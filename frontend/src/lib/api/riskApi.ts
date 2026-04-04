@@ -36,10 +36,12 @@ export interface UpdateRiskRequest {
 }
 
 export const riskApi = {
-  listRisks: (page = 0, size = 20) =>
-    apiClient
-      .get<ApiResponse<PagedResponse<RiskResponse>>>("/v1/risks", { params: { page, size } })
-      .then((r) => r.data),
+  listRisks: (projectId?: string, page = 0, size = 20) => {
+    const url = projectId ? `/v1/projects/${projectId}/risks` : "/v1/projects/risks";
+    return apiClient
+      .get<ApiResponse<RiskResponse[]>>(url, { params: { page, size } })
+      .then((r) => r.data);
+  },
 
   getRisk: (id: string) =>
     apiClient.get<ApiResponse<RiskResponse>>(`/v1/risks/${id}`).then((r) => r.data),

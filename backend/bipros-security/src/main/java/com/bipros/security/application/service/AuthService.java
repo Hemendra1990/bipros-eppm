@@ -8,6 +8,7 @@ import com.bipros.security.domain.model.User;
 import com.bipros.security.domain.model.UserRole;
 import com.bipros.security.domain.repository.RoleRepository;
 import com.bipros.security.domain.repository.UserRepository;
+import com.bipros.security.domain.repository.UserRoleRepository;
 import com.bipros.security.infrastructure.jwt.JwtTokenProvider;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
@@ -27,6 +28,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
@@ -87,8 +89,8 @@ public class AuthService {
                 });
 
         UserRole userRole = new UserRole(savedUser.getId(), viewerRole.getId());
+        userRoleRepository.save(userRole);
         savedUser.getRoles().add(userRole);
-        userRepository.save(savedUser);
 
         String accessToken = jwtTokenProvider.generateAccessToken(savedUser);
         String refreshToken = jwtTokenProvider.generateRefreshToken(savedUser);

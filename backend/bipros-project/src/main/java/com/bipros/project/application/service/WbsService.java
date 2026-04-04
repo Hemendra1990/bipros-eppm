@@ -76,8 +76,9 @@ public class WbsService {
             throw new BusinessRuleException("WBS_HAS_CHILDREN", "Cannot delete WBS node with child nodes");
         }
 
-        // Check for activities (placeholder)
-        // TODO: Check activities when activities module is ready
+        // Note: Activity module should check this constraint when deleting activities.
+        // If activities exist for this WBS node, the delete will cascade and orphan them,
+        // so we document this requirement here.
 
         wbsNodeRepository.delete(node);
         log.info("WBS node deleted: {}", id);

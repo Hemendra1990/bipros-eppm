@@ -26,10 +26,11 @@ export default function RiskPage() {
 
   const { data: risksData, isLoading, error } = useQuery({
     queryKey: ["risks"],
-    queryFn: () => riskApi.listRisks(0, 50),
+    queryFn: () => riskApi.listRisks(undefined, 0, 50),
   });
 
-  const risks = risksData?.data?.content ?? [];
+  const rawRisks = risksData?.data;
+  const risks = Array.isArray(rawRisks) ? rawRisks : (rawRisks as any)?.content ?? [];
 
   const createMutation = useMutation({
     mutationFn: (data: CreateRiskRequest) => riskApi.createRisk(data),

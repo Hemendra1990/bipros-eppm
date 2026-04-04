@@ -210,6 +210,55 @@ export interface CalendarResponse {
   updatedAt: string;
 }
 
+// === Resources ===
+
+export interface ResourceAssignmentResponse {
+  id: string;
+  activityId: string;
+  resourceId: string;
+  projectId: string;
+  plannedUnits: number;
+  actualUnits: number;
+  remainingUnits: number;
+  rateType: string;
+  plannedCost: number;
+  actualCost: number;
+  remainingCost: number;
+  plannedStartDate: string | null;
+  plannedFinishDate: string | null;
+}
+
+export interface CreateResourceAssignmentRequest {
+  activityId: string;
+  resourceId: string;
+  plannedUnits: number;
+  rateType: string;
+}
+
+// === Costs ===
+
+export interface ExpenseResponse {
+  id: string;
+  projectId: string;
+  activityId: string | null;
+  description: string;
+  amount: number;
+  currency: string;
+  expenseDate: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CostSummaryResponse {
+  projectId: string;
+  totalBudget: number;
+  totalActual: number;
+  totalRemaining: number;
+  atCompletion: number;
+  currency: string;
+}
+
 // === EVM ===
 
 export interface EvmCalculationResponse {
@@ -226,6 +275,29 @@ export interface EvmCalculationResponse {
   etc: number;
 }
 
+export interface EvmMetricsResponse {
+  projectId: string;
+  periodDate: string;
+  pv: number;
+  ev: number;
+  ac: number;
+  sv: number;
+  cv: number;
+  spi: number;
+  cpi: number;
+  eac: number;
+  etc: number;
+  vac: number;
+  tcpi: number;
+}
+
+export interface EvmHistoryEntryResponse {
+  periodDate: string;
+  pv: number;
+  ev: number;
+  ac: number;
+}
+
 // === Baseline ===
 
 export interface BaselineResponse {
@@ -233,8 +305,72 @@ export interface BaselineResponse {
   code: string;
   name: string;
   projectId: string;
-  description: string;
+  baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY";
   snapshotDate: string;
+  activitiesCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BaselineVarianceRow {
+  activityCode: string;
+  activityName: string;
+  startVariance: number;
+  finishVariance: number;
+  durationVariance: number;
+  costVariance: number;
+}
+
+export interface BaselineVarianceData {
+  baselineId: string;
+  baselineName: string;
+  projectId: string;
+  variance: BaselineVarianceRow[];
+}
+
+// === Portfolio ===
+
+export interface PortfolioResponse {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  projectCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePortfolioRequest {
+  code: string;
+  name: string;
+  description?: string;
+}
+
+export interface PortfolioProjectResponse {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+}
+
+export interface PortfolioScoringCriterion {
+  id: string;
+  name: string;
+  weight: number;
+  description?: string;
+}
+
+export interface PortfolioScenarioResponse {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+}
+
+// === OBS (Organizational Breakdown Structure) ===
+
+export interface CreateObsNodeRequest {
+  code: string;
+  name: string;
+  description?: string;
+  parentId?: string;
 }

@@ -28,15 +28,25 @@ export interface CashFlowData {
   netCashFlow: number[];
 }
 
+export interface ReportExecutionResponse {
+  id: string;
+  format: "EXCEL" | "PDF";
+  status: "PENDING" | "COMPLETED" | "FAILED";
+  createdAt: string;
+}
+
 export const reportApi = {
   generateSCurve: (projectId: string) =>
     apiClient
       .post<ApiResponse<SCurveData>>(`/v1/projects/${projectId}/reports/s-curve`)
       .then((r) => r.data),
 
-  generateResourceHistogram: (projectId: string) =>
+  generateResourceHistogram: (projectId: string, resourceId?: string) =>
     apiClient
-      .post<ApiResponse<ResourceHistogramData>>(`/v1/projects/${projectId}/reports/resource-histogram`)
+      .post<ApiResponse<ResourceHistogramData>>(
+        `/v1/projects/${projectId}/reports/resource-histogram`,
+        resourceId ? { resourceId } : {}
+      )
       .then((r) => r.data),
 
   generateCashFlow: (projectId: string) =>
@@ -56,4 +66,17 @@ export const reportApi = {
     apiClient
       .get<ApiResponse<ReportData[]>>(`/v1/projects/${projectId}/reports/custom`)
       .then((r) => r.data),
+
+  executeReport: (format: "EXCEL" | "PDF", reportType?: string) =>
+    apiClient
+      .post<ApiResponse<ReportExecutionResponse>>(`/v1/reports/execute`, {
+        format,
+        reportType,
+      })
+      .then((r) => r.data),
+
+  downloadReport: (executionId: string) =>
+    apiClient.get(`/v1/reports/executions/${executionId}/download`, {
+      responseType: "blob",
+    }),
 };

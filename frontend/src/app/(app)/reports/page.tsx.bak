@@ -69,7 +69,7 @@ export default function ReportsPage() {
 
   const { data: resourcesData } = useQuery({
     queryKey: ["resources", selectedProjectId],
-    queryFn: () => selectedProjectId ? resourceApi.getProjectResourceAssignments(selectedProjectId, 0, 100) : Promise.resolve(null),
+    queryFn: () => selectedProjectId ? resourceApi.listResources(selectedProjectId, 0, 100) : Promise.resolve(null),
     enabled: !!selectedProjectId,
   });
 
@@ -100,7 +100,7 @@ export default function ReportsPage() {
           setReportData({
             histogram: {
               resources: response.data.resources,
-              allocations: response.data.allocations.map((a: any) => ({ date: a.date, ...a.allocated })),
+              allocations: response.data.allocations.map((a) => ({ date: a.date, ...a.allocated })),
             },
           });
         }

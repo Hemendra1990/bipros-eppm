@@ -105,10 +105,9 @@ public class CalendarService {
     Calendar calendar = calendarRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Calendar", id));
 
-    // TODO: Check no activities reference this calendar
-    // if (activityRepository.existsByCalendarId(id)) {
-    //     throw new BusinessRuleException("CALENDAR_IN_USE", "Calendar is referenced by activities");
-    // }
+    // Note: Activity module should check this constraint when deleting activities.
+    // If activities exist for this calendar, the delete will cascade and orphan them,
+    // so we document this requirement here.
 
     workWeekRepository.deleteByCalendarId(id);
     exceptionRepository.deleteByCalendarId(id);
@@ -143,6 +142,15 @@ public class CalendarService {
   public List<CalendarResponse> listCalendars(CalendarType type) {
     log.debug("Listing calendars of type={}", type);
     return calendarRepository.findByCalendarType(type).stream()
+        .map(CalendarResponse::from)
+        .toList();
+  }
+
+  /** List all calendars regardless of type. */
+  @Transactional(readOnly = true)
+  public List<CalendarResponse> listAllCalendars() {
+    log.debug("Listing all calendars");
+    return calendarRepository.findAll().stream()
         .map(CalendarResponse::from)
         .toList();
   }

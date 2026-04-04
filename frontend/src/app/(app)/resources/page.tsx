@@ -24,13 +24,14 @@ export default function ResourcesPage() {
     },
   });
 
-  const resources = resourcesData?.data?.content ?? [];
+  const rawData = resourcesData?.data;
+  const resources = Array.isArray(rawData) ? rawData : (rawData as any)?.content ?? [];
 
   const columns: ColumnDef<ResourceResponse>[] = [
     { key: "code", label: "Code", sortable: true },
     { key: "name", label: "Name", sortable: true },
     {
-      key: "type",
+      key: "resourceType",
       label: "Type",
       sortable: true,
       render: (value) => <span className="text-sm font-medium">{String(value)}</span>,
@@ -40,7 +41,7 @@ export default function ResourcesPage() {
       label: "Status",
       render: (value) => <StatusBadge status={String(value)} />,
     },
-    { key: "maxUnits", label: "Max Units", sortable: true },
+    { key: "maxUnitsPerDay", label: "Max Units/Day", sortable: true },
     {
       key: "id",
       label: "Actions",

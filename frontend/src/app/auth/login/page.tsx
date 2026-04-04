@@ -24,6 +24,7 @@ export default function LoginPage() {
         // Store token BEFORE calling me() so the interceptor can use it
         localStorage.setItem("access_token", result.data.accessToken);
         localStorage.setItem("refresh_token", result.data.refreshToken);
+        document.cookie = `access_token=${result.data.accessToken}; path=/; max-age=3600`;
         const userResult = await authApi.me();
         if (userResult.data) {
           setAuth(userResult.data, result.data.accessToken, result.data.refreshToken);

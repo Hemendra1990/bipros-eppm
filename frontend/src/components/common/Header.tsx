@@ -9,6 +9,7 @@ export function Header() {
   const router = useRouter();
 
   const handleLogout = () => {
+    document.cookie = 'access_token=; path=/; max-age=0';
     clearAuth();
     router.push("/auth/login");
   };

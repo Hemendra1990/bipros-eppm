@@ -1,38 +1,31 @@
 import { apiClient } from "./client";
-import type { ApiResponse, PagedResponse } from "../types";
+import type { ApiResponse } from "../types";
 
 export interface CalendarResponse {
   id: string;
-  code: string;
   name: string;
-  type: "GLOBAL" | "PROJECT" | "RESOURCE";
-  baseCalendarId: string | null;
-  workHoursPerDay: number;
-  workDaysPerWeek: number;
+  description: string | null;
+  calendarType: "GLOBAL" | "PROJECT" | "RESOURCE";
+  standardWorkHoursPerDay: number;
+  standardWorkDaysPerWeek: number;
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateCalendarRequest {
-  code: string;
   name: string;
-  type: "GLOBAL" | "PROJECT" | "RESOURCE";
-  baseCalendarId?: string;
-  workHoursPerDay?: number;
-  workDaysPerWeek?: number;
-}
-
-export interface UpdateCalendarRequest {
-  name?: string;
-  workHoursPerDay?: number;
-  workDaysPerWeek?: number;
+  description?: string;
+  calendarType: "GLOBAL" | "PROJECT" | "RESOURCE";
+  standardWorkHoursPerDay?: number;
+  standardWorkDaysPerWeek?: number;
 }
 
 export const calendarApi = {
-  listCalendars: (page = 0, size = 20) =>
+  listCalendars: (type?: string) =>
     apiClient
-      .get<ApiResponse<PagedResponse<CalendarResponse>>>("/v1/calendars", {
-        params: { page, size },
+      .get<ApiResponse<CalendarResponse[]>>("/v1/calendars", {
+        params: type ? { type } : {},
       })
       .then((r) => r.data),
 
@@ -42,13 +35,5 @@ export const calendarApi = {
   createCalendar: (data: CreateCalendarRequest) =>
     apiClient.post<ApiResponse<CalendarResponse>>("/v1/calendars", data).then((r) => r.data),
 
-  updateCalendar: (id: string, data: UpdateCalendarRequest) =>
-    apiClient.put<ApiResponse<CalendarResponse>>(`/v1/calendars/${id}`, data).then((r) => r.data),
-
   deleteCalendar: (id: string) => apiClient.delete(`/v1/calendars/${id}`),
-
-  getGlobalCalendar: () =>
-    apiClient
-      .get<ApiResponse<CalendarResponse>>("/v1/calendars/global")
-      .then((r) => r.data),
 };

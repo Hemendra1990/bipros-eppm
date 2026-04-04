@@ -52,8 +52,9 @@ public class CalendarController {
   public ResponseEntity<ApiResponse<List<CalendarResponse>>> listCalendars(
       @RequestParam(required = false) CalendarType type) {
     log.info("GET /v1/calendars - Listing calendars, type={}", type);
-    List<CalendarResponse> calendars =
-        type != null ? calendarService.listCalendars(type) : List.of();
+    List<CalendarResponse> calendars = type != null
+        ? calendarService.listCalendars(type)
+        : calendarService.listAllCalendars();
     return ResponseEntity.ok(ApiResponse.ok(calendars));
   }
 

@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  Briefcase,
   Calendar,
   ChevronLeft,
   ChevronRight,
   FolderTree,
   LayoutDashboard,
+  Network,
   Settings,
   Shield,
   Users,
@@ -19,10 +21,12 @@ import { useAppStore } from "@/lib/state/store";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Projects", href: "/projects", icon: FolderTree },
+  { name: "Portfolios", href: "/portfolios", icon: Briefcase },
   { name: "Resources", href: "/resources", icon: Users },
   { name: "Calendars", href: "/admin/calendars", icon: Calendar },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Risk", href: "/risk", icon: Shield },
+  { name: "OBS", href: "/obs", icon: Network },
   { name: "Admin", href: "/admin/settings", icon: Settings },
 ];
 

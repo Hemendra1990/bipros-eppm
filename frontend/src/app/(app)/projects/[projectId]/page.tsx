@@ -6,13 +6,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "next/navigation";
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
+import { baselineApi } from "@/lib/api/baselineApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { GanttChart } from "@/components/schedule/GanttChart";
+import { ResourcesTab } from "@/components/resource/ResourcesTab";
+import { CostsTab } from "@/components/cost/CostsTab";
+import { EvmTab } from "@/components/evm/EvmTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Trash2 } from "lucide-react";
-import type { ProjectResponse, ActivityResponse, WbsNodeResponse } from "@/lib/types";
+import { ListTodo, Plus, Play, Trash2, Eye } from "lucide-react";
+import type { ProjectResponse, ActivityResponse, WbsNodeResponse, BaselineResponse, BaselineVarianceRow } from "@/lib/types";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -51,6 +55,12 @@ export default function ProjectDetailPage() {
     enabled: tab === "network",
   });
 
+  const { data: baselinesData, isLoading: isLoadingBaselines, refetch: refetchBaselines } = useQuery({
+    queryKey: ["baselines", projectId],
+    queryFn: () => baselineApi.listBaselines(projectId),
+    enabled: tab === "baselines",
+  });
+
   const scheduleMutation = useMutation({
     mutationFn: () => activityApi.triggerSchedule(projectId, "RETAINED_LOGIC"),
     onSuccess: () => {
@@ -66,6 +76,21 @@ export default function ProjectDetailPage() {
     mutationFn: (activityId: string) => activityApi.deleteActivity(projectId, activityId),
     onSuccess: () => {
       refetchActivities();
+    },
+  });
+
+  const createBaselineMutation = useMutation({
+    mutationFn: (data: { name: string; baselineType: string }) =>
+      baselineApi.createBaseline(projectId, data as any),
+    onSuccess: () => {
+      refetchBaselines();
+    },
+  });
+
+  const deleteBaselineMutation = useMutation({
+    mutationFn: (baselineId: string) => baselineApi.deleteBaseline(projectId, baselineId),
+    onSuccess: () => {
+      refetchBaselines();
     },
   });
 
@@ -154,9 +179,20 @@ export default function ProjectDetailPage() {
           isLoading={isLoadingActivities || isLoadingRelationships}
         />
       )}
-      {["resources", "costs", "evm"].includes(tab) && (
-        <ComingSoonTab tabName={tab} />
+      {tab === "baselines" && (
+        <BaselinesTab
+          projectId={projectId}
+          baselines={baselinesData?.data ?? []}
+          isLoading={isLoadingBaselines}
+          onCreateBaseline={(data) => createBaselineMutation.mutate(data)}
+          isCreating={createBaselineMutation.isPending}
+          onDeleteBaseline={(baselineId) => deleteBaselineMutation.mutate(baselineId)}
+          isDeleting={deleteBaselineMutation.isPending}
+        />
       )}
+      {tab === "resources" && <ResourcesTab projectId={projectId} />}
+      {tab === "costs" && <CostsTab projectId={projectId} />}
+      {tab === "evm" && <EvmTab projectId={projectId} />}
     </div>
   );
 }
@@ -398,6 +434,228 @@ function NetworkTab({
   }
 
   return <NetworkDiagram activities={activities} relationships={relationships} />;
+}
+
+function BaselinesTab({
+  projectId,
+  baselines,
+  isLoading,
+  onCreateBaseline,
+  isCreating,
+  onDeleteBaseline,
+  isDeleting,
+}: {
+  projectId: string;
+  baselines: BaselineResponse[];
+  isLoading: boolean;
+  onCreateBaseline: (data: { name: string; baselineType: string }) => void;
+  isCreating: boolean;
+  onDeleteBaseline: (baselineId: string) => void;
+  isDeleting: boolean;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ name: "", baselineType: "PROJECT" });
+  const [expandedBaselineId, setExpandedBaselineId] = useState<string | null>(null);
+  const [varianceData, setVarianceData] = useState<Record<string, BaselineVarianceRow[]>>({});
+  const [loadingVarianceId, setLoadingVarianceId] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.name.trim()) {
+      onCreateBaseline(formData);
+      setFormData({ name: "", baselineType: "PROJECT" });
+      setShowForm(false);
+    }
+  };
+
+  const handleViewVariance = async (baselineId: string) => {
+    if (expandedBaselineId === baselineId) {
+      setExpandedBaselineId(null);
+      return;
+    }
+
+    if (varianceData[baselineId]) {
+      setExpandedBaselineId(baselineId);
+      return;
+    }
+
+    setLoadingVarianceId(baselineId);
+    try {
+      const response = await baselineApi.getVariance(projectId, baselineId);
+      if (response?.data) {
+        setVarianceData((prev) => ({
+          ...prev,
+          [baselineId]: response.data!.variance,
+        }));
+        setExpandedBaselineId(baselineId);
+      }
+    } catch (error) {
+      console.error("Failed to load variance data:", error);
+    } finally {
+      setLoadingVarianceId(null);
+    }
+  };
+
+  if (isLoading) {
+    return <div className="text-center text-gray-500">Loading baselines...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {!showForm && (
+        <button
+          onClick={() => setShowForm(true)}
+          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Plus size={16} />
+          Create Baseline
+        </button>
+      )}
+
+      {showForm && (
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <h3 className="mb-4 text-lg font-semibold text-gray-900">Create New Baseline</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                placeholder="Baseline name"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Type</label>
+              <select
+                value={formData.baselineType}
+                onChange={(e) => setFormData({ ...formData, baselineType: e.target.value })}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="PROJECT">PROJECT</option>
+                <option value="PRIMARY">PRIMARY</option>
+                <option value="SECONDARY">SECONDARY</option>
+                <option value="TERTIARY">TERTIARY</option>
+              </select>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={isCreating}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {isCreating ? "Creating..." : "Create"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {baselines.length === 0 ? (
+        <EmptyState
+          icon={ListTodo}
+          title="No baselines"
+          description="This project has no baselines yet. Create a baseline to start tracking project variance."
+        />
+      ) : (
+        <div className="space-y-4">
+          {baselines.map((baseline) => (
+            <div key={baseline.id} className="rounded-lg border border-gray-200 bg-white p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900">{baseline.name}</h3>
+                  <div className="mt-2 space-y-1 text-sm text-gray-600">
+                    <p>Type: {baseline.baselineType}</p>
+                    <p>Date: {new Date(baseline.snapshotDate).toLocaleDateString()}</p>
+                    <p>Activities: {baseline.activitiesCount}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleViewVariance(baseline.id)}
+                    disabled={loadingVarianceId === baseline.id}
+                    className="inline-flex items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:bg-gray-200"
+                  >
+                    <Eye size={16} />
+                    {expandedBaselineId === baseline.id ? "Hide Variance" : "View Variance"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Are you sure you want to delete this baseline?")) {
+                        onDeleteBaseline(baseline.id);
+                      }
+                    }}
+                    disabled={isDeleting}
+                    className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:bg-gray-200"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              {expandedBaselineId === baseline.id && varianceData[baseline.id] && (
+                <div className="mt-6 border-t border-gray-200 pt-6">
+                  <h4 className="mb-4 font-semibold text-gray-900">Variance Details</h4>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Activity Code</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Activity Name</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-700">Start Var (days)</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-700">Finish Var (days)</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-700">Duration Var</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-700">Cost Var</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {varianceData[baseline.id].map((row, idx) => (
+                          <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="px-4 py-3 text-gray-900">{row.activityCode}</td>
+                            <td className="px-4 py-3 text-gray-900">{row.activityName}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">
+                              <span className={row.startVariance !== 0 ? "font-semibold text-red-600" : ""}>
+                                {row.startVariance}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-gray-900">
+                              <span className={row.finishVariance !== 0 ? "font-semibold text-red-600" : ""}>
+                                {row.finishVariance}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-gray-900">
+                              <span className={row.durationVariance !== 0 ? "font-semibold text-red-600" : ""}>
+                                {row.durationVariance}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-gray-900">
+                              <span className={row.costVariance !== 0 ? "font-semibold text-red-600" : ""}>
+                                {row.costVariance}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ComingSoonTab({ tabName }: { tabName: string }) {

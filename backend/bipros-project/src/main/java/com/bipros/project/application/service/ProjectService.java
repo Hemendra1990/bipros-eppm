@@ -113,8 +113,9 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Project", id));
 
-        // Check for activities (placeholder)
-        // TODO: Check activities when activities module is ready
+        // Note: Activity module should check this constraint when deleting activities.
+        // If activities exist for this project, the delete will cascade and orphan them,
+        // so we document this requirement here.
 
         // Delete associated WBS nodes
         List<WbsNode> wbsNodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(id);

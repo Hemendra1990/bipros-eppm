@@ -10,11 +10,10 @@ export default function NewCalendarPage() {
   const router = useRouter();
 
   const [formData, setFormData] = useState<CreateCalendarRequest>({
-    code: "",
     name: "",
-    type: "GLOBAL",
-    workHoursPerDay: 8,
-    workDaysPerWeek: 5,
+    calendarType: "GLOBAL",
+    standardWorkHoursPerDay: 8,
+    standardWorkDaysPerWeek: 5,
   });
 
   const [error, setError] = useState("");
@@ -25,7 +24,7 @@ export default function NewCalendarPage() {
     setFormData((prev) => ({
       ...prev,
       [name]:
-        name === "workHoursPerDay" || name === "workDaysPerWeek" ? parseInt(value, 10) : value,
+        name === "standardWorkHoursPerDay" || name === "standardWorkDaysPerWeek" ? parseInt(value, 10) : value,
     }));
   };
 
@@ -33,7 +32,7 @@ export default function NewCalendarPage() {
     e.preventDefault();
     setError("");
 
-    if (!formData.code || !formData.name) {
+    if (!formData.name) {
       setError("Code and Name are required");
       return;
     }
@@ -66,18 +65,6 @@ export default function NewCalendarPage() {
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Code *</label>
-              <input
-                type="text"
-                name="code"
-                value={formData.code}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="e.g., CAL-001"
-              />
-            </div>
-
-            <div>
               <label className="block text-sm font-medium text-gray-700">Name *</label>
               <input
                 type="text"
@@ -94,8 +81,8 @@ export default function NewCalendarPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700">Calendar Type *</label>
               <select
-                name="type"
-                value={formData.type}
+                name="calendarType"
+                value={formData.calendarType}
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
@@ -111,8 +98,8 @@ export default function NewCalendarPage() {
               </label>
               <input
                 type="number"
-                name="workDaysPerWeek"
-                value={formData.workDaysPerWeek || 5}
+                name="standardWorkDaysPerWeek"
+                value={formData.standardWorkDaysPerWeek || 5}
                 onChange={handleChange}
                 min="1"
                 max="7"
@@ -127,8 +114,8 @@ export default function NewCalendarPage() {
             </label>
             <input
               type="number"
-              name="workHoursPerDay"
-              value={formData.workHoursPerDay || 8}
+              name="standardWorkHoursPerDay"
+              value={formData.standardWorkHoursPerDay || 8}
               onChange={handleChange}
               min="1"
               max="24"
