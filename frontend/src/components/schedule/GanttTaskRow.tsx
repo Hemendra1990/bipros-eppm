@@ -10,6 +10,12 @@ interface DateRange {
   days: number;
 }
 
+interface BaselineActivityData {
+  activityId: string;
+  baselineStartDate: string | null;
+  baselineFinishDate: string | null;
+}
+
 interface GanttTaskRowProps {
   activity: ActivityResponse;
   dateRange: DateRange;
@@ -17,6 +23,7 @@ interface GanttTaskRowProps {
   rowIndex: number;
   rowHeight: number;
   timelineStartY: number;
+  baselineData?: BaselineActivityData;
   onActivityClick?: (id: string) => void;
 }
 
@@ -27,6 +34,7 @@ export function GanttTaskRow({
   rowIndex,
   rowHeight,
   timelineStartY,
+  baselineData,
   onActivityClick,
 }: GanttTaskRowProps) {
   const startDate = activity.plannedStartDate
@@ -56,8 +64,47 @@ export function GanttTaskRow({
   const percentComplete = activity.percentComplete || 0;
   const completeWidth = (width * percentComplete) / 100;
 
+  // Render baseline bar if available
+  let baselineBarElements: React.ReactNode = null;
+  if (baselineData?.baselineStartDate && baselineData?.baselineFinishDate) {
+    const baselineStartDate = baselineData.baselineStartDate
+      ? startOfDay(new Date(baselineData.baselineStartDate))
+      : null;
+    const baselineEndDate = baselineData.baselineFinishDate
+      ? startOfDay(new Date(baselineData.baselineFinishDate))
+      : null;
+
+    if (baselineStartDate && baselineEndDate) {
+      const baselineStartOffset = Math.max(0, differenceInDays(baselineStartDate, dateRange.start));
+      const baselineEndOffset = differenceInDays(baselineEndDate, dateRange.start);
+      const baselineDuration = Math.max(1, baselineEndOffset - baselineStartOffset + 1);
+      const baselineX = baselineStartOffset * pixelsPerDay;
+      const baselineWidth = baselineDuration * pixelsPerDay;
+
+      baselineBarElements = (
+        <>
+          <rect
+            x={baselineX}
+            y={y + barHeight + 4}
+            width={baselineWidth}
+            height={6}
+            fill="#6b7280"
+            opacity="0.5"
+            rx="1"
+          />
+          <title>
+            Baseline: {baselineData.baselineStartDate} to {baselineData.baselineFinishDate}
+          </title>
+        </>
+      );
+    }
+  }
+
   return (
     <g key={`task-${activity.id}`}>
+      {/* Baseline bar */}
+      {baselineBarElements}
+
       {/* Main bar */}
       <rect
         x={x}

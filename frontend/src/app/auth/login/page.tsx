@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import { authApi } from "@/lib/api/authApi";
 import { useAuthStore } from "@/lib/state/store";
 
@@ -28,17 +29,23 @@ export default function LoginPage() {
         const userResult = await authApi.me();
         if (userResult.data) {
           setAuth(userResult.data, result.data.accessToken, result.data.refreshToken);
+          toast.success("Welcome back!");
           router.push("/");
         } else {
           // me() failed but login succeeded — still redirect
           setAuth({ id: "", username, email: "", firstName: "", lastName: "", enabled: true, roles: [] }, result.data.accessToken, result.data.refreshToken);
+          toast.success("Logged in successfully!");
           router.push("/");
         }
       } else if (result.error) {
-        setError(result.error.message);
+        const errorMsg = result.error.message || "Login failed";
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
-    } catch {
-      setError("Invalid username or password");
+    } catch (err) {
+      const errorMsg = "Invalid username or password";
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

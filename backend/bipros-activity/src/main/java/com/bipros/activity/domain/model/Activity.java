@@ -130,4 +130,7 @@ public class Activity extends BaseEntity {
 
   @Column(name = "sort_order")
   private Integer sortOrder;
+
+  @Column(columnDefinition = "TEXT")
+  private String notes;
 }

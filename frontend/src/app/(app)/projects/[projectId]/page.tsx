@@ -52,13 +52,24 @@ export default function ProjectDetailPage() {
   const { data: relationshipsData, isLoading: isLoadingRelationships } = useQuery({
     queryKey: ["relationships", projectId],
     queryFn: () => activityApi.getRelationships(projectId),
-    enabled: tab === "network",
+    enabled: ["network", "gantt"].includes(tab),
   });
 
   const { data: baselinesData, isLoading: isLoadingBaselines, refetch: refetchBaselines } = useQuery({
     queryKey: ["baselines", projectId],
     queryFn: () => baselineApi.listBaselines(projectId),
-    enabled: tab === "baselines",
+    enabled: ["baselines", "gantt"].includes(tab),
+  });
+
+  const primaryBaseline = baselinesData?.data?.find((b) => b.baselineType === "PRIMARY");
+
+  const { data: baselineActivitiesData, isLoading: isLoadingBaselineActivities } = useQuery({
+    queryKey: ["baseline-activities", projectId, primaryBaseline?.id],
+    queryFn: () =>
+      primaryBaseline
+        ? baselineApi.getBaselineActivities(projectId, primaryBaseline.id)
+        : Promise.resolve({ data: [], success: true, meta: {} } as any),
+    enabled: tab === "gantt" && !!primaryBaseline,
   });
 
   const scheduleMutation = useMutation({
@@ -170,7 +181,12 @@ export default function ProjectDetailPage() {
         <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} />
       )}
       {tab === "gantt" && (
-        <GanttTab activities={activities} isLoading={isLoadingActivities} />
+        <GanttTab
+          activities={activities}
+          isLoading={isLoadingActivities || isLoadingRelationships || isLoadingBaselineActivities}
+          relationships={relationshipsData?.data ?? []}
+          baselineActivities={baselineActivitiesData?.data ?? []}
+        />
       )}
       {tab === "network" && (
         <NetworkTab
@@ -342,9 +358,13 @@ function ActivitiesTab({
 function GanttTab({
   activities,
   isLoading,
+  relationships = [],
+  baselineActivities = [],
 }: {
   activities: ActivityResponse[];
   isLoading: boolean;
+  relationships?: Array<{ predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
+  baselineActivities?: Array<{ activityId: string; baselineStartDate: string | null; baselineFinishDate: string | null }>;
 }) {
   if (isLoading) {
     return <div className="text-center text-gray-500">Loading activities...</div>;
@@ -360,7 +380,13 @@ function GanttTab({
     );
   }
 
-  return <GanttChart activities={activities} />;
+  return (
+    <GanttChart
+      activities={activities}
+      relationships={relationships}
+      baselineActivities={baselineActivities}
+    />
+  );
 }
 
 function WbsTab({ wbsTree, isLoading }: { wbsTree: WbsNodeResponse[]; isLoading: boolean }) {

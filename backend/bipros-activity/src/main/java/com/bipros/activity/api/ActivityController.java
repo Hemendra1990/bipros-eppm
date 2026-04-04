@@ -4,6 +4,9 @@ import com.bipros.activity.application.dto.ActivityResponse;
 import com.bipros.activity.application.dto.CreateActivityRequest;
 import com.bipros.activity.application.dto.UpdateActivityRequest;
 import com.bipros.activity.application.service.ActivityService;
+import com.bipros.activity.application.service.ApplyActualsRequest;
+import com.bipros.activity.application.service.GlobalChangeRequest;
+import com.bipros.activity.application.service.GlobalChangeService;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.common.dto.PagedResponse;
 import jakarta.validation.Valid;
@@ -24,6 +27,7 @@ import java.util.UUID;
 public class ActivityController {
 
   private final ActivityService activityService;
+  private final GlobalChangeService globalChangeService;
 
   @PostMapping
   public ResponseEntity<ApiResponse<ActivityResponse>> createActivity(
@@ -80,5 +84,22 @@ public class ActivityController {
     ActivityResponse response = activityService.updateProgress(activityId, percentComplete,
         actualStartDate, actualFinishDate);
     return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  @PutMapping("/apply-actuals")
+  public ResponseEntity<ApiResponse<Void>> applyActuals(
+      @PathVariable UUID projectId,
+      @Valid @RequestBody ApplyActualsRequest request) {
+    activityService.applyActuals(projectId, request.dataDate());
+    return ResponseEntity.ok(ApiResponse.ok(null));
+  }
+
+  @PostMapping("/global-change")
+  public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> applyGlobalChange(
+      @PathVariable UUID projectId,
+      @Valid @RequestBody GlobalChangeRequest request) {
+    int updatedCount = globalChangeService.applyGlobalChange(projectId, request);
+    java.util.Map<String, Object> result = java.util.Map.of("updatedCount", updatedCount);
+    return ResponseEntity.ok(ApiResponse.ok(result));
   }
 }

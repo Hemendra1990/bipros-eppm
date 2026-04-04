@@ -4,5 +4,6 @@ public enum ImportExportFormat {
   XER,
   P6XML,
   MSP_XML,
-  EXCEL
+  EXCEL,
+  CSV
 }

@@ -23,6 +23,7 @@ export interface ActivityResponse {
   totalFloat: number;
   freeFloat?: number;
   remainingDuration: number;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +43,7 @@ export interface UpdateActivityRequest {
   percentComplete?: number;
   actualStartDate?: string;
   actualFinishDate?: string;
+  notes?: string;
 }
 
 export const activityApi = {
@@ -98,4 +100,28 @@ export const activityApi = {
         >
       >(`/v1/projects/${projectId}/relationships`)
       .then((r) => r.data),
+
+  applyActuals: (projectId: string, dataDate: string) =>
+    apiClient
+      .put<ApiResponse<void>>(
+        `/v1/projects/${projectId}/activities/apply-actuals`,
+        { dataDate }
+      )
+      .then((r) => r.data),
+
+  applyGlobalChange: (projectId: string, request: GlobalChangeRequest) =>
+    apiClient
+      .post<ApiResponse<{ updatedCount: number }>>(
+        `/v1/projects/${projectId}/activities/global-change`,
+        request
+      )
+      .then((r) => r.data),
 };
+
+export interface GlobalChangeRequest {
+  filterField: string;
+  filterValue: string;
+  updateField: string;
+  updateValue: string;
+  operation: "SET" | "ADD" | "SUBTRACT";
+}

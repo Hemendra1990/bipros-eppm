@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: bipros-api-test
+
+  datasource:
+    url: jdbc:tc:postgresql:17-alpine:///bipros_test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 10
+        order_inserts: true
+        order_updates: true
+    show-sql: false
+
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:test-data.sql
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+server:
+  servlet:
+    context-path: /
+
+jwt:
+  secret: ${JWT_SECRET:test-secret-key-for-testing-purposes-only}
+  expiration: 86400000
+  refresh-expiration: 604800000
+
+logging:
+  level:
+    root: WARN
+    com.bipros: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

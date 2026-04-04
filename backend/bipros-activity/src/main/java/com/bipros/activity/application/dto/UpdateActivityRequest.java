@@ -53,5 +53,7 @@ public record UpdateActivityRequest(
 
     LocalDate suspendDate,
 
-    LocalDate resumeDate
+    LocalDate resumeDate,
+
+    String notes
 ) {}

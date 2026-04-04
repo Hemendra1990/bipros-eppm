@@ -34,6 +34,12 @@ export interface CreateBaselineRequest {
   baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY";
 }
 
+export interface BaselineActivityResponse {
+  activityId: string;
+  baselineStartDate: string | null;
+  baselineFinishDate: string | null;
+}
+
 export const baselineApi = {
   listBaselines: (projectId: string) =>
     apiClient
@@ -52,6 +58,13 @@ export const baselineApi = {
     apiClient
       .get<ApiResponse<BaselineVarianceData>>(
         `/v1/projects/${projectId}/baselines/${baselineId}/variance`
+      )
+      .then((r) => r.data),
+
+  getBaselineActivities: (projectId: string, baselineId: string) =>
+    apiClient
+      .get<ApiResponse<BaselineActivityResponse[]>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}/activities`
       )
       .then((r) => r.data),
 

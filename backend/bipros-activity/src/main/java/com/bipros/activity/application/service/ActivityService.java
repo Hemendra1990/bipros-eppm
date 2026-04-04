@@ -98,6 +98,9 @@ public class ActivityService {
     activity.setSecondaryConstraintDate(request.secondaryConstraintDate());
     activity.setSuspendDate(request.suspendDate());
     activity.setResumeDate(request.resumeDate());
+    if (request.notes() != null) {
+      activity.setNotes(request.notes());
+    }
 
     Activity updated = activityRepository.save(activity);
     log.info("Activity updated successfully: id={}", id);
@@ -168,5 +171,49 @@ public class ActivityService {
     Activity updated = activityRepository.save(activity);
     log.info("Progress updated successfully: id={}", id);
     return ActivityResponse.from(updated);
+  }
+
+  public void applyActuals(UUID projectId, LocalDate dataDate) {
+    log.info("Applying actuals for project: projectId={}, dataDate={}", projectId, dataDate);
+
+    java.util.List<Activity> activities = activityRepository.findByProjectId(projectId);
+
+    for (Activity activity : activities) {
+      boolean updated = false;
+
+      if (activity.getPlannedStartDate() != null &&
+          activity.getPlannedStartDate().compareTo(dataDate) <= 0 &&
+          activity.getActualStartDate() == null) {
+        activity.setActualStartDate(activity.getPlannedStartDate());
+        updated = true;
+      }
+
+      if (activity.getPlannedFinishDate() != null &&
+          activity.getPlannedFinishDate().compareTo(dataDate) <= 0 &&
+          activity.getActualFinishDate() == null) {
+        activity.setActualFinishDate(activity.getPlannedFinishDate());
+        activity.setPercentComplete(100.0);
+        updated = true;
+      } else if (activity.getActualStartDate() != null &&
+          activity.getActualFinishDate() == null &&
+          activity.getPlannedFinishDate() != null) {
+        long totalDays = java.time.temporal.ChronoUnit.DAYS.between(
+            activity.getActualStartDate(), activity.getPlannedFinishDate());
+        long elapsedDays = java.time.temporal.ChronoUnit.DAYS.between(
+            activity.getActualStartDate(), dataDate);
+
+        if (totalDays > 0 && elapsedDays >= 0) {
+          double durationPercentComplete = Math.min((double) elapsedDays / totalDays * 100, 100.0);
+          activity.setDurationPercentComplete(durationPercentComplete);
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        activityRepository.save(activity);
+      }
+    }
+
+    log.info("Actuals applied successfully for project: projectId={}", projectId);
   }
 }

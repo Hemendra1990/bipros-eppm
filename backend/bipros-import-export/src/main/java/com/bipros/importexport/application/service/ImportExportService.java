@@ -6,15 +6,24 @@ import com.bipros.importexport.application.dto.ImportExportLogResponse;
 import com.bipros.importexport.domain.model.*;
 import com.bipros.importexport.domain.repository.ImportExportJobRepository;
 import com.bipros.importexport.domain.repository.ImportExportLogRepository;
+import com.bipros.importexport.infrastructure.export.CsvExporter;
+import com.bipros.importexport.infrastructure.export.ExcelExporter;
+import com.bipros.importexport.infrastructure.export.MspXmlExporter;
+import com.bipros.importexport.infrastructure.export.P6XmlExporter;
 import com.bipros.importexport.infrastructure.parser.XerParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,6 +38,13 @@ public class ImportExportService {
   private final XerParser xerParser;
   private final XerImportMapper xerImportMapper;
   private final ObjectMapper objectMapper;
+  private final P6XmlExporter p6XmlExporter;
+  private final MspXmlExporter mspXmlExporter;
+  private final ExcelExporter excelExporter;
+  private final CsvExporter csvExporter;
+
+  @Value("${export.directory:/tmp/bipros-exports}")
+  private String exportDirectory;
 
   @Transactional
   public ImportExportJobResponse exportProject(UUID projectId, ImportExportFormat format) throws Exception {
@@ -43,18 +59,18 @@ public class ImportExportService {
       job.setStatus(ImportExportStatus.PROCESSING);
       var saved = jobRepository.save(job);
 
-      String exportData = generateExportData(projectId, format);
-
       String fileName = "project_" + projectId + "_export." + getFileExtension(format);
+      Path filePath = storeExportFile(projectId, format, fileName);
+
       saved.setFileName(fileName);
-      saved.setFilePath("/exports/" + fileName);
+      saved.setFilePath(filePath.toString());
       saved.setStatus(ImportExportStatus.COMPLETED);
       saved.setCompletedAt(Instant.now());
       saved.setProcessedRecords(1);
       saved.setTotalRecords(1);
 
       var result = jobRepository.save(saved);
-      log.info("Export completed: projectId={}, format={}, jobId={}", projectId, format, result.getId());
+      log.info("Export completed: projectId={}, format={}, jobId={}, filePath={}", projectId, format, result.getId(), filePath);
 
       return ImportExportJobResponse.from(result);
     } catch (Exception e) {
@@ -96,6 +112,8 @@ public class ImportExportService {
         logMessage(saved.getId(), "WARN", "MSP XML parsing not yet implemented");
       } else if (ImportExportFormat.EXCEL.equals(format)) {
         logMessage(saved.getId(), "WARN", "Excel parsing not yet implemented");
+      } else if (ImportExportFormat.CSV.equals(format)) {
+        logMessage(saved.getId(), "WARN", "CSV parsing not yet implemented");
       }
 
       saved.setStatus(ImportExportStatus.COMPLETED);
@@ -173,33 +191,42 @@ public class ImportExportService {
     }
   }
 
-  private String generateExportData(UUID projectId, ImportExportFormat format) throws Exception {
-    return switch (format) {
-      case XER -> generateXERData(projectId);
-      case P6XML -> generateP6XMLData(projectId);
-      case MSP_XML -> generateMSPXMLData(projectId);
-      case EXCEL -> generateExcelData(projectId);
-    };
+  private Path storeExportFile(UUID projectId, ImportExportFormat format, String fileName) throws Exception {
+    // Create export directory if it doesn't exist
+    Path exportDir = Paths.get(exportDirectory);
+    Files.createDirectories(exportDir);
+
+    Path filePath = exportDir.resolve(fileName);
+
+    switch (format) {
+      case XER -> {
+        String data = generateXERData(projectId);
+        Files.write(filePath, data.getBytes(StandardCharsets.UTF_8));
+      }
+      case P6XML -> {
+        String data = p6XmlExporter.export(projectId);
+        Files.write(filePath, data.getBytes(StandardCharsets.UTF_8));
+      }
+      case MSP_XML -> {
+        String data = mspXmlExporter.export(projectId);
+        Files.write(filePath, data.getBytes(StandardCharsets.UTF_8));
+      }
+      case EXCEL -> {
+        byte[] data = excelExporter.export(projectId);
+        Files.write(filePath, data);
+      }
+      case CSV -> {
+        String data = csvExporter.export(projectId);
+        Files.write(filePath, data.getBytes(StandardCharsets.UTF_8));
+      }
+    }
+
+    return filePath;
   }
 
   private String generateXERData(UUID projectId) {
     // Placeholder: generate XER format structure
     return "%TPROJECT\n%FPROJECT_ID\tPROJECT_NAME\n%R" + projectId + "\tTest Project\n";
-  }
-
-  private String generateP6XMLData(UUID projectId) {
-    // Placeholder: generate P6XML format
-    return "<?xml version=\"1.0\"?>\n<Project>\n</Project>";
-  }
-
-  private String generateMSPXMLData(UUID projectId) {
-    // Placeholder: generate MSP XML format
-    return "<?xml version=\"1.0\"?>\n<Project>\n</Project>";
-  }
-
-  private String generateExcelData(UUID projectId) {
-    // Placeholder: Excel data would be binary, return placeholder
-    return "Excel export placeholder";
   }
 
   private void logMessage(UUID jobId, String level, String message) {
@@ -216,6 +243,7 @@ public class ImportExportService {
       case P6XML -> "xml";
       case MSP_XML -> "xml";
       case EXCEL -> "xlsx";
+      case CSV -> "csv";
     };
   }
 }
