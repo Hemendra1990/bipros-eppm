@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-schemas
+      author: bipros
+      changes:
+        - sql:
+            sql: |
+              CREATE SCHEMA IF NOT EXISTS public;
+              CREATE SCHEMA IF NOT EXISTS project;
+              CREATE SCHEMA IF NOT EXISTS scheduling;
+              CREATE SCHEMA IF NOT EXISTS activity;
+              CREATE SCHEMA IF NOT EXISTS resource;
+              CREATE SCHEMA IF NOT EXISTS udf;
+              CREATE SCHEMA IF NOT EXISTS risk;
+              CREATE SCHEMA IF NOT EXISTS cost;
+              CREATE SCHEMA IF NOT EXISTS evm;
+              CREATE SCHEMA IF NOT EXISTS baseline;
+              CREATE SCHEMA IF NOT EXISTS portfolio;
+              CREATE SCHEMA IF NOT EXISTS admin;

@@ -1,0 +1,172 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-create-schedule-results-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: scheduling
+            tableName: schedule_results
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: data_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_start_date
+                  type: DATE
+              - column:
+                  name: project_finish_date
+                  type: DATE
+              - column:
+                  name: critical_path_length
+                  type: DOUBLE
+              - column:
+                  name: total_activities
+                  type: INTEGER
+              - column:
+                  name: critical_activities
+                  type: INTEGER
+              - column:
+                  name: scheduling_option
+                  type: VARCHAR(30)
+              - column:
+                  name: calculated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: duration_seconds
+                  type: DOUBLE
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addForeignKeyConstraint:
+            baseSchemaName: scheduling
+            baseTableName: schedule_results
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_schedule_results_project
+
+  - changeSet:
+      id: 007-create-schedule-activity-results-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: scheduling
+            tableName: schedule_activity_results
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: schedule_result_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: activity_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: early_start
+                  type: DATE
+              - column:
+                  name: early_finish
+                  type: DATE
+              - column:
+                  name: late_start
+                  type: DATE
+              - column:
+                  name: late_finish
+                  type: DATE
+              - column:
+                  name: total_float
+                  type: DOUBLE
+              - column:
+                  name: free_float
+                  type: DOUBLE
+              - column:
+                  name: is_critical
+                  type: BOOLEAN
+              - column:
+                  name: remaining_duration
+                  type: DOUBLE
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: scheduling
+            tableName: schedule_activity_results
+            columnNames: schedule_result_id,activity_id
+            constraintName: uk_schedule_activity_result_schedule_activity
+        - addForeignKeyConstraint:
+            baseSchemaName: scheduling
+            baseTableName: schedule_activity_results
+            baseColumnNames: schedule_result_id
+            referencedSchemaName: scheduling
+            referencedTableName: schedule_results
+            referencedColumnNames: id
+            constraintName: fk_schedule_activity_results_schedule_result
+        - addForeignKeyConstraint:
+            baseSchemaName: scheduling
+            baseTableName: schedule_activity_results
+            baseColumnNames: activity_id
+            referencedSchemaName: activity
+            referencedTableName: activities
+            referencedColumnNames: id
+            constraintName: fk_schedule_activity_results_activity

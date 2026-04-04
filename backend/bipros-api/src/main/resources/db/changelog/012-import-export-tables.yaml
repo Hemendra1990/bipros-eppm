@@ -1,0 +1,154 @@
+databaseChangeLog:
+  - changeSet:
+      id: 012-create-import-export-jobs-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: public
+            tableName: import_export_jobs
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: format
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: direction
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+              - column:
+                  name: file_path
+                  type: VARCHAR(500)
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'PENDING'
+              - column:
+                  name: total_records
+                  type: INTEGER
+              - column:
+                  name: processed_records
+                  type: INTEGER
+                  defaultValue: 0
+              - column:
+                  name: error_count
+                  type: INTEGER
+                  defaultValue: 0
+              - column:
+                  name: started_at
+                  type: TIMESTAMP
+              - column:
+                  name: completed_at
+                  type: TIMESTAMP
+              - column:
+                  name: error_log
+                  type: TEXT
+              - column:
+                  name: imported_project_id
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addForeignKeyConstraint:
+            baseSchemaName: public
+            baseTableName: import_export_jobs
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_import_export_jobs_project
+
+  - changeSet:
+      id: 012-create-import-export-logs-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: public
+            tableName: import_export_logs
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: job_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: level
+                  type: VARCHAR(20)
+              - column:
+                  name: message
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: entity_type
+                  type: VARCHAR(50)
+              - column:
+                  name: entity_id
+                  type: VARCHAR(255)
+              - column:
+                  name: line_number
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addForeignKeyConstraint:
+            baseSchemaName: public
+            baseTableName: import_export_logs
+            baseColumnNames: job_id
+            referencedSchemaName: public
+            referencedTableName: import_export_jobs
+            referencedColumnNames: id
+            constraintName: fk_import_export_logs_job

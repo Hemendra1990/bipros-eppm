@@ -1,0 +1,144 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-create-report-definitions-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: public
+            tableName: report_definitions
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: report_type
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_built_in
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+              - column:
+                  name: created_by_user_id
+                  type: UUID
+              - column:
+                  name: config_json
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+
+  - changeSet:
+      id: 011-create-report-executions-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: public
+            tableName: report_executions
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: report_definition_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+              - column:
+                  name: format
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'PENDING'
+              - column:
+                  name: parameters
+                  type: TEXT
+              - column:
+                  name: result_data
+                  type: TEXT
+              - column:
+                  name: file_path
+                  type: VARCHAR(500)
+              - column:
+                  name: executed_at
+                  type: TIMESTAMP
+              - column:
+                  name: completed_at
+                  type: TIMESTAMP
+              - column:
+                  name: error_message
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addForeignKeyConstraint:
+            baseSchemaName: public
+            baseTableName: report_executions
+            baseColumnNames: report_definition_id
+            referencedSchemaName: public
+            referencedTableName: report_definitions
+            referencedColumnNames: id
+            constraintName: fk_report_executions_definition
+        - addForeignKeyConstraint:
+            baseSchemaName: public
+            baseTableName: report_executions
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_report_executions_project

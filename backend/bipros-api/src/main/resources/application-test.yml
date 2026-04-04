@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:17-alpine:///bipros_test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+bipros:
+  security:
+    jwt:
+      secret: test-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256-testing
+      access-token-expiration: 3600000
+      refresh-token-expiration: 86400000
+
+logging:
+  level:
+    com.bipros: DEBUG

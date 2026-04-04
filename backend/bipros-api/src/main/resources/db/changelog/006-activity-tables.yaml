@@ -1,0 +1,324 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-create-activities-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: activity
+            tableName: activities
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: wbs_node_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: activity_type
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'TASK_DEPENDENT'
+              - column:
+                  name: duration_type
+                  type: VARCHAR(30)
+                  defaultValue: 'FIXED_DURATION_AND_UNITS'
+              - column:
+                  name: percent_complete_type
+                  type: VARCHAR(30)
+                  defaultValue: 'DURATION'
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'NOT_STARTED'
+              - column:
+                  name: original_duration
+                  type: DOUBLE
+              - column:
+                  name: remaining_duration
+                  type: DOUBLE
+              - column:
+                  name: at_completion_duration
+                  type: DOUBLE
+              - column:
+                  name: planned_start_date
+                  type: DATE
+              - column:
+                  name: planned_finish_date
+                  type: DATE
+              - column:
+                  name: early_start_date
+                  type: DATE
+              - column:
+                  name: early_finish_date
+                  type: DATE
+              - column:
+                  name: late_start_date
+                  type: DATE
+              - column:
+                  name: late_finish_date
+                  type: DATE
+              - column:
+                  name: actual_start_date
+                  type: DATE
+              - column:
+                  name: actual_finish_date
+                  type: DATE
+              - column:
+                  name: total_float
+                  type: DOUBLE
+              - column:
+                  name: free_float
+                  type: DOUBLE
+              - column:
+                  name: percent_complete
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+                  defaultValue: 0
+              - column:
+                  name: physical_percent_complete
+                  type: DOUBLE
+              - column:
+                  name: duration_percent_complete
+                  type: DOUBLE
+              - column:
+                  name: units_percent_complete
+                  type: DOUBLE
+              - column:
+                  name: calendar_id
+                  type: UUID
+              - column:
+                  name: is_critical
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: suspend_date
+                  type: DATE
+              - column:
+                  name: resume_date
+                  type: DATE
+              - column:
+                  name: primary_constraint_type
+                  type: VARCHAR(30)
+              - column:
+                  name: primary_constraint_date
+                  type: DATE
+              - column:
+                  name: secondary_constraint_type
+                  type: VARCHAR(30)
+              - column:
+                  name: secondary_constraint_date
+                  type: DATE
+              - column:
+                  name: sort_order
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: activity
+            tableName: activities
+            columnNames: project_id,code
+            constraintName: uk_activities_project_code
+        - addForeignKeyConstraint:
+            baseSchemaName: activity
+            baseTableName: activities
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_activities_project
+        - addForeignKeyConstraint:
+            baseSchemaName: activity
+            baseTableName: activities
+            baseColumnNames: wbs_node_id
+            referencedSchemaName: project
+            referencedTableName: wbs_nodes
+            referencedColumnNames: id
+            constraintName: fk_activities_wbs_node
+
+  - changeSet:
+      id: 006-create-activity-relationships-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: activity
+            tableName: activity_relationships
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: predecessor_activity_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: successor_activity_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: relationship_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'FINISH_TO_START'
+              - column:
+                  name: lag
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+                  defaultValue: 0
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_external
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: activity
+            tableName: activity_relationships
+            columnNames: predecessor_activity_id,successor_activity_id
+            constraintName: uk_activity_relationships_pred_succ
+        - addForeignKeyConstraint:
+            baseSchemaName: activity
+            baseTableName: activity_relationships
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_activity_relationships_project
+
+  - changeSet:
+      id: 006-create-activity-code-assignments-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: activity
+            tableName: activity_code_assignments
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: activity_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: activity_code_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code_value
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: activity
+            tableName: activity_code_assignments
+            columnNames: activity_id,activity_code_id
+            constraintName: uk_activity_code_assignments_activity_code
+        - addForeignKeyConstraint:
+            baseSchemaName: activity
+            baseTableName: activity_code_assignments
+            baseColumnNames: activity_id
+            referencedSchemaName: activity
+            referencedTableName: activities
+            referencedColumnNames: id
+            constraintName: fk_activity_code_assignments_activity

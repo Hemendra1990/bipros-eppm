@@ -1,0 +1,285 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-create-calendars-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: scheduling
+            tableName: calendars
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: VARCHAR(500)
+              - column:
+                  name: calendar_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+              - column:
+                  name: resource_id
+                  type: UUID
+              - column:
+                  name: parent_calendar_id
+                  type: UUID
+              - column:
+                  name: is_default
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: standard_work_hours_per_day
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+                  defaultValue: 8.0
+              - column:
+                  name: standard_work_days_per_week
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  defaultValue: 5
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - createIndex:
+            schemaName: scheduling
+            tableName: calendars
+            indexName: idx_calendar_type
+            columns:
+              - column:
+                  name: calendar_type
+        - createIndex:
+            schemaName: scheduling
+            tableName: calendars
+            indexName: idx_calendar_project_id
+            columns:
+              - column:
+                  name: project_id
+        - createIndex:
+            schemaName: scheduling
+            tableName: calendars
+            indexName: idx_calendar_resource_id
+            columns:
+              - column:
+                  name: resource_id
+        - createIndex:
+            schemaName: scheduling
+            tableName: calendars
+            indexName: idx_calendar_is_default
+            columns:
+              - column:
+                  name: is_default
+        - addUniqueConstraint:
+            schemaName: scheduling
+            tableName: calendars
+            columnNames: name,calendar_type,project_id
+            constraintName: uk_calendar_name_type_project
+
+  - changeSet:
+      id: 005-create-calendar-exceptions-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: scheduling
+            tableName: calendar_exceptions
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: calendar_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: exception_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: day_type
+                  type: VARCHAR(25)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+              - column:
+                  name: start_time1
+                  type: TIME
+              - column:
+                  name: end_time1
+                  type: TIME
+              - column:
+                  name: start_time2
+                  type: TIME
+              - column:
+                  name: end_time2
+                  type: TIME
+              - column:
+                  name: total_work_hours
+                  type: DOUBLE
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - createIndex:
+            schemaName: scheduling
+            tableName: calendar_exceptions
+            indexName: idx_calendar_exception_calendar_id
+            columns:
+              - column:
+                  name: calendar_id
+        - createIndex:
+            schemaName: scheduling
+            tableName: calendar_exceptions
+            indexName: idx_calendar_exception_date
+            columns:
+              - column:
+                  name: exception_date
+        - addUniqueConstraint:
+            schemaName: scheduling
+            tableName: calendar_exceptions
+            columnNames: calendar_id,exception_date
+            constraintName: uk_calendar_exception_date
+        - addForeignKeyConstraint:
+            baseSchemaName: scheduling
+            baseTableName: calendar_exceptions
+            baseColumnNames: calendar_id
+            referencedSchemaName: scheduling
+            referencedTableName: calendars
+            referencedColumnNames: id
+            constraintName: fk_calendar_exceptions_calendar
+
+  - changeSet:
+      id: 005-create-calendar-work-weeks-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: scheduling
+            tableName: calendar_work_weeks
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: calendar_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: day_of_week
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: day_type
+                  type: VARCHAR(25)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: start_time1
+                  type: TIME
+              - column:
+                  name: end_time1
+                  type: TIME
+              - column:
+                  name: start_time2
+                  type: TIME
+              - column:
+                  name: end_time2
+                  type: TIME
+              - column:
+                  name: total_work_hours
+                  type: DOUBLE
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - createIndex:
+            schemaName: scheduling
+            tableName: calendar_work_weeks
+            indexName: idx_calendar_work_week_calendar_id
+            columns:
+              - column:
+                  name: calendar_id
+        - addUniqueConstraint:
+            schemaName: scheduling
+            tableName: calendar_work_weeks
+            columnNames: calendar_id,day_of_week
+            constraintName: uk_calendar_work_week_day
+        - addForeignKeyConstraint:
+            baseSchemaName: scheduling
+            baseTableName: calendar_work_weeks
+            baseColumnNames: calendar_id
+            referencedSchemaName: scheduling
+            referencedTableName: calendars
+            referencedColumnNames: id
+            constraintName: fk_calendar_work_weeks_calendar

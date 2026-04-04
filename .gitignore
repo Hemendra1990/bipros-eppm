@@ -1,0 +1,38 @@
+# Java
+target/
+*.class
+*.jar
+*.war
+*.log
+*.iml
+.idea/
+*.swp
+*~
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# Spring Boot
+*.pid
+
+# Node.js / Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker/data/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Environment
+.env
+*.env.local

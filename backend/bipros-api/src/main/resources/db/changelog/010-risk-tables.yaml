@@ -1,0 +1,175 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-create-risks-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risks
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: category
+                  type: VARCHAR(30)
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'IDENTIFIED'
+              - column:
+                  name: probability
+                  type: VARCHAR(20)
+              - column:
+                  name: impact
+                  type: VARCHAR(20)
+              - column:
+                  name: risk_score
+                  type: DOUBLE
+              - column:
+                  name: owner_id
+                  type: UUID
+              - column:
+                  name: identified_date
+                  type: DATE
+              - column:
+                  name: due_date
+                  type: DATE
+              - column:
+                  name: affected_activities
+                  type: TEXT
+              - column:
+                  name: cost_impact
+                  type: DECIMAL(19, 4)
+              - column:
+                  name: schedule_impact_days
+                  type: INTEGER
+              - column:
+                  name: sort_order
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risks
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_risks_project
+
+  - changeSet:
+      id: 010-create-risk-responses-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risk_responses
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: risk_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_type
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: responsible_id
+                  type: UUID
+              - column:
+                  name: planned_date
+                  type: DATE
+              - column:
+                  name: actual_date
+                  type: DATE
+              - column:
+                  name: estimated_cost
+                  type: DECIMAL(19, 4)
+              - column:
+                  name: actual_cost
+                  type: DECIMAL(19, 4)
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+                  defaultValue: 'PLANNED'
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risk_responses
+            baseColumnNames: risk_id
+            referencedSchemaName: risk
+            referencedTableName: risks
+            referencedColumnNames: id
+            constraintName: fk_risk_responses_risk

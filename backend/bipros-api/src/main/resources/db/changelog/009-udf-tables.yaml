@@ -1,0 +1,151 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-create-user-defined-fields-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: udf
+            tableName: user_defined_fields
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: data_type
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: subject
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: scope
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'GLOBAL'
+              - column:
+                  name: project_id
+                  type: UUID
+              - column:
+                  name: is_formula
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: formula_expression
+                  type: TEXT
+              - column:
+                  name: default_value
+                  type: VARCHAR(255)
+              - column:
+                  name: sort_order
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+
+  - changeSet:
+      id: 009-create-udf-values-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: udf
+            tableName: udf_values
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_defined_field_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: entity_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: text_value
+                  type: TEXT
+              - column:
+                  name: number_value
+                  type: DOUBLE
+              - column:
+                  name: cost_value
+                  type: DECIMAL(19, 4)
+              - column:
+                  name: date_value
+                  type: DATE
+              - column:
+                  name: indicator_value
+                  type: VARCHAR(30)
+              - column:
+                  name: code_value
+                  type: VARCHAR(100)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: udf
+            tableName: udf_values
+            columnNames: user_defined_field_id,entity_id
+            constraintName: uk_udf_values_field_entity
+        - addForeignKeyConstraint:
+            baseSchemaName: udf
+            baseTableName: udf_values
+            baseColumnNames: user_defined_field_id
+            referencedSchemaName: udf
+            referencedTableName: user_defined_fields
+            referencedColumnNames: id
+            constraintName: fk_udf_values_field
