@@ -113,7 +113,7 @@ export default function ProjectDetailPage() {
   const activityColumns: ColumnDef<ActivityResponse>[] = [
     { key: "code", label: "Code", sortable: true },
     { key: "name", label: "Name", sortable: true },
-    { key: "duration", label: "Duration (days)", sortable: true },
+    { key: "originalDuration", label: "Duration (days)", sortable: true },
     {
       key: "percentComplete",
       label: "% Complete",
@@ -484,6 +484,9 @@ function BaselinesTab({
   const [expandedBaselineId, setExpandedBaselineId] = useState<string | null>(null);
   const [varianceData, setVarianceData] = useState<Record<string, BaselineVarianceRow[]>>({});
   const [loadingVarianceId, setLoadingVarianceId] = useState<string | null>(null);
+  const [comparisonBaselineId, setComparisonBaselineId] = useState<string | null>(null);
+  const [comparisonData, setComparisonData] = useState<Record<string, any[]>>({});
+  const [loadingComparisonId, setLoadingComparisonId] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -519,6 +522,34 @@ function BaselinesTab({
       console.error("Failed to load variance data:", error);
     } finally {
       setLoadingVarianceId(null);
+    }
+  };
+
+  const handleCompareSchedule = async (baselineId: string) => {
+    if (comparisonBaselineId === baselineId) {
+      setComparisonBaselineId(null);
+      return;
+    }
+
+    if (comparisonData[baselineId]) {
+      setComparisonBaselineId(baselineId);
+      return;
+    }
+
+    setLoadingComparisonId(baselineId);
+    try {
+      const response = await baselineApi.getScheduleComparison(projectId, baselineId);
+      if (response?.data) {
+        setComparisonData((prev) => ({
+          ...prev,
+          [baselineId]: response.data!,
+        }));
+        setComparisonBaselineId(baselineId);
+      }
+    } catch (error) {
+      console.error("Failed to load schedule comparison data:", error);
+    } finally {
+      setLoadingComparisonId(null);
     }
   };
 
@@ -615,6 +646,14 @@ function BaselinesTab({
                     {expandedBaselineId === baseline.id ? "Hide Variance" : "View Variance"}
                   </button>
                   <button
+                    onClick={() => handleCompareSchedule(baseline.id)}
+                    disabled={loadingComparisonId === baseline.id}
+                    className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 disabled:bg-gray-200"
+                  >
+                    <Eye size={16} />
+                    {comparisonBaselineId === baseline.id ? "Hide Compare" : "Compare"}
+                  </button>
+                  <button
                     onClick={() => {
                       if (window.confirm("Are you sure you want to delete this baseline?")) {
                         onDeleteBaseline(baseline.id);
@@ -667,6 +706,63 @@ function BaselinesTab({
                             <td className="px-4 py-3 text-right text-gray-900">
                               <span className={row.costVariance !== 0 ? "font-semibold text-red-600" : ""}>
                                 {row.costVariance}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {comparisonBaselineId === baseline.id && comparisonData[baseline.id] && (
+                <div className="mt-6 border-t border-gray-200 pt-6">
+                  <h4 className="mb-4 font-semibold text-gray-900">Schedule Comparison</h4>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Activity Name</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Current Start</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Baseline Start</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-700">Start Var</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Current Finish</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Baseline Finish</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-700">Finish Var</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisonData[baseline.id].map((row: any, idx: number) => (
+                          <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="px-4 py-3 text-gray-900">{row.activityName}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {row.currentStart ? new Date(row.currentStart).toLocaleDateString() : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {row.baselineStart ? new Date(row.baselineStart).toLocaleDateString() : "—"}
+                            </td>
+                            <td className={`px-4 py-3 text-right ${row.startVarianceDays > 0 ? "font-semibold text-red-600" : row.startVarianceDays < 0 ? "font-semibold text-green-600" : ""}`}>
+                              {row.startVarianceDays > 0 ? "+" : ""}{row.startVarianceDays}d
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {row.currentFinish ? new Date(row.currentFinish).toLocaleDateString() : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {row.baselineFinish ? new Date(row.baselineFinish).toLocaleDateString() : "—"}
+                            </td>
+                            <td className={`px-4 py-3 text-right ${row.finishVarianceDays > 0 ? "font-semibold text-red-600" : row.finishVarianceDays < 0 ? "font-semibold text-green-600" : ""}`}>
+                              {row.finishVarianceDays > 0 ? "+" : ""}{row.finishVarianceDays}d
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                                row.status === "ADDED" ? "bg-green-100 text-green-800" :
+                                row.status === "DELETED" ? "bg-red-100 text-red-800" :
+                                row.status === "CHANGED" ? "bg-yellow-100 text-yellow-800" :
+                                "bg-gray-100 text-gray-800"
+                              }`}>
+                                {row.status}
                               </span>
                             </td>
                           </tr>

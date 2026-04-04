@@ -40,6 +40,18 @@ export interface BaselineActivityResponse {
   baselineFinishDate: string | null;
 }
 
+export interface ScheduleComparisonRow {
+  activityId: string;
+  activityName: string;
+  currentStart: string | null;
+  baselineStart: string | null;
+  startVarianceDays: number;
+  currentFinish: string | null;
+  baselineFinish: string | null;
+  finishVarianceDays: number;
+  status: "ADDED" | "DELETED" | "CHANGED" | "UNCHANGED";
+}
+
 export const baselineApi = {
   listBaselines: (projectId: string) =>
     apiClient
@@ -72,4 +84,11 @@ export const baselineApi = {
     apiClient.delete<ApiResponse<void>>(
       `/v1/projects/${projectId}/baselines/${baselineId}`
     ),
+
+  getScheduleComparison: (projectId: string, baselineId: string) =>
+    apiClient
+      .get<ApiResponse<ScheduleComparisonRow[]>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}/schedule-comparison`
+      )
+      .then((r) => r.data),
 };

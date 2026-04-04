@@ -42,6 +42,10 @@ public class WbsNode extends BaseEntity implements HierarchyNode {
     @Column(name = "summary_percent_complete")
     private Double summaryPercentComplete;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "asset_class")
+    private AssetClass assetClass;
+
     @Override
     public int getSortOrder() {
         return sortOrder != null ? sortOrder : 0;

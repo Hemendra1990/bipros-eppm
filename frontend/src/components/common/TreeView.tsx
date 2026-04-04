@@ -22,7 +22,20 @@ export function TreeView<T extends { id: string; code: string; name: string; chi
   renderNode,
   level = 0,
 }: TreeViewProps<T>) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    // Auto-expand nodes that have children
+    const initial: Record<string, boolean> = {};
+    const expandAll = (items: T[]) => {
+      for (const item of items) {
+        if (item.children && item.children.length > 0) {
+          initial[item.id] = true;
+          expandAll(item.children);
+        }
+      }
+    };
+    expandAll(nodes);
+    return initial;
+  });
 
   const toggleNode = (id: string) => {
     setExpanded((prev) => ({

@@ -246,4 +246,20 @@ public class ImportExportService {
       case CSV -> "csv";
     };
   }
+
+  public String exportP6Xml(UUID projectId) throws Exception {
+    return p6XmlExporter.export(projectId);
+  }
+
+  public String exportMspXml(UUID projectId) throws Exception {
+    return mspXmlExporter.export(projectId);
+  }
+
+  public byte[] exportExcel(UUID projectId) throws Exception {
+    return excelExporter.export(projectId);
+  }
+
+  public String exportCsv(UUID projectId) throws Exception {
+    return csvExporter.export(projectId);
+  }
 }

@@ -1,0 +1,267 @@
+import { apiClient } from "./client";
+import type { ApiResponse } from "../types";
+
+export interface DocumentFolder {
+  id: string;
+  projectId: string;
+  name: string;
+  code: string;
+  category: string;
+  parentId: string | null;
+  wbsNodeId: string | null;
+  sortOrder: number;
+}
+
+export interface Document {
+  id: string;
+  folderId: string;
+  projectId: string;
+  documentNumber: string;
+  title: string;
+  description: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  filePath: string;
+  currentVersion: number;
+  status: "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "SUPERSEDED" | "ARCHIVED";
+  tags: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  changeDescription: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface DrawingRegister {
+  id: string;
+  projectId: string;
+  documentId: string | null;
+  drawingNumber: string;
+  title: string;
+  discipline: string;
+  revision: string;
+  revisionDate: string;
+  status: "PRELIMINARY" | "IFA" | "IFC" | "AS_BUILT" | "SUPERSEDED";
+  packageCode: string;
+  scale: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Transmittal {
+  id: string;
+  projectId: string;
+  transmittalNumber: string;
+  subject: string;
+  fromParty: string;
+  toParty: string;
+  sentDate: string;
+  dueDate: string;
+  status: "DRAFT" | "SENT" | "RECEIVED" | "ACKNOWLEDGED" | "OVERDUE";
+  remarks: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RfiRegister {
+  id: string;
+  projectId: string;
+  rfiNumber: string;
+  subject: string;
+  description: string;
+  raisedBy: string;
+  assignedTo: string;
+  raisedDate: string;
+  dueDate: string;
+  closedDate: string | null;
+  status: "OPEN" | "RESPONDED" | "CLOSED" | "OVERDUE";
+  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  response: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const documentApi = {
+  // Document Folders
+  listRootFolders: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<DocumentFolder[]>>(
+        `/v1/projects/${projectId}/document-folders/root`
+      )
+      .then((r) => r.data),
+
+  listChildFolders: (projectId: string, folderId: string) =>
+    apiClient
+      .get<ApiResponse<DocumentFolder[]>>(
+        `/v1/projects/${projectId}/document-folders/${folderId}/children`
+      )
+      .then((r) => r.data),
+
+  createFolder: (projectId: string, data: any) =>
+    apiClient
+      .post<ApiResponse<DocumentFolder>>(
+        `/v1/projects/${projectId}/document-folders`,
+        data
+      )
+      .then((r) => r.data),
+
+  updateFolder: (projectId: string, folderId: string, data: any) =>
+    apiClient
+      .put<ApiResponse<DocumentFolder>>(
+        `/v1/projects/${projectId}/document-folders/${folderId}`,
+        data
+      )
+      .then((r) => r.data),
+
+  deleteFolder: (projectId: string, folderId: string) =>
+    apiClient.delete(`/v1/projects/${projectId}/document-folders/${folderId}`),
+
+  // Documents
+  listDocuments: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<Document[]>>(`/v1/projects/${projectId}/documents`)
+      .then((r) => r.data),
+
+  getDocument: (projectId: string, documentId: string) =>
+    apiClient
+      .get<ApiResponse<Document>>(
+        `/v1/projects/${projectId}/documents/${documentId}`
+      )
+      .then((r) => r.data),
+
+  createDocument: (projectId: string, data: any) =>
+    apiClient
+      .post<ApiResponse<Document>>(`/v1/projects/${projectId}/documents`, data)
+      .then((r) => r.data),
+
+  updateDocument: (projectId: string, documentId: string, data: any) =>
+    apiClient
+      .put<ApiResponse<Document>>(
+        `/v1/projects/${projectId}/documents/${documentId}`,
+        data
+      )
+      .then((r) => r.data),
+
+  deleteDocument: (projectId: string, documentId: string) =>
+    apiClient.delete(`/v1/projects/${projectId}/documents/${documentId}`),
+
+  getDocumentVersions: (projectId: string, documentId: string) =>
+    apiClient
+      .get<ApiResponse<DocumentVersion[]>>(
+        `/v1/projects/${projectId}/documents/${documentId}/versions`
+      )
+      .then((r) => r.data),
+
+  addDocumentVersion: (projectId: string, documentId: string, data: any) =>
+    apiClient
+      .post<ApiResponse<DocumentVersion>>(
+        `/v1/projects/${projectId}/documents/${documentId}/versions`,
+        data
+      )
+      .then((r) => r.data),
+
+  // Drawings
+  listDrawings: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<DrawingRegister[]>>(
+        `/v1/projects/${projectId}/drawings`
+      )
+      .then((r) => r.data),
+
+  getDrawing: (projectId: string, drawingId: string) =>
+    apiClient
+      .get<ApiResponse<DrawingRegister>>(
+        `/v1/projects/${projectId}/drawings/${drawingId}`
+      )
+      .then((r) => r.data),
+
+  createDrawing: (projectId: string, data: any) =>
+    apiClient
+      .post<ApiResponse<DrawingRegister>>(
+        `/v1/projects/${projectId}/drawings`,
+        data
+      )
+      .then((r) => r.data),
+
+  updateDrawing: (projectId: string, drawingId: string, data: any) =>
+    apiClient
+      .put<ApiResponse<DrawingRegister>>(
+        `/v1/projects/${projectId}/drawings/${drawingId}`,
+        data
+      )
+      .then((r) => r.data),
+
+  deleteDrawing: (projectId: string, drawingId: string) =>
+    apiClient.delete(`/v1/projects/${projectId}/drawings/${drawingId}`),
+
+  // Transmittals
+  listTransmittals: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<Transmittal[]>>(
+        `/v1/projects/${projectId}/transmittals`
+      )
+      .then((r) => r.data),
+
+  getTransmittal: (projectId: string, transmittalId: string) =>
+    apiClient
+      .get<ApiResponse<Transmittal>>(
+        `/v1/projects/${projectId}/transmittals/${transmittalId}`
+      )
+      .then((r) => r.data),
+
+  createTransmittal: (projectId: string, data: any) =>
+    apiClient
+      .post<ApiResponse<Transmittal>>(
+        `/v1/projects/${projectId}/transmittals`,
+        data
+      )
+      .then((r) => r.data),
+
+  updateTransmittal: (projectId: string, transmittalId: string, data: any) =>
+    apiClient
+      .put<ApiResponse<Transmittal>>(
+        `/v1/projects/${projectId}/transmittals/${transmittalId}`,
+        data
+      )
+      .then((r) => r.data),
+
+  deleteTransmittal: (projectId: string, transmittalId: string) =>
+    apiClient.delete(`/v1/projects/${projectId}/transmittals/${transmittalId}`),
+
+  // RFIs
+  listRfis: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<RfiRegister[]>>(`/v1/projects/${projectId}/rfis`)
+      .then((r) => r.data),
+
+  getRfi: (projectId: string, rfiId: string) =>
+    apiClient
+      .get<ApiResponse<RfiRegister>>(`/v1/projects/${projectId}/rfis/${rfiId}`)
+      .then((r) => r.data),
+
+  createRfi: (projectId: string, data: any) =>
+    apiClient
+      .post<ApiResponse<RfiRegister>>(`/v1/projects/${projectId}/rfis`, data)
+      .then((r) => r.data),
+
+  updateRfi: (projectId: string, rfiId: string, data: any) =>
+    apiClient
+      .put<ApiResponse<RfiRegister>>(
+        `/v1/projects/${projectId}/rfis/${rfiId}`,
+        data
+      )
+      .then((r) => r.data),
+
+  deleteRfi: (projectId: string, rfiId: string) =>
+    apiClient.delete(`/v1/projects/${projectId}/rfis/${rfiId}`),
+};

@@ -210,6 +210,86 @@ export interface CalendarResponse {
   updatedAt: string;
 }
 
+// === Documents ===
+
+export interface DocumentFolder {
+  id: string;
+  projectId: string;
+  name: string;
+  code: string;
+  category: string;
+  parentId: string | null;
+  wbsNodeId: string | null;
+  sortOrder: number;
+}
+
+export interface DocumentResponse {
+  id: string;
+  folderId: string;
+  projectId: string;
+  documentNumber: string;
+  title: string;
+  description: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  filePath: string;
+  currentVersion: number;
+  status: "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "SUPERSEDED" | "ARCHIVED";
+  tags: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DrawingRegisterResponse {
+  id: string;
+  projectId: string;
+  documentId: string | null;
+  drawingNumber: string;
+  title: string;
+  discipline: string;
+  revision: string;
+  revisionDate: string;
+  status: "PRELIMINARY" | "IFA" | "IFC" | "AS_BUILT" | "SUPERSEDED";
+  packageCode: string;
+  scale: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TransmittalResponse {
+  id: string;
+  projectId: string;
+  transmittalNumber: string;
+  subject: string;
+  fromParty: string;
+  toParty: string;
+  sentDate: string;
+  dueDate: string;
+  status: "DRAFT" | "SENT" | "RECEIVED" | "ACKNOWLEDGED" | "OVERDUE";
+  remarks: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RfiRegisterResponse {
+  id: string;
+  projectId: string;
+  rfiNumber: string;
+  subject: string;
+  description: string;
+  raisedBy: string;
+  assignedTo: string;
+  raisedDate: string;
+  dueDate: string;
+  closedDate: string | null;
+  status: "OPEN" | "RESPONDED" | "CLOSED" | "OVERDUE";
+  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  response: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // === Resources ===
 
 export interface ResourceAssignmentResponse {
@@ -373,4 +453,287 @@ export interface CreateObsNodeRequest {
   name: string;
   description?: string;
   parentId?: string;
+}
+
+// === Contracts & Procurement ===
+
+export type ProcurementMethod = "OPEN_TENDER" | "LIMITED_TENDER" | "GEM_PORTAL" | "SINGLE_SOURCE" | "EOI" | "DESIGN_BUILD";
+export type ProcurementPlanStatus = "DRAFT" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type TenderStatus = "DRAFT" | "PUBLISHED" | "BID_OPEN" | "EVALUATION" | "AWARDED" | "CANCELLED";
+export type BidSubmissionStatus = "SUBMITTED" | "TECHNICALLY_QUALIFIED" | "NOT_QUALIFIED" | "L1" | "AWARDED" | "REJECTED";
+export type ContractStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "COMPLETED" | "TERMINATED" | "DLP";
+export type ContractType = "WORKS" | "SUPPLY" | "CONSULTANCY" | "EPC" | "PPP";
+export type MilestoneStatus = "PENDING" | "ACHIEVED" | "DELAYED" | "WAIVED";
+export type VariationOrderStatus = "INITIATED" | "RECOMMENDED" | "APPROVED" | "REJECTED";
+export type BondType = "PERFORMANCE_GUARANTEE" | "EMD" | "ADVANCE_GUARANTEE" | "RETENTION";
+export type BondStatus = "ACTIVE" | "EXPIRED" | "RELEASED" | "INVOKED";
+
+export interface ProcurementPlanResponse {
+  id: string;
+  projectId: string;
+  wbsNodeId: string | null;
+  planCode: string;
+  description: string;
+  procurementMethod: ProcurementMethod;
+  estimatedValue: number;
+  currency: string;
+  targetNitDate: string;
+  targetAwardDate: string;
+  status: ProcurementPlanStatus;
+  approvalLevel: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProcurementPlanRequest {
+  projectId: string;
+  wbsNodeId?: string;
+  planCode: string;
+  description: string;
+  procurementMethod: ProcurementMethod;
+  estimatedValue: number;
+  currency: string;
+  targetNitDate: string;
+  targetAwardDate: string;
+  approvalLevel?: string;
+  approvedBy?: string;
+}
+
+export interface TenderResponse {
+  id: string;
+  procurementPlanId: string;
+  projectId: string;
+  tenderNumber: string;
+  nitDate: string;
+  scope: string;
+  estimatedValue: number;
+  emdAmount: number;
+  completionPeriodDays: number;
+  bidDueDate: string;
+  bidOpenDate: string;
+  status: TenderStatus;
+  awardedContractId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTenderRequest {
+  procurementPlanId: string;
+  projectId: string;
+  tenderNumber: string;
+  nitDate: string;
+  scope: string;
+  estimatedValue: number;
+  emdAmount: number;
+  completionPeriodDays: number;
+  bidDueDate: string;
+  bidOpenDate: string;
+}
+
+export interface BidSubmissionResponse {
+  id: string;
+  tenderId: string;
+  bidderName: string;
+  bidderCode: string;
+  technicalScore: number;
+  financialBid: number;
+  status: BidSubmissionStatus;
+  evaluationRemarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateBidSubmissionRequest {
+  tenderId: string;
+  bidderName: string;
+  bidderCode: string;
+  technicalScore: number;
+  financialBid: number;
+  evaluationRemarks?: string;
+}
+
+export interface ContractResponse {
+  id: string;
+  projectId: string;
+  tenderId: string | null;
+  contractNumber: string;
+  loaNumber: string | null;
+  contractorName: string;
+  contractorCode: string | null;
+  contractValue: number;
+  loaDate: string;
+  startDate: string;
+  completionDate: string;
+  dlpMonths: number;
+  ldRate: number;
+  status: ContractStatus;
+  contractType: ContractType;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContractRequest {
+  projectId: string;
+  tenderId?: string;
+  contractNumber: string;
+  loaNumber?: string;
+  contractorName: string;
+  contractorCode?: string;
+  contractValue: number;
+  loaDate: string;
+  startDate: string;
+  completionDate: string;
+  dlpMonths?: number;
+  ldRate: number;
+  contractType: ContractType;
+}
+
+export interface ContractMilestoneResponse {
+  id: string;
+  contractId: string;
+  milestoneCode: string;
+  milestoneName: string;
+  targetDate: string;
+  actualDate: string | null;
+  paymentPercentage: number;
+  amount: number;
+  status: MilestoneStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContractMilestoneRequest {
+  contractId: string;
+  milestoneCode: string;
+  milestoneName: string;
+  targetDate: string;
+  actualDate?: string;
+  paymentPercentage: number;
+  amount: number;
+}
+
+export interface VariationOrderResponse {
+  id: string;
+  contractId: string;
+  voNumber: string;
+  description: string;
+  voValue: number;
+  justification: string;
+  status: VariationOrderStatus;
+  impactOnBudget: number;
+  impactOnScheduleDays: number;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateVariationOrderRequest {
+  contractId: string;
+  voNumber: string;
+  description: string;
+  voValue: number;
+  justification: string;
+  impactOnBudget: number;
+  impactOnScheduleDays: number;
+  approvedBy?: string;
+}
+
+export interface PerformanceBondResponse {
+  id: string;
+  contractId: string;
+  bondType: BondType;
+  bondValue: number;
+  bankName: string;
+  issueDate: string;
+  expiryDate: string;
+  status: BondStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePerformanceBondRequest {
+  contractId: string;
+  bondType: BondType;
+  bondValue: number;
+  bankName: string;
+  issueDate: string;
+  expiryDate: string;
+}
+
+export interface ContractorScorecardResponse {
+  id: string;
+  contractId: string;
+  period: string;
+  qualityScore: number;
+  safetyScore: number;
+  progressScore: number;
+  paymentComplianceScore: number;
+  overallScore: number;
+  remarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContractorScorecardRequest {
+  contractId: string;
+  period: string;
+  qualityScore: number;
+  safetyScore: number;
+  progressScore: number;
+  paymentComplianceScore: number;
+  overallScore: number;
+  remarks?: string;
+}
+
+// === WBS Templates and Asset Classes ===
+
+export type AssetClass =
+  | "ROAD"
+  | "RAIL"
+  | "POWER"
+  | "WATER"
+  | "ICT"
+  | "BUILDING"
+  | "GREEN_INFRASTRUCTURE";
+
+export interface WbsTemplateResponse {
+  id: string;
+  code: string;
+  name: string;
+  assetClass: AssetClass;
+  description: string;
+  defaultStructure: string; // JSON string
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateWbsTemplateRequest {
+  code: string;
+  name: string;
+  assetClass: AssetClass;
+  description?: string;
+  defaultStructure: string;
+  isActive?: boolean;
+}
+
+export interface CorridorCodeResponse {
+  id: string;
+  projectId: string;
+  corridorPrefix: string;
+  zoneCode: string;
+  nodeCode: string;
+  generatedCode: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCorridorCodeRequest {
+  projectId: string;
+  corridorPrefix: string;
+  zoneCode: string;
+  nodeCode: string;
 }

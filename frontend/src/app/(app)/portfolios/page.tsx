@@ -21,7 +21,8 @@ export default function PortfoliosPage() {
     try {
       setLoading(true);
       const result = await portfolioApi.listPortfolios();
-      setPortfolios(result.data?.content ?? []);
+      const data = result.data;
+      setPortfolios(Array.isArray(data) ? data : (data as any)?.content ?? []);
     } catch {
       setError("Failed to load portfolios");
     } finally {

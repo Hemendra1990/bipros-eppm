@@ -1,0 +1,264 @@
+databaseChangeLog:
+  - changeSet:
+      id: 015-create-equipment-logs-table
+      author: bipros
+      changes:
+        - createTable:
+            tableName: equipment_logs
+            schemaName: resource
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: resource_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_equip_log_resource
+                    references: resource.resources(id)
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: log_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deployment_site
+                  type: VARCHAR(255)
+              - column:
+                  name: operating_hours
+                  type: DOUBLE
+              - column:
+                  name: idle_hours
+                  type: DOUBLE
+              - column:
+                  name: breakdown_hours
+                  type: DOUBLE
+              - column:
+                  name: fuel_consumed
+                  type: DOUBLE
+              - column:
+                  name: operator_name
+                  type: VARCHAR(100)
+              - column:
+                  name: remarks
+                  type: TEXT
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: equipment_logs
+            schemaName: resource
+            indexName: idx_equip_log_resource
+            columns:
+              - column:
+                  name: resource_id
+
+        - createIndex:
+            tableName: equipment_logs
+            schemaName: resource
+            indexName: idx_equip_log_project
+            columns:
+              - column:
+                  name: project_id
+
+        - createIndex:
+            tableName: equipment_logs
+            schemaName: resource
+            indexName: idx_equip_log_date
+            columns:
+              - column:
+                  name: log_date
+
+        - createTable:
+            tableName: labour_returns
+            schemaName: resource
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contractor_name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: return_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: skill_category
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: head_count
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: man_days
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: wbs_node_id
+                  type: UUID
+              - column:
+                  name: site_location
+                  type: VARCHAR(255)
+              - column:
+                  name: remarks
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: labour_returns
+            schemaName: resource
+            indexName: idx_labour_project
+            columns:
+              - column:
+                  name: project_id
+
+        - createIndex:
+            tableName: labour_returns
+            schemaName: resource
+            indexName: idx_labour_return_date
+            columns:
+              - column:
+                  name: return_date
+
+        - createTable:
+            tableName: ra_bills
+            schemaName: cost
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contract_id
+                  type: UUID
+              - column:
+                  name: bill_number
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: bill_period_from
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: bill_period_to
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: gross_amount
+                  type: DECIMAL(15, 2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deductions
+                  type: DECIMAL(15, 2)
+              - column:
+                  name: net_amount
+                  type: DECIMAL(15, 2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cumulative_amount
+                  type: DECIMAL(15, 2)
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: submitted_date
+                  type: DATE
+              - column:
+                  name: remarks
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: ra_bills
+            schemaName: cost
+            indexName: idx_ra_bill_project
+            columns:
+              - column:
+                  name: project_id
+
+        - createIndex:
+            tableName: ra_bills
+            schemaName: cost
+            indexName: idx_ra_bill_contract
+            columns:
+              - column:
+                  name: contract_id

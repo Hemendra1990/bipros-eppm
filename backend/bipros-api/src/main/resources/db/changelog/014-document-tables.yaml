@@ -1,0 +1,302 @@
+databaseChangeLog:
+  - changeSet:
+      id: 014-create-document-tables
+      author: bipros
+      changes:
+        - createTable:
+            tableName: document_folders
+            schemaName: document
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(50)
+              - column:
+                  name: parent_id
+                  type: UUID
+              - column:
+                  name: wbs_node_id
+                  type: UUID
+              - column:
+                  name: sort_order
+                  type: INT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: document_folders
+            schemaName: document
+            indexName: idx_folder_project
+            columns:
+              - column:
+                  name: project_id
+
+        - createIndex:
+            tableName: document_folders
+            schemaName: document
+            indexName: idx_folder_parent
+            columns:
+              - column:
+                  name: parent_id
+
+        - createTable:
+            tableName: drawings
+            schemaName: document
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: drawing_number
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: discipline
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: package_code
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: scale
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: document_id
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: drawings
+            schemaName: document
+            indexName: idx_drawing_project
+            columns:
+              - column:
+                  name: project_id
+
+        - createTable:
+            tableName: rfis
+            schemaName: document
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rfi_number
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: subject
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: raised_by
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: assigned_to
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: raised_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: due_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: closed_date
+                  type: DATE
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: priority
+                  type: VARCHAR(50)
+              - column:
+                  name: response
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: rfis
+            schemaName: document
+            indexName: idx_rfi_project
+            columns:
+              - column:
+                  name: project_id
+
+        - createTable:
+            tableName: transmittals
+            schemaName: document
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: transmittal_number
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: subject
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: transmittal_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: from_party
+                  type: VARCHAR(200)
+              - column:
+                  name: to_party
+                  type: VARCHAR(200)
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: remarks
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: transmittals
+            schemaName: document
+            indexName: idx_transmittal_project
+            columns:
+              - column:
+                  name: project_id

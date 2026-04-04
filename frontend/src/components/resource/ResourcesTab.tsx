@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { resourceApi } from "@/lib/api/resourceApi";
+import { resourceHistogramApi } from "@/lib/api/resourceHistogramApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { Plus } from "lucide-react";
@@ -31,6 +33,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     plannedUnits: "",
     rateType: "FIXED",
   });
+  const [selectedResourceId, setSelectedResourceId] = useState<string>("");
 
   const { data: assignmentsData, isLoading: isLoadingAssignments } = useQuery({
     queryKey: ["resource-assignments", projectId],
@@ -45,6 +48,15 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
   const { data: activitiesData, isLoading: isLoadingActivities } = useQuery({
     queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 100),
+  });
+
+  const { data: histogramData, isLoading: isLoadingHistogram } = useQuery({
+    queryKey: ["resource-histogram", projectId, selectedResourceId],
+    queryFn: () =>
+      selectedResourceId
+        ? resourceHistogramApi.getHistogram(projectId, selectedResourceId)
+        : Promise.resolve({ data: [], success: true } as any),
+    enabled: !!selectedResourceId,
   });
 
   const assignMutation = useMutation({
@@ -70,6 +82,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
   const assignments = assignmentsData?.data?.content ?? [];
   const resources = resourcesData?.data?.content ?? [];
   const activities = activitiesData?.data?.content ?? [];
+  const histogramEntries = histogramData?.data ?? [];
 
   const columns: ColumnDef<ResourceAssignmentRow>[] = [
     { key: "resourceName", label: "Resource Name", sortable: true },
@@ -108,14 +121,16 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
   ];
 
   return (
-    <div className="space-y-4">
-      <button
-        onClick={() => setShowForm(!showForm)}
-        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-      >
-        <Plus size={16} />
-        Assign Resource
-      </button>
+    <div className="space-y-6">
+      <div>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Plus size={16} />
+          Assign Resource
+        </button>
+      </div>
 
       {showForm && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -209,16 +224,79 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {isLoadingAssignments ? (
-        <div className="text-center text-gray-500">Loading assignments...</div>
-      ) : assignments.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
-          <h3 className="text-lg font-medium text-gray-900">No Assignments</h3>
-          <p className="mt-2 text-gray-500">No resource assignments yet. Create one to get started.</p>
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-lg font-semibold text-gray-900">Resource Assignments</h3>
+        {isLoadingAssignments ? (
+          <div className="text-center text-gray-500">Loading assignments...</div>
+        ) : assignments.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
+            <h3 className="text-lg font-medium text-gray-900">No Assignments</h3>
+            <p className="mt-2 text-gray-500">No resource assignments yet. Create one to get started.</p>
+          </div>
+        ) : (
+          <DataTable columns={columns} data={assignments} rowKey="id" />
+        )}
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-lg font-semibold text-gray-900">Resource Histogram</h3>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Resource</label>
+          <select
+            value={selectedResourceId}
+            onChange={(e) => setSelectedResourceId(e.target.value)}
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none"
+          >
+            <option value="">Choose a resource to view histogram...</option>
+            {resources.map((resource) => (
+              <option key={resource.id} value={resource.id}>
+                {resource.code} - {resource.name}
+              </option>
+            ))}
+          </select>
         </div>
-      ) : (
-        <DataTable columns={columns} data={assignments} rowKey="id" />
-      )}
+
+        {!selectedResourceId ? (
+          <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
+            <p className="text-gray-500">Select a resource to view planned vs actual usage over time.</p>
+          </div>
+        ) : isLoadingHistogram ? (
+          <div className="text-center text-gray-500">Loading histogram data...</div>
+        ) : histogramEntries.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
+            <p className="text-gray-500">No histogram data available for this resource.</p>
+          </div>
+        ) : (
+          <div className="w-full h-96">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={histogramEntries}
+                margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="period"
+                  label={{ value: "Time Period", position: "insideBottom", offset: -10 }}
+                />
+                <YAxis
+                  label={{ value: "Units", angle: -90, position: "insideLeft" }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.375rem",
+                  }}
+                  formatter={(value) => (typeof value === "number" ? value.toFixed(2) : value)}
+                />
+                <Legend wrapperStyle={{ paddingTop: "16px" }} />
+                <Bar dataKey="planned" fill="#3b82f6" name="Planned" />
+                <Bar dataKey="actual" fill="#10b981" name="Actual" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

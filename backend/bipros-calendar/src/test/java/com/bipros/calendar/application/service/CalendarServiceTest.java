@@ -2,6 +2,7 @@ package com.bipros.calendar.application.service;
 
 import com.bipros.calendar.domain.model.CalendarWorkWeek;
 import com.bipros.calendar.domain.model.DayType;
+import com.bipros.calendar.domain.repository.CalendarActivityCounter;
 import com.bipros.calendar.domain.repository.CalendarExceptionRepository;
 import com.bipros.calendar.domain.repository.CalendarRepository;
 import com.bipros.calendar.domain.repository.CalendarWorkWeekRepository;
@@ -36,13 +37,16 @@ class CalendarServiceTest {
   @Mock
   private CalendarExceptionRepository exceptionRepository;
 
+  @Mock
+  private CalendarActivityCounter calendarActivityCounter;
+
   private CalendarService calendarService;
 
   private UUID calendarId;
 
   @BeforeEach
   void setUp() {
-    calendarService = new CalendarService(calendarRepository, workWeekRepository, exceptionRepository);
+    calendarService = new CalendarService(calendarRepository, workWeekRepository, exceptionRepository, calendarActivityCounter);
     calendarId = UUID.randomUUID();
   }
 

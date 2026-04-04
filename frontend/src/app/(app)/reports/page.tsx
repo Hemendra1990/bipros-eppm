@@ -3,11 +3,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, TrendingUp, DollarSign, GitCompare, FileText, Download } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PageHeader } from "@/components/common/PageHeader";
 import { reportApi } from "@/lib/api/reportApi";
+import { reportDataApi } from "@/lib/api/reportDataApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { resourceApi } from "@/lib/api/resourceApi";
-import type { ProjectResponse, ResourceResponse } from "@/lib/types";
+import { MonthlyProgressReport } from "@/components/reports/MonthlyProgressReport";
+import { EvmReport } from "@/components/reports/EvmReport";
+import { CashFlowReport } from "@/components/reports/CashFlowReport";
+import { ContractStatusReport } from "@/components/reports/ContractStatusReport";
+import { RiskRegisterReport } from "@/components/reports/RiskRegisterReport";
+import { ResourceUtilizationReport } from "@/components/reports/ResourceUtilizationReport";
+import type { ProjectResponse } from "@/lib/types";
 
 interface ReportCard {
   id: string;
@@ -49,13 +57,32 @@ const reportCards: ReportCard[] = [
   },
 ];
 
+interface SCurveChartData {
+  period: string;
+  pv: number;
+  ev: number;
+  ac: number;
+}
+
+interface HistogramChartData {
+  date: string;
+  [key: string]: string | number;
+}
+
+interface CashFlowChartData {
+  period: string;
+  income: number;
+  expense: number;
+}
+
 interface ReportChartData {
-  scurve?: { periods: string[]; pv: number[]; ev: number[]; ac: number[] };
-  histogram?: { resources: string[]; allocations: Record<string, number>[] };
-  cashflow?: { periods: string[]; income: number[]; expense: number[] };
+  scurve?: SCurveChartData[];
+  histogram?: HistogramChartData[];
+  cashflow?: CashFlowChartData[];
 }
 
 export default function ReportsPage() {
+  const [activeTab, setActiveTab] = useState<"classic" | "standard">("standard");
   const [generatingReport, setGeneratingReport] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
@@ -73,6 +100,43 @@ export default function ReportsPage() {
     enabled: !!selectedProjectId,
   });
 
+  // Standard reports queries
+  const { data: monthlyProgressData, isLoading: monthlyProgressLoading } = useQuery({
+    queryKey: ["report-monthly-progress", selectedProjectId],
+    queryFn: () => selectedProjectId ? reportDataApi.getMonthlyProgress(selectedProjectId, new Date().toISOString().slice(0, 7)) : Promise.resolve(null),
+    enabled: !!selectedProjectId && activeTab === "standard",
+  });
+
+  const { data: evmReportData, isLoading: evmReportLoading } = useQuery({
+    queryKey: ["report-evm", selectedProjectId],
+    queryFn: () => selectedProjectId ? reportDataApi.getEvmReport(selectedProjectId) : Promise.resolve(null),
+    enabled: !!selectedProjectId && activeTab === "standard",
+  });
+
+  const { data: cashFlowData, isLoading: cashFlowLoading } = useQuery({
+    queryKey: ["report-cash-flow", selectedProjectId],
+    queryFn: () => selectedProjectId ? reportDataApi.getCashFlowReport(selectedProjectId) : Promise.resolve(null),
+    enabled: !!selectedProjectId && activeTab === "standard",
+  });
+
+  const { data: contractStatusData, isLoading: contractStatusLoading } = useQuery({
+    queryKey: ["report-contract-status", selectedProjectId],
+    queryFn: () => selectedProjectId ? reportDataApi.getContractStatus(selectedProjectId) : Promise.resolve(null),
+    enabled: !!selectedProjectId && activeTab === "standard",
+  });
+
+  const { data: riskRegisterData, isLoading: riskRegisterLoading } = useQuery({
+    queryKey: ["report-risk-register", selectedProjectId],
+    queryFn: () => selectedProjectId ? reportDataApi.getRiskRegister(selectedProjectId) : Promise.resolve(null),
+    enabled: !!selectedProjectId && activeTab === "standard",
+  });
+
+  const { data: resourceUtilizationData, isLoading: resourceUtilizationLoading } = useQuery({
+    queryKey: ["report-resource-utilization", selectedProjectId],
+    queryFn: () => selectedProjectId ? reportDataApi.getResourceUtilization(selectedProjectId) : Promise.resolve(null),
+    enabled: !!selectedProjectId && activeTab === "standard",
+  });
+
   const projects = projectsData?.data?.content ?? [];
   const resources = resourcesData?.data?.content ?? [];
 
@@ -82,14 +146,14 @@ export default function ReportsPage() {
       if (reportId === "s-curve" && selectedProjectId) {
         const response = await reportApi.generateSCurve(selectedProjectId);
         if (response.data) {
-          setReportData({
-            scurve: {
-              periods: response.data.periods,
-              pv: response.data.plangedCumulativeValue,
-              ev: response.data.earnedCumulativeValue,
-              ac: response.data.actualCumulativeValue,
-            },
-          });
+          const data = response.data;
+          const chartData: SCurveChartData[] = data.periods.map((period: string, idx: number) => ({
+            period,
+            pv: data.plangedCumulativeValue[idx] ?? 0,
+            ev: data.earnedCumulativeValue[idx] ?? 0,
+            ac: data.actualCumulativeValue[idx] ?? 0,
+          }));
+          setReportData({ scurve: chartData });
         }
       } else if (reportId === "resource-histogram" && selectedProjectId) {
         const response = await reportApi.generateResourceHistogram(
@@ -97,23 +161,23 @@ export default function ReportsPage() {
           selectedResourceId || undefined
         );
         if (response.data) {
-          setReportData({
-            histogram: {
-              resources: response.data.resources,
-              allocations: response.data.allocations.map((a: any) => ({ date: a.date, ...a.allocated })),
-            },
-          });
+          const data = response.data;
+          const chartData: HistogramChartData[] = data.allocations.map((a: any) => ({
+            date: a.date,
+            ...a.allocated,
+          }));
+          setReportData({ histogram: chartData });
         }
       } else if (reportId === "cash-flow" && selectedProjectId) {
         const response = await reportApi.generateCashFlow(selectedProjectId);
         if (response.data) {
-          setReportData({
-            cashflow: {
-              periods: response.data.periods,
-              income: response.data.inflows,
-              expense: response.data.outflows,
-            },
-          });
+          const data = response.data;
+          const chartData: CashFlowChartData[] = data.periods.map((period: string, idx: number) => ({
+            period,
+            income: data.inflows[idx] ?? 0,
+            expense: data.outflows[idx] ?? 0,
+          }));
+          setReportData({ cashflow: chartData });
         }
       }
     } catch (error) {
@@ -191,83 +255,194 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {reportCards.map((card) => (
-          <div
-            key={card.id}
-            className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+      {/* Report Tabs */}
+      <div className="mb-8">
+        <div className="flex gap-4 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab("standard")}
+            className={`px-4 py-3 font-medium ${
+              activeTab === "standard"
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
           >
-            <div className="mb-4 text-gray-400">{card.icon}</div>
-            <h3 className="mb-2 text-lg font-semibold text-gray-900">{card.title}</h3>
-            <p className="mb-6 text-sm text-gray-600">{card.description}</p>
-            <button
-              onClick={() => handleGenerateReport(card.id)}
-              disabled={generatingReport === card.id || !selectedProjectId}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
-            >
-              {generatingReport === card.id ? "Generating..." : "Generate"}
-            </button>
-          </div>
-        ))}
+            Standard Reports
+          </button>
+          <button
+            onClick={() => setActiveTab("classic")}
+            className={`px-4 py-3 font-medium ${
+              activeTab === "classic"
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Classic Reports
+          </button>
+        </div>
       </div>
 
-      {(reportData.scurve || reportData.histogram || reportData.cashflow) && (
-        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Generated Report</h2>
-          {reportData.scurve && (
-            <div className="mb-6">
-              <h3 className="mb-3 font-semibold text-gray-700">S-Curve Data</h3>
-              <div className="text-sm text-gray-600">
-                <p>Periods: {reportData.scurve.periods.length}</p>
-                <p>PV values: {reportData.scurve.pv.length}</p>
-                <p>EV values: {reportData.scurve.ev.length}</p>
-                <p>AC values: {reportData.scurve.ac.length}</p>
-              </div>
+      {/* Standard Reports Tab */}
+      {activeTab === "standard" && (
+        <div className="space-y-8">
+          {monthlyProgressData && !monthlyProgressLoading && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <MonthlyProgressReport data={monthlyProgressData as any} />
             </div>
           )}
-          {reportData.histogram && (
-            <div className="mb-6">
-              <h3 className="mb-3 font-semibold text-gray-700">Resource Histogram Data</h3>
-              <div className="text-sm text-gray-600">
-                <p>Resources: {reportData.histogram.resources.join(", ")}</p>
-                <p>Periods: {reportData.histogram.allocations.length}</p>
-              </div>
+
+          {evmReportData && !evmReportLoading && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <EvmReport data={evmReportData as any} />
             </div>
           )}
-          {reportData.cashflow && (
-            <div className="mb-6">
-              <h3 className="mb-3 font-semibold text-gray-700">Cash Flow Data</h3>
-              <div className="text-sm text-gray-600">
-                <p>Periods: {reportData.cashflow.periods.length}</p>
-                <p>Income total: {reportData.cashflow.income.reduce((a, b) => a + b, 0)}</p>
-                <p>Expense total: {reportData.cashflow.expense.reduce((a, b) => a + b, 0)}</p>
-              </div>
+
+          {cashFlowData && !cashFlowLoading && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <CashFlowReport data={cashFlowData as any} />
+            </div>
+          )}
+
+          {contractStatusData && !contractStatusLoading && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <ContractStatusReport data={contractStatusData as any} />
+            </div>
+          )}
+
+          {riskRegisterData && !riskRegisterLoading && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <RiskRegisterReport data={riskRegisterData as any} />
+            </div>
+          )}
+
+          {resourceUtilizationData && !resourceUtilizationLoading && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <ResourceUtilizationReport data={resourceUtilizationData as any} />
+            </div>
+          )}
+
+          {!selectedProjectId && (
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
+              <p className="text-yellow-700">Select a project to view standard reports</p>
+            </div>
+          )}
+
+          {selectedProjectId && !monthlyProgressData && (monthlyProgressLoading || evmReportLoading || cashFlowLoading || contractStatusLoading || riskRegisterLoading || resourceUtilizationLoading) && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 text-center">
+              <p className="text-blue-700">Loading reports...</p>
             </div>
           )}
         </div>
       )}
 
-      <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Export Reports</h2>
-        <div className="flex gap-3">
-          <button
-            onClick={() => downloadReport("EXCEL")}
-            disabled={downloadingReport === "EXCEL"}
-            className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:bg-gray-400"
-          >
-            <Download size={16} />
-            {downloadingReport === "EXCEL" ? "Exporting..." : "Export to Excel"}
-          </button>
-          <button
-            onClick={() => downloadReport("PDF")}
-            disabled={downloadingReport === "PDF"}
-            className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:bg-gray-400"
-          >
-            <Download size={16} />
-            {downloadingReport === "PDF" ? "Exporting..." : "Export to PDF"}
-          </button>
+      {/* Classic Reports Tab */}
+      {activeTab === "classic" && (
+        <>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {reportCards.map((card) => (
+              <div
+                key={card.id}
+                className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="mb-4 text-gray-400">{card.icon}</div>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900">{card.title}</h3>
+                <p className="mb-6 text-sm text-gray-600">{card.description}</p>
+                <button
+                  onClick={() => handleGenerateReport(card.id)}
+                  disabled={generatingReport === card.id || !selectedProjectId}
+                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                >
+                  {generatingReport === card.id ? "Generating..." : "Generate"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Classic Report Output */}
+      {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow) && (
+        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-6 text-lg font-semibold text-gray-900">Generated Report</h2>
+          {reportData.scurve && (
+            <div className="mb-8">
+              <h3 className="mb-4 font-semibold text-gray-700">S-Curve Analysis</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={reportData.scurve}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="period" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="pv" stroke="#3b82f6" name="Planned Value" />
+                  <Line type="monotone" dataKey="ev" stroke="#10b981" name="Earned Value" />
+                  <Line type="monotone" dataKey="ac" stroke="#ef4444" name="Actual Cost" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {reportData.histogram && (
+            <div className="mb-8">
+              <h3 className="mb-4 font-semibold text-gray-700">Resource Histogram</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={reportData.histogram}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  {reportData.histogram.length > 0 &&
+                    Object.keys(reportData.histogram[0])
+                      .filter((k) => k !== "date")
+                      .map((key, idx) => (
+                        <Bar key={key} dataKey={key} fill={["#3b82f6", "#10b981", "#f59e0b"][idx % 3]} />
+                      ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {reportData.cashflow && (
+            <div className="mb-6">
+              <h3 className="mb-4 font-semibold text-gray-700">Cash Flow Analysis</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={reportData.cashflow}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="period" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="income" fill="#10b981" name="Income" />
+                  <Bar dataKey="expense" fill="#ef4444" name="Expense" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* Export Reports */}
+      {activeTab === "classic" && (
+        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Export Reports</h2>
+          <div className="flex gap-3">
+            <button
+              onClick={() => downloadReport("EXCEL")}
+              disabled={downloadingReport === "EXCEL"}
+              className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:bg-gray-400"
+            >
+              <Download size={16} />
+              {downloadingReport === "EXCEL" ? "Exporting..." : "Export to Excel"}
+            </button>
+            <button
+              onClick={() => downloadReport("PDF")}
+              disabled={downloadingReport === "PDF"}
+              className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:bg-gray-400"
+            >
+              <Download size={16} />
+              {downloadingReport === "PDF" ? "Exporting..." : "Export to PDF"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

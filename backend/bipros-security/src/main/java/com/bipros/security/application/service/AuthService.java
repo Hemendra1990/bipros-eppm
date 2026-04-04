@@ -89,6 +89,8 @@ public class AuthService {
                 });
 
         UserRole userRole = new UserRole(savedUser.getId(), viewerRole.getId());
+        userRole.setRole(viewerRole);
+        userRole.setUser(savedUser);
         userRoleRepository.save(userRole);
         savedUser.getRoles().add(userRole);
 

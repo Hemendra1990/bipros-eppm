@@ -23,3 +23,9 @@ databaseChangeLog:
       file: db/changelog/011-reporting-tables.yaml
   - include:
       file: db/changelog/012-import-export-tables.yaml
+  - include:
+      file: db/changelog/013-contract-tables.yaml
+  - include:
+      file: db/changelog/014-document-tables.yaml
+  - include:
+      file: db/changelog/015-resource-logs-tables.yaml

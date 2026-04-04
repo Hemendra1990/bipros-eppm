@@ -31,10 +31,14 @@
         <module>bipros-baseline</module>
         <module>bipros-portfolio</module>
         <module>bipros-risk</module>
+        <module>bipros-document</module>
         <module>bipros-udf</module>
+        <module>bipros-contract</module>
         <module>bipros-reporting</module>
         <module>bipros-import-export</module>
+        <module>bipros-integration</module>
         <module>bipros-admin</module>
+        <module>bipros-gis</module>
         <module>bipros-api</module>
     </modules>
 
@@ -112,7 +116,17 @@
             </dependency>
             <dependency>
                 <groupId>com.bipros</groupId>
+                <artifactId>bipros-document</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
                 <artifactId>bipros-udf</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-contract</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -127,7 +141,17 @@
             </dependency>
             <dependency>
                 <groupId>com.bipros</groupId>
+                <artifactId>bipros-integration</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
                 <artifactId>bipros-admin</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-gis</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

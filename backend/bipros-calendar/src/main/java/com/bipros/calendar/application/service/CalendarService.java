@@ -12,6 +12,7 @@ import com.bipros.calendar.domain.model.CalendarException;
 import com.bipros.calendar.domain.model.CalendarType;
 import com.bipros.calendar.domain.model.CalendarWorkWeek;
 import com.bipros.calendar.domain.model.DayType;
+import com.bipros.calendar.domain.repository.CalendarActivityCounter;
 import com.bipros.calendar.domain.repository.CalendarExceptionRepository;
 import com.bipros.calendar.domain.repository.CalendarRepository;
 import com.bipros.calendar.domain.repository.CalendarWorkWeekRepository;
@@ -41,6 +42,7 @@ public class CalendarService {
   private final CalendarRepository calendarRepository;
   private final CalendarWorkWeekRepository workWeekRepository;
   private final CalendarExceptionRepository exceptionRepository;
+  private final CalendarActivityCounter calendarActivityCounter;
 
   /**
    * Create a new calendar with default work week pattern (Mon-Fri working 08:00-12:00 +
@@ -105,9 +107,11 @@ public class CalendarService {
     Calendar calendar = calendarRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Calendar", id));
 
-    // Note: Activity module should check this constraint when deleting activities.
-    // If activities exist for this calendar, the delete will cascade and orphan them,
-    // so we document this requirement here.
+    // Check if activities or projects use this calendar
+    long activityCount = calendarActivityCounter.countActivitiesByCalendarId(id);
+    if (activityCount > 0) {
+      throw new BusinessRuleException("CALENDAR_IN_USE", "Cannot delete calendar that is in use");
+    }
 
     workWeekRepository.deleteByCalendarId(id);
     exceptionRepository.deleteByCalendarId(id);

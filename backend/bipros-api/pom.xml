@@ -66,6 +66,10 @@
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
+            <artifactId>bipros-document</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
             <artifactId>bipros-udf</artifactId>
         </dependency>
         <dependency>
@@ -78,7 +82,15 @@
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
+            <artifactId>bipros-integration</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
             <artifactId>bipros-admin</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-gis</artifactId>
         </dependency>
 
         <!-- Spring Boot Starters -->

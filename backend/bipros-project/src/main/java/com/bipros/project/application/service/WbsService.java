@@ -6,6 +6,7 @@ import com.bipros.project.application.dto.CreateWbsNodeRequest;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
 import com.bipros.project.application.dto.WbsNodeResponse;
 import com.bipros.project.domain.model.WbsNode;
+import com.bipros.project.domain.repository.ProjectActivityCounter;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class WbsService {
 
     private final WbsNodeRepository wbsNodeRepository;
     private final ProjectRepository projectRepository;
+    private final ProjectActivityCounter projectActivityCounter;
 
     public WbsNodeResponse createNode(CreateWbsNodeRequest request) {
         log.info("Creating WBS node with code: {}", request.code());
@@ -76,9 +78,11 @@ public class WbsService {
             throw new BusinessRuleException("WBS_HAS_CHILDREN", "Cannot delete WBS node with child nodes");
         }
 
-        // Note: Activity module should check this constraint when deleting activities.
-        // If activities exist for this WBS node, the delete will cascade and orphan them,
-        // so we document this requirement here.
+        // Check if activities reference this WBS node
+        long activityCount = projectActivityCounter.countActivitiesByWbsNodeId(id);
+        if (activityCount > 0) {
+            throw new BusinessRuleException("WBS_HAS_ACTIVITIES", "Cannot delete WBS node with existing activities");
+        }
 
         wbsNodeRepository.delete(node);
         log.info("WBS node deleted: {}", id);

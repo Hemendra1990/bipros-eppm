@@ -16,4 +16,9 @@ export const costApi = {
 
   getCostAccountTree: () =>
     apiClient.get<ApiResponse<any>>("/v1/cost-accounts").then((r) => r.data),
+
+  getCashFlowForecast: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<any>>(`/v1/projects/${projectId}/cash-flow`)
+      .then((r) => r.data),
 };

@@ -24,6 +24,11 @@ apiClient.interceptors.response.use(
   async (error: AxiosError & { config?: InternalAxiosRequestConfig & { _retry?: boolean } }) => {
     if (error.response?.status === 401 && !error.config?._retry) {
       error.config!._retry = true;
+      // Skip redirect for login/refresh endpoints — let the caller handle the error
+      const requestUrl = error.config?.url || '';
+      if (requestUrl.includes('/v1/auth/login') || requestUrl.includes('/v1/auth/refresh')) {
+        return Promise.reject(error);
+      }
       if (typeof window !== "undefined") {
         const refreshToken = localStorage.getItem("refresh_token");
         if (refreshToken) {

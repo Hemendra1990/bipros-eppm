@@ -23,6 +23,11 @@ public class CostService {
     private final ProjectFundingRepository projectFundingRepository;
     private final FinancialPeriodRepository financialPeriodRepository;
     private final StorePeriodPerformanceRepository storePeriodPerformanceRepository;
+    private final RaBillRepository raBillRepository;
+    private final RaBillItemRepository raBillItemRepository;
+    private final DprEstimateRepository dprEstimateRepository;
+    private final RetentionMoneyRepository retentionMoneyRepository;
+    private final CashFlowForecastRepository cashFlowForecastRepository;
 
     // Cost Account Operations
     @Transactional
@@ -310,5 +315,143 @@ public class CostService {
         var entity = storePeriodPerformanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StorePeriodPerformance", id));
         storePeriodPerformanceRepository.delete(entity);
+    }
+
+    // RA Bill Operations
+    @Transactional
+    public RaBillDto createRaBill(CreateRaBillRequest request) {
+        if (raBillRepository.findByBillNumber(request.billNumber()).isPresent()) {
+            throw new BusinessRuleException("RABILL_DUPLICATE_NUMBER",
+                    "RA Bill with number " + request.billNumber() + " already exists");
+        }
+
+        var entity = new RaBill();
+        entity.setProjectId(request.projectId());
+        entity.setContractId(request.contractId());
+        entity.setBillNumber(request.billNumber());
+        entity.setBillPeriodFrom(request.billPeriodFrom());
+        entity.setBillPeriodTo(request.billPeriodTo());
+        entity.setGrossAmount(request.grossAmount());
+        entity.setDeductions(request.deductions() != null ? request.deductions() : java.math.BigDecimal.ZERO);
+        entity.setNetAmount(request.netAmount());
+        entity.setStatus(RaBill.RaBillStatus.DRAFT);
+        entity.setRemarks(request.remarks());
+
+        var saved = raBillRepository.save(entity);
+        return RaBillDto.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RaBillDto> getRaBillsByProject(UUID projectId) {
+        return raBillRepository.findByProjectIdOrderByBillNumberDesc(projectId)
+                .stream()
+                .map(RaBillDto::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public RaBillDto getRaBill(UUID raBillId) {
+        var entity = raBillRepository.findById(raBillId)
+                .orElseThrow(() -> new ResourceNotFoundException("RaBill", raBillId));
+        return RaBillDto.from(entity);
+    }
+
+    @Transactional
+    public RaBillDto updateRaBill(UUID raBillId, CreateRaBillRequest request) {
+        var entity = raBillRepository.findById(raBillId)
+                .orElseThrow(() -> new ResourceNotFoundException("RaBill", raBillId));
+
+        if (!entity.getStatus().equals(RaBill.RaBillStatus.DRAFT)) {
+            throw new BusinessRuleException("RABILL_NOT_DRAFT",
+                    "Only DRAFT RA Bills can be updated");
+        }
+
+        entity.setBillNumber(request.billNumber());
+        entity.setBillPeriodFrom(request.billPeriodFrom());
+        entity.setBillPeriodTo(request.billPeriodTo());
+        entity.setGrossAmount(request.grossAmount());
+        entity.setDeductions(request.deductions() != null ? request.deductions() : java.math.BigDecimal.ZERO);
+        entity.setNetAmount(request.netAmount());
+        entity.setRemarks(request.remarks());
+
+        var saved = raBillRepository.save(entity);
+        return RaBillDto.from(saved);
+    }
+
+    // RA Bill Item Operations
+    @Transactional
+    public RaBillItemDto addRaBillItem(CreateRaBillItemRequest request) {
+        var raBill = raBillRepository.findById(request.raBillId())
+                .orElseThrow(() -> new ResourceNotFoundException("RaBill", request.raBillId()));
+
+        var entity = new RaBillItem();
+        entity.setRaBillId(request.raBillId());
+        entity.setItemCode(request.itemCode());
+        entity.setDescription(request.description());
+        entity.setUnit(request.unit());
+        entity.setRate(request.rate());
+        entity.setPreviousQuantity(request.previousQuantity());
+        entity.setCurrentQuantity(request.currentQuantity());
+        entity.setCumulativeQuantity(request.cumulativeQuantity());
+        entity.setAmount(request.amount());
+
+        var saved = raBillItemRepository.save(entity);
+        return RaBillItemDto.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RaBillItemDto> getRaBillItems(UUID raBillId) {
+        return raBillItemRepository.findByRaBillIdOrderByCreatedAt(raBillId)
+                .stream()
+                .map(RaBillItemDto::from)
+                .collect(Collectors.toList());
+    }
+
+    // DPR Estimate Operations
+    @Transactional
+    public DprEstimateDto createDprEstimate(CreateDprEstimateRequest request) {
+        var entity = new DprEstimate();
+        entity.setProjectId(request.projectId());
+        entity.setWbsNodeId(request.wbsNodeId());
+        entity.setCostCategory(DprEstimate.CostCategory.valueOf(request.costCategory()));
+        entity.setEstimatedAmount(request.estimatedAmount());
+        entity.setRevisedAmount(request.revisedAmount());
+        entity.setRemarks(request.remarks());
+
+        var saved = dprEstimateRepository.save(entity);
+        return DprEstimateDto.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DprEstimateDto> getDprEstimatesByProject(UUID projectId) {
+        return dprEstimateRepository.findByProjectIdOrderByCreatedAt(projectId)
+                .stream()
+                .map(DprEstimateDto::from)
+                .collect(Collectors.toList());
+    }
+
+    // Cash Flow Forecast Operations
+    @Transactional
+    public CashFlowForecastDto createCashFlowForecast(CreateCashFlowForecastRequest request) {
+        var entity = new CashFlowForecast();
+        entity.setProjectId(request.projectId());
+        entity.setPeriod(request.period());
+        entity.setPlannedAmount(request.plannedAmount() != null ? request.plannedAmount() : java.math.BigDecimal.ZERO);
+        entity.setActualAmount(request.actualAmount() != null ? request.actualAmount() : java.math.BigDecimal.ZERO);
+        entity.setForecastAmount(request.forecastAmount() != null ? request.forecastAmount() : java.math.BigDecimal.ZERO);
+        entity.setCumulativePlanned(request.cumulativePlanned());
+        entity.setCumulativeActual(request.cumulativeActual());
+        entity.setCumulativeForecast(request.cumulativeForecast());
+
+        var saved = cashFlowForecastRepository.save(entity);
+        return CashFlowForecastDto.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CashFlowForecastDto> getCashFlowForecastByProject(UUID projectId) {
+        return cashFlowForecastRepository.findByProjectIdOrderByPeriodAsc(projectId)
+                .stream()
+                .map(CashFlowForecastDto::from)
+                .collect(Collectors.toList());
     }
 }

@@ -127,11 +127,25 @@ public class P6XmlExporter {
     writeElement(writer, "Code", activity.getCode());
     writeElement(writer, "Name", activity.getName());
     writeElement(writer, "Type", activity.getActivityType() != null ? activity.getActivityType().toString() : "");
+    writeElement(writer, "Status", activity.getStatus() != null ? activity.getStatus().toString() : "NOT_STARTED");
+
     if (activity.getPlannedStartDate() != null) {
       writeElement(writer, "PlannedStartDate", activity.getPlannedStartDate().toString());
     }
     if (activity.getPlannedFinishDate() != null) {
       writeElement(writer, "PlannedFinishDate", activity.getPlannedFinishDate().toString());
+    }
+    if (activity.getEarlyStartDate() != null) {
+      writeElement(writer, "EarlyStartDate", activity.getEarlyStartDate().toString());
+    }
+    if (activity.getEarlyFinishDate() != null) {
+      writeElement(writer, "EarlyFinishDate", activity.getEarlyFinishDate().toString());
+    }
+    if (activity.getLateStartDate() != null) {
+      writeElement(writer, "LateStartDate", activity.getLateStartDate().toString());
+    }
+    if (activity.getLateFinishDate() != null) {
+      writeElement(writer, "LateFinishDate", activity.getLateFinishDate().toString());
     }
     if (activity.getActualStartDate() != null) {
       writeElement(writer, "ActualStartDate", activity.getActualStartDate().toString());
@@ -139,8 +153,13 @@ public class P6XmlExporter {
     if (activity.getActualFinishDate() != null) {
       writeElement(writer, "ActualFinishDate", activity.getActualFinishDate().toString());
     }
-    writeElement(writer, "PercentComplete", String.valueOf(activity.getPercentComplete() != null ? activity.getPercentComplete() : 0.0));
+
+    writeElement(writer, "OriginalDuration", String.valueOf(activity.getOriginalDuration() != null ? activity.getOriginalDuration() : 0.0));
     writeElement(writer, "RemainingDuration", String.valueOf(activity.getRemainingDuration() != null ? activity.getRemainingDuration() : 0.0));
+    writeElement(writer, "PercentComplete", String.valueOf(activity.getPercentComplete() != null ? activity.getPercentComplete() : 0.0));
+    writeElement(writer, "TotalFloat", String.valueOf(activity.getTotalFloat() != null ? activity.getTotalFloat() : 0.0));
+    writeElement(writer, "FreeFloat", String.valueOf(activity.getFreeFloat() != null ? activity.getFreeFloat() : 0.0));
+
     writeElement(writer, "WbsNodeId", activity.getWbsNodeId().toString());
     writeElement(writer, "ProjectId", activity.getProjectId().toString());
     writer.writeEndElement(); // Activity

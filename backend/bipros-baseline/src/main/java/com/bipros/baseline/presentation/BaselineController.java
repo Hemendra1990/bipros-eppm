@@ -4,6 +4,7 @@ import com.bipros.baseline.application.dto.BaselineDetailResponse;
 import com.bipros.baseline.application.dto.BaselineResponse;
 import com.bipros.baseline.application.dto.BaselineVarianceResponse;
 import com.bipros.baseline.application.dto.CreateBaselineRequest;
+import com.bipros.baseline.application.dto.ScheduleComparisonResponse;
 import com.bipros.baseline.application.service.BaselineService;
 import com.bipros.common.dto.ApiResponse;
 import jakarta.validation.Valid;
@@ -61,6 +62,14 @@ public class BaselineController {
       @PathVariable UUID projectId, @PathVariable UUID baselineId) {
     List<BaselineVarianceResponse> response =
         baselineService.getVariance(projectId, baselineId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  @GetMapping("/{baselineId}/schedule-comparison")
+  public ResponseEntity<ApiResponse<List<ScheduleComparisonResponse>>> getScheduleComparison(
+      @PathVariable UUID projectId, @PathVariable UUID baselineId) {
+    List<ScheduleComparisonResponse> response =
+        baselineService.getScheduleComparison(projectId, baselineId);
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 }

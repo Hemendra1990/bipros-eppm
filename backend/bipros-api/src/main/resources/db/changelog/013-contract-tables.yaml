@@ -1,0 +1,224 @@
+databaseChangeLog:
+  - changeSet:
+      id: 013-create-contract-tables
+      author: bipros
+      changes:
+        - createTable:
+            tableName: contracts
+            schemaName: contract
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tender_id
+                  type: UUID
+              - column:
+                  name: contract_number
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: loa_number
+                  type: VARCHAR(50)
+                  constraints:
+                    unique: true
+              - column:
+                  name: contractor_name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contractor_code
+                  type: VARCHAR(50)
+              - column:
+                  name: contract_value
+                  type: DECIMAL(15, 2)
+              - column:
+                  name: loa_date
+                  type: DATE
+              - column:
+                  name: start_date
+                  type: DATE
+              - column:
+                  name: completion_date
+                  type: DATE
+              - column:
+                  name: dlp_months
+                  type: INT
+                  defaultValue: 12
+              - column:
+                  name: ld_rate
+                  type: DOUBLE
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                  defaultValue: DRAFT
+              - column:
+                  name: contract_type
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            tableName: contracts
+            schemaName: contract
+            indexName: idx_contract_project
+            columns:
+              - column:
+                  name: project_id
+
+        - createIndex:
+            tableName: contracts
+            schemaName: contract
+            indexName: idx_contract_number
+            columns:
+              - column:
+                  name: contract_number
+
+        - createTable:
+            tableName: contract_milestones
+            schemaName: contract
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: contract_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_milestone_contract
+                    references: contract.contracts(id)
+              - column:
+                  name: milestone_name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: milestone_value
+                  type: DECIMAL(15, 2)
+              - column:
+                  name: due_date
+                  type: DATE
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+
+        - createTable:
+            tableName: contract_variation_orders
+            schemaName: contract
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: contract_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_vo_contract
+                    references: contract.contracts(id)
+              - column:
+                  name: vo_number
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: vo_value
+                  type: DECIMAL(15, 2)
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+
+        - createTable:
+            tableName: contract_scorecards
+            schemaName: contract
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: contract_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    unique: true
+                    foreignKeyName: fk_scorecard_contract
+                    references: contract.contracts(id)
+              - column:
+                  name: safety_score
+                  type: DOUBLE
+              - column:
+                  name: quality_score
+                  type: DOUBLE
+              - column:
+                  name: schedule_score
+                  type: DOUBLE
+              - column:
+                  name: cost_score
+                  type: DOUBLE
+              - column:
+                  name: overall_score
+                  type: DOUBLE
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP

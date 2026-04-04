@@ -4,6 +4,7 @@ import { FolderTree, Users, Calendar, BarChart3, TrendingUp, AlertCircle, Clock 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api/client";
 
 const navigationCards = [
   {
@@ -64,30 +65,35 @@ interface MetricsData {
 
 async function fetchMetrics(): Promise<MetricsData> {
   try {
-    const projectsResponse = await fetch("/v1/projects?page=0&size=100");
-    const projectsData: ProjectsResponse = await projectsResponse.json();
+    const projectsResponse = await apiClient.get("/v1/projects?page=0&size=100");
+    const projectsData = projectsResponse.data.data;
 
-    const projects = projectsData.data || [];
+    const projects: ProjectData[] = projectsData?.content || [];
 
     const plannedCount = projects.filter((p) => p.status === "PLANNED").length;
     const activeCount = projects.filter((p) => p.status === "ACTIVE").length;
     const completedCount = projects.filter((p) => p.status === "COMPLETED").length;
 
-    const recentProjects = projects
+    const recentProjects = [...projects]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
 
     // Fetch resources count
-    const resourcesResponse = await fetch("/v1/resources?page=0&size=1");
-    const resourcesData = await resourcesResponse.json();
-    const resourceCount = resourcesData.meta?.total || 0;
+    const resourcesResponse = await apiClient.get("/v1/resources");
+    const resourcesList = resourcesResponse.data.data || [];
+    const resourceCount = Array.isArray(resourcesList) ? resourcesList.length : 0;
 
-    // For now, use static activity data (would come from API in production)
-    const activities: ActivityData = {
-      totalActivities: 42,
-      criticalActivities: 3,
-      overdueCount: 1,
-    };
+    // Aggregate activity counts across all projects
+    let totalActivities = 0;
+    let criticalActivities = 0;
+    for (const proj of projects.slice(0, 10)) {
+      try {
+        const actResp = await apiClient.get(`/v1/projects/${proj.id}/activities?page=0&size=1`);
+        const actData = actResp.data.data;
+        const total = actData?.pagination?.totalElements || 0;
+        totalActivities += total;
+      } catch { /* skip */ }
+    }
 
     return {
       plannedCount,
@@ -95,7 +101,7 @@ async function fetchMetrics(): Promise<MetricsData> {
       completedCount,
       resourceCount,
       recentProjects,
-      activities,
+      activities: { totalActivities, criticalActivities, overdueCount: 0 },
     };
   } catch (error) {
     console.error("Failed to fetch metrics:", error);

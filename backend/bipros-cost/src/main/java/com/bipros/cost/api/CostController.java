@@ -205,4 +205,82 @@ public class CostController {
         costService.deleteStorePeriodPerformance(sppId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+
+    // RA Bill Endpoints
+    @PostMapping("/projects/{projectId}/ra-bills")
+    public ResponseEntity<ApiResponse<RaBillDto>> createRaBill(
+            @PathVariable UUID projectId,
+            @Valid @RequestBody CreateRaBillRequest request) {
+        RaBillDto response = costService.createRaBill(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/projects/{projectId}/ra-bills")
+    public ResponseEntity<ApiResponse<List<RaBillDto>>> getRaBillsByProject(
+            @PathVariable UUID projectId) {
+        List<RaBillDto> response = costService.getRaBillsByProject(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/ra-bills/{raBillId}")
+    public ResponseEntity<ApiResponse<RaBillDto>> getRaBill(@PathVariable UUID raBillId) {
+        RaBillDto response = costService.getRaBill(raBillId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @PutMapping("/ra-bills/{raBillId}")
+    public ResponseEntity<ApiResponse<RaBillDto>> updateRaBill(
+            @PathVariable UUID raBillId,
+            @Valid @RequestBody CreateRaBillRequest request) {
+        RaBillDto response = costService.updateRaBill(raBillId, request);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // RA Bill Item Endpoints
+    @PostMapping("/ra-bills/{raBillId}/items")
+    public ResponseEntity<ApiResponse<RaBillItemDto>> addRaBillItem(
+            @PathVariable UUID raBillId,
+            @Valid @RequestBody CreateRaBillItemRequest request) {
+        RaBillItemDto response = costService.addRaBillItem(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/ra-bills/{raBillId}/items")
+    public ResponseEntity<ApiResponse<List<RaBillItemDto>>> getRaBillItems(
+            @PathVariable UUID raBillId) {
+        List<RaBillItemDto> response = costService.getRaBillItems(raBillId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // DPR Estimate Endpoints
+    @PostMapping("/projects/{projectId}/dpr-estimates")
+    public ResponseEntity<ApiResponse<DprEstimateDto>> createDprEstimate(
+            @PathVariable UUID projectId,
+            @Valid @RequestBody CreateDprEstimateRequest request) {
+        DprEstimateDto response = costService.createDprEstimate(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/projects/{projectId}/dpr-estimates")
+    public ResponseEntity<ApiResponse<List<DprEstimateDto>>> getDprEstimatesByProject(
+            @PathVariable UUID projectId) {
+        List<DprEstimateDto> response = costService.getDprEstimatesByProject(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // Cash Flow Forecast Endpoints
+    @PostMapping("/projects/{projectId}/cash-flow")
+    public ResponseEntity<ApiResponse<CashFlowForecastDto>> createCashFlowForecast(
+            @PathVariable UUID projectId,
+            @Valid @RequestBody CreateCashFlowForecastRequest request) {
+        CashFlowForecastDto response = costService.createCashFlowForecast(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/projects/{projectId}/cash-flow")
+    public ResponseEntity<ApiResponse<List<CashFlowForecastDto>>> getCashFlowForecastByProject(
+            @PathVariable UUID projectId) {
+        List<CashFlowForecastDto> response = costService.getCashFlowForecastByProject(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
 }

@@ -1,6 +1,7 @@
 package com.bipros.risk.domain.model;
 
 public enum RiskCategory {
+    // General categories
     TECHNICAL,
     EXTERNAL,
     ORGANIZATIONAL,
@@ -8,5 +9,16 @@ public enum RiskCategory {
     SCHEDULE,
     COST,
     RESOURCE,
-    QUALITY
+    QUALITY,
+    // India-specific categories
+    LAND_ACQUISITION,
+    FOREST_CLEARANCE,
+    UTILITY_SHIFTING,
+    STATUTORY_CLEARANCE,
+    CONTRACTOR_FINANCIAL,
+    MONSOON_IMPACT,
+    GEOPOLITICAL,
+    NATURAL_HAZARD,
+    MARKET_PRICE,
+    TECHNOLOGY
 }

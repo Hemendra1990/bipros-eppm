@@ -47,6 +47,7 @@ public class ExcelExporter {
       createRelationshipsSheet(workbook, projectId);
       createWbsSheet(workbook, projectId);
       createResourcesSheet(workbook);
+      createResourceAssignmentsSheet(workbook, projectId);
       createCostsSheet(workbook, projectId);
 
       // Write to byte array
@@ -189,6 +190,49 @@ public class ExcelExporter {
       row.createCell(1).setCellValue(resource.getName());
       row.createCell(2).setCellValue(resource.getResourceType() != null ? resource.getResourceType().toString() : "");
       row.createCell(3).setCellValue(100); // Default max units
+    }
+
+    // Auto-fit columns
+    for (int i = 0; i < headers.length; i++) {
+      sheet.autoSizeColumn(i);
+    }
+  }
+
+  private void createResourceAssignmentsSheet(Workbook workbook, UUID projectId) {
+    Sheet sheet = workbook.createSheet("Assignments");
+    CellStyle headerStyle = createHeaderStyle(workbook);
+
+    // Headers
+    Row headerRow = sheet.createRow(0);
+    String[] headers = {"Activity Code", "Activity Name", "Resource Code", "Resource Name", "Planned Units", "Actual Units"};
+    for (int i = 0; i < headers.length; i++) {
+      Cell cell = headerRow.createCell(i);
+      cell.setCellValue(headers[i]);
+      cell.setCellStyle(headerStyle);
+    }
+
+    // Data
+    List<ResourceAssignment> assignments = resourceAssignmentRepository.findByProjectId(projectId);
+    int rowNum = 1;
+    for (ResourceAssignment assignment : assignments) {
+      Row row = sheet.createRow(rowNum++);
+
+      // Get activity and resource details for display
+      var activity = activityRepository.findById(assignment.getActivityId());
+      var resource = resourceRepository.findById(assignment.getResourceId());
+
+      if (activity.isPresent()) {
+        row.createCell(0).setCellValue(activity.get().getCode());
+        row.createCell(1).setCellValue(activity.get().getName());
+      }
+
+      if (resource.isPresent()) {
+        row.createCell(2).setCellValue(resource.get().getCode());
+        row.createCell(3).setCellValue(resource.get().getName());
+      }
+
+      row.createCell(4).setCellValue(assignment.getPlannedUnits() != null ? assignment.getPlannedUnits() : 0.0);
+      row.createCell(5).setCellValue(assignment.getActualUnits() != null ? assignment.getActualUnits() : 0.0);
     }
 
     // Auto-fit columns

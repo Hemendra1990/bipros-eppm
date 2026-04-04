@@ -47,6 +47,8 @@ public class SchedulingService {
   private final ActivityRepository activityRepository;
   private final ActivityRelationshipRepository activityRelationshipRepository;
   private final CalendarService calendarService;
+  private final PertEstimateService pertEstimateService;
+  private final ScheduleHealthService scheduleHealthService;
 
   public ScheduleResultResponse scheduleProject(UUID projectId, SchedulingOption option) {
     log.info("Scheduling project: id={}, option={}", projectId, option);
@@ -79,12 +81,32 @@ public class SchedulingService {
       Map<UUID, Activity> activityMap = new HashMap<>();
       List<SchedulableActivity> schedulableActivities = new ArrayList<>();
 
+      // Fetch all PERT estimates for this project's activities
+      List<UUID> activityIds = activities.stream().map(Activity::getId).toList();
+      var pertEstimates = pertEstimateService.getByActivities(activityIds);
+      var pertMap = pertEstimates.stream()
+          .collect(java.util.stream.Collectors.toMap(
+              pe -> pe.activityId(),
+              pe -> pe
+          ));
+
+      if (!pertEstimates.isEmpty()) {
+        log.debug("Found {} PERT estimates for project: id={}", pertEstimates.size(), projectId);
+      }
+
       for (Activity activity : activities) {
         activityMap.put(activity.getId(), activity);
+
+        // Use PERT expected duration if available, otherwise use remaining duration
+        double durationToUse = activity.getRemainingDuration() != null ? activity.getRemainingDuration() : 0.0;
+        if (pertMap.containsKey(activity.getId())) {
+          durationToUse = pertMap.get(activity.getId()).expectedDuration();
+        }
+
         SchedulableActivity schedulable = new SchedulableActivity(
             activity.getId(),
             activity.getOriginalDuration() != null ? activity.getOriginalDuration() : 0.0,
-            activity.getRemainingDuration() != null ? activity.getRemainingDuration() : 0.0,
+            durationToUse,
             activity.getCalendarId(),
             activity.getActivityType() != null ? activity.getActivityType().name() : null,
             activity.getStatus() != null ? activity.getStatus().name() : null,
@@ -192,6 +214,9 @@ public class SchedulingService {
 
       // Save updated Activity entities
       activityRepository.saveAll(activities);
+
+      // Calculate schedule health index
+      scheduleHealthService.calculateHealth(saved.getId());
 
       log.info("Project scheduled successfully: id={}, duration={}s", projectId, saved.getDurationSeconds());
       return ScheduleResultResponse.from(saved);

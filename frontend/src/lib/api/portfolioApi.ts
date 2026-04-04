@@ -44,7 +44,7 @@ export const portfolioApi = {
 
   addProjectToPortfolio: (portfolioId: string, projectId: string) =>
     apiClient
-      .post(`/v1/portfolios/${portfolioId}/projects/${projectId}`, {})
+      .post(`/v1/portfolios/${portfolioId}/projects`, null, { params: { projectId } })
       .then((r) => r.data),
 
   removeProjectFromPortfolio: (portfolioId: string, projectId: string) =>

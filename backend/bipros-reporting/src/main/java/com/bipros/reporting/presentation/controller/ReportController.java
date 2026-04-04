@@ -5,6 +5,7 @@ import com.bipros.reporting.application.dto.*;
 import com.bipros.reporting.application.service.ReportService;
 import com.bipros.reporting.domain.model.ReportFormat;
 import com.bipros.reporting.domain.model.ReportType;
+import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -104,5 +105,38 @@ public class ReportController {
         .contentType(contentType)
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
         .body(new byte[0]); // Placeholder: actual bytes would come from file storage
+  }
+
+  @GetMapping("/monthly-progress")
+  public ApiResponse<MonthlyProgressData> getMonthlyProgress(
+      @RequestParam UUID projectId,
+      @RequestParam String period) {
+    return ApiResponse.ok(reportService.getMonthlyProgress(projectId, period));
+  }
+
+  @GetMapping("/evm")
+  public ApiResponse<EvmReportData> getEvmReport(@RequestParam UUID projectId) {
+    return ApiResponse.ok(reportService.getEvmReport(projectId));
+  }
+
+  @GetMapping("/cash-flow")
+  public ApiResponse<List<CashFlowEntry>> getCashFlowReport(@RequestParam UUID projectId) {
+    return ApiResponse.ok(reportService.getCashFlowReport(projectId));
+  }
+
+  @GetMapping("/contract-status")
+  public ApiResponse<ContractStatusData> getContractStatus(@RequestParam UUID projectId) {
+    return ApiResponse.ok(reportService.getContractStatus(projectId));
+  }
+
+  @GetMapping("/risk-register")
+  public ApiResponse<RiskRegisterData> getRiskRegister(@RequestParam UUID projectId) {
+    return ApiResponse.ok(reportService.getRiskRegister(projectId));
+  }
+
+  @GetMapping("/resource-utilization")
+  public ApiResponse<ResourceUtilizationData> getResourceUtilization(
+      @RequestParam UUID projectId) {
+    return ApiResponse.ok(reportService.getResourceUtilization(projectId));
   }
 }

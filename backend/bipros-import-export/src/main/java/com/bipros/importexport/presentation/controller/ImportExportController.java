@@ -8,9 +8,15 @@ import com.bipros.importexport.application.service.ImportExportService;
 import com.bipros.importexport.domain.model.ImportExportFormat;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,8 +57,64 @@ public class ImportExportController {
   }
 
   @GetMapping("/jobs/{jobId}/download")
-  public ApiResponse<String> downloadExportedFile(@PathVariable UUID jobId) {
+  public ResponseEntity<byte[]> downloadExportedFile(@PathVariable UUID jobId) throws Exception {
     var job = importExportService.getJobStatus(jobId);
-    return ApiResponse.ok(job.filePath());
+    Path filePath = Paths.get(job.filePath());
+    byte[] fileContent = Files.readAllBytes(filePath);
+
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + job.fileName() + "\"")
+        .header(HttpHeaders.CONTENT_TYPE, getMediaType(job.format()))
+        .body(fileContent);
+  }
+
+  @GetMapping("/projects/{projectId}/export/p6xml")
+  public ResponseEntity<String> exportP6Xml(@PathVariable UUID projectId) throws Exception {
+    String content = importExportService.exportP6Xml(projectId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"project_" + projectId + "_p6.xml\"")
+        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_XML_VALUE)
+        .body(content);
+  }
+
+  @GetMapping("/projects/{projectId}/export/msp")
+  public ResponseEntity<String> exportMspXml(@PathVariable UUID projectId) throws Exception {
+    String content = importExportService.exportMspXml(projectId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"project_" + projectId + "_msp.xml\"")
+        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_XML_VALUE)
+        .body(content);
+  }
+
+  @GetMapping("/projects/{projectId}/export/excel")
+  public ResponseEntity<byte[]> exportExcel(@PathVariable UUID projectId) throws Exception {
+    byte[] content = importExportService.exportExcel(projectId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"project_" + projectId + ".xlsx\"")
+        .header(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        .body(content);
+  }
+
+  @GetMapping("/projects/{projectId}/export/csv")
+  public ResponseEntity<String> exportCsv(@PathVariable UUID projectId) throws Exception {
+    String content = importExportService.exportCsv(projectId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"project_" + projectId + ".csv\"")
+        .header(HttpHeaders.CONTENT_TYPE, "text/csv")
+        .body(content);
+  }
+
+  @PostMapping("/projects/import/xer")
+  public ApiResponse<ImportExportJobResponse> importXer(@RequestParam("file") MultipartFile file) throws Exception {
+    return ApiResponse.ok(importExportService.importProject(file, ImportExportFormat.XER));
+  }
+
+  private String getMediaType(ImportExportFormat format) {
+    return switch (format) {
+      case P6XML, MSP_XML -> MediaType.APPLICATION_XML_VALUE;
+      case EXCEL -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      case CSV -> "text/csv";
+      case XER -> "text/plain";
+    };
   }
 }

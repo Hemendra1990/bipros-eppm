@@ -25,6 +25,15 @@ export default function ActivityDetailPage() {
     actualFinishDate: "",
   });
 
+  const [usePert, setUsePert] = useState(false);
+  const [pertData, setPertData] = useState({
+    optimisticDuration: 0,
+    mostLikelyDuration: 0,
+    pessimisticDuration: 0,
+    expectedDuration: 0,
+    standardDeviation: 0,
+  });
+
   const { data: activityData, isLoading } = useQuery({
     queryKey: ["activity", projectId, activityId],
     queryFn: () => activityApi.getActivity(projectId, activityId),
@@ -53,6 +62,26 @@ export default function ActivityDetailPage() {
       [name]:
         name === "percentComplete" || name === "remainingDuration" ? parseInt(value, 10) : value,
     }));
+  };
+
+  const handlePertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const numValue = parseFloat(value) || 0;
+    const updated = {
+      ...pertData,
+      [name]: numValue,
+    };
+    setPertData(updated);
+
+    // Auto-calculate expected duration and std deviation
+    if (updated.optimisticDuration && updated.mostLikelyDuration && updated.pessimisticDuration) {
+      const o = updated.optimisticDuration;
+      const m = updated.mostLikelyDuration;
+      const p = updated.pessimisticDuration;
+      updated.expectedDuration = (o + 4 * m + p) / 6;
+      updated.standardDeviation = (p - o) / 6;
+    }
+    setPertData(updated);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -114,6 +143,10 @@ export default function ActivityDetailPage() {
           onSubmit={handleSaveEdit}
           onCancel={() => setIsEditing(false)}
           isSubmitting={updateMutation.isPending}
+          usePert={usePert}
+          onTogglePert={() => setUsePert(!usePert)}
+          pertData={pertData}
+          onPertChange={handlePertChange}
         />
       ) : (
         <ViewMode activity={activity} />
@@ -206,9 +239,29 @@ interface EditFormProps {
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  usePert: boolean;
+  onTogglePert: () => void;
+  pertData: {
+    optimisticDuration: number;
+    mostLikelyDuration: number;
+    pessimisticDuration: number;
+    expectedDuration: number;
+    standardDeviation: number;
+  };
+  onPertChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-function EditForm({ data, onChange, onSubmit, onCancel, isSubmitting }: EditFormProps) {
+function EditForm({
+  data,
+  onChange,
+  onSubmit,
+  onCancel,
+  isSubmitting,
+  usePert,
+  onTogglePert,
+  pertData,
+  onPertChange,
+}: EditFormProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <form onSubmit={onSubmit} className="space-y-6">
@@ -237,7 +290,6 @@ function EditForm({ data, onChange, onSubmit, onCancel, isSubmitting }: EditForm
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
-
         </div>
 
         <div className="grid grid-cols-2 gap-6">
@@ -265,6 +317,93 @@ function EditForm({ data, onChange, onSubmit, onCancel, isSubmitting }: EditForm
             />
           </div>
         </div>
+
+        <div className="border-t border-gray-200 pt-6">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="usePert"
+              checked={usePert}
+              onChange={onTogglePert}
+              className="rounded border-gray-300"
+            />
+            <label htmlFor="usePert" className="text-sm font-medium text-gray-700">
+              Use PERT Estimation
+            </label>
+          </div>
+        </div>
+
+        {usePert && (
+          <div className="space-y-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Optimistic (days)
+                </label>
+                <input
+                  type="number"
+                  name="optimisticDuration"
+                  value={pertData.optimisticDuration || ""}
+                  onChange={onPertChange}
+                  min="0"
+                  step="0.5"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Optimistic"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Most Likely (days)
+                </label>
+                <input
+                  type="number"
+                  name="mostLikelyDuration"
+                  value={pertData.mostLikelyDuration || ""}
+                  onChange={onPertChange}
+                  min="0"
+                  step="0.5"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Most Likely"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Pessimistic (days)
+                </label>
+                <input
+                  type="number"
+                  name="pessimisticDuration"
+                  value={pertData.pessimisticDuration || ""}
+                  onChange={onPertChange}
+                  min="0"
+                  step="0.5"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Pessimistic"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-white p-4">
+              <div className="text-sm font-medium text-gray-700">Calculated Values</div>
+              <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Expected Duration:</span>
+                  <span className="ml-2 font-semibold text-gray-900">
+                    {pertData.expectedDuration.toFixed(2)} days
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Standard Deviation:</span>
+                  <span className="ml-2 font-semibold text-gray-900">
+                    {pertData.standardDeviation.toFixed(2)} days
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3 pt-6">
           <button

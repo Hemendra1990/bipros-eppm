@@ -71,7 +71,13 @@ public class MspXmlExporter {
       int uid = 1;
       for (Activity activity : activities) {
         activityUidMap.put(activity.getId(), uid);
-        writeTaskElement(writer, activity, uid, projectId, relationships);
+        uid++;
+      }
+
+      // Now write tasks with proper predecessor UIDs
+      uid = 1;
+      for (Activity activity : activities) {
+        writeTaskElementWithPredecessors(writer, activity, uid, activityUidMap, relationships);
         uid++;
       }
       writer.writeEndElement(); // Tasks
@@ -111,12 +117,12 @@ public class MspXmlExporter {
     }
   }
 
-  private void writeTaskElement(XMLStreamWriter writer, Activity activity, int uid, UUID projectId, List<ActivityRelationship> allRelationships) throws Exception {
+  private void writeTaskElementWithPredecessors(XMLStreamWriter writer, Activity activity, int uid, Map<UUID, Integer> activityUidMap, List<ActivityRelationship> allRelationships) throws Exception {
     writer.writeStartElement("Task");
     writeElement(writer, "UID", String.valueOf(uid));
     writeElement(writer, "ID", String.valueOf(uid));
     writeElement(writer, "Name", activity.getName());
-    writeElement(writer, "Type", String.valueOf(uid)); // Type corresponds to task type
+    writeElement(writer, "Code", activity.getCode());
 
     if (activity.getPlannedStartDate() != null) {
       writeElement(writer, "Start", activity.getPlannedStartDate().toString());
@@ -136,19 +142,25 @@ public class MspXmlExporter {
     double percentComplete = activity.getPercentComplete() != null ? activity.getPercentComplete() : 0.0;
     writeElement(writer, "PercentComplete", String.valueOf((int)(percentComplete * 100)));
 
+    if (activity.getTotalFloat() != null) {
+      writeElement(writer, "TotalSlack", String.valueOf(Math.round(activity.getTotalFloat())));
+    }
+
     // Predecessors (relationships where this activity is the successor)
-    writer.writeStartElement("PredecessorLink");
     for (ActivityRelationship rel : allRelationships) {
       if (rel.getSuccessorActivityId().equals(activity.getId())) {
-        writeElement(writer, "PredecessorUID", String.valueOf(uid - 1)); // Simplified: assume sequential
-        writeElement(writer, "Type", mapRelationshipTypeToMsp(rel.getRelationshipType()));
-        if (rel.getLag() != null && rel.getLag() != 0) {
-          writeElement(writer, "LinkLag", String.valueOf((int)Math.round(rel.getLag())));
+        Integer predUid = activityUidMap.get(rel.getPredecessorActivityId());
+        if (predUid != null) {
+          writer.writeStartElement("PredecessorLink");
+          writeElement(writer, "PredecessorUID", String.valueOf(predUid));
+          writeElement(writer, "Type", mapRelationshipTypeToMsp(rel.getRelationshipType()));
+          if (rel.getLag() != null && rel.getLag() != 0) {
+            writeElement(writer, "LinkLag", String.valueOf((int)Math.round(rel.getLag())));
+          }
+          writer.writeEndElement(); // PredecessorLink
         }
-        break;
       }
     }
-    writer.writeEndElement(); // PredecessorLink
 
     writer.writeEndElement(); // Task
   }

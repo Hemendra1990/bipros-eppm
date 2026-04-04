@@ -9,6 +9,7 @@ import com.bipros.project.application.dto.ProjectResponse;
 import com.bipros.project.application.dto.UpdateProjectRequest;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
+import com.bipros.project.domain.repository.ProjectActivityCounter;
 import com.bipros.project.domain.repository.EpsNodeRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
@@ -35,6 +36,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final EpsNodeRepository epsNodeRepository;
     private final WbsNodeRepository wbsNodeRepository;
+    private final ProjectActivityCounter projectActivityCounter;
     private final AuditService auditService;
 
     public ProjectResponse createProject(CreateProjectRequest request) {
@@ -126,9 +128,11 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Project", id));
 
-        // Note: Activity module should check this constraint when deleting activities.
-        // If activities exist for this project, the delete will cascade and orphan them,
-        // so we document this requirement here.
+        // Check if activities exist for this project
+        long activityCount = projectActivityCounter.countActivitiesByProjectId(id);
+        if (activityCount > 0) {
+            throw new BusinessRuleException("PROJECT_HAS_ACTIVITIES", "Cannot delete project with existing activities");
+        }
 
         // Delete associated WBS nodes
         List<WbsNode> wbsNodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(id);

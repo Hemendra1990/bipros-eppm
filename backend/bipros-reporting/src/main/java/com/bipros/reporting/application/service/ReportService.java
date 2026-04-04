@@ -31,6 +31,7 @@ public class ReportService {
   private final ObjectMapper objectMapper;
   private final ExcelReportGenerator excelReportGenerator;
   private final PdfReportGenerator pdfReportGenerator;
+  private final com.bipros.reporting.application.service.ReportDataService reportDataService;
 
   @Transactional
   public ReportDefinitionResponse createReportDefinition(CreateReportDefinitionRequest request) {
@@ -232,5 +233,40 @@ public class ReportService {
     String timestamp = String.valueOf(System.currentTimeMillis());
     String extension = format == ReportFormat.EXCEL ? ".xlsx" : ".pdf";
     return "report_" + reportType.toString().toLowerCase() + "_" + timestamp + extension;
+  }
+
+  // Delegate methods to ReportDataService
+  @Transactional(readOnly = true)
+  public com.bipros.reporting.application.dto.MonthlyProgressData getMonthlyProgress(
+      UUID projectId, String period) {
+    return reportDataService.getMonthlyProgress(projectId, period);
+  }
+
+  @Transactional(readOnly = true)
+  public com.bipros.reporting.application.dto.EvmReportData getEvmReport(UUID projectId) {
+    return reportDataService.getEvmReport(projectId);
+  }
+
+  @Transactional(readOnly = true)
+  public List<com.bipros.reporting.application.dto.CashFlowEntry> getCashFlowReport(
+      UUID projectId) {
+    return reportDataService.getCashFlowReport(projectId);
+  }
+
+  @Transactional(readOnly = true)
+  public com.bipros.reporting.application.dto.ContractStatusData getContractStatus(
+      UUID projectId) {
+    return reportDataService.getContractStatus(projectId);
+  }
+
+  @Transactional(readOnly = true)
+  public com.bipros.reporting.application.dto.RiskRegisterData getRiskRegister(UUID projectId) {
+    return reportDataService.getRiskRegister(projectId);
+  }
+
+  @Transactional(readOnly = true)
+  public com.bipros.reporting.application.dto.ResourceUtilizationData getResourceUtilization(
+      UUID projectId) {
+    return reportDataService.getResourceUtilization(projectId);
   }
 }

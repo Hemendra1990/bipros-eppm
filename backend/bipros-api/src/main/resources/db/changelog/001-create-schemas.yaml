@@ -17,3 +17,5 @@ databaseChangeLog:
               CREATE SCHEMA IF NOT EXISTS baseline;
               CREATE SCHEMA IF NOT EXISTS portfolio;
               CREATE SCHEMA IF NOT EXISTS admin;
+              CREATE SCHEMA IF NOT EXISTS contract;
+              CREATE SCHEMA IF NOT EXISTS document;

@@ -7,6 +7,7 @@ import com.bipros.baseline.application.dto.BaselineDetailResponse;
 import com.bipros.baseline.application.dto.BaselineResponse;
 import com.bipros.baseline.application.dto.BaselineVarianceResponse;
 import com.bipros.baseline.application.dto.CreateBaselineRequest;
+import com.bipros.baseline.application.dto.ScheduleComparisonResponse;
 import com.bipros.baseline.domain.Baseline;
 import com.bipros.baseline.domain.BaselineActivity;
 import com.bipros.baseline.domain.BaselineType;
@@ -160,5 +161,74 @@ public class BaselineService {
         finishVarianceDays,
         durationVariance,
         BigDecimal.ZERO); // costVariance - no cost data in baseline yet
+  }
+
+  public List<ScheduleComparisonResponse> getScheduleComparison(UUID projectId, UUID baselineId) {
+    Baseline baseline = baselineRepository
+        .findById(baselineId)
+        .orElseThrow(() -> new ResourceNotFoundException("Baseline", baselineId));
+
+    if (!baseline.getProjectId().equals(projectId)) {
+      throw new ResourceNotFoundException("Baseline", baselineId);
+    }
+
+    // Get baseline activities indexed by activity ID
+    List<BaselineActivity> baselineActivities = baselineActivityRepository.findByBaselineId(baselineId);
+    Map<UUID, BaselineActivity> baselineActivityMap = baselineActivities.stream()
+        .collect(Collectors.toMap(BaselineActivity::getActivityId, activity -> activity));
+
+    // Get current activities
+    List<Activity> currentActivities = activityRepository.findByProjectId(projectId);
+    Map<UUID, Activity> currentActivityMap = currentActivities.stream()
+        .collect(Collectors.toMap(Activity::getId, activity -> activity));
+
+    // Compare current activities with baseline
+    return currentActivities.stream()
+        .map(current -> compareActivity(current, baselineActivityMap.get(current.getId())))
+        .toList();
+  }
+
+  private ScheduleComparisonResponse compareActivity(Activity current, BaselineActivity baseline) {
+    ScheduleComparisonResponse.ComparisonStatus status;
+    LocalDate currentStart = current.getPlannedStartDate();
+    LocalDate baselineStart = baseline != null ? baseline.getEarlyStart() : null;
+    LocalDate currentFinish = current.getPlannedFinishDate();
+    LocalDate baselineFinish = baseline != null ? baseline.getEarlyFinish() : null;
+
+    if (baseline == null) {
+      status = ScheduleComparisonResponse.ComparisonStatus.ADDED;
+    } else if (areDatesEqual(currentStart, baselineStart) && areDatesEqual(currentFinish, baselineFinish)) {
+      status = ScheduleComparisonResponse.ComparisonStatus.UNCHANGED;
+    } else {
+      status = ScheduleComparisonResponse.ComparisonStatus.CHANGED;
+    }
+
+    Long startVariance = calculateDaysDifference(baselineStart, currentStart);
+    Long finishVariance = calculateDaysDifference(baselineFinish, currentFinish);
+
+    return new ScheduleComparisonResponse(
+        current.getId(),
+        current.getName(),
+        currentStart,
+        baselineStart,
+        startVariance,
+        currentFinish,
+        baselineFinish,
+        finishVariance,
+        status);
+  }
+
+  private boolean areDatesEqual(LocalDate date1, LocalDate date2) {
+    if (date1 == null && date2 == null) {
+      return true;
+    }
+    return date1 != null && date1.equals(date2);
+  }
+
+  private Long calculateDaysDifference(LocalDate from, LocalDate to) {
+    if (from == null || to == null) {
+      return 0L;
+    }
+    return ChronoUnit.DAYS.between(from, to);
   }
 }
