@@ -2,6 +2,7 @@ package com.bipros.resource.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateResourceRequest;
 import com.bipros.resource.application.dto.ResourceResponse;
 import com.bipros.resource.domain.model.Resource;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class ResourceService {
 
   private final ResourceRepository resourceRepository;
+  private final AuditService auditService;
 
   public ResourceResponse createResource(CreateResourceRequest request) {
     log.info("Creating resource: code={}, type={}", request.code(), request.resourceType());
@@ -47,6 +49,10 @@ public class ResourceService {
 
     Resource saved = resourceRepository.save(resource);
     log.info("Resource created: id={}", saved.getId());
+
+    // Audit log creation
+    auditService.logCreate("Resource", saved.getId(), ResourceResponse.from(saved));
+
     return ResourceResponse.from(saved);
   }
 
@@ -116,6 +122,12 @@ public class ResourceService {
 
     Resource updated = resourceRepository.save(resource);
     log.info("Resource updated: id={}", id);
+
+    // Audit log update
+    if (!resource.getName().equals(request.name())) {
+      auditService.logUpdate("Resource", id, "name", resource.getName(), request.name());
+    }
+
     return ResourceResponse.from(updated);
   }
 
@@ -126,5 +138,8 @@ public class ResourceService {
     }
     resourceRepository.deleteById(id);
     log.info("Resource deleted: id={}", id);
+
+    // Audit log deletion
+    auditService.logDelete("Resource", id);
   }
 }

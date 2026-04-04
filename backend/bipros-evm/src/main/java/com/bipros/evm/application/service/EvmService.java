@@ -1,5 +1,7 @@
 package com.bipros.evm.application.service;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.evm.application.dto.CalculateEvmRequest;
 import com.bipros.evm.application.dto.EvmCalculationResponse;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 public class EvmService {
 
     private final EvmCalculationRepository evmCalculationRepository;
+    private final ActivityRepository activityRepository;
     private static final BigDecimal ZERO = BigDecimal.ZERO;
     private static final int SCALE = 2;
 
@@ -31,27 +34,86 @@ public class EvmService {
     public EvmCalculationResponse calculateEvm(UUID projectId, CalculateEvmRequest request) {
         LocalDate dataDate = LocalDate.now();
 
-        // Create EVM calculation record with initial values
+        // Create EVM calculation record
         var calculation = new EvmCalculation();
         calculation.setProjectId(projectId);
         calculation.setDataDate(dataDate);
         calculation.setEvmTechnique(request.technique());
         calculation.setEtcMethod(request.etcMethod());
 
-        // For now, initialize with zeros - in production, would integrate with:
-        // - Activity module to get activity costs and percent complete
-        // - Resource module to get resource assignments
-        // - Baseline module for planned values
-        calculation.setBudgetAtCompletion(ZERO);
-        calculation.setPlannedValue(ZERO);
-        calculation.setEarnedValue(ZERO);
-        calculation.setActualCost(ZERO);
+        // Load all activities for this project
+        List<Activity> activities = activityRepository.findByProjectId(projectId);
+
+        // Calculate PV, EV, AC from activities
+        BigDecimal pv = calculatePlannedValue(activities, dataDate);
+        BigDecimal ev = calculateEarnedValue(activities);
+        BigDecimal ac = calculateActualCost(activities);
+        BigDecimal bac = calculateBudgetAtCompletion(activities);
+
+        calculation.setBudgetAtCompletion(bac);
+        calculation.setPlannedValue(pv);
+        calculation.setEarnedValue(ev);
+        calculation.setActualCost(ac);
 
         // Calculate indices
         calculateIndices(calculation);
 
         var saved = evmCalculationRepository.save(calculation);
         return EvmCalculationResponse.from(saved);
+    }
+
+    private BigDecimal calculatePlannedValue(List<Activity> activities, LocalDate dataDate) {
+        return activities.stream()
+            .filter(activity -> activity.getPlannedFinishDate() != null &&
+                              activity.getPlannedFinishDate().compareTo(dataDate) <= 0)
+            .map(activity -> {
+                Double duration = activity.getOriginalDuration();
+                return duration != null ? BigDecimal.valueOf(duration) : ZERO;
+            })
+            .reduce(ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal calculateEarnedValue(List<Activity> activities) {
+        return activities.stream()
+            .map(activity -> {
+                Double duration = activity.getOriginalDuration();
+                Double percentComplete = activity.getPercentComplete();
+                if (duration != null && percentComplete != null) {
+                    return BigDecimal.valueOf(duration * percentComplete / 100.0);
+                }
+                return ZERO;
+            })
+            .reduce(ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal calculateActualCost(List<Activity> activities) {
+        return activities.stream()
+            .map(activity -> {
+                Double duration = activity.getOriginalDuration();
+                Double remaining = activity.getRemainingDuration();
+                if (duration != null) {
+                    if (remaining != null) {
+                        double actual = duration - remaining;
+                        return BigDecimal.valueOf(Math.max(0, actual));
+                    } else {
+                        Double percentComplete = activity.getPercentComplete();
+                        if (percentComplete != null) {
+                            return BigDecimal.valueOf(duration * percentComplete / 100.0);
+                        }
+                    }
+                }
+                return ZERO;
+            })
+            .reduce(ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal calculateBudgetAtCompletion(List<Activity> activities) {
+        return activities.stream()
+            .map(activity -> {
+                Double duration = activity.getOriginalDuration();
+                return duration != null ? BigDecimal.valueOf(duration) : ZERO;
+            })
+            .reduce(ZERO, BigDecimal::add);
     }
 
     @Transactional(readOnly = true)

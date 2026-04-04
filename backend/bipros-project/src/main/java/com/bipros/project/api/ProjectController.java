@@ -31,7 +31,6 @@ public class ProjectController {
         @RequestParam(defaultValue = "20") int size,
         @RequestParam(defaultValue = "createdAt") String sortBy,
         @RequestParam(defaultValue = "DESC") Sort.Direction direction) {
-
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
         PagedResponse<ProjectResponse> response = projectService.listProjects(pageable);
         return ResponseEntity.ok(ApiResponse.ok(response));
@@ -51,8 +50,7 @@ public class ProjectController {
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
-        @PathVariable UUID id,
-        @Valid @RequestBody UpdateProjectRequest request) {
+        @PathVariable UUID id, @Valid @RequestBody UpdateProjectRequest request) {
         ProjectResponse response = projectService.updateProject(id, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

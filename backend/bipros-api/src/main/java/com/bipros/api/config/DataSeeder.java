@@ -6,7 +6,10 @@ import com.bipros.admin.domain.repository.CurrencyRepository;
 import com.bipros.admin.domain.repository.GlobalSettingRepository;
 import com.bipros.calendar.domain.model.Calendar;
 import com.bipros.calendar.domain.model.CalendarType;
+import com.bipros.calendar.domain.model.CalendarWorkWeek;
+import com.bipros.calendar.domain.model.DayType;
 import com.bipros.calendar.domain.repository.CalendarRepository;
+import com.bipros.calendar.domain.repository.CalendarWorkWeekRepository;
 import com.bipros.security.domain.model.Role;
 import com.bipros.security.domain.model.User;
 import com.bipros.security.domain.model.UserRole;
@@ -20,6 +23,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 
 @Slf4j
 @Component
@@ -29,6 +34,7 @@ public class DataSeeder implements CommandLineRunner {
   private final RoleRepository roleRepository;
   private final UserRepository userRepository;
   private final CalendarRepository calendarRepository;
+  private final CalendarWorkWeekRepository calendarWorkWeekRepository;
   private final CurrencyRepository currencyRepository;
   private final GlobalSettingRepository globalSettingRepository;
   private final PasswordEncoder passwordEncoder;
@@ -113,8 +119,51 @@ public class DataSeeder implements CommandLineRunner {
             .standardWorkDaysPerWeek(5)
             .build();
 
-    calendarRepository.save(globalCalendar);
+    Calendar savedCalendar = calendarRepository.save(globalCalendar);
     log.info("Created global calendar: Standard");
+
+    // Create CalendarWorkWeek entries for 7 days
+    // Monday-Friday: WORKING days with 8 work hours
+    DayOfWeek[] workDays = {
+      DayOfWeek.MONDAY,
+      DayOfWeek.TUESDAY,
+      DayOfWeek.WEDNESDAY,
+      DayOfWeek.THURSDAY,
+      DayOfWeek.FRIDAY
+    };
+
+    for (DayOfWeek day : workDays) {
+      CalendarWorkWeek workWeek =
+          CalendarWorkWeek.builder()
+              .calendarId(savedCalendar.getId())
+              .dayOfWeek(day)
+              .dayType(DayType.WORKING)
+              .startTime1(LocalTime.of(8, 0))
+              .endTime1(LocalTime.of(12, 0))
+              .startTime2(LocalTime.of(13, 0))
+              .endTime2(LocalTime.of(17, 0))
+              .totalWorkHours(8.0)
+              .build();
+      calendarWorkWeekRepository.save(workWeek);
+      log.debug("Created work week entry for {}", day);
+    }
+
+    // Saturday-Sunday: NON_WORKING days
+    DayOfWeek[] weekendDays = {DayOfWeek.SATURDAY, DayOfWeek.SUNDAY};
+
+    for (DayOfWeek day : weekendDays) {
+      CalendarWorkWeek nonWorkWeek =
+          CalendarWorkWeek.builder()
+              .calendarId(savedCalendar.getId())
+              .dayOfWeek(day)
+              .dayType(DayType.NON_WORKING)
+              .totalWorkHours(0.0)
+              .build();
+      calendarWorkWeekRepository.save(nonWorkWeek);
+      log.debug("Created non-work week entry for {}", day);
+    }
+
+    log.info("Created 7 CalendarWorkWeek entries for Standard calendar");
   }
 
   private void seedBaseCurrency() {

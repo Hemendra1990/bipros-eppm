@@ -3,6 +3,7 @@ package com.bipros.project.application.service;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateProjectRequest;
 import com.bipros.project.application.dto.ProjectResponse;
 import com.bipros.project.application.dto.UpdateProjectRequest;
@@ -34,6 +35,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final EpsNodeRepository epsNodeRepository;
     private final WbsNodeRepository wbsNodeRepository;
+    private final AuditService auditService;
 
     public ProjectResponse createProject(CreateProjectRequest request) {
         log.info("Creating project with code: {}", request.code());
@@ -61,6 +63,9 @@ public class ProjectService {
         Project saved = projectRepository.save(project);
         log.info("Project created with ID: {}", saved.getId());
 
+        // Audit log creation
+        auditService.logCreate("Project", saved.getId(), buildProjectResponse(saved));
+
         // Auto-create root WBS node
         createRootWbsNode(saved);
 
@@ -72,6 +77,9 @@ public class ProjectService {
 
         Project project = projectRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Project", id));
+
+        // Track changes for audit
+        String oldName = project.getName();
 
         if (request.name() != null) {
             project.setName(request.name());
@@ -104,6 +112,11 @@ public class ProjectService {
         Project updated = projectRepository.save(project);
         log.info("Project updated: {}", id);
 
+        // Audit log update
+        if (request.name() != null && !request.name().equals(oldName)) {
+            auditService.logUpdate("Project", id, "name", oldName, request.name());
+        }
+
         return buildProjectResponse(updated);
     }
 
@@ -123,6 +136,9 @@ public class ProjectService {
 
         projectRepository.delete(project);
         log.info("Project deleted: {}", id);
+
+        // Audit log deletion
+        auditService.logDelete("Project", id);
     }
 
     public ProjectResponse getProject(UUID id) {

@@ -9,6 +9,7 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,7 @@ public class ActivityService {
 
   private final ActivityRepository activityRepository;
   private final ActivityRelationshipRepository relationshipRepository;
+  private final AuditService auditService;
 
   public ActivityResponse createActivity(CreateActivityRequest request) {
     log.info("Creating activity: code={}, name={}, projectId={}", request.code(), request.name(),
@@ -57,6 +59,10 @@ public class ActivityService {
 
     Activity saved = activityRepository.save(activity);
     log.info("Activity created successfully: id={}", saved.getId());
+
+    // Audit log creation
+    auditService.logCreate("Activity", saved.getId(), ActivityResponse.from(saved));
+
     return ActivityResponse.from(saved);
   }
 
@@ -104,6 +110,12 @@ public class ActivityService {
 
     Activity updated = activityRepository.save(activity);
     log.info("Activity updated successfully: id={}", id);
+
+    // Audit log update
+    if (request.name() != null && !request.name().equals(activity.getName())) {
+      auditService.logUpdate("Activity", id, "name", activity.getName(), request.name());
+    }
+
     return ActivityResponse.from(updated);
   }
 
@@ -123,6 +135,9 @@ public class ActivityService {
 
     activityRepository.deleteById(id);
     log.info("Activity deleted successfully: id={}", id);
+
+    // Audit log deletion
+    auditService.logDelete("Activity", id);
   }
 
   public ActivityResponse getActivity(UUID id) {

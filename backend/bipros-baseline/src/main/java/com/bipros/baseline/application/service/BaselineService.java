@@ -1,5 +1,7 @@
 package com.bipros.baseline.application.service;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.baseline.application.dto.BaselineActivityResponse;
 import com.bipros.baseline.application.dto.BaselineDetailResponse;
 import com.bipros.baseline.application.dto.BaselineResponse;
@@ -18,8 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +33,7 @@ public class BaselineService {
   private final BaselineRepository baselineRepository;
   private final BaselineActivityRepository baselineActivityRepository;
   private final BaselineRelationshipRepository baselineRelationshipRepository;
+  private final ActivityRepository activityRepository;
 
   @Transactional
   public BaselineResponse createBaseline(UUID projectId, CreateBaselineRequest request) {
@@ -107,18 +113,52 @@ public class BaselineService {
     List<BaselineActivity> baselineActivities =
         baselineActivityRepository.findByBaselineId(baselineId);
 
-    // In a real implementation, fetch current activities from activity service
-    // and calculate variance
+    // Load current activities and index by ID
+    List<Activity> currentActivities = activityRepository.findByProjectId(projectId);
+    Map<UUID, Activity> activityMap = currentActivities.stream()
+        .collect(Collectors.toMap(Activity::getId, activity -> activity));
+
     return baselineActivities.stream()
-        .map(
-            activity ->
-                new BaselineVarianceResponse(
-                    activity.getActivityId(),
-                    "Activity " + activity.getActivityId(),
-                    0L, // startVarianceDays - would calculate from current activity
-                    0L, // finishVarianceDays
-                    0.0, // durationVariance
-                    BigDecimal.ZERO)) // costVariance
+        .map(baselineActivity -> calculateVariance(baselineActivity, activityMap))
         .toList();
+  }
+
+  private BaselineVarianceResponse calculateVariance(
+      BaselineActivity baselineActivity,
+      Map<UUID, Activity> currentActivityMap) {
+    Activity currentActivity = currentActivityMap.get(baselineActivity.getActivityId());
+
+    Long startVarianceDays = 0L;
+    Long finishVarianceDays = 0L;
+    Double durationVariance = 0.0;
+
+    if (currentActivity != null) {
+      // Calculate start variance (positive = delayed)
+      if (baselineActivity.getEarlyStart() != null && currentActivity.getPlannedStartDate() != null) {
+        startVarianceDays = ChronoUnit.DAYS.between(
+            baselineActivity.getEarlyStart(),
+            currentActivity.getPlannedStartDate());
+      }
+
+      // Calculate finish variance (positive = delayed)
+      if (baselineActivity.getEarlyFinish() != null && currentActivity.getPlannedFinishDate() != null) {
+        finishVarianceDays = ChronoUnit.DAYS.between(
+            baselineActivity.getEarlyFinish(),
+            currentActivity.getPlannedFinishDate());
+      }
+
+      // Calculate duration variance
+      if (baselineActivity.getOriginalDuration() != null && currentActivity.getOriginalDuration() != null) {
+        durationVariance = currentActivity.getOriginalDuration() - baselineActivity.getOriginalDuration();
+      }
+    }
+
+    return new BaselineVarianceResponse(
+        baselineActivity.getActivityId(),
+        "Activity " + baselineActivity.getActivityId(),
+        startVarianceDays,
+        finishVarianceDays,
+        durationVariance,
+        BigDecimal.ZERO); // costVariance - no cost data in baseline yet
   }
 }
