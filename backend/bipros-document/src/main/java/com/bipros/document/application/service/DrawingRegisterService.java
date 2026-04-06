@@ -1,6 +1,7 @@
 package com.bipros.document.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.document.application.dto.DrawingRegisterRequest;
 import com.bipros.document.application.dto.DrawingRegisterResponse;
 import com.bipros.document.domain.model.DrawingRegister;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class DrawingRegisterService {
 
     private final DrawingRegisterRepository drawingRepository;
+    private final AuditService auditService;
 
     public DrawingRegisterResponse createDrawing(UUID projectId, DrawingRegisterRequest request) {
         DrawingRegister drawing = new DrawingRegister();
@@ -33,6 +35,7 @@ public class DrawingRegisterService {
         drawing.setDocumentId(request.documentId());
 
         DrawingRegister saved = drawingRepository.save(drawing);
+        auditService.logCreate("DrawingRegister", saved.getId(), saved);
         return DrawingRegisterResponse.from(saved);
     }
 
@@ -55,6 +58,9 @@ public class DrawingRegisterService {
         DrawingRegister drawing = drawingRepository.findByProjectIdAndId(projectId, drawingId)
             .orElseThrow(() -> new ResourceNotFoundException("DrawingRegister", drawingId));
 
+        auditService.logUpdate("DrawingRegister", drawingId, "title", drawing.getTitle(), request.title());
+        auditService.logUpdate("DrawingRegister", drawingId, "revision", drawing.getRevision(), request.revision());
+
         drawing.setTitle(request.title());
         drawing.setDiscipline(request.discipline());
         drawing.setRevision(request.revision());
@@ -72,5 +78,6 @@ public class DrawingRegisterService {
         DrawingRegister drawing = drawingRepository.findByProjectIdAndId(projectId, drawingId)
             .orElseThrow(() -> new ResourceNotFoundException("DrawingRegister", drawingId));
         drawingRepository.delete(drawing);
+        auditService.logDelete("DrawingRegister", drawingId);
     }
 }

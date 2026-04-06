@@ -1,6 +1,7 @@
 package com.bipros.contract.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.ContractorScorecardRequest;
 import com.bipros.contract.application.dto.ContractorScorecardResponse;
 import com.bipros.contract.domain.model.ContractorScorecard;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class ContractorScorecardService {
 
     private final ContractorScorecardRepository scorecardRepository;
+    private final AuditService auditService;
 
     public ContractorScorecardResponse create(ContractorScorecardRequest request) {
         log.info("Creating scorecard for contract: {} period: {}", request.contractId(), request.period());
@@ -36,6 +38,7 @@ public class ContractorScorecardService {
 
         ContractorScorecard saved = scorecardRepository.save(scorecard);
         log.info("Scorecard created with ID: {}", saved.getId());
+        auditService.logCreate("ContractorScorecard", saved.getId(), toResponse(saved));
 
         return toResponse(saved);
     }
@@ -80,12 +83,14 @@ public class ContractorScorecardService {
         scorecard.setRemarks(request.remarks());
 
         ContractorScorecard updated = scorecardRepository.save(scorecard);
+        auditService.logUpdate("ContractorScorecard", id, "scorecard", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting scorecard with ID: {}", id);
         scorecardRepository.deleteById(id);
+        auditService.logDelete("ContractorScorecard", id);
     }
 
     private ContractorScorecardResponse toResponse(ContractorScorecard scorecard) {

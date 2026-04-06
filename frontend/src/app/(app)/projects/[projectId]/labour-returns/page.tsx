@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { labourApi, type LabourReturnResponse, type CreateLabourReturnRequest, type DeploymentSummary } from "@/lib/api/labourApi";
+import { TabTip } from "@/components/common/TabTip";
+import { getErrorMessage } from "@/lib/utils/error";
 import type { PagedResponse } from "@/lib/types";
 
 interface LabourReturnForm {
@@ -56,8 +58,8 @@ export default function LabourReturnsPage() {
         setTotalElements(pagedData.pagination.totalElements);
         setPage(pageNum);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load labour returns");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to load labour returns"));
     } finally {
       setIsLoading(false);
     }
@@ -69,8 +71,8 @@ export default function LabourReturnsPage() {
       if (response.data) {
         setSummary(response.data);
       }
-    } catch (err) {
-      console.error("Failed to load deployment summary:", err);
+    } catch (err: unknown) {
+      console.error(getErrorMessage(err, "Failed to load deployment summary"));
     }
   };
 
@@ -98,50 +100,54 @@ export default function LabourReturnsPage() {
       setShowForm(false);
       loadLabourReturns();
       loadDeploymentSummary();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create labour return");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to create labour return"));
     }
   };
 
   if (isLoading && returns.length === 0) {
-    return <div className="p-6">Loading labour returns...</div>;
+    return <div className="p-6 text-slate-500">Loading labour returns...</div>;
   }
 
   return (
     <div className="p-6">
+      <TabTip
+        title="Labour Returns"
+        description="Daily labour count by contractor and skill category. Track workforce deployment across different work sites."
+      />
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4">Labour Returns</h1>
+        <h1 className="text-3xl font-bold mb-4 text-white">Labour Returns</h1>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <p className="text-sm text-gray-600 mb-1">Total Headcount</p>
-            <p className="text-2xl font-bold text-blue-600">
+          <div className="bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
+            <p className="text-sm text-slate-400 mb-1">Total Headcount</p>
+            <p className="text-2xl font-bold text-blue-400">
               {summary.reduce((sum, s) => sum + s.totalHeadCount, 0)}
             </p>
           </div>
-          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-            <p className="text-sm text-gray-600 mb-1">Total Man-Days</p>
-            <p className="text-2xl font-bold text-green-600">
+          <div className="bg-emerald-500/10 p-4 rounded-lg border border-emerald-500/20">
+            <p className="text-sm text-slate-400 mb-1">Total Man-Days</p>
+            <p className="text-2xl font-bold text-emerald-400">
               {summary.reduce((sum, s) => sum + s.totalManDays, 0).toFixed(1)}
             </p>
           </div>
-          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-            <p className="text-sm text-gray-600 mb-1">Returns Submitted</p>
-            <p className="text-2xl font-bold text-purple-600">{totalElements}</p>
+          <div className="bg-purple-500/10 p-4 rounded-lg border border-purple-500/20">
+            <p className="text-sm text-slate-400 mb-1">Returns Submitted</p>
+            <p className="text-2xl font-bold text-purple-400">{totalElements}</p>
           </div>
         </div>
 
         {/* Skill Category Breakdown */}
         {summary.length > 0 && (
-          <div className="bg-white p-4 rounded-lg border border-gray-300 mb-6">
-            <h3 className="font-bold text-lg mb-3">Deployment by Skill Category</h3>
+          <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 mb-6 shadow-xl">
+            <h3 className="font-bold text-lg mb-3 text-white">Deployment by Skill Category</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               {summary.map((s) => (
-                <div key={s.skillCategory} className="bg-gray-50 p-3 rounded border border-gray-200">
-                  <p className="text-sm text-gray-600">{skillCategoryLabel[s.skillCategory]}</p>
-                  <p className="text-xl font-bold text-gray-800">{s.totalHeadCount}</p>
-                  <p className="text-xs text-gray-500">{s.totalManDays.toFixed(1)} man-days</p>
+                <div key={s.skillCategory} className="bg-slate-800/50 p-3 rounded border border-slate-700">
+                  <p className="text-sm text-slate-400">{skillCategoryLabel[s.skillCategory]}</p>
+                  <p className="text-xl font-bold text-white">{s.totalHeadCount}</p>
+                  <p className="text-xs text-slate-500">{s.totalManDays.toFixed(1)} man-days</p>
                 </div>
               ))}
             </div>
@@ -150,42 +156,42 @@ export default function LabourReturnsPage() {
 
         <button
           onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="mb-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           {showForm ? "Cancel" : "Add Labour Return"}
         </button>
 
-        {error && <div className="text-red-600 mb-4">{error}</div>}
+        {error && <div className="text-red-400 mb-4">{error}</div>}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-white p-4 rounded-lg border border-gray-300 mb-6">
+          <form onSubmit={handleSubmit} className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 mb-6 shadow-xl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Contractor Name</label>
+                <label className="block text-sm font-medium mb-1 text-slate-300">Contractor Name</label>
                 <input
                   type="text"
                   value={formData.contractorName}
                   onChange={(e) => setFormData({ ...formData, contractorName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Return Date</label>
+                <label className="block text-sm font-medium mb-1 text-slate-300">Return Date</label>
                 <input
                   type="date"
                   value={formData.returnDate}
                   onChange={(e) => setFormData({ ...formData, returnDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Skill Category</label>
+                <label className="block text-sm font-medium mb-1 text-slate-300">Skill Category</label>
                 <select
                   value={formData.skillCategory}
                   onChange={(e) => setFormData({ ...formData, skillCategory: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
                   required
                 >
                   <option value="UNSKILLED">Unskilled</option>
@@ -196,55 +202,55 @@ export default function LabourReturnsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Headcount</label>
+                <label className="block text-sm font-medium mb-1 text-slate-300">Headcount</label>
                 <input
                   type="number"
                   min="1"
                   value={formData.headCount}
                   onChange={(e) => setFormData({ ...formData, headCount: parseInt(e.target.value) || 1 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Man-Days</label>
+                <label className="block text-sm font-medium mb-1 text-slate-300">Man-Days</label>
                 <input
                   type="number"
                   step="0.1"
                   min="0"
                   value={formData.manDays}
                   onChange={(e) => setFormData({ ...formData, manDays: parseFloat(e.target.value) || 1 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Site Location</label>
+                <label className="block text-sm font-medium mb-1 text-slate-300">Site Location</label>
                 <input
                   type="text"
                   value={formData.siteLocation}
                   onChange={(e) => setFormData({ ...formData, siteLocation: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Remarks</label>
+                <label className="block text-sm font-medium mb-1 text-slate-300">Remarks</label>
                 <textarea
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
                   rows={3}
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+              <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600">
                 Save Return
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500"
+                className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-600"
               >
                 Cancel
               </button>
@@ -254,30 +260,30 @@ export default function LabourReturnsPage() {
 
         {/* Returns Table */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-gray-300">
+          <table className="w-full border-collapse border border-slate-800">
             <thead>
-              <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-4 py-2 text-left">Date</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Contractor</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Skill Category</th>
-                <th className="border border-gray-300 px-4 py-2 text-right">Headcount</th>
-                <th className="border border-gray-300 px-4 py-2 text-right">Man-Days</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Site Location</th>
+              <tr className="bg-slate-900/80">
+                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Date</th>
+                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Contractor</th>
+                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Skill Category</th>
+                <th className="border border-slate-800 px-4 py-2 text-right text-slate-400">Headcount</th>
+                <th className="border border-slate-800 px-4 py-2 text-right text-slate-400">Man-Days</th>
+                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Site Location</th>
               </tr>
             </thead>
             <tbody>
               {returns.map((ret) => (
-                <tr key={ret.id} className="hover:bg-gray-50">
-                  <td className="border border-gray-300 px-4 py-2">{ret.returnDate}</td>
-                  <td className="border border-gray-300 px-4 py-2">{ret.contractorName}</td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
+                <tr key={ret.id} className="hover:bg-slate-800/30 text-white">
+                  <td className="border border-slate-800 px-4 py-2">{ret.returnDate}</td>
+                  <td className="border border-slate-800 px-4 py-2">{ret.contractorName}</td>
+                  <td className="border border-slate-800 px-4 py-2">
+                    <span className="px-2 py-1 bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20 rounded text-sm">
                       {skillCategoryLabel[ret.skillCategory]}
                     </span>
                   </td>
-                  <td className="border border-gray-300 px-4 py-2 text-right font-semibold">{ret.headCount}</td>
-                  <td className="border border-gray-300 px-4 py-2 text-right">{ret.manDays.toFixed(1)}</td>
-                  <td className="border border-gray-300 px-4 py-2">{ret.siteLocation || "-"}</td>
+                  <td className="border border-slate-800 px-4 py-2 text-right font-semibold">{ret.headCount}</td>
+                  <td className="border border-slate-800 px-4 py-2 text-right">{ret.manDays.toFixed(1)}</td>
+                  <td className="border border-slate-800 px-4 py-2">{ret.siteLocation || "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -290,15 +296,15 @@ export default function LabourReturnsPage() {
             <button
               onClick={() => loadLabourReturns(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded disabled:opacity-50"
+              className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded disabled:opacity-50"
             >
               Previous
             </button>
-            <span className="px-4 py-2">{page + 1}</span>
+            <span className="px-4 py-2 text-slate-300">{page + 1}</span>
             <button
               onClick={() => loadLabourReturns(page + 1)}
               disabled={(page + 1) * 20 >= totalElements}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded disabled:opacity-50"
+              className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded disabled:opacity-50"
             >
               Next
             </button>

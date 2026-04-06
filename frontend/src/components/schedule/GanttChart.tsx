@@ -31,6 +31,7 @@ interface GanttChartProps {
   relationships?: ActivityRelationship[];
   baselineActivities?: BaselineActivityData[];
   onActivityClick?: (id: string) => void;
+  onActivityReschedule?: (id: string, newStart: string, newEnd: string) => void;
   spotlightStartDate?: string | null;
   spotlightEndDate?: string | null;
 }
@@ -46,6 +47,7 @@ export function GanttChart({
   relationships = [],
   baselineActivities = [],
   onActivityClick,
+  onActivityReschedule,
   spotlightStartDate,
   spotlightEndDate,
 }: GanttChartProps) {
@@ -60,8 +62,8 @@ export function GanttChart({
 
   if (!dateRange || activities.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
-        <p className="text-gray-500">No activities to display</p>
+      <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
+        <p className="text-slate-400">No activities to display</p>
       </div>
     );
   }
@@ -102,15 +104,15 @@ export function GanttChart({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Gantt Chart</h2>
+        <h2 className="text-lg font-semibold text-white">Gantt Chart</h2>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
+          <div className="flex items-center gap-2 text-sm text-slate-300">
             <label>Progress Spotlight:</label>
             <input
               type="date"
               value={startDateFilter}
               onChange={(e) => setStartDateFilter(e.target.value)}
-              className="rounded border border-gray-300 px-2 py-1"
+              className="rounded border border-slate-700 px-2 py-1 bg-slate-900/50 text-white"
               placeholder="Start"
             />
             <span>to</span>
@@ -118,7 +120,7 @@ export function GanttChart({
               type="date"
               value={endDateFilter}
               onChange={(e) => setEndDateFilter(e.target.value)}
-              className="rounded border border-gray-300 px-2 py-1"
+              className="rounded border border-slate-700 px-2 py-1 bg-slate-900/50 text-white"
               placeholder="End"
             />
             {(startDateFilter || endDateFilter) && (
@@ -127,14 +129,14 @@ export function GanttChart({
                   setStartDateFilter("");
                   setEndDateFilter("");
                 }}
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs text-blue-400 hover:underline"
               >
                 Clear
               </button>
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-slate-300">
             Zoom:
             <input
               type="range"
@@ -149,11 +151,11 @@ export function GanttChart({
         </div>
       </div>
 
-      <div className="flex gap-4 border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="flex gap-4 border border-slate-800 rounded-lg overflow-hidden bg-slate-900/50">
         {/* Sidebar */}
         <div
           ref={sidebarRef}
-          className="w-80 overflow-y-auto border-r border-gray-200"
+          className="w-80 overflow-y-auto border-r border-slate-800"
           onScroll={handleSidebarScroll}
         >
           <GanttSidebar activities={activities} rowHeight={rowHeight} />
@@ -171,7 +173,7 @@ export function GanttChart({
             <svg
               width={totalWidth}
               height={activities.length * rowHeight + timelineStartY}
-              className="bg-white"
+              className="bg-slate-900/50"
             >
               <defs>
                 {/* Arrowhead marker for relationship lines */}
@@ -229,6 +231,7 @@ export function GanttChart({
                       timelineStartY={timelineStartY}
                       baselineData={baselineData}
                       onActivityClick={onActivityClick}
+                      onActivityReschedule={onActivityReschedule}
                     />
                   </g>
                 );
@@ -239,44 +242,44 @@ export function GanttChart({
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <div className="flex flex-wrap gap-6 rounded-lg border border-slate-800 bg-slate-900/80 p-4">
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 rounded bg-blue-500" />
-          <span className="text-sm text-gray-700">Normal</span>
+          <span className="text-sm text-slate-300">Normal</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 rounded bg-red-500" />
-          <span className="text-sm text-gray-700">Critical Path</span>
+          <span className="text-sm text-slate-300">Critical Path</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 rounded bg-green-500" />
-          <span className="text-sm text-gray-700">Completed</span>
+          <div className="h-4 w-4 rounded bg-emerald-500" />
+          <span className="text-sm text-slate-300">Completed</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 rounded bg-gray-400" />
-          <span className="text-sm text-gray-700">Not Started</span>
+          <div className="h-4 w-4 rounded bg-slate-500" />
+          <span className="text-sm text-slate-300">Not Started</span>
         </div>
         {(startDateFilter || endDateFilter) && (
           <div className="flex items-center gap-2">
             <div className="h-4 w-4 rounded bg-yellow-300" />
-            <span className="text-sm text-gray-700">In Spotlight Range</span>
+            <span className="text-sm text-slate-300">In Spotlight Range</span>
           </div>
         )}
         {baselineActivities.length > 0 && (
           <div className="flex items-center gap-2">
-            <div className="h-2 w-4 rounded bg-gray-600" style={{ opacity: 0.5 }} />
-            <span className="text-sm text-gray-700">Baseline</span>
+            <div className="h-2 w-4 rounded bg-slate-500" style={{ opacity: 0.5 }} />
+            <span className="text-sm text-slate-300">Baseline</span>
           </div>
         )}
         {relationships.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="w-6 h-4 relative">
               <svg width="24" height="16" viewBox="0 0 24 16" className="absolute">
-                <path d="M 0 8 L 24 8" stroke="#9ca3af" strokeWidth="1.5" fill="none" />
-                <polygon points="24,8 18,5 18,11" fill="#9ca3af" />
+                <path d="M 0 8 L 24 8" stroke="#64748b" strokeWidth="1.5" fill="none" />
+                <polygon points="24,8 18,5 18,11" fill="#64748b" />
               </svg>
             </div>
-            <span className="text-sm text-gray-700">Relationships</span>
+            <span className="text-sm text-slate-300">Relationships</span>
           </div>
         )}
       </div>
@@ -319,7 +322,7 @@ function renderGridLines(
           y1="0"
           x2={x}
           y2={height}
-          stroke="#e5e7eb"
+          stroke="#1e293b"
           strokeWidth="1"
           strokeDasharray="2,2"
         />

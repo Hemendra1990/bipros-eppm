@@ -91,6 +91,111 @@ export interface RfiRegister {
   updatedAt: string;
 }
 
+export interface CreateFolderRequest {
+  name: string;
+  code: string;
+  category: string;
+  parentId?: string | null;
+  wbsNodeId?: string | null;
+  sortOrder?: number;
+}
+
+export interface UpdateFolderRequest {
+  name?: string;
+  code?: string;
+  category?: string;
+  parentId?: string | null;
+  wbsNodeId?: string | null;
+  sortOrder?: number;
+}
+
+export interface CreateRfiRequest {
+  projectId: string;
+  rfiNumber: string;
+  subject: string;
+  description?: string;
+  priority?: string;
+  assignedTo?: string;
+  dueDate?: string;
+}
+
+export interface UpdateRfiRequest {
+  rfiNumber?: string;
+  subject?: string;
+  description?: string;
+  priority?: string;
+  assignedTo?: string;
+  dueDate?: string;
+  response?: string;
+  status?: string;
+}
+
+export interface CreateDrawingRequest {
+  projectId: string;
+  drawingNumber: string;
+  title: string;
+  discipline?: string;
+  revision?: string;
+  status?: string;
+}
+
+export interface UpdateDrawingRequest {
+  drawingNumber?: string;
+  title?: string;
+  discipline?: string;
+  revision?: string;
+  revisionDate?: string;
+  status?: string;
+  packageCode?: string;
+  scale?: string;
+}
+
+export interface CreateDocumentRequest {
+  projectId: string;
+  title: string;
+  documentNumber?: string;
+  folderId?: string;
+  status?: string;
+  description?: string;
+  tags?: string;
+}
+
+export interface UpdateDocumentRequest {
+  title?: string;
+  documentNumber?: string;
+  folderId?: string;
+  status?: string;
+  description?: string;
+  tags?: string;
+}
+
+export interface AddDocumentVersionRequest {
+  changeDescription?: string;
+}
+
+export interface CreateTransmittalRequest {
+  projectId: string;
+  transmittalNumber: string;
+  subject: string;
+  fromParty: string;
+  toParty: string;
+  sentDate: string;
+  dueDate?: string;
+  status?: string;
+  remarks?: string;
+}
+
+export interface UpdateTransmittalRequest {
+  transmittalNumber?: string;
+  subject?: string;
+  fromParty?: string;
+  toParty?: string;
+  sentDate?: string;
+  dueDate?: string;
+  status?: string;
+  remarks?: string;
+}
+
 export const documentApi = {
   // Document Folders
   listRootFolders: (projectId: string) =>
@@ -107,7 +212,7 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  createFolder: (projectId: string, data: any) =>
+  createFolder: (projectId: string, data: CreateFolderRequest) =>
     apiClient
       .post<ApiResponse<DocumentFolder>>(
         `/v1/projects/${projectId}/document-folders`,
@@ -115,7 +220,7 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  updateFolder: (projectId: string, folderId: string, data: any) =>
+  updateFolder: (projectId: string, folderId: string, data: UpdateFolderRequest) =>
     apiClient
       .put<ApiResponse<DocumentFolder>>(
         `/v1/projects/${projectId}/document-folders/${folderId}`,
@@ -139,12 +244,12 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  createDocument: (projectId: string, data: any) =>
+  createDocument: (projectId: string, data: CreateDocumentRequest) =>
     apiClient
       .post<ApiResponse<Document>>(`/v1/projects/${projectId}/documents`, data)
       .then((r) => r.data),
 
-  updateDocument: (projectId: string, documentId: string, data: any) =>
+  updateDocument: (projectId: string, documentId: string, data: UpdateDocumentRequest) =>
     apiClient
       .put<ApiResponse<Document>>(
         `/v1/projects/${projectId}/documents/${documentId}`,
@@ -162,7 +267,7 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  addDocumentVersion: (projectId: string, documentId: string, data: any) =>
+  addDocumentVersion: (projectId: string, documentId: string, data: AddDocumentVersionRequest) =>
     apiClient
       .post<ApiResponse<DocumentVersion>>(
         `/v1/projects/${projectId}/documents/${documentId}/versions`,
@@ -185,7 +290,7 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  createDrawing: (projectId: string, data: any) =>
+  createDrawing: (projectId: string, data: CreateDrawingRequest) =>
     apiClient
       .post<ApiResponse<DrawingRegister>>(
         `/v1/projects/${projectId}/drawings`,
@@ -193,7 +298,7 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  updateDrawing: (projectId: string, drawingId: string, data: any) =>
+  updateDrawing: (projectId: string, drawingId: string, data: UpdateDrawingRequest) =>
     apiClient
       .put<ApiResponse<DrawingRegister>>(
         `/v1/projects/${projectId}/drawings/${drawingId}`,
@@ -219,7 +324,7 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  createTransmittal: (projectId: string, data: any) =>
+  createTransmittal: (projectId: string, data: CreateTransmittalRequest) =>
     apiClient
       .post<ApiResponse<Transmittal>>(
         `/v1/projects/${projectId}/transmittals`,
@@ -227,7 +332,7 @@ export const documentApi = {
       )
       .then((r) => r.data),
 
-  updateTransmittal: (projectId: string, transmittalId: string, data: any) =>
+  updateTransmittal: (projectId: string, transmittalId: string, data: UpdateTransmittalRequest) =>
     apiClient
       .put<ApiResponse<Transmittal>>(
         `/v1/projects/${projectId}/transmittals/${transmittalId}`,
@@ -249,12 +354,12 @@ export const documentApi = {
       .get<ApiResponse<RfiRegister>>(`/v1/projects/${projectId}/rfis/${rfiId}`)
       .then((r) => r.data),
 
-  createRfi: (projectId: string, data: any) =>
+  createRfi: (projectId: string, data: CreateRfiRequest) =>
     apiClient
       .post<ApiResponse<RfiRegister>>(`/v1/projects/${projectId}/rfis`, data)
       .then((r) => r.data),
 
-  updateRfi: (projectId: string, rfiId: string, data: any) =>
+  updateRfi: (projectId: string, rfiId: string, data: UpdateRfiRequest) =>
     apiClient
       .put<ApiResponse<RfiRegister>>(
         `/v1/projects/${projectId}/rfis/${rfiId}`,

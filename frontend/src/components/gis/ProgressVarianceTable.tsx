@@ -14,77 +14,77 @@ export function ProgressVarianceTable({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "ON_TRACK":
-        return "bg-green-100 text-green-800";
+        return "bg-green-950 text-green-300";
       case "BEHIND":
-        return "bg-red-100 text-red-800";
+        return "bg-red-950 text-red-300";
       case "AHEAD":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-950 text-blue-300";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-slate-800 text-slate-300";
     }
   };
 
   const getVarianceColor = (variance?: number) => {
-    if (!variance) return "text-gray-500";
-    if (variance > 10) return "text-red-600 font-bold";
-    if (variance < -5) return "text-green-600 font-bold";
-    return "text-gray-900";
+    if (!variance) return "text-slate-400";
+    if (variance > 10) return "text-red-400 font-bold";
+    if (variance < -5) return "text-green-400 font-bold";
+    return "text-white";
   };
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900">
+        <h3 className="text-lg font-semibold text-white">
           Progress Variance Analysis
         </h3>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-slate-400">
           Comparing derived vs claimed progress
         </p>
       </div>
 
       {variance.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">No progress data available</p>
+        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-8 text-center">
+          <p className="text-slate-400">No progress data available</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+        <div className="bg-slate-900/50 rounded-lg border border-slate-800 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-slate-900/80 border-b border-slate-800">
               <tr>
-                <th className="px-6 py-3 text-left font-medium text-gray-700">
+                <th className="px-6 py-3 text-left font-medium text-slate-300">
                   WBS Code
                 </th>
-                <th className="px-6 py-3 text-left font-medium text-gray-700">
+                <th className="px-6 py-3 text-left font-medium text-slate-300">
                   WBS Name
                 </th>
-                <th className="px-6 py-3 text-center font-medium text-gray-700">
+                <th className="px-6 py-3 text-center font-medium text-slate-300">
                   Derived %
                 </th>
-                <th className="px-6 py-3 text-center font-medium text-gray-700">
+                <th className="px-6 py-3 text-center font-medium text-slate-300">
                   Claimed %
                 </th>
-                <th className="px-6 py-3 text-center font-medium text-gray-700">
+                <th className="px-6 py-3 text-center font-medium text-slate-300">
                   Variance %
                 </th>
-                <th className="px-6 py-3 text-center font-medium text-gray-700">
+                <th className="px-6 py-3 text-center font-medium text-slate-300">
                   Status
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-800">
               {variance.map((v) => (
-                <tr key={v.wbsPolygonId} className="hover:bg-gray-50">
-                  <td className="px-6 py-3 font-mono text-gray-900">
+                <tr key={v.wbsPolygonId} className="hover:bg-slate-800/30">
+                  <td className="px-6 py-3 font-mono text-white">
                     {v.wbsCode}
                   </td>
-                  <td className="px-6 py-3 text-gray-600">{v.wbsName}</td>
-                  <td className="px-6 py-3 text-center text-gray-900">
+                  <td className="px-6 py-3 text-slate-300">{v.wbsName}</td>
+                  <td className="px-6 py-3 text-center text-white">
                     {v.derivedPercent !== null &&
                     v.derivedPercent !== undefined
                       ? v.derivedPercent.toFixed(1) + "%"
                       : "-"}
                   </td>
-                  <td className="px-6 py-3 text-center text-gray-900">
+                  <td className="px-6 py-3 text-center text-white">
                     {v.claimedPercent !== null &&
                     v.claimedPercent !== undefined
                       ? v.claimedPercent.toFixed(1) + "%"
@@ -113,7 +113,7 @@ export function ProgressVarianceTable({
       )}
 
       {/* Legend */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-gray-700">
+      <div className="bg-blue-950 border border-blue-700 rounded-lg p-4 text-sm text-slate-300">
         <p className="font-medium mb-2">Understanding Variance:</p>
         <ul className="space-y-1 text-xs">
           <li>
@@ -128,15 +128,15 @@ export function ProgressVarianceTable({
             <span className="font-medium">Variance:</span> Derived minus Claimed
           </li>
           <li>
-            <span className="font-medium text-green-600">AHEAD:</span> Variance
+            <span className="font-medium text-green-400">AHEAD:</span> Variance
             &lt; -5% (ahead of contractor claims)
           </li>
           <li>
-            <span className="font-medium text-amber-600">ON_TRACK:</span>{" "}
+            <span className="font-medium text-amber-400">ON_TRACK:</span>{" "}
             Variance between -5% and +10%
           </li>
           <li>
-            <span className="font-medium text-red-600">BEHIND:</span> Variance
+            <span className="font-medium text-red-400">BEHIND:</span> Variance
             &gt; +10% (behind contractor claims)
           </li>
         </ul>

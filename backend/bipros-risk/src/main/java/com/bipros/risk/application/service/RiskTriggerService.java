@@ -1,6 +1,7 @@
 package com.bipros.risk.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.risk.application.dto.CreateRiskTriggerRequest;
 import com.bipros.risk.application.dto.RiskTriggerDto;
 import com.bipros.risk.domain.model.Risk;
@@ -25,6 +26,7 @@ public class RiskTriggerService {
 
     private final RiskTriggerRepository triggerRepository;
     private final RiskRepository riskRepository;
+    private final AuditService auditService;
 
     public RiskTriggerDto createTrigger(UUID projectId, CreateRiskTriggerRequest request) {
         // Verify risk exists and belongs to project
@@ -47,6 +49,7 @@ public class RiskTriggerService {
 
         RiskTrigger saved = triggerRepository.save(trigger);
         log.info("Risk trigger created: {} for risk: {}", saved.getId(), request.getRiskId());
+        auditService.logCreate("RiskTrigger", saved.getId(), saved);
 
         return RiskTriggerDto.from(saved);
     }
@@ -84,6 +87,9 @@ public class RiskTriggerService {
         RiskTrigger trigger = triggerRepository.findById(triggerId)
             .orElseThrow(() -> new ResourceNotFoundException("RiskTrigger", triggerId));
 
+        auditService.logUpdate("RiskTrigger", triggerId, "triggerCondition", trigger.getTriggerCondition(), request.getTriggerCondition());
+        auditService.logUpdate("RiskTrigger", triggerId, "thresholdValue", trigger.getThresholdValue(), request.getThresholdValue());
+
         trigger.setTriggerCondition(request.getTriggerCondition());
         trigger.setTriggerType(request.getTriggerType());
         trigger.setThresholdValue(request.getThresholdValue());
@@ -99,6 +105,7 @@ public class RiskTriggerService {
             .orElseThrow(() -> new ResourceNotFoundException("RiskTrigger", triggerId));
         triggerRepository.delete(trigger);
         log.info("Risk trigger deleted: {}", triggerId);
+        auditService.logDelete("RiskTrigger", triggerId);
     }
 
     private void evaluateTrigger(RiskTrigger trigger) {

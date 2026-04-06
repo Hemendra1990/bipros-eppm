@@ -18,6 +18,7 @@ import {
   Sparkles,
   FileText,
   Plug,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAppStore } from "@/lib/state/store";
@@ -40,6 +41,7 @@ const adminNavigation = [
   { name: "Settings", href: "/admin/settings", icon: Settings },
   { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
   { name: "Integrations", href: "/admin/integrations", icon: Plug },
+  { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal },
 ];
 
 export function Sidebar() {
@@ -49,17 +51,18 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-gray-200 bg-white transition-all duration-200",
+        "flex flex-col border-r border-border-subtle bg-surface shadow-lg transition-all duration-200",
+        "relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px before:bg-gradient-to-b before:from-accent-glow before:to-transparent before:opacity-50",
         sidebarCollapsed ? "w-16" : "w-64"
       )}
     >
-      <div className="flex h-14 items-center justify-between border-b px-4">
+      <div className="flex h-14 items-center justify-between border-b border-border-subtle px-4 relative z-10">
         {!sidebarCollapsed && (
-          <span className="text-lg font-bold text-blue-600">Bipros</span>
+          <span className="text-lg font-bold gradient-text">Bipros</span>
         )}
         <button
           onClick={toggleSidebar}
-          className="rounded p-1 hover:bg-gray-100"
+          className="rounded p-1 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
         >
           {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
@@ -77,12 +80,15 @@ export function Sidebar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors relative",
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    ? "text-accent hover:text-accent-hover border-l-2 border-accent"
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
                 )}
               >
+                {isActive && (
+                  <div className="absolute inset-0 rounded-md bg-accent-glow pointer-events-none -z-10"></div>
+                )}
                 <item.icon size={20} />
                 {!sidebarCollapsed && <span>{item.name}</span>}
               </Link>
@@ -92,7 +98,7 @@ export function Sidebar() {
 
         {/* Admin Section Divider */}
         {!sidebarCollapsed && (
-          <div className="my-2 border-t border-gray-200" />
+          <div className="my-2 border-t border-border-subtle" />
         )}
 
         {/* Admin Navigation */}
@@ -104,12 +110,15 @@ export function Sidebar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors relative",
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    ? "text-accent hover:text-accent-hover border-l-2 border-accent"
+                    : "text-text-muted hover:text-text-secondary hover:bg-surface-hover"
                 )}
               >
+                {isActive && (
+                  <div className="absolute inset-0 rounded-md bg-accent-glow pointer-events-none -z-10"></div>
+                )}
                 <item.icon size={20} />
                 {!sidebarCollapsed && <span>{item.name}</span>}
               </Link>
@@ -117,6 +126,13 @@ export function Sidebar() {
           })}
         </div>
       </nav>
+
+      {/* Footer - Version */}
+      {!sidebarCollapsed && (
+        <div className="border-t border-border-subtle px-4 py-3">
+          <p className="text-xs text-text-muted">v1.0.0</p>
+        </div>
+      )}
     </aside>
   );
 }

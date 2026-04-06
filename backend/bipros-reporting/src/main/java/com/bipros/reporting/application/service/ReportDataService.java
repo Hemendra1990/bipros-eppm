@@ -215,12 +215,227 @@ public class ReportDataService {
     }
   }
 
+  @Transactional(readOnly = true)
+  public TrendAnalysisData getTrendAnalysis(UUID projectId, int months) {
+    try {
+      String projectName = getProjectName(projectId);
+
+      // Period-over-period metrics
+      List<TrendAnalysisData.PeriodMetric> periodMetrics = getPeriodMetrics(projectId, months);
+
+      // Milestone status
+      List<TrendAnalysisData.MilestoneStatusRow> milestoneStatus = getMilestoneStatus(projectId);
+
+      // Activity status distribution
+      Map<String, Integer> activityDistribution = getActivityDistribution(projectId);
+
+      // Resource loading trend
+      List<TrendAnalysisData.ResourceLoadingEntry> resourceLoadingTrend =
+          getResourceLoadingTrend(projectId, months);
+
+      return new TrendAnalysisData(
+          projectName,
+          periodMetrics,
+          milestoneStatus,
+          activityDistribution,
+          resourceLoadingTrend);
+    } catch (Exception e) {
+      log.error("Error generating trend analysis for projectId={}", projectId, e);
+      throw new RuntimeException("Failed to generate trend analysis report", e);
+    }
+  }
+
+  private List<TrendAnalysisData.PeriodMetric> getPeriodMetrics(UUID projectId, int months) {
+    List<TrendAnalysisData.PeriodMetric> metrics = new ArrayList<>();
+    LocalDate now = LocalDate.now();
+
+    for (int i = months - 1; i >= 0; i--) {
+      YearMonth ym = YearMonth.from(now.minusMonths(i));
+      String period = ym.toString();
+      LocalDate monthEnd = ym.atEndOfMonth();
+
+      try {
+        int total = countActivitiesAsOf(projectId, monthEnd);
+        int completed = countCompletedAsOf(projectId, monthEnd);
+        double pct = total > 0 ? (completed * 100.0) / total : 0.0;
+
+        double spi = getSpiAsOf(projectId, monthEnd);
+        double cpi = getCpiAsOf(projectId, monthEnd);
+
+        metrics.add(new TrendAnalysisData.PeriodMetric(period, total, completed, pct, spi, cpi));
+      } catch (Exception e) {
+        log.warn("Failed to fetch trend metrics for period {}: {}", period, e.getMessage());
+        metrics.add(new TrendAnalysisData.PeriodMetric(period, 0, 0, 0.0, 0.0, 0.0));
+      }
+    }
+
+    return metrics;
+  }
+
+  private int countActivitiesAsOf(UUID projectId, LocalDate asOf) {
+    try {
+      Object result = em.createNativeQuery(
+              "SELECT COUNT(*) FROM activity.activities " +
+              "WHERE project_id = ?1 AND planned_start_date <= ?2")
+          .setParameter(1, projectId.toString())
+          .setParameter(2, asOf)
+          .getSingleResult();
+      return result != null ? ((Number) result).intValue() : 0;
+    } catch (Exception e) {
+      log.warn("Failed to count activities for project={} asOf={}: {}", projectId, asOf, e.getMessage());
+      return 0;
+    }
+  }
+
+  private int countCompletedAsOf(UUID projectId, LocalDate asOf) {
+    try {
+      Object result = em.createNativeQuery(
+              "SELECT COUNT(*) FROM activity.activities " +
+              "WHERE project_id = ?1 AND status = 'COMPLETED' AND actual_finish_date <= ?2")
+          .setParameter(1, projectId.toString())
+          .setParameter(2, asOf)
+          .getSingleResult();
+      return result != null ? ((Number) result).intValue() : 0;
+    } catch (Exception e) {
+      log.warn("Failed to count completed activities for project={} asOf={}: {}", projectId, asOf, e.getMessage());
+      return 0;
+    }
+  }
+
+  private double getSpiAsOf(UUID projectId, LocalDate asOf) {
+    try {
+      Object result = em.createNativeQuery(
+              "SELECT schedule_performance_index FROM evm.evm_calculations " +
+              "WHERE project_id = ?1 AND data_date <= ?2 " +
+              "ORDER BY data_date DESC LIMIT 1")
+          .setParameter(1, projectId.toString())
+          .setParameter(2, asOf)
+          .getSingleResult();
+      return result != null ? ((Number) result).doubleValue() : 0.0;
+    } catch (Exception e) {
+      log.warn("Failed to get SPI for project={} asOf={}: {}", projectId, asOf, e.getMessage());
+      return 0.0;
+    }
+  }
+
+  private double getCpiAsOf(UUID projectId, LocalDate asOf) {
+    try {
+      Object result = em.createNativeQuery(
+              "SELECT cost_performance_index FROM evm.evm_calculations " +
+              "WHERE project_id = ?1 AND data_date <= ?2 " +
+              "ORDER BY data_date DESC LIMIT 1")
+          .setParameter(1, projectId.toString())
+          .setParameter(2, asOf)
+          .getSingleResult();
+      return result != null ? ((Number) result).doubleValue() : 0.0;
+    } catch (Exception e) {
+      log.warn("Failed to get CPI for project={} asOf={}: {}", projectId, asOf, e.getMessage());
+      return 0.0;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<TrendAnalysisData.MilestoneStatusRow> getMilestoneStatus(UUID projectId) {
+    try {
+      List<Object> results = em.createNativeQuery(
+              "SELECT cm.milestone_code, cm.milestone_name, cm.target_date, cm.actual_date, " +
+              "CASE WHEN cm.actual_date IS NOT NULL THEN 'ACHIEVED' " +
+              "     WHEN cm.target_date < CURRENT_DATE THEN 'LATE' " +
+              "     ELSE 'PENDING' END as status, " +
+              "COALESCE(EXTRACT(DAY FROM (cm.actual_date - cm.target_date)), " +
+              "         EXTRACT(DAY FROM (CURRENT_DATE - cm.target_date))) as variance_days " +
+              "FROM contract.contract_milestones cm " +
+              "JOIN contract.contracts c ON cm.contract_id = c.id " +
+              "WHERE c.project_id = ?1 " +
+              "ORDER BY cm.target_date ASC")
+          .setParameter(1, projectId.toString())
+          .getResultList();
+
+      return results.stream()
+          .map(row -> {
+            Object[] cols = (Object[]) row;
+            return new TrendAnalysisData.MilestoneStatusRow(
+                cols[0] != null ? cols[0].toString() : "",
+                cols[1] != null ? cols[1].toString() : "",
+                cols[2] != null ? cols[2].toString() : "",
+                cols[3] != null ? cols[3].toString() : "",
+                cols[4] != null ? cols[4].toString() : "PENDING",
+                cols[5] != null ? ((Number) cols[5]).intValue() : 0);
+          })
+          .collect(Collectors.toList());
+    } catch (Exception e) {
+      log.warn("Failed to get milestone status for project={}: {}", projectId, e.getMessage());
+      return new ArrayList<>();
+    }
+  }
+
+  private Map<String, Integer> getActivityDistribution(UUID projectId) {
+    try {
+      @SuppressWarnings("unchecked")
+      List<Object> results = em.createNativeQuery(
+              "SELECT status, COUNT(*) as cnt FROM activity.activities " +
+              "WHERE project_id = ?1 GROUP BY status")
+          .setParameter(1, projectId.toString())
+          .getResultList();
+
+      return results.stream()
+          .collect(Collectors.toMap(
+              row -> ((Object[]) row)[0] != null ? ((Object[]) row)[0].toString() : "UNKNOWN",
+              row -> ((Number) ((Object[]) row)[1]).intValue()));
+    } catch (Exception e) {
+      log.warn("Failed to get activity distribution for project={}: {}", projectId, e.getMessage());
+      return new HashMap<>();
+    }
+  }
+
+  private List<TrendAnalysisData.ResourceLoadingEntry> getResourceLoadingTrend(
+      UUID projectId, int months) {
+    List<TrendAnalysisData.ResourceLoadingEntry> entries = new ArrayList<>();
+    LocalDate now = LocalDate.now();
+
+    for (int i = months - 1; i >= 0; i--) {
+      YearMonth ym = YearMonth.from(now.minusMonths(i));
+      String period = ym.toString();
+      LocalDate monthStart = ym.atDay(1);
+      LocalDate monthEnd = ym.atEndOfMonth();
+
+      try {
+        @SuppressWarnings("unchecked")
+        List<Object> results = em.createNativeQuery(
+                "SELECT COALESCE(SUM(planned_units), 0), COALESCE(SUM(actual_units), 0), " +
+                "COUNT(DISTINCT resource_id) " +
+                "FROM resource.resource_assignments " +
+                "WHERE project_id = ?1 AND planned_start_date <= ?3 AND planned_finish_date >= ?2")
+            .setParameter(1, projectId.toString())
+            .setParameter(2, monthStart)
+            .setParameter(3, monthEnd)
+            .getResultList();
+
+        if (!results.isEmpty()) {
+          Object[] cols = (Object[]) results.get(0);
+          entries.add(new TrendAnalysisData.ResourceLoadingEntry(
+              period,
+              cols[0] != null ? ((Number) cols[0]).doubleValue() : 0.0,
+              cols[1] != null ? ((Number) cols[1]).doubleValue() : 0.0,
+              cols[2] != null ? ((Number) cols[2]).intValue() : 0));
+        } else {
+          entries.add(new TrendAnalysisData.ResourceLoadingEntry(period, 0.0, 0.0, 0));
+        }
+      } catch (Exception e) {
+        log.warn("Failed to get resource loading for period {}: {}", period, e.getMessage());
+        entries.add(new TrendAnalysisData.ResourceLoadingEntry(period, 0.0, 0.0, 0));
+      }
+    }
+
+    return entries;
+  }
+
   // Helper methods for querying data from different schemas
 
   private String getProjectName(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT name FROM scheduling.projects WHERE id = ?1")
+              "SELECT name FROM project.projects WHERE id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? result.toString() : "Unknown Project";
@@ -233,7 +448,7 @@ public class ReportDataService {
   private String getProjectCode(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT code FROM scheduling.projects WHERE id = ?1")
+              "SELECT code FROM project.projects WHERE id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? result.toString() : "N/A";
@@ -246,7 +461,7 @@ public class ReportDataService {
     try {
       Object result = em.createNativeQuery(
               "SELECT COUNT(*) FROM activity.activities " +
-              "WHERE project_id = ?1 AND actual_start <= ?3 AND actual_end >= ?2")
+              "WHERE project_id = ?1 AND actual_start_date <= ?3 AND actual_finish_date >= ?2")
           .setParameter(1, projectId.toString())
           .setParameter(2, start)
           .setParameter(3, end)
@@ -286,7 +501,7 @@ public class ReportDataService {
   private BigDecimal getProjectBudget(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT SUM(budget_amount) FROM cost.cost_items WHERE project_id = ?1")
+              "SELECT SUM(budgeted_cost) FROM cost.activity_expenses WHERE project_id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? new BigDecimal(result.toString()) : BigDecimal.ZERO;
@@ -298,7 +513,7 @@ public class ReportDataService {
   private BigDecimal getActualCost(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT SUM(actual_cost) FROM cost.cost_items WHERE project_id = ?1")
+              "SELECT SUM(actual_cost) FROM cost.activity_expenses WHERE project_id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? new BigDecimal(result.toString()) : BigDecimal.ZERO;
@@ -310,8 +525,8 @@ public class ReportDataService {
   private BigDecimal getActualCost(UUID projectId, LocalDate start, LocalDate end) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT SUM(actual_cost) FROM cost.cost_items " +
-              "WHERE project_id = ?1 AND cost_date BETWEEN ?2 AND ?3")
+              "SELECT SUM(actual_cost) FROM cost.activity_expenses " +
+              "WHERE project_id = ?1 AND planned_start_date BETWEEN ?2 AND ?3")
           .setParameter(1, projectId.toString())
           .setParameter(2, start)
           .setParameter(3, end)
@@ -325,7 +540,7 @@ public class ReportDataService {
   private BigDecimal getForecastCost(UUID projectId, LocalDate start, LocalDate end) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT SUM(forecast_cost) FROM cost.cost_items " +
+              "SELECT SUM(at_completion_cost) FROM cost.activity_expenses " +
               "WHERE project_id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
@@ -338,8 +553,8 @@ public class ReportDataService {
   private BigDecimal getPlannedValue(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT SUM(planned_value) FROM cost.evm_calculations WHERE project_id = ?1 " +
-              "ORDER BY calculation_date DESC LIMIT 1")
+              "SELECT planned_value FROM evm.evm_calculations WHERE project_id = ?1 " +
+              "ORDER BY data_date DESC LIMIT 1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? new BigDecimal(result.toString()) : BigDecimal.ZERO;
@@ -351,8 +566,8 @@ public class ReportDataService {
   private BigDecimal getEarnedValue(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT SUM(earned_value) FROM cost.evm_calculations WHERE project_id = ?1 " +
-              "ORDER BY calculation_date DESC LIMIT 1")
+              "SELECT earned_value FROM evm.evm_calculations WHERE project_id = ?1 " +
+              "ORDER BY data_date DESC LIMIT 1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? new BigDecimal(result.toString()) : BigDecimal.ZERO;
@@ -364,7 +579,8 @@ public class ReportDataService {
   private int getTotalMilestones(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT COUNT(*) FROM activity.milestones WHERE project_id = ?1")
+              "SELECT COUNT(*) FROM contract.contract_milestones cm " +
+              "JOIN contract.contracts c ON cm.contract_id = c.id WHERE c.project_id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? ((Number) result).intValue() : 0;
@@ -376,8 +592,9 @@ public class ReportDataService {
   private int getAchievedMilestones(UUID projectId, LocalDate asOfDate) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT COUNT(*) FROM activity.milestones " +
-              "WHERE project_id = ?1 AND achieved_date IS NOT NULL AND achieved_date <= ?2")
+              "SELECT COUNT(*) FROM contract.contract_milestones cm " +
+              "JOIN contract.contracts c ON cm.contract_id = c.id " +
+              "WHERE c.project_id = ?1 AND cm.actual_date IS NOT NULL AND cm.actual_date <= ?2")
           .setParameter(1, projectId.toString())
           .setParameter(2, asOfDate)
           .getSingleResult();
@@ -390,8 +607,9 @@ public class ReportDataService {
   private int getAchievedMilestones(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT COUNT(*) FROM activity.milestones " +
-              "WHERE project_id = ?1 AND achieved_date IS NOT NULL")
+              "SELECT COUNT(*) FROM contract.contract_milestones cm " +
+              "JOIN contract.contracts c ON cm.contract_id = c.id " +
+              "WHERE c.project_id = ?1 AND cm.actual_date IS NOT NULL")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? ((Number) result).intValue() : 0;
@@ -430,10 +648,10 @@ public class ReportDataService {
       @SuppressWarnings("unchecked")
       List<Object> results = em.createNativeQuery(
               "SELECT a.code, a.name, a.status, " +
-              "EXTRACT(DAY FROM (a.planned_finish - ?2)) as total_float, a.planned_finish " +
+              "EXTRACT(DAY FROM (a.planned_finish_date - ?2)) as total_float, a.planned_finish_date " +
               "FROM activity.activities a " +
-              "WHERE a.project_id = ?1 AND a.actual_finish IS NULL " +
-              "AND a.planned_finish < ?2 " +
+              "WHERE a.project_id = ?1 AND a.actual_finish_date IS NULL " +
+              "AND a.planned_finish_date < ?2 " +
               "ORDER BY a.planned_finish ASC LIMIT ?3")
           .setParameter(1, projectId.toString())
           .setParameter(2, asOfDate)
@@ -525,7 +743,8 @@ public class ReportDataService {
   private BigDecimal getTotalVariationOrderValue(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT SUM(vo_value) FROM contract.variation_orders WHERE project_id = ?1")
+              "SELECT SUM(vo.vo_value) FROM contract.variation_orders vo " +
+              "JOIN contract.contracts c ON vo.contract_id = c.id WHERE c.project_id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? new BigDecimal(result.toString()) : BigDecimal.ZERO;
@@ -537,8 +756,9 @@ public class ReportDataService {
   private int getPendingMilestones(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT COUNT(*) FROM contract.contract_milestones " +
-              "WHERE project_id = ?1 AND status IN ('PENDING', 'DUE')")
+              "SELECT COUNT(*) FROM contract.contract_milestones cm " +
+              "JOIN contract.contracts c ON cm.contract_id = c.id " +
+              "WHERE c.project_id = ?1 AND cm.status IN ('PENDING', 'DUE')")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? ((Number) result).intValue() : 0;
@@ -650,7 +870,7 @@ public class ReportDataService {
   private int getTotalResources(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT COUNT(DISTINCT resource_id) FROM resource.assignments WHERE project_id = ?1")
+              "SELECT COUNT(DISTINCT resource_id) FROM resource.resource_assignments WHERE project_id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? ((Number) result).intValue() : 0;
@@ -662,8 +882,9 @@ public class ReportDataService {
   private double getAverageUtilization(UUID projectId) {
     try {
       Object result = em.createNativeQuery(
-              "SELECT AVG(utilization_percentage) FROM resource.resource_utilization " +
-              "WHERE project_id = ?1")
+              "SELECT CASE WHEN SUM(planned_units) > 0 " +
+              "THEN ROUND(100.0 * SUM(actual_units) / SUM(planned_units), 2) ELSE 0 END " +
+              "FROM resource.resource_assignments WHERE project_id = ?1")
           .setParameter(1, projectId.toString())
           .getSingleResult();
       return result != null ? ((Number) result).doubleValue() : 0.0;
@@ -678,12 +899,12 @@ public class ReportDataService {
       @SuppressWarnings("unchecked")
       List<Object> results = em.createNativeQuery(
               "SELECT r.code, r.name, r.resource_type, " +
-              "SUM(a.planned_hours) as planned_hours, " +
-              "SUM(a.actual_hours) as actual_hours, " +
-              "ROUND(100.0 * SUM(a.actual_hours) / SUM(a.planned_hours), 2) as util_pct " +
+              "COALESCE(SUM(a.planned_units), 0) as planned_units, " +
+              "COALESCE(SUM(a.actual_units), 0) as actual_units, " +
+              "CASE WHEN SUM(a.planned_units) > 0 THEN ROUND(100.0 * SUM(a.actual_units) / SUM(a.planned_units), 2) ELSE 0 END as util_pct " +
               "FROM resource.resources r " +
-              "LEFT JOIN resource.assignments a ON r.id = a.resource_id " +
-              "WHERE r.project_id = ?1 " +
+              "LEFT JOIN resource.resource_assignments a ON r.id = a.resource_id " +
+              "WHERE a.project_id = ?1 " +
               "GROUP BY r.id ORDER BY util_pct DESC LIMIT 50")
           .setParameter(1, projectId.toString())
           .getResultList();

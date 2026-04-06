@@ -10,6 +10,7 @@ import com.bipros.importexport.infrastructure.export.CsvExporter;
 import com.bipros.importexport.infrastructure.export.ExcelExporter;
 import com.bipros.importexport.infrastructure.export.MspXmlExporter;
 import com.bipros.importexport.infrastructure.export.P6XmlExporter;
+import com.bipros.importexport.infrastructure.parser.P6XmlParser;
 import com.bipros.importexport.infrastructure.parser.XerParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class ImportExportService {
   private final ImportExportJobRepository jobRepository;
   private final ImportExportLogRepository logRepository;
   private final XerParser xerParser;
+  private final P6XmlParser p6XmlParser;
   private final XerImportMapper xerImportMapper;
   private final ObjectMapper objectMapper;
   private final P6XmlExporter p6XmlExporter;
@@ -107,7 +109,7 @@ public class ImportExportService {
       if (ImportExportFormat.XER.equals(format)) {
         parseXER(fileContent, saved.getId(), errors);
       } else if (ImportExportFormat.P6XML.equals(format)) {
-        logMessage(saved.getId(), "WARN", "P6XML parsing not yet implemented");
+        parseP6Xml(fileContent, saved.getId(), errors);
       } else if (ImportExportFormat.MSP_XML.equals(format)) {
         logMessage(saved.getId(), "WARN", "MSP XML parsing not yet implemented");
       } else if (ImportExportFormat.EXCEL.equals(format)) {
@@ -189,6 +191,57 @@ public class ImportExportService {
       logMessage(jobId, "ERROR", errorMsg);
       log.error("XER import failed", e);
     }
+  }
+
+  private void parseP6Xml(String content, UUID jobId, List<String> errors) {
+    try {
+      Map<String, List<Map<String, String>>> elements = p6XmlParser.parse(content);
+      logMessage(jobId, "INFO", "Parsed P6 XML with " + elements.values().stream().mapToInt(List::size).sum() + " total records");
+
+      for (String elementType : elements.keySet()) {
+        int recordCount = elements.get(elementType).size();
+        if (recordCount > 0) {
+          logMessage(jobId, "INFO", elementType + ": " + recordCount + " records");
+        }
+      }
+
+      // Map P6 XML data to XER-compatible table format for reuse of xerImportMapper
+      Map<String, List<Map<String, String>>> xerCompatibleTables = mapP6XmlToXerTables(elements);
+      UUID projectId = xerImportMapper.importProject(xerCompatibleTables);
+      logMessage(jobId, "INFO", "Successfully imported P6 XML project: " + projectId);
+    } catch (Exception e) {
+      String errorMsg = "Error parsing P6 XML: " + e.getMessage();
+      errors.add(errorMsg);
+      logMessage(jobId, "ERROR", errorMsg);
+      log.error("P6 XML import failed", e);
+    }
+  }
+
+  private Map<String, List<Map<String, String>>> mapP6XmlToXerTables(
+      Map<String, List<Map<String, String>>> p6Elements) {
+    Map<String, List<Map<String, String>>> tables = new LinkedHashMap<>();
+
+    // Map P6 XML element types to XER table names
+    if (p6Elements.containsKey("Project")) {
+      tables.put("PROJECT", p6Elements.get("Project"));
+    }
+    if (p6Elements.containsKey("WBS")) {
+      tables.put("PROJWBS", p6Elements.get("WBS"));
+    }
+    if (p6Elements.containsKey("Activity")) {
+      tables.put("TASK", p6Elements.get("Activity"));
+    }
+    if (p6Elements.containsKey("ActivityRelationship")) {
+      tables.put("TASKPRED", p6Elements.get("ActivityRelationship"));
+    }
+    if (p6Elements.containsKey("Resource")) {
+      tables.put("RSRC", p6Elements.get("Resource"));
+    }
+    if (p6Elements.containsKey("ResourceAssignment")) {
+      tables.put("TASKRSRC", p6Elements.get("ResourceAssignment"));
+    }
+
+    return tables;
   }
 
   private Path storeExportFile(UUID projectId, ImportExportFormat format, String fileName) throws Exception {

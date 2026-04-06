@@ -36,3 +36,6 @@ docker/data/
 # Environment
 .env
 *.env.local
+
+# LLM-maintained project wiki (auto-generated)
+.claude/wiki/

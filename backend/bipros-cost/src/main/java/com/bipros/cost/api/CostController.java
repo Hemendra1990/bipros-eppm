@@ -1,12 +1,15 @@
 package com.bipros.cost.api;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.common.dto.PagedResponse;
 import com.bipros.cost.application.dto.*;
+import com.bipros.cost.application.service.CashFlowForecastEngine;
 import com.bipros.cost.application.service.CostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,6 +17,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
 @RequiredArgsConstructor
 public class CostController {
 
@@ -36,6 +40,14 @@ public class CostController {
     @GetMapping("/cost-accounts/{id}")
     public ResponseEntity<ApiResponse<CostAccountDto>> getCostAccount(@PathVariable UUID id) {
         CostAccountDto response = costService.getCostAccount(id);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @PutMapping("/cost-accounts/{id}")
+    public ResponseEntity<ApiResponse<CostAccountDto>> updateCostAccount(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateCostAccountRequest request) {
+        CostAccountDto response = costService.updateCostAccount(id, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
@@ -64,9 +76,11 @@ public class CostController {
     }
 
     @GetMapping("/projects/{projectId}/expenses")
-    public ResponseEntity<ApiResponse<List<ActivityExpenseDto>>> getProjectExpenses(
-            @PathVariable UUID projectId) {
-        List<ActivityExpenseDto> response = costService.getExpensesByProject(projectId);
+    public ResponseEntity<ApiResponse<PagedResponse<ActivityExpenseDto>>> getProjectExpenses(
+            @PathVariable UUID projectId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PagedResponse<ActivityExpenseDto> response = costService.getExpensesByProjectPaged(projectId, page, size);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
@@ -265,6 +279,34 @@ public class CostController {
     public ResponseEntity<ApiResponse<List<DprEstimateDto>>> getDprEstimatesByProject(
             @PathVariable UUID projectId) {
         List<DprEstimateDto> response = costService.getDprEstimatesByProject(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // Cost Summary Endpoint
+    @GetMapping("/projects/{projectId}/cost-summary")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+    public ResponseEntity<ApiResponse<CostSummaryDto>> getCostSummary(
+            @PathVariable UUID projectId) {
+        CostSummaryDto response = costService.getCostSummary(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // Period Cost Aggregation
+    @GetMapping("/projects/{projectId}/cost-periods")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+    public ResponseEntity<ApiResponse<List<PeriodCostAggregationDto>>> aggregateByPeriod(
+            @PathVariable UUID projectId) {
+        List<PeriodCostAggregationDto> response = costService.aggregateByPeriod(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // Forecast Generation
+    @GetMapping("/projects/{projectId}/cost-forecast")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+    public ResponseEntity<ApiResponse<List<CashFlowForecastDto>>> generateForecast(
+            @PathVariable UUID projectId,
+            @RequestParam(defaultValue = "LINEAR") CashFlowForecastEngine.ForecastMethod method) {
+        List<CashFlowForecastDto> response = costService.generateForecast(projectId, method);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 

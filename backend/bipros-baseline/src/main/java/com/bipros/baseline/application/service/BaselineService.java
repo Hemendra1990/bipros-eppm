@@ -10,11 +10,15 @@ import com.bipros.baseline.application.dto.CreateBaselineRequest;
 import com.bipros.baseline.application.dto.ScheduleComparisonResponse;
 import com.bipros.baseline.domain.Baseline;
 import com.bipros.baseline.domain.BaselineActivity;
-import com.bipros.baseline.domain.BaselineType;
 import com.bipros.baseline.infrastructure.repository.BaselineActivityRepository;
-import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineRelationshipRepository;
+import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
+import com.bipros.cost.domain.entity.ActivityExpense;
+import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +39,9 @@ public class BaselineService {
   private final BaselineActivityRepository baselineActivityRepository;
   private final BaselineRelationshipRepository baselineRelationshipRepository;
   private final ActivityRepository activityRepository;
+  private final ActivityExpenseRepository activityExpenseRepository;
+  private final ResourceAssignmentRepository resourceAssignmentRepository;
+  private final AuditService auditService;
 
   @Transactional
   public BaselineResponse createBaseline(UUID projectId, CreateBaselineRequest request) {
@@ -46,6 +53,24 @@ public class BaselineService {
       baselineRepository.save(baseline);
     }
 
+    // Load all activities for this project
+    List<Activity> activities = activityRepository.findByProjectId(projectId);
+
+    // Load cost data
+    List<ActivityExpense> allExpenses = activityExpenseRepository.findByProjectId(projectId);
+    Map<UUID, List<ActivityExpense>> expensesByActivity = allExpenses.stream()
+        .filter(e -> e.getActivityId() != null)
+        .collect(Collectors.groupingBy(ActivityExpense::getActivityId));
+
+    List<ResourceAssignment> allAssignments = resourceAssignmentRepository.findByProjectId(projectId);
+    Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
+        .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+
+    // Compute project-level metrics from activities
+    BigDecimal totalCost = BigDecimal.ZERO;
+    LocalDate projectStart = null;
+    LocalDate projectFinish = null;
+
     // Create new baseline
     Baseline baseline = new Baseline();
     baseline.setProjectId(projectId);
@@ -54,15 +79,57 @@ public class BaselineService {
     baseline.setBaselineType(request.baselineType());
     baseline.setBaselineDate(LocalDate.now());
     baseline.setIsActive(true);
-
-    // Placeholder values - in real implementation, fetch from activity/project service
-    baseline.setTotalActivities(0);
-    baseline.setTotalCost(BigDecimal.ZERO);
-    baseline.setProjectDuration(0.0);
-    baseline.setProjectStartDate(LocalDate.now());
-    baseline.setProjectFinishDate(LocalDate.now());
-
     Baseline saved = baselineRepository.save(baseline);
+
+    // Snapshot each activity
+    for (Activity activity : activities) {
+      BigDecimal plannedCost = calculatePlannedCost(activity, expensesByActivity, assignmentsByActivity);
+      BigDecimal actualCost = calculateActualCost(activity, expensesByActivity, assignmentsByActivity);
+
+      BaselineActivity ba = new BaselineActivity();
+      ba.setBaselineId(saved.getId());
+      ba.setActivityId(activity.getId());
+      ba.setEarlyStart(activity.getPlannedStartDate());
+      ba.setEarlyFinish(activity.getPlannedFinishDate());
+      ba.setLateStart(activity.getLateStartDate());
+      ba.setLateFinish(activity.getLateFinishDate());
+      ba.setOriginalDuration(activity.getOriginalDuration());
+      ba.setRemainingDuration(activity.getRemainingDuration());
+      ba.setTotalFloat(activity.getTotalFloat());
+      ba.setFreeFloat(activity.getFreeFloat());
+      ba.setPlannedCost(plannedCost);
+      ba.setActualCost(actualCost);
+      ba.setPercentComplete(activity.getPercentComplete());
+      baselineActivityRepository.save(ba);
+
+      totalCost = totalCost.add(plannedCost);
+
+      // Track project date range
+      if (activity.getPlannedStartDate() != null) {
+        if (projectStart == null || activity.getPlannedStartDate().isBefore(projectStart)) {
+          projectStart = activity.getPlannedStartDate();
+        }
+      }
+      if (activity.getPlannedFinishDate() != null) {
+        if (projectFinish == null || activity.getPlannedFinishDate().isAfter(projectFinish)) {
+          projectFinish = activity.getPlannedFinishDate();
+        }
+      }
+    }
+
+    // Update baseline with computed metrics
+    saved.setTotalActivities(activities.size());
+    saved.setTotalCost(totalCost);
+    saved.setProjectStartDate(projectStart);
+    saved.setProjectFinishDate(projectFinish);
+    if (projectStart != null && projectFinish != null) {
+      saved.setProjectDuration((double) ChronoUnit.DAYS.between(projectStart, projectFinish));
+    } else {
+      saved.setProjectDuration(0.0);
+    }
+    saved = baselineRepository.save(saved);
+    auditService.logCreate("Baseline", saved.getId(), BaselineResponse.from(saved));
+
     return BaselineResponse.from(saved);
   }
 
@@ -98,10 +165,10 @@ public class BaselineService {
     baselineRelationshipRepository.deleteAll(
         baselineRelationshipRepository.findByBaselineId(baselineId));
     baselineRepository.delete(baseline);
+    auditService.logDelete("Baseline", baselineId);
   }
 
-  public List<BaselineVarianceResponse> getVariance(
-      UUID projectId, UUID baselineId) {
+  public List<BaselineVarianceResponse> getVariance(UUID projectId, UUID baselineId) {
     Baseline baseline =
         baselineRepository
             .findById(baselineId)
@@ -114,53 +181,72 @@ public class BaselineService {
     List<BaselineActivity> baselineActivities =
         baselineActivityRepository.findByBaselineId(baselineId);
 
-    // Load current activities and index by ID
+    // Load current activities and cost data
     List<Activity> currentActivities = activityRepository.findByProjectId(projectId);
     Map<UUID, Activity> activityMap = currentActivities.stream()
-        .collect(Collectors.toMap(Activity::getId, activity -> activity));
+        .collect(Collectors.toMap(Activity::getId, a -> a));
+
+    List<ActivityExpense> allExpenses = activityExpenseRepository.findByProjectId(projectId);
+    Map<UUID, List<ActivityExpense>> expensesByActivity = allExpenses.stream()
+        .filter(e -> e.getActivityId() != null)
+        .collect(Collectors.groupingBy(ActivityExpense::getActivityId));
+
+    List<ResourceAssignment> allAssignments = resourceAssignmentRepository.findByProjectId(projectId);
+    Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
+        .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
 
     return baselineActivities.stream()
-        .map(baselineActivity -> calculateVariance(baselineActivity, activityMap))
+        .map(ba -> calculateVariance(ba, activityMap, expensesByActivity, assignmentsByActivity))
         .toList();
   }
 
   private BaselineVarianceResponse calculateVariance(
       BaselineActivity baselineActivity,
-      Map<UUID, Activity> currentActivityMap) {
+      Map<UUID, Activity> currentActivityMap,
+      Map<UUID, List<ActivityExpense>> expensesByActivity,
+      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+
     Activity currentActivity = currentActivityMap.get(baselineActivity.getActivityId());
+    String activityName = currentActivity != null ? currentActivity.getName() : "Deleted Activity";
 
     Long startVarianceDays = 0L;
     Long finishVarianceDays = 0L;
     Double durationVariance = 0.0;
+    BigDecimal costVariance = BigDecimal.ZERO;
 
     if (currentActivity != null) {
-      // Calculate start variance (positive = delayed)
+      // Schedule variance (positive = delayed)
       if (baselineActivity.getEarlyStart() != null && currentActivity.getPlannedStartDate() != null) {
         startVarianceDays = ChronoUnit.DAYS.between(
             baselineActivity.getEarlyStart(),
             currentActivity.getPlannedStartDate());
       }
-
-      // Calculate finish variance (positive = delayed)
       if (baselineActivity.getEarlyFinish() != null && currentActivity.getPlannedFinishDate() != null) {
         finishVarianceDays = ChronoUnit.DAYS.between(
             baselineActivity.getEarlyFinish(),
             currentActivity.getPlannedFinishDate());
       }
 
-      // Calculate duration variance
+      // Duration variance
       if (baselineActivity.getOriginalDuration() != null && currentActivity.getOriginalDuration() != null) {
         durationVariance = currentActivity.getOriginalDuration() - baselineActivity.getOriginalDuration();
       }
+
+      // Cost variance = current actual cost - baseline planned cost
+      BigDecimal currentActualCost = calculateActualCost(
+          currentActivity, expensesByActivity, assignmentsByActivity);
+      BigDecimal baselinePlannedCost = baselineActivity.getPlannedCost() != null
+          ? baselineActivity.getPlannedCost() : BigDecimal.ZERO;
+      costVariance = currentActualCost.subtract(baselinePlannedCost);
     }
 
     return new BaselineVarianceResponse(
         baselineActivity.getActivityId(),
-        "Activity " + baselineActivity.getActivityId(),
+        activityName,
         startVarianceDays,
         finishVarianceDays,
         durationVariance,
-        BigDecimal.ZERO); // costVariance - no cost data in baseline yet
+        costVariance);
   }
 
   public List<ScheduleComparisonResponse> getScheduleComparison(UUID projectId, UUID baselineId) {
@@ -172,20 +258,36 @@ public class BaselineService {
       throw new ResourceNotFoundException("Baseline", baselineId);
     }
 
-    // Get baseline activities indexed by activity ID
     List<BaselineActivity> baselineActivities = baselineActivityRepository.findByBaselineId(baselineId);
     Map<UUID, BaselineActivity> baselineActivityMap = baselineActivities.stream()
-        .collect(Collectors.toMap(BaselineActivity::getActivityId, activity -> activity));
+        .collect(Collectors.toMap(BaselineActivity::getActivityId, a -> a));
 
-    // Get current activities
     List<Activity> currentActivities = activityRepository.findByProjectId(projectId);
-    Map<UUID, Activity> currentActivityMap = currentActivities.stream()
-        .collect(Collectors.toMap(Activity::getId, activity -> activity));
 
-    // Compare current activities with baseline
-    return currentActivities.stream()
+    // Build comparison for current activities
+    List<ScheduleComparisonResponse> comparisons = currentActivities.stream()
         .map(current -> compareActivity(current, baselineActivityMap.get(current.getId())))
-        .toList();
+        .collect(Collectors.toList());
+
+    // Add DELETED entries for baseline activities not in current set
+    Map<UUID, Activity> currentMap = currentActivities.stream()
+        .collect(Collectors.toMap(Activity::getId, a -> a));
+    for (BaselineActivity ba : baselineActivities) {
+      if (!currentMap.containsKey(ba.getActivityId())) {
+        comparisons.add(new ScheduleComparisonResponse(
+            ba.getActivityId(),
+            "Deleted Activity",
+            null,
+            ba.getEarlyStart(),
+            0L,
+            null,
+            ba.getEarlyFinish(),
+            0L,
+            ScheduleComparisonResponse.ComparisonStatus.DELETED));
+      }
+    }
+
+    return comparisons;
   }
 
   private ScheduleComparisonResponse compareActivity(Activity current, BaselineActivity baseline) {
@@ -218,17 +320,53 @@ public class BaselineService {
         status);
   }
 
-  private boolean areDatesEqual(LocalDate date1, LocalDate date2) {
-    if (date1 == null && date2 == null) {
-      return true;
+  private BigDecimal calculatePlannedCost(
+      Activity activity,
+      Map<UUID, List<ActivityExpense>> expensesByActivity,
+      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+    BigDecimal cost = BigDecimal.ZERO;
+    List<ActivityExpense> expenses = expensesByActivity.get(activity.getId());
+    if (expenses != null) {
+      for (ActivityExpense e : expenses) {
+        if (e.getBudgetedCost() != null) cost = cost.add(e.getBudgetedCost());
+      }
     }
+    List<ResourceAssignment> assignments = assignmentsByActivity.get(activity.getId());
+    if (assignments != null) {
+      for (ResourceAssignment ra : assignments) {
+        if (ra.getPlannedCost() != null) cost = cost.add(ra.getPlannedCost());
+      }
+    }
+    return cost;
+  }
+
+  private BigDecimal calculateActualCost(
+      Activity activity,
+      Map<UUID, List<ActivityExpense>> expensesByActivity,
+      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+    BigDecimal cost = BigDecimal.ZERO;
+    List<ActivityExpense> expenses = expensesByActivity.get(activity.getId());
+    if (expenses != null) {
+      for (ActivityExpense e : expenses) {
+        if (e.getActualCost() != null) cost = cost.add(e.getActualCost());
+      }
+    }
+    List<ResourceAssignment> assignments = assignmentsByActivity.get(activity.getId());
+    if (assignments != null) {
+      for (ResourceAssignment ra : assignments) {
+        if (ra.getActualCost() != null) cost = cost.add(ra.getActualCost());
+      }
+    }
+    return cost;
+  }
+
+  private boolean areDatesEqual(LocalDate date1, LocalDate date2) {
+    if (date1 == null && date2 == null) return true;
     return date1 != null && date1.equals(date2);
   }
 
   private Long calculateDaysDifference(LocalDate from, LocalDate to) {
-    if (from == null || to == null) {
-      return 0L;
-    }
+    if (from == null || to == null) return 0L;
     return ChronoUnit.DAYS.between(from, to);
   }
 }

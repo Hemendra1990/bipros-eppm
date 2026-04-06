@@ -1,0 +1,70 @@
+/**
+ * Bipros EPPM User Guide — Custom Styles
+ */
+
+:root {
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1d4ed8;
+  --ifm-color-primary-darker: #1e40af;
+  --ifm-color-primary-darkest: #1e3a8a;
+  --ifm-color-primary-light: #3b82f6;
+  --ifm-color-primary-lighter: #60a5fa;
+  --ifm-color-primary-lightest: #93c5fd;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #60a5fa;
+  --ifm-color-primary-dark: #3b82f6;
+  --ifm-color-primary-darker: #2563eb;
+  --ifm-color-primary-darkest: #1d4ed8;
+  --ifm-color-primary-light: #93c5fd;
+  --ifm-color-primary-lighter: #bfdbfe;
+  --ifm-color-primary-lightest: #dbeafe;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Screenshot images */
+img[alt*="Dashboard"],
+img[alt*="Projects"],
+img[alt*="Portfolio"],
+img[alt*="EPS"],
+img[alt*="OBS"],
+img[alt*="Resource"],
+img[alt*="Report"],
+img[alt*="Risk"],
+img[alt*="Analytics"],
+img[alt*="Admin"],
+img[alt*="Login"],
+img[alt*="Activities"],
+img[alt*="Contract"],
+img[alt*="WBS"],
+img[alt*="EVM"],
+img[alt*="GIS"],
+img[alt*="Schedule"],
+img[alt*="RA Bills"],
+img[alt*="Labour"],
+img[alt*="Equipment"],
+img[alt*="Material"],
+img[alt*="Drawings"],
+img[alt*="RFI"],
+img[alt*="Baselines"],
+img[alt*="Predictions"],
+img[alt*="Global Change"],
+img[alt*="Integrations"],
+img[alt*="Calendar"],
+img[alt*="Overview"],
+img[alt*="Tab"] {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin: 1rem 0;
+}
+
+[data-theme='dark'] img[alt*="Dashboard"],
+[data-theme='dark'] img[alt*="Projects"],
+[data-theme='dark'] img[alt*="Login"] {
+  border-color: var(--ifm-color-emphasis-400);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}

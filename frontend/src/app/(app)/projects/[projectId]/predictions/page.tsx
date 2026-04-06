@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { analyticsApi, type PredictionDto } from "@/lib/api/analyticsApi";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
+import { TabTip } from "@/components/common/TabTip";
 import { AlertCircle, TrendingDown, TrendingUp, Zap } from "lucide-react";
 
 export default function PredictionsPage() {
@@ -31,15 +32,15 @@ export default function PredictionsPage() {
   const completionDate = predictions.find((p) => p.predictionType === "COMPLETION_DATE");
 
   const getRiskColor = (confidence: number) => {
-    if (confidence > 0.75) return "text-red-600";
-    if (confidence > 0.5) return "text-yellow-600";
-    return "text-green-600";
+    if (confidence > 0.75) return "text-red-400";
+    if (confidence > 0.5) return "text-amber-400";
+    return "text-emerald-400";
   };
 
   const getRiskBgColor = (confidence: number) => {
-    if (confidence > 0.75) return "bg-red-50";
-    if (confidence > 0.5) return "bg-yellow-50";
-    return "bg-green-50";
+    if (confidence > 0.75) return "bg-red-500/10";
+    if (confidence > 0.5) return "bg-amber-500/10";
+    return "bg-emerald-500/10";
   };
 
   const parseFactors = (factorsJson: string) => {
@@ -52,10 +53,14 @@ export default function PredictionsPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <TabTip
+        title="Predictive Analytics"
+        description="Rule-based predictions using SPI (Schedule Performance Index) and CPI (Cost Performance Index) to forecast schedule slippage and cost overruns."
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Predictive Analytics</h1>
-          <p className="text-gray-600 mt-2">Rule-based schedule and cost predictions</p>
+          <p className="text-slate-400 mt-2">Rule-based schedule and cost predictions</p>
         </div>
         <Button
           onClick={() => runPredictionsMutation.mutate()}
@@ -68,7 +73,7 @@ export default function PredictionsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-8 text-gray-500">Loading predictions...</div>
+        <div className="text-center py-8 text-slate-500">Loading predictions...</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Schedule Slip Risk Card */}
@@ -84,17 +89,17 @@ export default function PredictionsPage() {
                   {scheduleSlip.predictedValue.toFixed(1)}
                   <span className="text-lg ml-2">days</span>
                 </div>
-                <p className="text-sm text-gray-600 mt-2">Predicted Slip Duration</p>
+                <p className="text-sm text-slate-400 mt-2">Predicted Slip Duration</p>
               </div>
 
-              <div className="bg-white rounded p-3 mb-4">
+              <div className="bg-slate-900/50 rounded p-3 mb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Confidence Level</span>
                   <span className={`font-bold ${getRiskColor(scheduleSlip.confidenceLevel)}`}>
                     {(scheduleSlip.confidenceLevel * 100).toFixed(0)}%
                   </span>
                 </div>
-                <div className="w-full bg-gray-300 rounded h-2 mt-2">
+                <div className="w-full bg-slate-700 rounded h-2 mt-2">
                   <div
                     className={`h-2 rounded ${
                       scheduleSlip.confidenceLevel > 0.75
@@ -141,17 +146,17 @@ export default function PredictionsPage() {
                   {(costOverrun.predictedValue / 1000).toFixed(1)}
                   <span className="text-lg ml-2">k</span>
                 </div>
-                <p className="text-sm text-gray-600 mt-2">Predicted Overrun Amount</p>
+                <p className="text-sm text-slate-400 mt-2">Predicted Overrun Amount</p>
               </div>
 
-              <div className="bg-white rounded p-3 mb-4">
+              <div className="bg-slate-900/50 rounded p-3 mb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Confidence Level</span>
                   <span className={`font-bold ${getRiskColor(costOverrun.confidenceLevel)}`}>
                     {(costOverrun.confidenceLevel * 100).toFixed(0)}%
                   </span>
                 </div>
-                <div className="w-full bg-gray-300 rounded h-2 mt-2">
+                <div className="w-full bg-slate-700 rounded h-2 mt-2">
                   <div
                     className={`h-2 rounded ${
                       costOverrun.confidenceLevel > 0.75
@@ -186,10 +191,10 @@ export default function PredictionsPage() {
 
           {/* Completion Date Card */}
           {completionDate && (
-            <div className="rounded-lg border bg-blue-50 p-6">
+            <div className="rounded-lg border border-slate-800 bg-blue-500/10 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Completion Date</h3>
-                <TrendingUp className="text-blue-600" size={24} />
+                <TrendingUp className="text-blue-400" size={24} />
               </div>
 
               <div className="mb-4">
@@ -197,17 +202,17 @@ export default function PredictionsPage() {
                   {completionDate.predictedValue.toFixed(0)}
                   <span className="text-lg ml-2">days</span>
                 </div>
-                <p className="text-sm text-gray-600 mt-2">Adjusted Remaining Duration</p>
+                <p className="text-sm text-slate-400 mt-2">Adjusted Remaining Duration</p>
               </div>
 
-              <div className="bg-white rounded p-3 mb-4">
+              <div className="bg-slate-900/50 rounded p-3 mb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Baseline Remaining</span>
                   <span className="font-bold">{completionDate.baselineValue?.toFixed(0)} days</span>
                 </div>
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-sm font-medium">Variance</span>
-                  <span className={`font-bold ${(completionDate.variance || 0) > 0 ? "text-red-600" : "text-green-600"}`}>
+                  <span className={`font-bold ${(completionDate.variance || 0) > 0 ? "text-red-400" : "text-emerald-400"}`}>
                     {(completionDate.variance || 0) > 0 ? "+" : ""}
                     {completionDate.variance?.toFixed(0)} days
                   </span>
@@ -235,7 +240,7 @@ export default function PredictionsPage() {
 
       {/* Historical Predictions Chart */}
       {predictions.length > 0 && (
-        <div className="rounded-lg border bg-white p-6">
+        <div className="rounded-lg border bg-slate-900/50 p-6">
           <h3 className="text-lg font-semibold mb-4">Prediction Trend</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart
@@ -259,7 +264,7 @@ export default function PredictionsPage() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis />
-              <Tooltip />
+              <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px", color: "#e2e8f0" }} />
               <Legend />
               <Line
                 type="monotone"
@@ -279,9 +284,9 @@ export default function PredictionsPage() {
       )}
 
       {/* Info Section */}
-      <div className="rounded-lg border bg-blue-50 p-4">
-        <h4 className="font-semibold text-blue-900 mb-2">About These Predictions</h4>
-        <p className="text-sm text-blue-800">
+      <div className="rounded-lg border border-slate-800 bg-blue-500/10 p-4">
+        <h4 className="font-semibold text-blue-400 mb-2">About These Predictions</h4>
+        <p className="text-sm text-slate-300">
           These predictions use rule-based algorithms analyzing Schedule Performance Index (SPI),
           Cost Performance Index (CPI), critical path activities, and variation orders. Confidence
           levels are currently fixed at 65% as the model is rule-based. Machine learning models

@@ -82,6 +82,14 @@ public class ProjectService {
 
         // Track changes for audit
         String oldName = project.getName();
+        String oldDescription = project.getDescription();
+        UUID oldObsNodeId = project.getObsNodeId();
+        var oldPlannedStart = project.getPlannedStartDate();
+        var oldPlannedFinish = project.getPlannedFinishDate();
+        var oldMustFinishBy = project.getMustFinishByDate();
+        var oldStatus = project.getStatus();
+        var oldPriority = project.getPriority();
+        var oldDataDate = project.getDataDate();
 
         if (request.name() != null) {
             project.setName(request.name());
@@ -114,9 +122,33 @@ public class ProjectService {
         Project updated = projectRepository.save(project);
         log.info("Project updated: {}", id);
 
-        // Audit log update
+        // Audit log updates for all changed fields
         if (request.name() != null && !request.name().equals(oldName)) {
             auditService.logUpdate("Project", id, "name", oldName, request.name());
+        }
+        if (request.description() != null && !request.description().equals(oldDescription)) {
+            auditService.logUpdate("Project", id, "description", oldDescription, request.description());
+        }
+        if (request.obsNodeId() != null && !request.obsNodeId().equals(oldObsNodeId)) {
+            auditService.logUpdate("Project", id, "obsNodeId", oldObsNodeId, request.obsNodeId());
+        }
+        if (request.plannedStartDate() != null && !request.plannedStartDate().equals(oldPlannedStart)) {
+            auditService.logUpdate("Project", id, "plannedStartDate", oldPlannedStart, request.plannedStartDate());
+        }
+        if (request.plannedFinishDate() != null && !request.plannedFinishDate().equals(oldPlannedFinish)) {
+            auditService.logUpdate("Project", id, "plannedFinishDate", oldPlannedFinish, request.plannedFinishDate());
+        }
+        if (request.mustFinishByDate() != null && !request.mustFinishByDate().equals(oldMustFinishBy)) {
+            auditService.logUpdate("Project", id, "mustFinishByDate", oldMustFinishBy, request.mustFinishByDate());
+        }
+        if (request.status() != null && !request.status().equals(oldStatus)) {
+            auditService.logUpdate("Project", id, "status", oldStatus, request.status());
+        }
+        if (request.priority() != null && !request.priority().equals(oldPriority)) {
+            auditService.logUpdate("Project", id, "priority", oldPriority, request.priority());
+        }
+        if (request.dataDate() != null && !request.dataDate().equals(oldDataDate)) {
+            auditService.logUpdate("Project", id, "dataDate", oldDataDate, request.dataDate());
         }
 
         return buildProjectResponse(updated);

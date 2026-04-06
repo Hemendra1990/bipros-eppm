@@ -2,6 +2,7 @@ package com.bipros.admin.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.admin.application.dto.CreateUnitOfMeasureRequest;
 import com.bipros.admin.application.dto.UnitOfMeasureDto;
 import com.bipros.admin.domain.model.UnitOfMeasure;
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 public class UnitOfMeasureService {
 
     private final UnitOfMeasureRepository unitOfMeasureRepository;
+    private final AuditService auditService;
 
     public UnitOfMeasureDto createUnitOfMeasure(CreateUnitOfMeasureRequest request) {
         if (unitOfMeasureRepository.findByCode(request.getCode()).isPresent()) {
@@ -33,6 +35,7 @@ public class UnitOfMeasureService {
         unit.setCategory(request.getCategory());
 
         UnitOfMeasure saved = unitOfMeasureRepository.save(unit);
+        auditService.logCreate("UnitOfMeasure", saved.getId(), mapToDto(saved));
         return mapToDto(saved);
     }
 
@@ -51,6 +54,7 @@ public class UnitOfMeasureService {
         unit.setCategory(request.getCategory());
 
         UnitOfMeasure updated = unitOfMeasureRepository.save(unit);
+        auditService.logUpdate("UnitOfMeasure", id, "unit", null, mapToDto(updated));
         return mapToDto(updated);
     }
 
@@ -58,6 +62,7 @@ public class UnitOfMeasureService {
         UnitOfMeasure unit = unitOfMeasureRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("UnitOfMeasure", id));
         unitOfMeasureRepository.delete(unit);
+        auditService.logDelete("UnitOfMeasure", id);
     }
 
     @Transactional(readOnly = true)

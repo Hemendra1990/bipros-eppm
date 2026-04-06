@@ -1,6 +1,7 @@
 package com.bipros.admin.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.admin.application.dto.JobServiceDto;
 import com.bipros.admin.domain.model.JobService;
 import com.bipros.admin.domain.repository.JobServiceRepository;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 public class JobServiceService {
 
     private final JobServiceRepository jobServiceRepository;
+    private final AuditService auditService;
 
     @Transactional(readOnly = true)
     public JobServiceDto getJobService(UUID id) {
@@ -43,6 +45,7 @@ public class JobServiceService {
         job.setLastError(null);
 
         JobService saved = jobServiceRepository.save(job);
+        auditService.logCreate("JobService", saved.getId(), mapToDto(saved));
         return mapToDto(saved);
     }
 
@@ -55,6 +58,7 @@ public class JobServiceService {
         job.setLastError(error);
 
         JobService updated = jobServiceRepository.save(job);
+        auditService.logUpdate("JobService", id, "job", null, mapToDto(updated));
         return mapToDto(updated);
     }
 
@@ -64,6 +68,7 @@ public class JobServiceService {
 
         job.setStatus(status);
         JobService updated = jobServiceRepository.save(job);
+        auditService.logUpdate("JobService", id, "status", null, mapToDto(updated));
         return mapToDto(updated);
     }
 
@@ -79,7 +84,9 @@ public class JobServiceService {
         job.setName(name);
         job.setProjectId(projectId);
         job.setStatus("IDLE");
-        return jobServiceRepository.save(job);
+        JobService saved = jobServiceRepository.save(job);
+        auditService.logCreate("JobService", saved.getId(), mapToDto(saved));
+        return saved;
     }
 
     private JobServiceDto mapToDto(JobService job) {

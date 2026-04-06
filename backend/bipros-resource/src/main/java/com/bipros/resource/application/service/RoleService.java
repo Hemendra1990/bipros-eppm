@@ -2,6 +2,7 @@ package com.bipros.resource.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateRoleRequest;
 import com.bipros.resource.application.dto.RoleResponse;
 import com.bipros.resource.domain.model.Role;
@@ -22,6 +23,7 @@ import java.util.UUID;
 public class RoleService {
 
   private final ResourceRoleRepository roleRepository;
+  private final AuditService auditService;
 
   public RoleResponse createRole(CreateRoleRequest request) {
     log.info("Creating role: code={}, type={}", request.code(), request.resourceType());
@@ -41,6 +43,10 @@ public class RoleService {
 
     Role saved = roleRepository.save(role);
     log.info("Role created: id={}", saved.getId());
+
+    // Audit log creation
+    auditService.logCreate("Role", saved.getId(), RoleResponse.from(saved));
+
     return RoleResponse.from(saved);
   }
 
@@ -83,6 +89,10 @@ public class RoleService {
 
     Role updated = roleRepository.save(role);
     log.info("Role updated: id={}", id);
+
+    // Audit log update
+    auditService.logUpdate("Role", id, "role", role, RoleResponse.from(updated));
+
     return RoleResponse.from(updated);
   }
 
@@ -93,5 +103,8 @@ public class RoleService {
     }
     roleRepository.deleteById(id);
     log.info("Role deleted: id={}", id);
+
+    // Audit log deletion
+    auditService.logDelete("Role", id);
   }
 }

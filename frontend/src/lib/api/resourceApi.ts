@@ -28,6 +28,39 @@ export interface UpdateResourceRequest {
   calendarId?: string;
 }
 
+export type LevelingMode = "LEVEL_WITHIN_FLOAT" | "LEVEL_ALL" | "SMOOTH";
+
+export interface ResourceLevelingRequest {
+  mode: LevelingMode;
+  resourceIds?: string[];
+}
+
+export interface ShiftedActivity {
+  activityId: string;
+  originalStart: string;
+  newStart: string;
+  delayDays: number;
+}
+
+export interface ResourceLevelingResponse {
+  mode: LevelingMode;
+  activitiesShifted: number;
+  iterationsUsed: number;
+  peakUtilizationBefore: number;
+  peakUtilizationAfter: number;
+  shiftedActivities: ShiftedActivity[];
+  messages: string[];
+}
+
+export interface UtilizationProfileEntry {
+  date: string;
+  resourceId: string;
+  resourceName: string;
+  demand: number;
+  capacity: number;
+  utilization: number;
+}
+
 export interface ResourceAssignmentResponse {
   id: string;
   activityId: string;
@@ -38,6 +71,14 @@ export interface ResourceAssignmentResponse {
   actualUnits: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateProjectResourceAssignmentRequest {
+  activityId: string;
+  resourceId: string;
+  assignmentStartDate?: string;
+  assignmentFinishDate?: string;
+  plannedUnits: number;
 }
 
 export const resourceApi = {
@@ -83,17 +124,32 @@ export const resourceApi = {
 
   getProjectResourceAssignments: (projectId: string, page = 0, size = 20) =>
     apiClient
-      .get<ApiResponse<PagedResponse<any>>>(
+      .get<ApiResponse<PagedResponse<ResourceAssignmentResponse>>>(
         `/v1/projects/${projectId}/resource-assignments`,
         { params: { page, size } }
       )
       .then((r) => r.data),
 
-  createProjectResourceAssignment: (projectId: string, data: any) =>
+  createProjectResourceAssignment: (projectId: string, data: CreateProjectResourceAssignmentRequest) =>
     apiClient
-      .post<ApiResponse<any>>(
+      .post<ApiResponse<ResourceAssignmentResponse>>(
         `/v1/projects/${projectId}/resource-assignments`,
         data
+      )
+      .then((r) => r.data),
+
+  levelResources: (projectId: string, request: ResourceLevelingRequest) =>
+    apiClient
+      .post<ApiResponse<ResourceLevelingResponse>>(
+        `/v1/projects/${projectId}/resource-assignments/level`,
+        request
+      )
+      .then((r) => r.data),
+
+  getUtilizationProfile: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<UtilizationProfileEntry[]>>(
+        `/v1/projects/${projectId}/resource-assignments/utilization-profile`
       )
       .then((r) => r.data),
 };

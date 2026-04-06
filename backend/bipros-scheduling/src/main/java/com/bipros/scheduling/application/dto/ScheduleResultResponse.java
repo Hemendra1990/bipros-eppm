@@ -6,6 +6,7 @@ import com.bipros.scheduling.domain.model.SchedulingOption;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record ScheduleResultResponse(
@@ -20,7 +21,8 @@ public record ScheduleResultResponse(
     SchedulingOption schedulingOption,
     Instant calculatedAt,
     Double durationSeconds,
-    ScheduleStatus status
+    ScheduleStatus status,
+    List<String> warnings
 ) {
 
   public static ScheduleResultResponse from(ScheduleResult result) {
@@ -36,7 +38,26 @@ public record ScheduleResultResponse(
         result.getSchedulingOption(),
         result.getCalculatedAt(),
         result.getDurationSeconds(),
-        result.getStatus()
+        result.getStatus(),
+        List.of()
+    );
+  }
+
+  public static ScheduleResultResponse from(ScheduleResult result, List<String> warnings) {
+    return new ScheduleResultResponse(
+        result.getId(),
+        result.getProjectId(),
+        result.getDataDate(),
+        result.getProjectStartDate(),
+        result.getProjectFinishDate(),
+        result.getCriticalPathLength(),
+        result.getTotalActivities(),
+        result.getCriticalActivities(),
+        result.getSchedulingOption(),
+        result.getCalculatedAt(),
+        result.getDurationSeconds(),
+        result.getStatus(),
+        warnings != null ? warnings : List.of()
     );
   }
 }

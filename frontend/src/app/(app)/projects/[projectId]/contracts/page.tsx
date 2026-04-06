@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contractApi } from "@/lib/api/contractApi";
+import { TabTip } from "@/components/common/TabTip";
 import type { ContractResponse, CreateContractRequest } from "@/lib/types";
 
 export default function ContractsPage() {
@@ -58,7 +59,7 @@ export default function ContractsPage() {
   };
 
   if (isLoading) {
-    return <div className="p-6 text-center text-gray-500">Loading contracts...</div>;
+    return <div className="p-6 text-center text-slate-500">Loading contracts...</div>;
   }
 
   const contracts = contractsData?.content || [];
@@ -67,124 +68,128 @@ export default function ContractsPage() {
 
   return (
     <div className="space-y-6">
+      <TabTip
+        title="Contracts & Procurement"
+        description="Track contractor agreements, LOA values, milestones, and variation orders. Create contracts to link with project activities and costs."
+      />
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-gray-900">Contracts</h2>
+        <h2 className="text-xl font-semibold text-white">Contracts</h2>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
         >
           {showCreateForm ? "Cancel" : "Create Contract"}
         </button>
       </div>
 
       {showCreateForm && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">New Contract</h3>
+        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 shadow-xl">
+          <h3 className="text-lg font-medium text-white mb-4">New Contract</h3>
           <form onSubmit={handleCreateSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contract Number</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Contract Number</label>
                 <input
                   type="text"
                   name="contractNumber"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   placeholder="CON-2024-001"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">LOA Number</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">LOA Number</label>
                 <input
                   type="text"
                   name="loaNumber"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   placeholder="Optional"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contractor Name</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Contractor Name</label>
                 <input
                   type="text"
                   name="contractorName"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   placeholder="Company Name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contractor Code</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Contractor Code</label>
                 <input
                   type="text"
                   name="contractorCode"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   placeholder="Optional"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contract Value</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Contract Value</label>
                 <input
                   type="number"
                   name="contractValue"
                   required
                   step="0.01"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   placeholder="0.00"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">LD Rate (%)</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">LD Rate (%)</label>
                 <input
                   type="number"
                   name="ldRate"
                   required
                   step="0.01"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   placeholder="0.00"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">LOA Date</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">LOA Date</label>
                 <input
                   type="date"
                   name="loaDate"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Start Date</label>
                 <input
                   type="date"
                   name="startDate"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Completion Date</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Completion Date</label>
                 <input
                   type="date"
                   name="completionDate"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">DLP Months</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">DLP Months</label>
                 <input
                   type="number"
                   name="dlpMonths"
                   step="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   placeholder="12"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contract Type</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Contract Type</label>
                 <select
                   name="contractType"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 >
                   <option value="">Select Type</option>
                   <option value="WORKS">Works</option>
@@ -199,14 +204,14 @@ export default function ContractsPage() {
               <button
                 type="submit"
                 disabled={createMutation.isPending}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors"
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600 disabled:bg-slate-600 transition-colors"
               >
                 {createMutation.isPending ? "Creating..." : "Create"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateForm(false)}
-                className="px-4 py-2 bg-gray-300 text-gray-900 rounded-lg hover:bg-gray-400 transition-colors"
+                className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
               >
                 Cancel
               </button>
@@ -217,28 +222,28 @@ export default function ContractsPage() {
 
       <div className="grid gap-4">
         {contracts.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">No contracts found</div>
+          <div className="text-center py-8 text-slate-500">No contracts found</div>
         ) : (
           contracts.map((contract: ContractResponse) => (
-            <div key={contract.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div key={contract.id} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 hover:bg-slate-900/70 transition-colors shadow-xl">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">{contract.contractNumber}</h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h3 className="text-lg font-semibold text-white">{contract.contractNumber}</h3>
+                  <p className="text-sm text-slate-400 mt-1">
                     <span className="font-medium">Contractor:</span> {contract.contractorName}
                   </p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-slate-400">
                     <span className="font-medium">Value:</span> {contract.contractValue.toLocaleString()} | <span className="font-medium">Type:</span> {contract.contractType}
                   </p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-slate-400">
                     <span className="font-medium">Dates:</span> {new Date(contract.loaDate).toLocaleDateString()} - {new Date(contract.completionDate).toLocaleDateString()}
                   </p>
                   <span className={`inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full ${
                     contract.status === "ACTIVE"
-                      ? "bg-green-100 text-green-800"
+                      ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
                       : contract.status === "COMPLETED"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-gray-100 text-gray-800"
+                        ? "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20"
+                        : "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50"
                   }`}>
                     {contract.status}
                   </span>
@@ -246,14 +251,14 @@ export default function ContractsPage() {
                 <div className="flex gap-2">
                   <a
                     href={`/projects/${projectId}/contracts/${contract.id}`}
-                    className="px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800"
+                    className="px-3 py-2 text-sm font-medium text-blue-400 hover:text-blue-300"
                   >
                     View
                   </a>
                   <button
                     onClick={() => deleteMutation.mutate(contract.id)}
                     disabled={deleteMutation.isPending}
-                    className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-800 disabled:text-gray-400"
+                    className="px-3 py-2 text-sm font-medium text-red-400 hover:text-red-300 disabled:text-slate-500"
                   >
                     Delete
                   </button>
@@ -269,17 +274,17 @@ export default function ContractsPage() {
           <button
             onClick={() => setPage(Math.max(0, page - 1))}
             disabled={page === 0}
-            className="px-4 py-2 bg-gray-300 text-gray-900 rounded-lg disabled:bg-gray-100 hover:bg-gray-400 transition-colors"
+            className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-lg disabled:bg-slate-800 disabled:text-slate-600 hover:bg-slate-600 transition-colors"
           >
             Previous
           </button>
-          <span className="px-4 py-2 text-gray-700">
+          <span className="px-4 py-2 text-slate-300">
             Page {page + 1} of {totalPages}
           </span>
           <button
             onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
             disabled={page >= totalPages - 1}
-            className="px-4 py-2 bg-gray-300 text-gray-900 rounded-lg disabled:bg-gray-100 hover:bg-gray-400 transition-colors"
+            className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-lg disabled:bg-slate-800 disabled:text-slate-600 hover:bg-slate-600 transition-colors"
           >
             Next
           </button>

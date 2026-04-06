@@ -8,6 +8,7 @@ import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { TabTip } from "@/components/common/TabTip";
 import type { ResourceResponse } from "@/lib/types";
 
 export default function ResourcesPage() {
@@ -53,7 +54,7 @@ export default function ResourcesPage() {
             }
           }}
           disabled={deleteMutation.isPending}
-          className="text-red-600 hover:text-red-700 disabled:text-gray-400"
+          className="text-red-400 hover:text-red-400 disabled:text-slate-500"
         >
           <Trash2 size={16} />
         </button>
@@ -69,7 +70,7 @@ export default function ResourcesPage() {
         actions={
           <Link
             href="/resources/new"
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
           >
             <Plus size={16} />
             New Resource
@@ -77,12 +78,17 @@ export default function ResourcesPage() {
         }
       />
 
+      <TabTip
+        title="Global Resource Pool"
+        description="Define all available resources (people, equipment, materials) that can be assigned to projects. Set resource types, units, and rates here."
+      />
+
       {isLoading && (
-        <div className="py-12 text-center text-gray-500">Loading resources...</div>
+        <div className="py-12 text-center text-slate-500">Loading resources...</div>
       )}
 
       {error && (
-        <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">
           Failed to load resources. Is the backend running?
         </div>
       )}

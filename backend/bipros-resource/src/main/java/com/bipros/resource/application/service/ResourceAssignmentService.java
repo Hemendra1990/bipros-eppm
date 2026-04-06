@@ -2,6 +2,7 @@ package com.bipros.resource.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateResourceAssignmentRequest;
 import com.bipros.resource.application.dto.ResourceAssignmentResponse;
 import com.bipros.resource.application.dto.ResourceUsageEntry;
@@ -32,6 +33,7 @@ public class ResourceAssignmentService {
   private final ResourceAssignmentRepository assignmentRepository;
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository rateRepository;
+  private final AuditService auditService;
 
   public ResourceAssignmentResponse assignResource(CreateResourceAssignmentRequest request) {
     log.info("Assigning resource: activityId={}, resourceId={}, projectId={}",
@@ -79,6 +81,10 @@ public class ResourceAssignmentService {
 
     ResourceAssignment saved = assignmentRepository.save(assignment);
     log.info("Resource assignment created: id={}", saved.getId());
+
+    // Audit log creation
+    auditService.logCreate("ResourceAssignment", saved.getId(), ResourceAssignmentResponse.from(saved));
+
     return ResourceAssignmentResponse.from(saved);
   }
 
@@ -143,6 +149,10 @@ public class ResourceAssignmentService {
 
     ResourceAssignment updated = assignmentRepository.save(assignment);
     log.info("Resource assignment updated: id={}", id);
+
+    // Audit log update
+    auditService.logUpdate("ResourceAssignment", id, "assignment", assignment, ResourceAssignmentResponse.from(updated));
+
     return ResourceAssignmentResponse.from(updated);
   }
 
@@ -153,6 +163,9 @@ public class ResourceAssignmentService {
     }
     assignmentRepository.deleteById(assignmentId);
     log.info("Resource assignment removed: id={}", assignmentId);
+
+    // Audit log deletion
+    auditService.logDelete("ResourceAssignment", assignmentId);
   }
 
   public List<ResourceUsageEntry> getResourceUsageProfile(UUID resourceId, LocalDate startDate, LocalDate endDate) {

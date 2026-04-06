@@ -36,7 +36,8 @@ public class ScheduleHealthService {
 
     return scheduleHealthIndexRepository.findTopByProjectIdOrderByCreatedAtDesc(projectId)
         .map(ScheduleHealthResponse::from)
-        .orElseThrow(() -> new ResourceNotFoundException("ScheduleHealthIndex", projectId));
+        .orElse(new ScheduleHealthResponse(
+            null, projectId, null, 0, 0, 0, 0.0, 0.0, Map.of(), RiskLevel.LOW));
   }
 
   public ScheduleHealthResponse calculateHealth(UUID scheduleResultId) {

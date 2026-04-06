@@ -2,12 +2,14 @@ package com.bipros.activity.api;
 
 import com.bipros.activity.application.dto.CreateRelationshipRequest;
 import com.bipros.activity.application.dto.RelationshipResponse;
+import com.bipros.activity.application.dto.UpdateRelationshipRequest;
 import com.bipros.activity.application.service.RelationshipService;
 import com.bipros.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,6 +17,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/relationships")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
 @RequiredArgsConstructor
 public class RelationshipController {
 
@@ -33,6 +36,15 @@ public class RelationshipController {
       @PathVariable UUID projectId) {
     List<RelationshipResponse> response = relationshipService.getRelationships(projectId);
     return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  @PutMapping("/{relationshipId}")
+  public ResponseEntity<ApiResponse<RelationshipResponse>> updateRelationship(
+      @PathVariable UUID projectId,
+      @PathVariable UUID relationshipId,
+      @Valid @RequestBody UpdateRelationshipRequest request) {
+    RelationshipResponse updated = relationshipService.update(projectId, relationshipId, request);
+    return ResponseEntity.ok(ApiResponse.ok(updated));
   }
 
   @DeleteMapping("/{relationshipId}")

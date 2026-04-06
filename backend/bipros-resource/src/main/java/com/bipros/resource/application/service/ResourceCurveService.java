@@ -2,6 +2,7 @@ package com.bipros.resource.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateResourceCurveRequest;
 import com.bipros.resource.application.dto.ResourceCurveResponse;
 import com.bipros.resource.domain.model.ResourceCurve;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class ResourceCurveService {
 
   private final ResourceCurveRepository curveRepository;
+  private final AuditService auditService;
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   public ResourceCurveResponse createCurve(CreateResourceCurveRequest request) {
@@ -48,6 +50,10 @@ public class ResourceCurveService {
 
       ResourceCurve saved = curveRepository.save(curve);
       log.info("Resource curve created: id={}", saved.getId());
+
+      // Audit log creation
+      auditService.logCreate("ResourceCurve", saved.getId(), ResourceCurveResponse.from(saved));
+
       return ResourceCurveResponse.from(saved);
     } catch (JsonProcessingException e) {
       throw new BusinessRuleException("INVALID_CURVE_FORMAT", "Invalid curve data format: " + e.getMessage());
@@ -110,6 +116,10 @@ public class ResourceCurveService {
 
       ResourceCurve updated = curveRepository.save(curve);
       log.info("Resource curve updated: id={}", id);
+
+      // Audit log update
+      auditService.logUpdate("ResourceCurve", id, "curve", curve, ResourceCurveResponse.from(updated));
+
       return ResourceCurveResponse.from(updated);
     } catch (JsonProcessingException e) {
       throw new BusinessRuleException("INVALID_CURVE_FORMAT", "Invalid curve data format: " + e.getMessage());
@@ -123,6 +133,9 @@ public class ResourceCurveService {
     }
     curveRepository.deleteById(id);
     log.info("Resource curve deleted: id={}", id);
+
+    // Audit log deletion
+    auditService.logDelete("ResourceCurve", id);
   }
 
   public void seedDefaultCurves() {

@@ -1,6 +1,7 @@
 package com.bipros.admin.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.admin.application.dto.AdminCategoryDto;
 import com.bipros.admin.application.dto.CreateAdminCategoryRequest;
 import com.bipros.admin.domain.model.AdminCategory;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 public class AdminCategoryService {
 
     private final AdminCategoryRepository adminCategoryRepository;
+    private final AuditService auditService;
 
     public AdminCategoryDto createCategory(CreateAdminCategoryRequest request) {
         AdminCategory category = new AdminCategory();
@@ -29,6 +31,7 @@ public class AdminCategoryService {
         category.setSortOrder(request.getSortOrder());
 
         AdminCategory saved = adminCategoryRepository.save(category);
+        auditService.logCreate("AdminCategory", saved.getId(), mapToDto(saved));
         return mapToDto(saved);
     }
 
@@ -43,6 +46,7 @@ public class AdminCategoryService {
         category.setSortOrder(request.getSortOrder());
 
         AdminCategory updated = adminCategoryRepository.save(category);
+        auditService.logUpdate("AdminCategory", id, "category", null, mapToDto(updated));
         return mapToDto(updated);
     }
 
@@ -52,6 +56,7 @@ public class AdminCategoryService {
 
         adminCategoryRepository.deleteAll(adminCategoryRepository.findByParentId(id));
         adminCategoryRepository.delete(category);
+        auditService.logDelete("AdminCategory", id);
     }
 
     @Transactional(readOnly = true)

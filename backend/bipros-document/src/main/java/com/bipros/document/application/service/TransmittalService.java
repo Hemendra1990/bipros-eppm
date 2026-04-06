@@ -1,6 +1,7 @@
 package com.bipros.document.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.document.application.dto.TransmittalItemRequest;
 import com.bipros.document.application.dto.TransmittalItemResponse;
 import com.bipros.document.application.dto.TransmittalRequest;
@@ -23,6 +24,7 @@ public class TransmittalService {
 
     private final TransmittalRepository transmittalRepository;
     private final TransmittalItemRepository itemRepository;
+    private final AuditService auditService;
 
     public TransmittalResponse createTransmittal(UUID projectId, TransmittalRequest request) {
         Transmittal transmittal = new Transmittal();
@@ -37,6 +39,7 @@ public class TransmittalService {
         transmittal.setRemarks(request.remarks());
 
         Transmittal saved = transmittalRepository.save(transmittal);
+        auditService.logCreate("Transmittal", saved.getId(), saved);
         return TransmittalResponse.from(saved);
     }
 
@@ -59,6 +62,9 @@ public class TransmittalService {
         Transmittal transmittal = transmittalRepository.findByProjectIdAndId(projectId, transmittalId)
             .orElseThrow(() -> new ResourceNotFoundException("Transmittal", transmittalId));
 
+        auditService.logUpdate("Transmittal", transmittalId, "subject", transmittal.getSubject(), request.subject());
+        auditService.logUpdate("Transmittal", transmittalId, "status", transmittal.getStatus(), request.status());
+
         transmittal.setSubject(request.subject());
         transmittal.setFromParty(request.fromParty());
         transmittal.setToParty(request.toParty());
@@ -80,6 +86,7 @@ public class TransmittalService {
         itemRepository.deleteAll(items);
 
         transmittalRepository.delete(transmittal);
+        auditService.logDelete("Transmittal", transmittalId);
     }
 
     @Transactional(readOnly = true)
@@ -104,6 +111,7 @@ public class TransmittalService {
         item.setRemarks(request.remarks());
 
         TransmittalItem saved = itemRepository.save(item);
+        auditService.logCreate("TransmittalItem", saved.getId(), saved);
         return TransmittalItemResponse.from(saved);
     }
 
@@ -115,5 +123,6 @@ public class TransmittalService {
             .orElseThrow(() -> new ResourceNotFoundException("TransmittalItem", itemId));
 
         itemRepository.delete(item);
+        auditService.logDelete("TransmittalItem", itemId);
     }
 }

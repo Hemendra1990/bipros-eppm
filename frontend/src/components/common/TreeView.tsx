@@ -52,36 +52,39 @@ export function TreeView<T extends { id: string; code: string; name: string; chi
             {node.children && node.children.length > 0 ? (
               <button
                 onClick={() => toggleNode(node.id)}
-                className="p-0.5 hover:bg-gray-200"
+                className="p-0.5 hover:bg-slate-800/50 rounded"
               >
                 <ChevronRight
                   size={16}
-                  className={`transition-transform ${expanded[node.id] ? "rotate-90" : ""}`}
+                  className={`text-slate-500 transition-transform ${expanded[node.id] ? "rotate-90" : ""}`}
                 />
               </button>
             ) : (
               <div className="w-6" />
             )}
-            <button
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => onNodeClick?.(node)}
-              className="flex-1 rounded px-2 py-1 text-left text-sm hover:bg-blue-50"
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNodeClick?.(node); }}
+              className="flex-1 rounded-lg px-2 py-1 text-left text-sm hover:bg-slate-800/50 transition-colors cursor-pointer"
             >
               {renderNode ? renderNode(node) : (
                 <span>
-                  <span className="font-medium text-blue-600">{node.code}</span>
-                  <span className="ml-2 text-gray-700">{node.name}</span>
+                  <span className="font-medium text-blue-400">{node.code}</span>
+                  <span className="ml-2 text-slate-300">{node.name}</span>
                   {node.children && (
-                    <span className="ml-2 text-xs text-gray-500">
+                    <span className="ml-2 text-xs text-slate-500">
                       ({node.children.length})
                     </span>
                   )}
                 </span>
               )}
-            </button>
+            </div>
           </div>
 
           {expanded[node.id] && node.children && node.children.length > 0 && (
-            <div className="ml-6 border-l border-gray-200 pl-0">
+            <div className="ml-6 border-l border-slate-700 pl-0">
               <TreeView
                 nodes={node.children}
                 onNodeClick={onNodeClick}

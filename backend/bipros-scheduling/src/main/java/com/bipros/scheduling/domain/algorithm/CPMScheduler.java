@@ -23,17 +23,36 @@ public class CPMScheduler {
   private final CalendarCalculator calendarCalculator;
   private final UUID defaultCalendarId;
 
+  /** Scheduling result containing scheduled activities and any warnings generated. */
+  public record ScheduleOutput(List<ScheduledActivity> activities, List<String> warnings) {}
+
   public List<ScheduledActivity> schedule(ScheduleData data) {
+    return scheduleWithWarnings(data).activities();
+  }
+
+  public ScheduleOutput scheduleWithWarnings(ScheduleData data) {
     log.debug(
         "Starting CPM scheduling for project: id={}, dataDate={}, option={}",
         data.projectId(),
         data.dataDate(),
         data.schedulingOption());
 
+    List<String> warnings = new ArrayList<>();
+
     // Build activity index
     Map<UUID, SchedulableActivity> activityMap = new HashMap<>();
     for (SchedulableActivity activity : data.activities()) {
       activityMap.put(activity.id(), activity);
+    }
+
+    // Identify WBS_SUMMARY / hammock activities and their children
+    Map<UUID, List<UUID>> summaryChildren = data.summaryChildren() != null
+        ? data.summaryChildren() : Map.of();
+    Set<UUID> summaryActivityIds = new HashSet<>();
+    for (SchedulableActivity activity : data.activities()) {
+      if ("WBS_SUMMARY".equals(activity.activityType())) {
+        summaryActivityIds.add(activity.id());
+      }
     }
 
     // Build adjacency lists for predecessors and successors
@@ -53,6 +72,15 @@ public class CPMScheduler {
       inDegree.put(rel.successorId(), inDegree.getOrDefault(rel.successorId(), 0) + 1);
     }
 
+    // Warn about activities with no predecessors (except project start activities)
+    for (SchedulableActivity activity : data.activities()) {
+      if (predecessorMap.getOrDefault(activity.id(), List.of()).isEmpty()
+          && successorMap.getOrDefault(activity.id(), List.of()).isEmpty()
+          && !summaryActivityIds.contains(activity.id())) {
+        warnings.add("Activity " + activity.id() + " has no predecessors or successors");
+      }
+    }
+
     // Topological sort (Kahn's algorithm) to detect circular dependencies
     List<UUID> topologicalOrder = topologicalSort(data.activities(), inDegree, successorMap);
     if (topologicalOrder.size() != data.activities().size()) {
@@ -67,11 +95,68 @@ public class CPMScheduler {
 
     // Forward pass - calculate early start and early finish
     log.debug("Starting forward pass");
-    forwardPass(data, topologicalOrder, activityMap, scheduledActivities, predecessorMap);
+    forwardPass(data, topologicalOrder, activityMap, scheduledActivities, predecessorMap, warnings);
+
+    // Resolve WBS_SUMMARY / hammock activities: duration = span of children
+    for (UUID summaryId : summaryActivityIds) {
+      List<UUID> children = summaryChildren.getOrDefault(summaryId, List.of());
+      if (children.isEmpty()) continue;
+      LocalDate earliest = null;
+      LocalDate latest = null;
+      for (UUID childId : children) {
+        ScheduledActivity child = scheduledActivities.get(childId);
+        if (child == null) continue;
+        if (earliest == null || child.getEarlyStart().isBefore(earliest)) {
+          earliest = child.getEarlyStart();
+        }
+        if (latest == null || child.getEarlyFinish().isAfter(latest)) {
+          latest = child.getEarlyFinish();
+        }
+      }
+      if (earliest != null && latest != null) {
+        ScheduledActivity summary = scheduledActivities.get(summaryId);
+        summary.setEarlyStart(earliest);
+        summary.setEarlyFinish(latest);
+        summary.setRemainingDuration(
+            calendarCalculator.countWorkingDays(defaultCalendarId, earliest, latest));
+      }
+    }
 
     // Backward pass - calculate late start and late finish
     log.debug("Starting backward pass");
     backwardPass(data, topologicalOrder, activityMap, scheduledActivities, successorMap);
+
+    // Resolve WBS_SUMMARY late dates from children
+    for (UUID summaryId : summaryActivityIds) {
+      List<UUID> children = summaryChildren.getOrDefault(summaryId, List.of());
+      if (children.isEmpty()) continue;
+      LocalDate earliestLate = null;
+      LocalDate latestLate = null;
+      for (UUID childId : children) {
+        ScheduledActivity child = scheduledActivities.get(childId);
+        if (child == null) continue;
+        if (earliestLate == null || child.getLateStart().isBefore(earliestLate)) {
+          earliestLate = child.getLateStart();
+        }
+        if (latestLate == null || child.getLateFinish().isAfter(latestLate)) {
+          latestLate = child.getLateFinish();
+        }
+      }
+      if (earliestLate != null && latestLate != null) {
+        ScheduledActivity summary = scheduledActivities.get(summaryId);
+        summary.setLateStart(earliestLate);
+        summary.setLateFinish(latestLate);
+      }
+    }
+
+    // Apply AS_LATE_AS_POSSIBLE constraint: shift early dates to late dates
+    for (SchedulableActivity activity : data.activities()) {
+      if ("AS_LATE_AS_POSSIBLE".equals(activity.primaryConstraintType())) {
+        ScheduledActivity scheduled = scheduledActivities.get(activity.id());
+        scheduled.setEarlyStart(scheduled.getLateStart());
+        scheduled.setEarlyFinish(scheduled.getLateFinish());
+      }
+    }
 
     // Calculate floats and mark critical path
     log.debug("Calculating floats and marking critical path");
@@ -83,6 +168,10 @@ public class CPMScheduler {
           scheduled.getLateStart());
       scheduled.setTotalFloat(totalFloat);
       scheduled.setCritical(totalFloat == 0);
+
+      if (totalFloat < 0) {
+        warnings.add("Activity " + activityId + " has negative float (" + totalFloat + " days)");
+      }
     }
 
     // Calculate free float for each activity
@@ -99,8 +188,15 @@ public class CPMScheduler {
       }
     }
 
-    log.debug("CPM scheduling completed");
-    return new ArrayList<>(scheduledActivities.values());
+    // Finalize free float: activities with no successors get free float = total float
+    for (ScheduledActivity scheduled : scheduledActivities.values()) {
+      if (scheduled.getFreeFloat() == Double.MAX_VALUE) {
+        scheduled.setFreeFloat(scheduled.getTotalFloat());
+      }
+    }
+
+    log.debug("CPM scheduling completed with {} warnings", warnings.size());
+    return new ScheduleOutput(new ArrayList<>(scheduledActivities.values()), warnings);
   }
 
   private void forwardPass(
@@ -108,11 +204,20 @@ public class CPMScheduler {
       List<UUID> topologicalOrder,
       Map<UUID, SchedulableActivity> activityMap,
       Map<UUID, ScheduledActivity> scheduledActivities,
-      Map<UUID, List<SchedulableRelationship>> predecessorMap) {
+      Map<UUID, List<SchedulableRelationship>> predecessorMap,
+      List<String> warnings) {
 
     for (UUID activityId : topologicalOrder) {
       SchedulableActivity activity = activityMap.get(activityId);
       ScheduledActivity scheduled = scheduledActivities.get(activityId);
+
+      // Skip WBS_SUMMARY — computed after forward pass from children
+      if ("WBS_SUMMARY".equals(activity.activityType())) {
+        scheduled.setEarlyStart(data.projectStartDate());
+        scheduled.setEarlyFinish(data.projectStartDate());
+        continue;
+      }
+
       LocalDate earlyStart = data.projectStartDate();
 
       // Get contributions from predecessors
@@ -124,8 +229,10 @@ public class CPMScheduler {
         }
       }
 
-      // Apply primary constraint
-      if (activity.primaryConstraintType() != null && activity.primaryConstraintDate() != null) {
+      // Apply primary constraint (skip ALAP — handled after backward pass)
+      if (activity.primaryConstraintType() != null
+          && activity.primaryConstraintDate() != null
+          && !"AS_LATE_AS_POSSIBLE".equals(activity.primaryConstraintType())) {
         earlyStart = applyPrimaryConstraintForward(
             activity.primaryConstraintType(),
             activity.primaryConstraintDate(),
@@ -136,16 +243,35 @@ public class CPMScheduler {
       // Handle actuals based on scheduling option
       if (data.schedulingOption() == SchedulingOption.RETAINED_LOGIC) {
         if (activity.actualFinishDate() != null) {
-          // Activity is complete, use actual dates
           scheduled.setEarlyStart(activity.actualStartDate());
           scheduled.setEarlyFinish(activity.actualFinishDate());
           continue;
         } else if (activity.actualStartDate() != null) {
-          // Activity has started, use actual start
           earlyStart = activity.actualStartDate();
         } else if (activity.status() != null && activity.status().equals("In Progress")) {
-          // In progress activity starts from data date
           earlyStart = data.dataDate();
+        }
+      } else if (data.schedulingOption() == SchedulingOption.PROGRESS_OVERRIDE) {
+        // PROGRESS_OVERRIDE: completed activities keep actuals; in-progress activities
+        // ignore retained logic and schedule remaining work from data date forward,
+        // disregarding predecessor relationships for the remaining portion.
+        if (activity.actualFinishDate() != null) {
+          scheduled.setEarlyStart(activity.actualStartDate());
+          scheduled.setEarlyFinish(activity.actualFinishDate());
+          continue;
+        } else if (activity.actualStartDate() != null || "IN_PROGRESS".equals(activity.status())) {
+          // In-progress: schedule remaining duration from data date, ignoring predecessors
+          earlyStart = data.dataDate();
+          warnings.add("Activity " + activityId + " scheduled from data date (progress override)");
+        }
+      } else if (data.schedulingOption() == SchedulingOption.ACTUAL_DATES) {
+        // ACTUAL_DATES: use actual dates as-is, no recalculation
+        if (activity.actualFinishDate() != null) {
+          scheduled.setEarlyStart(activity.actualStartDate());
+          scheduled.setEarlyFinish(activity.actualFinishDate());
+          continue;
+        } else if (activity.actualStartDate() != null) {
+          earlyStart = activity.actualStartDate();
         }
       }
 

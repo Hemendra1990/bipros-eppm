@@ -2,6 +2,7 @@ package com.bipros.contract.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.TenderRequest;
 import com.bipros.contract.application.dto.TenderResponse;
 import com.bipros.contract.domain.model.Tender;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class TenderService {
 
     private final TenderRepository tenderRepository;
+    private final AuditService auditService;
 
     public TenderResponse create(TenderRequest request) {
         log.info("Creating tender with number: {}", request.tenderNumber());
@@ -43,6 +45,7 @@ public class TenderService {
 
         Tender saved = tenderRepository.save(tender);
         log.info("Tender created with ID: {}", saved.getId());
+        auditService.logCreate("Tender", saved.getId(), toResponse(saved));
 
         return toResponse(saved);
     }
@@ -92,12 +95,14 @@ public class TenderService {
         tender.setBidOpenDate(request.bidOpenDate());
 
         Tender updated = tenderRepository.save(tender);
+        auditService.logUpdate("Tender", id, "tender", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting tender with ID: {}", id);
         tenderRepository.deleteById(id);
+        auditService.logDelete("Tender", id);
     }
 
     private TenderResponse toResponse(Tender tender) {

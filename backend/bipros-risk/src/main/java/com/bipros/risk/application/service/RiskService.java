@@ -1,6 +1,7 @@
 package com.bipros.risk.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.risk.application.dto.CreateRiskRequest;
 import com.bipros.risk.application.dto.CreateRiskResponseRequest;
 import com.bipros.risk.application.dto.RiskResponseDto;
@@ -28,6 +29,7 @@ public class RiskService {
 
     private final RiskRepository riskRepository;
     private final RiskResponseRepository riskResponseRepository;
+    private final AuditService auditService;
 
     public RiskSummary createRisk(UUID projectId, CreateRiskRequest request) {
         Risk risk = new Risk();
@@ -48,6 +50,7 @@ public class RiskService {
         risk.calculateRiskScore();
 
         Risk saved = riskRepository.save(risk);
+        auditService.logCreate("Risk", saved.getId(), saved);
         return mapToSummary(saved);
     }
 
@@ -58,6 +61,10 @@ public class RiskService {
         if (!risk.getProjectId().equals(projectId)) {
             throw new ResourceNotFoundException("Risk", projectId);
         }
+
+        auditService.logUpdate("Risk", riskId, "title", risk.getTitle(), request.getTitle());
+        auditService.logUpdate("Risk", riskId, "description", risk.getDescription(), request.getDescription());
+        auditService.logUpdate("Risk", riskId, "category", risk.getCategory(), request.getCategory());
 
         risk.setCode(request.getCode());
         risk.setTitle(request.getTitle());
@@ -88,6 +95,7 @@ public class RiskService {
 
         riskResponseRepository.deleteAll(riskResponseRepository.findByRiskId(riskId));
         riskRepository.delete(risk);
+        auditService.logDelete("Risk", riskId);
     }
 
     public RiskSummary getRisk(UUID projectId, UUID riskId) {
@@ -132,6 +140,7 @@ public class RiskService {
         response.setStatus(request.getStatus());
 
         RiskResponse saved = riskResponseRepository.save(response);
+        auditService.logCreate("RiskResponse", saved.getId(), saved);
         return mapToResponseDto(saved);
     }
 
@@ -145,6 +154,9 @@ public class RiskService {
 
         RiskResponse response = riskResponseRepository.findById(responseId)
             .orElseThrow(() -> new ResourceNotFoundException("RiskResponse", responseId));
+
+        auditService.logUpdate("RiskResponse", responseId, "status", response.getStatus(), request.getStatus());
+        auditService.logUpdate("RiskResponse", responseId, "description", response.getDescription(), request.getDescription());
 
         response.setResponseType(request.getResponseType());
         response.setDescription(request.getDescription());

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, TrendingUp, DollarSign, GitCompare, FileText, Download } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PageHeader } from "@/components/common/PageHeader";
+import { TabTip } from "@/components/common/TabTip";
 import { reportApi } from "@/lib/api/reportApi";
 import { reportDataApi } from "@/lib/api/reportDataApi";
 import { projectApi } from "@/lib/api/projectApi";
@@ -75,6 +76,11 @@ interface CashFlowChartData {
   expense: number;
 }
 
+interface AllocationItem {
+  date: string;
+  allocated: Record<string, number>;
+}
+
 interface ReportChartData {
   scurve?: SCurveChartData[];
   histogram?: HistogramChartData[];
@@ -95,9 +101,8 @@ export default function ReportsPage() {
   });
 
   const { data: resourcesData } = useQuery({
-    queryKey: ["resources", selectedProjectId],
-    queryFn: () => selectedProjectId ? resourceApi.getProjectResourceAssignments(selectedProjectId, 0, 100) : Promise.resolve(null),
-    enabled: !!selectedProjectId,
+    queryKey: ["resources"],
+    queryFn: () => resourceApi.listResources(0, 100),
   });
 
   // Standard reports queries
@@ -162,7 +167,7 @@ export default function ReportsPage() {
         );
         if (response.data) {
           const data = response.data;
-          const chartData: HistogramChartData[] = data.allocations.map((a: any) => ({
+          const chartData: HistogramChartData[] = data.allocations.map((a: AllocationItem) => ({
             date: a.date,
             ...a.allocated,
           }));
@@ -214,18 +219,23 @@ export default function ReportsPage() {
         description="Generate and view project reports and analytics"
       />
 
-      <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Report Filters</h2>
+      <TabTip
+        title="Reports"
+        description="Generate standard project reports including Monthly Progress, EVM Analysis, Cash Flow, Resource Utilization, Risk Register, and Contract Status reports."
+      />
+
+      <div className="mb-8 rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+        <h2 className="mb-4 text-lg font-semibold text-white">Report Filters</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Project</label>
+            <label className="block text-sm font-medium text-slate-300">Project</label>
             <select
               value={selectedProjectId || ""}
               onChange={(e) => {
                 setSelectedProjectId(e.target.value || null);
                 setSelectedResourceId(null);
               }}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none"
+              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
             >
               <option value="">Select a project...</option>
               {projects.map((p) => (
@@ -237,11 +247,11 @@ export default function ReportsPage() {
           </div>
           {selectedProjectId && (
             <div>
-              <label className="block text-sm font-medium text-gray-700">Resource (Optional)</label>
+              <label className="block text-sm font-medium text-slate-300">Resource (Optional)</label>
               <select
                 value={selectedResourceId || ""}
                 onChange={(e) => setSelectedResourceId(e.target.value || null)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
               >
                 <option value="">All resources</option>
                 {resources.map((r) => (
@@ -257,13 +267,13 @@ export default function ReportsPage() {
 
       {/* Report Tabs */}
       <div className="mb-8">
-        <div className="flex gap-4 border-b border-gray-200">
+        <div className="flex gap-4 border-b border-slate-800">
           <button
             onClick={() => setActiveTab("standard")}
             className={`px-4 py-3 font-medium ${
               activeTab === "standard"
-                ? "border-b-2 border-blue-600 text-blue-600"
-                : "text-gray-600 hover:text-gray-900"
+                ? "border-b-2 border-blue-500 text-blue-400"
+                : "text-slate-400 hover:text-slate-200"
             }`}
           >
             Standard Reports
@@ -272,8 +282,8 @@ export default function ReportsPage() {
             onClick={() => setActiveTab("classic")}
             className={`px-4 py-3 font-medium ${
               activeTab === "classic"
-                ? "border-b-2 border-blue-600 text-blue-600"
-                : "text-gray-600 hover:text-gray-900"
+                ? "border-b-2 border-blue-500 text-blue-400"
+                : "text-slate-400 hover:text-slate-200"
             }`}
           >
             Classic Reports
@@ -285,50 +295,50 @@ export default function ReportsPage() {
       {activeTab === "standard" && (
         <div className="space-y-8">
           {monthlyProgressData && !monthlyProgressLoading && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
               <MonthlyProgressReport data={monthlyProgressData as any} />
             </div>
           )}
 
           {evmReportData && !evmReportLoading && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
               <EvmReport data={evmReportData as any} />
             </div>
           )}
 
           {cashFlowData && !cashFlowLoading && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
               <CashFlowReport data={cashFlowData as any} />
             </div>
           )}
 
           {contractStatusData && !contractStatusLoading && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
               <ContractStatusReport data={contractStatusData as any} />
             </div>
           )}
 
           {riskRegisterData && !riskRegisterLoading && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
               <RiskRegisterReport data={riskRegisterData as any} />
             </div>
           )}
 
           {resourceUtilizationData && !resourceUtilizationLoading && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
               <ResourceUtilizationReport data={resourceUtilizationData as any} />
             </div>
           )}
 
           {!selectedProjectId && (
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
-              <p className="text-yellow-700">Select a project to view standard reports</p>
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-6 text-center">
+              <p className="text-amber-400">Select a project to view standard reports</p>
             </div>
           )}
 
           {selectedProjectId && !monthlyProgressData && (monthlyProgressLoading || evmReportLoading || cashFlowLoading || contractStatusLoading || riskRegisterLoading || resourceUtilizationLoading) && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 text-center">
-              <p className="text-blue-700">Loading reports...</p>
+            <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-6 text-center">
+              <p className="text-blue-400">Loading reports...</p>
             </div>
           )}
         </div>
@@ -341,15 +351,15 @@ export default function ReportsPage() {
             {reportCards.map((card) => (
               <div
                 key={card.id}
-                className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+                className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg hover:shadow-xl transition-shadow"
               >
-                <div className="mb-4 text-gray-400">{card.icon}</div>
-                <h3 className="mb-2 text-lg font-semibold text-gray-900">{card.title}</h3>
-                <p className="mb-6 text-sm text-gray-600">{card.description}</p>
+                <div className="mb-4 text-slate-500">{card.icon}</div>
+                <h3 className="mb-2 text-lg font-semibold text-white">{card.title}</h3>
+                <p className="mb-6 text-sm text-slate-400">{card.description}</p>
                 <button
                   onClick={() => handleGenerateReport(card.id)}
                   disabled={generatingReport === card.id || !selectedProjectId}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-500 transition-colors"
                 >
                   {generatingReport === card.id ? "Generating..." : "Generate"}
                 </button>
@@ -361,17 +371,17 @@ export default function ReportsPage() {
 
       {/* Classic Report Output */}
       {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow) && (
-        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-6 text-lg font-semibold text-gray-900">Generated Report</h2>
+        <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
+          <h2 className="mb-6 text-lg font-semibold text-white">Generated Report</h2>
           {reportData.scurve && (
             <div className="mb-8">
-              <h3 className="mb-4 font-semibold text-gray-700">S-Curve Analysis</h3>
+              <h3 className="mb-4 font-semibold text-slate-300">S-Curve Analysis</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={reportData.scurve}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="period" />
                   <YAxis />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px", color: "#e2e8f0" }} />
                   <Legend />
                   <Line type="monotone" dataKey="pv" stroke="#3b82f6" name="Planned Value" />
                   <Line type="monotone" dataKey="ev" stroke="#10b981" name="Earned Value" />
@@ -382,13 +392,13 @@ export default function ReportsPage() {
           )}
           {reportData.histogram && (
             <div className="mb-8">
-              <h3 className="mb-4 font-semibold text-gray-700">Resource Histogram</h3>
+              <h3 className="mb-4 font-semibold text-slate-300">Resource Histogram</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={reportData.histogram}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px", color: "#e2e8f0" }} />
                   <Legend />
                   {reportData.histogram.length > 0 &&
                     Object.keys(reportData.histogram[0])
@@ -402,13 +412,13 @@ export default function ReportsPage() {
           )}
           {reportData.cashflow && (
             <div className="mb-6">
-              <h3 className="mb-4 font-semibold text-gray-700">Cash Flow Analysis</h3>
+              <h3 className="mb-4 font-semibold text-slate-300">Cash Flow Analysis</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={reportData.cashflow}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="period" />
                   <YAxis />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px", color: "#e2e8f0" }} />
                   <Legend />
                   <Bar dataKey="income" fill="#10b981" name="Income" />
                   <Bar dataKey="expense" fill="#ef4444" name="Expense" />
@@ -421,13 +431,13 @@ export default function ReportsPage() {
 
       {/* Export Reports */}
       {activeTab === "classic" && (
-        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Export Reports</h2>
+        <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">Export Reports</h2>
           <div className="flex gap-3">
             <button
               onClick={() => downloadReport("EXCEL")}
               disabled={downloadingReport === "EXCEL"}
-              className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:bg-gray-400"
+              className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:bg-slate-600"
             >
               <Download size={16} />
               {downloadingReport === "EXCEL" ? "Exporting..." : "Export to Excel"}
@@ -435,7 +445,7 @@ export default function ReportsPage() {
             <button
               onClick={() => downloadReport("PDF")}
               disabled={downloadingReport === "PDF"}
-              className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:bg-gray-400"
+              className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:bg-slate-600"
             >
               <Download size={16} />
               {downloadingReport === "PDF" ? "Exporting..." : "Export to PDF"}

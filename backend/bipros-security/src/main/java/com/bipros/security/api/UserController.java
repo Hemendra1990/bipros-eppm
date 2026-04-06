@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/v1/users")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
 @Tag(name = "Users", description = "User management endpoints")
 @Slf4j
 @RequiredArgsConstructor

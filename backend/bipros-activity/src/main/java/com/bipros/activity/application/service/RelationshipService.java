@@ -2,6 +2,7 @@ package com.bipros.activity.application.service;
 
 import com.bipros.activity.application.dto.CreateRelationshipRequest;
 import com.bipros.activity.application.dto.RelationshipResponse;
+import com.bipros.activity.application.dto.UpdateRelationshipRequest;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.RelationshipType;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
@@ -70,6 +71,20 @@ public class RelationshipService {
     ActivityRelationship saved = relationshipRepository.save(relationship);
     log.info("Relationship created successfully: id={}", saved.getId());
     return RelationshipResponse.from(saved);
+  }
+
+  public RelationshipResponse update(UUID projectId, UUID relationshipId, UpdateRelationshipRequest request) {
+    log.info("Updating relationship: id={}", relationshipId);
+
+    ActivityRelationship relationship = relationshipRepository.findById(relationshipId)
+        .orElseThrow(() -> new ResourceNotFoundException("ActivityRelationship", relationshipId));
+
+    relationship.setRelationshipType(RelationshipType.valueOf(request.relationshipType()));
+    relationship.setLag(request.lag() != null ? request.lag() : 0.0);
+
+    ActivityRelationship updated = relationshipRepository.save(relationship);
+    log.info("Relationship updated successfully: id={}", relationshipId);
+    return RelationshipResponse.from(updated);
   }
 
   public void deleteRelationship(UUID id) {

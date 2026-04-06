@@ -382,30 +382,28 @@ export interface EvmHistoryEntryResponse {
 
 export interface BaselineResponse {
   id: string;
-  code: string;
-  name: string;
   projectId: string;
+  name: string;
+  description: string | null;
   baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY";
-  snapshotDate: string;
-  activitiesCount: number;
+  baselineDate: string;
+  isActive: boolean;
+  totalActivities: number;
+  totalCost: number;
+  projectDuration: number;
+  projectStartDate: string | null;
+  projectFinishDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface BaselineVarianceRow {
-  activityCode: string;
+  activityId: string;
   activityName: string;
-  startVariance: number;
-  finishVariance: number;
+  startVarianceDays: number;
+  finishVarianceDays: number;
   durationVariance: number;
   costVariance: number;
-}
-
-export interface BaselineVarianceData {
-  baselineId: string;
-  baselineName: string;
-  projectId: string;
-  variance: BaselineVarianceRow[];
 }
 
 // === Portfolio ===

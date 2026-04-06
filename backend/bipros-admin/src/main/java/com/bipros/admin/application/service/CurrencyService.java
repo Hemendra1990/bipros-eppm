@@ -2,6 +2,7 @@ package com.bipros.admin.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.admin.application.dto.CreateCurrencyRequest;
 import com.bipros.admin.application.dto.CurrencyDto;
 import com.bipros.admin.domain.model.Currency;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 public class CurrencyService {
 
     private final CurrencyRepository currencyRepository;
+    private final AuditService auditService;
 
     public CurrencyDto createCurrency(CreateCurrencyRequest request) {
         if (currencyRepository.findByCode(request.getCode()).isPresent()) {
@@ -43,6 +45,7 @@ public class CurrencyService {
         }
 
         Currency saved = currencyRepository.save(currency);
+        auditService.logCreate("Currency", saved.getId(), mapToDto(saved));
         return mapToDto(saved);
     }
 
@@ -70,6 +73,7 @@ public class CurrencyService {
         }
 
         Currency updated = currencyRepository.save(currency);
+        auditService.logUpdate("Currency", id, "currency", null, mapToDto(updated));
         return mapToDto(updated);
     }
 
@@ -82,6 +86,7 @@ public class CurrencyService {
         }
 
         currencyRepository.delete(currency);
+        auditService.logDelete("Currency", id);
     }
 
     @Transactional(readOnly = true)
@@ -109,7 +114,8 @@ public class CurrencyService {
 
         baseCurrency.setIsBaseCurrency(true);
         baseCurrency.setExchangeRate(BigDecimal.ONE);
-        currencyRepository.save(baseCurrency);
+        Currency saved = currencyRepository.save(baseCurrency);
+        auditService.logUpdate("Currency", saved.getId(), "baseCurrency", null, mapToDto(saved));
     }
 
     @Transactional(readOnly = true)

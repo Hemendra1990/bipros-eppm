@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { obsApi } from "@/lib/api/obsApi";
 import type { ObsNodeResponse } from "@/lib/types";
 import { TreeView } from "@/components/common/TreeView";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, FolderPlus } from "lucide-react";
+import { TabTip } from "@/components/common/TabTip";
+import { getErrorMessage } from "@/lib/utils/error";
 
 export default function ObsPage() {
   const [obsTree, setObsTree] = useState<ObsNodeResponse[]>([]);
@@ -17,6 +19,7 @@ export default function ObsPage() {
     description: "",
     parentId: "",
   });
+  const [parentLabel, setParentLabel] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedNode, setSelectedNode] = useState<ObsNodeResponse | null>(null);
 
@@ -29,8 +32,8 @@ export default function ObsPage() {
       setLoading(true);
       const result = await obsApi.getObsTree();
       setObsTree(result.data ?? []);
-    } catch {
-      setError("Failed to load OBS hierarchy");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to load OBS hierarchy"));
     } finally {
       setLoading(false);
     }
@@ -54,14 +57,15 @@ export default function ObsPage() {
 
       if (result.data) {
         setFormData({ code: "", name: "", description: "", parentId: "" });
+        setParentLabel(null);
         setShowNewForm(false);
         setError("");
         loadObsTree();
       } else if (result.error) {
         setError(result.error.message);
       }
-    } catch {
-      setError("Failed to create OBS node");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to create OBS node"));
     } finally {
       setSubmitting(false);
     }
@@ -76,9 +80,21 @@ export default function ObsPage() {
       await obsApi.deleteObsNode(id);
       loadObsTree();
       setSelectedNode(null);
-    } catch {
-      setError("Failed to delete OBS node");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to delete OBS node"));
     }
+  };
+
+  const handleAddChild = (parentId: string, parentCode: string, parentName: string) => {
+    setFormData({ code: "", name: "", description: "", parentId });
+    setParentLabel(`${parentCode} - ${parentName}`);
+    setShowNewForm(true);
+  };
+
+  const handleAddRoot = () => {
+    setFormData({ code: "", name: "", description: "", parentId: "" });
+    setParentLabel(null);
+    setShowNewForm(!showNewForm);
   };
 
   const handleNodeSelect = (node: ObsNodeResponse) => {
@@ -86,43 +102,57 @@ export default function ObsPage() {
   };
 
   if (loading) {
-    return <div className="text-center text-gray-500">Loading OBS hierarchy...</div>;
+    return <div className="text-center text-slate-500">Loading OBS hierarchy...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">OBS Management</h1>
+        <h1 className="text-3xl font-bold text-white">OBS Management</h1>
         <button
-          onClick={() => setShowNewForm(!showNewForm)}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          onClick={handleAddRoot}
+          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
         >
           <Plus size={18} />
-          Add Node
+          Add Root Node
         </button>
       </div>
 
+      <TabTip
+        title="Organization Breakdown Structure (OBS)"
+        description="Define your organizational hierarchy — departments, teams, and roles. Link OBS nodes to projects for responsibility assignment."
+      />
+
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-md bg-red-500/10 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Tree View */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">OBS Hierarchy</h2>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+          <h2 className="mb-4 text-lg font-semibold text-white">OBS Hierarchy</h2>
           {obsTree.length === 0 ? (
-            <p className="text-sm text-gray-500">No OBS nodes yet. Create one to get started.</p>
+            <p className="text-sm text-slate-500">No OBS nodes yet. Create one to get started.</p>
           ) : (
             <TreeView
               nodes={obsTree}
               onNodeClick={handleNodeSelect}
               renderNode={(node) => (
-                <span>
-                  <span className="font-medium text-blue-600">{node.code}</span>
-                  <span className="ml-2 text-gray-700">{node.name}</span>
-                </span>
+                <div className="group flex items-center justify-between gap-3 flex-1">
+                  <span>
+                    <span className="font-medium text-blue-400">{node.code}</span>
+                    <span className="ml-2 text-slate-300">{node.name}</span>
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleAddChild(node.id, node.code, node.name); }}
+                    className="rounded p-1 text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/10 hover:text-emerald-400 transition-opacity"
+                    title="Add child node"
+                  >
+                    <FolderPlus size={16} />
+                  </button>
+                </div>
               )}
             />
           )}
@@ -133,57 +163,53 @@ export default function ObsPage() {
           {showNewForm && (
             <form
               onSubmit={handleCreateNode}
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+              className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg"
             >
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">Create New OBS Node</h3>
+              <h3 className="mb-4 text-lg font-semibold text-white">Create New OBS Node</h3>
+              {parentLabel && (
+                <div className="mb-4 text-sm text-slate-400">
+                  Adding child under: <span className="font-medium text-blue-400">{parentLabel}</span>
+                </div>
+              )}
+              {!parentLabel && (
+                <div className="mb-4 text-sm text-slate-400">Adding root-level node</div>
+              )}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Code</label>
+                  <label className="block text-sm font-medium text-slate-300">Code</label>
                   <input
                     type="text"
                     required
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="e.g., OBS-001"
+                    autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <label className="block text-sm font-medium text-slate-300">Name</label>
                   <input
                     type="text"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="Node name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-slate-300">
                     Description
                   </label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="Node description (optional)"
                     rows={2}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Parent Node (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.parentId}
-                    onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Parent node ID"
                   />
                 </div>
 
@@ -191,14 +217,14 @@ export default function ObsPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
                   >
                     {submitting ? "Creating..." : "Create"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowNewForm(false)}
-                    className="flex-1 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    onClick={() => { setShowNewForm(false); setParentLabel(null); setFormData({ code: "", name: "", description: "", parentId: "" }); }}
+                    className="flex-1 rounded-md border border-slate-700 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
                   >
                     Cancel
                   </button>
@@ -208,32 +234,41 @@ export default function ObsPage() {
           )}
 
           {selectedNode && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">Node Details</h3>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Node Details</h3>
+                <button
+                  onClick={() => handleAddChild(selectedNode.id, selectedNode.code, selectedNode.name)}
+                  className="flex items-center gap-1 rounded-md bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20"
+                >
+                  <FolderPlus size={14} />
+                  Add Child
+                </button>
+              </div>
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-medium text-gray-500">CODE</p>
-                  <p className="text-sm text-gray-900">{selectedNode.code}</p>
+                  <p className="text-xs font-medium text-slate-500">CODE</p>
+                  <p className="text-sm text-white">{selectedNode.code}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-500">NAME</p>
-                  <p className="text-sm text-gray-900">{selectedNode.name}</p>
+                  <p className="text-xs font-medium text-slate-500">NAME</p>
+                  <p className="text-sm text-white">{selectedNode.name}</p>
                 </div>
                 {selectedNode.description && (
                   <div>
-                    <p className="text-xs font-medium text-gray-500">DESCRIPTION</p>
-                    <p className="text-sm text-gray-900">{selectedNode.description}</p>
+                    <p className="text-xs font-medium text-slate-500">DESCRIPTION</p>
+                    <p className="text-sm text-white">{selectedNode.description}</p>
                   </div>
                 )}
                 {selectedNode.children && selectedNode.children.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-gray-500">CHILDREN</p>
-                    <p className="text-sm text-gray-900">{selectedNode.children.length}</p>
+                    <p className="text-xs font-medium text-slate-500">CHILDREN</p>
+                    <p className="text-sm text-white">{selectedNode.children.length}</p>
                   </div>
                 )}
                 <button
                   onClick={() => handleDeleteNode(selectedNode.id)}
-                  className="mt-4 flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100"
+                  className="mt-4 flex items-center gap-2 rounded-md bg-red-500/10 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20"
                 >
                   <Trash2 size={16} />
                   Delete Node

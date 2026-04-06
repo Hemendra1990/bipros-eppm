@@ -2,6 +2,7 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateWbsTemplateRequest;
 import com.bipros.project.application.dto.WbsTemplateResponse;
 import com.bipros.project.domain.model.AssetClass;
@@ -28,6 +29,7 @@ public class WbsTemplateService {
     private final WbsTemplateRepository wbsTemplateRepository;
     private final WbsNodeRepository wbsNodeRepository;
     private final ObjectMapper objectMapper;
+    private final AuditService auditService;
 
     public List<WbsTemplateResponse> listTemplates() {
         log.info("Listing all active WBS templates");
@@ -78,6 +80,7 @@ public class WbsTemplateService {
 
         WbsTemplate saved = wbsTemplateRepository.save(template);
         log.info("WBS template created with ID: {}", saved.getId());
+        auditService.logCreate("WbsTemplate", saved.getId(), request);
 
         return WbsTemplateResponse.from(saved);
     }
@@ -121,6 +124,7 @@ public class WbsTemplateService {
         wbsNode.setSortOrder(0);
 
         WbsNode savedNode = wbsNodeRepository.save(wbsNode);
+        auditService.logCreate("WbsNode", savedNode.getId(), nodeJson.asText());
 
         // Process children recursively
         if (nodeJson.has("children") && nodeJson.get("children").isArray()) {
@@ -201,7 +205,8 @@ public class WbsTemplateService {
             roadTemplate.setDescription("Standard WBS template for road infrastructure projects");
             roadTemplate.setDefaultStructure(roadStructure);
             roadTemplate.setIsActive(true);
-            wbsTemplateRepository.save(roadTemplate);
+            WbsTemplate savedRoadTemplate = wbsTemplateRepository.save(roadTemplate);
+            auditService.logCreate("WbsTemplate", savedRoadTemplate.getId(), roadTemplate);
             log.info("ROAD template seeded");
         }
 
@@ -265,7 +270,8 @@ public class WbsTemplateService {
             buildingTemplate.setDescription("Standard WBS template for building construction projects");
             buildingTemplate.setDefaultStructure(buildingStructure);
             buildingTemplate.setIsActive(true);
-            wbsTemplateRepository.save(buildingTemplate);
+            WbsTemplate savedBuildingTemplate = wbsTemplateRepository.save(buildingTemplate);
+            auditService.logCreate("WbsTemplate", savedBuildingTemplate.getId(), buildingTemplate);
             log.info("BUILDING template seeded");
         }
 
@@ -323,7 +329,8 @@ public class WbsTemplateService {
             powerTemplate.setDescription("Standard WBS template for power infrastructure projects");
             powerTemplate.setDefaultStructure(powerStructure);
             powerTemplate.setIsActive(true);
-            wbsTemplateRepository.save(powerTemplate);
+            WbsTemplate savedPowerTemplate = wbsTemplateRepository.save(powerTemplate);
+            auditService.logCreate("WbsTemplate", savedPowerTemplate.getId(), powerTemplate);
             log.info("POWER template seeded");
         }
     }

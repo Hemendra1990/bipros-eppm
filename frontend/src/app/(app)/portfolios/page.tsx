@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { portfolioApi } from "@/lib/api/portfolioApi";
 import type { PortfolioResponse } from "@/lib/types";
 import { Plus, Trash2 } from "lucide-react";
+import { TabTip } from "@/components/common/TabTip";
+import { getErrorMessage } from "@/lib/utils/error";
 
 export default function PortfoliosPage() {
   const [portfolios, setPortfolios] = useState<PortfolioResponse[]>([]);
@@ -23,8 +25,8 @@ export default function PortfoliosPage() {
       const result = await portfolioApi.listPortfolios();
       const data = result.data;
       setPortfolios(Array.isArray(data) ? data : (data as any)?.content ?? []);
-    } catch {
-      setError("Failed to load portfolios");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to load portfolios"));
     } finally {
       setLoading(false);
     }
@@ -48,8 +50,8 @@ export default function PortfoliosPage() {
       } else if (result.error) {
         setError(result.error.message);
       }
-    } catch {
-      setError("Failed to create portfolio");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to create portfolio"));
     } finally {
       setSubmitting(false);
     }
@@ -61,30 +63,35 @@ export default function PortfoliosPage() {
     try {
       await portfolioApi.deletePortfolio(id);
       setPortfolios(portfolios.filter((p) => p.id !== id));
-    } catch {
-      setError("Failed to delete portfolio");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to delete portfolio"));
     }
   };
 
   if (loading) {
-    return <div className="text-center text-gray-500">Loading portfolios...</div>;
+    return <div className="text-center text-slate-500">Loading portfolios...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Portfolios</h1>
+        <h1 className="text-3xl font-bold text-white">Portfolios</h1>
         <button
           onClick={() => setShowNewForm(!showNewForm)}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
         >
           <Plus size={18} />
           New Portfolio
         </button>
       </div>
 
+      <TabTip
+        title="Portfolio Management"
+        description="Group related projects into portfolios for high-level oversight. Track overall portfolio health, budget, and progress across multiple projects."
+      />
+
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-md bg-red-500/10 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
@@ -92,38 +99,38 @@ export default function PortfoliosPage() {
       {showNewForm && (
         <form
           onSubmit={handleCreatePortfolio}
-          className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg"
         >
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Create New Portfolio</h2>
+          <h2 className="mb-4 text-lg font-semibold text-white">Create New Portfolio</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Code</label>
+              <label className="block text-sm font-medium text-slate-300">Code</label>
               <input
                 type="text"
                 required
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="e.g., PORT-001"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <label className="block text-sm font-medium text-slate-300">Name</label>
               <input
                 type="text"
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="Portfolio name"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-slate-300">Description</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="Portfolio description (optional)"
                 rows={3}
               />
@@ -132,14 +139,14 @@ export default function PortfoliosPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
               >
                 {submitting ? "Creating..." : "Create"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowNewForm(false)}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-md border border-slate-700 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
               >
                 Cancel
               </button>
@@ -149,8 +156,8 @@ export default function PortfoliosPage() {
       )}
 
       {portfolios.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-          <p className="text-gray-500">No portfolios yet. Create one to get started.</p>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-8 text-center shadow-lg">
+          <p className="text-slate-500">No portfolios yet. Create one to get started.</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -158,18 +165,18 @@ export default function PortfoliosPage() {
             <a
               key={portfolio.id}
               href={`/portfolios/${portfolio.id}`}
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+              className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg hover:shadow-xl transition-shadow"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900">{portfolio.name}</h3>
-                  <p className="text-sm text-gray-500">{portfolio.code}</p>
+                  <h3 className="font-semibold text-white">{portfolio.name}</h3>
+                  <p className="text-sm text-slate-400">{portfolio.code}</p>
                   {portfolio.description && (
-                    <p className="mt-2 text-sm text-gray-600 line-clamp-2">
+                    <p className="mt-2 text-sm text-slate-300 line-clamp-2">
                       {portfolio.description}
                     </p>
                   )}
-                  <p className="mt-4 text-xs text-gray-500">
+                  <p className="mt-4 text-xs text-slate-500">
                     {portfolio.projectCount} project{portfolio.projectCount !== 1 ? "s" : ""}
                   </p>
                 </div>
@@ -178,7 +185,7 @@ export default function PortfoliosPage() {
                     e.preventDefault();
                     handleDeletePortfolio(portfolio.id);
                   }}
-                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
                 >
                   <Trash2 size={18} />
                 </button>

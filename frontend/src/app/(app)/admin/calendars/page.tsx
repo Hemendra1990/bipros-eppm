@@ -38,7 +38,10 @@ export default function CalendarsPage() {
     },
     { key: "standardWorkHoursPerDay", label: "Hours/Day", sortable: true },
     { key: "standardWorkDaysPerWeek", label: "Days/Week", sortable: true },
-    { key: "createdAt", label: "Created", sortable: true },
+    { key: "createdAt", label: "Created", sortable: true, render: (value: unknown) => {
+      if (!value) return "—";
+      return new Date(value as string).toLocaleDateString();
+    }},
   ];
 
   return (
@@ -49,7 +52,7 @@ export default function CalendarsPage() {
         actions={
           <button
             onClick={() => router.push("/admin/calendars/new")}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
           >
             <Plus size={16} />
             New Calendar
@@ -58,11 +61,11 @@ export default function CalendarsPage() {
       />
 
       {isLoading && (
-        <div className="py-12 text-center text-gray-500">Loading calendars...</div>
+        <div className="py-12 text-center text-slate-500">Loading calendars...</div>
       )}
 
       {error && (
-        <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">
           Failed to load calendars. Is the backend running?
         </div>
       )}
@@ -75,7 +78,12 @@ export default function CalendarsPage() {
       )}
 
       {calendars.length > 0 && (
-        <DataTable columns={columns} data={calendars} rowKey="id" />
+        <DataTable
+          columns={columns}
+          data={calendars}
+          rowKey="id"
+          onRowClick={(row) => router.push(`/admin/calendars/${row.id}`)}
+        />
       )}
     </div>
   );

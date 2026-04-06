@@ -58,8 +58,8 @@ export default function DashboardsPage() {
   return (
     <div className="space-y-8 p-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboards</h1>
-        <p className="mt-2 text-gray-600">
+        <h1 className="text-3xl font-bold text-white">Dashboards</h1>
+        <p className="mt-2 text-slate-400">
           Select a dashboard tier to view project insights and KPIs
         </p>
       </div>
@@ -68,18 +68,18 @@ export default function DashboardsPage() {
         {dashboardTiers.map((tier) => (
           <div
             key={tier.id}
-            className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md"
+            className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm transition-all hover:shadow-md"
           >
             <div className={`bg-gradient-to-br ${tier.color} mb-4 inline-block rounded-lg p-3 text-white`}>
               {tier.icon}
             </div>
-            <h3 className="mb-2 text-lg font-semibold text-gray-900">
+            <h3 className="mb-2 text-lg font-semibold text-white">
               {tier.title}
             </h3>
-            <p className="mb-4 text-sm text-gray-600">{tier.description}</p>
+            <p className="mb-4 text-sm text-slate-400">{tier.description}</p>
             <button
               onClick={() => handleSelectTier(tier.id)}
-              className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="w-full rounded-md border border-slate-700 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-900/80"
             >
               View Dashboard
             </button>

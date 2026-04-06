@@ -7,6 +7,7 @@ import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.scheduling.application.dto.CompressionAnalysisResponse;
 import com.bipros.scheduling.application.dto.CompressionRecommendation;
 import com.bipros.scheduling.domain.model.CompressionAnalysis;
@@ -42,6 +43,7 @@ public class ScheduleCompressionService {
   private final ScheduleActivityResultRepository scheduleActivityResultRepository;
   private final ActivityRepository activityRepository;
   private final ActivityRelationshipRepository activityRelationshipRepository;
+  private final AuditService auditService;
 
   /**
    * Analyze fast-tracking opportunities.
@@ -134,6 +136,7 @@ public class ScheduleCompressionService {
         .build();
 
     CompressionAnalysis saved = compressionAnalysisRepository.save(analysis);
+    auditService.logCreate("CompressionAnalysis", saved.getId(), toResponse(saved, recommendations));
     return toResponse(saved, recommendations);
   }
 
@@ -231,6 +234,7 @@ public class ScheduleCompressionService {
         .build();
 
     CompressionAnalysis saved = compressionAnalysisRepository.save(analysis);
+    auditService.logCreate("CompressionAnalysis", saved.getId(), toResponse(saved, recommendations));
     return toResponse(saved, recommendations);
   }
 

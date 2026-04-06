@@ -10,7 +10,7 @@ export function Progress({ value = 0, max = 100, className = '', ...props }: Pro
 
   return (
     <div
-      className={`h-4 w-full overflow-hidden rounded-full bg-gray-200 ${className}`}
+      className={`h-4 w-full overflow-hidden rounded-full bg-slate-700/50 ${className}`}
       {...props}
     >
       <div

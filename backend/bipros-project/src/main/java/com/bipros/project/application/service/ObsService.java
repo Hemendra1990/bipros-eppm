@@ -2,6 +2,7 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateEpsNodeRequest;
 import com.bipros.project.application.dto.EpsNodeResponse;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 public class ObsService {
 
     private final ObsNodeRepository obsNodeRepository;
+    private final AuditService auditService;
 
     public EpsNodeResponse createNode(CreateEpsNodeRequest request) {
         log.info("Creating OBS node with code: {}", request.code());
@@ -41,6 +43,7 @@ public class ObsService {
 
         ObsNode saved = obsNodeRepository.save(node);
         log.info("OBS node created with ID: {}", saved.getId());
+        auditService.logCreate("ObsNode", saved.getId(), request);
 
         return buildNodeResponse(saved, new HashMap<>());
     }
@@ -51,6 +54,9 @@ public class ObsService {
         ObsNode node = obsNodeRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("ObsNode", id));
 
+        String oldName = node.getName();
+        Integer oldSortOrder = node.getSortOrder();
+
         node.setName(request.name());
         if (request.sortOrder() != null) {
             node.setSortOrder(request.sortOrder());
@@ -58,6 +64,8 @@ public class ObsService {
 
         ObsNode updated = obsNodeRepository.save(node);
         log.info("OBS node updated: {}", id);
+        auditService.logUpdate("ObsNode", id, "name", oldName, updated.getName());
+        auditService.logUpdate("ObsNode", id, "sortOrder", oldSortOrder, updated.getSortOrder());
 
         return buildNodeResponse(updated, new HashMap<>());
     }
@@ -76,6 +84,7 @@ public class ObsService {
 
         obsNodeRepository.delete(node);
         log.info("OBS node deleted: {}", id);
+        auditService.logDelete("ObsNode", id);
     }
 
     public List<EpsNodeResponse> getTree() {

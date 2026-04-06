@@ -24,7 +24,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
   const headerHeight = 80;
 
   return (
-    <svg width={totalWidth} height={headerHeight} className="sticky top-0 bg-white border-b border-gray-200">
+    <svg width={totalWidth} height={headerHeight} className="sticky top-0 bg-slate-900/50 border-b border-slate-800">
       {/* Month headers */}
       <g>
         {months.map((month, idx) => {
@@ -48,8 +48,8 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                 y="0"
                 width={width}
                 height="40"
-                fill="#f3f4f6"
-                stroke="#d1d5db"
+                fill="#1e293b"
+                stroke="#475569"
                 strokeWidth="1"
               />
               <text
@@ -58,7 +58,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                 textAnchor="middle"
                 fontSize="13"
                 fontWeight="bold"
-                fill="#1f2937"
+                fill="#cbd5e1"
               >
                 {format(month, "MMM yyyy")}
               </text>
@@ -82,7 +82,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                   x={x + 5}
                   y="72"
                   fontSize="11"
-                  fill="#6b7280"
+                  fill="#94a3b8"
                   fontWeight="600"
                 >
                   W{Math.ceil((i + 1) / 7)}
@@ -93,7 +93,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                 y1="40"
                 x2={x}
                 y2="80"
-                stroke={isMonday ? "#9ca3af" : "#e5e7eb"}
+                stroke={isMonday ? "#64748b" : "#334155"}
                 strokeWidth={isMonday ? "1" : "0.5"}
               />
             </g>

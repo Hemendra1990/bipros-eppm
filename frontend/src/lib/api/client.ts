@@ -36,20 +36,20 @@ apiClient.interceptors.response.use(
             const res = await axios.post(`${API_BASE_URL}/v1/auth/refresh`, { refreshToken });
             const newToken = res.data.data.accessToken;
             localStorage.setItem("access_token", newToken);
-            document.cookie = `access_token=${newToken}; path=/; max-age=3600`;
+            document.cookie = `access_token=${newToken}; path=/; max-age=3600; Secure; SameSite=Strict`;
             error.config!.headers.Authorization = `Bearer ${newToken}`;
             return apiClient(error.config!);
           } catch {
             // refresh failed, clear auth
             localStorage.removeItem("access_token");
             localStorage.removeItem("refresh_token");
-            document.cookie = 'access_token=; path=/; max-age=0';
+            document.cookie = 'access_token=; path=/; max-age=0; Secure; SameSite=Strict';
             window.location.href = "/auth/login";
           }
         } else {
           // no refresh token, redirect to login
           localStorage.removeItem("access_token");
-          document.cookie = 'access_token=; path=/; max-age=0';
+          document.cookie = 'access_token=; path=/; max-age=0; Secure; SameSite=Strict';
           window.location.href = "/auth/login";
         }
       }

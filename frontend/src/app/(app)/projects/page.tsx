@@ -24,10 +24,10 @@ export default function ProjectsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
+        <h1 className="text-2xl font-bold text-white">Projects</h1>
         <Link
           href="/projects/new"
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
         >
           <Plus size={16} />
           New Project
@@ -35,69 +35,75 @@ export default function ProjectsPage() {
       </div>
 
       {isLoading && (
-        <div className="py-12 text-center text-gray-500">Loading projects...</div>
+        <div className="py-12 text-center text-slate-500">Loading projects...</div>
       )}
 
       {error && (
-        <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">
           Failed to load projects. Is the backend running?
         </div>
       )}
 
       {!isLoading && projects.length === 0 && (
-        <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
-          <p className="text-gray-500">No projects yet. Create your first project to get started.</p>
+        <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
+          <p className="text-slate-500">No projects yet. Create your first project to get started.</p>
         </div>
       )}
 
       {projects.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 shadow-xl">
+          <table className="min-w-full divide-y divide-slate-800/50">
+            <thead className="bg-slate-900/80 border-b border-slate-700/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Code
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Start Date
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Finish Date
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Priority
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-800/50">
               {projects.map((project) => (
-                <tr key={project.id} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-blue-600">
+                <tr key={project.id} className="hover:bg-slate-800/30">
+                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-blue-400">
                     <Link href={`/projects/${project.id}`}>{project.code}</Link>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{project.name}</td>
+                  <td className="px-6 py-4 text-sm text-slate-300">{project.name}</td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm">
                     <StatusBadge status={project.status} />
                   </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
                     {project.plannedStartDate}
                   </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
                     {project.plannedFinishDate}
                   </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
                     {project.priority}
                   </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm">
+                  <td className="whitespace-nowrap px-6 py-4 text-sm flex items-center gap-3">
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="text-blue-400 hover:text-blue-300"
+                    >
+                      Edit
+                    </Link>
                     <button
                       onClick={() => {
                         if (window.confirm("Are you sure you want to delete this project?")) {
@@ -105,7 +111,7 @@ export default function ProjectsPage() {
                         }
                       }}
                       disabled={deleteMutation.isPending}
-                      className="text-red-600 hover:text-red-700 disabled:text-gray-400"
+                      className="text-red-400 hover:text-red-300 disabled:text-slate-500"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -122,15 +128,15 @@ export default function ProjectsPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    PLANNED: "bg-gray-100 text-gray-700",
-    ACTIVE: "bg-green-100 text-green-700",
-    INACTIVE: "bg-yellow-100 text-yellow-700",
-    COMPLETED: "bg-blue-100 text-blue-700",
+    PLANNED: "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50",
+    ACTIVE: "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
+    INACTIVE: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
+    COMPLETED: "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20",
   };
 
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${styles[status] ?? "bg-gray-100 text-gray-700"}`}
+      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${styles[status] ?? "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50"}`}
     >
       {status}
     </span>

@@ -26,8 +26,8 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
 
   if (activities.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
-        <p className="text-gray-500">No activities to display</p>
+      <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
+        <p className="text-slate-400">No activities to display</p>
       </div>
     );
   }
@@ -50,10 +50,10 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-gray-900">Activity Network Diagram</h2>
+      <h2 className="text-lg font-semibold text-white">Activity Network Diagram</h2>
 
-      <div className="overflow-auto rounded-lg border border-gray-200 bg-white p-4">
-        <svg width={svgWidth} height={svgHeight} className="bg-white">
+      <div className="overflow-auto rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <svg width={svgWidth} height={svgHeight} className="bg-slate-900/50">
           <defs>
             {/* Arrowhead marker for relationship lines */}
             <marker
@@ -64,7 +64,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
               refY="3"
               orient="auto"
             >
-              <polygon points="0 0, 10 3, 0 6" fill="#6b7280" />
+              <polygon points="0 0, 10 3, 0 6" fill="#94a3b8" />
             </marker>
             <marker
               id="arrowhead-critical"
@@ -99,7 +99,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y1={y1}
                   x2={x2}
                   y2={y2}
-                  stroke={isCritical ? "#dc2626" : "#9ca3af"}
+                  stroke={isCritical ? "#dc2626" : "#64748b"}
                   strokeWidth="2"
                   markerEnd={isCritical ? "url(#arrowhead-critical)" : "url(#arrowhead)"}
                 />
@@ -108,7 +108,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                     x={(x1 + x2) / 2}
                     y={(y1 + y2) / 2 - 5}
                     fontSize="11"
-                    fill="#6b7280"
+                    fill="#94a3b8"
                     textAnchor="middle"
                   >
                     {rel.relationshipType}
@@ -132,7 +132,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y}
                   width={boxWidth}
                   height={boxHeight}
-                  fill="white"
+                  fill="#1e293b"
                   stroke={isCritical ? "#dc2626" : "#3b82f6"}
                   strokeWidth={isCritical ? "3" : "2"}
                   rx="4"
@@ -144,7 +144,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y + 18}
                   fontSize="12"
                   fontWeight="bold"
-                  fill="#111827"
+                  fill="#cbd5e1"
                   className="font-mono"
                 >
                   {node.activity.code}
@@ -168,7 +168,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y1={node.y + 42}
                   x2={node.x + boxWidth}
                   y2={node.y + 42}
-                  stroke="#e5e7eb"
+                  stroke="#1e293b"
                   strokeWidth="1"
                 />
 
@@ -250,14 +250,14 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <div className="flex flex-wrap gap-6 rounded-lg border border-slate-800 bg-slate-900/80 p-4">
         <div className="flex items-center gap-2">
           <div className="h-4 w-12 border-2 border-blue-500 rounded" />
-          <span className="text-sm text-gray-700">Normal Activity</span>
+          <span className="text-sm text-slate-300">Normal Activity</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="h-4 w-12 border-3 border-red-600 rounded" />
-          <span className="text-sm text-gray-700">Critical Activity</span>
+          <span className="text-sm text-slate-300">Critical Activity</span>
         </div>
       </div>
     </div>

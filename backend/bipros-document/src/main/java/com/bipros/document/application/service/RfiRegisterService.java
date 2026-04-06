@@ -1,6 +1,7 @@
 package com.bipros.document.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.document.application.dto.RfiRegisterRequest;
 import com.bipros.document.application.dto.RfiRegisterResponse;
 import com.bipros.document.domain.model.RfiRegister;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class RfiRegisterService {
 
     private final RfiRegisterRepository rfiRepository;
+    private final AuditService auditService;
 
     public RfiRegisterResponse createRfi(UUID projectId, RfiRegisterRequest request) {
         RfiRegister rfi = new RfiRegister();
@@ -35,6 +37,7 @@ public class RfiRegisterService {
         rfi.setResponse(request.response());
 
         RfiRegister saved = rfiRepository.save(rfi);
+        auditService.logCreate("RfiRegister", saved.getId(), saved);
         return RfiRegisterResponse.from(saved);
     }
 
@@ -57,6 +60,9 @@ public class RfiRegisterService {
         RfiRegister rfi = rfiRepository.findByProjectIdAndId(projectId, rfiId)
             .orElseThrow(() -> new ResourceNotFoundException("RfiRegister", rfiId));
 
+        auditService.logUpdate("RfiRegister", rfiId, "subject", rfi.getSubject(), request.subject());
+        auditService.logUpdate("RfiRegister", rfiId, "status", rfi.getStatus(), request.status());
+
         rfi.setSubject(request.subject());
         rfi.setDescription(request.description());
         rfi.setAssignedTo(request.assignedTo());
@@ -74,5 +80,6 @@ public class RfiRegisterService {
         RfiRegister rfi = rfiRepository.findByProjectIdAndId(projectId, rfiId)
             .orElseThrow(() -> new ResourceNotFoundException("RfiRegister", rfiId));
         rfiRepository.delete(rfi);
+        auditService.logDelete("RfiRegister", rfiId);
     }
 }

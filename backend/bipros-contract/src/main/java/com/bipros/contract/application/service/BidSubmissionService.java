@@ -2,6 +2,7 @@ package com.bipros.contract.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.BidSubmissionRequest;
 import com.bipros.contract.application.dto.BidSubmissionResponse;
 import com.bipros.contract.domain.model.BidSubmission;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class BidSubmissionService {
 
     private final BidSubmissionRepository bidSubmissionRepository;
+    private final AuditService auditService;
 
     public BidSubmissionResponse create(BidSubmissionRequest request) {
         log.info("Creating bid submission from: {}", request.bidderName());
@@ -39,6 +41,7 @@ public class BidSubmissionService {
 
         BidSubmission saved = bidSubmissionRepository.save(bid);
         log.info("Bid submission created with ID: {}", saved.getId());
+        auditService.logCreate("BidSubmission", saved.getId(), toResponse(saved));
 
         return toResponse(saved);
     }
@@ -85,12 +88,14 @@ public class BidSubmissionService {
         bid.setEvaluationRemarks(request.evaluationRemarks());
 
         BidSubmission updated = bidSubmissionRepository.save(bid);
+        auditService.logUpdate("BidSubmission", id, "bid", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting bid submission with ID: {}", id);
         bidSubmissionRepository.deleteById(id);
+        auditService.logDelete("BidSubmission", id);
     }
 
     private BidSubmissionResponse toResponse(BidSubmission bid) {

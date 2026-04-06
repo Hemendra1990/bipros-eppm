@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,6 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/import-export")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
 @RequiredArgsConstructor
 public class ImportExportController {
 
@@ -59,7 +61,11 @@ public class ImportExportController {
   @GetMapping("/jobs/{jobId}/download")
   public ResponseEntity<byte[]> downloadExportedFile(@PathVariable UUID jobId) throws Exception {
     var job = importExportService.getJobStatus(jobId);
-    Path filePath = Paths.get(job.filePath());
+    Path filePath = Paths.get(job.filePath()).normalize();
+    Path allowedDir = Paths.get(System.getProperty("bipros.export.dir", "/tmp/bipros-exports")).normalize();
+    if (!filePath.startsWith(allowedDir)) {
+      throw new SecurityException("Access denied: file path outside allowed directory");
+    }
     byte[] fileContent = Files.readAllBytes(filePath);
 
     return ResponseEntity.ok()

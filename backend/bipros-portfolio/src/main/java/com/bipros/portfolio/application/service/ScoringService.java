@@ -1,6 +1,7 @@
 package com.bipros.portfolio.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.portfolio.application.dto.AddScoringCriterionRequest;
 import com.bipros.portfolio.application.dto.CreateScoringModelRequest;
 import com.bipros.portfolio.application.dto.ProjectRankingResponse;
@@ -28,6 +29,7 @@ public class ScoringService {
   private final ScoringModelRepository scoringModelRepository;
   private final ScoringCriterionRepository scoringCriterionRepository;
   private final ProjectScoreRepository projectScoreRepository;
+  private final AuditService auditService;
 
   public ScoringModelResponse createScoringModel(CreateScoringModelRequest request) {
     ScoringModel model = new ScoringModel();
@@ -36,6 +38,7 @@ public class ScoringService {
     model.setIsDefault(false);
 
     ScoringModel saved = scoringModelRepository.save(model);
+    auditService.logCreate("ScoringModel", saved.getId(), saved);
     return ScoringModelResponse.from(saved);
   }
 
@@ -72,6 +75,7 @@ public class ScoringService {
     criterion.setSortOrder(request.sortOrder());
 
     ScoringCriterion saved = scoringCriterionRepository.save(criterion);
+    auditService.logCreate("ScoringCriterion", saved.getId(), saved);
     return ScoringCriterionResponse.from(saved);
   }
 
@@ -100,12 +104,18 @@ public class ScoringService {
             .findByProjectIdAndScoringCriterionId(projectId, criterionId)
             .orElse(new ProjectScore());
 
+    Double oldScore = projectScore.getScore();
     projectScore.setProjectId(projectId);
     projectScore.setScoringModelId(modelId);
     projectScore.setScoringCriterionId(criterionId);
     projectScore.setScore(score);
 
-    projectScoreRepository.save(projectScore);
+    ProjectScore saved = projectScoreRepository.save(projectScore);
+    if (oldScore == null) {
+      auditService.logCreate("ProjectScore", saved.getId(), saved);
+    } else {
+      auditService.logUpdate("ProjectScore", saved.getId(), "score", oldScore, score);
+    }
   }
 
   public Double calculateWeightedScore(UUID projectId, UUID modelId) {
@@ -180,5 +190,6 @@ public class ScoringService {
     scoringCriterionRepository.deleteAll(criteria);
 
     scoringModelRepository.delete(model);
+    auditService.logDelete("ScoringModel", modelId);
   }
 }

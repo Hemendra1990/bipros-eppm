@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { PageHeader } from "@/components/common/PageHeader";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { projectApi } from "@/lib/api/projectApi";
+import { getErrorMessage } from "@/lib/utils/error";
 import type { CreateProjectRequest } from "@/lib/types";
 
 export default function NewProjectPage() {
@@ -52,8 +54,8 @@ export default function NewProjectPage() {
       if (result.data) {
         router.push(`/projects/${result.data.id}`);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create project");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to create project"));
     } finally {
       setIsSubmitting(false);
     }
@@ -63,76 +65,72 @@ export default function NewProjectPage() {
     <div>
       <PageHeader title="New Project" description="Create a new project to get started" />
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">{error}</div>
+            <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
           )}
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Code *</label>
+              <label className="block text-sm font-medium text-slate-300">Code *</label>
               <input
                 type="text"
                 name="code"
                 value={formData.code}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="e.g., PROJ-001"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name *</label>
+              <label className="block text-sm font-medium text-slate-300">Name *</label>
               <input
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="e.g., Website Redesign"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <label className="block text-sm font-medium text-slate-300">Description</label>
             <textarea
               name="description"
               value={formData.description || ""}
               onChange={handleChange}
               rows={4}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               placeholder="Project description"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">EPS Node *</label>
-              <select
-                name="epsNodeId"
+              <label className="block text-sm font-medium text-slate-300">EPS Node *</label>
+              <SearchableSelect
                 value={formData.epsNodeId}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onChange={(val) => setFormData((prev) => ({ ...prev, epsNodeId: val }))}
+                placeholder="Search EPS nodes..."
+                options={epsNodes.map((node) => ({
+                  value: node.id,
+                  label: `${node.code} - ${node.name}`,
+                }))}
                 disabled={isLoadingEps}
-              >
-                <option value="">Select an EPS Node</option>
-                {epsNodes.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.code} - {node.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Priority</label>
+              <label className="block text-sm font-medium text-slate-300">Priority</label>
               <select
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((p) => (
                   <option key={p} value={p}>
@@ -145,24 +143,24 @@ export default function NewProjectPage() {
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Planned Start Date</label>
+              <label className="block text-sm font-medium text-slate-300">Planned Start Date</label>
               <input
                 type="date"
                 name="plannedStartDate"
                 value={formData.plannedStartDate}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Planned Finish Date</label>
+              <label className="block text-sm font-medium text-slate-300">Planned Finish Date</label>
               <input
                 type="date"
                 name="plannedFinishDate"
                 value={formData.plannedFinishDate || ""}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -171,14 +169,14 @@ export default function NewProjectPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-500"
             >
               {isSubmitting ? "Creating..." : "Create Project"}
             </button>
             <button
               type="button"
               onClick={() => router.back()}
-              className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+              className="rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
             >
               Cancel
             </button>

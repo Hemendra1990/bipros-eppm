@@ -17,7 +17,9 @@ export default function ProjectDetailLayout({
   const router = useRouter();
   const pathname = usePathname();
   const projectId = params.projectId as string;
-  const activeTab = searchParams.get("tab") || "overview";
+  // Check if we're on a sub-route (not the base project page with ?tab= params)
+  const isOnSubRoute = pathname !== `/projects/${projectId}` && !pathname.endsWith(`/projects/${projectId}`);
+  const activeTab = isOnSubRoute ? null : (searchParams.get("tab") || "overview");
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
 
   const { data: projectData, isLoading } = useQuery({
@@ -28,11 +30,11 @@ export default function ProjectDetailLayout({
   const project = projectData?.data;
 
   if (isLoading) {
-    return <div className="p-6 text-center text-gray-500">Loading...</div>;
+    return <div className="p-6 text-center text-slate-500">Loading...</div>;
   }
 
   if (!project) {
-    return <div className="p-6 text-center text-red-500">Project not found</div>;
+    return <div className="p-6 text-center text-red-400">Project not found</div>;
   }
 
   // Tab-based navigation (query parameter)
@@ -63,25 +65,38 @@ export default function ProjectDetailLayout({
     { label: "Materials", href: `/projects/${projectId}/material-reconciliation` },
   ];
 
+  // Check if any "More" link is active (check first so we can exclude them below)
+  const isMoreActive = moreLinks.some((link) => pathname.includes(link.href));
+
+  // Check if any href-based tab matches
+  const isAnyHrefTabActive = tabs.some((t) => t.href && pathname.includes(t.href));
+
   // Determine if a tab is active
   const isTabActive = (tab: typeof tabs[0]): boolean => {
     if (tab.href) {
-      // For href-based tabs, check if pathname matches
       return pathname.includes(tab.href);
-    } else {
-      // For query-based tabs, check the query parameter
+    }
+    // For query-based tabs on the base project page
+    if (activeTab !== null) {
       return activeTab === tab.id;
     }
+    // On a sub-route: check if the pathname contains /activities/, /activity-codes/ etc.
+    // that should map back to the query-based tab
+    if (isOnSubRoute && !isMoreActive && !isAnyHrefTabActive) {
+      const subRouteSegment = pathname.replace(`/projects/${projectId}`, "").split("/")[1];
+      if (tab.id === "activities" && (subRouteSegment === "activities" || subRouteSegment === "activity-codes")) return true;
+    }
+    return false;
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-        <p className="text-sm text-gray-600">{project.code}</p>
+        <h1 className="text-2xl font-bold text-white">{project.name}</h1>
+        <p className="text-sm text-slate-400">{project.code}</p>
       </div>
 
-      <div className="border-b border-gray-200">
+      <div className="border-b border-slate-800">
         <nav className="flex items-center gap-8" aria-label="Tabs">
           {tabs.map((t) => {
             const isActive = isTabActive(t);
@@ -98,8 +113,8 @@ export default function ProjectDetailLayout({
                 className={cn(
                   "px-1 py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer",
                   isActive
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
+                    ? "border-blue-500 text-blue-400"
+                    : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
                 )}
               >
                 {t.label}
@@ -111,7 +126,7 @@ export default function ProjectDetailLayout({
           <div className="relative">
             <button
               onClick={() => setMoreDropdownOpen(!moreDropdownOpen)}
-              className="flex items-center gap-1 px-1 py-4 text-sm font-medium border-b-2 border-transparent text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-1 py-4 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             >
               More
               <ChevronDown
@@ -124,7 +139,7 @@ export default function ProjectDetailLayout({
             </button>
 
             {moreDropdownOpen && (
-              <div className="absolute right-0 mt-0 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+              <div className="absolute right-0 mt-0 w-48 bg-slate-900/50 border border-slate-800 rounded-md shadow-lg z-10">
                 {moreLinks.map((link) => (
                   <button
                     key={link.href}
@@ -132,7 +147,7 @@ export default function ProjectDetailLayout({
                       router.push(link.href);
                       setMoreDropdownOpen(false);
                     }}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 first:rounded-t-md last:rounded-b-md transition-colors"
+                    className="block w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/50 hover:text-white first:rounded-t-md last:rounded-b-md transition-colors"
                   >
                     {link.label}
                   </button>

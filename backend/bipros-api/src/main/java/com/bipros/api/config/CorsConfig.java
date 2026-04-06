@@ -8,20 +8,8 @@ import org.springframework.web.filter.CorsFilter;
 
 import java.util.List;
 
-@Configuration
+// CORS is configured in SecurityConfig via Spring Security's CorsConfigurationSource.
+// This duplicate bean has been removed to avoid conflicting CORS configurations.
+// @Configuration
 public class CorsConfig {
-
-    @Bean
-    public CorsFilter corsFilter() {
-        var config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
-        config.setMaxAge(3600L);
-
-        var source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return new CorsFilter(source);
-    }
 }

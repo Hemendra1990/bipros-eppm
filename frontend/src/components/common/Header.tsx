@@ -15,22 +15,25 @@ export function Header() {
   };
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6">
+    <header className="relative flex h-14 items-center justify-between border-b border-border-subtle bg-surface/50 glass-subtle px-6">
+      {/* Top gradient accent line */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-accent via-accent/50 to-transparent opacity-30"></div>
+
       <div className="flex items-center gap-4">
-        <h1 className="text-sm font-medium text-gray-500">
+        <h1 className="text-sm font-medium text-text-secondary">
           Enterprise Project Portfolio Management
         </h1>
       </div>
       <div className="flex items-center gap-4">
         {user && (
-          <div className="flex items-center gap-2 text-sm text-gray-700">
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
             <User size={16} />
             <span>{user.firstName ?? user.username}</span>
           </div>
         )}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
         >
           <LogOut size={16} />
           <span>Logout</span>

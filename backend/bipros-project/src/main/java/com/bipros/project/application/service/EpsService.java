@@ -2,6 +2,7 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateEpsNodeRequest;
 import com.bipros.project.application.dto.EpsNodeResponse;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
@@ -27,6 +28,7 @@ public class EpsService {
 
     private final EpsNodeRepository epsNodeRepository;
     private final ProjectRepository projectRepository;
+    private final AuditService auditService;
 
     public EpsNodeResponse createNode(CreateEpsNodeRequest request) {
         log.info("Creating EPS node with code: {}", request.code());
@@ -44,6 +46,7 @@ public class EpsService {
 
         EpsNode saved = epsNodeRepository.save(node);
         log.info("EPS node created with ID: {}", saved.getId());
+        auditService.logCreate("EpsNode", saved.getId(), request);
 
         return buildNodeResponse(saved, new HashMap<>());
     }
@@ -54,6 +57,10 @@ public class EpsService {
         EpsNode node = epsNodeRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("EpsNode", id));
 
+        String oldName = node.getName();
+        UUID oldObsId = node.getObsId();
+        Integer oldSortOrder = node.getSortOrder();
+
         node.setName(request.name());
         node.setObsId(request.obsId());
         if (request.sortOrder() != null) {
@@ -62,6 +69,9 @@ public class EpsService {
 
         EpsNode updated = epsNodeRepository.save(node);
         log.info("EPS node updated: {}", id);
+        auditService.logUpdate("EpsNode", id, "name", oldName, updated.getName());
+        auditService.logUpdate("EpsNode", id, "obsId", oldObsId, updated.getObsId());
+        auditService.logUpdate("EpsNode", id, "sortOrder", oldSortOrder, updated.getSortOrder());
 
         return buildNodeResponse(updated, new HashMap<>());
     }
@@ -86,6 +96,7 @@ public class EpsService {
 
         epsNodeRepository.delete(node);
         log.info("EPS node deleted: {}", id);
+        auditService.logDelete("EpsNode", id);
     }
 
     public List<EpsNodeResponse> getTree() {

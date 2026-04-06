@@ -24,6 +24,14 @@
             <artifactId>bipros-activity</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-cost</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-resource</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>

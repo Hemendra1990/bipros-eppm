@@ -1,6 +1,7 @@
 package com.bipros.admin.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.admin.application.dto.CreateGlobalSettingRequest;
 import com.bipros.admin.application.dto.GlobalSettingDto;
 import com.bipros.admin.domain.model.GlobalSetting;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 public class GlobalSettingService {
 
     private final GlobalSettingRepository globalSettingRepository;
+    private final AuditService auditService;
 
     public GlobalSettingDto createSetting(CreateGlobalSettingRequest request) {
         GlobalSetting setting = new GlobalSetting();
@@ -28,6 +30,7 @@ public class GlobalSettingService {
         setting.setCategory(request.getCategory());
 
         GlobalSetting saved = globalSettingRepository.save(setting);
+        auditService.logCreate("GlobalSetting", saved.getId(), mapToDto(saved));
         return mapToDto(saved);
     }
 
@@ -41,6 +44,7 @@ public class GlobalSettingService {
         setting.setCategory(request.getCategory());
 
         GlobalSetting updated = globalSettingRepository.save(setting);
+        auditService.logUpdate("GlobalSetting", id, "setting", null, mapToDto(updated));
         return mapToDto(updated);
     }
 
@@ -48,6 +52,7 @@ public class GlobalSettingService {
         GlobalSetting setting = globalSettingRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("GlobalSetting", id));
         globalSettingRepository.delete(setting);
+        auditService.logDelete("GlobalSetting", id);
     }
 
     @Transactional(readOnly = true)
@@ -84,7 +89,8 @@ public class GlobalSettingService {
 
         setting.setSettingKey(key);
         setting.setSettingValue(value);
-        globalSettingRepository.save(setting);
+        GlobalSetting saved = globalSettingRepository.save(setting);
+        auditService.logCreate("GlobalSetting", saved.getId(), mapToDto(saved));
     }
 
     private GlobalSettingDto mapToDto(GlobalSetting setting) {

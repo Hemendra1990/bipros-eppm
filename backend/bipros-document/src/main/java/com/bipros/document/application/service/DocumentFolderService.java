@@ -1,6 +1,7 @@
 package com.bipros.document.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.document.application.dto.DocumentFolderRequest;
 import com.bipros.document.application.dto.DocumentFolderResponse;
 import com.bipros.document.domain.model.DocumentFolder;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class DocumentFolderService {
 
     private final DocumentFolderRepository folderRepository;
+    private final AuditService auditService;
 
     public DocumentFolderResponse createFolder(UUID projectId, DocumentFolderRequest request) {
         DocumentFolder folder = new DocumentFolder();
@@ -30,6 +32,7 @@ public class DocumentFolderService {
         folder.setSortOrder(request.sortOrder() != null ? request.sortOrder() : 0);
 
         DocumentFolder saved = folderRepository.save(folder);
+        auditService.logCreate("DocumentFolder", saved.getId(), saved);
         return DocumentFolderResponse.from(saved);
     }
 
@@ -60,6 +63,9 @@ public class DocumentFolderService {
         DocumentFolder folder = folderRepository.findByProjectIdAndId(projectId, folderId)
             .orElseThrow(() -> new ResourceNotFoundException("DocumentFolder", folderId));
 
+        auditService.logUpdate("DocumentFolder", folderId, "name", folder.getName(), request.name());
+        auditService.logUpdate("DocumentFolder", folderId, "category", folder.getCategory(), request.category());
+
         folder.setName(request.name());
         folder.setCode(request.code());
         folder.setCategory(request.category());
@@ -74,5 +80,6 @@ public class DocumentFolderService {
         DocumentFolder folder = folderRepository.findByProjectIdAndId(projectId, folderId)
             .orElseThrow(() -> new ResourceNotFoundException("DocumentFolder", folderId));
         folderRepository.delete(folder);
+        auditService.logDelete("DocumentFolder", folderId);
     }
 }

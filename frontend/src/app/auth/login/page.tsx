@@ -52,27 +52,27 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-gray-50 px-4 py-12">
+    <div className="flex min-h-full items-center justify-center bg-slate-950 px-4 py-12">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-blue-600">Bipros EPPM</h1>
-          <p className="mt-2 text-sm text-gray-500">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Bipros EPPM</h1>
+          <p className="mt-2 text-sm text-slate-400">
             Enterprise Project Portfolio Management
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6 rounded-lg border bg-white p-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">Sign in</h2>
+        <form onSubmit={handleSubmit} className="mt-8 space-y-6 rounded-2xl border border-slate-700/50 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-sm">
+          <h2 className="text-xl font-semibold text-white">Sign in</h2>
 
           {error && (
-            <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">
               {error}
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="username" className="block text-sm font-medium text-slate-300">
                 Username
               </label>
               <input
@@ -81,13 +81,13 @@ export default function LoginPage() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 shadow-sm"
                 placeholder="Enter your username"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
                 Password
               </label>
               <input
@@ -96,7 +96,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 shadow-sm"
                 placeholder="Enter your password"
               />
             </div>
@@ -105,7 +105,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-offset-slate-900 disabled:opacity-50 shadow-lg shadow-blue-500/25 transition-all"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>

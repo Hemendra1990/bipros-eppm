@@ -2,6 +2,7 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateCorridorCodeRequest;
 import com.bipros.project.application.dto.CorridorCodeResponse;
 import com.bipros.project.domain.model.CorridorCode;
@@ -22,6 +23,7 @@ public class CorridorCodeService {
 
     private final CorridorCodeRepository corridorCodeRepository;
     private final ProjectRepository projectRepository;
+    private final AuditService auditService;
 
     public CorridorCodeResponse generateCode(CreateCorridorCodeRequest request) {
         log.info("Generating corridor code for project: {}", request.projectId());
@@ -51,6 +53,7 @@ public class CorridorCodeService {
 
         CorridorCode saved = corridorCodeRepository.save(corridorCode);
         log.info("Corridor code generated: {} for project: {}", generatedCode, request.projectId());
+        auditService.logCreate("CorridorCode", saved.getId(), request);
 
         return CorridorCodeResponse.from(saved);
     }

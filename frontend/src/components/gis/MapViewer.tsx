@@ -12,6 +12,7 @@ import GeoJSON from "ol/format/GeoJSON";
 import "ol/ol.css";
 import { GeoJsonFeatureCollection } from "@/lib/api/gisApi";
 import Overlay from "ol/Overlay";
+import type { FeatureLike } from "ol/Feature";
 
 interface MapViewerProps {
   geoJsonData: GeoJsonFeatureCollection;
@@ -20,7 +21,7 @@ interface MapViewerProps {
 export function MapViewer({ geoJsonData }: MapViewerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<Map | null>(null);
-  const [selectedPolygon, setSelectedPolygon] = useState<any>(null);
+  const [selectedPolygon, setSelectedPolygon] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || !geoJsonData) return;
@@ -62,7 +63,7 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
     const popupContainer = document.createElement("div");
     popupContainer.id = "popup";
     popupContainer.className =
-      "absolute bg-white rounded-lg shadow-lg p-4 z-50";
+      "absolute bg-slate-900 rounded-lg shadow-lg p-4 z-50 border border-slate-700";
     document.body.appendChild(popupContainer);
 
     const popup = new Overlay({
@@ -84,7 +85,7 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
 
     // Handle click on features
     map.on("click", (event) => {
-      let clickedFeature: any = null;
+      let clickedFeature: FeatureLike | null = null;
 
       map.forEachFeatureAtPixel(event.pixel, (feature) => {
         clickedFeature = feature;
@@ -92,10 +93,11 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
       });
 
       if (clickedFeature) {
-        const props = clickedFeature.getProperties();
+        const feat = clickedFeature as Feature;
+        const props = feat.getProperties();
         setSelectedPolygon(props);
 
-        const coords = clickedFeature.getGeometry()?.getExtent();
+        const coords = feat.getGeometry()?.getExtent();
         if (coords) {
           const center = [
             (coords[0] + coords[2]) / 2,
@@ -103,12 +105,18 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
           ];
           popup.setPosition(center as any);
 
-          popupContainer.innerHTML = `
-            <div class="text-sm">
-              <h3 class="font-bold text-gray-900">${props.wbsCode}</h3>
-              <p class="text-gray-700">${props.wbsName}</p>
-            </div>
-          `;
+          popupContainer.textContent = '';
+          const div = document.createElement('div');
+          div.className = 'text-sm';
+          const h3 = document.createElement('h3');
+          h3.className = 'font-bold text-white';
+          h3.textContent = props.wbsCode;
+          const p = document.createElement('p');
+          p.className = 'text-slate-300';
+          p.textContent = props.wbsName;
+          div.appendChild(h3);
+          div.appendChild(p);
+          popupContainer.appendChild(div);
         }
       } else {
         popup.setPosition(undefined);
@@ -134,14 +142,14 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
     <div className="relative w-full">
       <div
         ref={mapRef}
-        className="w-full h-96 bg-gray-100 rounded-lg border border-gray-300"
+        className="w-full h-96 bg-slate-800 rounded-lg border border-slate-700"
       />
       {selectedPolygon && (
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-          <p className="text-sm font-medium text-gray-900">
-            Selected: {selectedPolygon.wbsCode}
+        <div className="mt-4 p-3 bg-blue-950 border border-blue-700 rounded">
+          <p className="text-sm font-medium text-white">
+            Selected: {String(selectedPolygon.wbsCode ?? "")}
           </p>
-          <p className="text-sm text-gray-600">{selectedPolygon.wbsName}</p>
+          <p className="text-sm text-slate-300">{String(selectedPolygon.wbsName ?? "")}</p>
         </div>
       )}
     </div>

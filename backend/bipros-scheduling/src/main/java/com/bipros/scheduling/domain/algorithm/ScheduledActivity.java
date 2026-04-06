@@ -19,7 +19,7 @@ public class ScheduledActivity {
     this.activityId = activityId;
     this.remainingDuration = remainingDuration;
     this.totalFloat = 0.0;
-    this.freeFloat = 0.0;
+    this.freeFloat = Double.MAX_VALUE;
     this.isCritical = false;
   }
 

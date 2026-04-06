@@ -2,6 +2,7 @@ package com.bipros.scheduling.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.scheduling.application.dto.CreateScenarioRequest;
 import com.bipros.scheduling.application.dto.ScenarioComparisonResponse;
 import com.bipros.scheduling.application.dto.ScenarioComparisonResponse.ActivityChangeDetail;
@@ -25,6 +26,7 @@ import java.util.UUID;
 public class ScenarioService {
 
   private final ScheduleScenarioRepository scenarioRepository;
+  private final AuditService auditService;
 
   public ScheduleScenarioResponse createScenario(UUID projectId, CreateScenarioRequest request) {
     log.info("Creating scenario for project: {} with name: {}", projectId, request.scenarioName());
@@ -45,6 +47,7 @@ public class ScenarioService {
         .build();
 
     ScheduleScenario saved = scenarioRepository.save(scenario);
+    auditService.logCreate("ScheduleScenario", saved.getId(), ScheduleScenarioResponse.from(saved));
     return ScheduleScenarioResponse.from(saved);
   }
 
@@ -96,6 +99,7 @@ public class ScenarioService {
     }
 
     ScheduleScenario saved = scenarioRepository.save(scenario);
+    auditService.logUpdate("ScheduleScenario", scenarioId, "scenario", scenario, saved);
     return ScheduleScenarioResponse.from(saved);
   }
 

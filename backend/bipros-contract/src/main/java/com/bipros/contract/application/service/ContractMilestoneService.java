@@ -1,6 +1,7 @@
 package com.bipros.contract.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.ContractMilestoneRequest;
 import com.bipros.contract.application.dto.ContractMilestoneResponse;
 import com.bipros.contract.domain.model.ContractMilestone;
@@ -21,6 +22,7 @@ import java.util.UUID;
 public class ContractMilestoneService {
 
     private final ContractMilestoneRepository milestoneRepository;
+    private final AuditService auditService;
 
     public ContractMilestoneResponse create(ContractMilestoneRequest request) {
         log.info("Creating milestone for contract: {}", request.contractId());
@@ -33,10 +35,21 @@ public class ContractMilestoneService {
         milestone.setActualDate(request.actualDate());
         milestone.setPaymentPercentage(request.paymentPercentage());
         milestone.setAmount(request.amount());
-        milestone.setStatus(MilestoneStatus.PENDING);
+
+        // Determine status based on actualDate
+        if (request.actualDate() != null) {
+            if (request.targetDate() != null && request.actualDate().isAfter(request.targetDate())) {
+                milestone.setStatus(MilestoneStatus.DELAYED);
+            } else {
+                milestone.setStatus(MilestoneStatus.ACHIEVED);
+            }
+        } else {
+            milestone.setStatus(MilestoneStatus.PENDING);
+        }
 
         ContractMilestone saved = milestoneRepository.save(milestone);
         log.info("Milestone created with ID: {}", saved.getId());
+        auditService.logCreate("ContractMilestone", saved.getId(), toResponse(saved));
 
         return toResponse(saved);
     }
@@ -70,13 +83,24 @@ public class ContractMilestoneService {
         milestone.setPaymentPercentage(request.paymentPercentage());
         milestone.setAmount(request.amount());
 
+        // Auto-update status based on actualDate
+        if (request.actualDate() != null) {
+            if (request.targetDate() != null && request.actualDate().isAfter(request.targetDate())) {
+                milestone.setStatus(MilestoneStatus.DELAYED);
+            } else {
+                milestone.setStatus(MilestoneStatus.ACHIEVED);
+            }
+        }
+
         ContractMilestone updated = milestoneRepository.save(milestone);
+        auditService.logUpdate("ContractMilestone", id, "milestone", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting milestone with ID: {}", id);
         milestoneRepository.deleteById(id);
+        auditService.logDelete("ContractMilestone", id);
     }
 
     private ContractMilestoneResponse toResponse(ContractMilestone milestone) {

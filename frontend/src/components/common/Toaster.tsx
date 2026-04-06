@@ -11,8 +11,10 @@ export function AppToaster() {
       toastOptions={{
         duration: 4000,
         style: {
-          background: '#363636',
-          color: '#fff',
+          background: '#1e293b',
+          color: '#f1f5f9',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          borderRadius: '12px',
           zIndex: 99999,
         },
         success: {

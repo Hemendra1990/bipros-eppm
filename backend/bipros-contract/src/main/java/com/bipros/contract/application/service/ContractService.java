@@ -1,7 +1,9 @@
 package com.bipros.contract.application.service;
 
 import com.bipros.common.dto.PagedResponse;
+import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.ContractRequest;
 import com.bipros.contract.application.dto.ContractResponse;
 import com.bipros.contract.domain.model.Contract;
@@ -24,30 +26,62 @@ import java.util.UUID;
 public class ContractService {
 
     private final ContractRepository contractRepository;
+    private final AuditService auditService;
 
     public ContractResponse create(ContractRequest request) {
         log.info("Creating contract with number: {}", request.contractNumber());
 
-        Contract contract = new Contract();
-        contract.setProjectId(request.projectId());
-        contract.setTenderId(request.tenderId());
-        contract.setContractNumber(request.contractNumber());
-        contract.setLoaNumber(request.loaNumber());
-        contract.setContractorName(request.contractorName());
-        contract.setContractorCode(request.contractorCode());
-        contract.setContractValue(request.contractValue());
-        contract.setLoaDate(request.loaDate());
-        contract.setStartDate(request.startDate());
-        contract.setCompletionDate(request.completionDate());
-        contract.setDlpMonths(request.dlpMonths() != null ? request.dlpMonths() : 12);
-        contract.setLdRate(request.ldRate());
-        contract.setStatus(ContractStatus.DRAFT);
-        contract.setContractType(request.contractType());
+        try {
+            // Validate required fields
+            if (request.projectId() == null) {
+                throw new BusinessRuleException("INVALID_PROJECT_ID",
+                    "Project ID is required for contract creation");
+            }
 
-        Contract saved = contractRepository.save(contract);
-        log.info("Contract created with ID: {}", saved.getId());
+            if (request.contractNumber() == null || request.contractNumber().isBlank()) {
+                throw new BusinessRuleException("INVALID_CONTRACT_NUMBER",
+                    "Contract number is required");
+            }
 
-        return toResponse(saved);
+            if (request.contractorName() == null || request.contractorName().isBlank()) {
+                throw new BusinessRuleException("INVALID_CONTRACTOR_NAME",
+                    "Contractor name is required");
+            }
+
+            if (request.contractType() == null) {
+                throw new BusinessRuleException("INVALID_CONTRACT_TYPE",
+                    "Contract type is required");
+            }
+
+            Contract contract = new Contract();
+            contract.setProjectId(request.projectId());
+            contract.setTenderId(request.tenderId());
+            contract.setContractNumber(request.contractNumber());
+            contract.setLoaNumber(request.loaNumber());
+            contract.setContractorName(request.contractorName());
+            contract.setContractorCode(request.contractorCode());
+            contract.setContractValue(request.contractValue());
+            contract.setLoaDate(request.loaDate());
+            contract.setStartDate(request.startDate());
+            contract.setCompletionDate(request.completionDate());
+            contract.setDlpMonths(request.dlpMonths() != null ? request.dlpMonths() : 12);
+            contract.setLdRate(request.ldRate());
+            contract.setStatus(ContractStatus.DRAFT);
+            contract.setContractType(request.contractType());
+
+            Contract saved = contractRepository.save(contract);
+            log.info("Contract created with ID: {}", saved.getId());
+            auditService.logCreate("Contract", saved.getId(), toResponse(saved));
+
+            return toResponse(saved);
+        } catch (BusinessRuleException e) {
+            log.error("Validation error creating contract: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error creating contract with number: {}", request.contractNumber(), e);
+            throw new BusinessRuleException("CONTRACT_CREATION_ERROR",
+                "Failed to create contract: " + e.getMessage());
+        }
     }
 
     public ContractResponse getById(UUID id) {
@@ -96,12 +130,14 @@ public class ContractService {
         contract.setLdRate(request.ldRate());
 
         Contract updated = contractRepository.save(contract);
+        auditService.logUpdate("Contract", id, "contract", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting contract with ID: {}", id);
         contractRepository.deleteById(id);
+        auditService.logDelete("Contract", id);
     }
 
     private ContractResponse toResponse(Contract contract) {

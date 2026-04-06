@@ -12,7 +12,10 @@ import com.bipros.reporting.domain.model.KpiSnapshot;
 import com.bipros.reporting.domain.repository.DashboardConfigRepository;
 import com.bipros.reporting.domain.repository.KpiDefinitionRepository;
 import com.bipros.reporting.domain.repository.KpiSnapshotRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,11 +26,14 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DashboardService {
 
     private final DashboardConfigRepository dashboardConfigRepository;
     private final KpiDefinitionRepository kpiDefinitionRepository;
     private final KpiSnapshotRepository kpiSnapshotRepository;
+
+    @PersistenceContext private EntityManager em;
 
     @Transactional(readOnly = true)
     public DashboardConfigDto getDashboardByTier(String tier) {
@@ -118,9 +124,102 @@ public class DashboardService {
     }
 
     private Double calculateKpiValue(KpiDefinition kpiDef, UUID projectId) {
-        // Placeholder implementation - would calculate based on formula and module source
-        // In production, this would aggregate data from cost, schedule, contract modules
-        return 0.0;
+        try {
+            String source = kpiDef.getModuleSource() != null ? kpiDef.getModuleSource().toUpperCase() : "";
+            String code = kpiDef.getCode() != null ? kpiDef.getCode().toUpperCase() : "";
+
+            return switch (source) {
+                case "EVM" -> calculateEvmKpi(code, projectId);
+                case "SCHEDULE" -> calculateScheduleKpi(code, projectId);
+                case "COST" -> calculateCostKpi(code, projectId);
+                case "RISK" -> calculateRiskKpi(code, projectId);
+                default -> calculateGenericKpi(code, projectId);
+            };
+        } catch (Exception e) {
+            log.warn("Failed to calculate KPI {} for project {}: {}", kpiDef.getCode(), projectId, e.getMessage());
+            return 0.0;
+        }
+    }
+
+    private Double calculateEvmKpi(String code, UUID projectId) {
+        String column = switch (code) {
+            case "SPI" -> "schedule_performance_index";
+            case "CPI" -> "cost_performance_index";
+            case "EAC" -> "estimate_at_completion";
+            case "ETC" -> "estimate_to_complete";
+            case "VAC" -> "variance_at_completion";
+            default -> null;
+        };
+        if (column == null) return 0.0;
+
+        Object result = em.createNativeQuery(
+                "SELECT " + column + " FROM evm.evm_calculations " +
+                "WHERE project_id = ?1 ORDER BY data_date DESC LIMIT 1")
+            .setParameter(1, projectId.toString())
+            .getSingleResult();
+        return result != null ? ((Number) result).doubleValue() : 0.0;
+    }
+
+    private Double calculateScheduleKpi(String code, UUID projectId) {
+        return switch (code) {
+            case "PCT_COMPLETE" -> {
+                Object result = em.createNativeQuery(
+                        "SELECT CASE WHEN COUNT(*) > 0 THEN " +
+                        "ROUND(100.0 * COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) / COUNT(*), 2) " +
+                        "ELSE 0 END FROM activity.activities WHERE project_id = ?1")
+                    .setParameter(1, projectId.toString())
+                    .getSingleResult();
+                yield result != null ? ((Number) result).doubleValue() : 0.0;
+            }
+            case "CRITICAL_PATH_LENGTH" -> {
+                Object result = em.createNativeQuery(
+                        "SELECT COALESCE(SUM(remaining_duration), 0) FROM activity.activities " +
+                        "WHERE project_id = ?1 AND is_critical = true")
+                    .setParameter(1, projectId.toString())
+                    .getSingleResult();
+                yield result != null ? ((Number) result).doubleValue() : 0.0;
+            }
+            default -> 0.0;
+        };
+    }
+
+    private Double calculateCostKpi(String code, UUID projectId) {
+        return switch (code) {
+            case "BUDGET_UTILIZATION" -> {
+                Object result = em.createNativeQuery(
+                        "SELECT CASE WHEN SUM(budgeted_cost) > 0 THEN " +
+                        "ROUND(100.0 * SUM(actual_cost) / SUM(budgeted_cost), 2) " +
+                        "ELSE 0 END FROM cost.activity_expenses WHERE project_id = ?1")
+                    .setParameter(1, projectId.toString())
+                    .getSingleResult();
+                yield result != null ? ((Number) result).doubleValue() : 0.0;
+            }
+            default -> 0.0;
+        };
+    }
+
+    private Double calculateRiskKpi(String code, UUID projectId) {
+        return switch (code) {
+            case "RISK_EXPOSURE" -> {
+                Object result = em.createNativeQuery(
+                        "SELECT COALESCE(AVG(risk_score), 0) FROM risk.risks " +
+                        "WHERE project_id = ?1 AND status IN ('OPEN', 'ACTIVE')")
+                    .setParameter(1, projectId.toString())
+                    .getSingleResult();
+                yield result != null ? ((Number) result).doubleValue() : 0.0;
+            }
+            default -> 0.0;
+        };
+    }
+
+    private Double calculateGenericKpi(String code, UUID projectId) {
+        // Fallback: try to derive from common KPI codes
+        return switch (code) {
+            case "SPI", "CPI" -> calculateEvmKpi(code, projectId);
+            case "PCT_COMPLETE" -> calculateScheduleKpi(code, projectId);
+            case "BUDGET_UTILIZATION" -> calculateCostKpi(code, projectId);
+            default -> 0.0;
+        };
     }
 
     private KpiSnapshot.KpiStatus determineKpiStatus(Double value, KpiDefinition kpiDef) {

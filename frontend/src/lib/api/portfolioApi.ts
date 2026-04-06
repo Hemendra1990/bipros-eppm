@@ -81,4 +81,49 @@ export const portfolioApi = {
     apiClient
       .post(`/v1/portfolios/${portfolioId}/scenarios/compare`, { scenarioIds })
       .then((r) => r.data),
+
+  // Portfolio Optimization
+  optimizePortfolio: (
+    portfolioId: string,
+    data: { budgetLimit?: number; mandatoryProjectIds?: string[] }
+  ) =>
+    apiClient
+      .post<ApiResponse<OptimizationResultResponse>>(
+        `/v1/portfolios/${portfolioId}/optimize`,
+        data
+      )
+      .then((r) => r.data),
+
+  whatIfAnalysis: (
+    portfolioId: string,
+    data: { projectId: string; addProject: boolean; budgetLimit?: number }
+  ) =>
+    apiClient
+      .post<ApiResponse<WhatIfResponse>>(`/v1/portfolios/${portfolioId}/what-if`, data)
+      .then((r) => r.data),
 };
+
+export interface OptimizationResultResponse {
+  selectedProjectIds: string[];
+  excludedProjectIds: string[];
+  totalScore: number;
+  totalBudget: number;
+  remainingBudget: number | null;
+  totalSelected: number;
+  totalExcluded: number;
+  messages: string[];
+}
+
+export interface WhatIfResponse {
+  projectId: string;
+  projectName: string;
+  action: string;
+  scoreBefore: number;
+  scoreAfter: number;
+  scoreDelta: number;
+  budgetBefore: number;
+  budgetAfter: number;
+  budgetDelta: number;
+  withinBudget: boolean;
+  remainingBudget: number | null;
+}

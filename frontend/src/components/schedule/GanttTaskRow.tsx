@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { differenceInDays, startOfDay } from "date-fns";
+import React, { useState, useCallback, useRef } from "react";
+import { differenceInDays, startOfDay, addDays, format } from "date-fns";
 import type { ActivityResponse } from "@/lib/types";
 
 interface DateRange {
@@ -25,6 +25,11 @@ interface GanttTaskRowProps {
   timelineStartY: number;
   baselineData?: BaselineActivityData;
   onActivityClick?: (id: string) => void;
+  onActivityReschedule?: (
+    id: string,
+    newStart: string,
+    newEnd: string
+  ) => void;
 }
 
 export function GanttTaskRow({
@@ -36,69 +41,134 @@ export function GanttTaskRow({
   timelineStartY,
   baselineData,
   onActivityClick,
+  onActivityReschedule,
 }: GanttTaskRowProps) {
-  const startDate = activity.plannedStartDate
+  const [dragState, setDragState] = useState<{
+    dragging: boolean;
+    startMouseX: number;
+    originalStartOffset: number;
+    currentDeltaDays: number;
+  } | null>(null);
+
+  const dragRef = useRef(dragState);
+
+  // Sync ref with state in useEffect to avoid mutation during render
+  React.useEffect(() => {
+    dragRef.current = dragState;
+  }, [dragState]);
+
+  const actStartDate = activity.plannedStartDate
     ? startOfDay(new Date(activity.plannedStartDate))
     : null;
-  const endDate = activity.plannedFinishDate
+  const actEndDate = activity.plannedFinishDate
     ? startOfDay(new Date(activity.plannedFinishDate))
     : null;
 
-  if (!startDate || !endDate) {
+  const startOffset = actStartDate
+    ? Math.max(0, differenceInDays(actStartDate, dateRange.start))
+    : 0;
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onActivityReschedule || !actStartDate || !actEndDate) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const state = {
+        dragging: true,
+        startMouseX: e.clientX,
+        originalStartOffset: startOffset,
+        currentDeltaDays: 0,
+      };
+      setDragState(state);
+      dragRef.current = state;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const current = dragRef.current;
+        if (!current?.dragging) return;
+        const dx = moveEvent.clientX - current.startMouseX;
+        const daysDelta = Math.round(dx / pixelsPerDay);
+        const newState = { ...current, currentDeltaDays: daysDelta };
+        setDragState(newState);
+        dragRef.current = newState;
+      };
+
+      const handleMouseUp = () => {
+        const current = dragRef.current;
+        if (current?.dragging && current.currentDeltaDays !== 0) {
+          const newStart = addDays(actStartDate, current.currentDeltaDays);
+          const newEnd = addDays(actEndDate, current.currentDeltaDays);
+          onActivityReschedule(
+            activity.id,
+            format(newStart, "yyyy-MM-dd"),
+            format(newEnd, "yyyy-MM-dd")
+          );
+        }
+        setDragState(null);
+        dragRef.current = null;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [onActivityReschedule, pixelsPerDay, startOffset, actStartDate, actEndDate, activity.id]
+  );
+
+  if (!actStartDate || !actEndDate) {
     return null;
   }
 
-  const startOffset = Math.max(0, differenceInDays(startDate, dateRange.start));
-  const endOffset = differenceInDays(endDate, dateRange.start);
+  const endOffset = differenceInDays(actEndDate, dateRange.start);
   const duration = Math.max(1, endOffset - startOffset + 1);
 
-  const x = startOffset * pixelsPerDay;
+  const deltaDays = dragState?.currentDeltaDays ?? 0;
+  const x = (startOffset + deltaDays) * pixelsPerDay;
   const width = duration * pixelsPerDay;
   const y = rowIndex * rowHeight + timelineStartY;
 
-  // Determine bar color
   const color = getBarColor(activity);
   const barHeight = rowHeight - 4;
 
-  // Calculate percent complete indicator
   const percentComplete = activity.percentComplete || 0;
   const completeWidth = (width * percentComplete) / 100;
 
   // Render baseline bar if available
   let baselineBarElements: React.ReactNode = null;
   if (baselineData?.baselineStartDate && baselineData?.baselineFinishDate) {
-    const baselineStartDate = baselineData.baselineStartDate
-      ? startOfDay(new Date(baselineData.baselineStartDate))
-      : null;
-    const baselineEndDate = baselineData.baselineFinishDate
-      ? startOfDay(new Date(baselineData.baselineFinishDate))
-      : null;
+    const baselineStartDate = startOfDay(new Date(baselineData.baselineStartDate));
+    const baselineEndDate = startOfDay(new Date(baselineData.baselineFinishDate));
+    const baselineStartOffset = Math.max(0, differenceInDays(baselineStartDate, dateRange.start));
+    const baselineEndOffset = differenceInDays(baselineEndDate, dateRange.start);
+    const baselineDuration = Math.max(1, baselineEndOffset - baselineStartOffset + 1);
+    const baselineX = baselineStartOffset * pixelsPerDay;
+    const baselineWidth = baselineDuration * pixelsPerDay;
 
-    if (baselineStartDate && baselineEndDate) {
-      const baselineStartOffset = Math.max(0, differenceInDays(baselineStartDate, dateRange.start));
-      const baselineEndOffset = differenceInDays(baselineEndDate, dateRange.start);
-      const baselineDuration = Math.max(1, baselineEndOffset - baselineStartOffset + 1);
-      const baselineX = baselineStartOffset * pixelsPerDay;
-      const baselineWidth = baselineDuration * pixelsPerDay;
-
-      baselineBarElements = (
-        <>
-          <rect
-            x={baselineX}
-            y={y + barHeight + 4}
-            width={baselineWidth}
-            height={6}
-            fill="#6b7280"
-            opacity="0.5"
-            rx="1"
-          />
-          <title>
-            Baseline: {baselineData.baselineStartDate} to {baselineData.baselineFinishDate}
-          </title>
-        </>
-      );
-    }
+    baselineBarElements = (
+      <>
+        <rect
+          x={baselineX}
+          y={y + barHeight + 4}
+          width={baselineWidth}
+          height={6}
+          fill="#6b7280"
+          opacity="0.5"
+          rx="1"
+        />
+        <title>
+          Baseline: {baselineData.baselineStartDate} to {baselineData.baselineFinishDate}
+        </title>
+      </>
+    );
   }
+
+  const isDragging = dragState?.dragging ?? false;
+  const cursorClass = onActivityReschedule
+    ? isDragging
+      ? "cursor-grabbing"
+      : "cursor-grab"
+    : "cursor-pointer";
 
   return (
     <g key={`task-${activity.id}`}>
@@ -112,10 +182,15 @@ export function GanttTaskRow({
         width={width}
         height={barHeight}
         fill={color}
-        opacity="0.8"
+        opacity={isDragging ? 0.6 : 0.8}
         rx="2"
-        className="cursor-pointer hover:opacity-100 transition-opacity"
-        onClick={() => onActivityClick?.(activity.id)}
+        className={`${cursorClass} hover:opacity-100 transition-opacity`}
+        onMouseDown={handleMouseDown}
+        onClick={(e) => {
+          if (!isDragging) {
+            onActivityClick?.(activity.id);
+          }
+        }}
       />
 
       {/* Percent complete overlay */}
@@ -128,6 +203,7 @@ export function GanttTaskRow({
           fill={color}
           opacity="1"
           rx="2"
+          className="pointer-events-none"
         />
       )}
 
@@ -139,36 +215,44 @@ export function GanttTaskRow({
           fontSize="11"
           fill="white"
           fontWeight="600"
-          className="pointer-events-none"
+          className="pointer-events-none select-none"
         >
           {activity.code}
+        </text>
+      )}
+
+      {/* Drag indicator - show new dates while dragging */}
+      {isDragging && deltaDays !== 0 && (
+        <text
+          x={x + width + 6}
+          y={y + rowHeight / 2 + 4}
+          fontSize="10"
+          fill="#94a3b8"
+          className="pointer-events-none select-none"
+        >
+          {deltaDays > 0 ? "+" : ""}
+          {deltaDays}d
         </text>
       )}
 
       {/* Tooltip on hover */}
       <title>
         {activity.name} | {activity.code} | {percentComplete}% complete | Float: {activity.totalFloat}d
+        {onActivityReschedule ? " | Drag to reschedule" : ""}
       </title>
     </g>
   );
 }
 
 function getBarColor(activity: ActivityResponse): string {
-  // Green for completed
   if (activity.status === "COMPLETED") {
-    return "#10b981"; // green-600
+    return "#10b981";
   }
-
-  // Red for critical path (totalFloat === 0)
   if (activity.totalFloat === 0) {
-    return "#ef4444"; // red-500
+    return "#ef4444";
   }
-
-  // Gray for not started
   if (activity.status === "NOT_STARTED") {
-    return "#9ca3af"; // gray-400
+    return "#9ca3af";
   }
-
-  // Blue for in progress or normal
-  return "#3b82f6"; // blue-500
+  return "#3b82f6";
 }

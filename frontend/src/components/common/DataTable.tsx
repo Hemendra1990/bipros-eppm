@@ -41,7 +41,7 @@ export function DataTable<T = unknown>({
     }
   };
 
-  let sortedData = [...data];
+  let sortedData = [...(Array.isArray(data) ? data : [])];
   if (sortKey && sortOrder) {
     sortedData.sort((a, b) => {
       const aVal = (a as Record<string, unknown>)[sortKey];
@@ -71,15 +71,15 @@ export function DataTable<T = unknown>({
   };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+    <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 shadow-xl">
+      <table className="min-w-full divide-y divide-slate-800/50">
+        <thead className="bg-slate-900/80 border-b border-slate-700/50">
           <tr>
             {columns.map((col) => (
               <th
                 key={String(col.key)}
-                className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 ${
-                  col.sortable ? "cursor-pointer hover:bg-gray-100" : ""
+                className={`px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 ${
+                  col.sortable ? "cursor-pointer hover:bg-slate-800/50" : ""
                 } ${col.className ?? ""}`}
                 onClick={() => col.sortable && handleSort(String(col.key))}
               >
@@ -88,7 +88,7 @@ export function DataTable<T = unknown>({
                   {col.sortable && (
                     <ArrowUpDown
                       size={14}
-                      className={`transition-opacity ${
+                      className={`text-slate-500 transition-opacity ${
                         sortKey === col.key ? "opacity-100" : "opacity-30"
                       }`}
                     />
@@ -98,17 +98,17 @@ export function DataTable<T = unknown>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
+        <tbody className="divide-y divide-slate-800/50">
           {sortedData.map((row, idx) => (
             <tr
               key={getRowKey(row, idx)}
-              className={`${onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}`}
+              className={`border-b border-slate-800/50 transition-colors ${onRowClick ? "cursor-pointer hover:bg-slate-800/30" : ""}`}
               onClick={() => onRowClick?.(row)}
             >
               {columns.map((col) => (
                 <td
                   key={String(col.key)}
-                  className={`px-6 py-4 text-sm text-gray-900 ${col.className ?? ""}`}
+                  className={`px-6 py-4 text-sm text-slate-300 ${col.className ?? ""}`}
                 >
                   {col.render
                     ? col.render((row as Record<string, unknown>)[col.key], row)

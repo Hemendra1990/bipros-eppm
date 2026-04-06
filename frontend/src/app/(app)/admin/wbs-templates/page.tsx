@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
+import { getErrorMessage } from "@/lib/utils/error";
 import { PageHeader } from "@/components/common/PageHeader";
 import type {
   AssetClass,
@@ -70,8 +71,8 @@ export default function WbsTemplatesPage() {
       });
       setTimeout(() => setSuccess(""), 3000);
     },
-    onError: (err) => {
-      setError(err instanceof Error ? err.message : "Failed to create template");
+    onError: (err: unknown) => {
+      setError(getErrorMessage(err, "Failed to create template"));
     },
   });
 
@@ -101,7 +102,7 @@ export default function WbsTemplatesPage() {
   };
 
   if (isLoading) {
-    return <div className="text-center py-8 text-gray-500">Loading templates...</div>;
+    return <div className="text-center py-8 text-slate-500">Loading templates...</div>;
   }
 
   return (
@@ -112,10 +113,10 @@ export default function WbsTemplatesPage() {
       />
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
       )}
       {success && (
-        <div className="mb-4 rounded-md bg-green-50 p-4 text-sm text-green-700">
+        <div className="mb-4 rounded-md bg-emerald-500/10 p-4 text-sm text-emerald-400">
           {success}
         </div>
       )}
@@ -123,20 +124,20 @@ export default function WbsTemplatesPage() {
       <div className="mb-6">
         <button
           onClick={() => setShowForm(!showForm)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
         >
           {showForm ? "Cancel" : "Create Template"}
         </button>
       </div>
 
       {showForm && (
-        <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Create New WBS Template</h2>
+        <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">Create New WBS Template</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-slate-300">
                   Code <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -145,13 +146,13 @@ export default function WbsTemplatesPage() {
                   value={formData.code}
                   onChange={handleInputChange}
                   required
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   placeholder="e.g., ROAD, BUILDING"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-slate-300">
                   Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -160,20 +161,20 @@ export default function WbsTemplatesPage() {
                   value={formData.name}
                   onChange={handleInputChange}
                   required
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   placeholder="e.g., Road Infrastructure Project"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-slate-300">
                   Asset Class <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="assetClass"
                   value={formData.assetClass}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   {ASSET_CLASSES.map((ac) => (
                     <option key={ac} value={ac}>
@@ -190,29 +191,29 @@ export default function WbsTemplatesPage() {
                     name="isActive"
                     checked={formData.isActive}
                     onChange={handleInputChange}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    className="h-4 w-4 rounded border-slate-700 text-blue-400"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Active</span>
+                  <span className="ml-2 text-sm text-slate-300">Active</span>
                 </label>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-slate-300">
                 Description
               </label>
               <textarea
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 rows={3}
                 placeholder="Template description..."
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-slate-300">
                 Default Structure (JSON) <span className="text-red-500">*</span>
               </label>
               <textarea
@@ -220,7 +221,7 @@ export default function WbsTemplatesPage() {
                 value={formData.defaultStructure}
                 onChange={handleInputChange}
                 required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 font-mono text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 rows={8}
                 placeholder='[{"code":"ROOT","name":"Project","level":0,"children":[...]}]'
               />
@@ -230,14 +231,14 @@ export default function WbsTemplatesPage() {
               <button
                 type="submit"
                 disabled={createMutation.isPending}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
               >
                 {createMutation.isPending ? "Creating..." : "Create Template"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-md border border-slate-700 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-900/80"
               >
                 Cancel
               </button>
@@ -246,48 +247,48 @@ export default function WbsTemplatesPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="rounded-lg border border-slate-800 bg-slate-900/50 shadow-sm overflow-hidden">
+        <table className="min-w-full divide-y divide-slate-800/50">
+          <thead className="bg-slate-900/80">
             <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+              <th className="px-6 py-3 text-left text-sm font-semibold text-white">
                 Code
               </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+              <th className="px-6 py-3 text-left text-sm font-semibold text-white">
                 Name
               </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+              <th className="px-6 py-3 text-left text-sm font-semibold text-white">
                 Asset Class
               </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+              <th className="px-6 py-3 text-left text-sm font-semibold text-white">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+              <th className="px-6 py-3 text-left text-sm font-semibold text-white">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-slate-800/50">
             {templates.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-sm text-slate-500">
                   No templates found
                 </td>
               </tr>
             ) : (
               templates.map((template) => (
-                <tr key={template.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                <tr key={template.id} className="hover:bg-slate-900/80">
+                  <td className="px-6 py-4 text-sm font-medium text-white">
                     {template.code}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{template.name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{template.assetClass}</td>
+                  <td className="px-6 py-4 text-sm text-slate-300">{template.name}</td>
+                  <td className="px-6 py-4 text-sm text-slate-300">{template.assetClass}</td>
                   <td className="px-6 py-4 text-sm">
                     <span
                       className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
                         template.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-emerald-500/10 text-emerald-300"
+                          : "bg-slate-800/50 text-slate-100"
                       }`}
                     >
                       {template.isActive ? "Active" : "Inactive"}
@@ -299,7 +300,7 @@ export default function WbsTemplatesPage() {
                         setSelectedTemplate(template);
                         setShowStructureViewer(true);
                       }}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-blue-400 hover:text-blue-400"
                     >
                       View Structure
                     </button>
@@ -312,12 +313,12 @@ export default function WbsTemplatesPage() {
       </div>
 
       {showStructureViewer && selectedTemplate && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-50 flex items-center justify-center">
-          <div className="relative w-full max-w-2xl m-4 rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950 bg-opacity-50 flex items-center justify-center">
+          <div className="relative w-full max-w-2xl m-4 rounded-lg bg-slate-900/50 p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-white">
               {selectedTemplate.name} - Structure
             </h2>
-            <pre className="mb-4 overflow-auto max-h-96 rounded-md bg-gray-100 p-4 text-sm text-gray-900">
+            <pre className="mb-4 overflow-auto max-h-96 rounded-md bg-slate-800/50 p-4 text-sm text-white">
               {JSON.stringify(JSON.parse(selectedTemplate.defaultStructure), null, 2)}
             </pre>
             <button
@@ -325,7 +326,7 @@ export default function WbsTemplatesPage() {
                 setShowStructureViewer(false);
                 setSelectedTemplate(null);
               }}
-              className="rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+              className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
             >
               Close
             </button>

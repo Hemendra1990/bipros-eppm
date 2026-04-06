@@ -51,11 +51,19 @@ public class ActivityService {
       activity.setPercentCompleteType(request.percentCompleteType());
     }
 
-    activity.setOriginalDuration(request.originalDuration());
     activity.setPlannedStartDate(request.plannedStartDate());
     activity.setPlannedFinishDate(request.plannedFinishDate());
     activity.setCalendarId(request.calendarId());
     activity.setPercentComplete(0.0);
+
+    // Auto-calculate originalDuration from dates if not provided
+    Double duration = request.originalDuration();
+    if (duration == null && request.plannedStartDate() != null && request.plannedFinishDate() != null) {
+      duration = (double) java.time.temporal.ChronoUnit.DAYS.between(
+          request.plannedStartDate(), request.plannedFinishDate());
+    }
+    activity.setOriginalDuration(duration);
+    activity.setRemainingDuration(duration);
 
     Activity saved = activityRepository.save(activity);
     log.info("Activity created successfully: id={}", saved.getId());
@@ -71,6 +79,15 @@ public class ActivityService {
 
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
+
+    // Capture old values for audit BEFORE mutation
+    String oldName = activity.getName();
+    var oldStatus = activity.getStatus();
+    Double oldOriginalDuration = activity.getOriginalDuration();
+    Double oldRemainingDuration = activity.getRemainingDuration();
+    Double oldPercentComplete = activity.getPercentComplete();
+    var oldActualStart = activity.getActualStartDate();
+    var oldActualFinish = activity.getActualFinishDate();
 
     activity.setName(request.name());
     activity.setDescription(request.description());
@@ -111,9 +128,27 @@ public class ActivityService {
     Activity updated = activityRepository.save(activity);
     log.info("Activity updated successfully: id={}", id);
 
-    // Audit log update
-    if (request.name() != null && !request.name().equals(activity.getName())) {
-      auditService.logUpdate("Activity", id, "name", activity.getName(), request.name());
+    // Audit log updates for key fields
+    if (request.name() != null && !request.name().equals(oldName)) {
+      auditService.logUpdate("Activity", id, "name", oldName, request.name());
+    }
+    if (request.status() != null && !request.status().equals(oldStatus)) {
+      auditService.logUpdate("Activity", id, "status", oldStatus, request.status());
+    }
+    if (request.originalDuration() != null && !request.originalDuration().equals(oldOriginalDuration)) {
+      auditService.logUpdate("Activity", id, "originalDuration", oldOriginalDuration, request.originalDuration());
+    }
+    if (request.remainingDuration() != null && !request.remainingDuration().equals(oldRemainingDuration)) {
+      auditService.logUpdate("Activity", id, "remainingDuration", oldRemainingDuration, request.remainingDuration());
+    }
+    if (request.percentComplete() != null && !request.percentComplete().equals(oldPercentComplete)) {
+      auditService.logUpdate("Activity", id, "percentComplete", oldPercentComplete, request.percentComplete());
+    }
+    if (request.actualStartDate() != null && !request.actualStartDate().equals(oldActualStart)) {
+      auditService.logUpdate("Activity", id, "actualStartDate", oldActualStart, request.actualStartDate());
+    }
+    if (request.actualFinishDate() != null && !request.actualFinishDate().equals(oldActualFinish)) {
+      auditService.logUpdate("Activity", id, "actualFinishDate", oldActualFinish, request.actualFinishDate());
     }
 
     return ActivityResponse.from(updated);
@@ -179,12 +214,28 @@ public class ActivityService {
           "Percent complete must be between 0 and 100");
     }
 
+    Double oldPercent = activity.getPercentComplete();
+    var oldActualStart = activity.getActualStartDate();
+    var oldActualFinish = activity.getActualFinishDate();
+
     activity.setPercentComplete(percentComplete);
     activity.setActualStartDate(actualStart);
     activity.setActualFinishDate(actualFinish);
 
     Activity updated = activityRepository.save(activity);
     log.info("Progress updated successfully: id={}", id);
+
+    // Audit progress changes
+    if (!java.util.Objects.equals(percentComplete, oldPercent)) {
+      auditService.logUpdate("Activity", id, "percentComplete", oldPercent, percentComplete);
+    }
+    if (!java.util.Objects.equals(actualStart, oldActualStart)) {
+      auditService.logUpdate("Activity", id, "actualStartDate", oldActualStart, actualStart);
+    }
+    if (!java.util.Objects.equals(actualFinish, oldActualFinish)) {
+      auditService.logUpdate("Activity", id, "actualFinishDate", oldActualFinish, actualFinish);
+    }
+
     return ActivityResponse.from(updated);
   }
 
@@ -226,6 +277,8 @@ public class ActivityService {
 
       if (updated) {
         activityRepository.save(activity);
+        auditService.logUpdate("Activity", activity.getId(), "applyActuals",
+            null, "Auto-applied actuals for dataDate=" + dataDate);
       }
     }
 

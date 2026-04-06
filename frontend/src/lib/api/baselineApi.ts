@@ -3,41 +3,58 @@ import type { ApiResponse } from "../types";
 
 export interface BaselineResponse {
   id: string;
-  code: string;
-  name: string;
   projectId: string;
+  name: string;
+  description: string | null;
   baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY";
-  snapshotDate: string;
-  activitiesCount: number;
+  baselineDate: string;
+  isActive: boolean;
+  totalActivities: number;
+  totalCost: number;
+  projectDuration: number;
+  projectStartDate: string | null;
+  projectFinishDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface BaselineVarianceRow {
-  activityCode: string;
-  activityName: string;
-  startVariance: number;
-  finishVariance: number;
-  durationVariance: number;
-  costVariance: number;
+export interface BaselineActivityResponse {
+  id: string;
+  baselineId: string;
+  activityId: string;
+  earlyStart: string | null;
+  earlyFinish: string | null;
+  lateStart: string | null;
+  lateFinish: string | null;
+  originalDuration: number | null;
+  remainingDuration: number | null;
+  totalFloat: number | null;
+  freeFloat: number | null;
+  plannedCost: number | null;
+  actualCost: number | null;
+  percentComplete: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface BaselineVarianceData {
-  baselineId: string;
-  baselineName: string;
-  projectId: string;
-  variance: BaselineVarianceRow[];
+export interface BaselineDetailResponse {
+  baseline: BaselineResponse;
+  activities: BaselineActivityResponse[];
+}
+
+export interface BaselineVarianceRow {
+  activityId: string;
+  activityName: string;
+  startVarianceDays: number;
+  finishVarianceDays: number;
+  durationVariance: number;
+  costVariance: number;
 }
 
 export interface CreateBaselineRequest {
   name: string;
   baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY";
-}
-
-export interface BaselineActivityResponse {
-  activityId: string;
-  baselineStartDate: string | null;
-  baselineFinishDate: string | null;
+  description?: string;
 }
 
 export interface ScheduleComparisonRow {
@@ -66,17 +83,17 @@ export const baselineApi = {
       )
       .then((r) => r.data),
 
-  getVariance: (projectId: string, baselineId: string) =>
+  getBaseline: (projectId: string, baselineId: string) =>
     apiClient
-      .get<ApiResponse<BaselineVarianceData>>(
-        `/v1/projects/${projectId}/baselines/${baselineId}/variance`
+      .get<ApiResponse<BaselineDetailResponse>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}`
       )
       .then((r) => r.data),
 
-  getBaselineActivities: (projectId: string, baselineId: string) =>
+  getVariance: (projectId: string, baselineId: string) =>
     apiClient
-      .get<ApiResponse<BaselineActivityResponse[]>>(
-        `/v1/projects/${projectId}/baselines/${baselineId}/activities`
+      .get<ApiResponse<BaselineVarianceRow[]>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}/variance`
       )
       .then((r) => r.data),
 

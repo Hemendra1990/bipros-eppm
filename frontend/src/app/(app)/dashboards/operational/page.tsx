@@ -7,6 +7,7 @@ import { raBillApi } from "@/lib/api/raBillApi";
 import { projectApi } from "@/lib/api/projectApi";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import type { ProjectResponse } from "@/lib/types";
 
 interface RaBillRow {
   id: string;
@@ -55,7 +56,7 @@ export default function OperationalDashboardPage() {
   });
 
   const projects = projectsData?.data?.content ?? [];
-  const raBills = raBillsData?.data ?? [];
+  const raBills = Array.isArray(raBillsData?.data) ? raBillsData.data : [];
 
   // Mock resource utilization data
   const mockResourceUtilization: ResourceUtilization[] = [
@@ -127,43 +128,43 @@ export default function OperationalDashboardPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "PAID":
-        return "bg-green-100 text-green-800";
+        return "bg-emerald-500/10 text-emerald-300";
       case "APPROVED":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-500/10 text-blue-300";
       case "CERTIFIED":
-        return "bg-purple-100 text-purple-800";
+        return "bg-purple-500/10 text-purple-300";
       case "SUBMITTED":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-amber-500/10 text-amber-300";
       case "DRAFT":
-        return "bg-gray-100 text-gray-800";
+        return "bg-slate-800/50 text-slate-100";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-slate-800/50 text-slate-100";
     }
   };
 
   const getActivityStatusColor = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return "bg-green-100 text-green-800";
+        return "bg-emerald-500/10 text-emerald-300";
       case "IN_PROGRESS":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-500/10 text-blue-300";
       case "PENDING":
-        return "bg-gray-100 text-gray-800";
+        return "bg-slate-800/50 text-slate-100";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-slate-800/50 text-slate-100";
     }
   };
 
   const getResourceColor = (percentage: number) => {
     if (percentage >= 90) return "bg-red-500";
-    if (percentage >= 75) return "bg-yellow-500";
-    return "bg-green-500";
+    if (percentage >= 75) return "bg-amber-500";
+    return "bg-emerald-500";
   };
 
   if (isLoadingConfig) {
     return (
       <div className="flex items-center justify-center p-6">
-        <div className="text-gray-500">Loading dashboard...</div>
+        <div className="text-slate-500">Loading dashboard...</div>
       </div>
     );
   }
@@ -172,38 +173,38 @@ export default function OperationalDashboardPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-4">
         <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-gray-100">
+          <button className="rounded p-1 hover:bg-slate-800/50">
             <ArrowLeft size={20} />
           </button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-white">
             Operational Dashboard
           </h1>
-          <p className="text-gray-600">
+          <p className="text-slate-400">
             RA bills, resources, and WBS-level activity progress
           </p>
         </div>
       </div>
 
       {/* Project Selection */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">
+      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-white">
           Select Project
         </h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          {projects.map((project: any) => (
+          {projects.map((project: ProjectResponse) => (
             <button
               key={project.id}
               onClick={() => setSelectedProjectId(project.id)}
               className={`rounded-lg border-2 p-3 text-left transition ${
                 selectedProjectId === project.id
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 hover:border-blue-300"
+                  ? "border-blue-500 bg-blue-500/10"
+                  : "border-slate-800 hover:border-blue-300"
               }`}
             >
-              <div className="font-medium text-gray-900">{project.name}</div>
-              <div className="text-xs text-gray-500">
+              <div className="font-medium text-white">{project.name}</div>
+              <div className="text-xs text-slate-500">
                 {project.description}
               </div>
             </button>
@@ -214,48 +215,48 @@ export default function OperationalDashboardPage() {
       {selectedProjectId && (
         <>
           {/* RA Bills Status */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-white">
               RA Bills Status
             </h2>
             {isLoadingRaBills ? (
-              <div className="text-center text-gray-500">
+              <div className="text-center text-slate-500">
                 Loading RA bills...
               </div>
             ) : raBills.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-gray-300 py-8 text-center">
-                <p className="text-gray-500">No RA bills available</p>
+              <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
+                <p className="text-slate-500">No RA bills available</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                    <tr className="border-b border-slate-800">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
                         Bill Number
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
                         Period
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
                         Amount
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
                         Status
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {raBills.map((bill: RaBillRow) => (
-                      <tr key={bill.id} className="border-b border-gray-100">
-                        <td className="px-4 py-3 text-sm text-gray-900">
+                      <tr key={bill.id} className="border-b border-slate-800/50">
+                        <td className="px-4 py-3 text-sm text-white">
                           {bill.billNumber}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
+                        <td className="px-4 py-3 text-sm text-slate-400">
                           {new Date(bill.billPeriodFrom).toLocaleDateString()} -{" "}
                           {new Date(bill.billPeriodTo).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        <td className="px-4 py-3 text-sm font-medium text-white">
                           ${bill.netAmount.toLocaleString("en-US", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
@@ -279,23 +280,23 @@ export default function OperationalDashboardPage() {
           </div>
 
           {/* Resource Utilization */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-white">
               Resource Utilization
             </h2>
             <div className="space-y-4">
               {mockResourceUtilization.map((resource) => (
                 <div key={resource.resourceType}>
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-gray-900">
+                    <span className="font-medium text-white">
                       {resource.resourceType}
                     </span>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-slate-400">
                       {resource.utilized} / {resource.allocated} (
                       {resource.percentage.toFixed(1)}%)
                     </span>
                   </div>
-                  <div className="h-3 w-full rounded-full bg-gray-200">
+                  <div className="h-3 w-full rounded-full bg-slate-700/50">
                     <div
                       className={`h-3 rounded-full transition-all ${getResourceColor(
                         resource.percentage
@@ -309,22 +310,22 @@ export default function OperationalDashboardPage() {
           </div>
 
           {/* Activity Progress by WBS */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-white">
               Activity Progress by WBS
             </h2>
             <div className="space-y-4">
               {mockActivityProgress.map((activity) => (
                 <div
                   key={activity.wbsCode}
-                  className="rounded-lg border border-gray-200 p-4"
+                  className="rounded-lg border border-slate-800 p-4"
                 >
                   <div className="mb-3 flex items-start justify-between">
                     <div>
-                      <h3 className="font-medium text-gray-900">
+                      <h3 className="font-medium text-white">
                         {activity.wbsCode}
                       </h3>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-slate-400">
                         {activity.description}
                       </p>
                     </div>
@@ -340,14 +341,14 @@ export default function OperationalDashboardPage() {
                   <div className="space-y-2">
                     <div>
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-600">
+                        <span className="text-xs font-medium text-slate-400">
                           Planned Progress
                         </span>
-                        <span className="text-xs font-semibold text-gray-900">
+                        <span className="text-xs font-semibold text-white">
                           {activity.plannedProgress}%
                         </span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-gray-200">
+                      <div className="h-2 w-full rounded-full bg-slate-700/50">
                         <div
                           className="h-2 rounded-full bg-blue-500"
                           style={{ width: `${activity.plannedProgress}%` }}
@@ -357,19 +358,19 @@ export default function OperationalDashboardPage() {
 
                     <div>
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-600">
+                        <span className="text-xs font-medium text-slate-400">
                           Actual Progress
                         </span>
-                        <span className="text-xs font-semibold text-gray-900">
+                        <span className="text-xs font-semibold text-white">
                           {activity.actualProgress}%
                         </span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-gray-200">
+                      <div className="h-2 w-full rounded-full bg-slate-700/50">
                         <div
                           className={`h-2 rounded-full ${
                             activity.actualProgress >= activity.plannedProgress
-                              ? "bg-green-500"
-                              : "bg-yellow-500"
+                              ? "bg-emerald-500"
+                              : "bg-amber-500"
                           }`}
                           style={{ width: `${activity.actualProgress}%` }}
                         />

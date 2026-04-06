@@ -1,6 +1,7 @@
 package com.bipros.resource.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateResourceRateRequest;
 import com.bipros.resource.application.dto.ResourceRateResponse;
 import com.bipros.resource.domain.model.ResourceRate;
@@ -22,6 +23,7 @@ public class ResourceRateService {
 
   private final ResourceRateRepository rateRepository;
   private final ResourceRepository resourceRepository;
+  private final AuditService auditService;
 
   public ResourceRateResponse createRate(UUID resourceId, CreateResourceRateRequest request) {
     log.info("Creating rate for resource: resourceId={}, rateType={}", resourceId, request.rateType());
@@ -40,6 +42,10 @@ public class ResourceRateService {
 
     ResourceRate saved = rateRepository.save(rate);
     log.info("Rate created: id={}", saved.getId());
+
+    // Audit log creation
+    auditService.logCreate("ResourceRate", saved.getId(), ResourceRateResponse.from(saved));
+
     return ResourceRateResponse.from(saved);
   }
 
@@ -83,6 +89,10 @@ public class ResourceRateService {
 
     ResourceRate updated = rateRepository.save(rate);
     log.info("Rate updated: id={}", id);
+
+    // Audit log update
+    auditService.logUpdate("ResourceRate", id, "rate", rate, ResourceRateResponse.from(updated));
+
     return ResourceRateResponse.from(updated);
   }
 
@@ -93,5 +103,8 @@ public class ResourceRateService {
     }
     rateRepository.deleteById(id);
     log.info("Rate deleted: id={}", id);
+
+    // Audit log deletion
+    auditService.logDelete("ResourceRate", id);
   }
 }

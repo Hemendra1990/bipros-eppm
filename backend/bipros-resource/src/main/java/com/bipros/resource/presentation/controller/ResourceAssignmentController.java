@@ -3,9 +3,13 @@ package com.bipros.resource.presentation.controller;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.resource.application.dto.CreateResourceAssignmentRequest;
 import com.bipros.resource.application.dto.ResourceAssignmentResponse;
+import com.bipros.resource.application.dto.ResourceLevelingRequest;
+import com.bipros.resource.application.dto.ResourceLevelingResponse;
 import com.bipros.resource.application.dto.ResourceUsageEntry;
+import com.bipros.resource.application.dto.UtilizationProfileEntry;
 import com.bipros.resource.application.service.ResourceAssignmentService;
 import com.bipros.resource.application.service.ResourceLevelingService;
+import com.bipros.resource.domain.algorithm.LevelingMode;
 import com.bipros.resource.domain.algorithm.LevelingResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +34,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/resource-assignments")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
 @RequiredArgsConstructor
 @Slf4j
 public class ResourceAssignmentController {
@@ -123,5 +129,25 @@ public class ResourceAssignmentController {
         projectId);
     LevelingResult result = levelingService.levelResources(projectId);
     return ResponseEntity.ok(ApiResponse.ok(result));
+  }
+
+  @PostMapping("/level")
+  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+  public ResponseEntity<ApiResponse<ResourceLevelingResponse>> levelResourcesWithMode(
+      @PathVariable UUID projectId,
+      @Valid @RequestBody ResourceLevelingRequest request) {
+    log.info("POST /v1/projects/{}/resource-assignments/level - mode={}", projectId, request.mode());
+    ResourceLevelingResponse response = levelingService.levelResourcesWithMode(
+        projectId, request.mode(), request.resourceIds());
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  @GetMapping("/utilization-profile")
+  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+  public ResponseEntity<ApiResponse<List<UtilizationProfileEntry>>> getUtilizationProfile(
+      @PathVariable UUID projectId) {
+    log.info("GET /v1/projects/{}/resource-assignments/utilization-profile", projectId);
+    List<UtilizationProfileEntry> response = levelingService.getUtilizationProfile(projectId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
   }
 }

@@ -6,6 +6,7 @@ import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.calendar.application.service.CalendarService;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.scheduling.application.dto.FloatPathResponse;
 import com.bipros.scheduling.application.dto.ScheduleActivityResultResponse;
 import com.bipros.scheduling.application.dto.ScheduleResultResponse;
@@ -49,6 +50,7 @@ public class SchedulingService {
   private final CalendarService calendarService;
   private final PertEstimateService pertEstimateService;
   private final ScheduleHealthService scheduleHealthService;
+  private final AuditService auditService;
 
   public ScheduleResultResponse scheduleProject(UUID projectId, SchedulingOption option) {
     log.info("Scheduling project: id={}, option={}", projectId, option);
@@ -133,6 +135,25 @@ public class SchedulingService {
         schedulableRelationships.add(schedulable);
       }
 
+      // Build WBS_SUMMARY → children map for hammock/summary activity support
+      Map<UUID, List<UUID>> summaryChildren = new HashMap<>();
+      for (Activity activity : activities) {
+        if (activity.getActivityType() != null
+            && activity.getActivityType().name().equals("WBS_SUMMARY")
+            && activity.getWbsNodeId() != null) {
+          // Find all non-summary activities that share the same WBS node
+          List<UUID> children = activities.stream()
+              .filter(a -> activity.getWbsNodeId().equals(a.getWbsNodeId())
+                  && !a.getId().equals(activity.getId())
+                  && (a.getActivityType() == null || !a.getActivityType().name().equals("WBS_SUMMARY")))
+              .map(Activity::getId)
+              .toList();
+          if (!children.isEmpty()) {
+            summaryChildren.put(activity.getId(), children);
+          }
+        }
+      }
+
       // Create schedule data
       ScheduleData scheduleData = new ScheduleData(
           projectId,
@@ -141,12 +162,15 @@ public class SchedulingService {
           null,
           schedulableActivities,
           schedulableRelationships,
-          option != null ? option : SchedulingOption.RETAINED_LOGIC
+          option != null ? option : SchedulingOption.RETAINED_LOGIC,
+          summaryChildren
       );
 
       // Run CPM scheduler
       CPMScheduler scheduler = new CPMScheduler(calendarCalculator, defaultCalendarId);
-      List<ScheduledActivity> scheduledActivities = scheduler.schedule(scheduleData);
+      CPMScheduler.ScheduleOutput output = scheduler.scheduleWithWarnings(scheduleData);
+      List<ScheduledActivity> scheduledActivities = output.activities();
+      List<String> scheduleWarnings = output.warnings();
 
       // Calculate project statistics
       LocalDate projectFinish = scheduledActivities.stream()
@@ -179,6 +203,7 @@ public class SchedulingService {
           .build();
 
       ScheduleResult saved = scheduleResultRepository.save(scheduleResult);
+      auditService.logCreate("ScheduleResult", saved.getId(), ScheduleResultResponse.from(saved));
 
       // Save activity results and update Activity entities
       List<ScheduleActivityResult> activityResults = new ArrayList<>();
@@ -218,8 +243,9 @@ public class SchedulingService {
       // Calculate schedule health index
       scheduleHealthService.calculateHealth(saved.getId());
 
-      log.info("Project scheduled successfully: id={}, duration={}s", projectId, saved.getDurationSeconds());
-      return ScheduleResultResponse.from(saved);
+      log.info("Project scheduled successfully: id={}, duration={}s, warnings={}",
+          projectId, saved.getDurationSeconds(), scheduleWarnings.size());
+      return ScheduleResultResponse.from(saved, scheduleWarnings);
 
     } catch (Exception e) {
       log.error("Error scheduling project: id={}", projectId, e);

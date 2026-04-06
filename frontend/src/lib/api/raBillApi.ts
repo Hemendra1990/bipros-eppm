@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client'
+import type { ApiResponse } from '../types'
 
 export interface RaBill {
   id: string
@@ -61,21 +62,21 @@ export interface CreateRaBillItemRequest {
 export const raBillApi = {
   // RA Bills
   createRaBill: (projectId: string, request: CreateRaBillRequest) =>
-    apiClient.post<RaBill>(`/v1/projects/${projectId}/ra-bills`, request),
+    apiClient.post<ApiResponse<RaBill>>(`/v1/projects/${projectId}/ra-bills`, request).then(r => r.data),
 
   getRaBillsByProject: (projectId: string) =>
-    apiClient.get<RaBill[]>(`/v1/projects/${projectId}/ra-bills`),
+    apiClient.get<ApiResponse<RaBill[]>>(`/v1/projects/${projectId}/ra-bills`).then(r => r.data),
 
   getRaBill: (raBillId: string) =>
-    apiClient.get<RaBill>(`/v1/ra-bills/${raBillId}`),
+    apiClient.get<ApiResponse<RaBill>>(`/v1/ra-bills/${raBillId}`).then(r => r.data),
 
   updateRaBill: (raBillId: string, request: CreateRaBillRequest) =>
-    apiClient.put<RaBill>(`/v1/ra-bills/${raBillId}`, request),
+    apiClient.put<ApiResponse<RaBill>>(`/v1/ra-bills/${raBillId}`, request).then(r => r.data),
 
   // RA Bill Items
   addRaBillItem: (raBillId: string, request: CreateRaBillItemRequest) =>
-    apiClient.post<RaBillItem>(`/v1/ra-bills/${raBillId}/items`, request),
+    apiClient.post<ApiResponse<RaBillItem>>(`/v1/ra-bills/${raBillId}/items`, request).then(r => r.data),
 
   getRaBillItems: (raBillId: string) =>
-    apiClient.get<RaBillItem[]>(`/v1/ra-bills/${raBillId}/items`),
+    apiClient.get<ApiResponse<RaBillItem[]>>(`/v1/ra-bills/${raBillId}/items`).then(r => r.data),
 }

@@ -42,7 +42,7 @@ export interface GeoJsonFeatureCollection {
       strokeColor: string;
       id: string;
     };
-    geometry: any;
+    geometry: { type: string; coordinates: number[][][] };
   }>;
 }
 
@@ -99,19 +99,112 @@ export interface ProgressVariance {
   varianceStatus: "NO_DATA" | "ON_TRACK" | "BEHIND" | "AHEAD";
 }
 
+export interface CreateLayerRequest {
+  layerName: string;
+  layerType: "WBS_POLYGON" | "SATELLITE_OVERLAY" | "VECTOR_LAYER" | "BASE_MAP";
+  description?: string;
+  isVisible: boolean;
+  opacity: number;
+  sortOrder: number;
+}
+
+export interface UpdateLayerRequest {
+  layerName?: string;
+  layerType?: "WBS_POLYGON" | "SATELLITE_OVERLAY" | "VECTOR_LAYER" | "BASE_MAP";
+  description?: string;
+  isVisible?: boolean;
+  opacity?: number;
+  sortOrder?: number;
+}
+
+export interface CreatePolygonRequest {
+  wbsNodeId: UUID;
+  layerId: UUID;
+  wbsCode: string;
+  wbsName: string;
+  polygonGeoJson: string;
+  centerLatitude: number;
+  centerLongitude: number;
+  areaInSqMeters?: number;
+  fillColor: string;
+  strokeColor: string;
+}
+
+export interface UpdatePolygonRequest {
+  wbsCode?: string;
+  wbsName?: string;
+  polygonGeoJson?: string;
+  centerLatitude?: number;
+  centerLongitude?: number;
+  areaInSqMeters?: number;
+  fillColor?: string;
+  strokeColor?: string;
+}
+
+export interface CreateSatelliteImageRequest {
+  imageName: string;
+  description?: string;
+  captureDate: string;
+  source: "ISRO_CARTOSAT" | "PLANET_LABS" | "MAXAR" | "AIRBUS" | "DRONE" | "MANUAL_UPLOAD";
+  resolution?: string;
+  boundingBoxGeoJson?: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  northBound?: number;
+  southBound?: number;
+  eastBound?: number;
+  westBound?: number;
+}
+
+export interface UpdateSatelliteImageRequest {
+  imageName?: string;
+  description?: string;
+  captureDate?: string;
+  source?: "ISRO_CARTOSAT" | "PLANET_LABS" | "MAXAR" | "AIRBUS" | "DRONE" | "MANUAL_UPLOAD";
+  resolution?: string;
+  boundingBoxGeoJson?: string;
+  northBound?: number;
+  southBound?: number;
+  eastBound?: number;
+  westBound?: number;
+  status?: "UPLOADED" | "PROCESSING" | "READY" | "FAILED";
+}
+
+export interface CreateProgressSnapshotRequest {
+  wbsPolygonId: UUID;
+  captureDate: string;
+  satelliteImageId?: UUID;
+  derivedProgressPercent?: number;
+  contractorClaimedPercent?: number;
+  variancePercent?: number;
+  analysisMethod: "MANUAL" | "AI_SEGMENTATION" | "VISUAL_INSPECTION";
+  remarks?: string;
+}
+
+export interface UpdateProgressSnapshotRequest {
+  captureDate?: string;
+  satelliteImageId?: UUID;
+  derivedProgressPercent?: number;
+  contractorClaimedPercent?: number;
+  variancePercent?: number;
+  analysisMethod?: "MANUAL" | "AI_SEGMENTATION" | "VISUAL_INSPECTION";
+  remarks?: string;
+}
+
 // GIS Layers
 export const gisApi = {
   // Layers
   getLayers: (projectId: UUID) =>
     apiClient.get<{ data: GisLayer[] }>(`/v1/projects/${projectId}/gis/layers`),
 
-  createLayer: (projectId: UUID, data: any) =>
+  createLayer: (projectId: UUID, data: CreateLayerRequest) =>
     apiClient.post<{ data: GisLayer }>(
       `/v1/projects/${projectId}/gis/layers`,
       data
     ),
 
-  updateLayer: (projectId: UUID, layerId: UUID, data: any) =>
+  updateLayer: (projectId: UUID, layerId: UUID, data: UpdateLayerRequest) =>
     apiClient.put<{ data: GisLayer }>(
       `/v1/projects/${projectId}/gis/layers/${layerId}`,
       data
@@ -131,13 +224,13 @@ export const gisApi = {
       `/v1/projects/${projectId}/gis/polygons/geojson`
     ),
 
-  createPolygon: (projectId: UUID, data: any) =>
+  createPolygon: (projectId: UUID, data: CreatePolygonRequest) =>
     apiClient.post<{ data: WbsPolygon }>(
       `/v1/projects/${projectId}/gis/polygons`,
       data
     ),
 
-  updatePolygon: (projectId: UUID, polygonId: UUID, data: any) =>
+  updatePolygon: (projectId: UUID, polygonId: UUID, data: UpdatePolygonRequest) =>
     apiClient.put<{ data: WbsPolygon }>(
       `/v1/projects/${projectId}/gis/polygons/${polygonId}`,
       data
@@ -155,13 +248,13 @@ export const gisApi = {
     return apiClient.get<{ data: SatelliteImage[] }>(url);
   },
 
-  createSatelliteImage: (projectId: UUID, data: any) =>
+  createSatelliteImage: (projectId: UUID, data: CreateSatelliteImageRequest) =>
     apiClient.post<{ data: SatelliteImage }>(
       `/v1/projects/${projectId}/gis/satellite-images`,
       data
     ),
 
-  updateSatelliteImage: (projectId: UUID, imageId: UUID, data: any) =>
+  updateSatelliteImage: (projectId: UUID, imageId: UUID, data: UpdateSatelliteImageRequest) =>
     apiClient.put<{ data: SatelliteImage }>(
       `/v1/projects/${projectId}/gis/satellite-images/${imageId}`,
       data
@@ -183,13 +276,13 @@ export const gisApi = {
     return apiClient.get<{ data: ConstructionProgress[] }>(url);
   },
 
-  createProgressSnapshot: (projectId: UUID, data: any) =>
+  createProgressSnapshot: (projectId: UUID, data: CreateProgressSnapshotRequest) =>
     apiClient.post<{ data: ConstructionProgress }>(
       `/v1/projects/${projectId}/gis/progress-snapshots`,
       data
     ),
 
-  updateProgressSnapshot: (projectId: UUID, snapshotId: UUID, data: any) =>
+  updateProgressSnapshot: (projectId: UUID, snapshotId: UUID, data: UpdateProgressSnapshotRequest) =>
     apiClient.put<{ data: ConstructionProgress }>(
       `/v1/projects/${projectId}/gis/progress-snapshots/${snapshotId}`,
       data

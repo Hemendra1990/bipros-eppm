@@ -1,24 +1,96 @@
 import { apiClient } from "./client";
-import type { ApiResponse, PagedResponse } from "../types";
+import type { ApiResponse, PagedResponse, ExpenseResponse } from "../types";
+
+export interface CostAccount {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  parentId?: string | null;
+}
+
+export interface CreateCostAccountRequest {
+  code: string;
+  name: string;
+  description?: string;
+  parentId?: string | null;
+}
+
+export interface CostSummary {
+  totalBudget: number;
+  totalActual: number;
+  totalRemaining: number;
+  atCompletion: number;
+  costVariance: number;
+  costPerformanceIndex: number;
+  expenseCount: number;
+}
+
+export interface CashFlowForecastItem {
+  id: string | null;
+  projectId: string;
+  period: string;
+  plannedAmount: number;
+  actualAmount: number;
+  forecastAmount: number;
+  cumulativePlanned: number;
+  cumulativeActual: number;
+  cumulativeForecast: number;
+}
+
+export interface PeriodCostAggregation {
+  periodId: string;
+  periodName: string;
+  startDate: string;
+  endDate: string;
+  budget: number;
+  actual: number;
+  variance: number;
+  earnedValue: number;
+  plannedValue: number;
+}
+
+export type ForecastMethod = "LINEAR" | "CPI_BASED" | "SPI_CPI_COMPOSITE";
 
 export const costApi = {
   getExpensesByProject: (projectId: string, page = 0, size = 20) =>
     apiClient
-      .get<ApiResponse<PagedResponse<any>>>(`/v1/projects/${projectId}/expenses`, {
+      .get<ApiResponse<PagedResponse<ExpenseResponse>>>(`/v1/projects/${projectId}/expenses`, {
         params: { page, size },
       })
       .then((r) => r.data),
 
   getCostSummary: (projectId: string) =>
     apiClient
-      .get<ApiResponse<any>>(`/v1/projects/${projectId}/cost-summary`)
+      .get<ApiResponse<CostSummary>>(`/v1/projects/${projectId}/cost-summary`)
       .then((r) => r.data),
 
   getCostAccountTree: () =>
-    apiClient.get<ApiResponse<any>>("/v1/cost-accounts").then((r) => r.data),
+    apiClient.get<ApiResponse<CostAccount[]>>("/v1/cost-accounts").then((r) => r.data),
 
   getCashFlowForecast: (projectId: string) =>
     apiClient
-      .get<ApiResponse<any>>(`/v1/projects/${projectId}/cash-flow`)
+      .get<ApiResponse<CashFlowForecastItem[]>>(`/v1/projects/${projectId}/cash-flow`)
       .then((r) => r.data),
+
+  generateForecast: (projectId: string, method: ForecastMethod = "LINEAR") =>
+    apiClient
+      .get<ApiResponse<CashFlowForecastItem[]>>(`/v1/projects/${projectId}/cost-forecast`, {
+        params: { method },
+      })
+      .then((r) => r.data),
+
+  getCostPeriods: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<PeriodCostAggregation[]>>(`/v1/projects/${projectId}/cost-periods`)
+      .then((r) => r.data),
+
+  listCostAccounts: () =>
+    apiClient.get<ApiResponse<CostAccount[]>>("/v1/cost-accounts").then((r) => r.data),
+
+  createCostAccount: (data: CreateCostAccountRequest) =>
+    apiClient.post<ApiResponse<CostAccount>>("/v1/cost-accounts", data).then((r) => r.data),
+
+  deleteCostAccount: (id: string) =>
+    apiClient.delete(`/v1/cost-accounts/${id}`),
 };

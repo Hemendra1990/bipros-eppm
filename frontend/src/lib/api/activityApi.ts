@@ -31,19 +31,29 @@ export interface ActivityResponse {
 export interface CreateActivityRequest {
   code: string;
   name: string;
+  projectId: string;
   wbsNodeId: string;
-  duration: number;
-  status?: string;
+  originalDuration?: number;
+  activityType?: string;
+  durationType?: string;
   plannedStartDate?: string;
+  plannedFinishDate?: string;
+  calendarId?: string;
 }
 
 export interface UpdateActivityRequest {
   name?: string;
   duration?: number;
+  originalDuration?: number;
   percentComplete?: number;
   actualStartDate?: string;
   actualFinishDate?: string;
   notes?: string;
+  calendarId?: string;
+  activityType?: string;
+  durationType?: string;
+  plannedStartDate?: string;
+  plannedFinishDate?: string;
 }
 
 export const activityApi = {
@@ -78,8 +88,8 @@ export const activityApi = {
   triggerSchedule: (projectId: string, option: string) =>
     apiClient
       .post<ApiResponse<{ success: boolean }>>(
-        `/v1/projects/${projectId}/schedule/calculate`,
-        { option }
+        `/v1/projects/${projectId}/schedule`,
+        { projectId, option }
       )
       .then((r) => r.data),
 
@@ -114,6 +124,15 @@ export const activityApi = {
       .post<ApiResponse<{ updatedCount: number }>>(
         `/v1/projects/${projectId}/activities/global-change`,
         request
+      )
+      .then((r) => r.data),
+
+  updateProgress: (projectId: string, activityId: string, percentComplete: number, actualStartDate?: string, actualFinishDate?: string) =>
+    apiClient
+      .put<ApiResponse<ActivityResponse>>(
+        `/v1/projects/${projectId}/activities/${activityId}/progress`,
+        null,
+        { params: { percentComplete, actualStartDate, actualFinishDate } }
       )
       .then((r) => r.data),
 };

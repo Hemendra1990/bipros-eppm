@@ -2,6 +2,7 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateWbsNodeRequest;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
 import com.bipros.project.application.dto.WbsNodeResponse;
@@ -27,6 +28,7 @@ public class WbsService {
     private final WbsNodeRepository wbsNodeRepository;
     private final ProjectRepository projectRepository;
     private final ProjectActivityCounter projectActivityCounter;
+    private final AuditService auditService;
 
     public WbsNodeResponse createNode(CreateWbsNodeRequest request) {
         log.info("Creating WBS node with code: {}", request.code());
@@ -45,6 +47,7 @@ public class WbsService {
 
         WbsNode saved = wbsNodeRepository.save(node);
         log.info("WBS node created with ID: {}", saved.getId());
+        auditService.logCreate("WbsNode", saved.getId(), request);
 
         return buildNodeResponse(saved);
     }
@@ -55,6 +58,9 @@ public class WbsService {
         WbsNode node = wbsNodeRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("WbsNode", id));
 
+        String oldName = node.getName();
+        Integer oldSortOrder = node.getSortOrder();
+
         node.setName(request.name());
         if (request.sortOrder() != null) {
             node.setSortOrder(request.sortOrder());
@@ -62,6 +68,8 @@ public class WbsService {
 
         WbsNode updated = wbsNodeRepository.save(node);
         log.info("WBS node updated: {}", id);
+        auditService.logUpdate("WbsNode", id, "name", oldName, updated.getName());
+        auditService.logUpdate("WbsNode", id, "sortOrder", oldSortOrder, updated.getSortOrder());
 
         return buildNodeResponse(updated);
     }
@@ -86,6 +94,7 @@ public class WbsService {
 
         wbsNodeRepository.delete(node);
         log.info("WBS node deleted: {}", id);
+        auditService.logDelete("WbsNode", id);
     }
 
     public List<WbsNodeResponse> getTree(UUID projectId) {

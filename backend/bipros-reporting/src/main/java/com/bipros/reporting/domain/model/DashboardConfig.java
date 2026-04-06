@@ -35,6 +35,6 @@ public class DashboardConfig extends BaseEntity {
     private Boolean isDefault;
 
     public enum DashboardTier {
-        EXECUTIVE, PROGRAMME, OPERATIONAL, FIELD
+        EXECUTIVE, PROGRAMME, PROJECT_MANAGER, OPERATIONAL, FIELD
     }
 }

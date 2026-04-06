@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
 @RequiredArgsConstructor
 public class ProjectController {
 
@@ -43,12 +45,14 @@ public class ProjectController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
     public ResponseEntity<ApiResponse<ProjectResponse>> createProject(@Valid @RequestBody CreateProjectRequest request) {
         ProjectResponse response = projectService.createProject(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
         @PathVariable UUID id, @Valid @RequestBody UpdateProjectRequest request) {
         ProjectResponse response = projectService.updateProject(id, request);
@@ -56,6 +60,7 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteProject(@PathVariable UUID id) {
         projectService.deleteProject(id);
         return ResponseEntity.noContent().build();

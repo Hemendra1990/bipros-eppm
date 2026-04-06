@@ -1,6 +1,7 @@
 package com.bipros.scheduling.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.scheduling.application.dto.PertEstimateRequest;
 import com.bipros.scheduling.application.dto.PertEstimateResponse;
 import com.bipros.scheduling.domain.model.PertEstimate;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class PertEstimateService {
 
   private final PertEstimateRepository pertEstimateRepository;
+  private final AuditService auditService;
 
   public PertEstimateResponse createOrUpdate(PertEstimateRequest request) {
     log.info("Creating or updating PERT estimate for activity: id={}", request.activityId());
@@ -50,6 +52,7 @@ public class PertEstimateService {
 
     PertEstimate saved = pertEstimateRepository.save(estimate);
     log.info("PERT estimate saved: activityId={}, expectedDuration={}", request.activityId(), expectedDuration);
+    auditService.logCreate("PertEstimate", saved.getId(), PertEstimateResponse.from(saved));
 
     return PertEstimateResponse.from(saved);
   }

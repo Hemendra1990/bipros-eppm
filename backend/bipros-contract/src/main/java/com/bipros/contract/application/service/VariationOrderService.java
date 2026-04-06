@@ -1,6 +1,7 @@
 package com.bipros.contract.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.VariationOrderRequest;
 import com.bipros.contract.application.dto.VariationOrderResponse;
 import com.bipros.contract.domain.model.VariationOrder;
@@ -21,6 +22,7 @@ import java.util.UUID;
 public class VariationOrderService {
 
     private final VariationOrderRepository variationOrderRepository;
+    private final AuditService auditService;
 
     public VariationOrderResponse create(VariationOrderRequest request) {
         log.info("Creating variation order for contract: {}", request.contractId());
@@ -38,6 +40,7 @@ public class VariationOrderService {
 
         VariationOrder saved = variationOrderRepository.save(vo);
         log.info("Variation order created with ID: {}", saved.getId());
+        auditService.logCreate("VariationOrder", saved.getId(), toResponse(saved));
 
         return toResponse(saved);
     }
@@ -73,12 +76,14 @@ public class VariationOrderService {
         vo.setApprovedBy(request.approvedBy());
 
         VariationOrder updated = variationOrderRepository.save(vo);
+        auditService.logUpdate("VariationOrder", id, "vo", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting variation order with ID: {}", id);
         variationOrderRepository.deleteById(id);
+        auditService.logDelete("VariationOrder", id);
     }
 
     private VariationOrderResponse toResponse(VariationOrder vo) {

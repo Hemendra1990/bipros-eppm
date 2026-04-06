@@ -5,13 +5,13 @@ import com.bipros.reporting.application.dto.*;
 import com.bipros.reporting.application.service.ReportService;
 import com.bipros.reporting.domain.model.ReportFormat;
 import com.bipros.reporting.domain.model.ReportType;
-import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,6 +21,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/reports")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
 @RequiredArgsConstructor
 public class ReportController {
 
@@ -138,5 +139,13 @@ public class ReportController {
   public ApiResponse<ResourceUtilizationData> getResourceUtilization(
       @RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getResourceUtilization(projectId));
+  }
+
+  @GetMapping("/trend-analysis")
+  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+  public ApiResponse<TrendAnalysisData> getTrendAnalysis(
+      @RequestParam UUID projectId,
+      @RequestParam(defaultValue = "6") int months) {
+    return ApiResponse.ok(reportService.getTrendAnalysis(projectId, months));
   }
 }

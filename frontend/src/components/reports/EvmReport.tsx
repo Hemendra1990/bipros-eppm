@@ -20,13 +20,13 @@ function MetricCard({
   suffix?: string;
 }) {
   const isPositive = value >= 1 || value >= 0;
-  const bgColor = isGood ? "bg-green-50" : "bg-red-50";
-  const textColor = isGood ? "text-green-700" : "text-red-700";
+  const bgColor = isGood ? "bg-emerald-500/10" : "bg-red-500/10";
+  const textColor = isGood ? "text-emerald-400" : "text-red-400";
   const borderColor = isGood ? "border-green-200" : "border-red-200";
 
   return (
     <div className={`${bgColor} border ${borderColor} rounded-lg p-4`}>
-      <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{label}</p>
       <div className="flex items-center justify-between">
         <p className={`text-2xl font-bold ${textColor}`}>
           {typeof value === "number" && !isNaN(value) ? value.toFixed(2) : "0.00"}
@@ -63,9 +63,9 @@ export function EvmReport({ data }: EvmReportProps) {
     ].filter(Boolean).length;
     const percentage = (score / 4) * 100;
 
-    if (percentage >= 75) return { status: "Healthy", color: "bg-green-100 text-green-700" };
-    if (percentage >= 50) return { status: "At Risk", color: "bg-yellow-100 text-yellow-700" };
-    return { status: "Critical", color: "bg-red-100 text-red-700" };
+    if (percentage >= 75) return { status: "Healthy", color: "bg-emerald-500/10 text-emerald-400" };
+    if (percentage >= 50) return { status: "At Risk", color: "bg-amber-500/10 text-amber-400" };
+    return { status: "Critical", color: "bg-red-500/10 text-red-400" };
   }, [metrics]);
 
   return (
@@ -74,8 +74,8 @@ export function EvmReport({ data }: EvmReportProps) {
       <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-200">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className="font-semibold text-lg text-gray-900">{data.projectName}</h3>
-            <p className="text-sm text-gray-600">Earned Value Management Report</p>
+            <h3 className="font-semibold text-lg text-white">{data.projectName}</h3>
+            <p className="text-sm text-slate-400">Earned Value Management Report</p>
           </div>
           <div className={`px-3 py-1 rounded-full text-sm font-semibold ${overallHealth.color}`}>
             {overallHealth.status}
@@ -121,25 +121,25 @@ export function EvmReport({ data }: EvmReportProps) {
       </div>
 
       {/* Interpretation */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h4 className="font-semibold text-gray-900 mb-4">Interpretation</h4>
+      <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+        <h4 className="font-semibold text-white mb-4">Interpretation</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
           <div className="space-y-3">
             <div>
-              <p className="text-gray-600 mb-1">
+              <p className="text-slate-400 mb-1">
                 <span className="font-semibold">Schedule Status (SPI):</span>
               </p>
-              <p className="text-gray-900">
+              <p className="text-white">
                 {data.spi >= 1
                   ? "✓ Project is ahead of schedule"
                   : `✗ Project is behind schedule by ${((1 - data.spi) * 100).toFixed(0)}%`}
               </p>
             </div>
             <div>
-              <p className="text-gray-600 mb-1">
+              <p className="text-slate-400 mb-1">
                 <span className="font-semibold">Cost Status (CPI):</span>
               </p>
-              <p className="text-gray-900">
+              <p className="text-white">
                 {data.cpi >= 1
                   ? "✓ Project is under budget"
                   : `✗ Project is over budget by ${((1 - data.cpi) * 100).toFixed(0)}%`}
@@ -148,20 +148,20 @@ export function EvmReport({ data }: EvmReportProps) {
           </div>
           <div className="space-y-3">
             <div>
-              <p className="text-gray-600 mb-1">
+              <p className="text-slate-400 mb-1">
                 <span className="font-semibold">Cost Variance (VAC):</span>
               </p>
-              <p className="text-gray-900">
+              <p className="text-white">
                 {data.vac >= 0
                   ? `✓ Project will save $${data.vac.toFixed(2)}`
                   : `✗ Project will overrun by $${Math.abs(data.vac).toFixed(2)}`}
               </p>
             </div>
             <div>
-              <p className="text-gray-600 mb-1">
+              <p className="text-slate-400 mb-1">
                 <span className="font-semibold">Final Estimate (EAC):</span>
               </p>
-              <p className="text-gray-900">
+              <p className="text-white">
                 Project is estimated to cost ${data.eac.toFixed(2)} (originally planned: $
                 {data.pv.toFixed(2)})
               </p>

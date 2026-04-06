@@ -18,6 +18,7 @@ import com.bipros.calendar.domain.repository.CalendarRepository;
 import com.bipros.calendar.domain.repository.CalendarWorkWeekRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -43,6 +44,7 @@ public class CalendarService {
   private final CalendarWorkWeekRepository workWeekRepository;
   private final CalendarExceptionRepository exceptionRepository;
   private final CalendarActivityCounter calendarActivityCounter;
+  private final AuditService auditService;
 
   /**
    * Create a new calendar with default work week pattern (Mon-Fri working 08:00-12:00 +
@@ -72,6 +74,7 @@ public class CalendarService {
 
     Calendar saved = calendarRepository.save(calendar);
     log.debug("Calendar created with id={}", saved.getId());
+    auditService.logCreate("Calendar", saved.getId(), CalendarResponse.from(saved));
 
     // Create default work week pattern
     createDefaultWorkWeek(saved.getId());
@@ -97,6 +100,7 @@ public class CalendarService {
 
     Calendar updated = calendarRepository.save(calendar);
     log.debug("Calendar updated with id={}", id);
+    auditService.logUpdate("Calendar", id, "calendar", calendar, updated);
     return CalendarResponse.from(updated);
   }
 
@@ -116,6 +120,7 @@ public class CalendarService {
     workWeekRepository.deleteByCalendarId(id);
     exceptionRepository.deleteByCalendarId(id);
     calendarRepository.deleteById(id);
+    auditService.logDelete("Calendar", id);
 
     log.debug("Calendar deleted with id={}", id);
   }
@@ -205,6 +210,7 @@ public class CalendarService {
 
     List<CalendarWorkWeek> saved = workWeekRepository.saveAll(workWeeks);
     log.debug("Work week set for calendar: id={}, days={}", calendarId, saved.size());
+    auditService.logUpdate("CalendarWorkWeek", calendarId, "workWeek", workWeeks, saved);
 
     return saved.stream().map(CalendarWorkWeekResponse::from).toList();
   }
@@ -243,6 +249,7 @@ public class CalendarService {
 
     CalendarException saved = exceptionRepository.save(exception);
     log.debug("Exception added to calendar: id={}, exceptionId={}", calendarId, saved.getId());
+    auditService.logCreate("CalendarException", saved.getId(), CalendarExceptionResponse.from(saved));
 
     return CalendarExceptionResponse.from(saved);
   }
@@ -255,6 +262,7 @@ public class CalendarService {
         .orElseThrow(() -> new ResourceNotFoundException("CalendarException", exceptionId));
 
     exceptionRepository.deleteById(exceptionId);
+    auditService.logDelete("CalendarException", exceptionId);
     log.debug("Exception removed: id={}", exceptionId);
   }
 

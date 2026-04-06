@@ -122,8 +122,8 @@ export const scheduleNotifications = {
  */
 export function confirmDeletion(entityName: string, onConfirm: () => void) {
   const undoId = toast.custom((t) => (
-    <div className="flex items-center gap-2 rounded-lg bg-white p-4 shadow-lg">
-      <p className="text-sm font-medium text-gray-900">
+    <div className="flex items-center gap-2 rounded-lg bg-slate-900/50 p-4 shadow-lg">
+      <p className="text-sm font-medium text-white">
         Delete {entityName}?
       </p>
       <button
@@ -131,13 +131,13 @@ export function confirmDeletion(entityName: string, onConfirm: () => void) {
           onConfirm();
           toast.dismiss(t.id);
         }}
-        className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700"
+        className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-600"
       >
         Delete
       </button>
       <button
         onClick={() => toast.dismiss(t.id)}
-        className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-900 hover:bg-gray-300"
+        className="rounded bg-slate-700/50 px-3 py-1 text-sm font-medium text-white hover:bg-slate-700"
       >
         Cancel
       </button>

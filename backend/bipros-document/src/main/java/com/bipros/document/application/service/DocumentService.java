@@ -1,6 +1,7 @@
 package com.bipros.document.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.document.application.dto.DocumentRequest;
 import com.bipros.document.application.dto.DocumentResponse;
 import com.bipros.document.application.dto.DocumentVersionRequest;
@@ -24,6 +25,7 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final DocumentVersionRepository versionRepository;
+    private final AuditService auditService;
 
     public DocumentResponse createDocument(UUID projectId, DocumentRequest request) {
         Document document = new Document();
@@ -41,6 +43,7 @@ public class DocumentService {
         document.setCurrentVersion(1);
 
         Document saved = documentRepository.save(document);
+        auditService.logCreate("Document", saved.getId(), saved);
 
         // Create initial version
         DocumentVersion version = new DocumentVersion();
@@ -83,6 +86,9 @@ public class DocumentService {
         Document document = documentRepository.findByProjectIdAndId(projectId, documentId)
             .orElseThrow(() -> new ResourceNotFoundException("Document", documentId));
 
+        auditService.logUpdate("Document", documentId, "title", document.getTitle(), request.title());
+        auditService.logUpdate("Document", documentId, "status", document.getStatus(), request.status());
+
         document.setTitle(request.title());
         document.setDescription(request.description());
         document.setStatus(request.status() != null ? request.status() : document.getStatus());
@@ -101,6 +107,7 @@ public class DocumentService {
         versionRepository.deleteAll(versions);
 
         documentRepository.delete(document);
+        auditService.logDelete("Document", documentId);
     }
 
     @Transactional(readOnly = true)
@@ -131,6 +138,7 @@ public class DocumentService {
         version.setUploadedAt(Instant.now());
 
         DocumentVersion saved = versionRepository.save(version);
+        auditService.logCreate("DocumentVersion", saved.getId(), saved);
 
         // Update document current version
         document.setCurrentVersion(nextVersion);

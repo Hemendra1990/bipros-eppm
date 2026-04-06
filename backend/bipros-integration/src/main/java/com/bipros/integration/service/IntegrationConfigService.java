@@ -2,6 +2,7 @@ package com.bipros.integration.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.integration.dto.IntegrationConfigDto;
 import com.bipros.integration.model.IntegrationConfig;
 import com.bipros.integration.repository.IntegrationConfigRepository;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class IntegrationConfigService {
 
     private final IntegrationConfigRepository integrationConfigRepository;
+    private final AuditService auditService;
 
     public List<IntegrationConfigDto> listAll() {
         return integrationConfigRepository.findAll()
@@ -57,6 +59,7 @@ public class IntegrationConfigService {
         config.setConfigJson(dto.getConfigJson());
 
         IntegrationConfig saved = integrationConfigRepository.save(config);
+        auditService.logCreate("IntegrationConfig", saved.getId(), IntegrationConfigDto.from(saved));
         return IntegrationConfigDto.from(saved);
     }
 
@@ -72,6 +75,7 @@ public class IntegrationConfigService {
         config.setConfigJson(dto.getConfigJson());
 
         IntegrationConfig updated = integrationConfigRepository.save(config);
+        auditService.logUpdate("IntegrationConfig", id, "config", null, IntegrationConfigDto.from(updated));
         return IntegrationConfigDto.from(updated);
     }
 
@@ -80,5 +84,6 @@ public class IntegrationConfigService {
             throw new ResourceNotFoundException("IntegrationConfig", id.toString());
         }
         integrationConfigRepository.deleteById(id);
+        auditService.logDelete("IntegrationConfig", id);
     }
 }

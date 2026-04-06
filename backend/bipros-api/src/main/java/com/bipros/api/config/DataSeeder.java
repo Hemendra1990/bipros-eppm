@@ -19,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ import java.time.LocalTime;
 
 @Slf4j
 @Component
+@Profile("dev")
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
 
@@ -38,6 +41,15 @@ public class DataSeeder implements CommandLineRunner {
   private final CurrencyRepository currencyRepository;
   private final GlobalSettingRepository globalSettingRepository;
   private final PasswordEncoder passwordEncoder;
+
+  @Value("${bipros.admin.username:admin}")
+  private String adminUsername;
+
+  @Value("${bipros.admin.password:admin123}")
+  private String adminPassword;
+
+  @Value("${bipros.admin.email:admin@bipros.local}")
+  private String adminEmail;
 
   @Override
   @Transactional
@@ -89,7 +101,7 @@ public class DataSeeder implements CommandLineRunner {
             .orElseThrow(() -> new RuntimeException("ADMIN role not found"));
 
     // Create admin user
-    User adminUser = new User("admin", "admin@bipros.local", passwordEncoder.encode("admin123"));
+    User adminUser = new User(adminUsername, adminEmail, passwordEncoder.encode(adminPassword));
     adminUser.setFirstName("System");
     adminUser.setLastName("Administrator");
     adminUser.setEnabled(true);

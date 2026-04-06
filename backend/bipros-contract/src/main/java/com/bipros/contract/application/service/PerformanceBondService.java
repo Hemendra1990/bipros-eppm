@@ -1,6 +1,7 @@
 package com.bipros.contract.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.PerformanceBondRequest;
 import com.bipros.contract.application.dto.PerformanceBondResponse;
 import com.bipros.contract.domain.model.PerformanceBond;
@@ -21,6 +22,7 @@ import java.util.UUID;
 public class PerformanceBondService {
 
     private final PerformanceBondRepository bondRepository;
+    private final AuditService auditService;
 
     public PerformanceBondResponse create(PerformanceBondRequest request) {
         log.info("Creating performance bond for contract: {}", request.contractId());
@@ -36,6 +38,7 @@ public class PerformanceBondService {
 
         PerformanceBond saved = bondRepository.save(bond);
         log.info("Performance bond created with ID: {}", saved.getId());
+        auditService.logCreate("PerformanceBond", saved.getId(), toResponse(saved));
 
         return toResponse(saved);
     }
@@ -69,12 +72,14 @@ public class PerformanceBondService {
         bond.setExpiryDate(request.expiryDate());
 
         PerformanceBond updated = bondRepository.save(bond);
+        auditService.logUpdate("PerformanceBond", id, "bond", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting performance bond with ID: {}", id);
         bondRepository.deleteById(id);
+        auditService.logDelete("PerformanceBond", id);
     }
 
     private PerformanceBondResponse toResponse(PerformanceBond bond) {

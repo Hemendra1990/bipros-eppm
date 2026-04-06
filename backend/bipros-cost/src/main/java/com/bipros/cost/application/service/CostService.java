@@ -1,14 +1,18 @@
 package com.bipros.cost.application.service;
 
+import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.dto.*;
 import com.bipros.cost.domain.entity.*;
 import com.bipros.cost.domain.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -28,6 +32,8 @@ public class CostService {
     private final DprEstimateRepository dprEstimateRepository;
     private final RetentionMoneyRepository retentionMoneyRepository;
     private final CashFlowForecastRepository cashFlowForecastRepository;
+    private final CashFlowForecastEngine cashFlowForecastEngine;
+    private final AuditService auditService;
 
     // Cost Account Operations
     @Transactional
@@ -45,6 +51,7 @@ public class CostService {
         entity.setSortOrder(request.sortOrder());
 
         var saved = costAccountRepository.save(entity);
+        auditService.logCreate("CostAccount", saved.getId(), CostAccountDto.from(saved));
         return CostAccountDto.from(saved);
     }
 
@@ -64,6 +71,19 @@ public class CostService {
     }
 
     @Transactional
+    public CostAccountDto updateCostAccount(UUID id, UpdateCostAccountRequest request) {
+        var entity = costAccountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("CostAccount", id));
+
+        entity.setName(request.name());
+        entity.setDescription(request.description());
+
+        var updated = costAccountRepository.save(entity);
+        auditService.logUpdate("CostAccount", id, "costAccount", null, CostAccountDto.from(updated));
+        return CostAccountDto.from(updated);
+    }
+
+    @Transactional
     public void deleteCostAccount(UUID id) {
         var entity = costAccountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CostAccount", id));
@@ -75,6 +95,7 @@ public class CostService {
         }
 
         costAccountRepository.delete(entity);
+        auditService.logDelete("CostAccount", id);
     }
 
     // Activity Expense Operations
@@ -98,6 +119,7 @@ public class CostService {
         entity.setActualFinishDate(request.actualFinishDate());
 
         var saved = activityExpenseRepository.save(entity);
+        auditService.logCreate("ActivityExpense", saved.getId(), ActivityExpenseDto.from(saved));
         return ActivityExpenseDto.from(saved);
     }
 
@@ -121,6 +143,7 @@ public class CostService {
         entity.setActualFinishDate(request.actualFinishDate());
 
         var saved = activityExpenseRepository.save(entity);
+        auditService.logUpdate("ActivityExpense", id, "expense", null, ActivityExpenseDto.from(saved));
         return ActivityExpenseDto.from(saved);
     }
 
@@ -130,6 +153,16 @@ public class CostService {
                 .stream()
                 .map(ActivityExpenseDto::from)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<ActivityExpenseDto> getExpensesByProjectPaged(UUID projectId, int page, int size) {
+        var pageResult = activityExpenseRepository.findByProjectId(projectId, PageRequest.of(page, size));
+        var content = pageResult.getContent().stream()
+                .map(ActivityExpenseDto::from)
+                .collect(Collectors.toList());
+        return PagedResponse.of(content, pageResult.getTotalElements(),
+                pageResult.getTotalPages(), pageResult.getNumber(), pageResult.getSize());
     }
 
     @Transactional(readOnly = true)
@@ -145,6 +178,7 @@ public class CostService {
         var entity = activityExpenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ActivityExpense", id));
         activityExpenseRepository.delete(entity);
+        auditService.logDelete("ActivityExpense", id);
     }
 
     // Funding Source Operations
@@ -164,6 +198,7 @@ public class CostService {
         entity.setRemainingAmount(request.remainingAmount());
 
         var saved = fundingSourceRepository.save(entity);
+        auditService.logCreate("FundingSource", saved.getId(), FundingSourceDto.from(saved));
         return FundingSourceDto.from(saved);
     }
 
@@ -187,6 +222,7 @@ public class CostService {
         var entity = fundingSourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FundingSource", id));
         fundingSourceRepository.delete(entity);
+        auditService.logDelete("FundingSource", id);
     }
 
     // Project Funding Operations
@@ -202,6 +238,7 @@ public class CostService {
         entity.setAllocatedAmount(request.allocatedAmount());
 
         var saved = projectFundingRepository.save(entity);
+        auditService.logCreate("ProjectFunding", saved.getId(), ProjectFundingDto.from(saved));
         return ProjectFundingDto.from(saved);
     }
 
@@ -218,6 +255,7 @@ public class CostService {
         var entity = projectFundingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ProjectFunding", id));
         projectFundingRepository.delete(entity);
+        auditService.logDelete("ProjectFunding", id);
     }
 
     // Financial Period Operations
@@ -232,6 +270,7 @@ public class CostService {
         entity.setSortOrder(request.sortOrder());
 
         var saved = financialPeriodRepository.save(entity);
+        auditService.logCreate("FinancialPeriod", saved.getId(), FinancialPeriodDto.from(saved));
         return FinancialPeriodDto.from(saved);
     }
 
@@ -264,6 +303,7 @@ public class CostService {
                 .orElseThrow(() -> new ResourceNotFoundException("FinancialPeriod", id));
         entity.setIsClosed(true);
         var saved = financialPeriodRepository.save(entity);
+        auditService.logUpdate("FinancialPeriod", id, "isClosed", false, true);
         return FinancialPeriodDto.from(saved);
     }
 
@@ -272,6 +312,7 @@ public class CostService {
         var entity = financialPeriodRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FinancialPeriod", id));
         financialPeriodRepository.delete(entity);
+        auditService.logDelete("FinancialPeriod", id);
     }
 
     // Store Period Performance Operations
@@ -292,6 +333,7 @@ public class CostService {
         entity.setPlannedValueCost(request.plannedValueCost());
 
         var saved = storePeriodPerformanceRepository.save(entity);
+        auditService.logCreate("StorePeriodPerformance", saved.getId(), StorePeriodPerformanceDto.from(saved));
         return StorePeriodPerformanceDto.from(saved);
     }
 
@@ -315,6 +357,7 @@ public class CostService {
         var entity = storePeriodPerformanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StorePeriodPerformance", id));
         storePeriodPerformanceRepository.delete(entity);
+        auditService.logDelete("StorePeriodPerformance", id);
     }
 
     // RA Bill Operations
@@ -338,6 +381,7 @@ public class CostService {
         entity.setRemarks(request.remarks());
 
         var saved = raBillRepository.save(entity);
+        auditService.logCreate("RaBill", saved.getId(), RaBillDto.from(saved));
         return RaBillDto.from(saved);
     }
 
@@ -375,6 +419,7 @@ public class CostService {
         entity.setRemarks(request.remarks());
 
         var saved = raBillRepository.save(entity);
+        auditService.logUpdate("RaBill", raBillId, "raBill", null, RaBillDto.from(saved));
         return RaBillDto.from(saved);
     }
 
@@ -396,6 +441,7 @@ public class CostService {
         entity.setAmount(request.amount());
 
         var saved = raBillItemRepository.save(entity);
+        auditService.logCreate("RaBillItem", saved.getId(), RaBillItemDto.from(saved));
         return RaBillItemDto.from(saved);
     }
 
@@ -419,6 +465,7 @@ public class CostService {
         entity.setRemarks(request.remarks());
 
         var saved = dprEstimateRepository.save(entity);
+        auditService.logCreate("DprEstimate", saved.getId(), DprEstimateDto.from(saved));
         return DprEstimateDto.from(saved);
     }
 
@@ -444,6 +491,7 @@ public class CostService {
         entity.setCumulativeForecast(request.cumulativeForecast());
 
         var saved = cashFlowForecastRepository.save(entity);
+        auditService.logCreate("CashFlowForecast", saved.getId(), CashFlowForecastDto.from(saved));
         return CashFlowForecastDto.from(saved);
     }
 
@@ -453,5 +501,82 @@ public class CostService {
                 .stream()
                 .map(CashFlowForecastDto::from)
                 .collect(Collectors.toList());
+    }
+
+    // Cost Summary
+    @Transactional(readOnly = true)
+    public CostSummaryDto getCostSummary(UUID projectId) {
+        var expenses = activityExpenseRepository.findByProjectId(projectId);
+
+        BigDecimal totalBudget = expenses.stream()
+                .map(e -> e.getBudgetedCost() != null ? e.getBudgetedCost() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalActual = expenses.stream()
+                .map(e -> e.getActualCost() != null ? e.getActualCost() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalRemaining = expenses.stream()
+                .map(e -> e.getRemainingCost() != null ? e.getRemainingCost() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal atCompletion = expenses.stream()
+                .map(e -> e.getAtCompletionCost() != null ? e.getAtCompletionCost() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return CostSummaryDto.of(totalBudget, totalActual, totalRemaining, atCompletion, expenses.size());
+    }
+
+    // Period Aggregation
+    @Transactional(readOnly = true)
+    public List<PeriodCostAggregationDto> aggregateByPeriod(UUID projectId) {
+        var periods = financialPeriodRepository.findAllByOrderBySortOrder();
+        var expenses = activityExpenseRepository.findByProjectId(projectId);
+        var performances = storePeriodPerformanceRepository.findByProjectId(projectId);
+
+        return periods.stream().map(period -> {
+            // Sum actuals for expenses whose actual start date falls in this period
+            BigDecimal periodBudget = BigDecimal.ZERO;
+            BigDecimal periodActual = BigDecimal.ZERO;
+            for (var expense : expenses) {
+                if (expense.getActualStartDate() != null
+                        && !expense.getActualStartDate().isBefore(period.getStartDate())
+                        && !expense.getActualStartDate().isAfter(period.getEndDate())) {
+                    periodActual = periodActual.add(
+                            expense.getActualCost() != null ? expense.getActualCost() : BigDecimal.ZERO);
+                    periodBudget = periodBudget.add(
+                            expense.getBudgetedCost() != null ? expense.getBudgetedCost() : BigDecimal.ZERO);
+                }
+            }
+
+            // EV/PV from StorePeriodPerformance
+            BigDecimal ev = BigDecimal.ZERO;
+            BigDecimal pv = BigDecimal.ZERO;
+            for (var perf : performances) {
+                if (period.getId().equals(perf.getFinancialPeriodId())) {
+                    ev = ev.add(perf.getEarnedValueCost() != null ? perf.getEarnedValueCost() : BigDecimal.ZERO);
+                    pv = pv.add(perf.getPlannedValueCost() != null ? perf.getPlannedValueCost() : BigDecimal.ZERO);
+                }
+            }
+
+            BigDecimal variance = periodBudget.subtract(periodActual);
+
+            return new PeriodCostAggregationDto(
+                    period.getId(), period.getName(),
+                    period.getStartDate(), period.getEndDate(),
+                    periodBudget, periodActual, variance,
+                    ev, pv
+            );
+        }).collect(Collectors.toList());
+    }
+
+    // Forecast Generation
+    @Transactional(readOnly = true)
+    public List<CashFlowForecastDto> generateForecast(UUID projectId, CashFlowForecastEngine.ForecastMethod method) {
+        var periods = financialPeriodRepository.findAllByOrderBySortOrder();
+        var expenses = activityExpenseRepository.findByProjectId(projectId);
+        var performances = storePeriodPerformanceRepository.findByProjectId(projectId);
+
+        return cashFlowForecastEngine.generateForecast(projectId, periods, expenses, performances, method);
     }
 }

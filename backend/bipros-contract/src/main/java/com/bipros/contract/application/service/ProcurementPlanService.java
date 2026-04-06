@@ -2,6 +2,7 @@ package com.bipros.contract.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.ProcurementPlanRequest;
 import com.bipros.contract.application.dto.ProcurementPlanResponse;
 import com.bipros.contract.domain.model.ProcurementPlan;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class ProcurementPlanService {
 
     private final ProcurementPlanRepository procurementPlanRepository;
+    private final AuditService auditService;
 
     public ProcurementPlanResponse create(ProcurementPlanRequest request) {
         log.info("Creating procurement plan with code: {}", request.planCode());
@@ -43,6 +45,7 @@ public class ProcurementPlanService {
 
         ProcurementPlan saved = procurementPlanRepository.save(plan);
         log.info("Procurement plan created with ID: {}", saved.getId());
+        auditService.logCreate("ProcurementPlan", saved.getId(), toResponse(saved));
 
         return toResponse(saved);
     }
@@ -93,12 +96,14 @@ public class ProcurementPlanService {
         plan.setApprovalLevel(request.approvalLevel());
 
         ProcurementPlan updated = procurementPlanRepository.save(plan);
+        auditService.logUpdate("ProcurementPlan", id, "plan", null, toResponse(updated));
         return toResponse(updated);
     }
 
     public void delete(UUID id) {
         log.info("Deleting procurement plan with ID: {}", id);
         procurementPlanRepository.deleteById(id);
+        auditService.logDelete("ProcurementPlan", id);
     }
 
     private ProcurementPlanResponse toResponse(ProcurementPlan plan) {
