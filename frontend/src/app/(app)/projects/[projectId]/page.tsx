@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
+import { formatDate, getPriorityInfo } from "@/lib/utils/format";
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { baselineApi, type BaselineActivityResponse, type BaselineDetailResponse } from "@/lib/api/baselineApi";
@@ -135,8 +136,18 @@ export default function ProjectDetailPage() {
       render: (value) => <StatusBadge status={String(value)} />,
     },
     { key: "totalFloat", label: "Float (days)", sortable: true },
-    { key: "plannedStartDate", label: "Planned Start", sortable: true },
-    { key: "plannedFinishDate", label: "Planned Finish", sortable: true },
+    {
+      key: "plannedStartDate",
+      label: "Planned Start",
+      sortable: true,
+      render: (value) => formatDate(value as string | null),
+    },
+    {
+      key: "plannedFinishDate",
+      label: "Planned Finish",
+      sortable: true,
+      render: (value) => formatDate(value as string | null),
+    },
     {
       key: "id",
       label: "Actions",
@@ -164,7 +175,16 @@ export default function ProjectDetailPage() {
   ];
 
   if (isLoadingProject) {
-    return <div className="text-center text-slate-500">Loading...</div>;
+    return (
+      <div className="space-y-4">
+        <div className="h-8 w-48 animate-pulse rounded bg-slate-800/50" />
+        <div className="grid grid-cols-2 gap-6">
+          <div className="h-28 animate-pulse rounded-xl bg-slate-800/50" />
+          <div className="h-28 animate-pulse rounded-xl bg-slate-800/50" />
+        </div>
+        <div className="h-32 animate-pulse rounded-xl bg-slate-800/50" />
+      </div>
+    );
   }
 
   if (!project) {
@@ -266,6 +286,34 @@ export default function ProjectDetailPage() {
 }
 
 function OverviewTab({ project }: { project: ProjectResponse }) {
+  const queryClient = useQueryClient();
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const statusTransitions: Record<string, { label: string; value: string }[]> = {
+    PLANNED: [{ label: "Activate Project", value: "ACTIVE" }],
+    ACTIVE: [
+      { label: "Complete Project", value: "COMPLETED" },
+      { label: "Deactivate Project", value: "INACTIVE" },
+    ],
+    INACTIVE: [{ label: "Reactivate Project", value: "ACTIVE" }],
+    COMPLETED: [],
+  };
+
+  const availableTransitions = statusTransitions[project.status] ?? [];
+
+  const handleStatusTransition = async (newStatus: string) => {
+    setIsTransitioning(true);
+    try {
+      await projectApi.updateProject(project.id, { status: newStatus });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      toast.success(`Project status changed to ${newStatus}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update project status"));
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-6">
@@ -275,8 +323,22 @@ function OverviewTab({ project }: { project: ProjectResponse }) {
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-slate-400">Status</h3>
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-3">
             <StatusBadge status={project.status} />
+            {availableTransitions.length > 0 && (
+              <div className="flex gap-2">
+                {availableTransitions.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => handleStatusTransition(t.value)}
+                    disabled={isTransitioning}
+                    className="rounded-md border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-slate-800/50 disabled:opacity-50"
+                  >
+                    {isTransitioning ? "..." : t.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -289,22 +351,24 @@ function OverviewTab({ project }: { project: ProjectResponse }) {
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-slate-400">Planned Start Date</h3>
-          <p className="mt-2 text-lg text-white">{project.plannedStartDate}</p>
+          <p className="mt-2 text-lg text-white">{formatDate(project.plannedStartDate)}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-slate-400">Planned Finish Date</h3>
-          <p className="mt-2 text-lg text-white">{project.plannedFinishDate}</p>
+          <p className="mt-2 text-lg text-white">{formatDate(project.plannedFinishDate)}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-slate-400">Priority</h3>
-          <p className="mt-2 text-lg text-white">{project.priority}</p>
+          <p className={`mt-2 text-lg font-medium ${getPriorityInfo(project.priority).color}`}>
+            {getPriorityInfo(project.priority).label} ({project.priority})
+          </p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-slate-400">Data Date</h3>
-          <p className="mt-2 text-lg text-white">{project.dataDate || "Not set"}</p>
+          <p className="mt-2 text-lg text-white">{project.dataDate ? formatDate(project.dataDate) : "Not set"}</p>
         </div>
       </div>
     </div>

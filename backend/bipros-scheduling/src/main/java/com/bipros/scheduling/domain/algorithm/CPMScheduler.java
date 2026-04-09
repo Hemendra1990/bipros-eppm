@@ -276,8 +276,9 @@ public class CPMScheduler {
       }
 
       scheduled.setEarlyStart(earlyStart);
+      UUID calId = activity.calendarId() != null ? activity.calendarId() : defaultCalendarId;
       LocalDate earlyFinish = calendarCalculator.addWorkingDays(
-          activity.calendarId(),
+          calId,
           earlyStart,
           activity.remainingDuration());
       scheduled.setEarlyFinish(earlyFinish);
@@ -335,8 +336,9 @@ public class CPMScheduler {
       }
 
       scheduled.setLateFinish(lateFinish);
+      UUID calId = activity.calendarId() != null ? activity.calendarId() : defaultCalendarId;
       LocalDate lateStart = calendarCalculator.subtractWorkingDays(
-          activity.calendarId(),
+          calId,
           lateFinish,
           activity.remainingDuration());
       scheduled.setLateStart(lateStart);

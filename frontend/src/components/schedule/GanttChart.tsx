@@ -87,8 +87,8 @@ export function GanttChart({
   const getActivityOpacity = (activity: ActivityResponse): number => {
     if (!startDateFilter && !endDateFilter) return 1;
 
-    const actStart = activity.plannedStartDate ? new Date(activity.plannedStartDate) : null;
-    const actEnd = activity.plannedFinishDate ? new Date(activity.plannedFinishDate) : null;
+    const actStart = (activity.plannedStartDate || activity.earlyStartDate) ? new Date((activity.plannedStartDate || activity.earlyStartDate)!) : null;
+    const actEnd = (activity.plannedFinishDate || activity.earlyFinishDate) ? new Date((activity.plannedFinishDate || activity.earlyFinishDate)!) : null;
     const filterStart = startDateFilter ? new Date(startDateFilter) : null;
     const filterEnd = endDateFilter ? new Date(endDateFilter) : null;
 
@@ -289,8 +289,11 @@ export function GanttChart({
 
 function calculateDateRange(activities: ActivityResponse[]): DateRange | null {
   const validDates = activities
-    .flatMap((a) => [a.plannedStartDate, a.plannedFinishDate])
-    .filter((d): d is string => d !== null)
+    .flatMap((a) => [
+      a.plannedStartDate || a.earlyStartDate,
+      a.plannedFinishDate || a.earlyFinishDate,
+    ])
+    .filter((d): d is string => d != null)
     .map((d) => startOfDay(new Date(d)));
 
   if (validDates.length === 0) {
@@ -393,15 +396,13 @@ function renderRelationshipLines(
     const succActivity = activities[succIdx];
 
     // Get dates
-    const predStart = predActivity.plannedStartDate
-      ? startOfDay(new Date(predActivity.plannedStartDate))
-      : null;
-    const predEnd = predActivity.plannedFinishDate
-      ? startOfDay(new Date(predActivity.plannedFinishDate))
-      : null;
-    const succStart = succActivity.plannedStartDate
-      ? startOfDay(new Date(succActivity.plannedStartDate))
-      : null;
+    const predStartStr = predActivity.plannedStartDate || predActivity.earlyStartDate;
+    const predEndStr = predActivity.plannedFinishDate || predActivity.earlyFinishDate;
+    const succStartStr = succActivity.plannedStartDate || succActivity.earlyStartDate;
+
+    const predStart = predStartStr ? startOfDay(new Date(predStartStr)) : null;
+    const predEnd = predEndStr ? startOfDay(new Date(predEndStr)) : null;
+    const succStart = succStartStr ? startOfDay(new Date(succStartStr)) : null;
 
     if (!predEnd || !succStart) return;
 

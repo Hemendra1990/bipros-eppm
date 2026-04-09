@@ -127,6 +127,17 @@ export interface CreateProjectRequest {
   priority?: number;
 }
 
+export interface UpdateProjectRequest {
+  name?: string;
+  description?: string;
+  obsNodeId?: string;
+  plannedStartDate?: string;
+  plannedFinishDate?: string;
+  mustFinishByDate?: string;
+  status?: string;
+  priority?: number;
+}
+
 export interface CreateEpsNodeRequest {
   code: string;
   name: string;
@@ -145,13 +156,19 @@ export interface ActivityResponse {
   status: string;
   plannedStartDate: string | null;
   plannedFinishDate: string | null;
+  earlyStartDate?: string | null;
+  earlyFinishDate?: string | null;
+  lateStartDate?: string | null;
+  lateFinishDate?: string | null;
   actualStartDate: string | null;
   actualFinishDate: string | null;
   duration: number;
   percentComplete: number;
   slack: number;
   totalFloat: number;
+  freeFloat?: number;
   remainingDuration: number;
+  isCritical?: boolean;
   createdAt: string;
   updatedAt: string;
 }

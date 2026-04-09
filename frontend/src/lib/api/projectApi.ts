@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   CreateEpsNodeRequest,
   CreateProjectRequest,
+  UpdateProjectRequest,
   EpsNodeResponse,
   PagedResponse,
   ProjectResponse,
@@ -32,7 +33,7 @@ export const projectApi = {
   createProject: (data: CreateProjectRequest) =>
     apiClient.post<ApiResponse<ProjectResponse>>("/v1/projects", data).then((r) => r.data),
 
-  updateProject: (id: string, data: Partial<CreateProjectRequest>) =>
+  updateProject: (id: string, data: UpdateProjectRequest) =>
     apiClient.put<ApiResponse<ProjectResponse>>(`/v1/projects/${id}`, data).then((r) => r.data),
 
   deleteProject: (id: string) =>

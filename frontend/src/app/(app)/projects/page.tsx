@@ -1,12 +1,19 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { projectApi } from "@/lib/api/projectApi";
+import { formatDate, getPriorityInfo } from "@/lib/utils/format";
+
+const STATUS_OPTIONS = ["All", "PLANNED", "ACTIVE", "INACTIVE", "COMPLETED"] as const;
 
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["projects"],
     queryFn: () => projectApi.listProjects(0, 50),
@@ -19,7 +26,23 @@ export default function ProjectsPage() {
     },
   });
 
-  const projects = data?.data?.content ?? [];
+  const allProjects = data?.data?.content ?? [];
+
+  const projects = useMemo(() => {
+    let filtered = allProjects;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.code.toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q)
+      );
+    }
+    if (statusFilter !== "All") {
+      filtered = filtered.filter((p) => p.status === statusFilter);
+    }
+    return filtered;
+  }, [allProjects, searchQuery, statusFilter]);
 
   return (
     <div>
@@ -34,8 +57,36 @@ export default function ProjectsPage() {
         </Link>
       </div>
 
+      <div className="mb-4 flex items-center gap-4">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search by code or name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-md border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {s === "All" ? "All Statuses" : s}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {isLoading && (
-        <div className="py-12 text-center text-slate-500">Loading projects...</div>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-800/50" />
+          ))}
+        </div>
       )}
 
       {error && (
@@ -44,9 +95,15 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {!isLoading && projects.length === 0 && (
+      {!isLoading && allProjects.length === 0 && (
         <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
           <p className="text-slate-500">No projects yet. Create your first project to get started.</p>
+        </div>
+      )}
+
+      {!isLoading && allProjects.length > 0 && projects.length === 0 && (
+        <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
+          <p className="text-slate-500">No projects match your search criteria.</p>
         </div>
       )}
 
@@ -89,13 +146,15 @@ export default function ProjectsPage() {
                     <StatusBadge status={project.status} />
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
-                    {project.plannedStartDate}
+                    {formatDate(project.plannedStartDate)}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
-                    {project.plannedFinishDate}
+                    {formatDate(project.plannedFinishDate)}
                   </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
-                    {project.priority}
+                  <td className="whitespace-nowrap px-6 py-4 text-sm">
+                    <span className={getPriorityInfo(project.priority).color}>
+                      {getPriorityInfo(project.priority).label}
+                    </span>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm flex items-center gap-3">
                     <Link

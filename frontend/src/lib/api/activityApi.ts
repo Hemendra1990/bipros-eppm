@@ -23,6 +23,7 @@ export interface ActivityResponse {
   totalFloat: number;
   freeFloat?: number;
   remainingDuration: number;
+  isCritical?: boolean;
   notes?: string;
   createdAt: string;
   updatedAt: string;

@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { projectApi } from "@/lib/api/projectApi";
+import { obsApi } from "@/lib/api/obsApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import type { CreateProjectRequest } from "@/lib/types";
 
@@ -29,7 +30,13 @@ export default function NewProjectPage() {
     queryFn: () => projectApi.getEpsTree(),
   });
 
+  const { data: obsData, isLoading: isLoadingObs } = useQuery({
+    queryKey: ["obs"],
+    queryFn: () => obsApi.getObsTree(),
+  });
+
   const epsNodes = epsData?.data ?? [];
+  const obsNodes = obsData?.data ?? [];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -124,6 +131,22 @@ export default function NewProjectPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-slate-300">OBS Node</label>
+              <SearchableSelect
+                value={formData.obsNodeId || ""}
+                onChange={(val) => setFormData((prev) => ({ ...prev, obsNodeId: val }))}
+                placeholder="Search OBS nodes..."
+                options={obsNodes.map((node) => ({
+                  value: node.id,
+                  label: `${node.code} - ${node.name}`,
+                }))}
+                disabled={isLoadingObs}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-300">Priority</label>
               <select

@@ -100,7 +100,10 @@ public class SchedulingService {
         activityMap.put(activity.getId(), activity);
 
         // Use PERT expected duration if available, otherwise use remaining duration
-        double durationToUse = activity.getRemainingDuration() != null ? activity.getRemainingDuration() : 0.0;
+        // (fall back to originalDuration when remainingDuration is null — e.g. NOT_STARTED activities)
+        Double remDur = activity.getRemainingDuration();
+        Double origDur = activity.getOriginalDuration();
+        double durationToUse = remDur != null ? remDur : (origDur != null ? origDur : 0.0);
         if (pertMap.containsKey(activity.getId())) {
           durationToUse = pertMap.get(activity.getId()).expectedDuration();
         }
@@ -233,6 +236,14 @@ public class SchedulingService {
           activity.setTotalFloat(scheduled.getTotalFloat());
           activity.setFreeFloat(scheduled.getFreeFloat());
           activity.setIsCritical(scheduled.isCritical());
+
+          // Set planned dates from calculated schedule so Gantt and other views can render
+          if (activity.getPlannedStartDate() == null) {
+            activity.setPlannedStartDate(scheduled.getEarlyStart());
+          }
+          if (activity.getPlannedFinishDate() == null) {
+            activity.setPlannedFinishDate(scheduled.getEarlyFinish());
+          }
         }
       }
       scheduleActivityResultRepository.saveAll(activityResults);

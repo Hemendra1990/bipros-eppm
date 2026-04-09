@@ -57,12 +57,10 @@ export function GanttTaskRow({
     dragRef.current = dragState;
   }, [dragState]);
 
-  const actStartDate = activity.plannedStartDate
-    ? startOfDay(new Date(activity.plannedStartDate))
-    : null;
-  const actEndDate = activity.plannedFinishDate
-    ? startOfDay(new Date(activity.plannedFinishDate))
-    : null;
+  const startStr = activity.plannedStartDate || activity.earlyStartDate;
+  const endStr = activity.plannedFinishDate || activity.earlyFinishDate;
+  const actStartDate = startStr ? startOfDay(new Date(startStr)) : null;
+  const actEndDate = endStr ? startOfDay(new Date(endStr)) : null;
 
   const startOffset = actStartDate
     ? Math.max(0, differenceInDays(actStartDate, dateRange.start))
