@@ -157,6 +157,18 @@ public class ContractService {
             contract.getLdRate(),
             contract.getStatus(),
             contract.getContractType(),
+            contract.getWbsPackageCode(),
+            contract.getPackageDescription(),
+            contract.getActualCompletionDate(),
+            contract.getSpi(),
+            contract.getCpi(),
+            contract.getPhysicalProgressAi(),
+            contract.getCumulativeRaBillsCrores(),
+            contract.getVoNumbersIssued(),
+            contract.getVoValueCrores(),
+            contract.getPerformanceScore(),
+            contract.getBgExpiry(),
+            contract.getKpiRefreshedAt(),
             contract.getCreatedAt(),
             contract.getUpdatedAt()
         );

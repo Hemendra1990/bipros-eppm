@@ -6,6 +6,7 @@ import com.bipros.contract.domain.model.ContractType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record ContractResponse(
@@ -24,6 +25,19 @@ public record ContractResponse(
     Double ldRate,
     ContractStatus status,
     ContractType contractType,
+    // IC-PMS denormalised KPI fields
+    String wbsPackageCode,
+    String packageDescription,
+    LocalDate actualCompletionDate,
+    BigDecimal spi,
+    BigDecimal cpi,
+    BigDecimal physicalProgressAi,
+    BigDecimal cumulativeRaBillsCrores,
+    Integer voNumbersIssued,
+    BigDecimal voValueCrores,
+    BigDecimal performanceScore,
+    LocalDate bgExpiry,
+    OffsetDateTime kpiRefreshedAt,
     Instant createdAt,
     Instant updatedAt
 ) {}

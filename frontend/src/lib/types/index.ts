@@ -494,8 +494,24 @@ export type ProcurementMethod = "OPEN_TENDER" | "LIMITED_TENDER" | "GEM_PORTAL" 
 export type ProcurementPlanStatus = "DRAFT" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type TenderStatus = "DRAFT" | "PUBLISHED" | "BID_OPEN" | "EVALUATION" | "AWARDED" | "CANCELLED";
 export type BidSubmissionStatus = "SUBMITTED" | "TECHNICALLY_QUALIFIED" | "NOT_QUALIFIED" | "L1" | "AWARDED" | "REJECTED";
-export type ContractStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "COMPLETED" | "TERMINATED" | "DLP";
-export type ContractType = "WORKS" | "SUPPLY" | "CONSULTANCY" | "EPC" | "PPP";
+export type ContractStatus =
+  | "DRAFT"
+  | "MOBILISATION"
+  | "ACTIVE"
+  | "ACTIVE_AT_RISK"
+  | "ACTIVE_DELAYED"
+  | "DELAYED"
+  | "SUSPENDED"
+  | "COMPLETED"
+  | "TERMINATED"
+  | "DLP";
+export type ContractType =
+  | "EPC_LUMP_SUM_FIDIC_YELLOW"
+  | "EPC_LUMP_SUM_FIDIC_RED"
+  | "EPC_LUMP_SUM_FIDIC_SILVER"
+  | "ITEM_RATE_FIDIC_RED"
+  | "PERCENTAGE_BASED_PMC"
+  | "LUMP_SUM_UNIT_RATE";
 export type MilestoneStatus = "PENDING" | "ACHIEVED" | "DELAYED" | "WAIVED";
 export type VariationOrderStatus = "INITIATED" | "RECOMMENDED" | "APPROVED" | "REJECTED";
 export type BondType = "PERFORMANCE_GUARANTEE" | "EMD" | "ADVANCE_GUARANTEE" | "RETENTION";
@@ -603,6 +619,19 @@ export interface ContractResponse {
   ldRate: number;
   status: ContractStatus;
   contractType: ContractType;
+  // IC-PMS denormalised KPI fields
+  wbsPackageCode: string | null;
+  packageDescription: string | null;
+  actualCompletionDate: string | null;
+  spi: number | null;
+  cpi: number | null;
+  physicalProgressAi: number | null;
+  cumulativeRaBillsCrores: number | null;
+  voNumbersIssued: number | null;
+  voValueCrores: number | null;
+  performanceScore: number | null;
+  bgExpiry: string | null;
+  kpiRefreshedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
