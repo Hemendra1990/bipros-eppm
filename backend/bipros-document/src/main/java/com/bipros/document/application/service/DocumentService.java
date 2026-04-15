@@ -7,6 +7,7 @@ import com.bipros.document.application.dto.DocumentResponse;
 import com.bipros.document.application.dto.DocumentVersionRequest;
 import com.bipros.document.application.dto.DocumentVersionResponse;
 import com.bipros.document.domain.model.Document;
+import com.bipros.document.domain.model.DocumentType;
 import com.bipros.document.domain.model.DocumentVersion;
 import com.bipros.document.domain.repository.DocumentRepository;
 import com.bipros.document.domain.repository.DocumentVersionRepository;
@@ -28,6 +29,8 @@ public class DocumentService {
     private final AuditService auditService;
 
     public DocumentResponse createDocument(UUID projectId, DocumentRequest request) {
+        validateDocumentNumberPrefix(request.documentType(), request.documentNumber());
+
         Document document = new Document();
         document.setProjectId(projectId);
         document.setFolderId(request.folderId());
@@ -39,6 +42,9 @@ public class DocumentService {
         document.setMimeType(request.mimeType());
         document.setFilePath(request.filePath());
         document.setStatus(request.status() != null ? request.status() : document.getStatus());
+        document.setDocumentType(request.documentType());
+        document.setDiscipline(request.discipline());
+        document.setTransmittalNumber(request.transmittalNumber());
         document.setTags(request.tags());
         document.setCurrentVersion(1);
 
@@ -92,10 +98,32 @@ public class DocumentService {
         document.setTitle(request.title());
         document.setDescription(request.description());
         document.setStatus(request.status() != null ? request.status() : document.getStatus());
+        if (request.documentType() != null) {
+            document.setDocumentType(request.documentType());
+        }
+        if (request.discipline() != null) {
+            document.setDiscipline(request.discipline());
+        }
+        if (request.transmittalNumber() != null) {
+            document.setTransmittalNumber(request.transmittalNumber());
+        }
         document.setTags(request.tags());
 
         Document updated = documentRepository.save(document);
         return DocumentResponse.from(updated);
+    }
+
+    /** IC-PMS M6: enforce that the document number starts with the type-specific prefix. */
+    private void validateDocumentNumberPrefix(DocumentType type, String documentNumber) {
+        if (type == null || documentNumber == null) {
+            return;
+        }
+        String expected = type.getCodePrefix();
+        if (!documentNumber.startsWith(expected)) {
+            throw new IllegalArgumentException(
+                "Document number '" + documentNumber + "' must start with '" + expected
+                    + "' for type " + type);
+        }
     }
 
     public void deleteDocument(UUID projectId, UUID documentId) {

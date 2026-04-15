@@ -1,13 +1,67 @@
 import { apiClient } from "./client";
 import type { ApiResponse, PagedResponse } from "../types";
 
+export type ResourceCategory =
+  | "SITE_ENGINEER"
+  | "FOREMAN"
+  | "SKILLED_LABOUR"
+  | "UNSKILLED_LABOUR"
+  | "OPERATOR"
+  | "DRIVER"
+  | "WELDER"
+  | "ELECTRICIAN"
+  | "EARTH_MOVING"
+  | "CRANES_LIFTING"
+  | "CONCRETE_EQUIPMENT"
+  | "PAVING_EQUIPMENT"
+  | "TRANSPORT_VEHICLES"
+  | "PILING_RIG"
+  | "SURVEY_EQUIPMENT"
+  | "CEMENT"
+  | "STEEL_REBAR"
+  | "AGGREGATE"
+  | "BITUMEN"
+  | "READY_MIX_CONCRETE"
+  | "BRICKS_BLOCKS"
+  | "ELECTRICAL_CABLE"
+  | "FORMWORK"
+  | "OTHER";
+
+export type ResourceUnit =
+  | "PER_DAY"
+  | "MT"
+  | "CU_M"
+  | "RMT"
+  | "NOS"
+  | "KG"
+  | "LITRE";
+
+export type UtilisationStatus =
+  | "ACTIVE"
+  | "OVER_90"
+  | "CRITICAL_100"
+  | "ON_HOLD_NOT_MOBILISED"
+  | "PROCUREMENT"
+  | "DELIVERY_ONGOING"
+  | "LAYING";
+
 export interface ResourceResponse {
   id: string;
   code: string;
   name: string;
-  type: "LABOR" | "NONLABOR" | "MATERIAL";
+  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
+  resourceCategory?: ResourceCategory | null;
+  unit?: ResourceUnit | null;
   status: string;
-  maxUnits: number;
+  maxUnitsPerDay?: number;
+  poolMaxAvailable?: number | null;
+  plannedUnitsToday?: number | null;
+  actualUnitsToday?: number | null;
+  utilisationPercent?: number | null;
+  utilisationStatus?: UtilisationStatus | null;
+  dailyCostLakh?: number | null;
+  cumulativeCostCrores?: number | null;
+  wbsAssignmentId?: string | null;
   calendarId: string | null;
   createdAt: string;
   updatedAt: string;

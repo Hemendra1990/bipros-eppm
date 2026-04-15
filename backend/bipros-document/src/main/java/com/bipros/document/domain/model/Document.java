@@ -55,6 +55,20 @@ public class Document extends BaseEntity {
     @Column(nullable = false)
     private DocumentStatus status = DocumentStatus.DRAFT;
 
+    /** IC-PMS M6 document type (DRAWING / SPECIFICATION / RFI / …). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "document_type", length = 40)
+    private DocumentType documentType;
+
+    /** IC-PMS M6 drawing discipline (used when documentType=DRAWING). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discipline", length = 30)
+    private DrawingDiscipline discipline;
+
+    /** Denormalised last transmittal number for quick display on the register grid. */
+    @Column(name = "transmittal_number", length = 60)
+    private String transmittalNumber;
+
     @Column(columnDefinition = "TEXT")
     private String tags;
 }

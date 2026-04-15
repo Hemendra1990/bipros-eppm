@@ -5,5 +5,13 @@ public enum DocumentStatus {
     UNDER_REVIEW,
     APPROVED,
     SUPERSEDED,
-    ARCHIVED
+    ARCHIVED,
+    // IC-PMS M6 additions
+    IFC,
+    IFA,
+    PUBLISHED,
+    EXECUTED,
+    VALID,
+    OPEN,
+    CLOSED
 }

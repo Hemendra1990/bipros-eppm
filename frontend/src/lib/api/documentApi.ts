@@ -12,6 +12,43 @@ export interface DocumentFolder {
   sortOrder: number;
 }
 
+export type DocumentStatus =
+  | "DRAFT"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "SUPERSEDED"
+  | "ARCHIVED"
+  | "IFC"
+  | "IFA"
+  | "PUBLISHED"
+  | "EXECUTED"
+  | "VALID"
+  | "OPEN"
+  | "CLOSED";
+
+export type DocumentType =
+  | "DRAWING"
+  | "SPECIFICATION"
+  | "RFI"
+  | "MINUTES"
+  | "CONTRACT_DOCUMENT"
+  | "REPORT"
+  | "BANK_GUARANTEE"
+  | "LOA";
+
+export type DrawingDisciplineType =
+  | "CIVIL"
+  | "STRUCTURAL"
+  | "ELECTRICAL"
+  | "MECHANICAL"
+  | "ARCHITECTURAL"
+  | "PLUMBING"
+  | "HVAC"
+  | "ICT"
+  | "MANAGEMENT"
+  | "LEGAL"
+  | "FINANCE";
+
 export interface Document {
   id: string;
   folderId: string;
@@ -24,7 +61,10 @@ export interface Document {
   mimeType: string;
   filePath: string;
   currentVersion: number;
-  status: "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "SUPERSEDED" | "ARCHIVED";
+  status: DocumentStatus;
+  documentType?: DocumentType | null;
+  discipline?: DrawingDisciplineType | null;
+  transmittalNumber?: string | null;
   tags: string;
   createdAt: string;
   updatedAt: string;

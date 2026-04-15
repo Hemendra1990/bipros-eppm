@@ -1,6 +1,8 @@
 package com.bipros.document.application.dto;
 
 import com.bipros.document.domain.model.DocumentStatus;
+import com.bipros.document.domain.model.DocumentType;
+import com.bipros.document.domain.model.DrawingDiscipline;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -31,6 +33,12 @@ public record DocumentRequest(
     String filePath,
 
     DocumentStatus status,
+
+    DocumentType documentType,
+
+    DrawingDiscipline discipline,
+
+    String transmittalNumber,
 
     String tags
 ) {
