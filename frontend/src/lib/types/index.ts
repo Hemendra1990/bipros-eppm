@@ -60,6 +60,11 @@ export interface UserResponse {
   lastName: string;
   enabled: boolean;
   roles: string[];
+  // IC-PMS fields (nullable for legacy users)
+  organisationId?: string | null;
+  designation?: string | null;
+  primaryIcpmsRole?: string | null;
+  authMethods?: AuthMethod[] | null;
 }
 
 // === Project Structure ===
@@ -103,6 +108,10 @@ export interface ProjectResponse {
   updatedAt: string;
 }
 
+export type WbsType = "PROGRAMME" | "NODE" | "PACKAGE" | "WORK_PACKAGE";
+export type WbsPhase = "PROGRAMME" | "CONSTRUCTION" | "MOBILISATION" | "TENDER" | "PLANNING";
+export type WbsStatus = "ACTIVE" | "IN_PROGRESS" | "NOT_STARTED" | "COMPLETED" | "DELAYED" | "AT_RISK";
+
 export interface WbsNodeResponse {
   id: string;
   code: string;
@@ -113,6 +122,15 @@ export interface WbsNodeResponse {
   sortOrder: number;
   summaryDuration: number | null;
   summaryPercentComplete: number | null;
+  wbsLevel: number | null;
+  wbsType: WbsType | null;
+  phase: WbsPhase | null;
+  wbsStatus: WbsStatus | null;
+  responsibleOrganisationId: string | null;
+  plannedStart: string | null;
+  plannedFinish: string | null;
+  budgetCrores: number | null;
+  gisPolygonId: string | null;
   children: WbsNodeResponse[];
 }
 
@@ -751,4 +769,46 @@ export interface CreateCorridorCodeRequest {
   corridorPrefix: string;
   zoneCode: string;
   nodeCode: string;
+}
+
+// === IC-PMS Master Data ===
+
+export type OrganisationType = "EMPLOYER" | "SPV" | "PMC" | "EPC_CONTRACTOR" | "GOVERNMENT_AUDITOR";
+
+export interface OrganisationResponse {
+  id: string;
+  code: string;
+  name: string;
+  shortName: string | null;
+  organisationType: OrganisationType;
+  parentOrganisationId: string | null;
+  active: boolean;
+}
+
+export type AuthMethod = "AADHAAR_OTP" | "NIC_SSO" | "DSC_CLASS_3" | "USERNAME_PASSWORD";
+
+export type IcpmsModule =
+  | "M1_WBS_GIS"
+  | "M2_SCHEDULE_EVM"
+  | "M3_SATELLITE_MONITORING"
+  | "M4_COST_RA_BILLS"
+  | "M5_CONTRACTS"
+  | "M6_DOCUMENTS"
+  | "M7_RISKS"
+  | "M8_RESOURCES"
+  | "M9_REPORTS";
+
+export type ModuleAccessLevel = "NONE" | "VIEW" | "EDIT" | "CERTIFY" | "APPROVE" | "FULL";
+
+export interface UserModuleAccessResponse {
+  id: string;
+  userId: string;
+  module: IcpmsModule;
+  accessLevel: ModuleAccessLevel;
+}
+
+export interface UserCorridorScopeResponse {
+  id: string;
+  userId: string;
+  wbsNodeId: string | null; // NULL = All Corridors
 }

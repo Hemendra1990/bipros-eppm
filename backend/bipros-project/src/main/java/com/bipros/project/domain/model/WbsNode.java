@@ -8,6 +8,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -45,6 +47,42 @@ public class WbsNode extends BaseEntity implements HierarchyNode {
     @Enumerated(EnumType.STRING)
     @Column(name = "asset_class")
     private AssetClass assetClass;
+
+    // --- IC-PMS M1 extensions (sample data spec) ---
+
+    /** WBS hierarchy level 1-4 (1=Programme, 2=Node, 3=Package, 4=Work Package). */
+    @Column(name = "wbs_level")
+    private Integer wbsLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "wbs_type", length = 20)
+    private WbsType wbsType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "phase", length = 20)
+    private WbsPhase phase;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "wbs_status", length = 20)
+    private WbsStatus wbsStatus;
+
+    /** FK to organisations.id — the org responsible for delivering this WBS element. */
+    @Column(name = "responsible_organisation_id")
+    private UUID responsibleOrganisationId;
+
+    @Column(name = "planned_start")
+    private LocalDate plannedStart;
+
+    @Column(name = "planned_finish")
+    private LocalDate plannedFinish;
+
+    /** Budget in crores (INR) — Excel fidelity unit. */
+    @Column(name = "budget_crores", precision = 14, scale = 2)
+    private BigDecimal budgetCrores;
+
+    /** Denormalised GIS polygon ID (e.g. "POLY-N03-P01"); detailed geometry lives in bipros-gis. */
+    @Column(name = "gis_polygon_id", length = 40)
+    private String gisPolygonId;
 
     @Override
     public int getSortOrder() {

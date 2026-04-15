@@ -135,6 +135,15 @@ public class WbsService {
             node.getSortOrder(),
             node.getSummaryDuration(),
             node.getSummaryPercentComplete(),
+            node.getWbsLevel(),
+            node.getWbsType(),
+            node.getPhase(),
+            node.getWbsStatus(),
+            node.getResponsibleOrganisationId(),
+            node.getPlannedStart(),
+            node.getPlannedFinish(),
+            node.getBudgetCrores(),
+            node.getGisPolygonId(),
             childResponses
         );
     }

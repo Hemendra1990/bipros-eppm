@@ -685,14 +685,55 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
   );
 }
 
+function wbsStatusColor(status: string | null | undefined): string {
+  switch (status) {
+    case "COMPLETED":
+      return "bg-emerald-500/20 text-emerald-300";
+    case "IN_PROGRESS":
+    case "ACTIVE":
+      return "bg-blue-500/20 text-blue-300";
+    case "AT_RISK":
+      return "bg-amber-500/20 text-amber-300";
+    case "DELAYED":
+      return "bg-red-500/20 text-red-300";
+    case "NOT_STARTED":
+      return "bg-slate-500/20 text-slate-300";
+    default:
+      return "bg-slate-500/20 text-slate-300";
+  }
+}
+
 function WbsTree({ nodes, level = 0, onAddChild }: { nodes: WbsNodeResponse[]; level?: number; onAddChild: (node: WbsNodeResponse) => void }) {
   return (
     <ul className="space-y-2">
       {nodes.map((node) => (
         <li key={node.id}>
-          <div style={{ marginLeft: `${level * 24}px` }} className="group flex items-center gap-2">
+          <div style={{ marginLeft: `${level * 24}px` }} className="group flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-blue-400">{node.code}</span>
             <span className="text-sm text-slate-300">{node.name}</span>
+            {node.wbsType && (
+              <span className="rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
+                {node.wbsType}
+              </span>
+            )}
+            {node.phase && (
+              <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-indigo-300">
+                {node.phase}
+              </span>
+            )}
+            {node.wbsStatus && (
+              <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${wbsStatusColor(node.wbsStatus)}`}>
+                {node.wbsStatus.replace(/_/g, " ")}
+              </span>
+            )}
+            {node.budgetCrores != null && (
+              <span className="text-xs text-emerald-400">₹{node.budgetCrores}cr</span>
+            )}
+            {node.plannedStart && node.plannedFinish && (
+              <span className="text-xs text-slate-500">
+                {node.plannedStart} → {node.plannedFinish}
+              </span>
+            )}
             {node.summaryDuration && (
               <span className="ml-1 text-xs text-slate-500">({node.summaryDuration}d)</span>
             )}
