@@ -27,6 +27,14 @@ public class SatelliteImage extends BaseEntity {
     @Column(name = "layer_id")
     private UUID layerId;
 
+    /** Scene identifier from spec (e.g. SCN-N03-250328). */
+    @Column(name = "scene_id", unique = true, length = 80)
+    private String sceneId;
+
+    /** Cloud cover at capture time (0-100). */
+    @Column(name = "cloud_cover_percent")
+    private Double cloudCoverPercent;
+
     @NotBlank(message = "Image name is required")
     @Column(name = "image_name", nullable = false, length = 200)
     private String imageName;

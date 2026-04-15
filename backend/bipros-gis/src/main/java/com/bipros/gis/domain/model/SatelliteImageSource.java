@@ -1,10 +1,20 @@
 package com.bipros.gis.domain.model;
 
 public enum SatelliteImageSource {
-    ISRO_CARTOSAT,
-    PLANET_LABS,
-    MAXAR,
-    AIRBUS,
-    DRONE,
-    MANUAL_UPLOAD
+    ISRO_CARTOSAT("ISRO Cartosat-3"),
+    PLANET_LABS("Planet Scope"),
+    MAXAR("Maxar WorldView"),
+    AIRBUS("Airbus Pléiades"),
+    DRONE("Drone Survey"),
+    MANUAL_UPLOAD("Manual Upload");
+
+    private final String displayName;
+
+    SatelliteImageSource(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
 }

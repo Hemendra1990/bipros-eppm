@@ -1,18 +1,42 @@
 import { apiClient } from '@/lib/api/client'
 import type { ApiResponse } from '../types'
 
+export type SatelliteGate = 'PASS' | 'HOLD_VARIANCE' | 'RED_VARIANCE' | 'HOLD_SATELLITE_DISPUTE'
+
+export type RaBillStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'PMC_REVIEW_PENDING'
+  | 'HOLD_SATELLITE_DISPUTE'
+  | 'CERTIFIED'
+  | 'APPROVED'
+  | 'PAID'
+  | 'PAID_PMC_OVERRIDE'
+  | 'REJECTED'
+
 export interface RaBill {
   id: string
   projectId: string
   contractId?: string
+  wbsPackageCode?: string | null
   billNumber: string
   billPeriodFrom: string
   billPeriodTo: string
   grossAmount: number
   deductions: number
+  mobAdvanceRecovery?: number | null
+  retention5Pct?: number | null
+  tds2Pct?: number | null
+  gst18Pct?: number | null
   netAmount: number
   cumulativeAmount: number
-  status: 'DRAFT' | 'SUBMITTED' | 'CERTIFIED' | 'APPROVED' | 'PAID' | 'REJECTED'
+  aiSatellitePercent?: number | null
+  contractorClaimedPercent?: number | null
+  satelliteGate?: SatelliteGate | null
+  satelliteGateVariance?: number | null
+  pfmsDpaRef?: string | null
+  paymentDate?: string | null
+  status: RaBillStatus
   submittedDate?: string
   certifiedDate?: string
   approvedDate?: string
@@ -38,12 +62,18 @@ export interface RaBillItem {
 export interface CreateRaBillRequest {
   projectId: string
   contractId?: string
+  wbsPackageCode?: string
   billNumber: string
   billPeriodFrom: string
   billPeriodTo: string
   grossAmount: number
   deductions?: number
+  mobAdvanceRecovery?: number
+  retention5Pct?: number
+  tds2Pct?: number
+  gst18Pct?: number
   netAmount: number
+  contractorClaimedPercent?: number
   remarks?: string
 }
 

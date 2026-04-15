@@ -23,8 +23,7 @@ public class ConstructionProgressSnapshot extends BaseEntity {
     @Column(name = "project_id", nullable = false)
     private UUID projectId;
 
-    @NotNull(message = "WBS Polygon ID is required")
-    @Column(name = "wbs_polygon_id", nullable = false)
+    @Column(name = "wbs_polygon_id")
     private UUID wbsPolygonId;
 
     @NotNull(message = "Capture date is required")
@@ -42,6 +41,31 @@ public class ConstructionProgressSnapshot extends BaseEntity {
 
     @Column(name = "variance_percent")
     private Double variancePercent;
+
+    /** AI-estimated physical progress % (M3 spec). */
+    @Column(name = "ai_progress_percent")
+    private Double aiProgressPercent;
+
+    /** Construction Visibility Index — 0-100. */
+    @Column(name = "cvi")
+    private Double cvi;
+
+    /** Earthwork Detection Index — 0-100. */
+    @Column(name = "edi")
+    private Double edi;
+
+    /** NDVI change since prior scene (−1 to +1). */
+    @Column(name = "ndvi_change")
+    private Double ndviChange;
+
+    /** Denormalised WBS package code (e.g. DMIC-N03-P01) — matches Contract.wbsPackageCode. */
+    @Column(name = "wbs_package_code", length = 60)
+    private String wbsPackageCode;
+
+    /** Derived alert banding (GREEN/AMBER/RED variants). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "alert_flag", length = 40)
+    private SatelliteAlertFlag alertFlag;
 
     @NotNull(message = "Analysis method is required")
     @Enumerated(EnumType.STRING)
