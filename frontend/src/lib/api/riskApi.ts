@@ -1,16 +1,59 @@
 import { apiClient } from "./client";
 import type { ApiResponse, PagedResponse } from "../types";
 
+export type RiskRag = "CRIMSON" | "RED" | "AMBER" | "GREEN" | "OPPORTUNITY";
+
+export type RiskTrend = "WORSENING" | "STABLE" | "IMPROVING";
+
+export type RiskStatus =
+  | "OPEN"
+  | "OPEN_ESCALATED"
+  | "OPEN_UNDER_ACTIVE_MANAGEMENT"
+  | "OPEN_BEING_MANAGED"
+  | "OPEN_MONITOR"
+  | "OPEN_WATCH"
+  | "OPEN_TARGET"
+  | "OPEN_ASI_REVIEW"
+  | "MITIGATED"
+  | "CLOSED"
+  | "REALISED"
+  | "REALISED_PARTIALLY";
+
+export type RiskCategory =
+  | "TECHNICAL"
+  | "COMMERCIAL"
+  | "ENVIRONMENTAL"
+  | "REGULATORY"
+  | "FINANCIAL"
+  | "SCHEDULE"
+  | "SAFETY"
+  | "POLITICAL"
+  | "SOCIAL"
+  | "LAND_ACQUISITION"
+  | "SUPPLY_CHAIN"
+  | "DESIGN"
+  | "CONSTRUCTION"
+  | "GEOTECHNICAL"
+  | "MONSOON_WEATHER";
+
+export type RiskResponseType = "AVOID" | "MITIGATE" | "TRANSFER" | "ACCEPT" | "EXPLOIT";
+
 export interface RiskResponse {
   id: string;
   code: string;
   title: string;
   description: string;
-  category: string;
+  category: RiskCategory;
   probability: number;
   impact: number;
-  score: number;
-  status: "OPEN" | "MITIGATED" | "CLOSED";
+  impactCost: number;
+  impactSchedule: number;
+  riskScore: number;
+  residualRiskScore: number;
+  rag: RiskRag;
+  trend: RiskTrend;
+  isOpportunity: boolean;
+  status: RiskStatus;
   owner: string;
   createdAt: string;
   updatedAt: string;
@@ -20,9 +63,10 @@ export interface CreateRiskRequest {
   code: string;
   title: string;
   description?: string;
-  category: string;
+  category: RiskCategory;
   probability: number;
-  impact: number;
+  impactCost: number;
+  impactSchedule: number;
   owner?: string;
 }
 
@@ -30,8 +74,9 @@ export interface UpdateRiskRequest {
   title?: string;
   description?: string;
   probability?: number;
-  impact?: number;
-  status?: string;
+  impactCost?: number;
+  impactSchedule?: number;
+  status?: RiskStatus;
   owner?: string;
 }
 

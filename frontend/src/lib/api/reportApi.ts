@@ -1,6 +1,59 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
+export type ScheduleStatus = "ON_SCHEDULE" | "BEHIND_SCHEDULE" | "DELAYED";
+
+export type KpiStatus = "GREEN" | "AMBER" | "RED";
+
+export interface MonthlyEvmSnapshot {
+  id: string;
+  projectId: string;
+  nodeId: string;
+  nodeCode: string;
+  reportMonth: string;
+  bcws: number;
+  bcwp: number;
+  acwp: number;
+  bac: number;
+  spi: number;
+  cpi: number;
+  eac: number;
+  etc: number;
+  cv: number;
+  sv: number;
+  pctCompleteAi: number;
+  pctCompleteContractor: number;
+  scheduleStatus: ScheduleStatus;
+  redRisksCount: number;
+  openRaBillsCrores: number;
+  mprStatus: string;
+}
+
+export interface KpiNodeSnapshot {
+  id: string;
+  kpiDefinitionId: string;
+  kpiCode: string;
+  nodeCode: string;
+  period: string;
+  value: number;
+  targetValue: number;
+  rag: KpiStatus;
+  calculatedAt: string;
+}
+
+export interface KpiDefinition {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  unit: string;
+  greenThreshold: number;
+  amberThreshold: number;
+  redThreshold: number;
+  targetValue: number;
+  direction: "HIGHER_BETTER" | "LOWER_BETTER";
+}
+
 export interface ReportData {
   name: string;
   description: string;

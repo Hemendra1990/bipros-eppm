@@ -45,11 +45,38 @@ public class Risk extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private RiskProbability probability;
 
+    /** Legacy combined impact (kept for back-compat; derived from max of cost/schedule). */
     @Enumerated(EnumType.STRING)
     private RiskImpact impact;
 
+    /** IC-PMS M7: cost impact score 1-5 (Excel spec splits impact). */
+    @Column(name = "impact_cost")
+    private Integer impactCost;
+
+    /** IC-PMS M7: schedule impact score 1-5 (Excel spec splits impact). */
+    @Column(name = "impact_schedule")
+    private Integer impactSchedule;
+
     @Column
     private Double riskScore;
+
+    /** IC-PMS M7: residual score after mitigations applied. */
+    @Column(name = "residual_risk_score")
+    private Double residualRiskScore;
+
+    /** IC-PMS M7: RAG band (CRIMSON/RED/AMBER/GREEN/OPPORTUNITY). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rag", length = 20)
+    private RiskRag rag;
+
+    /** IC-PMS M7: exposure trend since last review. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "trend", length = 20)
+    private RiskTrend trend;
+
+    /** IC-PMS M7: flag upside risks (opportunities) so dashboards can style them. */
+    @Column(name = "is_opportunity", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean isOpportunity = Boolean.FALSE;
 
     @Column
     private UUID ownerId;
@@ -72,9 +99,41 @@ public class Risk extends BaseEntity {
     @Column
     private int sortOrder;
 
+    /**
+     * Recompute {@code riskScore = probability * max(impactCost, impactSchedule)}
+     * and derive the RAG band per Excel M7 spec.
+     */
     public void calculateRiskScore() {
-        if (probability != null && impact != null) {
-            this.riskScore = (double) (probability.getValue() * impact.getValue());
+        int impactMax;
+        if (impactCost != null || impactSchedule != null) {
+            impactMax = Math.max(impactCost != null ? impactCost : 0,
+                impactSchedule != null ? impactSchedule : 0);
+        } else if (impact != null) {
+            impactMax = impact.getValue();
+        } else {
+            return;
         }
+        if (probability != null) {
+            this.riskScore = (double) (probability.getValue() * impactMax);
+            this.rag = deriveRag(this.riskScore, Boolean.TRUE.equals(this.isOpportunity));
+        }
+    }
+
+    /**
+     * IC-PMS M7 RAG banding (for opportunities, flip GREEN→OPPORTUNITY):
+     * <ul>
+     *   <li>≥20 → CRIMSON (catastrophic threats only)</li>
+     *   <li>≥12 → RED</li>
+     *   <li>≥6 → AMBER</li>
+     *   <li>&lt;6 → GREEN, or OPPORTUNITY if upside risk</li>
+     * </ul>
+     */
+    public static RiskRag deriveRag(Double score, boolean opportunity) {
+        if (score == null) return null;
+        if (opportunity) return RiskRag.OPPORTUNITY;
+        if (score >= 20) return RiskRag.CRIMSON;
+        if (score >= 12) return RiskRag.RED;
+        if (score >= 6) return RiskRag.AMBER;
+        return RiskRag.GREEN;
     }
 }

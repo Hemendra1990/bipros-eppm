@@ -45,4 +45,15 @@ public class KpiDefinition extends BaseEntity {
 
     @Column(name = "is_active")
     private Boolean isActive;
+
+    /** IC-PMS M9 target value (spec row). */
+    @Column(name = "target_value")
+    private Double targetValue;
+
+    /**
+     * IC-PMS M9 direction: {@code HIGHER_BETTER} (e.g. SPI, physical %) or
+     * {@code LOWER_BETTER} (e.g. cost overrun %, variance).
+     */
+    @Column(name = "direction", length = 20)
+    private String direction;
 }
