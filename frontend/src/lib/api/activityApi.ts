@@ -101,16 +101,41 @@ export const activityApi = {
 
   getRelationships: (projectId: string) =>
     apiClient
-      .get<
-        ApiResponse<
-          Array<{
-            predecessorActivityId: string;
-            successorActivityId: string;
-            relationshipType: string;
-          }>
-        >
-      >(`/v1/projects/${projectId}/relationships`)
+      .get<ApiResponse<RelationshipResponse[]>>(`/v1/projects/${projectId}/relationships`)
       .then((r) => r.data),
+
+  getPredecessors: (projectId: string, activityId: string) =>
+    apiClient
+      .get<ApiResponse<RelationshipResponse[]>>(
+        `/v1/projects/${projectId}/relationships/predecessors/${activityId}`
+      )
+      .then((r) => r.data),
+
+  getSuccessors: (projectId: string, activityId: string) =>
+    apiClient
+      .get<ApiResponse<RelationshipResponse[]>>(
+        `/v1/projects/${projectId}/relationships/successors/${activityId}`
+      )
+      .then((r) => r.data),
+
+  createRelationship: (projectId: string, data: CreateRelationshipRequest) =>
+    apiClient
+      .post<ApiResponse<RelationshipResponse>>(
+        `/v1/projects/${projectId}/relationships`,
+        data
+      )
+      .then((r) => r.data),
+
+  updateRelationship: (projectId: string, relationshipId: string, data: UpdateRelationshipRequest) =>
+    apiClient
+      .put<ApiResponse<RelationshipResponse>>(
+        `/v1/projects/${projectId}/relationships/${relationshipId}`,
+        data
+      )
+      .then((r) => r.data),
+
+  deleteRelationship: (projectId: string, relationshipId: string) =>
+    apiClient.delete(`/v1/projects/${projectId}/relationships/${relationshipId}`),
 
   applyActuals: (projectId: string, dataDate: string) =>
     apiClient
@@ -144,4 +169,29 @@ export interface GlobalChangeRequest {
   updateField: string;
   updateValue: string;
   operation: "SET" | "ADD" | "SUBTRACT";
+}
+
+// === Relationships ===
+
+export type RelationshipType = "FINISH_TO_START" | "FINISH_TO_FINISH" | "START_TO_START" | "START_TO_FINISH";
+
+export interface RelationshipResponse {
+  id: string;
+  predecessorActivityId: string;
+  successorActivityId: string;
+  relationshipType: RelationshipType;
+  lag: number;
+  isExternal: boolean;
+}
+
+export interface CreateRelationshipRequest {
+  predecessorActivityId: string;
+  successorActivityId: string;
+  relationshipType?: RelationshipType;
+  lag?: number;
+}
+
+export interface UpdateRelationshipRequest {
+  relationshipType: string;
+  lag?: number;
 }

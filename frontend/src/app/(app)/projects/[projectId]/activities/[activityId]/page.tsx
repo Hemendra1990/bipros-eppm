@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/utils/error";
+import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
 import type { ActivityResponse, UpdateActivityRequest } from "@/lib/api/activityApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
+import { UdfSection } from "@/components/udf/UdfSection";
 
 export default function ActivityDetailPage() {
   const router = useRouter();
@@ -50,14 +53,18 @@ export default function ActivityDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
       setIsEditing(false);
       setError("");
+      activityNotifications.updated();
     },
     onError: (err: unknown) => {
-      setError(getErrorMessage(err, "Failed to update activity"));
+      const msg = getErrorMessage(err, "Failed to update activity");
+      setError(msg);
+      notificationHelpers.handleApiError(err, "Failed to update activity");
     },
   });
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    if (error) setError("");
     setEditData((prev) => ({
       ...prev,
       [name]:
@@ -155,13 +162,13 @@ export default function ActivityDetailPage() {
           onPertChange={handlePertChange}
         />
       ) : (
-        <ViewMode activity={activity} />
+        <ViewMode activity={activity} projectId={projectId} />
       )}
     </div>
   );
 }
 
-function ViewMode({ activity }: { activity: ActivityResponse }) {
+function ViewMode({ activity, projectId }: { activity: ActivityResponse; projectId: string }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-6">
@@ -235,6 +242,15 @@ function ViewMode({ activity }: { activity: ActivityResponse }) {
           </p>
         </div>
       </div>
+
+      {/* Dependencies Section */}
+      <ActivityDependencies
+        projectId={projectId}
+        activityId={activity.id}
+        activityName={activity.name}
+      />
+
+      <UdfSection entityId={activity.id} subject="ACTIVITY" projectId={projectId} />
     </div>
   );
 }
