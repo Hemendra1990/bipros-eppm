@@ -60,6 +60,37 @@ export function GanttChart({
   // Calculate date range from all activities
   const dateRange = calculateDateRange(activities);
 
+  // Auto-scroll the timeline to the first activity on initial mount so the
+  // bars are visible without the user having to manually scroll horizontally.
+  const hasAutoScrolledRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoScrolledRef.current) return;
+    if (!dateRange || activities.length === 0) return;
+    // Use the earliest start among the first ~10 visible rows, rather than the
+    // absolute minimum across the whole activity set. This keeps the timeline
+    // anchored on what the user sees above the fold instead of scrolling to a
+    // distant outlier far down the list.
+    const topRows = activities.slice(0, 10);
+    const firstDate = topRows
+      .map((a) => a.plannedStartDate || a.earlyStartDate)
+      .filter((d): d is string => d != null)
+      .map((d) => startOfDay(new Date(d)))
+      .reduce<Date | null>((acc, d) => (acc == null || d < acc ? d : acc), null);
+    if (!firstDate) return;
+    const offsetDays = Math.max(0, differenceInDays(firstDate, dateRange.start));
+    // Leave a small gutter of ~2 days so the bar isn't flush against the edge.
+    const targetScrollLeft = Math.max(0, (offsetDays - 2) * pixelsPerDay);
+    // Defer until after paint so the scrollable pane has its final width.
+    const raf = requestAnimationFrame(() => {
+      if (chartContainerRef.current) {
+        chartContainerRef.current.scrollLeft = targetScrollLeft;
+        hasAutoScrolledRef.current = true;
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activities.length, dateRange?.start.getTime(), pixelsPerDay]);
+
   if (!dateRange || activities.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
@@ -82,7 +113,8 @@ export function GanttChart({
 
   const totalWidth = dateRange.days * pixelsPerDay;
   const rowHeight = 32;
-  const timelineStartY = 80; // Space for header
+  // Timescale is rendered as a separate SVG above this one, so bars start at 0.
+  const timelineStartY = 0;
 
   const getActivityOpacity = (activity: ActivityResponse): number => {
     if (!startDateFilter && !endDateFilter) return 1;
@@ -155,7 +187,7 @@ export function GanttChart({
         {/* Sidebar */}
         <div
           ref={sidebarRef}
-          className="w-80 overflow-y-auto border-r border-slate-800"
+          className="w-[480px] shrink-0 overflow-y-auto border-r border-slate-800"
           onScroll={handleSidebarScroll}
         >
           <GanttSidebar activities={activities} rowHeight={rowHeight} />

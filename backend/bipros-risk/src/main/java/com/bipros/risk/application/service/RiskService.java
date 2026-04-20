@@ -230,6 +230,13 @@ public class RiskService {
             .costImpact(risk.getCostImpact())
             .scheduleImpactDays(risk.getScheduleImpactDays())
             .sortOrder(risk.getSortOrder())
+            // IC-PMS M7 extensions — surface persisted fields to the frontend.
+            .rag(risk.getRag())
+            .trend(risk.getTrend())
+            .isOpportunity(risk.getIsOpportunity())
+            .residualRiskScore(risk.getResidualRiskScore())
+            .impactCost(risk.getImpactCost())
+            .impactSchedule(risk.getImpactSchedule())
             .build();
     }
 

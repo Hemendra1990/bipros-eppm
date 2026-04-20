@@ -27,6 +27,22 @@ const trendIcons = {
   IMPROVING: TrendingUp,
 };
 
+/**
+ * Client-side RAG derivation mirroring backend Risk.deriveRag() banding.
+ * Backend RiskSummary DTO currently omits the `rag` field even though the
+ * entity persists it, so we fall back to `riskScore` + `isOpportunity`.
+ */
+function computeRag(r: Partial<RiskResponse>): RiskRag | null {
+  if (r.rag) return r.rag;
+  const score = r.riskScore;
+  if (score == null) return null;
+  if (r.isOpportunity) return "OPPORTUNITY";
+  if (score >= 20) return "CRIMSON";
+  if (score >= 12) return "RED";
+  if (score >= 6) return "AMBER";
+  return "GREEN";
+}
+
 const columns: ColumnDef<RiskResponse>[] = [
   { key: "code", label: "Code" },
   { key: "title", label: "Title" },
@@ -42,8 +58,9 @@ const columns: ColumnDef<RiskResponse>[] = [
   {
     key: "rag",
     label: "RAG",
-    render: (val: unknown) => {
-      const rag = val as RiskRag;
+    render: (_val: unknown, row: RiskResponse) => {
+      const rag = computeRag(row);
+      if (!rag) return <span className="text-slate-500">—</span>;
       return (
         <span className={`px-2 py-1 rounded text-xs font-bold ${ragColors[rag] || ""}`}>
           {rag}
@@ -100,7 +117,7 @@ export default function RisksPage() {
   const { data: risks = [], isLoading } = useQuery({
     queryKey: ["risks", projectId],
     queryFn: () => riskApi.getRisksByProject(projectId),
-    select: (response) => response.data?.content || [],
+    select: (response) => response.data || [],
   });
 
   const createMutation = useMutation({
@@ -113,9 +130,11 @@ export default function RisksPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const crimsonCount = risks.filter((r: RiskResponse) => r.rag === "CRIMSON").length;
-  const redCount = risks.filter((r: RiskResponse) => r.rag === "RED").length;
-  const opportunityCount = risks.filter((r: RiskResponse) => r.rag === "OPPORTUNITY").length;
+  const crimsonCount = risks.filter((r: RiskResponse) => computeRag(r) === "CRIMSON").length;
+  const redCount = risks.filter((r: RiskResponse) => computeRag(r) === "RED").length;
+  const amberCount = risks.filter((r: RiskResponse) => computeRag(r) === "AMBER").length;
+  const greenCount = risks.filter((r: RiskResponse) => computeRag(r) === "GREEN").length;
+  const opportunityCount = risks.filter((r: RiskResponse) => computeRag(r) === "OPPORTUNITY").length;
 
   return (
     <div className="space-y-6">
@@ -136,15 +155,11 @@ export default function RisksPage() {
         </div>
         <div className="bg-amber-900/20 rounded-lg border border-amber-800 p-4">
           <p className="text-xs text-slate-400 uppercase">Amber</p>
-          <p className="text-2xl font-bold text-amber-300">
-            {risks.filter((r: RiskResponse) => r.rag === "AMBER").length}
-          </p>
+          <p className="text-2xl font-bold text-amber-300">{amberCount}</p>
         </div>
         <div className="bg-emerald-900/20 rounded-lg border border-emerald-800 p-4">
           <p className="text-xs text-slate-400 uppercase">Green</p>
-          <p className="text-2xl font-bold text-emerald-300">
-            {risks.filter((r: RiskResponse) => r.rag === "GREEN").length}
-          </p>
+          <p className="text-2xl font-bold text-emerald-300">{greenCount}</p>
         </div>
         <div className="bg-blue-900/20 rounded-lg border border-blue-800 p-4">
           <p className="text-xs text-slate-400 uppercase">Opportunities</p>
@@ -171,7 +186,7 @@ export default function RisksPage() {
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-white"
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                placeholder="DMIC-RSK-025"
+                placeholder="RISK-DMIC-025"
               />
             </div>
             <div>

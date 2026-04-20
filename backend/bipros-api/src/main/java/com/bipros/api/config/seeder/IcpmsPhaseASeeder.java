@@ -34,6 +34,7 @@ import com.bipros.security.domain.repository.RoleRepository;
 import com.bipros.security.domain.repository.UserCorridorScopeRepository;
 import com.bipros.security.domain.repository.UserModuleAccessRepository;
 import com.bipros.security.domain.repository.UserRepository;
+import com.bipros.security.domain.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -83,6 +84,7 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
     private final WbsNodeRepository wbsNodeRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
     private final UserModuleAccessRepository userModuleAccessRepository;
     private final UserCorridorScopeRepository userCorridorScopeRepository;
     private final PasswordEncoder passwordEncoder;
@@ -178,6 +180,7 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
     private Calendar saveCalendar(String name, String description, int daysPerWeek,
                                   DayOfWeek[] workingDays, double hoursPerDay) {
         Calendar cal = Calendar.builder()
+                .code(name)
                 .name(name)
                 .description(description)
                 .calendarType(CalendarType.GLOBAL)
@@ -207,18 +210,29 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
     }
 
     // ---------------------- DMIC hierarchy ----------------------
+    //
+    // Corrected classification (GAP #3 / GAP #4):
+    //   EPS tree — corridor LOCATIONS  (DMIC programme -> 5 geographic regions)
+    //   OBS tree — ORGANISATION hierarchy (NICDC -> DMICDC -> SPVs/PMCs/EPCs/Auditors)
+    // Projects/WBS nodes reference the geographic region via epsNodeId and the
+    // responsible organisation via obsNodeId.
 
-    private record DmicHierarchy(EpsNode programme, Map<String, ObsNode> nodes, Project project) {}
+    private record DmicHierarchy(
+            EpsNode programme,
+            Map<String, EpsNode> geoNodes,
+            Map<String, ObsNode> obsNodes,
+            Project project) {}
 
     private DmicHierarchy seedDmicHierarchy(Map<String, Organisation> orgs) {
+        // --- EPS: DMIC programme + 5 geographic corridor nodes ---
         EpsNode programme = new EpsNode();
         programme.setCode("DMIC");
         programme.setName("Delhi Mumbai Industrial Corridor");
         programme.setSortOrder(0);
         programme = epsNodeRepository.save(programme);
 
-        Map<String, ObsNode> nodes = new HashMap<>();
-        String[][] nodeSpecs = {
+        Map<String, EpsNode> geoNodes = new HashMap<>();
+        String[][] geoSpecs = {
                 {"DMIC-N03", "Dholera Special Investment Region (Gujarat)"},
                 {"DMIC-N04", "Shendra-Bidkin Industrial Area (Maharashtra)"},
                 {"DMIC-N05", "Khushkhera-Bhiwadi-Neemrana (Rajasthan)"},
@@ -226,20 +240,47 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
                 {"DMIC-N08", "Ponneri (Tamil Nadu)"}
         };
         int order = 0;
-        for (String[] spec : nodeSpecs) {
-            ObsNode obs = new ObsNode();
-            obs.setCode(spec[0]);
-            obs.setName(spec[1]);
-            obs.setSortOrder(order++);
-            nodes.put(spec[0], obsNodeRepository.save(obs));
+        for (String[] spec : geoSpecs) {
+            EpsNode geo = new EpsNode();
+            geo.setCode(spec[0]);
+            geo.setName(spec[1]);
+            geo.setParentId(programme.getId());
+            geo.setSortOrder(order++);
+            geoNodes.put(spec[0], epsNodeRepository.save(geo));
         }
 
+        // --- OBS: one node per organisation, tree via parent_organisation_id ---
+        Map<String, ObsNode> obsNodes = new HashMap<>();
+        // First pass: insert all OBS rows without parent, keyed by org code
+        for (Organisation org : orgs.values()) {
+            ObsNode o = new ObsNode();
+            o.setCode(org.getCode());
+            o.setName(org.getName());
+            o.setDescription(org.getOrganisationType().name());
+            o.setSortOrder(0);
+            obsNodes.put(org.getCode(), obsNodeRepository.save(o));
+        }
+        // Second pass: wire parentId from organisations.parent_organisation_id
+        int obsOrder = 0;
+        for (Organisation org : orgs.values()) {
+            ObsNode node = obsNodes.get(org.getCode());
+            node.setSortOrder(obsOrder++);
+            if (org.getParentOrganisationId() != null) {
+                orgs.values().stream()
+                        .filter(o -> o.getId().equals(org.getParentOrganisationId()))
+                        .findFirst()
+                        .ifPresent(parent -> node.setParentId(obsNodes.get(parent.getCode()).getId()));
+            }
+            obsNodeRepository.save(node);
+        }
+
+        // --- Master programme project (EPS = DMIC root, OBS = DMICDC) ---
         Project project = new Project();
         project.setCode("DMIC-PROG");
         project.setName("DMIC Master Programme");
         project.setDescription("Delhi Mumbai Industrial Corridor — master programme project");
         project.setEpsNodeId(programme.getId());
-        project.setObsNodeId(nodes.get("DMIC-N03").getId());
+        project.setObsNodeId(obsNodes.get("DMICDC").getId());
         project.setPlannedStartDate(LocalDate.of(2023, 4, 1));
         project.setPlannedFinishDate(LocalDate.of(2029, 3, 31));
         project.setDataDate(LocalDate.of(2026, 4, 1));
@@ -247,7 +288,7 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
         project.setPriority(100);
         project = projectRepository.save(project);
 
-        return new DmicHierarchy(programme, nodes, project);
+        return new DmicHierarchy(programme, geoNodes, obsNodes, project);
     }
 
     // ---------------------- WBS ----------------------
@@ -260,13 +301,16 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
         UUID tataId = orgs.get("TATA-PROJ").getId();
         UUID afconsId = orgs.get("AFCONS").getId();
 
-        // Level 1: Programme root
-        WbsNode root = wbs(map, "DMIC", "DMIC Programme", null, h.project.getId(), h.nodes.get("DMIC-N03").getId(),
+        // WBS nodes point at the responsible organisation's OBS node (org tree).
+        UUID dmicdcObs = h.obsNodes.get("DMICDC").getId();
+
+        // Level 1: Programme root — owned by DMICDC (SPV)
+        WbsNode root = wbs(map, "DMIC", "DMIC Programme", null, h.project.getId(), dmicdcObs,
                 0, 1, WbsType.PROGRAMME, WbsPhase.PROGRAMME, WbsStatus.ACTIVE, dmicdcId,
                 LocalDate.of(2023, 4, 1), LocalDate.of(2029, 3, 31),
                 new BigDecimal("150000.00"), null, AssetClass.ROAD);
 
-        // Level 2: 5 corridor nodes
+        // Level 2: 5 corridor nodes — still owned by DMICDC at programme level
         String[][] level2 = {
                 {"DMIC-N03", "Dholera SIR Node", "DMIC", "22000.00", "ROAD"},
                 {"DMIC-N04", "Shendra-Bidkin Node", "DMIC", "18500.00", "ROAD"},
@@ -276,7 +320,7 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
         };
         int order = 1;
         for (String[] n : level2) {
-            wbs(map, n[0], n[1], n[2], h.project.getId(), h.nodes.get(n[0]).getId(), order++, 2,
+            wbs(map, n[0], n[1], n[2], h.project.getId(), dmicdcObs, order++, 2,
                     WbsType.NODE, WbsPhase.CONSTRUCTION, WbsStatus.IN_PROGRESS, dmicdcId,
                     LocalDate.of(2023, 4, 1), LocalDate.of(2028, 12, 31),
                     new BigDecimal(n[3]), "POLY-" + n[0], AssetClass.valueOf(n[4]));
@@ -289,24 +333,24 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
                 {"DMIC-N03-P03", "Power Distribution & Substations (N03)", "2500.00", "POWER", "POLY-N03-P03"},
                 {"DMIC-N03-P04", "ICT/Smart City Systems (N03)", "1400.00", "ICT", "POLY-N03-P04"},
                 {"DMIC-N03-P05", "Green Infrastructure & Landscaping (N03)", "900.00", "GREEN_INFRASTRUCTURE", "POLY-N03-P05"}
-        }, lntId);
+        }, lntId, "LNT-IDPL");
         seedNodePackages(map, h, "DMIC-N04", new String[][]{
                 {"DMIC-N04-P01", "Shendra Trunk Roads Package", "1600.00", "ROAD", "POLY-N04-P01"},
                 {"DMIC-N04-P02", "Bidkin Industrial Water Supply", "1400.00", "WATER", "POLY-N04-P02"},
                 {"DMIC-N04-P03", "Substation & Transmission (N04)", "1900.00", "POWER", "POLY-N04-P03"}
-        }, tataId);
+        }, tataId, "TATA-PROJ");
         seedNodePackages(map, h, "DMIC-N05", new String[][]{
                 {"DMIC-N05-P01", "Neemrana-Bhiwadi Arterial Roads", "1500.00", "ROAD", "POLY-N05-P01"},
                 {"DMIC-N05-P02", "Dedicated Freight Corridor Spur (N05)", "2100.00", "RAIL", "POLY-N05-P02"}
-        }, afconsId);
+        }, afconsId, "AFCONS");
         seedNodePackages(map, h, "DMIC-N06", new String[][]{
                 {"DMIC-N06-P01", "Pithampur Logistic Hub Roads", "1300.00", "ROAD", "POLY-N06-P01"},
                 {"DMIC-N06-P02", "Pithampur Power Distribution", "1100.00", "POWER", "POLY-N06-P02"}
-        }, tataId);
+        }, tataId, "TATA-PROJ");
         seedNodePackages(map, h, "DMIC-N08", new String[][]{
                 {"DMIC-N08-P01", "Ponneri SIR Trunk Roads", "1200.00", "ROAD", "POLY-N08-P01"},
                 {"DMIC-N08-P02", "Ponneri ICT & Smart Utility Monitoring", "800.00", "ICT", "POLY-N08-P02"}
-        }, lntId);
+        }, lntId, "LNT-IDPL");
 
         // Level 4: Work packages (subset, sample fidelity for the Satellite Gate scenario)
         seedWorkPackages(map, h, "DMIC-N03-P01", new String[][]{
@@ -315,26 +359,41 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
                 {"DMIC-N03-P01-WP03", "Box Culverts & Drainage Structures", "430.00", "ROAD", "POLY-N03-P01-WP03"},
                 {"DMIC-N03-P01-WP04", "Utility Corridor Ducts", "220.00", "ICT", "POLY-N03-P01-WP04"},
                 {"DMIC-N03-P01-WP05", "Road Furniture & Signage", "180.00", "ROAD", "POLY-N03-P01-WP05"}
-        }, lntId);
+        }, lntId, "LNT-IDPL");
+        // Phase M2 activities reference these WBS work packages for N03-P02/P03/P04
+        seedWorkPackages(map, h, "DMIC-N03-P02", new String[][]{
+                {"DMIC-N03-P02-WP01", "WTP Intake, Civil & M&E Works", "1100.00", "WATER", "POLY-N03-P02-WP01"},
+                {"DMIC-N03-P02-WP02", "Water Transmission Main (DN 1200mm)", "700.00", "WATER", "POLY-N03-P02-WP02"}
+        }, lntId, "LNT-IDPL");
+        seedWorkPackages(map, h, "DMIC-N03-P03", new String[][]{
+                {"DMIC-N03-P03-WP01", "Sub-station Civil Works & GIS Building", "600.00", "POWER", "POLY-N03-P03-WP01"},
+                {"DMIC-N03-P03-WP02", "GIS Switchgear, Transformers & 33kV", "1700.00", "POWER", "POLY-N03-P03-WP02"},
+                {"DMIC-N03-P03-WP03", "220kV Bay HV Testing & Commissioning", "200.00", "POWER", "POLY-N03-P03-WP03"}
+        }, lntId, "LNT-IDPL");
+        seedWorkPackages(map, h, "DMIC-N03-P04", new String[][]{
+                {"DMIC-N03-P04-WP01", "ICT Backbone Ring Fibre Optic Network", "900.00", "ICT", "POLY-N03-P04-WP01"},
+                {"DMIC-N03-P04-WP02", "Smart City Command Centre (SCCC) Building", "500.00", "ICT", "POLY-N03-P04-WP02"}
+        }, lntId, "LNT-IDPL");
         seedWorkPackages(map, h, "DMIC-N04-P01", new String[][]{
                 {"DMIC-N04-P01-WP01", "Shendra Main Arterial Package A", "900.00", "ROAD", "POLY-N04-P01-WP01"},
                 {"DMIC-N04-P01-WP02", "Shendra Main Arterial Package B", "700.00", "ROAD", "POLY-N04-P01-WP02"}
-        }, tataId);
+        }, tataId, "TATA-PROJ");
         seedWorkPackages(map, h, "DMIC-N05-P02", new String[][]{
                 {"DMIC-N05-P02-WP01", "DFC Track Bed Construction (Neemrana Spur)", "1200.00", "RAIL", "POLY-N05-P02-WP01"},
                 {"DMIC-N05-P02-WP02", "DFC Electrification & OHE", "900.00", "POWER", "POLY-N05-P02-WP02"}
-        }, afconsId);
+        }, afconsId, "AFCONS");
 
         log.info("[IC-PMS Phase A] seeded {} WBS elements", map.size());
         return map;
     }
 
     private void seedNodePackages(Map<String, WbsNode> map, DmicHierarchy h, String parentCode,
-                                  String[][] specs, UUID contractorOrgId) {
+                                  String[][] specs, UUID contractorOrgId, String contractorCode) {
+        UUID obsId = h.obsNodes.get(contractorCode).getId();
         int order = 1;
         for (String[] s : specs) {
             wbs(map, s[0], s[1], parentCode, h.project.getId(),
-                    h.nodes.get(parentCode).getId(), order++, 3,
+                    obsId, order++, 3,
                     WbsType.PACKAGE, WbsPhase.CONSTRUCTION, WbsStatus.IN_PROGRESS, contractorOrgId,
                     LocalDate.of(2024, 1, 1), LocalDate.of(2027, 12, 31),
                     new BigDecimal(s[2]), s[4], AssetClass.valueOf(s[3]));
@@ -342,12 +401,12 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
     }
 
     private void seedWorkPackages(Map<String, WbsNode> map, DmicHierarchy h, String parentCode,
-                                  String[][] specs, UUID contractorOrgId) {
-        String nodeCode = parentCode.substring(0, "DMIC-NXX".length());
+                                  String[][] specs, UUID contractorOrgId, String contractorCode) {
+        UUID obsId = h.obsNodes.get(contractorCode).getId();
         int order = 1;
         for (String[] s : specs) {
             wbs(map, s[0], s[1], parentCode, h.project.getId(),
-                    h.nodes.get(nodeCode).getId(), order++, 4,
+                    obsId, order++, 4,
                     WbsType.WORK_PACKAGE, WbsPhase.CONSTRUCTION, WbsStatus.IN_PROGRESS, contractorOrgId,
                     LocalDate.of(2024, 6, 1), LocalDate.of(2027, 6, 30),
                     new BigDecimal(s[2]), s[4], AssetClass.valueOf(s[3]));
@@ -470,8 +529,9 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
         u.setAuthMethods(authMethods);
         u.setEnabled(true);
         u = userRepository.save(u);
-        u.getRoles().add(new UserRole(u.getId(), springRole.getId()));
-        userRepository.save(u);
+        // Persist the UserRole join row directly — the @OneToMany on User has no cascade,
+        // so simply adding to u.getRoles() doesn't insert the row (which breaks JWT role claims).
+        userRoleRepository.save(new UserRole(u.getId(), springRole.getId()));
 
         for (var entry : moduleAccess.entrySet()) {
             userModuleAccessRepository.save(UserModuleAccess.builder()

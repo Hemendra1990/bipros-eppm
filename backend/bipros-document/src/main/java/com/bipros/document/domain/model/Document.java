@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -68,6 +69,26 @@ public class Document extends BaseEntity {
     /** Denormalised last transmittal number for quick display on the register grid. */
     @Column(name = "transmittal_number", length = 60)
     private String transmittalNumber;
+
+    /** IC-PMS M6: WBS package code this document is scoped to (e.g. DMIC-N03-P01). */
+    @Column(name = "wbs_package_code", length = 60)
+    private String wbsPackageCode;
+
+    /** IC-PMS M6: originating organisation short-name (denorm for register grid). */
+    @Column(name = "issued_by", length = 100)
+    private String issuedBy;
+
+    /** IC-PMS M6: date the revision was issued (stamped on the IFC/IFA drawing). */
+    @Column(name = "issued_date")
+    private LocalDate issuedDate;
+
+    /** IC-PMS M6: approving organisation short-name (Employer/PMC). */
+    @Column(name = "approved_by", length = 100)
+    private String approvedBy;
+
+    /** IC-PMS M6: date the document was approved (IFC stamp). */
+    @Column(name = "approved_date")
+    private LocalDate approvedDate;
 
     @Column(columnDefinition = "TEXT")
     private String tags;

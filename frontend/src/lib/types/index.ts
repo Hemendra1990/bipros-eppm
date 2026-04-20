@@ -180,7 +180,10 @@ export interface ActivityResponse {
   lateFinishDate?: string | null;
   actualStartDate: string | null;
   actualFinishDate: string | null;
+  // Backend returns `originalDuration` (float); `duration` kept for legacy callers.
   duration: number;
+  originalDuration?: number | null;
+  atCompletionDuration?: number | null;
   percentComplete: number;
   slack: number;
   totalFloat: number;

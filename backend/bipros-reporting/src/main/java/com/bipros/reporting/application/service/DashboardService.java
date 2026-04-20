@@ -165,7 +165,7 @@ public class DashboardService {
             case "PCT_COMPLETE" -> {
                 Object result = em.createNativeQuery(
                         "SELECT CASE WHEN COUNT(*) > 0 THEN " +
-                        "ROUND(100.0 * COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) / COUNT(*), 2) " +
+                        "ROUND((100.0 * COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) / COUNT(*))::numeric, 2) " +
                         "ELSE 0 END FROM activity.activities WHERE project_id = ?1")
                     .setParameter(1, projectId.toString())
                     .getSingleResult();
@@ -188,7 +188,7 @@ public class DashboardService {
             case "BUDGET_UTILIZATION" -> {
                 Object result = em.createNativeQuery(
                         "SELECT CASE WHEN SUM(budgeted_cost) > 0 THEN " +
-                        "ROUND(100.0 * SUM(actual_cost) / SUM(budgeted_cost), 2) " +
+                        "ROUND((100.0 * SUM(actual_cost) / SUM(budgeted_cost))::numeric, 2) " +
                         "ELSE 0 END FROM cost.activity_expenses WHERE project_id = ?1")
                     .setParameter(1, projectId.toString())
                     .getSingleResult();

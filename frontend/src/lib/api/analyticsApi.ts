@@ -30,6 +30,23 @@ export interface AnalyticsQueryRequest {
   projectId?: string;
 }
 
+/**
+ * Per-contractor performance/compliance rollup.
+ * Populated by `/v1/analytics/contractor-performance`.
+ * `safetyScore` is `null` because safety incident ingestion isn't wired yet
+ * — the UI should render "n/a" rather than fabricate a value.
+ */
+export interface ContractorPerformance {
+  orgId: string;
+  orgCode: string;
+  orgName: string;
+  performanceScore: number | null;
+  safetyScore: number | null;
+  complianceScore: number | null;
+  activeContracts: number;
+  totalContractValueCr: number;
+}
+
 export const analyticsApi = {
   runPredictions: (projectId: string) =>
     apiClient
@@ -64,4 +81,11 @@ export const analyticsApi = {
         { params: { limit } }
       )
       .then((r) => ({ data: r.data.data ?? [] })),
+
+  getContractorPerformance: () =>
+    apiClient
+      .get<ApiResponse<ContractorPerformance[]>>(
+        `/v1/analytics/contractor-performance`
+      )
+      .then((r) => r.data.data ?? []),
 };

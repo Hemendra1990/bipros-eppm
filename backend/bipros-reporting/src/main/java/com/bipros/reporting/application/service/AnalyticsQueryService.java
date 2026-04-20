@@ -146,13 +146,17 @@ public class AnalyticsQueryService {
     try {
       Map<String, Object> scheduleData = getScheduleMetrics(request.getProjectId());
 
-      double spi = (double) scheduleData.getOrDefault("spi", 1.0);
+      // Default to 0 (== "no EVM data") rather than the previous misleading 1.0
+      // which made every empty project look like it was "perfectly on schedule".
+      double spi = (double) scheduleData.getOrDefault("spi", 0.0);
       int delayedActivities = (int) scheduleData.getOrDefault("delayedActivities", 0);
       double completionPercentage = (double) scheduleData.getOrDefault("completionPercentage",
           0.0);
       int daysSlippage = (int) scheduleData.getOrDefault("estimatedSlippage", 0);
 
-      String health = spi >= 0.95 ? "green" : spi >= 0.85 ? "amber" : "red";
+      // SPI of exactly 0 means "no data" — treat as unknown. Otherwise band by ≥0.95/≥0.85.
+      String health = spi == 0.0 ? "unknown"
+          : spi >= 0.95 ? "green" : spi >= 0.85 ? "amber" : "red";
 
       return String.format(
           "Schedule Status: %s\n"
@@ -307,32 +311,52 @@ public class AnalyticsQueryService {
         return metrics;
       }
 
+      // Pull the most recent monthly EVM snapshot for this project. The
+      // public.monthly_evm_snapshots table is populated by IcpmsPhaseESeeder
+      // (see seedMonthlyEvm — 9 rows per project for DMIC rollups). Columns
+      // are bcws (PV), bcwp (EV), acwp (AC). We use the already-computed spi/cpi
+      // from the row when present and fall back to deriving from bcws/bcwp.
       Object[] result = (Object[]) em.createNativeQuery(
-          "SELECT CAST(COALESCE(SUM(pv), 0) AS DOUBLE PRECISION), "
-              + "CAST(COALESCE(SUM(ev), 0) AS DOUBLE PRECISION) "
-              + "FROM evm.earned_value_summary WHERE project_id = ? "
-              + "ORDER BY calculated_at DESC LIMIT 1"
+          "SELECT CAST(COALESCE(bcws, 0) AS DOUBLE PRECISION), "
+              + "CAST(COALESCE(bcwp, 0) AS DOUBLE PRECISION), "
+              + "CAST(COALESCE(acwp, 0) AS DOUBLE PRECISION), "
+              + "CAST(COALESCE(spi, 0) AS DOUBLE PRECISION), "
+              + "CAST(COALESCE(cpi, 0) AS DOUBLE PRECISION) "
+              + "FROM public.monthly_evm_snapshots WHERE project_id = ? "
+              + "ORDER BY report_month DESC LIMIT 1"
       )
           .setParameter(1, projectId)
           .getSingleResult();
 
       double pv = ((Number) result[0]).doubleValue();
       double ev = ((Number) result[1]).doubleValue();
-      double spi = pv > 0 ? ev / pv : 1.0;
+      double ac = ((Number) result[2]).doubleValue();
+      double snapshotSpi = ((Number) result[3]).doubleValue();
+      double snapshotCpi = ((Number) result[4]).doubleValue();
+
+      // Prefer the denormalised values; fall back to deriving from bcws/bcwp/acwp.
+      // If PV is zero, SPI is undefined — surface 0 so the caller/UI can treat as "n/a"
+      // rather than the prior misleading 1.0 default.
+      double spi = snapshotSpi > 0 ? snapshotSpi : (pv > 0 ? ev / pv : 0.0);
+      double cpi = snapshotCpi > 0 ? snapshotCpi : (ac > 0 ? ev / ac : 0.0);
 
       Integer delayedCount = (Integer) em.createNativeQuery(
-          "SELECT COUNT(*) FROM scheduling.activities WHERE project_id = ? "
-              + "AND status = 'NOT_STARTED' AND planned_start < CURRENT_DATE"
+          "SELECT CAST(COUNT(*) AS INTEGER) FROM activity.activities WHERE project_id = ? "
+              + "AND status = 'NOT_STARTED' AND planned_start_date < CURRENT_DATE"
       )
           .setParameter(1, projectId)
           .getSingleResult();
 
       metrics.put("spi", spi);
+      metrics.put("cpi", cpi);
       metrics.put("delayedActivities", delayedCount != null ? delayedCount : 0);
       metrics.put("completionPercentage", Math.min(ev / (pv > 0 ? pv : 1.0) * 100, 100.0));
-      metrics.put("estimatedSlippage", (int) ((1.0 / spi - 1.0) * 10));
+      // Estimated slippage in days — only meaningful when SPI is positive. Zero
+      // means we don't know, not "on schedule".
+      metrics.put("estimatedSlippage", spi > 0 ? (int) ((1.0 / spi - 1.0) * 10) : 0);
     } catch (Exception e) {
-      log.debug("Could not retrieve schedule metrics for projectId={}", projectId);
+      log.debug("Could not retrieve schedule metrics for projectId={}: {}",
+          projectId, e.getMessage());
     }
     return metrics;
   }

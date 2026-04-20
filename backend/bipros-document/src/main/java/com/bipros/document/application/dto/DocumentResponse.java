@@ -6,6 +6,7 @@ import com.bipros.document.domain.model.DocumentType;
 import com.bipros.document.domain.model.DrawingDiscipline;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record DocumentResponse(
@@ -24,6 +25,11 @@ public record DocumentResponse(
     DocumentType documentType,
     DrawingDiscipline discipline,
     String transmittalNumber,
+    String wbsPackageCode,
+    String issuedBy,
+    LocalDate issuedDate,
+    String approvedBy,
+    LocalDate approvedDate,
     String tags,
     Instant createdAt,
     Instant updatedAt
@@ -45,6 +51,11 @@ public record DocumentResponse(
             document.getDocumentType(),
             document.getDiscipline(),
             document.getTransmittalNumber(),
+            document.getWbsPackageCode(),
+            document.getIssuedBy(),
+            document.getIssuedDate(),
+            document.getApprovedBy(),
+            document.getApprovedDate(),
             document.getTags(),
             document.getCreatedAt(),
             document.getUpdatedAt()

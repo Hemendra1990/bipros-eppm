@@ -8,6 +8,8 @@ import {
   type CashFlowForecastItem,
   type PeriodCostAggregation,
 } from "@/lib/api/costApi";
+import { projectApi } from "@/lib/api/projectApi";
+import type { WbsNodeResponse } from "@/lib/types";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import {
   LineChart,
@@ -19,6 +21,46 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+
+/**
+ * IC-PMS monetary values are budgeted in INR crores (1 crore = 10,000,000 INR).
+ * WBS nodes carry `budgetCrores`; cost-summary/expense APIs return absolute INR.
+ * We display everything in ₹cr with two-decimal precision for uniformity.
+ */
+const INR_PER_CRORE = 10_000_000;
+
+function formatCrores(crores: number): string {
+  // Use Indian digit grouping (lakh/crore) for readability.
+  const rounded = Number.isFinite(crores) ? Math.round(crores * 100) / 100 : 0;
+  return `₹${rounded.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}cr`;
+}
+
+function formatInrAsCrores(inr: number): string {
+  return formatCrores((inr || 0) / INR_PER_CRORE);
+}
+
+function sumBudgetCrores(nodes: WbsNodeResponse[]): number {
+  // Recursive sum to cover cases where only leaves carry budgetCrores.
+  let total = 0;
+  for (const node of nodes) {
+    if (node.budgetCrores != null) total += Number(node.budgetCrores);
+    if (node.children?.length) total += sumBudgetCrores(node.children);
+  }
+  return total;
+}
+
+function pickTopLevelBudget(nodes: WbsNodeResponse[]): number {
+  // Prefer the declared top-level budget (e.g. DMIC root 150000) and fall back
+  // to summing all levels if no root has budgetCrores.
+  const rootsWithBudget = nodes.filter((n) => n.budgetCrores != null);
+  if (rootsWithBudget.length > 0) {
+    return rootsWithBudget.reduce((s, n) => s + Number(n.budgetCrores ?? 0), 0);
+  }
+  return sumBudgetCrores(nodes);
+}
 
 interface SummaryCard {
   label: string;
@@ -63,10 +105,25 @@ export function CostsTab({ projectId }: { projectId: string }) {
     queryFn: () => costApi.getCostPeriods(projectId),
   });
 
+  // Pull the WBS tree so we can derive the budget from `budgetCrores` on the
+  // project's WBS nodes (the legacy cost-summary endpoint returns 0 when no
+  // expense rows exist even though the WBS has a plan budget).
+  const { data: wbsData } = useQuery({
+    queryKey: ["wbs", projectId],
+    queryFn: () => projectApi.getWbsTree(projectId),
+  });
+
   const summary = summaryData?.data;
   const expenses = expensesData?.data?.content ?? [];
   const forecastItems: CashFlowForecastItem[] = forecastData?.data ?? [];
   const periodAggregations: PeriodCostAggregation[] = periodData?.data ?? [];
+  const wbsTree: WbsNodeResponse[] = wbsData?.data ?? [];
+
+  const wbsBudgetCrores = pickTopLevelBudget(wbsTree);
+  // summary amounts are INR; convert to crores for display.
+  const actualCrores = (summary?.totalActual ?? 0) / INR_PER_CRORE;
+  const remainingCrores = Math.max(wbsBudgetCrores - actualCrores, 0);
+  const atCompletionCrores = Math.max(wbsBudgetCrores, actualCrores);
 
   const chartData = forecastItems.map((item) => ({
     period: item.period,
@@ -81,22 +138,22 @@ export function CostsTab({ projectId }: { projectId: string }) {
   const summaryCards: SummaryCard[] = [
     {
       label: "Total Budget",
-      value: `$${(summary?.totalBudget ?? 0).toFixed(2)}`,
+      value: formatCrores(wbsBudgetCrores),
       color: "blue",
     },
     {
       label: "Total Actual",
-      value: `$${(summary?.totalActual ?? 0).toFixed(2)}`,
+      value: formatCrores(actualCrores),
       color: "green",
     },
     {
       label: "Total Remaining",
-      value: `$${(summary?.totalRemaining ?? 0).toFixed(2)}`,
+      value: formatCrores(remainingCrores),
       color: "yellow",
     },
     {
       label: "At Completion",
-      value: `$${(summary?.atCompletion ?? 0).toFixed(2)}`,
+      value: formatCrores(atCompletionCrores),
       color: "purple",
     },
   ];
@@ -105,7 +162,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
     ? [
         {
           label: "Cost Variance (CV)",
-          value: `$${summary.costVariance.toFixed(2)}`,
+          value: formatInrAsCrores(summary.costVariance),
           color: summary.costVariance >= 0 ? "green" : "red",
         },
         {
@@ -126,9 +183,9 @@ export function CostsTab({ projectId }: { projectId: string }) {
     { key: "category", label: "Category", sortable: true },
     {
       key: "amount",
-      label: "Amount",
+      label: "Amount (₹cr)",
       sortable: true,
-      render: (value) => `$${Number(value).toFixed(2)}`,
+      render: (value) => formatInrAsCrores(Number(value)),
     },
     { key: "expenseDate", label: "Date", sortable: true },
   ];
@@ -224,7 +281,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
               <YAxis
                 stroke="#64748b"
                 style={{ fontSize: "12px" }}
-                label={{ value: "Amount ($)", angle: -90, position: "insideLeft" }}
+                label={{ value: "Amount (₹cr)", angle: -90, position: "insideLeft" }}
+                tickFormatter={(v) =>
+                  typeof v === "number" ? (v / INR_PER_CRORE).toFixed(0) : String(v)
+                }
               />
               <Tooltip
                 contentStyle={{
@@ -234,10 +294,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 }}
                 formatter={(value) =>
                   typeof value === "number"
-                    ? `$${value.toLocaleString("en-US", {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}`
+                    ? formatInrAsCrores(value)
                     : String(value ?? "")
                 }
               />
@@ -283,11 +340,11 @@ export function CostsTab({ projectId }: { projectId: string }) {
               <thead>
                 <tr className="border-b border-slate-700 text-left text-slate-400">
                   <th className="px-3 py-2">Period</th>
-                  <th className="px-3 py-2 text-right">Budget</th>
-                  <th className="px-3 py-2 text-right">Actual</th>
-                  <th className="px-3 py-2 text-right">Variance</th>
-                  <th className="px-3 py-2 text-right">Earned Value</th>
-                  <th className="px-3 py-2 text-right">Planned Value</th>
+                  <th className="px-3 py-2 text-right">Budget (₹cr)</th>
+                  <th className="px-3 py-2 text-right">Actual (₹cr)</th>
+                  <th className="px-3 py-2 text-right">Variance (₹cr)</th>
+                  <th className="px-3 py-2 text-right">Earned Value (₹cr)</th>
+                  <th className="px-3 py-2 text-right">Planned Value (₹cr)</th>
                 </tr>
               </thead>
               <tbody>
@@ -298,23 +355,23 @@ export function CostsTab({ projectId }: { projectId: string }) {
                   >
                     <td className="px-3 py-2 text-white">{pa.periodName}</td>
                     <td className="px-3 py-2 text-right text-blue-300">
-                      ${pa.budget.toFixed(2)}
+                      {formatInrAsCrores(pa.budget)}
                     </td>
                     <td className="px-3 py-2 text-right text-green-300">
-                      ${pa.actual.toFixed(2)}
+                      {formatInrAsCrores(pa.actual)}
                     </td>
                     <td
                       className={`px-3 py-2 text-right ${
                         pa.variance >= 0 ? "text-green-300" : "text-red-300"
                       }`}
                     >
-                      ${pa.variance.toFixed(2)}
+                      {formatInrAsCrores(pa.variance)}
                     </td>
                     <td className="px-3 py-2 text-right text-yellow-300">
-                      ${pa.earnedValue.toFixed(2)}
+                      {formatInrAsCrores(pa.earnedValue)}
                     </td>
                     <td className="px-3 py-2 text-right text-purple-300">
-                      ${pa.plannedValue.toFixed(2)}
+                      {formatInrAsCrores(pa.plannedValue)}
                     </td>
                   </tr>
                 ))}

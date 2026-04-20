@@ -39,7 +39,7 @@ export default function RiskPage() {
 
   const { data: risksData, isLoading, error } = useQuery({
     queryKey: ["risks", selectedProjectId],
-    queryFn: () => riskApi.getRisksByProject(selectedProjectId, 0, 50),
+    queryFn: () => riskApi.getRisksByProject(selectedProjectId),
     enabled: !!selectedProjectId,
   });
 

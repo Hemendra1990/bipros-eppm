@@ -136,11 +136,14 @@ export interface CreateProjectResourceAssignmentRequest {
 }
 
 export const resourceApi = {
-  listResources: (page = 0, size = 20) =>
+  // The backend `ResourceController.listResources` returns
+  // `ApiResponse<List<ResourceResponse>>` (a flat array), NOT a Spring Page.
+  // It only accepts optional `type` / `status` filters. We keep the legacy
+  // `page`/`size` positional signature for backwards compatibility with
+  // existing callers, but the parameters are ignored by the server.
+  listResources: (_page = 0, _size = 20) =>
     apiClient
-      .get<ApiResponse<PagedResponse<ResourceResponse>>>("/v1/resources", {
-        params: { page, size },
-      })
+      .get<ApiResponse<ResourceResponse[]>>("/v1/resources")
       .then((r) => r.data),
 
   getResource: (id: string) =>

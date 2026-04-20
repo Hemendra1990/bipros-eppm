@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { ApiResponse, PagedResponse } from "../types";
+import type { ApiResponse } from "../types";
 
 export type RiskRag = "CRIMSON" | "RED" | "AMBER" | "GREEN" | "OPPORTUNITY";
 
@@ -99,10 +99,8 @@ export const riskApi = {
 
   deleteRisk: (id: string) => apiClient.delete(`/v1/risks/${id}`),
 
-  getRisksByProject: (projectId: string, page = 0, size = 20) =>
+  getRisksByProject: (projectId: string) =>
     apiClient
-      .get<ApiResponse<PagedResponse<RiskResponse>>>(`/v1/projects/${projectId}/risks`, {
-        params: { page, size },
-      })
+      .get<ApiResponse<RiskResponse[]>>(`/v1/projects/${projectId}/risks`)
       .then((r) => r.data),
 };

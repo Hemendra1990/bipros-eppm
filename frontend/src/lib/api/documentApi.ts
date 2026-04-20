@@ -213,6 +213,28 @@ export interface AddDocumentVersionRequest {
   changeDescription?: string;
 }
 
+/**
+ * Metadata for multipart uploadDocument — mirrors backend UploadDocumentRequest.
+ * The binary itself is passed separately as a File; all file-derived fields
+ * (fileName, fileSize, mimeType, filePath) are set server-side.
+ */
+export interface UploadDocumentMetadata {
+  folderId?: string | null;
+  documentNumber: string;
+  title: string;
+  description?: string | null;
+  status?: DocumentStatus | null;
+  documentType?: DocumentType | null;
+  discipline?: DrawingDisciplineType | null;
+  transmittalNumber?: string | null;
+  wbsPackageCode?: string | null;
+  issuedBy?: string | null;
+  issuedDate?: string | null;
+  approvedBy?: string | null;
+  approvedDate?: string | null;
+  tags?: string | null;
+}
+
 export interface CreateTransmittalRequest {
   projectId: string;
   transmittalNumber: string;
@@ -288,6 +310,73 @@ export const documentApi = {
     apiClient
       .post<ApiResponse<Document>>(`/v1/projects/${projectId}/documents`, data)
       .then((r) => r.data),
+
+  /**
+   * Multipart upload: metadata JSON part + binary file part.
+   * Server derives fileName/fileSize/mimeType/filePath from the file.
+   */
+  uploadDocument: (
+    projectId: string,
+    metadata: UploadDocumentMetadata,
+    file: File
+  ) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" })
+    );
+    form.append("file", file);
+    return apiClient
+      .post<ApiResponse<Document>>(
+        `/v1/projects/${projectId}/documents/upload`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((r) => r.data);
+  },
+
+  /** Downloads the current-version binary as a Blob. */
+  downloadDocument: (projectId: string, documentId: string) =>
+    apiClient
+      .get<Blob>(
+        `/v1/projects/${projectId}/documents/${documentId}/download`,
+        { responseType: "blob", params: { disposition: "attachment" } }
+      )
+      .then((r) => r.data),
+
+  /** Downloads a specific historical version binary as a Blob. */
+  downloadVersion: (
+    projectId: string,
+    documentId: string,
+    versionNumber: number
+  ) =>
+    apiClient
+      .get<Blob>(
+        `/v1/projects/${projectId}/documents/${documentId}/versions/${versionNumber}/download`,
+        { responseType: "blob", params: { disposition: "attachment" } }
+      )
+      .then((r) => r.data),
+
+  /** Multipart upload of a new version of an existing document. */
+  uploadVersion: (
+    projectId: string,
+    documentId: string,
+    file: File,
+    changeDescription?: string
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (changeDescription) {
+      form.append("changeDescription", changeDescription);
+    }
+    return apiClient
+      .post<ApiResponse<DocumentVersion>>(
+        `/v1/projects/${projectId}/documents/${documentId}/versions/upload`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((r) => r.data);
+  },
 
   updateDocument: (projectId: string, documentId: string, data: UpdateDocumentRequest) =>
     apiClient

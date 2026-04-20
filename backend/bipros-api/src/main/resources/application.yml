@@ -39,6 +39,12 @@ spring:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
 
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 60MB
+
 server:
   port: 8080
   servlet:
@@ -51,6 +57,12 @@ bipros:
       secret: bipros-dev-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256
       access-token-expiration: 3600000   # 1 hour
       refresh-token-expiration: 86400000 # 24 hours
+
+  # Document binary storage — local filesystem; point at shared volume in prod or swap to S3
+  document:
+    storage:
+      path: ./storage/documents
+      max-file-size: 52428800   # 50 MB in bytes; must match spring.servlet.multipart.max-file-size
 
 # OpenAPI
 springdoc:

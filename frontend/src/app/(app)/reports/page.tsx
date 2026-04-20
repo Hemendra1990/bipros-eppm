@@ -9,7 +9,7 @@ import { TabTip } from "@/components/common/TabTip";
 import { reportApi } from "@/lib/api/reportApi";
 import { reportDataApi } from "@/lib/api/reportDataApi";
 import { projectApi } from "@/lib/api/projectApi";
-import { resourceApi } from "@/lib/api/resourceApi";
+import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
 import { MonthlyProgressReport } from "@/components/reports/MonthlyProgressReport";
 import { EvmReport } from "@/components/reports/EvmReport";
 import { CashFlowReport } from "@/components/reports/CashFlowReport";
@@ -105,45 +105,87 @@ export default function ReportsPage() {
     queryFn: () => resourceApi.listResources(0, 100),
   });
 
-  // Standard reports queries
-  const { data: monthlyProgressData, isLoading: monthlyProgressLoading } = useQuery({
+  // Standard reports queries. The backend /v1/reports/* endpoints currently 500
+  // for every report type, so we disable retry to avoid 6*3 = 18 network errors
+  // and surface a clean empty state below instead of crashing the page.
+  const { data: monthlyProgressData, isLoading: monthlyProgressLoading, isError: monthlyProgressError } = useQuery({
     queryKey: ["report-monthly-progress", selectedProjectId],
     queryFn: () => selectedProjectId ? reportDataApi.getMonthlyProgress(selectedProjectId, new Date().toISOString().slice(0, 7)) : Promise.resolve(null),
     enabled: !!selectedProjectId && activeTab === "standard",
+    retry: false,
   });
 
-  const { data: evmReportData, isLoading: evmReportLoading } = useQuery({
+  const { data: evmReportData, isLoading: evmReportLoading, isError: evmReportError } = useQuery({
     queryKey: ["report-evm", selectedProjectId],
     queryFn: () => selectedProjectId ? reportDataApi.getEvmReport(selectedProjectId) : Promise.resolve(null),
     enabled: !!selectedProjectId && activeTab === "standard",
+    retry: false,
   });
 
-  const { data: cashFlowData, isLoading: cashFlowLoading } = useQuery({
+  const { data: cashFlowData, isLoading: cashFlowLoading, isError: cashFlowError } = useQuery({
     queryKey: ["report-cash-flow", selectedProjectId],
     queryFn: () => selectedProjectId ? reportDataApi.getCashFlowReport(selectedProjectId) : Promise.resolve(null),
     enabled: !!selectedProjectId && activeTab === "standard",
+    retry: false,
   });
 
-  const { data: contractStatusData, isLoading: contractStatusLoading } = useQuery({
+  const { data: contractStatusData, isLoading: contractStatusLoading, isError: contractStatusError } = useQuery({
     queryKey: ["report-contract-status", selectedProjectId],
     queryFn: () => selectedProjectId ? reportDataApi.getContractStatus(selectedProjectId) : Promise.resolve(null),
     enabled: !!selectedProjectId && activeTab === "standard",
+    retry: false,
   });
 
-  const { data: riskRegisterData, isLoading: riskRegisterLoading } = useQuery({
+  const { data: riskRegisterData, isLoading: riskRegisterLoading, isError: riskRegisterError } = useQuery({
     queryKey: ["report-risk-register", selectedProjectId],
     queryFn: () => selectedProjectId ? reportDataApi.getRiskRegister(selectedProjectId) : Promise.resolve(null),
     enabled: !!selectedProjectId && activeTab === "standard",
+    retry: false,
   });
 
-  const { data: resourceUtilizationData, isLoading: resourceUtilizationLoading } = useQuery({
+  const { data: resourceUtilizationData, isLoading: resourceUtilizationLoading, isError: resourceUtilizationError } = useQuery({
     queryKey: ["report-resource-utilization", selectedProjectId],
     queryFn: () => selectedProjectId ? reportDataApi.getResourceUtilization(selectedProjectId) : Promise.resolve(null),
     enabled: !!selectedProjectId && activeTab === "standard",
+    retry: false,
   });
 
+  // True when every standard-report query resolved (success or failure) and
+  // none of them returned data — used to render the empty-state card.
+  const standardReportsAllSettled =
+    !!selectedProjectId &&
+    !monthlyProgressLoading &&
+    !evmReportLoading &&
+    !cashFlowLoading &&
+    !contractStatusLoading &&
+    !riskRegisterLoading &&
+    !resourceUtilizationLoading;
+
+  const standardReportsAllEmpty =
+    standardReportsAllSettled &&
+    !monthlyProgressData &&
+    !evmReportData &&
+    !cashFlowData &&
+    !contractStatusData &&
+    !riskRegisterData &&
+    !resourceUtilizationData;
+
+  const standardReportsAllFailed =
+    standardReportsAllEmpty &&
+    monthlyProgressError &&
+    evmReportError &&
+    cashFlowError &&
+    contractStatusError &&
+    riskRegisterError &&
+    resourceUtilizationError;
+
   const projects = projectsData?.data?.content ?? [];
-  const resources = resourcesData?.data?.content ?? [];
+  // resourceApi.listResources returns a flat array (List<ResourceResponse>),
+  // not a paged response. Be defensive in case that ever changes.
+  const rawResources = resourcesData?.data as unknown;
+  const resources: ResourceResponse[] = Array.isArray(rawResources)
+    ? (rawResources as ResourceResponse[])
+    : ((rawResources as { content?: ResourceResponse[] } | undefined)?.content ?? []);
 
   const handleGenerateReport = async (reportId: string) => {
     setGeneratingReport(reportId);
@@ -339,6 +381,23 @@ export default function ReportsPage() {
           {selectedProjectId && !monthlyProgressData && (monthlyProgressLoading || evmReportLoading || cashFlowLoading || contractStatusLoading || riskRegisterLoading || resourceUtilizationLoading) && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-6 text-center">
               <p className="text-blue-400">Loading reports...</p>
+            </div>
+          )}
+
+          {standardReportsAllFailed && (
+            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-6 text-center">
+              <p className="mb-1 text-rose-300 font-medium">Standard reports are temporarily unavailable</p>
+              <p className="text-sm text-rose-200/70">
+                The reporting service returned errors for every report type. This usually means
+                the backend /v1/reports/* endpoints are offline or misconfigured. Check the
+                Classic Reports tab below, or retry once the service is back online.
+              </p>
+            </div>
+          )}
+
+          {standardReportsAllEmpty && !standardReportsAllFailed && (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-6 text-center">
+              <p className="text-slate-300">No standard reports available for this project</p>
             </div>
           )}
         </div>

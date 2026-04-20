@@ -33,7 +33,8 @@ import java.util.UUID;
         @Index(name = "idx_resource_parent_id", columnList = "parent_id"),
         @Index(name = "idx_resource_calendar_id", columnList = "calendar_id"),
         @Index(name = "idx_resource_category", columnList = "resource_category"),
-        @Index(name = "idx_resource_wbs_assignment", columnList = "wbs_assignment_id")
+        @Index(name = "idx_resource_wbs_assignment", columnList = "wbs_assignment_id"),
+        @Index(name = "idx_resource_responsible_contractor", columnList = "responsible_contractor_id")
     })
 @Getter
 @Setter
@@ -115,6 +116,14 @@ public class Resource extends BaseEntity {
   /** IC-PMS M8: assigned WBS package (denorm, matches WbsNode.code). */
   @Column(name = "wbs_assignment_id", length = 60)
   private String wbsAssignmentId;
+
+  /** IC-PMS M8: responsible EPC contractor organisation (FK → admin.organisations). */
+  @Column(name = "responsible_contractor_id")
+  private UUID responsibleContractorId;
+
+  /** IC-PMS M8: denormalised contractor short-name for register grid display. */
+  @Column(name = "responsible_contractor_name", length = 100)
+  private String responsibleContractorName;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20, columnDefinition = "VARCHAR(20) DEFAULT 'ACTIVE'")

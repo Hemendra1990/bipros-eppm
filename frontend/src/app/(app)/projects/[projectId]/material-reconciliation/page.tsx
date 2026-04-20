@@ -60,8 +60,13 @@ export default function MaterialReconciliationPage() {
   const loadResources = async () => {
     try {
       const response = await resourceApi.listResources(0, 100);
-      if (response.data && "content" in response.data) {
-        setResources((response.data as PagedResponse<ResourceResponse>).content);
+      // Backend returns a flat List<ResourceResponse>; be defensive in case
+      // it ever switches back to a paged envelope.
+      const data = response.data as unknown;
+      if (Array.isArray(data)) {
+        setResources(data as ResourceResponse[]);
+      } else if (data && typeof data === "object" && "content" in data) {
+        setResources((data as PagedResponse<ResourceResponse>).content);
       }
     } catch (err: unknown) {
       console.error(getErrorMessage(err, "Failed to load resources"));
