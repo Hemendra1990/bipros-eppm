@@ -6,6 +6,7 @@ import com.bipros.calendar.domain.repository.CalendarActivityCounter;
 import com.bipros.calendar.domain.repository.CalendarExceptionRepository;
 import com.bipros.calendar.domain.repository.CalendarRepository;
 import com.bipros.calendar.domain.repository.CalendarWorkWeekRepository;
+import com.bipros.common.util.AuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -40,13 +41,16 @@ class CalendarServiceTest {
   @Mock
   private CalendarActivityCounter calendarActivityCounter;
 
+  @Mock
+  private AuditService auditService;
+
   private CalendarService calendarService;
 
   private UUID calendarId;
 
   @BeforeEach
   void setUp() {
-    calendarService = new CalendarService(calendarRepository, workWeekRepository, exceptionRepository, calendarActivityCounter);
+    calendarService = new CalendarService(calendarRepository, workWeekRepository, exceptionRepository, calendarActivityCounter, auditService);
     calendarId = UUID.randomUUID();
   }
 

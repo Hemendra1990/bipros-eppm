@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.*;
 @Testcontainers
 @ActiveProfiles("test")
 @DisplayName("Project API Integration Tests")
-class ProjectApiIntegrationTest {
+class ProjectApiIT {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine")
