@@ -1,5 +1,6 @@
 package com.bipros.resource.application.dto;
 
+import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,4 +16,8 @@ public record CreateResourceRequest(
     String email,
     String phone,
     String title,
-    Double maxUnitsPerDay) {}
+    Double maxUnitsPerDay,
+    ResourceStatus status,
+    Double hourlyRate,
+    Double costPerUse,
+    Double overtimeRate) {}

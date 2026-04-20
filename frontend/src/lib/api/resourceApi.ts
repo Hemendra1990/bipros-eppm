@@ -5,9 +5,12 @@ export interface ResourceResponse {
   id: string;
   code: string;
   name: string;
-  type: "LABOR" | "NONLABOR" | "MATERIAL";
+  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
   status: string;
-  maxUnits: number;
+  maxUnitsPerDay: number;
+  hourlyRate: number;
+  costPerUse: number;
+  overtimeRate: number;
   calendarId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -18,13 +21,21 @@ export interface CreateResourceRequest {
   name: string;
   type: "LABOR" | "NONLABOR" | "MATERIAL";
   maxUnits?: number;
+  hourlyRate?: number;
+  costPerUse?: number;
+  overtimeRate?: number;
   calendarId?: string;
 }
 
 export interface UpdateResourceRequest {
-  name?: string;
+  code: string;
+  name: string;
+  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
+  maxUnitsPerDay?: number;
   status?: string;
-  maxUnits?: number;
+  hourlyRate?: number;
+  costPerUse?: number;
+  overtimeRate?: number;
   calendarId?: string;
 }
 
@@ -98,6 +109,9 @@ export const resourceApi = {
       name: data.name,
       resourceType: data.type,
       maxUnitsPerDay: data.maxUnits ?? 8,
+      hourlyRate: data.hourlyRate ?? 0,
+      costPerUse: data.costPerUse ?? 0,
+      overtimeRate: data.overtimeRate ?? 0,
       calendarId: data.calendarId,
     }).then((r) => r.data),
 

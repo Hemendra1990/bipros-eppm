@@ -76,6 +76,18 @@ public class Resource extends BaseEntity {
   @Default
   private ResourceStatus status = ResourceStatus.ACTIVE;
 
+  @Column(name = "hourly_rate", columnDefinition = "double precision default 0.0")
+  @Default
+  private Double hourlyRate = 0.0;
+
+  @Column(name = "cost_per_use", columnDefinition = "double precision default 0.0")
+  @Default
+  private Double costPerUse = 0.0;
+
+  @Column(name = "overtime_rate", columnDefinition = "double precision default 0.0")
+  @Default
+  private Double overtimeRate = 0.0;
+
   @Column(name = "sort_order", nullable = false, columnDefinition = "INTEGER DEFAULT 0")
   @Default
   private Integer sortOrder = 0;

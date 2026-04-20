@@ -10,6 +10,8 @@ import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { ResourceLevelingDialog } from "./ResourceLevelingDialog";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
+import { UdfSection } from "@/components/udf/UdfSection";
 
 interface ResourceAssignmentRow {
   id: string;
@@ -37,6 +39,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
   });
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [showLeveling, setShowLeveling] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<{ id: string; resourceName: string; activityName: string } | null>(null);
 
   const { data: assignmentsData, isLoading: isLoadingAssignments } = useQuery({
     queryKey: ["resource-assignments", projectId],
@@ -115,13 +118,13 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       key: "plannedCost",
       label: "Planned Cost",
       sortable: true,
-      render: (value) => `$${Number(value).toFixed(2)}`,
+      render: (value) => formatDefaultCurrency(Number(value)),
     },
     {
       key: "actualCost",
       label: "Actual Cost",
       sortable: true,
-      render: (value) => `$${Number(value).toFixed(2)}`,
+      render: (value) => formatDefaultCurrency(Number(value)),
     },
   ];
 
@@ -240,9 +243,27 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
             <p className="mt-2 text-slate-400">No resource assignments yet. Create one to get started.</p>
           </div>
         ) : (
-          <DataTable columns={columns} data={assignments as unknown as ResourceAssignmentRow[]} rowKey="id" />
+          <DataTable
+            columns={columns}
+            data={assignments as unknown as ResourceAssignmentRow[]}
+            rowKey="id"
+            searchable
+            searchPlaceholder="Search resources..."
+            onRowClick={(row) => setSelectedAssignment(
+              selectedAssignment?.id === row.id ? null : { id: row.id, resourceName: row.resourceName, activityName: row.activityName }
+            )}
+          />
         )}
       </div>
+
+      {selectedAssignment && (
+        <div className="space-y-2">
+          <div className="text-sm text-slate-400">
+            Custom fields for: <span className="font-medium text-blue-400">{selectedAssignment.resourceName} → {selectedAssignment.activityName}</span>
+          </div>
+          <UdfSection entityId={selectedAssignment.id} subject="RESOURCE_ASSIGNMENT" projectId={projectId} />
+        </div>
+      )}
 
       <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold text-white">Resource Histogram</h3>

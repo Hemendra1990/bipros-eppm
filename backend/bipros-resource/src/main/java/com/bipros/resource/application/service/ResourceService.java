@@ -44,6 +44,9 @@ public class ResourceService {
         .title(request.title())
         .maxUnitsPerDay(request.maxUnitsPerDay() != null ? request.maxUnitsPerDay() : 8.0)
         .status(ResourceStatus.ACTIVE)
+        .hourlyRate(request.hourlyRate() != null ? request.hourlyRate() : 0.0)
+        .costPerUse(request.costPerUse() != null ? request.costPerUse() : 0.0)
+        .overtimeRate(request.overtimeRate() != null ? request.overtimeRate() : 0.0)
         .sortOrder(0)
         .build();
 
@@ -118,6 +121,18 @@ public class ResourceService {
     resource.setTitle(request.title());
     if (request.maxUnitsPerDay() != null) {
       resource.setMaxUnitsPerDay(request.maxUnitsPerDay());
+    }
+    if (request.status() != null) {
+      resource.setStatus(request.status());
+    }
+    if (request.hourlyRate() != null) {
+      resource.setHourlyRate(request.hourlyRate());
+    }
+    if (request.costPerUse() != null) {
+      resource.setCostPerUse(request.costPerUse());
+    }
+    if (request.overtimeRate() != null) {
+      resource.setOvertimeRate(request.overtimeRate());
     }
 
     Resource updated = resourceRepository.save(resource);
