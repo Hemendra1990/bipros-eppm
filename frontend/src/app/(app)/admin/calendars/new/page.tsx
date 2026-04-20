@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
 import { PageHeader } from "@/components/common/PageHeader";
+import { Breadcrumb } from "@/components/common/Breadcrumb";
 import { calendarApi } from "@/lib/api/calendarApi";
 import type { CreateCalendarRequest } from "@/lib/api/calendarApi";
 
@@ -20,10 +21,13 @@ export default function NewCalendarPage() {
   });
 
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    if (error) setError("");
+    if (fieldErrors[name]) setFieldErrors((prev) => { const next = { ...prev }; delete next[name]; return next; });
     setFormData((prev) => ({
       ...prev,
       [name]:
@@ -35,8 +39,12 @@ export default function NewCalendarPage() {
     e.preventDefault();
     setError("");
 
-    if (!formData.code || !formData.name) {
-      setError("Code and Name are required");
+    const errors: Record<string, string> = {};
+    if (!formData.code.trim()) errors.code = "Calendar code is required";
+    if (!formData.name.trim()) errors.name = "Calendar name is required";
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the highlighted fields");
       return;
     }
 
@@ -56,6 +64,12 @@ export default function NewCalendarPage() {
 
   return (
     <div>
+      <div className="mb-4">
+        <Breadcrumb items={[
+          { label: "Calendars", href: "/admin/calendars" },
+          { label: "New Calendar", href: "/admin/calendars/new", active: true },
+        ]} />
+      </div>
       <PageHeader
         title="New Calendar"
         description="Create a new project, resource, or global calendar"
@@ -64,7 +78,10 @@ export default function NewCalendarPage() {
       <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
+            <div className="flex items-center justify-between rounded-md bg-red-500/10 p-4 text-sm text-red-400">
+              <span>{error}</span>
+              <button type="button" onClick={() => setError("")} className="ml-3 text-red-400 hover:text-red-300">&times;</button>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-6">
@@ -75,9 +92,10 @@ export default function NewCalendarPage() {
                 name="code"
                 value={formData.code}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className={`mt-1 block w-full rounded-md border ${fieldErrors.code ? "border-red-500" : "border-slate-700"} px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`}
                 placeholder="e.g., CAL-001"
               />
+              {fieldErrors.code && <p className="mt-1 text-xs text-red-400">{fieldErrors.code}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300">Name *</label>
@@ -86,9 +104,10 @@ export default function NewCalendarPage() {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className={`mt-1 block w-full rounded-md border ${fieldErrors.name ? "border-red-500" : "border-slate-700"} px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`}
                 placeholder="e.g., Standard 9-5 Calendar"
               />
+              {fieldErrors.name && <p className="mt-1 text-xs text-red-400">{fieldErrors.name}</p>}
             </div>
             <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-300">Description</label>

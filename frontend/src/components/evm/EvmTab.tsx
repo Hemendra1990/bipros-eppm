@@ -19,6 +19,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 interface MetricCard {
   label: string;
@@ -42,8 +43,7 @@ const ETC_METHODS: { value: EtcMethod; label: string }[] = [
   { value: "MANAGEMENT_OVERRIDE", label: "Management Override" },
 ];
 
-const fmt = (v: number | null | undefined) =>
-  `$${(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmt = (v: number | null | undefined) => formatDefaultCurrency(v);
 const fmtIdx = (v: number | null | undefined) => (v ?? 0).toFixed(2);
 const fmtPct = (v: number | null | undefined) => `${(v ?? 0).toFixed(1)}%`;
 
@@ -304,7 +304,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
                   />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip
-                    formatter={(value) => `$${Number(value).toFixed(2)}`}
+                    formatter={(value) => formatDefaultCurrency(Number(value))}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
                   <Legend />

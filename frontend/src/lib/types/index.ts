@@ -134,6 +134,7 @@ export interface UpdateProjectRequest {
   plannedStartDate?: string;
   plannedFinishDate?: string;
   mustFinishByDate?: string;
+  dataDate?: string;
   status?: string;
   priority?: number;
 }
@@ -179,9 +180,12 @@ export interface ResourceResponse {
   id: string;
   code: string;
   name: string;
-  type: "LABOR" | "NONLABOR" | "MATERIAL";
+  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
   status: string;
-  maxUnits: number;
+  maxUnitsPerDay: number;
+  hourlyRate: number;
+  costPerUse: number;
+  overtimeRate: number;
   calendarId: string | null;
   createdAt: string;
   updatedAt: string;

@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { getErrorMessage } from "@/lib/utils/error";
+import { Plus } from "lucide-react";
 import {
   costApi,
   type ForecastMethod,
   type CashFlowForecastItem,
   type PeriodCostAggregation,
+  type CreateExpenseRequest,
 } from "@/lib/api/costApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import {
@@ -19,6 +23,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useCurrency } from "@/lib/hooks/useCurrency";
 
 interface SummaryCard {
   label: string;
@@ -41,7 +46,31 @@ const FORECAST_METHODS: { value: ForecastMethod; label: string }[] = [
 ];
 
 export function CostsTab({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
+  const { formatCurrency, baseCurrency } = useCurrency();
   const [forecastMethod, setForecastMethod] = useState<ForecastMethod>("LINEAR");
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [expenseForm, setExpenseForm] = useState<CreateExpenseRequest>({
+    description: "",
+    amount: 0,
+    currency: "INR",
+    expenseDate: new Date().toISOString().split("T")[0],
+    category: "LABOR",
+  });
+
+  const createExpenseMutation = useMutation({
+    mutationFn: (data: CreateExpenseRequest) => costApi.createExpense(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["cost-summary", projectId] });
+      setShowExpenseForm(false);
+      setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+      toast.success("Expense recorded successfully");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to create expense"));
+    },
+  });
 
   const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
     queryKey: ["cost-summary", projectId],
@@ -81,22 +110,22 @@ export function CostsTab({ projectId }: { projectId: string }) {
   const summaryCards: SummaryCard[] = [
     {
       label: "Total Budget",
-      value: `$${(summary?.totalBudget ?? 0).toFixed(2)}`,
+      value: formatCurrency(summary?.totalBudget),
       color: "blue",
     },
     {
       label: "Total Actual",
-      value: `$${(summary?.totalActual ?? 0).toFixed(2)}`,
+      value: formatCurrency(summary?.totalActual),
       color: "green",
     },
     {
       label: "Total Remaining",
-      value: `$${(summary?.totalRemaining ?? 0).toFixed(2)}`,
+      value: formatCurrency(summary?.totalRemaining),
       color: "yellow",
     },
     {
       label: "At Completion",
-      value: `$${(summary?.atCompletion ?? 0).toFixed(2)}`,
+      value: formatCurrency(summary?.atCompletion),
       color: "purple",
     },
   ];
@@ -105,7 +134,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
     ? [
         {
           label: "Cost Variance (CV)",
-          value: `$${summary.costVariance.toFixed(2)}`,
+          value: formatCurrency(summary.costVariance),
           color: summary.costVariance >= 0 ? "green" : "red",
         },
         {
@@ -128,7 +157,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
       key: "amount",
       label: "Amount",
       sortable: true,
-      render: (value) => `$${Number(value).toFixed(2)}`,
+      render: (value) => formatCurrency(Number(value)),
     },
     { key: "expenseDate", label: "Date", sortable: true },
   ];
@@ -224,7 +253,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
               <YAxis
                 stroke="#64748b"
                 style={{ fontSize: "12px" }}
-                label={{ value: "Amount ($)", angle: -90, position: "insideLeft" }}
+                label={{ value: `Amount (${baseCurrency.symbol})`, angle: -90, position: "insideLeft" }}
               />
               <Tooltip
                 contentStyle={{
@@ -234,10 +263,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 }}
                 formatter={(value) =>
                   typeof value === "number"
-                    ? `$${value.toLocaleString("en-US", {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}`
+                    ? formatCurrency(value)
                     : String(value ?? "")
                 }
               />
@@ -298,23 +324,23 @@ export function CostsTab({ projectId }: { projectId: string }) {
                   >
                     <td className="px-3 py-2 text-white">{pa.periodName}</td>
                     <td className="px-3 py-2 text-right text-blue-300">
-                      ${pa.budget.toFixed(2)}
+                      {formatCurrency(pa.budget)}
                     </td>
                     <td className="px-3 py-2 text-right text-green-300">
-                      ${pa.actual.toFixed(2)}
+                      {formatCurrency(pa.actual)}
                     </td>
                     <td
                       className={`px-3 py-2 text-right ${
                         pa.variance >= 0 ? "text-green-300" : "text-red-300"
                       }`}
                     >
-                      ${pa.variance.toFixed(2)}
+                      {formatCurrency(pa.variance)}
                     </td>
                     <td className="px-3 py-2 text-right text-yellow-300">
-                      ${pa.earnedValue.toFixed(2)}
+                      {formatCurrency(pa.earnedValue)}
                     </td>
                     <td className="px-3 py-2 text-right text-purple-300">
-                      ${pa.plannedValue.toFixed(2)}
+                      {formatCurrency(pa.plannedValue)}
                     </td>
                   </tr>
                 ))}
@@ -325,7 +351,93 @@ export function CostsTab({ projectId }: { projectId: string }) {
       )}
 
       <div>
-        <h3 className="mb-4 text-lg font-semibold text-white">Expenses</h3>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">Expenses</h3>
+          <button
+            onClick={() => setShowExpenseForm(!showExpenseForm)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            <Plus size={16} />
+            Add Expense
+          </button>
+        </div>
+
+        {showExpenseForm && (
+          <div className="mb-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!expenseForm.description || !expenseForm.amount) return;
+                createExpenseMutation.mutate(expenseForm);
+              }}
+              className="grid grid-cols-2 gap-4 lg:grid-cols-4"
+            >
+              <div>
+                <label className="block text-xs font-medium text-slate-400">Description *</label>
+                <input
+                  type="text"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="e.g., Concrete delivery"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400">Amount ({baseCurrency.symbol}) *</label>
+                <input
+                  type="number"
+                  value={expenseForm.amount || ""}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                  min="0"
+                  step="0.01"
+                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="e.g., 5000"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400">Category</label>
+                <select
+                  value={expenseForm.category}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="LABOR">Labor</option>
+                  <option value="MATERIAL">Material</option>
+                  <option value="EQUIPMENT">Equipment</option>
+                  <option value="SUBCONTRACT">Subcontract</option>
+                  <option value="OVERHEAD">Overhead</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400">Date</label>
+                <input
+                  type="date"
+                  value={expenseForm.expenseDate}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, expenseDate: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="col-span-full flex gap-2">
+                <button
+                  type="submit"
+                  disabled={createExpenseMutation.isPending}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+                >
+                  {createExpenseMutation.isPending ? "Saving..." : "Save Expense"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExpenseForm(false)}
+                  className="rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {isLoadingExpenses ? (
           <div className="text-center text-slate-500">Loading expenses...</div>
         ) : expenses.length === 0 ? (

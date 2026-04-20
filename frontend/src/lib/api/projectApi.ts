@@ -21,6 +21,9 @@ export const projectApi = {
   deleteEpsNode: (id: string) =>
     apiClient.delete(`/v1/eps/${id}`),
 
+  moveEpsNode: (id: string, parentId: string | null) =>
+    apiClient.patch<ApiResponse<EpsNodeResponse>>(`/v1/eps/${id}/move`, { parentId }).then((r) => r.data),
+
   // Projects
   listProjects: (page = 0, size = 20) =>
     apiClient

@@ -8,6 +8,7 @@ import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { TabTip } from "@/components/common/TabTip";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 interface RaBillRow {
   id: string;
@@ -57,7 +58,7 @@ export default function RaBillsPage() {
       key: "netAmount",
       label: "Net Amount",
       sortable: true,
-      render: (value) => `$${Number(value).toFixed(2)}`,
+      render: (value) => formatDefaultCurrency(Number(value)),
     },
     { key: "status", label: "Status", sortable: true },
   ];

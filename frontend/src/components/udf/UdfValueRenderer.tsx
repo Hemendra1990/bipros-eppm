@@ -1,6 +1,7 @@
 "use client";
 
 import { Hash, DollarSign, Calendar, Type, Tag, ToggleLeft } from "lucide-react";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 interface UdfValue {
   fieldId: string;
@@ -125,10 +126,7 @@ function formatValue(field: UdfValue): string {
   if (!field.value) return "";
   switch (field.dataType) {
     case "COST":
-      return `$${parseFloat(field.value).toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}`;
+      return formatDefaultCurrency(parseFloat(field.value));
     case "DATE":
       return new Date(field.value).toLocaleDateString();
     case "INDICATOR": {

@@ -8,6 +8,7 @@ import { projectApi } from "@/lib/api/projectApi";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { ProjectResponse } from "@/lib/types";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 interface RaBillRow {
   id: string;
@@ -257,10 +258,7 @@ export default function OperationalDashboardPage() {
                           {new Date(bill.billPeriodTo).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3 text-sm font-medium text-white">
-                          ${bill.netAmount.toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatDefaultCurrency(bill.netAmount)}
                         </td>
                         <td className="px-4 py-3 text-sm">
                           <span

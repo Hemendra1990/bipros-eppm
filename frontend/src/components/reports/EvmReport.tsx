@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import type { EvmReportData } from "@/lib/api/reportDataApi";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 interface EvmReportProps {
   data: EvmReportData;
@@ -85,9 +86,9 @@ export function EvmReport({ data }: EvmReportProps) {
 
       {/* Core EVM Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricCard label="Planned Value (PV)" value={data.pv} isGood={true} suffix="$" />
-        <MetricCard label="Earned Value (EV)" value={data.ev} isGood={true} suffix="$" />
-        <MetricCard label="Actual Cost (AC)" value={data.ac} isGood={data.ac <= data.ev} suffix="$" />
+        <MetricCard label="Planned Value (PV)" value={data.pv} isGood={true} suffix="₹" />
+        <MetricCard label="Earned Value (EV)" value={data.ev} isGood={true} suffix="₹" />
+        <MetricCard label="Actual Cost (AC)" value={data.ac} isGood={data.ac <= data.ev} suffix="₹" />
       </div>
 
       {/* Performance Indices */}
@@ -106,9 +107,9 @@ export function EvmReport({ data }: EvmReportProps) {
 
       {/* Forecast Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricCard label="Estimate at Completion (EAC)" value={data.eac} isGood={metrics.eacGood} suffix="$" />
-        <MetricCard label="Estimate to Complete (ETC)" value={data.etc} isGood={data.etc >= 0} suffix="$" />
-        <MetricCard label="Variance at Completion (VAC)" value={data.vac} isGood={metrics.vacGood} suffix="$" />
+        <MetricCard label="Estimate at Completion (EAC)" value={data.eac} isGood={metrics.eacGood} suffix="₹" />
+        <MetricCard label="Estimate to Complete (ETC)" value={data.etc} isGood={data.etc >= 0} suffix="₹" />
+        <MetricCard label="Variance at Completion (VAC)" value={data.vac} isGood={metrics.vacGood} suffix="₹" />
       </div>
 
       {/* Completion Metric */}
@@ -153,8 +154,8 @@ export function EvmReport({ data }: EvmReportProps) {
               </p>
               <p className="text-white">
                 {data.vac >= 0
-                  ? `✓ Project will save $${data.vac.toFixed(2)}`
-                  : `✗ Project will overrun by $${Math.abs(data.vac).toFixed(2)}`}
+                  ? `✓ Project will save ${formatDefaultCurrency(data.vac)}`
+                  : `✗ Project will overrun by ${formatDefaultCurrency(Math.abs(data.vac))}`}
               </p>
             </div>
             <div>
@@ -162,8 +163,7 @@ export function EvmReport({ data }: EvmReportProps) {
                 <span className="font-semibold">Final Estimate (EAC):</span>
               </p>
               <p className="text-white">
-                Project is estimated to cost ${data.eac.toFixed(2)} (originally planned: $
-                {data.pv.toFixed(2)})
+                Project is estimated to cost {formatDefaultCurrency(data.eac)} (originally planned: {formatDefaultCurrency(data.pv)})
               </p>
             </div>
           </div>

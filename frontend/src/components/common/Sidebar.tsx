@@ -38,6 +38,7 @@ const mainNavigation = [
 ];
 
 const adminNavigation = [
+  { name: "Users", href: "/admin/users", icon: Users },
   { name: "Settings", href: "/admin/settings", icon: Settings },
   { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
   { name: "Integrations", href: "/admin/integrations", icon: Plug },

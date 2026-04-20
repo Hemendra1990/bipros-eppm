@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
 import { formatDate, getPriorityInfo } from "@/lib/utils/format";
 import { projectApi } from "@/lib/api/projectApi";
@@ -17,28 +17,54 @@ import { ResourcesTab } from "@/components/resource/ResourcesTab";
 import { CostsTab } from "@/components/cost/CostsTab";
 import { EvmTab } from "@/components/evm/EvmTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Trash2, Eye, FileText } from "lucide-react";
+import { ListTodo, Plus, Play, Trash2, Eye, FileText, ChevronRight, ChevronDown, Folder, FolderOpen, File, RefreshCw } from "lucide-react";
+import { UdfSection } from "@/components/udf/UdfSection";
+import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
+import { Breadcrumb } from "@/components/common/Breadcrumb";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
 import { TabTip } from "@/components/common/TabTip";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import { ScheduleComparisonTable } from "@/components/baseline/ScheduleComparisonTable";
 import type { ProjectResponse, ActivityResponse, WbsNodeResponse, BaselineResponse, BaselineVarianceRow, ApiResponse } from "@/lib/types";
 import type { WbsTemplateResponse } from "@/lib/types";
 import type { AxiosResponse } from "axios";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const projectId = params.projectId as string;
+  const isUuid = UUID_REGEX.test(projectId);
   const tab = searchParams.get("tab") || "overview";
   const [scheduleError, setScheduleError] = useState("");
+
+  // If projectId is not a UUID, try to resolve it as a project code
+  const { data: codeResolveData, isLoading: isResolvingCode } = useQuery({
+    queryKey: ["project-by-code", projectId],
+    queryFn: async () => {
+      const result = await projectApi.listProjects(0, 200);
+      const projects = result.data?.content ?? [];
+      return projects.find((p) => p.code.toLowerCase() === projectId.toLowerCase()) ?? null;
+    },
+    enabled: !isUuid,
+  });
+
+  // Redirect to UUID-based URL when code resolves
+  if (!isUuid && codeResolveData) {
+    router.replace(`/projects/${codeResolveData.id}${tab !== "overview" ? `?tab=${tab}` : ""}`);
+    return null;
+  }
 
   const { data: projectData, isLoading: isLoadingProject } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectApi.getProject(projectId),
+    enabled: isUuid,
   });
 
   const { data: activitiesData, isLoading: isLoadingActivities, refetch: refetchActivities } = useQuery({
@@ -62,7 +88,7 @@ export default function ProjectDetailPage() {
   const { data: relationshipsData, isLoading: isLoadingRelationships } = useQuery({
     queryKey: ["relationships", projectId],
     queryFn: () => activityApi.getRelationships(projectId),
-    enabled: ["network", "gantt"].includes(tab),
+    enabled: ["activities", "network", "gantt"].includes(tab),
   });
 
   const { data: baselinesData, isLoading: isLoadingBaselines, refetch: refetchBaselines } = useQuery({
@@ -86,10 +112,14 @@ export default function ProjectDetailPage() {
     mutationFn: () => activityApi.triggerSchedule(projectId, "RETAINED_LOGIC"),
     onSuccess: () => {
       refetchActivities();
+      queryClient.invalidateQueries({ queryKey: ["criticalPath", projectId] });
       setScheduleError("");
+      toast.success("Schedule calculated successfully");
     },
     onError: (err: unknown) => {
-      setScheduleError(getErrorMessage(err, "Failed to trigger schedule"));
+      const msg = getErrorMessage(err, "Failed to trigger schedule");
+      setScheduleError(msg);
+      toast.error(msg);
     },
   });
 
@@ -97,6 +127,10 @@ export default function ProjectDetailPage() {
     mutationFn: (activityId: string) => activityApi.deleteActivity(projectId, activityId),
     onSuccess: () => {
       refetchActivities();
+      toast.success("Activity deleted");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to delete activity"));
     },
   });
 
@@ -105,6 +139,10 @@ export default function ProjectDetailPage() {
       baselineApi.createBaseline(projectId, data as { name: string; baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY"; description?: string }),
     onSuccess: () => {
       refetchBaselines();
+      toast.success("Baseline created successfully");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to create baseline"));
     },
   });
 
@@ -112,6 +150,10 @@ export default function ProjectDetailPage() {
     mutationFn: (baselineId: string) => baselineApi.deleteBaseline(projectId, baselineId),
     onSuccess: () => {
       refetchBaselines();
+      toast.success("Baseline deleted");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to delete baseline"));
     },
   });
 
@@ -149,6 +191,30 @@ export default function ProjectDetailPage() {
       render: (value) => formatDate(value as string | null),
     },
     {
+      key: "earlyStartDate",
+      label: "ES",
+      sortable: true,
+      render: (value) => formatDate(value as string | null),
+    },
+    {
+      key: "earlyFinishDate",
+      label: "EF",
+      sortable: true,
+      render: (value) => formatDate(value as string | null),
+    },
+    {
+      key: "lateStartDate",
+      label: "LS",
+      sortable: true,
+      render: (value) => formatDate(value as string | null),
+    },
+    {
+      key: "lateFinishDate",
+      label: "LF",
+      sortable: true,
+      render: (value) => formatDate(value as string | null),
+    },
+    {
       key: "id",
       label: "Actions",
       render: (value, row: ActivityResponse) => (
@@ -174,7 +240,7 @@ export default function ProjectDetailPage() {
     },
   ];
 
-  if (isLoadingProject) {
+  if (isLoadingProject || isResolvingCode) {
     return (
       <div className="space-y-4">
         <div className="h-8 w-48 animate-pulse rounded bg-slate-800/50" />
@@ -188,7 +254,16 @@ export default function ProjectDetailPage() {
   }
 
   if (!project) {
-    return <div className="text-center text-red-400">Project not found</div>;
+    return (
+      <div className="py-12 text-center">
+        <p className="text-red-400">Project not found</p>
+        {!isUuid && (
+          <p className="mt-2 text-sm text-slate-500">
+            No project with code &ldquo;{projectId}&rdquo; was found. Try using the project&apos;s UUID or navigate from the projects list.
+          </p>
+        )}
+      </div>
+    );
   }
 
   const tabTips: Record<string, { title: string; description: string; steps?: string[] }> = {
@@ -231,8 +306,14 @@ export default function ProjectDetailPage() {
 
   return (
     <div>
+      <div className="mb-4">
+        <Breadcrumb items={[
+          { label: "Projects", href: "/projects" },
+          { label: project.name, href: `/projects/${projectId}`, active: true },
+        ]} />
+      </div>
       {currentTip && <TabTip title={currentTip.title} description={currentTip.description} steps={currentTip.steps} />}
-      {tab === "overview" && <OverviewTab project={project} />}
+      {tab === "overview" && <OverviewTab project={project} projectId={projectId} />}
       {tab === "activities" && (
         <ActivitiesTab
           projectId={projectId}
@@ -243,6 +324,7 @@ export default function ProjectDetailPage() {
           onRunSchedule={() => scheduleMutation.mutate()}
           isScheduling={scheduleMutation.isPending}
           scheduleError={scheduleError}
+          relationships={relationshipsData?.data ?? []}
         />
       )}
       {tab === "wbs" && (
@@ -285,9 +367,35 @@ export default function ProjectDetailPage() {
   );
 }
 
-function OverviewTab({ project }: { project: ProjectResponse }) {
+function OverviewTab({ project, projectId }: { project: ProjectResponse; projectId: string }) {
   const queryClient = useQueryClient();
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const { data: kpiSnapshotsData, isLoading: isLoadingKpis } = useQuery({
+    queryKey: ["project-kpis", projectId],
+    queryFn: () => dashboardApi.getProjectKpiSnapshots(projectId),
+  });
+
+  const { data: kpiDefsData } = useQuery({
+    queryKey: ["kpi-definitions"],
+    queryFn: () => dashboardApi.getKpiDefinitions(),
+  });
+
+  const calculateKpisMutation = useMutation({
+    mutationFn: () => dashboardApi.calculateProjectKpis(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project-kpis", projectId] });
+      toast.success("KPIs recalculated");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to calculate KPIs"));
+    },
+  });
+
+  const kpiSnapshots = Array.isArray(kpiSnapshotsData?.data) ? kpiSnapshotsData.data : [];
+  const rawKpiDefs = kpiDefsData?.data;
+  const kpiDefs = Array.isArray(rawKpiDefs) ? rawKpiDefs : (rawKpiDefs as unknown as { content?: KpiDefinition[] })?.content ?? [];
+  const kpiDefMap = new Map(kpiDefs.map((d: KpiDefinition) => [d.id, d]));
 
   const statusTransitions: Record<string, { label: string; value: string }[]> = {
     PLANNED: [{ label: "Activate Project", value: "ACTIVE" }],
@@ -366,11 +474,116 @@ function OverviewTab({ project }: { project: ProjectResponse }) {
             {getPriorityInfo(project.priority).label} ({project.priority})
           </p>
         </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h3 className="text-sm font-medium text-slate-400">Data Date</h3>
-          <p className="mt-2 text-lg text-white">{project.dataDate ? formatDate(project.dataDate) : "Not set"}</p>
-        </div>
+        <DataDateCard project={project} />
       </div>
+
+      {/* KPI Mini-Dashboard */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Key Performance Indicators</h3>
+          <button
+            onClick={() => calculateKpisMutation.mutate()}
+            disabled={calculateKpisMutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/50 disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={calculateKpisMutation.isPending ? "animate-spin" : ""} />
+            {calculateKpisMutation.isPending ? "Calculating..." : "Recalculate"}
+          </button>
+        </div>
+        {isLoadingKpis ? (
+          <div className="grid grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-800/50" />
+            ))}
+          </div>
+        ) : kpiSnapshots.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
+            <p className="text-slate-400 text-sm">No KPI data yet. Click &quot;Recalculate&quot; to generate KPI snapshots.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {kpiSnapshots.map((kpi: KpiSnapshot) => {
+              const def = kpiDefMap.get(kpi.kpiDefinitionId);
+              const statusColor = kpi.status === "GREEN" ? "text-emerald-400" : kpi.status === "AMBER" ? "text-amber-400" : "text-red-400";
+              const statusBg = kpi.status === "GREEN" ? "bg-emerald-500/10 border-emerald-500/20" : kpi.status === "AMBER" ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+              return (
+                <div key={kpi.id} className={`rounded-lg border p-4 ${statusBg}`}>
+                  <p className="text-xs font-medium text-slate-400 truncate">{def?.name ?? kpi.kpiDefinitionId}</p>
+                  <p className={`mt-1 text-2xl font-bold ${statusColor}`}>
+                    {typeof kpi.value === "number" ? kpi.value.toFixed(2) : kpi.value}
+                    {def?.unit ? <span className="ml-1 text-sm font-normal text-slate-500">{def.unit}</span> : null}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {kpi.calculatedAt ? new Date(kpi.calculatedAt).toLocaleDateString() : ""}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <UdfSection entityId={projectId} subject="PROJECT" projectId={projectId} />
+    </div>
+  );
+}
+
+function DataDateCard({ project }: { project: ProjectResponse }) {
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [dateValue, setDateValue] = useState(project.dataDate ?? "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await projectApi.updateProject(project.id, { dataDate: dateValue || undefined });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      toast.success("Data date updated");
+      setIsEditing(false);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update data date"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+      <h3 className="text-sm font-medium text-slate-400">Data Date</h3>
+      {isEditing ? (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="date"
+            value={dateValue}
+            onChange={(e) => setDateValue(e.target.value)}
+            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+          >
+            {isSaving ? "..." : "Save"}
+          </button>
+          <button
+            onClick={() => { setIsEditing(false); setDateValue(project.dataDate ?? ""); }}
+            className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/50"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center gap-3">
+          <p className="text-lg text-white">{project.dataDate ? formatDate(project.dataDate) : "Not set"}</p>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="rounded-md border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-slate-800/50"
+          >
+            Set
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -384,6 +597,7 @@ function ActivitiesTab({
   onRunSchedule,
   isScheduling,
   scheduleError,
+  relationships = [],
 }: {
   projectId: string;
   activities: ActivityResponse[];
@@ -393,13 +607,26 @@ function ActivitiesTab({
   onRunSchedule: () => void;
   isScheduling: boolean;
   scheduleError: string;
+  relationships?: Array<{ id?: string; predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
 }) {
+  // Build dependency count map
+  const predCountMap = new Map<string, number>();
+  const succCountMap = new Map<string, number>();
+  for (const rel of relationships) {
+    predCountMap.set(rel.successorActivityId, (predCountMap.get(rel.successorActivityId) ?? 0) + 1);
+    succCountMap.set(rel.predecessorActivityId, (succCountMap.get(rel.predecessorActivityId) ?? 0) + 1);
+  }
+
   const highlightedActivities = activities.map((a) => ({
     ...a,
     isCritical: criticalPathIds.has(a.id),
+    predCount: predCountMap.get(a.id) ?? 0,
+    succCount: succCountMap.get(a.id) ?? 0,
   }));
 
-  const enrichedColumns: ColumnDef<ActivityResponse & { isCritical: boolean }>[] = columns.map((col) => {
+  type EnrichedActivity = ActivityResponse & { isCritical: boolean; predCount: number; succCount: number };
+
+  const enrichedColumns: ColumnDef<EnrichedActivity>[] = columns.map((col) => {
     if (col.key === "code") {
       return {
         ...col,
@@ -421,6 +648,24 @@ function ActivitiesTab({
       };
     }
     return col;
+  });
+
+  // Add dependency counts column
+  enrichedColumns.push({
+    key: "predCount" as string,
+    label: "Deps",
+    render: (_value, row) => {
+      const p = row.predCount;
+      const s = row.succCount;
+      if (p === 0 && s === 0) return <span className="text-slate-600">—</span>;
+      return (
+        <span className="text-xs text-slate-300">
+          {p > 0 && <span className="text-blue-400">{p}P</span>}
+          {p > 0 && s > 0 && " / "}
+          {s > 0 && <span className="text-green-400">{s}S</span>}
+        </span>
+      );
+    },
   });
 
   if (isLoading) {
@@ -465,7 +710,7 @@ function ActivitiesTab({
           description="This project has no activities yet. Create activities to start planning."
         />
       ) : (
-        <DataTable columns={enrichedColumns} data={highlightedActivities} rowKey="id" />
+        <DataTable columns={enrichedColumns} data={highlightedActivities} rowKey="id" searchable searchPlaceholder="Search activities..." />
       )}
     </div>
   );
@@ -511,6 +756,7 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [parentNode, setParentNode] = useState<{ id: string; code: string; name: string } | null>(null);
   const [formData, setFormData] = useState({ code: "", name: "" });
+  const [selectedWbs, setSelectedWbs] = useState<{ id: string; code: string; name: string } | null>(null);
 
   const { data: templatesData } = useQuery({
     queryKey: ["wbs-templates"],
@@ -531,18 +777,37 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: { code: string; name: string; projectId: string; parentNodeId?: string }) =>
+    mutationFn: (data: { code: string; name: string; projectId: string; parentId?: string }) =>
       apiClient.post<AxiosResponse<ApiResponse<WbsNodeResponse>>>(`/v1/projects/${projectId}/wbs`, data).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wbs", projectId] });
       setFormData({ code: "", name: "" });
       setParentNode(null);
       setShowForm(false);
+      toast.success("WBS node created");
     },
     onError: (err: unknown) => {
-      alert(getErrorMessage(err, "Failed to create WBS node"));
+      toast.error(getErrorMessage(err, "Failed to create WBS node"));
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (nodeId: string) =>
+      apiClient.delete(`/v1/projects/${projectId}/wbs/${nodeId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wbs", projectId] });
+      toast.success("WBS node deleted");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to delete WBS node"));
+    },
+  });
+
+  const handleDelete = (node: WbsNodeResponse) => {
+    if (confirm(`Delete "${node.code} — ${node.name}"${node.children?.length ? " and all its children" : ""}?`)) {
+      deleteMutation.mutate(node.id);
+    }
+  };
 
   const handleAddChild = (node: WbsNodeResponse) => {
     setParentNode({ id: node.id, code: node.code, name: node.name });
@@ -563,7 +828,7 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
       code: formData.code,
       name: formData.name,
       projectId,
-      parentNodeId: parentNode?.id,
+      parentId: parentNode?.id,
     });
   };
 
@@ -678,38 +943,173 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
       ) : (
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
           <h2 className="mb-4 text-lg font-semibold text-white">Work Breakdown Structure</h2>
-          <WbsTree nodes={wbsTree} onAddChild={handleAddChild} />
+          <WbsTree
+            nodes={wbsTree}
+            onAddChild={handleAddChild}
+            onDelete={handleDelete}
+            onSelect={(node) => setSelectedWbs(selectedWbs?.id === node.id ? null : { id: node.id, code: node.code, name: node.name })}
+            selectedId={selectedWbs?.id ?? null}
+          />
+        </div>
+      )}
+
+      {selectedWbs && (
+        <div className="space-y-2">
+          <div className="text-sm text-slate-400">
+            Custom fields for: <span className="font-medium text-blue-400">{selectedWbs.code} — {selectedWbs.name}</span>
+          </div>
+          <UdfSection entityId={selectedWbs.id} subject="WBS" projectId={projectId} />
         </div>
       )}
     </div>
   );
 }
 
-function WbsTree({ nodes, level = 0, onAddChild }: { nodes: WbsNodeResponse[]; level?: number; onAddChild: (node: WbsNodeResponse) => void }) {
+function WbsTree({
+  nodes,
+  level = 0,
+  onAddChild,
+  onDelete,
+  onSelect,
+  selectedId,
+  isLast = [],
+}: {
+  nodes: WbsNodeResponse[];
+  level?: number;
+  onAddChild: (node: WbsNodeResponse) => void;
+  onDelete: (node: WbsNodeResponse) => void;
+  onSelect?: (node: WbsNodeResponse) => void;
+  selectedId?: string | null;
+  isLast?: boolean[];
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    const expand = (items: WbsNodeResponse[]) => {
+      for (const n of items) {
+        if (n.children?.length) {
+          initial[n.id] = true;
+          expand(n.children);
+        }
+      }
+    };
+    if (level === 0) expand(nodes);
+    return initial;
+  });
+
+  const toggle = (id: string) => {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
-    <ul className="space-y-2">
-      {nodes.map((node) => (
-        <li key={node.id}>
-          <div style={{ marginLeft: `${level * 24}px` }} className="group flex items-center gap-2">
-            <span className="text-sm font-medium text-blue-400">{node.code}</span>
-            <span className="text-sm text-slate-300">{node.name}</span>
-            {node.summaryDuration && (
-              <span className="ml-1 text-xs text-slate-500">({node.summaryDuration}d)</span>
-            )}
-            <button
-              onClick={() => onAddChild(node)}
-              className="ml-2 rounded p-0.5 text-slate-600 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/10 hover:text-emerald-400 transition-opacity"
-              title="Add child node"
+    <div className={level === 0 ? "font-mono text-sm" : ""}>
+      {nodes.map((node, index) => {
+        const hasChildren = node.children && node.children.length > 0;
+        const isOpen = expanded[node.id] ?? false;
+        const isLastNode = index === nodes.length - 1;
+
+        return (
+          <div key={node.id}>
+            <div
+              onClick={() => onSelect?.(node)}
+              className={`group flex items-center hover:bg-slate-800/50 rounded-md py-1 pr-2 transition-colors cursor-pointer ${selectedId === node.id ? "bg-blue-500/10 ring-1 ring-blue-500/30" : ""}`}
             >
-              <Plus size={14} />
-            </button>
+              {/* Tree guide lines */}
+              {Array.from({ length: level }).map((_, i) => (
+                <span key={i} className="inline-flex w-6 justify-center flex-shrink-0">
+                  {isLast[i] ? (
+                    <span className="w-px" />
+                  ) : (
+                    <span className="w-px bg-slate-700 h-full min-h-[28px]" />
+                  )}
+                </span>
+              ))}
+
+              {/* Branch connector */}
+              {level > 0 && (
+                <span className="inline-flex w-6 items-center justify-center flex-shrink-0 text-slate-700">
+                  {isLastNode ? "└" : "├"}
+                  <span className="inline-block w-2 h-px bg-slate-700" />
+                </span>
+              )}
+
+              {/* Expand/collapse toggle */}
+              <button
+                onClick={() => hasChildren && toggle(node.id)}
+                className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded ${
+                  hasChildren
+                    ? "text-slate-400 hover:text-white hover:bg-slate-700 cursor-pointer"
+                    : "text-transparent cursor-default"
+                }`}
+              >
+                {hasChildren ? (
+                  isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                ) : null}
+              </button>
+
+              {/* Folder / File icon */}
+              <span className="flex-shrink-0 mr-2">
+                {hasChildren ? (
+                  isOpen ? (
+                    <FolderOpen size={16} className="text-amber-400" />
+                  ) : (
+                    <Folder size={16} className="text-amber-500" />
+                  )
+                ) : (
+                  <File size={16} className="text-slate-500" />
+                )}
+              </span>
+
+              {/* Node content */}
+              <span className="font-semibold text-blue-400 mr-2 flex-shrink-0">{node.code}</span>
+              <span className="text-slate-300 truncate">{node.name}</span>
+
+              {/* Duration / percent badges */}
+              {node.summaryDuration != null && (
+                <span className="ml-2 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400 flex-shrink-0">
+                  {node.summaryDuration}d
+                </span>
+              )}
+              {node.summaryPercentComplete != null && (
+                <span className="ml-1 rounded-full bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-400 flex-shrink-0">
+                  {node.summaryPercentComplete}%
+                </span>
+              )}
+
+              {/* Action buttons */}
+              <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button
+                  onClick={() => onAddChild(node)}
+                  className="rounded p-1 text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400"
+                  title="Add child node"
+                >
+                  <Plus size={14} />
+                </button>
+                <button
+                  onClick={() => onDelete(node)}
+                  className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                  title="Delete node"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </span>
+            </div>
+
+            {/* Render children if expanded */}
+            {hasChildren && isOpen && (
+              <WbsTree
+                nodes={node.children}
+                level={level + 1}
+                onAddChild={onAddChild}
+                onDelete={onDelete}
+                onSelect={onSelect}
+                selectedId={selectedId}
+                isLast={[...isLast, isLastNode]}
+              />
+            )}
           </div>
-          {node.children && node.children.length > 0 && (
-            <WbsTree nodes={node.children} level={level + 1} onAddChild={onAddChild} />
-          )}
-        </li>
-      ))}
-    </ul>
+        );
+      })}
+    </div>
   );
 }
 
@@ -915,7 +1315,7 @@ function BaselinesTab({
                     <p>Type: {baseline.baselineType}</p>
                     <p>Date: {new Date(baseline.baselineDate).toLocaleDateString()}</p>
                     <p>Activities: {baseline.totalActivities}</p>
-                    {baseline.totalCost > 0 && <p>Total Cost: ${baseline.totalCost.toLocaleString()}</p>}
+                    {baseline.totalCost > 0 && <p>Total Cost: {formatDefaultCurrency(baseline.totalCost)}</p>}
                   </div>
                 </div>
                 <div className="flex gap-2">

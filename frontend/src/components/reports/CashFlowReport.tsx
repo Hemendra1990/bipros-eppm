@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import type { CashFlowEntry } from "@/lib/api/reportDataApi";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 interface CashFlowReportProps {
   data: CashFlowEntry[];
@@ -80,10 +81,10 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
             <YAxis
               stroke="#64748b"
               style={{ fontSize: "12px" }}
-              label={{ value: "Amount ($)", angle: -90, position: "insideLeft" }}
+              label={{ value: "Amount (₹)", angle: -90, position: "insideLeft" }}
             />
             <Tooltip
-              formatter={(value) => `$${Number(value).toFixed(2)}`}
+              formatter={(value) => formatDefaultCurrency(Number(value))}
               contentStyle={{
                 backgroundColor: "#1e293b",
                 border: "1px solid #334155",

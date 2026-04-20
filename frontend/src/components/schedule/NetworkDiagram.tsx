@@ -28,6 +28,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
     return (
       <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
         <p className="text-slate-400">No activities to display</p>
+        <p className="mt-2 text-sm text-slate-500">Create activities and add dependencies to see the network diagram.</p>
       </div>
     );
   }
@@ -212,7 +213,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   fill={isCritical ? "#dc2626" : "#111827"}
                   className="font-mono"
                 >
-                  {node.activity.totalFloat.toFixed(1)}
+                  {(node.activity.totalFloat ?? 0).toFixed(1)}
                 </text>
 
                 {/* Schedule info: LS / LF (bottom row) */}

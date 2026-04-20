@@ -10,6 +10,7 @@ import { reportApi } from "@/lib/api/reportApi";
 import { reportDataApi } from "@/lib/api/reportDataApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { resourceApi } from "@/lib/api/resourceApi";
+import toast from "react-hot-toast";
 import { MonthlyProgressReport } from "@/components/reports/MonthlyProgressReport";
 import { EvmReport } from "@/components/reports/EvmReport";
 import { CashFlowReport } from "@/components/reports/CashFlowReport";
@@ -81,10 +82,23 @@ interface AllocationItem {
   allocated: Record<string, number>;
 }
 
+interface ScheduleComparisonChartData {
+  activityCode: string;
+  activityName: string;
+  baselineStart: string | null;
+  baselineFinish: string | null;
+  currentStart: string | null;
+  currentFinish: string | null;
+  startVarianceDays: number;
+  finishVarianceDays: number;
+}
+
 interface ReportChartData {
   scurve?: SCurveChartData[];
   histogram?: HistogramChartData[];
   cashflow?: CashFlowChartData[];
+  scheduleComparison?: ScheduleComparisonChartData[];
+  customReports?: Array<{ id: string; name: string; type: string; createdAt: string }>;
 }
 
 export default function ReportsPage() {
@@ -184,9 +198,20 @@ export default function ReportsPage() {
           }));
           setReportData({ cashflow: chartData });
         }
+      } else if (reportId === "schedule-comparison" && selectedProjectId) {
+        const response = await reportApi.generateScheduleComparison(selectedProjectId);
+        if (response.data) {
+          const data = response.data as { activities?: ScheduleComparisonChartData[] };
+          setReportData({ scheduleComparison: data.activities ?? [] });
+        }
+      } else if (reportId === "custom-reports" && selectedProjectId) {
+        const response = await reportApi.listCustomReports(selectedProjectId);
+        if (response.data) {
+          setReportData({ customReports: response.data as any });
+        }
       }
     } catch (error) {
-      console.error("Failed to generate report:", error);
+      toast.error("Failed to generate report");
     } finally {
       setGeneratingReport(null);
     }
@@ -336,9 +361,16 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {selectedProjectId && !monthlyProgressData && (monthlyProgressLoading || evmReportLoading || cashFlowLoading || contractStatusLoading || riskRegisterLoading || resourceUtilizationLoading) && (
+          {selectedProjectId && (monthlyProgressLoading || evmReportLoading || cashFlowLoading || contractStatusLoading || riskRegisterLoading || resourceUtilizationLoading) && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-6 text-center">
               <p className="text-blue-400">Loading reports...</p>
+            </div>
+          )}
+
+          {selectedProjectId && !monthlyProgressLoading && !evmReportLoading && !cashFlowLoading && !contractStatusLoading && !riskRegisterLoading && !resourceUtilizationLoading && !monthlyProgressData && !evmReportData && !cashFlowData && !contractStatusData && !riskRegisterData && !resourceUtilizationData && (
+            <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
+              <h3 className="text-lg font-medium text-white">No Report Data</h3>
+              <p className="mt-2 text-slate-400">No report data available for this project yet. Create activities, expenses, and contracts first.</p>
             </div>
           )}
         </div>
@@ -370,7 +402,7 @@ export default function ReportsPage() {
       )}
 
       {/* Classic Report Output */}
-      {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow) && (
+      {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow || reportData.scheduleComparison || reportData.customReports) && (
         <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
           <h2 className="mb-6 text-lg font-semibold text-white">Generated Report</h2>
           {reportData.scurve && (
@@ -424,6 +456,66 @@ export default function ReportsPage() {
                   <Bar dataKey="expense" fill="#ef4444" name="Expense" />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          )}
+          {reportData.scheduleComparison && (
+            <div className="mb-6">
+              <h3 className="mb-4 font-semibold text-slate-300">Schedule Comparison</h3>
+              {reportData.scheduleComparison.length === 0 ? (
+                <p className="text-sm text-slate-400">No schedule comparison data available. Create a baseline first.</p>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead>
+                      <tr className="border-b border-slate-700 text-slate-400">
+                        <th className="px-3 py-2">Activity</th>
+                        <th className="px-3 py-2">Baseline Start</th>
+                        <th className="px-3 py-2">Current Start</th>
+                        <th className="px-3 py-2">Start Var (days)</th>
+                        <th className="px-3 py-2">Baseline Finish</th>
+                        <th className="px-3 py-2">Current Finish</th>
+                        <th className="px-3 py-2">Finish Var (days)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.scheduleComparison.map((row) => (
+                        <tr key={row.activityCode} className="border-b border-slate-800 text-slate-300">
+                          <td className="px-3 py-2 font-mono">{row.activityCode}</td>
+                          <td className="px-3 py-2">{row.baselineStart ?? "N/A"}</td>
+                          <td className="px-3 py-2">{row.currentStart ?? "N/A"}</td>
+                          <td className={`px-3 py-2 font-mono ${row.startVarianceDays > 0 ? "text-red-400" : row.startVarianceDays < 0 ? "text-green-400" : ""}`}>
+                            {row.startVarianceDays > 0 ? `+${row.startVarianceDays}` : row.startVarianceDays}
+                          </td>
+                          <td className="px-3 py-2">{row.baselineFinish ?? "N/A"}</td>
+                          <td className="px-3 py-2">{row.currentFinish ?? "N/A"}</td>
+                          <td className={`px-3 py-2 font-mono ${row.finishVarianceDays > 0 ? "text-red-400" : row.finishVarianceDays < 0 ? "text-green-400" : ""}`}>
+                            {row.finishVarianceDays > 0 ? `+${row.finishVarianceDays}` : row.finishVarianceDays}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+          {reportData.customReports && (
+            <div className="mb-6">
+              <h3 className="mb-4 font-semibold text-slate-300">Custom Reports</h3>
+              {reportData.customReports.length === 0 ? (
+                <p className="text-sm text-slate-400">No custom reports configured for this project.</p>
+              ) : (
+                <div className="space-y-2">
+                  {reportData.customReports.map((report) => (
+                    <div key={report.id} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/50 px-4 py-3">
+                      <div>
+                        <p className="font-medium text-white">{report.name}</p>
+                        <p className="text-xs text-slate-400">{report.type} &middot; Created {report.createdAt}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

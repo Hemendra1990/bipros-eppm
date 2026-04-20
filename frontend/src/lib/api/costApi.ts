@@ -52,6 +52,15 @@ export interface PeriodCostAggregation {
 
 export type ForecastMethod = "LINEAR" | "CPI_BASED" | "SPI_CPI_COMPOSITE";
 
+export interface CreateExpenseRequest {
+  activityId?: string;
+  description: string;
+  amount: number;
+  currency?: string;
+  expenseDate: string;
+  category: string;
+}
+
 export const costApi = {
   getExpensesByProject: (projectId: string, page = 0, size = 20) =>
     apiClient
@@ -93,4 +102,9 @@ export const costApi = {
 
   deleteCostAccount: (id: string) =>
     apiClient.delete(`/v1/cost-accounts/${id}`),
+
+  createExpense: (projectId: string, data: CreateExpenseRequest) =>
+    apiClient
+      .post<ApiResponse<ExpenseResponse>>(`/v1/projects/${projectId}/expenses`, data)
+      .then((r) => r.data),
 };

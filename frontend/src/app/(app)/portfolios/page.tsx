@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { portfolioApi } from "@/lib/api/portfolioApi";
 import type { PortfolioResponse } from "@/lib/types";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
 
@@ -14,6 +14,8 @@ export default function PortfoliosPage() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [formData, setFormData] = useState({ code: "", name: "", description: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [editingPortfolio, setEditingPortfolio] = useState<PortfolioResponse | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", description: "" });
 
   useEffect(() => {
     loadPortfolios();
@@ -36,6 +38,10 @@ export default function PortfoliosPage() {
     e.preventDefault();
     if (!formData.code || !formData.name) {
       setError("Code and name are required");
+      return;
+    }
+    if (portfolios.some((p) => p.code.toLowerCase() === formData.code.trim().toLowerCase())) {
+      setError(`Portfolio code "${formData.code.trim()}" already exists. Please use a different code.`);
       return;
     }
 
@@ -65,6 +71,36 @@ export default function PortfoliosPage() {
       setPortfolios(portfolios.filter((p) => p.id !== id));
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to delete portfolio"));
+    }
+  };
+
+  const handleEditPortfolio = (portfolio: PortfolioResponse) => {
+    setEditingPortfolio(portfolio);
+    setEditForm({ name: portfolio.name, description: portfolio.description || "" });
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPortfolio || !editForm.name.trim()) {
+      setError("Name is required");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const result = await portfolioApi.updatePortfolio(editingPortfolio.id, {
+        name: editForm.name,
+        description: editForm.description,
+      });
+      if (result.data) {
+        setPortfolios(portfolios.map((p) => (p.id === editingPortfolio.id ? result.data! : p)));
+        setEditingPortfolio(null);
+        setError("");
+      }
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to update portfolio"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -180,18 +216,82 @@ export default function PortfoliosPage() {
                     {portfolio.projectCount} project{portfolio.projectCount !== 1 ? "s" : ""}
                   </p>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleDeletePortfolio(portfolio.id);
-                  }}
-                  className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
-                >
-                  <Trash2 size={18} />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleEditPortfolio(portfolio);
+                    }}
+                    className="rounded p-1 text-slate-500 hover:bg-blue-500/10 hover:text-blue-400"
+                    title="Edit portfolio"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDeletePortfolio(portfolio.id);
+                    }}
+                    className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                    title="Delete portfolio"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
             </a>
           ))}
+        </div>
+      )}
+
+      {/* Edit Portfolio Modal */}
+      {editingPortfolio && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <form
+            onSubmit={handleSaveEdit}
+            className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl"
+          >
+            <h2 className="mb-4 text-lg font-semibold text-white">
+              Edit Portfolio: {editingPortfolio.code}
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300">Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPortfolio(null)}
+                  className="rounded-md border border-slate-700 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                >
+                  {submitting ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
     </div>

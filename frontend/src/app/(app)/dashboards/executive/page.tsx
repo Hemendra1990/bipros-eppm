@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { ProjectResponse } from "@/lib/types";
 import type { RiskResponse } from "@/lib/api/riskApi";
+import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 interface Project {
   id: string;
@@ -183,8 +184,7 @@ export default function ExecutiveDashboardPage() {
                               Budget Utilization
                             </span>
                             <span className="text-xs font-semibold text-white">
-                              ${proj.spent?.toLocaleString()} / $
-                              {proj.budget?.toLocaleString()}
+                              {formatDefaultCurrency(proj.spent)} / {formatDefaultCurrency(proj.budget)}
                             </span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-slate-700">

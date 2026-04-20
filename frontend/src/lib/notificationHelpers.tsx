@@ -9,7 +9,10 @@ export const notificationHelpers = {
    */
   handleApiError(error: unknown, fallbackMessage = 'An error occurred') {
     if (error instanceof AxiosError) {
-      const message = error.response?.data?.error || error.message || fallbackMessage;
+      const rawError = error.response?.data?.error;
+      const message = (typeof rawError === 'object' && rawError !== null && 'message' in rawError)
+        ? (rawError as { message: string }).message
+        : (typeof rawError === 'string' ? rawError : error.message || fallbackMessage);
       toast.error(message);
     } else if (error instanceof Error) {
       toast.error(error.message);

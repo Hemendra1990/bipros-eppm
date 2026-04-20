@@ -43,6 +43,8 @@ export default function ProjectDetailLayout({
     { id: "wbs", label: "WBS", href: null },
     { id: "activities", label: "Activities", href: null },
     { id: "gantt", label: "Gantt", href: null },
+    { id: "network", label: "Network", href: null },
+    { id: "baselines", label: "Baselines", href: null },
     { id: "resources", label: "Resources", href: null },
     { id: "costs", label: "Costs", href: null },
     { id: "evm", label: "EVM", href: null },

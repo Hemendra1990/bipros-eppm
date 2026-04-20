@@ -60,10 +60,22 @@ export function GanttChart({
   // Calculate date range from all activities
   const dateRange = calculateDateRange(activities);
 
-  if (!dateRange || activities.length === 0) {
+  if (activities.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
         <p className="text-slate-400">No activities to display</p>
+        <p className="mt-2 text-sm text-slate-500">Create activities first, then run the scheduler to see them on the Gantt chart.</p>
+      </div>
+    );
+  }
+
+  if (!dateRange) {
+    return (
+      <div className="rounded-lg border border-dashed border-amber-700/50 bg-amber-500/5 py-12 text-center">
+        <p className="text-amber-400 font-medium">Activities exist but have no scheduled dates</p>
+        <p className="mt-2 text-sm text-slate-400">
+          Run the CPM Scheduler from the Activities tab to calculate early/late start and finish dates.
+        </p>
       </div>
     );
   }
