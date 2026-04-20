@@ -76,6 +76,40 @@ public class EpsService {
         return buildNodeResponse(updated, new HashMap<>());
     }
 
+    public EpsNodeResponse moveNode(UUID id, UUID newParentId) {
+        log.info("Moving EPS node {} to parent {}", id, newParentId);
+
+        EpsNode node = epsNodeRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("EpsNode", id));
+
+        if (newParentId != null) {
+            if (newParentId.equals(id)) {
+                throw new BusinessRuleException("EPS_CIRCULAR_MOVE", "Cannot move a node under itself");
+            }
+            // Verify parent exists
+            epsNodeRepository.findById(newParentId)
+                .orElseThrow(() -> new ResourceNotFoundException("EpsNode (parent)", newParentId));
+            // Check for circular reference: walk up from newParentId to root
+            UUID current = newParentId;
+            while (current != null) {
+                if (current.equals(id)) {
+                    throw new BusinessRuleException("EPS_CIRCULAR_MOVE", "Cannot move a node under one of its descendants");
+                }
+                UUID finalCurrent = current;
+                EpsNode ancestor = epsNodeRepository.findById(finalCurrent).orElse(null);
+                current = ancestor != null ? ancestor.getParentId() : null;
+            }
+        }
+
+        UUID oldParentId = node.getParentId();
+        node.setParentId(newParentId);
+        EpsNode updated = epsNodeRepository.save(node);
+        log.info("EPS node {} moved from parent {} to {}", id, oldParentId, newParentId);
+        auditService.logUpdate("EpsNode", id, "parentId", oldParentId, newParentId);
+
+        return buildNodeResponse(updated, new HashMap<>());
+    }
+
     public void deleteNode(UUID id) {
         log.info("Deleting EPS node: {}", id);
 

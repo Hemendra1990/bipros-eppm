@@ -49,6 +49,18 @@ public class EpsController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PatchMapping("/{id}/move")
+    public ResponseEntity<ApiResponse<EpsNodeResponse>> moveNode(
+        @PathVariable UUID id,
+        @RequestBody(required = false) java.util.Map<String, String> body) {
+        UUID newParentId = null;
+        if (body != null && body.get("parentId") != null && !body.get("parentId").isBlank()) {
+            newParentId = UUID.fromString(body.get("parentId"));
+        }
+        EpsNodeResponse response = epsService.moveNode(id, newParentId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteNode(@PathVariable UUID id) {
         epsService.deleteNode(id);

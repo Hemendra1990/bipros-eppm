@@ -6,6 +6,7 @@ import com.bipros.project.application.dto.CreateEpsNodeRequest;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
 import com.bipros.project.domain.model.EpsNode;
 import com.bipros.project.domain.model.Project;
+import com.bipros.common.util.AuditService;
 import com.bipros.project.domain.repository.EpsNodeRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,11 +36,14 @@ class EpsServiceTest {
   @Mock
   private ProjectRepository projectRepository;
 
+  @Mock
+  private AuditService auditService;
+
   private EpsService epsService;
 
   @BeforeEach
   void setUp() {
-    epsService = new EpsService(epsNodeRepository, projectRepository);
+    epsService = new EpsService(epsNodeRepository, projectRepository, auditService);
   }
 
   @Nested
@@ -68,6 +72,7 @@ class EpsServiceTest {
         node.setId(nodeId);
         return node;
       });
+      when(epsNodeRepository.findByParentIdOrderBySortOrder(nodeId)).thenReturn(new ArrayList<>());
 
       var result = epsService.createNode(new CreateEpsNodeRequest(code, name, parentId, null));
 
@@ -212,6 +217,7 @@ class EpsServiceTest {
 
       when(epsNodeRepository.findById(nodeId)).thenReturn(Optional.of(node));
       when(epsNodeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+      when(epsNodeRepository.findByParentIdOrderBySortOrder(nodeId)).thenReturn(new ArrayList<>());
 
       var result = epsService.updateNode(nodeId, new UpdateEpsNodeRequest(newName, null, null));
 

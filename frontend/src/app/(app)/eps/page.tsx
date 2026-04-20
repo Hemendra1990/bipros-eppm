@@ -2,11 +2,12 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, X, Trash2, Edit2, Check, FolderPlus } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { projectApi } from "@/lib/api/projectApi";
 import { TreeView } from "@/components/common/TreeView";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { apiClient } from "@/lib/api/client";
 import type { EpsNodeResponse, ApiResponse } from "@/lib/types";
 
@@ -23,6 +24,7 @@ export default function EpsPage() {
   const [editingName, setEditingName] = useState("");
   const [formData, setFormData] = useState<EpsNodeCreateRequest>({ code: "", name: "", parentId: undefined });
   const [parentLabel, setParentLabel] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; nodeId: string | null }>({ open: false, nodeId: null });
 
   const { data: epsData, isLoading, error } = useQuery({
     queryKey: ["eps"],
@@ -63,6 +65,15 @@ export default function EpsPage() {
     },
   });
 
+  const moveMutation = useMutation({
+    mutationFn: async ({ nodeId, newParentId }: { nodeId: string; newParentId: string | null }) => {
+      return projectApi.moveEpsNode(nodeId, newParentId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["eps"] });
+    },
+  });
+
   const epsNodes = epsData?.data ?? [];
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -96,10 +107,19 @@ export default function EpsPage() {
   };
 
   const handleDelete = (nodeId: string) => {
-    if (window.confirm("Are you sure you want to delete this EPS node?")) {
-      deleteMutation.mutate(nodeId);
-    }
+    setDeleteConfirm({ open: true, nodeId });
   };
+
+  const confirmDelete = useCallback(() => {
+    if (deleteConfirm.nodeId) {
+      deleteMutation.mutate(deleteConfirm.nodeId);
+    }
+    setDeleteConfirm({ open: false, nodeId: null });
+  }, [deleteConfirm.nodeId, deleteMutation]);
+
+  const cancelDelete = useCallback(() => {
+    setDeleteConfirm({ open: false, nodeId: null });
+  }, []);
 
   return (
     <div>
@@ -193,6 +213,8 @@ export default function EpsPage() {
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
           <TreeView
             nodes={epsNodes}
+            draggable
+            onMoveNode={(nodeId, newParentId) => moveMutation.mutate({ nodeId, newParentId })}
             renderNode={(node: EpsNodeResponse) => (
               <div className="group flex items-center justify-between gap-3 flex-1">
                 <div className="flex-1">
@@ -258,6 +280,16 @@ export default function EpsPage() {
           />
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="Delete EPS Node"
+        message="Are you sure you want to delete this EPS node? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 }
