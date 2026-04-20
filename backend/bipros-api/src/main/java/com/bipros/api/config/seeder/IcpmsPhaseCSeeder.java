@@ -53,7 +53,9 @@ public class IcpmsPhaseCSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (raBillRepository.findByBillNumber("DMIC-N03-P01-RA-001").isPresent()) {
+        // Sentinel widened so the Excel master-data loader takes precedence:
+        // if any RA bill or satellite scene exists already, skip (loader owns both tables).
+        if (raBillRepository.count() > 0 || satelliteImageRepository.count() > 0) {
             log.info("[IC-PMS Phase C] satellite/RA-bill data already seeded, skipping");
             return;
         }
@@ -84,6 +86,8 @@ public class IcpmsPhaseCSeeder implements CommandLineRunner {
 
         seedScene(projectId, "SCN-N04-P01-250215", LocalDate.of(2025, 2, 15), "DMIC-N04-P01", 50.00, 66.0, 60.0, -0.05, 15.0, SatelliteAlertFlag.RED_VARIANCE_GT10, SatelliteImageSource.ISRO_CARTOSAT);
         seedScene(projectId, "SCN-N04-P01-250315", LocalDate.of(2025, 3, 15), "DMIC-N04-P01", 52.50, 68.0, 62.0, -0.06, 10.0, SatelliteAlertFlag.RED_VARIANCE_GT10, SatelliteImageSource.PLANET_LABS);
+        // Scenario 7 — Excel SCN-N04-250328: AI 50 vs Contractor 62 = variance 12% → RED_VARIANCE_GT10
+        seedScene(projectId, "SCN-N04-250328", LocalDate.of(2025, 3, 28), "DMIC-N04-P01", 50.00, 67.0, 61.0, -0.06, 9.0, SatelliteAlertFlag.RED_VARIANCE_GT10, SatelliteImageSource.ISRO_CARTOSAT);
         seedScene(projectId, "SCN-N04-P01-250415", LocalDate.of(2025, 4, 15), "DMIC-N04-P01", 55.30, 70.0, 64.0, -0.08, 8.0, SatelliteAlertFlag.RED_VARIANCE_GT10, SatelliteImageSource.ISRO_CARTOSAT);
 
         seedScene(projectId, "SCN-N04-P02-250215", LocalDate.of(2025, 2, 15), "DMIC-N04-P02", 44.00, 74.0, 66.0, -0.04, 5.0, SatelliteAlertFlag.GREEN, SatelliteImageSource.ISRO_CARTOSAT);
@@ -104,7 +108,7 @@ public class IcpmsPhaseCSeeder implements CommandLineRunner {
         seedScene(projectId, "SCN-N06-P02-250315", LocalDate.of(2025, 3, 15), "DMIC-N06-P02", 13.80, 50.0, 45.0, -0.01, 14.0, SatelliteAlertFlag.AMBER_IDLE_ZONE, SatelliteImageSource.ISRO_CARTOSAT);
         seedScene(projectId, "SCN-N06-P02-250415", LocalDate.of(2025, 4, 15), "DMIC-N06-P02", 15.20, 52.0, 47.0, -0.01, 12.0, SatelliteAlertFlag.AMBER_IDLE_ZONE, SatelliteImageSource.PLANET_LABS);
 
-        log.info("[IC-PMS Phase C] seeded 25 satellite scenes");
+        log.info("[IC-PMS Phase C] seeded 26 satellite scenes");
 
         // --- RA bills (16 bills, Jan-Apr 2025) -------------------------------------
         // Columns: billNumber, wbsPackageCode, periodTo, grossCrores, claimPct, deductionFactor

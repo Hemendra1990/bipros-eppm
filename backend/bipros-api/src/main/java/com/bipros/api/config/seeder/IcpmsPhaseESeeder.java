@@ -40,7 +40,7 @@ import java.util.UUID;
  * EVM rows (Jul-2024 → Mar-2025 for DMIC-N03 rollup), 14 KPI definitions and
  * their per-node snapshots.
  *
- * <p>Sentinel: first risk {@code DMIC-RSK-001} present → skip.
+ * <p>Sentinel: first risk {@code RISK-DMIC-001} present → skip.
  */
 @Slf4j
 @Component
@@ -59,9 +59,11 @@ public class IcpmsPhaseESeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (riskRepository.findAll().stream()
-            .anyMatch(r -> "DMIC-RSK-001".equals(r.getCode()))) {
-            log.info("[IC-PMS Phase E] risks/KPIs/EVM already seeded, skipping");
+        // Sentinel split so the Excel master-data loader owns risks while
+        // KPI defs + monthly EVM still seed here. We check KPI-def population as the
+        // true sentinel for "Phase E already ran" because risks may be loaded elsewhere.
+        if (kpiDefinitionRepository.count() > 0) {
+            log.info("[IC-PMS Phase E] KPIs/EVM already seeded, skipping");
             return;
         }
         Project programme = projectRepository.findByCode("DMIC-PROG").orElse(null);
@@ -71,13 +73,18 @@ public class IcpmsPhaseESeeder implements CommandLineRunner {
         }
         UUID projectId = programme.getId();
 
-        seedRisks(projectId);
+        // Risks only seeded here if Excel loader didn't already populate them.
+        if (riskRepository.count() == 0) {
+            seedRisks(projectId);
+        } else {
+            log.info("[IC-PMS Phase E] risks already present (likely Excel loader), skipping risk seed");
+        }
         seedKpiDefinitions();
         seedMonthlyEvm(projectId);
         seedKpiNodeSnapshots();
         verifyScenarios();
 
-        log.info("[IC-PMS Phase E] seeded 24 risks, 14 KPI defs, 9 monthly EVM rows, per-node KPI snapshots");
+        log.info("[IC-PMS Phase E] seeded 14 KPI defs, 9 monthly EVM rows, per-node KPI snapshots");
     }
 
     // =========================================================================
@@ -87,77 +94,77 @@ public class IcpmsPhaseESeeder implements CommandLineRunner {
         // Code, title, category, probability(1-5), impactCost(1-5), impactSchedule(1-5),
         // status, trend, opportunity?
         // Tuned: 1 CRIMSON (score ≥20), 3 RED (12-19), rest AMBER/GREEN, 2 OPPORTUNITY
-        seedRisk(projectId, "DMIC-RSK-001", "Monsoon delay on DMIC-N03-P01 earthworks",
+        seedRisk(projectId, "RISK-DMIC-001", "Monsoon delay on DMIC-N03-P01 earthworks",
             RiskCategory.MONSOON_IMPACT, 4, 3, 5, RiskStatus.OPEN_ESCALATED,
             RiskTrend.WORSENING, false); // 4*5=20 → CRIMSON
-        seedRisk(projectId, "DMIC-RSK-002", "Land acquisition dispute — DMIC-N04",
+        seedRisk(projectId, "RISK-DMIC-002", "Land acquisition dispute — DMIC-N04",
             RiskCategory.LAND_ACQUISITION, 4, 4, 4, RiskStatus.OPEN_UNDER_ACTIVE_MANAGEMENT,
             RiskTrend.STABLE, false); // 4*4=16 → RED
-        seedRisk(projectId, "DMIC-RSK-003", "Contractor financial stress — EPC-003",
+        seedRisk(projectId, "RISK-DMIC-003", "Contractor financial stress — EPC-003",
             RiskCategory.CONTRACTOR_FINANCIAL, 3, 5, 4, RiskStatus.OPEN_ESCALATED,
             RiskTrend.WORSENING, false); // 3*5=15 → RED
-        seedRisk(projectId, "DMIC-RSK-004", "Statutory clearance delay — forest",
+        seedRisk(projectId, "RISK-DMIC-004", "Statutory clearance delay — forest",
             RiskCategory.FOREST_CLEARANCE, 3, 3, 5, RiskStatus.OPEN_UNDER_ACTIVE_MANAGEMENT,
             RiskTrend.STABLE, false); // 3*5=15 → RED
-        seedRisk(projectId, "DMIC-RSK-005", "Utility shifting delay — gas pipeline",
+        seedRisk(projectId, "RISK-DMIC-005", "Utility shifting delay — gas pipeline",
             RiskCategory.UTILITY_SHIFTING, 3, 2, 4, RiskStatus.OPEN_BEING_MANAGED,
             RiskTrend.IMPROVING, false); // 3*4=12 → RED
-        seedRisk(projectId, "DMIC-RSK-006", "Steel price volatility",
+        seedRisk(projectId, "RISK-DMIC-006", "Steel price volatility",
             RiskCategory.MARKET_PRICE, 3, 3, 1, RiskStatus.OPEN_WATCH,
             RiskTrend.WORSENING, false); // 3*3=9 → AMBER
-        seedRisk(projectId, "DMIC-RSK-007", "Cement supply disruption",
+        seedRisk(projectId, "RISK-DMIC-007", "Cement supply disruption",
             RiskCategory.EXTERNAL, 2, 3, 2, RiskStatus.OPEN_MONITOR,
             RiskTrend.STABLE, false); // 2*3=6 → AMBER
-        seedRisk(projectId, "DMIC-RSK-008", "Skilled labour availability",
+        seedRisk(projectId, "RISK-DMIC-008", "Skilled labour availability",
             RiskCategory.RESOURCE, 3, 2, 3, RiskStatus.OPEN_BEING_MANAGED,
             RiskTrend.STABLE, false); // 3*3=9 → AMBER
-        seedRisk(projectId, "DMIC-RSK-009", "Environmental compliance audit",
+        seedRisk(projectId, "RISK-DMIC-009", "Environmental compliance audit",
             RiskCategory.STATUTORY_CLEARANCE, 2, 2, 3, RiskStatus.OPEN_ASI_REVIEW,
             RiskTrend.IMPROVING, false); // 2*3=6 → AMBER
-        seedRisk(projectId, "DMIC-RSK-010", "Tier-1 vendor delivery slip",
+        seedRisk(projectId, "RISK-DMIC-010", "Tier-1 vendor delivery slip",
             RiskCategory.EXTERNAL, 2, 3, 2, RiskStatus.OPEN_TARGET,
             RiskTrend.STABLE, false); // 2*3=6 → AMBER
-        seedRisk(projectId, "DMIC-RSK-011", "Design change — plant layout",
+        seedRisk(projectId, "RISK-DMIC-011", "Design change — plant layout",
             RiskCategory.TECHNICAL, 2, 2, 2, RiskStatus.MITIGATING,
             RiskTrend.IMPROVING, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-012", "Cyber-security DPIA gap — ICT",
+        seedRisk(projectId, "RISK-DMIC-012", "Cyber-security DPIA gap — ICT",
             RiskCategory.TECHNOLOGY, 2, 2, 1, RiskStatus.OPEN_MONITOR,
             RiskTrend.STABLE, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-013", "Local community engagement friction",
+        seedRisk(projectId, "RISK-DMIC-013", "Local community engagement friction",
             RiskCategory.ORGANIZATIONAL, 2, 1, 2, RiskStatus.OPEN_BEING_MANAGED,
             RiskTrend.IMPROVING, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-014", "Quality assurance lapse — pile caps",
+        seedRisk(projectId, "RISK-DMIC-014", "Quality assurance lapse — pile caps",
             RiskCategory.QUALITY, 2, 2, 2, RiskStatus.MITIGATING,
             RiskTrend.IMPROVING, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-015", "RA bill certification workflow latency",
+        seedRisk(projectId, "RISK-DMIC-015", "RA bill certification workflow latency",
             RiskCategory.PROJECT_MANAGEMENT, 2, 1, 2, RiskStatus.OPEN_WATCH,
             RiskTrend.STABLE, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-016", "Geotech anomaly — DMIC-N05 foundation",
+        seedRisk(projectId, "RISK-DMIC-016", "Geotech anomaly — DMIC-N05 foundation",
             RiskCategory.NATURAL_HAZARD, 2, 3, 3, RiskStatus.OPEN_UNDER_ACTIVE_MANAGEMENT,
             RiskTrend.STABLE, false); // 2*3=6 → AMBER
-        seedRisk(projectId, "DMIC-RSK-017", "Cost escalation — bitumen VG30",
+        seedRisk(projectId, "RISK-DMIC-017", "Cost escalation — bitumen VG30",
             RiskCategory.COST, 2, 2, 1, RiskStatus.MITIGATING,
             RiskTrend.STABLE, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-018", "HVAC commissioning slippage",
+        seedRisk(projectId, "RISK-DMIC-018", "HVAC commissioning slippage",
             RiskCategory.SCHEDULE, 2, 1, 3, RiskStatus.OPEN_MONITOR,
             RiskTrend.STABLE, false); // 2*3=6 → AMBER
-        seedRisk(projectId, "DMIC-RSK-019", "Piling rig availability — DMIC-N05",
+        seedRisk(projectId, "RISK-DMIC-019", "Piling rig availability — DMIC-N05",
             RiskCategory.RESOURCE, 2, 2, 2, RiskStatus.MITIGATING,
             RiskTrend.IMPROVING, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-020", "Third-party quality audit findings",
+        seedRisk(projectId, "RISK-DMIC-020", "Third-party quality audit findings",
             RiskCategory.QUALITY, 2, 2, 1, RiskStatus.OPEN_ASI_REVIEW,
             RiskTrend.STABLE, false); // 2*2=4 → GREEN
-        seedRisk(projectId, "DMIC-RSK-021", "Performance bond renewal delay",
+        seedRisk(projectId, "RISK-DMIC-021", "Performance bond renewal delay",
             RiskCategory.CONTRACTOR_FINANCIAL, 2, 3, 1, RiskStatus.OPEN_WATCH,
             RiskTrend.STABLE, false); // 2*3=6 → AMBER
-        seedRisk(projectId, "DMIC-RSK-022", "Scope creep on ICT backbone",
+        seedRisk(projectId, "RISK-DMIC-022", "Scope creep on ICT backbone",
             RiskCategory.PROJECT_MANAGEMENT, 3, 2, 2, RiskStatus.OPEN_BEING_MANAGED,
             RiskTrend.WORSENING, false); // 3*2=6 → AMBER
-        // Opportunities
-        seedRisk(projectId, "DMIC-OPP-001", "Early completion bonus — DMIC-N06-P01",
+        // Opportunities (continue numbering per Excel M7_Risk_Register scheme)
+        seedRisk(projectId, "RISK-DMIC-023", "Early completion bonus — DMIC-N06-P01",
             RiskCategory.SCHEDULE, 3, 4, 4, RiskStatus.OPEN_TARGET,
             RiskTrend.IMPROVING, true); // OPPORTUNITY
-        seedRisk(projectId, "DMIC-OPP-002", "Bulk cement pricing leverage",
+        seedRisk(projectId, "RISK-DMIC-024", "Bulk cement pricing leverage",
             RiskCategory.MARKET_PRICE, 3, 3, 1, RiskStatus.OPEN_TARGET,
             RiskTrend.IMPROVING, true); // OPPORTUNITY
     }

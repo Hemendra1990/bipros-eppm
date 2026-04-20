@@ -55,7 +55,9 @@ public class IcpmsPhaseBSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (contractRepository.findByContractNumber("LOA/DMIC/N03/P01/2024-01").isPresent()) {
+        // Sentinel widened so the Excel master-data loader takes precedence:
+        // if any contract is already present (from Excel or a prior Phase B run), skip.
+        if (contractRepository.count() > 0) {
             log.info("[IC-PMS Phase B] contracts already seeded, skipping");
             return;
         }

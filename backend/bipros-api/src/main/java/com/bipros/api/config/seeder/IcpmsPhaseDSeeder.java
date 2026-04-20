@@ -1,5 +1,7 @@
 package com.bipros.api.config.seeder;
 
+import com.bipros.admin.domain.model.Organisation;
+import com.bipros.admin.domain.repository.OrganisationRepository;
 import com.bipros.document.domain.model.Document;
 import com.bipros.document.domain.model.DocumentCategory;
 import com.bipros.document.domain.model.DocumentFolder;
@@ -28,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -51,12 +55,17 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
     private final DocumentRepository documentRepository;
     private final ResourceRepository resourceRepository;
     private final ResourceUtilisationService utilisationService;
+    private final OrganisationRepository organisationRepository;
+
+    /** Cached WBS → contractor map built once per seed run. */
+    private Map<String, Organisation> contractorByWbs;
 
     @Override
     @Transactional
     public void run(String... args) {
-        if (documentRepository.findAll().stream()
-            .anyMatch(d -> "DRW-N03-P01-001".equals(d.getDocumentNumber()))) {
+        // Sentinel widened so the Excel master-data loader takes precedence:
+        // if any document OR resource row exists already, skip (loader owns both tables).
+        if (documentRepository.count() > 0 || resourceRepository.count() > 0) {
             log.info("[IC-PMS Phase D] documents/resources already seeded, skipping");
             return;
         }
@@ -187,7 +196,50 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
         doc.setDocumentType(type);
         doc.setDiscipline(discipline);
         doc.setTransmittalNumber(transmittalNumber);
+        // IC-PMS M6 denormalised approval fields — used by the document register grid
+        doc.setWbsPackageCode(deriveWbsPackage(docNumber));
+        doc.setIssuedBy(deriveIssuedBy(type));
+        doc.setIssuedDate(LocalDate.of(2025, 2, 15));
+        if (isApprovedStatus(status)) {
+            doc.setApprovedBy("Employer/PMC");
+            doc.setApprovedDate(LocalDate.of(2025, 3, 5));
+        }
         documentRepository.save(doc);
+    }
+
+    /** Extract the WBS package from the document number (e.g. DRW-N03-P01-001 → DMIC-N03-P01). */
+    private String deriveWbsPackage(String docNumber) {
+        if (docNumber == null) return null;
+        String[] parts = docNumber.split("-");
+        if (parts.length >= 3 && parts[1].startsWith("N") && parts[2].startsWith("P")) {
+            return "DMIC-" + parts[1] + "-" + parts[2];
+        }
+        if (parts.length >= 2 && "ICT".equals(parts[1])) {
+            return "DMIC-ICT";
+        }
+        if (parts.length >= 2 && parts[1].startsWith("N")) {
+            return "DMIC-" + parts[1];
+        }
+        return "DMIC-PROG";
+    }
+
+    private String deriveIssuedBy(DocumentType type) {
+        if (type == null) return "EPC Contractor";
+        return switch (type) {
+            case RFI, MINUTES, REPORT -> "PMC";
+            case LOA, BANK_GUARANTEE -> "Employer";
+            case SPECIFICATION -> "PMC (Technical)";
+            default -> "EPC Contractor";
+        };
+    }
+
+    private boolean isApprovedStatus(DocumentStatus status) {
+        return status == DocumentStatus.IFC
+            || status == DocumentStatus.APPROVED
+            || status == DocumentStatus.PUBLISHED
+            || status == DocumentStatus.EXECUTED
+            || status == DocumentStatus.VALID
+            || status == DocumentStatus.CLOSED;
     }
 
     // =========================================================================
@@ -195,6 +247,9 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
     // =========================================================================
     private void seedResources() {
         LocalDate today = LocalDate.of(2025, 4, 15);
+
+        // Resolve EPC contractors once — map WBS package → responsible contractor
+        this.contractorByWbs = buildContractorByWbsMap();
 
         // ---- Equipment (10) ----
         // EQP-EXCAV-20T is tuned to 93.8% → OVER_90 (Excel scenario)
@@ -323,12 +378,47 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
         r.setDailyCostLakh(dailyCostLakh);
         r.setCumulativeCostCrores(cumulativeCrores);
         r.setWbsAssignmentId(wbsPackage);
+        if (contractorByWbs != null) {
+            Organisation contractor = contractorByWbs.get(wbsPackage);
+            if (contractor != null) {
+                r.setResponsibleContractorId(contractor.getId());
+                r.setResponsibleContractorName(contractor.getShortName());
+            }
+        }
         r.setStatus(ResourceStatus.ACTIVE);
         r.setSortOrder(0);
         Resource saved = resourceRepository.save(r);
 
         // Record daily log — aggregator computes utilisation% and sets band
         utilisationService.recordDaily(saved.getId(), logDate, planned, actual, wbsPackage, null);
+    }
+
+    /** IC-PMS M8 WBS → EPC contractor mapping per Excel M5_Contract_Register. */
+    private Map<String, Organisation> buildContractorByWbsMap() {
+        Map<String, Organisation> byWbs = new HashMap<>();
+        Organisation lnt = organisationRepository.findByCode("LNT-IDPL").orElse(null);
+        Organisation tata = organisationRepository.findByCode("TATA-PROJ").orElse(null);
+        Organisation afcons = organisationRepository.findByCode("AFCONS").orElse(null);
+        Organisation hcc = organisationRepository.findByCode("HCC").orElse(null);
+        Organisation dilip = organisationRepository.findByCode("DILIP-BUILDCON").orElse(null);
+        if (lnt != null) {
+            byWbs.put("DMIC-N03-P01", lnt);
+            byWbs.put("DMIC-N03-P02", lnt);
+        }
+        if (tata != null) {
+            byWbs.put("DMIC-N04-P01", tata);
+        }
+        if (afcons != null) {
+            byWbs.put("DMIC-N04-P02", afcons);
+            byWbs.put("DMIC-N05-P01", afcons);
+        }
+        if (hcc != null) {
+            byWbs.put("DMIC-N06-P01", hcc);
+        }
+        if (dilip != null) {
+            byWbs.put("DMIC-N06-P02", dilip);
+        }
+        return byWbs;
     }
 
     private static BigDecimal bd(String s) {
