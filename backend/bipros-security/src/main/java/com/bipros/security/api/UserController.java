@@ -2,7 +2,9 @@ package com.bipros.security.api;
 
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.common.dto.PagedResponse;
+import com.bipros.security.application.dto.UserAccessResponse;
 import com.bipros.security.application.dto.UserResponse;
+import com.bipros.security.application.service.UserAccessService;
 import com.bipros.security.application.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +32,7 @@ import java.util.stream.Collectors;
 public class UserController {
 
     private final UserService userService;
+    private final UserAccessService userAccessService;
 
     @GetMapping("/me")
     @Operation(summary = "Get current user", description = "Retrieve the currently authenticated user details")
@@ -75,6 +78,18 @@ public class UserController {
             log.error("Error retrieving user: {}", id, e);
             return ResponseEntity.status(404)
                     .body(ApiResponse.error("NOT_FOUND", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/access")
+    @Operation(summary = "Get IC-PMS module access & corridor scope for a user")
+    public ResponseEntity<ApiResponse<UserAccessResponse>> getUserAccess(@PathVariable UUID id) {
+        try {
+            return ResponseEntity.ok(ApiResponse.ok(userAccessService.getAccess(id)));
+        } catch (Exception e) {
+            log.error("Error retrieving access for user: {}", id, e);
+            return ResponseEntity.status(500)
+                    .body(ApiResponse.error("INTERNAL_SERVER_ERROR", e.getMessage()));
         }
     }
 }

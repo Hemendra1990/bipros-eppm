@@ -1,17 +1,24 @@
 package com.bipros.security.domain.model;
 
 import com.bipros.common.model.BaseEntity;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users", schema = "public")
@@ -40,6 +47,28 @@ public class User extends BaseEntity {
 
     @Column(name = "account_locked", nullable = false)
     private boolean accountLocked = false;
+
+    /** IC-PMS: FK to organisations.id (nullable for legacy admin users). */
+    @Column(name = "organisation_id")
+    private UUID organisationId;
+
+    /** IC-PMS: designation/title (e.g. "Additional Secretary", "Project Director"). */
+    @Column(name = "designation", length = 120)
+    private String designation;
+
+    /** IC-PMS: primary role in the programme (e.g. "Employer – Director (PMO)"). */
+    @Column(name = "primary_icpms_role", length = 120)
+    private String primaryIcpmsRole;
+
+    @ElementCollection(targetClass = AuthMethod.class, fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "user_auth_methods",
+            schema = "public",
+            joinColumns = @JoinColumn(name = "user_id")
+    )
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_method", length = 30)
+    private Set<AuthMethod> authMethods = EnumSet.noneOf(AuthMethod.class);
 
     @OneToMany(mappedBy = "user", fetch = FetchType.EAGER)
     private Set<UserRole> roles = new HashSet<>();

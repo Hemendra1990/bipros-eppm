@@ -18,6 +18,8 @@ export interface ActivityResponse {
   lateStartDate?: string | null;
   lateFinishDate?: string | null;
   duration: number;
+  originalDuration?: number | null;
+  atCompletionDuration?: number | null;
   percentComplete: number;
   slack: number;
   totalFloat: number;

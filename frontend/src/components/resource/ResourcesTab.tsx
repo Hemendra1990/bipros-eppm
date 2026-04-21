@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { resourceApi } from "@/lib/api/resourceApi";
+import { resourceApi, type ResourceResponse, type ResourceAssignmentResponse } from "@/lib/api/resourceApi";
 import { resourceHistogramApi } from "@/lib/api/resourceHistogramApi";
-import { activityApi } from "@/lib/api/activityApi";
+import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Plus, SlidersHorizontal } from "lucide-react";
@@ -84,12 +84,20 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     },
   });
 
-  const rawAssignments = assignmentsData?.data;
-  const assignments = Array.isArray(rawAssignments) ? rawAssignments : rawAssignments?.content ?? [];
-  const rawResources = resourcesData?.data;
-  const resources = Array.isArray(rawResources) ? rawResources : rawResources?.content ?? [];
-  const rawActivities = activitiesData?.data;
-  const activities = Array.isArray(rawActivities) ? rawActivities : rawActivities?.content ?? [];
+  const rawAssignments = assignmentsData?.data as unknown;
+  const assignments: ResourceAssignmentResponse[] = Array.isArray(rawAssignments)
+    ? (rawAssignments as ResourceAssignmentResponse[])
+    : ((rawAssignments as { content?: ResourceAssignmentResponse[] } | undefined)?.content ?? []);
+  // resourceApi.listResources returns a flat array now; keep the branch for
+  // safety in case it ever wraps the payload again.
+  const rawResources = resourcesData?.data as unknown;
+  const resources: ResourceResponse[] = Array.isArray(rawResources)
+    ? (rawResources as ResourceResponse[])
+    : ((rawResources as { content?: ResourceResponse[] } | undefined)?.content ?? []);
+  const rawActivities = activitiesData?.data as unknown;
+  const activities: ActivityResponse[] = Array.isArray(rawActivities)
+    ? (rawActivities as ActivityResponse[])
+    : ((rawActivities as { content?: ActivityResponse[] } | undefined)?.content ?? []);
   const histogramEntries = histogramData?.data ?? [];
 
   const columns: ColumnDef<ResourceAssignmentRow>[] = [

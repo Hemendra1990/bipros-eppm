@@ -5,9 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "@/lib/api/dashboardApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
+import { organisationApi } from "@/lib/api/organisationApi";
+import { analyticsApi, type ContractorPerformance } from "@/lib/api/analyticsApi";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import type { ProjectResponse, ActivityResponse } from "@/lib/types";
+import type { ProjectResponse, ActivityResponse, OrganisationResponse } from "@/lib/types";
 
 interface EvmMetrics {
   projectId: string;
@@ -28,9 +30,11 @@ interface Milestone {
 interface ContractorScorecard {
   id: string;
   name: string;
-  performanceScore: number;
-  safetyScore: number;
-  complianceScore: number;
+  // Scores are `null` until contractor-scorecard ingestion is wired — the UI
+  // renders "n/a" badges in that case instead of fabricating numbers.
+  performanceScore: number | null;
+  safetyScore: number | null;
+  complianceScore: number | null;
 }
 
 export default function ProgrammeDashboardPage() {
@@ -56,8 +60,28 @@ export default function ProgrammeDashboardPage() {
     retry: 1,
   });
 
+  const { data: epcContractorsData } = useQuery({
+    queryKey: ["organisations", "EPC_CONTRACTOR"],
+    queryFn: () => organisationApi.listByType("EPC_CONTRACTOR"),
+    staleTime: 5 * 60_000,
+  });
+
+  // Real per-contractor performance/compliance from the new analytics endpoint.
+  // Derived server-side from RA-bill satellite-gate PASS % + BG-validity %.
+  const { data: contractorPerfData } = useQuery({
+    queryKey: ["analytics", "contractor-performance"],
+    queryFn: () => analyticsApi.getContractorPerformance(),
+    staleTime: 60_000,
+  });
+
   const projects = projectsData?.data?.content ?? [];
   const activities = activitiesData?.data?.content ?? [];
+  const epcContractors: OrganisationResponse[] = epcContractorsData?.data ?? [];
+  const contractorPerfByCode = useMemo(() => {
+    const map = new Map<string, ContractorPerformance>();
+    (contractorPerfData ?? []).forEach((p) => map.set(p.orgCode, p));
+    return map;
+  }, [contractorPerfData]);
 
   // Mock EVM metrics — seeded by project index to avoid re-render instability
   const mockEvmMetrics: EvmMetrics[] = useMemo(
@@ -119,30 +143,20 @@ export default function ProgrammeDashboardPage() {
           },
         ];
 
-  // Mock contractor scorecards
-  const mockContractors: ContractorScorecard[] = [
-    {
-      id: "1",
-      name: "ABC Construction",
-      performanceScore: 92,
-      safetyScore: 88,
-      complianceScore: 95,
-    },
-    {
-      id: "2",
-      name: "XYZ Engineering",
-      performanceScore: 85,
-      safetyScore: 90,
-      complianceScore: 82,
-    },
-    {
-      id: "3",
-      name: "BuildRight Solutions",
-      performanceScore: 78,
-      safetyScore: 75,
-      complianceScore: 80,
-    },
-  ];
+  // Real EPC contractors from /v1/organisations?type=EPC_CONTRACTOR, joined to
+  // /v1/analytics/contractor-performance for derived scores. Performance comes
+  // from satellite-gate PASS% on RA bills, compliance from BG validity%. Safety
+  // stays null because safety-incident ingestion is not yet wired.
+  const contractors: ContractorScorecard[] = epcContractors.map((o) => {
+    const perf = contractorPerfByCode.get(o.code);
+    return {
+      id: o.id,
+      name: o.shortName || o.name,
+      performanceScore: perf?.performanceScore ?? null,
+      safetyScore: perf?.safetyScore ?? null,
+      complianceScore: perf?.complianceScore ?? null,
+    };
+  });
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
@@ -157,12 +171,16 @@ export default function ProgrammeDashboardPage() {
     }
   };
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score: number | null) => {
+    if (score == null) return "text-slate-500";
     if (score >= 90) return "text-emerald-400";
     if (score >= 80) return "text-blue-400";
     if (score >= 70) return "text-amber-400";
     return "text-red-400";
   };
+
+  const formatScore = (score: number | null) =>
+    score == null ? "n/a" : `${score}%`;
 
   if (isLoadingConfig) {
     return (
@@ -287,82 +305,74 @@ export default function ProgrammeDashboardPage() {
           <h2 className="mb-4 text-lg font-semibold text-white">
             Contractor Performance
           </h2>
-          <div className="space-y-4">
-            {mockContractors.map((contractor) => (
-              <div
-                key={contractor.id}
-                className="rounded-lg border border-slate-800 bg-slate-800/50 p-4"
-              >
-                <h3 className="mb-3 font-medium text-white">
-                  {contractor.name}
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-400">
-                      Performance
-                    </span>
-                    <span
-                      className={`text-sm font-semibold ${getScoreColor(
-                        contractor.performanceScore
-                      )}`}
-                    >
-                      {contractor.performanceScore}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-slate-700">
-                    <div
-                      className="h-1.5 rounded-full bg-blue-500"
-                      style={{
-                        width: `${contractor.performanceScore}%`,
-                      }}
-                    />
-                  </div>
+          {contractors.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
+              <p className="text-slate-400">No EPC contractors registered</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {contractors.map((contractor) => (
+                <div
+                  key={contractor.id}
+                  className="rounded-lg border border-slate-800 bg-slate-800/50 p-4"
+                >
+                  <h3 className="mb-3 font-medium text-white">{contractor.name}</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-400">
+                        Performance
+                      </span>
+                      <span
+                        className={`text-sm font-semibold ${getScoreColor(contractor.performanceScore)}`}
+                      >
+                        {formatScore(contractor.performanceScore)}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-700">
+                      <div
+                        className="h-1.5 rounded-full bg-blue-500"
+                        style={{ width: `${contractor.performanceScore ?? 0}%` }}
+                      />
+                    </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-400">
-                      Safety
-                    </span>
-                    <span
-                      className={`text-sm font-semibold ${getScoreColor(
-                        contractor.safetyScore
-                      )}`}
-                    >
-                      {contractor.safetyScore}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-slate-700">
-                    <div
-                      className="h-1.5 rounded-full bg-emerald-500"
-                      style={{
-                        width: `${contractor.safetyScore}%`,
-                      }}
-                    />
-                  </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-400">
+                        Safety
+                      </span>
+                      <span
+                        className={`text-sm font-semibold ${getScoreColor(contractor.safetyScore)}`}
+                      >
+                        {formatScore(contractor.safetyScore)}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-700">
+                      <div
+                        className="h-1.5 rounded-full bg-emerald-500"
+                        style={{ width: `${contractor.safetyScore ?? 0}%` }}
+                      />
+                    </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-400">
-                      Compliance
-                    </span>
-                    <span
-                      className={`text-sm font-semibold ${getScoreColor(
-                        contractor.complianceScore
-                      )}`}
-                    >
-                      {contractor.complianceScore}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-slate-700">
-                    <div
-                      className="h-1.5 rounded-full bg-purple-500"
-                      style={{
-                        width: `${contractor.complianceScore}%`,
-                      }}
-                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-400">
+                        Compliance
+                      </span>
+                      <span
+                        className={`text-sm font-semibold ${getScoreColor(contractor.complianceScore)}`}
+                      >
+                        {formatScore(contractor.complianceScore)}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-700">
+                      <div
+                        className="h-1.5 rounded-full bg-purple-500"
+                        style={{ width: `${contractor.complianceScore ?? 0}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

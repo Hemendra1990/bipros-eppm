@@ -1,9 +1,13 @@
 package com.bipros.resource.application.dto;
 
 import com.bipros.resource.domain.model.Resource;
+import com.bipros.resource.domain.model.ResourceCategory;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
+import com.bipros.resource.domain.model.ResourceUnit;
+import com.bipros.resource.domain.model.UtilisationStatus;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -12,6 +16,8 @@ public record ResourceResponse(
     String code,
     String name,
     ResourceType resourceType,
+    ResourceCategory resourceCategory,
+    ResourceUnit unit,
     UUID parentId,
     UUID calendarId,
     String email,
@@ -19,6 +25,14 @@ public record ResourceResponse(
     String title,
     Double maxUnitsPerDay,
     Double defaultUnitsPerTime,
+    Double poolMaxAvailable,
+    Double plannedUnitsToday,
+    Double actualUnitsToday,
+    Double utilisationPercent,
+    UtilisationStatus utilisationStatus,
+    BigDecimal dailyCostLakh,
+    BigDecimal cumulativeCostCrores,
+    String wbsAssignmentId,
     ResourceStatus status,
     Double hourlyRate,
     Double costPerUse,
@@ -35,6 +49,8 @@ public record ResourceResponse(
         resource.getCode(),
         resource.getName(),
         resource.getResourceType(),
+        resource.getResourceCategory(),
+        resource.getUnit(),
         resource.getParentId(),
         resource.getCalendarId(),
         resource.getEmail(),
@@ -42,6 +58,14 @@ public record ResourceResponse(
         resource.getTitle(),
         resource.getMaxUnitsPerDay(),
         resource.getDefaultUnitsPerTime(),
+        resource.getPoolMaxAvailable(),
+        resource.getPlannedUnitsToday(),
+        resource.getActualUnitsToday(),
+        resource.getUtilisationPercent(),
+        resource.getUtilisationStatus(),
+        resource.getDailyCostLakh(),
+        resource.getCumulativeCostCrores(),
+        resource.getWbsAssignmentId(),
         resource.getStatus(),
         resource.getHourlyRate(),
         resource.getCostPerUse(),

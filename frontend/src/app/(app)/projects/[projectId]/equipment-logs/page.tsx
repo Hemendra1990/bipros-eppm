@@ -8,6 +8,18 @@ import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
 import type { PagedResponse } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+
+// Spring's native Page<T> serialises with these fields at the root of the
+// response body (no `pagination` sub-object). The paged endpoints in
+// EquipmentLogController / LabourReturnController return ApiResponse<Page<T>>.
+interface SpringPage<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
 
 interface EquipmentLogForm {
   resourceId: string;
@@ -54,9 +66,10 @@ export default function EquipmentLogsPage() {
       setIsLoading(true);
       const response = await equipmentApi.getLogsByProject(projectId, pageNum, 20);
       if (response.data) {
-        const pagedData = response.data as PagedResponse<EquipmentLogResponse>;
-        setLogs(pagedData.content);
-        setTotalElements(pagedData.pagination.totalElements);
+        // Backend returns Spring Page<T>: { content, totalElements, ... } at the root.
+        const pagedData = response.data as unknown as SpringPage<EquipmentLogResponse>;
+        setLogs(pagedData.content ?? []);
+        setTotalElements(pagedData.totalElements ?? 0);
         setPage(pageNum);
       }
     } catch (err: unknown) {
@@ -77,21 +90,37 @@ export default function EquipmentLogsPage() {
     }
   };
 
-  const loadResources = async () => {
-    try {
-      const response = await resourceApi.listResources(0, 100);
-      if (response.data && "content" in response.data) {
-        setResources((response.data as PagedResponse<ResourceResponse>).content);
-      }
-    } catch (err: unknown) {
-      console.error(getErrorMessage(err, "Failed to load resources"));
+  // Load resources via react-query so the equipment dropdown is populated and
+  // the table can render friendly resource names. Enabled once logs are loaded
+  // (so the name map can be joined on the log rows).
+  const {
+    data: resourcesQueryData,
+  } = useQuery({
+    queryKey: ["resources-for-equipment-logs"],
+    queryFn: () => resourceApi.listResources(0, 500),
+    enabled: !isLoading,
+  });
+
+  useEffect(() => {
+    if (!resourcesQueryData) return;
+    // Backend returns a flat array; fall back to paged envelope just in case.
+    const raw = resourcesQueryData.data as unknown;
+    if (Array.isArray(raw)) {
+      setResources(raw as ResourceResponse[]);
+    } else if (raw && typeof raw === "object" && "content" in raw) {
+      setResources((raw as PagedResponse<ResourceResponse>).content);
     }
-  };
+  }, [resourcesQueryData]);
+
+  // Build a lookup so the Resource column can render `${code} — ${name}`.
+  const resourceById = new Map<string, { code: string; name: string }>();
+  for (const r of resources) {
+    resourceById.set(r.id, { code: r.code, name: r.name });
+  }
 
   useEffect(() => {
     loadEquipmentLogs();
     loadUtilization();
-    loadResources();
   }, [projectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -309,10 +338,15 @@ export default function EquipmentLogsPage() {
               </tr>
             </thead>
             <tbody>
-              {logs.map((log) => (
+              {logs.map((log) => {
+                const res = resourceById.get(log.resourceId);
+                const resourceLabel = res
+                  ? `${res.code} \u2014 ${res.name}`
+                  : `${log.resourceId.substring(0, 8)}...`;
+                return (
                 <tr key={log.id} className="hover:bg-slate-800/30 text-white">
                   <td className="border border-slate-800 px-4 py-2">{log.logDate}</td>
-                  <td className="border border-slate-800 px-4 py-2">{log.resourceId.substring(0, 8)}...</td>
+                  <td className="border border-slate-800 px-4 py-2">{resourceLabel}</td>
                   <td className="border border-slate-800 px-4 py-2">{log.deploymentSite || "-"}</td>
                   <td className="border border-slate-800 px-4 py-2 text-right">{log.operatingHours || 0}</td>
                   <td className="border border-slate-800 px-4 py-2 text-right">{log.idleHours || 0}</td>
@@ -334,7 +368,8 @@ export default function EquipmentLogsPage() {
                   </td>
                   <td className="border border-slate-800 px-4 py-2">{log.operatorName || "-"}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

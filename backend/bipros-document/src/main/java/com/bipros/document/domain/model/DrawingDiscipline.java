@@ -7,5 +7,10 @@ public enum DrawingDiscipline {
     MECHANICAL,
     ARCHITECTURAL,
     PLUMBING,
-    HVAC
+    HVAC,
+    // IC-PMS M6 additions
+    ICT,
+    MANAGEMENT,
+    LEGAL,
+    FINANCE
 }

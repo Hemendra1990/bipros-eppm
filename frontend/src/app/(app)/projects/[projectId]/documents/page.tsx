@@ -1,19 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getErrorMessage } from "@/lib/utils/error";
 import { documentApi } from "@/lib/api/documentApi";
 import { TabTip } from "@/components/common/TabTip";
-import type { DocumentFolder, Document } from "@/lib/api/documentApi";
+import type {
+  Document,
+  DocumentFolder,
+  UploadDocumentMetadata,
+} from "@/lib/api/documentApi";
 
 interface DocumentFormData {
   title: string;
   documentNumber: string;
   status: "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "SUPERSEDED" | "ARCHIVED";
-  folderId: string;
+  description: string;
 }
 
 export default function DocumentsPage() {
@@ -26,8 +30,10 @@ export default function DocumentsPage() {
     title: "",
     documentNumber: "",
     status: "DRAFT",
-    folderId: "",
+    description: "",
   });
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const queryClient = useQueryClient();
 
@@ -38,11 +44,18 @@ export default function DocumentsPage() {
     select: (response) => response.data || [],
   });
 
-  // Fetch documents in selected folder
+  // Fetch documents for the project. The backend endpoint returns every
+  // document in the project (no folderId query param), so filter client-side
+  // by the currently selected folder.
   const { data: documents = [] } = useQuery({
     queryKey: ["documents", projectId, selectedFolderId],
     queryFn: () => documentApi.listDocuments(projectId),
-    select: (response) => response.data || [],
+    select: (response) => {
+      const all = response.data ?? [];
+      return selectedFolderId
+        ? all.filter((d) => d.folderId === selectedFolderId)
+        : all;
+    },
     enabled: !!selectedFolderId,
   });
 
@@ -59,35 +72,45 @@ export default function DocumentsPage() {
     },
   });
 
-  const createDocumentMutation = useMutation({
-    mutationFn: (data: DocumentFormData) => documentApi.createDocument(projectId, { projectId, ...data }),
+  const uploadDocumentMutation = useMutation({
+    mutationFn: (vars: { metadata: UploadDocumentMetadata; file: File }) =>
+      documentApi.uploadDocument(projectId, vars.metadata, vars.file),
     onSuccess: () => {
-      toast.success("Document created successfully");
+      toast.success("Document uploaded successfully");
       setShowCreateForm(false);
       setFormData({
         title: "",
         documentNumber: "",
         status: "DRAFT",
-        folderId: "",
+        description: "",
       });
+      setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       setError("");
       queryClient.invalidateQueries({ queryKey: ["documents", projectId, selectedFolderId] });
     },
     onError: (err: unknown) => {
-      const msg = getErrorMessage(err, "Failed to create document");
+      const msg = getErrorMessage(err, "Failed to upload document");
       setError(msg);
       toast.error(msg);
     },
   });
 
   const handleFormChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value as any,
+      [name]: value as DocumentFormData[keyof DocumentFormData],
     }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0] ?? null;
+    setFile(picked);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -98,13 +121,37 @@ export default function DocumentsPage() {
       setError("Title and Document Number are required");
       return;
     }
+    if (!file) {
+      setError("Please pick a file to upload");
+      return;
+    }
 
-    const submitData = {
-      ...formData,
-      folderId: selectedFolderId || formData.folderId,
+    const metadata: UploadDocumentMetadata = {
+      folderId: selectedFolderId,
+      documentNumber: formData.documentNumber,
+      title: formData.title,
+      description: formData.description || null,
+      status: formData.status,
     };
 
-    createDocumentMutation.mutate(submitData);
+    uploadDocumentMutation.mutate({ metadata, file });
+  };
+
+  /** Fetches the binary from the API and triggers a browser save dialog. */
+  const handleDownload = async (doc: Document) => {
+    try {
+      const blob = await documentApi.downloadDocument(projectId, doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.fileName || `${doc.documentNumber || doc.id}.bin`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to download document"));
+    }
   };
 
   const toggleFolderExpansion = (folderId: string) => {
@@ -232,7 +279,7 @@ export default function DocumentsPage() {
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">
                       Status
                     </label>
@@ -249,17 +296,52 @@ export default function DocumentsPage() {
                       <option value="ARCHIVED">ARCHIVED</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      File
+                    </label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={handleFileChange}
+                      className="block w-full text-sm text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-blue-600 file:text-white file:text-sm file:font-medium hover:file:bg-blue-500 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer"
+                    />
+                    {file && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {file.name} — {(file.size / 1024).toFixed(1)} KB
+                      </p>
+                    )}
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Description (optional)
+                    </label>
+                    <textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleFormChange}
+                      placeholder="Brief description of the document"
+                      rows={2}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                    />
+                  </div>
                   <div className="col-span-2 flex gap-2">
                     <button
                       type="submit"
-                      disabled={createDocumentMutation.isPending}
+                      disabled={uploadDocumentMutation.isPending}
                       className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:bg-slate-600 transition-colors text-sm font-medium"
                     >
-                      {createDocumentMutation.isPending ? "Creating..." : "Create Document"}
+                      {uploadDocumentMutation.isPending ? "Uploading..." : "Upload Document"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => setShowCreateForm(false)}
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setFile(null);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                      }}
                       className="flex-1 px-3 py-2 border border-slate-700 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
                     >
                       Cancel
@@ -321,8 +403,13 @@ export default function DocumentsPage() {
                           {new Date(doc.updatedAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button className="text-blue-400 hover:text-blue-300 text-xs font-medium">
-                            View
+                          <button
+                            onClick={() => handleDownload(doc)}
+                            disabled={!doc.filePath}
+                            title={doc.filePath ? "Download file" : "No file attached"}
+                            className="text-blue-400 hover:text-blue-300 disabled:text-slate-600 disabled:cursor-not-allowed text-xs font-medium"
+                          >
+                            Download
                           </button>
                         </td>
                       </tr>

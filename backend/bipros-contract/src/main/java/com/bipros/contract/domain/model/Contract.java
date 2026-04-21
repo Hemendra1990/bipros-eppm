@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -65,4 +66,49 @@ public class Contract extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "contract_type", nullable = false)
     private ContractType contractType;
+
+    // ── IC-PMS M5 denormalised fields (refreshed by ContractKpiService) ──
+
+    /** WBS package code this contract is awarded for (e.g. DMIC-N03-P01). Excel-fidelity string key. */
+    @Column(name = "wbs_package_code", length = 60)
+    private String wbsPackageCode;
+
+    @Column(name = "package_description", length = 300)
+    private String packageDescription;
+
+    @Column(name = "actual_completion_date")
+    private LocalDate actualCompletionDate;
+
+    /** Denormalised Schedule Performance Index from latest EVM snapshot. */
+    @Column(name = "spi", precision = 6, scale = 3)
+    private BigDecimal spi;
+
+    /** Denormalised Cost Performance Index from latest EVM snapshot. */
+    @Column(name = "cpi", precision = 6, scale = 3)
+    private BigDecimal cpi;
+
+    /** AI-derived physical progress percent (0-100) from satellite monitoring. */
+    @Column(name = "physical_progress_ai", precision = 5, scale = 2)
+    private BigDecimal physicalProgressAi;
+
+    @Column(name = "cumulative_ra_bills_crores", precision = 14, scale = 2)
+    private BigDecimal cumulativeRaBillsCrores;
+
+    @Column(name = "vo_numbers_issued")
+    private Integer voNumbersIssued;
+
+    @Column(name = "vo_value_crores", precision = 14, scale = 2)
+    private BigDecimal voValueCrores;
+
+    /** Contractor performance score 0–100 (quality + safety + progress + payment compliance). */
+    @Column(name = "performance_score", precision = 5, scale = 2)
+    private BigDecimal performanceScore;
+
+    /** Surfaced from PerformanceBond — earliest expiry for BG-expiry alerts. */
+    @Column(name = "bg_expiry")
+    private LocalDate bgExpiry;
+
+    /** Last time the denormalised KPI columns were refreshed by ContractKpiService. */
+    @Column(name = "kpi_refreshed_at")
+    private OffsetDateTime kpiRefreshedAt;
 }

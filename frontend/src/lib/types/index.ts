@@ -60,6 +60,11 @@ export interface UserResponse {
   lastName: string;
   enabled: boolean;
   roles: string[];
+  // IC-PMS fields (nullable for legacy users)
+  organisationId?: string | null;
+  designation?: string | null;
+  primaryIcpmsRole?: string | null;
+  authMethods?: AuthMethod[] | null;
 }
 
 // === Project Structure ===
@@ -103,6 +108,10 @@ export interface ProjectResponse {
   updatedAt: string;
 }
 
+export type WbsType = "PROGRAMME" | "NODE" | "PACKAGE" | "WORK_PACKAGE";
+export type WbsPhase = "PROGRAMME" | "CONSTRUCTION" | "MOBILISATION" | "TENDER" | "PLANNING";
+export type WbsStatus = "ACTIVE" | "IN_PROGRESS" | "NOT_STARTED" | "COMPLETED" | "DELAYED" | "AT_RISK";
+
 export interface WbsNodeResponse {
   id: string;
   code: string;
@@ -113,6 +122,15 @@ export interface WbsNodeResponse {
   sortOrder: number;
   summaryDuration: number | null;
   summaryPercentComplete: number | null;
+  wbsLevel: number | null;
+  wbsType: WbsType | null;
+  phase: WbsPhase | null;
+  wbsStatus: WbsStatus | null;
+  responsibleOrganisationId: string | null;
+  plannedStart: string | null;
+  plannedFinish: string | null;
+  budgetCrores: number | null;
+  gisPolygonId: string | null;
   children: WbsNodeResponse[];
 }
 
@@ -163,7 +181,10 @@ export interface ActivityResponse {
   lateFinishDate?: string | null;
   actualStartDate: string | null;
   actualFinishDate: string | null;
+  // Backend returns `originalDuration` (float); `duration` kept for legacy callers.
   duration: number;
+  originalDuration?: number | null;
+  atCompletionDuration?: number | null;
   percentComplete: number;
   slack: number;
   totalFloat: number;
@@ -480,8 +501,24 @@ export type ProcurementMethod = "OPEN_TENDER" | "LIMITED_TENDER" | "GEM_PORTAL" 
 export type ProcurementPlanStatus = "DRAFT" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type TenderStatus = "DRAFT" | "PUBLISHED" | "BID_OPEN" | "EVALUATION" | "AWARDED" | "CANCELLED";
 export type BidSubmissionStatus = "SUBMITTED" | "TECHNICALLY_QUALIFIED" | "NOT_QUALIFIED" | "L1" | "AWARDED" | "REJECTED";
-export type ContractStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "COMPLETED" | "TERMINATED" | "DLP";
-export type ContractType = "WORKS" | "SUPPLY" | "CONSULTANCY" | "EPC" | "PPP";
+export type ContractStatus =
+  | "DRAFT"
+  | "MOBILISATION"
+  | "ACTIVE"
+  | "ACTIVE_AT_RISK"
+  | "ACTIVE_DELAYED"
+  | "DELAYED"
+  | "SUSPENDED"
+  | "COMPLETED"
+  | "TERMINATED"
+  | "DLP";
+export type ContractType =
+  | "EPC_LUMP_SUM_FIDIC_YELLOW"
+  | "EPC_LUMP_SUM_FIDIC_RED"
+  | "EPC_LUMP_SUM_FIDIC_SILVER"
+  | "ITEM_RATE_FIDIC_RED"
+  | "PERCENTAGE_BASED_PMC"
+  | "LUMP_SUM_UNIT_RATE";
 export type MilestoneStatus = "PENDING" | "ACHIEVED" | "DELAYED" | "WAIVED";
 export type VariationOrderStatus = "INITIATED" | "RECOMMENDED" | "APPROVED" | "REJECTED";
 export type BondType = "PERFORMANCE_GUARANTEE" | "EMD" | "ADVANCE_GUARANTEE" | "RETENTION";
@@ -589,6 +626,19 @@ export interface ContractResponse {
   ldRate: number;
   status: ContractStatus;
   contractType: ContractType;
+  // IC-PMS denormalised KPI fields
+  wbsPackageCode: string | null;
+  packageDescription: string | null;
+  actualCompletionDate: string | null;
+  spi: number | null;
+  cpi: number | null;
+  physicalProgressAi: number | null;
+  cumulativeRaBillsCrores: number | null;
+  voNumbersIssued: number | null;
+  voValueCrores: number | null;
+  performanceScore: number | null;
+  bgExpiry: string | null;
+  kpiRefreshedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -755,4 +805,46 @@ export interface CreateCorridorCodeRequest {
   corridorPrefix: string;
   zoneCode: string;
   nodeCode: string;
+}
+
+// === IC-PMS Master Data ===
+
+export type OrganisationType = "EMPLOYER" | "SPV" | "PMC" | "EPC_CONTRACTOR" | "GOVERNMENT_AUDITOR";
+
+export interface OrganisationResponse {
+  id: string;
+  code: string;
+  name: string;
+  shortName: string | null;
+  organisationType: OrganisationType;
+  parentOrganisationId: string | null;
+  active: boolean;
+}
+
+export type AuthMethod = "AADHAAR_OTP" | "NIC_SSO" | "DSC_CLASS_3" | "USERNAME_PASSWORD";
+
+export type IcpmsModule =
+  | "M1_WBS_GIS"
+  | "M2_SCHEDULE_EVM"
+  | "M3_SATELLITE_MONITORING"
+  | "M4_COST_RA_BILLS"
+  | "M5_CONTRACTS"
+  | "M6_DOCUMENTS"
+  | "M7_RISKS"
+  | "M8_RESOURCES"
+  | "M9_REPORTS";
+
+export type ModuleAccessLevel = "NONE" | "VIEW" | "EDIT" | "CERTIFY" | "APPROVE" | "FULL";
+
+export interface UserModuleAccessResponse {
+  id: string;
+  userId: string;
+  module: IcpmsModule;
+  accessLevel: ModuleAccessLevel;
+}
+
+export interface UserCorridorScopeResponse {
+  id: string;
+  userId: string;
+  wbsNodeId: string | null; // NULL = All Corridors
 }

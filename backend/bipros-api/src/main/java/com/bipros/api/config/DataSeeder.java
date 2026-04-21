@@ -15,9 +15,11 @@ import com.bipros.security.domain.model.User;
 import com.bipros.security.domain.model.UserRole;
 import com.bipros.security.domain.repository.RoleRepository;
 import com.bipros.security.domain.repository.UserRepository;
+import com.bipros.security.domain.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -31,11 +33,13 @@ import java.time.LocalTime;
 @Slf4j
 @Component
 @Profile("dev")
+@Order(100)
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
 
   private final RoleRepository roleRepository;
   private final UserRepository userRepository;
+  private final UserRoleRepository userRoleRepository;
   private final CalendarRepository calendarRepository;
   private final CalendarWorkWeekRepository calendarWorkWeekRepository;
   private final CurrencyRepository currencyRepository;
@@ -56,7 +60,9 @@ public class DataSeeder implements CommandLineRunner {
   public void run(String... args) throws Exception {
     // Check if data already seeded by checking role count
     if (roleRepository.count() > 0) {
-      log.info("Data already seeded, skipping initialization");
+      log.info("Data already seeded, skipping bulk initialization");
+      // Still ensure admin has ADMIN role (idempotent self-heal for missing association)
+      ensureAdminHasAdminRole();
       return;
     }
 
@@ -94,12 +100,6 @@ public class DataSeeder implements CommandLineRunner {
   private void seedAdminUser() {
     log.debug("Seeding admin user");
 
-    // Get ADMIN role
-    Role adminRole =
-        roleRepository
-            .findByName("ADMIN")
-            .orElseThrow(() -> new RuntimeException("ADMIN role not found"));
-
     // Create admin user
     User adminUser = new User(adminUsername, adminEmail, passwordEncoder.encode(adminPassword));
     adminUser.setFirstName("System");
@@ -110,12 +110,47 @@ public class DataSeeder implements CommandLineRunner {
     User savedUser = userRepository.save(adminUser);
     log.debug("Created admin user: {}", savedUser.getUsername());
 
-    // Create UserRole association
-    UserRole userRole = new UserRole(savedUser.getId(), adminRole.getId());
-    savedUser.getRoles().add(userRole);
-    userRepository.save(savedUser);
-
+    assignAdminRole(savedUser);
     log.info("Seeded admin user with ADMIN role");
+  }
+
+  /**
+   * Idempotent: ensures the seeded admin user exists and has the ADMIN role linked via
+   * {@code user_roles}. Safe to call on every startup even if the user/role already exist.
+   */
+  private void ensureAdminHasAdminRole() {
+    userRepository
+        .findByUsername(adminUsername)
+        .ifPresent(
+            adminUser -> {
+              Role adminRole = roleRepository.findByName("ADMIN").orElse(null);
+              if (adminRole == null) {
+                log.warn("ADMIN role missing while attempting to self-heal admin user mapping");
+                return;
+              }
+              if (!userRoleRepository.existsByUserIdAndRoleId(adminUser.getId(), adminRole.getId())) {
+                UserRole userRole = new UserRole(adminUser.getId(), adminRole.getId());
+                userRoleRepository.save(userRole);
+                log.info("Self-heal: linked ADMIN role to existing admin user '{}'", adminUsername);
+              }
+            });
+  }
+
+  private void assignAdminRole(User adminUser) {
+    Role adminRole =
+        roleRepository
+            .findByName("ADMIN")
+            .orElseThrow(() -> new RuntimeException("ADMIN role not found"));
+
+    if (userRoleRepository.existsByUserIdAndRoleId(adminUser.getId(), adminRole.getId())) {
+      return;
+    }
+
+    // Persist UserRole explicitly via its own repository — the @OneToMany on User.roles
+    // is not cascaded, so saving the User alone will NOT insert the user_roles row.
+    UserRole userRole = new UserRole(adminUser.getId(), adminRole.getId());
+    userRoleRepository.save(userRole);
+    adminUser.getRoles().add(userRole);
   }
 
   private void seedGlobalCalendar() {

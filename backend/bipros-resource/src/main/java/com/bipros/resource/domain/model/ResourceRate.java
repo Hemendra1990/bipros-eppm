@@ -40,6 +40,10 @@ public class ResourceRate extends BaseEntity {
   @Column(name = "resource_id", nullable = false)
   private UUID resourceId;
 
+  /**
+   * IC-PMS M8 rate type. Free text for backward compat; canonical values include
+   * {@code CPWD_SOR} (CPWD Schedule of Rates 2024-25) and {@code OVERTIME}.
+   */
   @Column(name = "rate_type", nullable = false, length = 50)
   private String rateType;
 

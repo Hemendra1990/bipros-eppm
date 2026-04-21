@@ -1,8 +1,10 @@
 package com.bipros.security.application.dto;
 
+import com.bipros.security.domain.model.AuthMethod;
 import com.bipros.security.domain.model.User;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public record UserResponse(
@@ -12,7 +14,11 @@ public record UserResponse(
         String firstName,
         String lastName,
         boolean enabled,
-        List<String> roles
+        List<String> roles,
+        UUID organisationId,
+        String designation,
+        String primaryIcpmsRole,
+        Set<AuthMethod> authMethods
 ) {
     public static UserResponse from(User user, List<String> roles) {
         return new UserResponse(
@@ -22,7 +28,11 @@ public record UserResponse(
                 user.getFirstName(),
                 user.getLastName(),
                 user.isEnabled(),
-                roles
+                roles,
+                user.getOrganisationId(),
+                user.getDesignation(),
+                user.getPrimaryIcpmsRole(),
+                user.getAuthMethods()
         );
     }
 }

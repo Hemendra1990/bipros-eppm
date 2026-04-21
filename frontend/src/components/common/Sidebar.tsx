@@ -19,6 +19,8 @@ import {
   FileText,
   Plug,
   SlidersHorizontal,
+  Building2,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAppStore } from "@/lib/state/store";
@@ -40,6 +42,8 @@ const mainNavigation = [
 const adminNavigation = [
   { name: "Users", href: "/admin/users", icon: Users },
   { name: "Settings", href: "/admin/settings", icon: Settings },
+  { name: "Organisations", href: "/admin/organisations", icon: Building2 },
+  { name: "User Access", href: "/admin/user-access", icon: UserCog },
   { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
   { name: "Integrations", href: "/admin/integrations", icon: Plug },
   { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal },

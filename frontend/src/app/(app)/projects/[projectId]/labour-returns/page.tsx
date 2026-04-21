@@ -5,7 +5,17 @@ import { useParams } from "next/navigation";
 import { labourApi, type LabourReturnResponse, type CreateLabourReturnRequest, type DeploymentSummary } from "@/lib/api/labourApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
-import type { PagedResponse } from "@/lib/types";
+
+// Spring's native Page<T> serialises with these fields at the root of the
+// response body (no `pagination` sub-object). LabourReturnController returns
+// ApiResponse<Page<LabourReturnResponse>>.
+interface SpringPage<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
 
 interface LabourReturnForm {
   contractorName: string;
@@ -53,9 +63,10 @@ export default function LabourReturnsPage() {
       setIsLoading(true);
       const response = await labourApi.getReturnsByProject(projectId, pageNum, 20);
       if (response.data) {
-        const pagedData = response.data as PagedResponse<LabourReturnResponse>;
-        setReturns(pagedData.content);
-        setTotalElements(pagedData.pagination.totalElements);
+        // Backend returns Spring Page<T>: { content, totalElements, ... } at the root.
+        const pagedData = response.data as unknown as SpringPage<LabourReturnResponse>;
+        setReturns(pagedData.content ?? []);
+        setTotalElements(pagedData.totalElements ?? 0);
         setPage(pageNum);
       }
     } catch (err: unknown) {

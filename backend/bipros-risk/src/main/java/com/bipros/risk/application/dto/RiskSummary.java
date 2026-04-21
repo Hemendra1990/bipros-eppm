@@ -3,7 +3,9 @@ package com.bipros.risk.application.dto;
 import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskImpact;
 import com.bipros.risk.domain.model.RiskProbability;
+import com.bipros.risk.domain.model.RiskRag;
 import com.bipros.risk.domain.model.RiskStatus;
+import com.bipros.risk.domain.model.RiskTrend;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,4 +36,29 @@ public class RiskSummary {
     private BigDecimal costImpact;
     private Integer scheduleImpactDays;
     private int sortOrder;
+
+    // ── IC-PMS M7 fields — surfaced so the Risks tab can render RAG / Trend /
+    //    Residual / Cost / Schedule impact and tally OPPORTUNITIES tile. ──
+
+    /** RAG band derived from score (CRIMSON/RED/AMBER/GREEN/OPPORTUNITY). */
+    private RiskRag rag;
+
+    /** Exposure trend since last review (IMPROVING / STABLE / DEGRADING). */
+    private RiskTrend trend;
+
+    /** True for upside risks (opportunities); flips GREEN → OPPORTUNITY tile. */
+    private Boolean isOpportunity;
+
+    /** Residual risk score after mitigations applied. */
+    private Double residualRiskScore;
+
+    /**
+     * Cost-impact score 1-5 per IC-PMS M7 split-impact model.
+     * Note: Risk entity persists this as Integer (1-5 scale), distinct from
+     * {@link #costImpact} which is the monetary exposure in BigDecimal.
+     */
+    private Integer impactCost;
+
+    /** Schedule-impact score 1-5 per IC-PMS M7 split-impact model. */
+    private Integer impactSchedule;
 }

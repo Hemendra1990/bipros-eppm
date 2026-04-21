@@ -14,4 +14,6 @@ public interface ContractRepository extends JpaRepository<Contract, UUID> {
     Page<Contract> findByProjectId(UUID projectId, Pageable pageable);
     List<Contract> findByProjectId(UUID projectId);
     List<Contract> findByTenderId(UUID tenderId);
+    List<Contract> findByWbsPackageCode(String wbsPackageCode);
+    java.util.Optional<Contract> findByContractNumber(String contractNumber);
 }

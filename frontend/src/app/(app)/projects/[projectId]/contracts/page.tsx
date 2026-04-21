@@ -192,11 +192,12 @@ export default function ContractsPage() {
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 >
                   <option value="">Select Type</option>
-                  <option value="WORKS">Works</option>
-                  <option value="SUPPLY">Supply</option>
-                  <option value="CONSULTANCY">Consultancy</option>
-                  <option value="EPC">EPC</option>
-                  <option value="PPP">PPP</option>
+                  <option value="EPC_LUMP_SUM_FIDIC_YELLOW">EPC Lump-Sum (FIDIC Yellow)</option>
+                  <option value="EPC_LUMP_SUM_FIDIC_RED">EPC Lump-Sum (FIDIC Red)</option>
+                  <option value="EPC_LUMP_SUM_FIDIC_SILVER">EPC Lump-Sum (FIDIC Silver)</option>
+                  <option value="ITEM_RATE_FIDIC_RED">Item Rate (FIDIC Red)</option>
+                  <option value="PERCENTAGE_BASED_PMC">Percentage-Based PMC</option>
+                  <option value="LUMP_SUM_UNIT_RATE">Lump-Sum / Unit-Rate</option>
                 </select>
               </div>
             </div>
@@ -224,29 +225,92 @@ export default function ContractsPage() {
         {contracts.length === 0 ? (
           <div className="text-center py-8 text-slate-500">No contracts found</div>
         ) : (
-          contracts.map((contract: ContractResponse) => (
+          contracts.map((contract: ContractResponse) => {
+            const statusBadge =
+              contract.status === "ACTIVE"
+                ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
+                : contract.status === "COMPLETED"
+                  ? "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20"
+                  : contract.status === "ACTIVE_AT_RISK"
+                    ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                    : contract.status === "ACTIVE_DELAYED" || contract.status === "DELAYED"
+                      ? "bg-red-500/10 text-red-400 ring-1 ring-red-500/20"
+                      : contract.status === "MOBILISATION"
+                        ? "bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20"
+                        : "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50";
+            const spiBadge = (v: number | null | undefined) =>
+              v == null
+                ? ""
+                : v >= 0.95
+                  ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
+                  : v >= 0.85
+                    ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                    : "bg-red-500/10 text-red-400 ring-1 ring-red-500/20";
+            const bgDays = contract.bgExpiry
+              ? Math.round(
+                  (new Date(contract.bgExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+                )
+              : null;
+            const bgExpiryClass =
+              bgDays == null
+                ? "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50"
+                : bgDays < 30
+                  ? "bg-red-500/10 text-red-400 ring-1 ring-red-500/20"
+                  : bgDays < 90
+                    ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                    : "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20";
+            return (
             <div key={contract.id} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 hover:bg-slate-900/70 transition-colors shadow-xl">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-white">{contract.contractNumber}</h3>
+                  {contract.packageDescription && (
+                    <p className="text-sm text-slate-300 mt-0.5">{contract.packageDescription}</p>
+                  )}
                   <p className="text-sm text-slate-400 mt-1">
                     <span className="font-medium">Contractor:</span> {contract.contractorName}
+                    {contract.wbsPackageCode && (
+                      <> · <span className="font-medium">WBS:</span> {contract.wbsPackageCode}</>
+                    )}
                   </p>
                   <p className="text-sm text-slate-400">
-                    <span className="font-medium">Value:</span> {contract.contractValue.toLocaleString()} | <span className="font-medium">Type:</span> {contract.contractType}
+                    <span className="font-medium">Value:</span> ₹{contract.contractValue.toLocaleString()} cr | <span className="font-medium">Type:</span> {contract.contractType.replace(/_/g, " ")}
                   </p>
                   <p className="text-sm text-slate-400">
                     <span className="font-medium">Dates:</span> {new Date(contract.loaDate).toLocaleDateString()} - {new Date(contract.completionDate).toLocaleDateString()}
                   </p>
-                  <span className={`inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full ${
-                    contract.status === "ACTIVE"
-                      ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
-                      : contract.status === "COMPLETED"
-                        ? "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20"
-                        : "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50"
-                  }`}>
-                    {contract.status}
-                  </span>
+                  <div className="mt-2 flex flex-wrap gap-2 items-center">
+                    <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${statusBadge}`}>
+                      {contract.status}
+                    </span>
+                    {contract.spi != null && (
+                      <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${spiBadge(contract.spi)}`}>
+                        SPI {contract.spi.toFixed(2)}
+                      </span>
+                    )}
+                    {contract.cpi != null && (
+                      <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${spiBadge(contract.cpi)}`}>
+                        CPI {contract.cpi.toFixed(2)}
+                      </span>
+                    )}
+                    {contract.physicalProgressAi != null && (
+                      <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20">
+                        Progress {contract.physicalProgressAi.toFixed(1)}%
+                      </span>
+                    )}
+                    {contract.voNumbersIssued != null && contract.voNumbersIssued > 0 && (
+                      <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50">
+                        VOs {contract.voNumbersIssued}
+                        {contract.voValueCrores != null && ` · ₹${contract.voValueCrores.toFixed(1)}cr`}
+                      </span>
+                    )}
+                    {contract.bgExpiry && (
+                      <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${bgExpiryClass}`}>
+                        BG {new Date(contract.bgExpiry).toLocaleDateString()}
+                        {bgDays != null && bgDays < 90 && ` (${bgDays}d)`}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <a
@@ -265,7 +329,8 @@ export default function ContractsPage() {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

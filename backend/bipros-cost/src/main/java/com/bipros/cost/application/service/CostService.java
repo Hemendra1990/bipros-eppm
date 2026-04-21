@@ -33,6 +33,7 @@ public class CostService {
     private final RetentionMoneyRepository retentionMoneyRepository;
     private final CashFlowForecastRepository cashFlowForecastRepository;
     private final CashFlowForecastEngine cashFlowForecastEngine;
+    private final SatelliteGateService satelliteGateService;
     private final AuditService auditService;
 
     // Cost Account Operations
@@ -371,18 +372,41 @@ public class CostService {
         var entity = new RaBill();
         entity.setProjectId(request.projectId());
         entity.setContractId(request.contractId());
+        entity.setWbsPackageCode(request.wbsPackageCode());
         entity.setBillNumber(request.billNumber());
         entity.setBillPeriodFrom(request.billPeriodFrom());
         entity.setBillPeriodTo(request.billPeriodTo());
         entity.setGrossAmount(request.grossAmount());
-        entity.setDeductions(request.deductions() != null ? request.deductions() : java.math.BigDecimal.ZERO);
+        applyDeductions(entity, request);
         entity.setNetAmount(request.netAmount());
+        entity.setContractorClaimedPercent(request.contractorClaimedPercent());
         entity.setStatus(RaBill.RaBillStatus.DRAFT);
         entity.setRemarks(request.remarks());
+
+        satelliteGateService.evaluate(entity);
 
         var saved = raBillRepository.save(entity);
         auditService.logCreate("RaBill", saved.getId(), RaBillDto.from(saved));
         return RaBillDto.from(saved);
+    }
+
+    private void applyDeductions(RaBill entity, CreateRaBillRequest request) {
+        entity.setMobAdvanceRecovery(request.mobAdvanceRecovery());
+        entity.setRetention5Pct(request.retention5Pct());
+        entity.setTds2Pct(request.tds2Pct());
+        entity.setGst18Pct(request.gst18Pct());
+        BigDecimal total = BigDecimal.ZERO;
+        if (request.mobAdvanceRecovery() != null) total = total.add(request.mobAdvanceRecovery());
+        if (request.retention5Pct() != null) total = total.add(request.retention5Pct());
+        if (request.tds2Pct() != null) total = total.add(request.tds2Pct());
+        if (request.gst18Pct() != null) total = total.add(request.gst18Pct());
+        if (total.signum() > 0) {
+            entity.setDeductions(total);
+        } else if (request.deductions() != null) {
+            entity.setDeductions(request.deductions());
+        } else {
+            entity.setDeductions(BigDecimal.ZERO);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -414,9 +438,12 @@ public class CostService {
         entity.setBillPeriodFrom(request.billPeriodFrom());
         entity.setBillPeriodTo(request.billPeriodTo());
         entity.setGrossAmount(request.grossAmount());
-        entity.setDeductions(request.deductions() != null ? request.deductions() : java.math.BigDecimal.ZERO);
+        entity.setWbsPackageCode(request.wbsPackageCode());
+        applyDeductions(entity, request);
         entity.setNetAmount(request.netAmount());
+        entity.setContractorClaimedPercent(request.contractorClaimedPercent());
         entity.setRemarks(request.remarks());
+        satelliteGateService.evaluate(entity);
 
         var saved = raBillRepository.save(entity);
         auditService.logUpdate("RaBill", raBillId, "raBill", null, RaBillDto.from(saved));

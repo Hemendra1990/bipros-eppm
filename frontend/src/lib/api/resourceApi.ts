@@ -1,16 +1,70 @@
 import { apiClient } from "./client";
 import type { ApiResponse, PagedResponse } from "../types";
 
+export type ResourceCategory =
+  | "SITE_ENGINEER"
+  | "FOREMAN"
+  | "SKILLED_LABOUR"
+  | "UNSKILLED_LABOUR"
+  | "OPERATOR"
+  | "DRIVER"
+  | "WELDER"
+  | "ELECTRICIAN"
+  | "EARTH_MOVING"
+  | "CRANES_LIFTING"
+  | "CONCRETE_EQUIPMENT"
+  | "PAVING_EQUIPMENT"
+  | "TRANSPORT_VEHICLES"
+  | "PILING_RIG"
+  | "SURVEY_EQUIPMENT"
+  | "CEMENT"
+  | "STEEL_REBAR"
+  | "AGGREGATE"
+  | "BITUMEN"
+  | "READY_MIX_CONCRETE"
+  | "BRICKS_BLOCKS"
+  | "ELECTRICAL_CABLE"
+  | "FORMWORK"
+  | "OTHER";
+
+export type ResourceUnit =
+  | "PER_DAY"
+  | "MT"
+  | "CU_M"
+  | "RMT"
+  | "NOS"
+  | "KG"
+  | "LITRE";
+
+export type UtilisationStatus =
+  | "ACTIVE"
+  | "OVER_90"
+  | "CRITICAL_100"
+  | "ON_HOLD_NOT_MOBILISED"
+  | "PROCUREMENT"
+  | "DELIVERY_ONGOING"
+  | "LAYING";
+
 export interface ResourceResponse {
   id: string;
   code: string;
   name: string;
   resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
+  resourceCategory?: ResourceCategory | null;
+  unit?: ResourceUnit | null;
   status: string;
   maxUnitsPerDay: number;
   hourlyRate: number;
   costPerUse: number;
   overtimeRate: number;
+  poolMaxAvailable?: number | null;
+  plannedUnitsToday?: number | null;
+  actualUnitsToday?: number | null;
+  utilisationPercent?: number | null;
+  utilisationStatus?: UtilisationStatus | null;
+  dailyCostLakh?: number | null;
+  cumulativeCostCrores?: number | null;
+  wbsAssignmentId?: string | null;
   calendarId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -93,11 +147,14 @@ export interface CreateProjectResourceAssignmentRequest {
 }
 
 export const resourceApi = {
-  listResources: (page = 0, size = 20) =>
+  // The backend `ResourceController.listResources` returns
+  // `ApiResponse<List<ResourceResponse>>` (a flat array), NOT a Spring Page.
+  // It only accepts optional `type` / `status` filters. We keep the legacy
+  // `page`/`size` positional signature for backwards compatibility with
+  // existing callers, but the parameters are ignored by the server.
+  listResources: (_page = 0, _size = 20) =>
     apiClient
-      .get<ApiResponse<PagedResponse<ResourceResponse>>>("/v1/resources", {
-        params: { page, size },
-      })
+      .get<ApiResponse<ResourceResponse[]>>("/v1/resources")
       .then((r) => r.data),
 
   getResource: (id: string) =>

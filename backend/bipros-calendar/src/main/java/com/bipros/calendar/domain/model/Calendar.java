@@ -24,13 +24,17 @@ import java.util.UUID;
     uniqueConstraints = {
         @UniqueConstraint(
             name = "uk_calendar_name_type_project",
-            columnNames = {"name", "calendar_type", "project_id"})
+            columnNames = {"name", "calendar_type", "project_id"}),
+        @UniqueConstraint(
+            name = "uk_calendar_code",
+            columnNames = {"code"})
     },
     indexes = {
         @Index(name = "idx_calendar_type", columnList = "calendar_type"),
         @Index(name = "idx_calendar_project_id", columnList = "project_id"),
         @Index(name = "idx_calendar_resource_id", columnList = "resource_id"),
-        @Index(name = "idx_calendar_is_default", columnList = "is_default")
+        @Index(name = "idx_calendar_is_default", columnList = "is_default"),
+        @Index(name = "idx_calendar_code", columnList = "code")
     })
 @Getter
 @Setter
@@ -38,6 +42,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class Calendar extends BaseEntity {
+
+  /** IC-PMS M2 short code (e.g. DMIC-6day, DMIC-NIGHT) — unique across the installation. */
+  @Column(name = "code", length = 40)
+  private String code;
 
   @Column(nullable = false, length = 100)
   private String name;

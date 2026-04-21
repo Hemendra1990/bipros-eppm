@@ -1,8 +1,21 @@
 import { apiClient } from "./client";
-import type { ApiResponse, PagedResponse, UserResponse } from "../types";
+import type {
+  ApiResponse,
+  IcpmsModule,
+  ModuleAccessLevel,
+  PagedResponse,
+  UserResponse,
+} from "../types";
 
 export interface UpdateUserRolesRequest {
   roles: string[];
+}
+
+export interface UserAccessApiResponse {
+  userId: string;
+  moduleAccess: Partial<Record<IcpmsModule, ModuleAccessLevel>>;
+  corridorScopes: string[];
+  allCorridors: boolean;
 }
 
 export const userApi = {
@@ -11,6 +24,14 @@ export const userApi = {
       .get<ApiResponse<PagedResponse<UserResponse>>>("/v1/users", {
         params: { page, size },
       })
+      .then((r) => r.data),
+
+  getUser: (id: string) =>
+    apiClient.get<ApiResponse<UserResponse>>(`/v1/users/${id}`).then((r) => r.data),
+
+  getAccess: (id: string) =>
+    apiClient
+      .get<ApiResponse<UserAccessApiResponse>>(`/v1/users/${id}/access`)
       .then((r) => r.data),
 
   updateUserRoles: (userId: string, data: UpdateUserRolesRequest) =>

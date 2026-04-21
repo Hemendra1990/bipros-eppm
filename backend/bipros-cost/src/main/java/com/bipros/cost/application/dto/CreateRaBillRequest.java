@@ -14,6 +14,8 @@ public record CreateRaBillRequest(
 
         UUID contractId,
 
+        String wbsPackageCode,
+
         @NotBlank(message = "Bill number is required")
         String billNumber,
 
@@ -28,9 +30,15 @@ public record CreateRaBillRequest(
         BigDecimal grossAmount,
 
         BigDecimal deductions,
+        BigDecimal mobAdvanceRecovery,
+        BigDecimal retention5Pct,
+        BigDecimal tds2Pct,
+        BigDecimal gst18Pct,
 
         @NotNull(message = "Net amount is required")
         BigDecimal netAmount,
+
+        BigDecimal contractorClaimedPercent,
 
         String remarks
 ) {}

@@ -4,5 +4,7 @@ public enum RiskResponseType {
     AVOID,
     MITIGATE,
     TRANSFER,
-    ACCEPT
+    ACCEPT,
+    // IC-PMS M7 — upside response for opportunities
+    EXPLOIT
 }

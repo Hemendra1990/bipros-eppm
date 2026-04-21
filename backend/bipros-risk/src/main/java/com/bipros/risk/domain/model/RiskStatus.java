@@ -6,5 +6,14 @@ public enum RiskStatus {
     MITIGATING,
     RESOLVED,
     CLOSED,
-    ACCEPTED
+    ACCEPTED,
+    // IC-PMS M7 — Excel spec open-state sub-variants + realisation states
+    OPEN_ESCALATED,
+    OPEN_UNDER_ACTIVE_MANAGEMENT,
+    OPEN_BEING_MANAGED,
+    OPEN_MONITOR,
+    OPEN_WATCH,
+    OPEN_TARGET,
+    OPEN_ASI_REVIEW,
+    REALISED_PARTIALLY
 }

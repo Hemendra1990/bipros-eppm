@@ -90,10 +90,12 @@ async function fetchMetrics(): Promise<MetricsData> {
     let criticalActivities = 0;
     for (const proj of projects.slice(0, 10)) {
       try {
-        const actResp = await apiClient.get(`/v1/projects/${proj.id}/activities?page=0&size=1`);
+        const actResp = await apiClient.get(`/v1/projects/${proj.id}/activities?page=0&size=500`);
         const actData = actResp.data.data;
         const total = actData?.pagination?.totalElements || 0;
         totalActivities += total;
+        const activitiesList: Array<{ isCritical?: boolean; totalFloat?: number }> = actData?.content || [];
+        criticalActivities += activitiesList.filter((a) => a.isCritical === true || a.totalFloat === 0).length;
       } catch { /* skip */ }
     }
 

@@ -4,6 +4,7 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.contract.application.dto.ContractRequest;
 import com.bipros.contract.application.dto.ContractResponse;
+import com.bipros.contract.application.service.ContractKpiService;
 import com.bipros.contract.application.service.ContractService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class ContractController {
 
     private final ContractService contractService;
+    private final ContractKpiService contractKpiService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ContractResponse>> create(
@@ -68,5 +70,14 @@ public class ContractController {
         @PathVariable UUID id) {
         contractService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/kpi/refresh")
+    public ResponseEntity<ApiResponse<ContractResponse>> refreshKpi(
+        @PathVariable UUID projectId,
+        @PathVariable UUID id) {
+        contractKpiService.refreshById(id);
+        ContractResponse response = contractService.getById(id);
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }
