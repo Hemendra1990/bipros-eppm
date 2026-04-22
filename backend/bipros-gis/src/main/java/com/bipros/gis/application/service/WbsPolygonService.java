@@ -1,5 +1,6 @@
 package com.bipros.gis.application.service;
 
+import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.gis.application.dto.GeoJsonFeature;
 import com.bipros.gis.application.dto.GeoJsonFeatureCollection;
@@ -10,6 +11,11 @@ import com.bipros.gis.domain.repository.WbsPolygonRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.Polygon;
+import org.locationtech.jts.io.ParseException;
+import org.locationtech.jts.io.geojson.GeoJsonReader;
+import org.locationtech.jts.io.geojson.GeoJsonWriter;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -24,6 +30,11 @@ public class WbsPolygonService {
     private final WbsPolygonRepository polygonRepository;
     private final ObjectMapper objectMapper;
 
+    /** JTS GeoJsonReader and Writer are thread-safe for simple reads/writes. */
+    private static final GeoJsonReader GEOJSON_READER = new GeoJsonReader();
+    private static final GeoJsonWriter GEOJSON_WRITER = new GeoJsonWriter();
+    static { GEOJSON_WRITER.setEncodeCRS(false); }
+
     public WbsPolygonResponse create(UUID projectId, WbsPolygonRequest request) {
         WbsPolygon polygon = new WbsPolygon();
         polygon.setProjectId(projectId);
@@ -31,7 +42,7 @@ public class WbsPolygonService {
         polygon.setLayerId(request.layerId());
         polygon.setWbsCode(request.wbsCode());
         polygon.setWbsName(request.wbsName());
-        polygon.setPolygonGeoJson(request.polygonGeoJson());
+        polygon.setPolygon(parsePolygon(request.polygonGeoJson()));
         polygon.setCenterLatitude(request.centerLatitude());
         polygon.setCenterLongitude(request.centerLongitude());
         polygon.setAreaInSqMeters(request.areaInSqMeters());
@@ -63,7 +74,7 @@ public class WbsPolygonService {
 
         polygon.setWbsCode(request.wbsCode());
         polygon.setWbsName(request.wbsName());
-        polygon.setPolygonGeoJson(request.polygonGeoJson());
+        polygon.setPolygon(parsePolygon(request.polygonGeoJson()));
         polygon.setCenterLatitude(request.centerLatitude());
         polygon.setCenterLongitude(request.centerLongitude());
         if (request.areaInSqMeters() != null) polygon.setAreaInSqMeters(request.areaInSqMeters());
@@ -94,14 +105,37 @@ public class WbsPolygonService {
                     properties.put("strokeColor", polygon.getStrokeColor());
                     properties.put("id", polygon.getId().toString());
 
-                    JsonNode geometry = objectMapper.readTree(polygon.getPolygonGeoJson());
+                    JsonNode geometry = objectMapper.readTree(GEOJSON_WRITER.write(polygon.getPolygon()));
                     return GeoJsonFeature.create(properties, geometry);
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to parse GeoJSON for polygon: " + polygon.getId(), e);
+                    throw new RuntimeException("Failed to render GeoJSON for polygon: " + polygon.getId(), e);
                 }
             })
             .toList();
 
         return GeoJsonFeatureCollection.create(features);
+    }
+
+    /**
+     * Parse a GeoJSON string into a JTS {@link Polygon}. Rejects anything that
+     * isn't a single Polygon (MultiPolygon, Point, etc.) with a clear
+     * business-rule error — this module models one boundary per WBS node.
+     */
+    private Polygon parsePolygon(String geoJson) {
+        if (geoJson == null || geoJson.isBlank()) {
+            throw new BusinessRuleException("INVALID_POLYGON", "Polygon GeoJSON is empty");
+        }
+        try {
+            Geometry geometry = GEOJSON_READER.read(geoJson);
+            if (!(geometry instanceof Polygon poly)) {
+                throw new BusinessRuleException("INVALID_POLYGON",
+                    "Only Polygon geometry is supported (got " + geometry.getGeometryType() + ")");
+            }
+            if (poly.getSRID() == 0) poly.setSRID(4326);
+            return poly;
+        } catch (ParseException e) {
+            throw new BusinessRuleException("INVALID_POLYGON",
+                "Failed to parse GeoJSON: " + e.getMessage());
+        }
     }
 }

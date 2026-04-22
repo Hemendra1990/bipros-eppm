@@ -72,6 +72,18 @@ public class ConstructionProgressSnapshot extends BaseEntity {
     @Column(name = "analysis_method", nullable = false, length = 50)
     private ProgressAnalysisMethod analysisMethod;
 
+    /** Analyzer that produced this row — e.g. "claude-vision:claude-sonnet-4-6". */
+    @Column(name = "analyzer_id", length = 50)
+    private String analyzerId;
+
+    /** Wall-clock time spent in analyzer.analyze() (ms). Useful for SLA telemetry. */
+    @Column(name = "analysis_duration_ms")
+    private Integer analysisDurationMs;
+
+    /** Approximate cost of the analysis call in USD micro-cents. */
+    @Column(name = "analysis_cost_micros")
+    private Long analysisCostMicros;
+
     @Column(name = "remarks", length = 1000)
     private String remarks;
 }

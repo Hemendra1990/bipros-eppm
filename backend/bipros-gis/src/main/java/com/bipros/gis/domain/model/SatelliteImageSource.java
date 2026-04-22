@@ -1,6 +1,7 @@
 package com.bipros.gis.domain.model;
 
 public enum SatelliteImageSource {
+    SENTINEL_HUB("Sentinel-2 (Copernicus)"),
     ISRO_CARTOSAT("ISRO Cartosat-3"),
     PLANET_LABS("Planet Scope"),
     MAXAR("Maxar WorldView"),

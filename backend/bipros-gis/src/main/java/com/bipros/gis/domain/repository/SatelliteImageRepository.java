@@ -13,4 +13,7 @@ public interface SatelliteImageRepository extends JpaRepository<SatelliteImage, 
     List<SatelliteImage> findByProjectIdOrderByCaptureDate(UUID projectId);
     List<SatelliteImage> findByProjectIdAndCaptureDateBetween(UUID projectId, LocalDate fromDate, LocalDate toDate);
     List<SatelliteImage> findByLayerIdOrderByCaptureDate(UUID layerId);
+
+    /** Used by ingestion to dedupe scenes that a prior run already pulled. */
+    boolean existsBySceneId(String sceneId);
 }

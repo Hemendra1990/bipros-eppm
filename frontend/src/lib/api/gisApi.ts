@@ -89,6 +89,32 @@ export interface ConstructionProgress {
   createdBy: string;
 }
 
+export interface IngestionResult {
+  projectId: UUID;
+  vendorId: string;
+  runStartedAt: string;
+  runFinishedAt: string;
+  scenesFetched: number;
+  scenesSkippedDedupe: number;
+  snapshotsCreated: number;
+  errors: string[];
+}
+
+export interface IngestionLogEntry {
+  id: UUID;
+  projectId: UUID;
+  vendorId: string;
+  fromDate: string;
+  toDate: string;
+  runStartedAt: string;
+  runFinishedAt: string | null;
+  scenesFetched: number;
+  snapshotsCreated: number;
+  status: "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL";
+  metadataJson: string | null;
+  errorsJson: string | null;
+}
+
 export interface ProgressVariance {
   wbsPolygonId: UUID;
   wbsCode: string;
@@ -296,5 +322,19 @@ export const gisApi = {
   getProgressVariance: (projectId: UUID) =>
     apiClient.get<{ data: ProgressVariance[] }>(
       `/v1/projects/${projectId}/gis/progress-snapshots/variance`
+    ),
+
+  // Satellite ingestion (Phase 2-4): manually trigger a fetch+analyze run,
+  // and inspect recent runs for a "last sync" indicator.
+  ingestSatellite: (projectId: UUID, from: string, to: string) =>
+    apiClient.post<{ data: IngestionResult }>(
+      `/v1/projects/${projectId}/gis/ingest`,
+      null,
+      { params: { from, to } }
+    ),
+
+  getIngestionLog: (projectId: UUID) =>
+    apiClient.get<{ data: IngestionLogEntry[] }>(
+      `/v1/projects/${projectId}/gis/ingestion-log`
     ),
 };

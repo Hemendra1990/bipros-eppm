@@ -29,3 +29,5 @@ databaseChangeLog:
       file: db/changelog/014-document-tables.yaml
   - include:
       file: db/changelog/015-resource-logs-tables.yaml
+  - include:
+      file: db/changelog/030-gis-tables.yaml

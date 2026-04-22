@@ -47,6 +47,28 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- JTS Polygon / GeoJsonReader used by the satellite adapter when
+             translating WbsPolygon geometry into Sentinel Hub evalscripts. -->
+        <dependency>
+            <groupId>org.locationtech.jts.io</groupId>
+            <artifactId>jts-io-common</artifactId>
+            <version>1.19.0</version>
+        </dependency>
+
+        <!-- AWS S3 SDK — used against MinIO in dev and against AWS S3 in prod
+             by switching bipros.storage.s3.endpoint. Minimal core client; no
+             apache/urlconnection http pullers. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.28.16</version>
+        </dependency>
+
+        <!-- Claude vision access uses Spring RestClient against Anthropic's
+             messages endpoint directly; no SDK dep. The messages API shape is
+             stable (https://docs.anthropic.com/en/api/messages) so a 200-line
+             POST wrapper beats pulling ~2 MB of SDK + kotlin-stdlib. -->
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

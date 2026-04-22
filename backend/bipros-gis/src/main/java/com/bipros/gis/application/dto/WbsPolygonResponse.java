@@ -1,6 +1,7 @@
 package com.bipros.gis.application.dto;
 
 import com.bipros.gis.domain.model.WbsPolygon;
+import org.locationtech.jts.io.geojson.GeoJsonWriter;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -21,7 +22,12 @@ public record WbsPolygonResponse(
     Instant createdAt,
     String createdBy
 ) {
+    /** GeoJsonWriter doesn't carry mutable state across write() calls. */
+    private static final GeoJsonWriter GEOJSON = new GeoJsonWriter();
+    static { GEOJSON.setEncodeCRS(false); }
+
     public static WbsPolygonResponse from(WbsPolygon entity) {
+        String polygonJson = entity.getPolygon() != null ? GEOJSON.write(entity.getPolygon()) : null;
         return new WbsPolygonResponse(
             entity.getId(),
             entity.getProjectId(),
@@ -29,7 +35,7 @@ public record WbsPolygonResponse(
             entity.getLayerId(),
             entity.getWbsCode(),
             entity.getWbsName(),
-            entity.getPolygonGeoJson(),
+            polygonJson,
             entity.getCenterLatitude(),
             entity.getCenterLongitude(),
             entity.getAreaInSqMeters(),

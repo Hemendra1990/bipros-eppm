@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    active: dev
   application:
     name: bipros-eppm
 
@@ -64,6 +66,49 @@ bipros:
       path: ./storage/documents
       max-file-size: 52428800   # 50 MB in bytes; must match spring.servlet.multipart.max-file-size
 
+  # Error responses — include exception class + message + top stack frame in 500 bodies.
+  # Default is OFF so production never leaks internals; default profile (dev) turns it ON below.
+  errors:
+    include-detail: true
+
+  # Satellite raster storage. MinIO in dev (docker-compose.yml), AWS S3 in prod
+  # via the same config keys (change endpoint + credentials).
+  storage:
+    kind: s3
+    s3:
+      endpoint: http://localhost:9000
+      access-key: minio
+      secret-key: minio123
+      region: us-east-1
+      bucket: sentinel-tiles
+    local:
+      root: ./data/satellite
+
+  # Satellite imagery providers. Dev defaults keep Sentinel Hub disabled so the
+  # app boots without a Copernicus account. Set the three env vars and flip
+  # enabled=true to activate ingestion.
+  satellite:
+    ingestion:
+      enabled: false
+      cron: "0 0 3 * * *"
+      max-days-lookback: 7
+    sentinel-hub:
+      enabled: false
+      base-url: https://services.sentinel-hub.com
+      client-id: ${SENTINEL_HUB_CLIENT_ID:}
+      client-secret: ${SENTINEL_HUB_CLIENT_SECRET:}
+
+  # AI progress analyzer — Anthropic Claude vision. Disabled by default so
+  # manual ingestion runs don't silently spend tokens. Flip provider to
+  # claude-vision and set ANTHROPIC_API_KEY to enable.
+  ai:
+    progress-analyzer:
+      provider: none
+      anthropic-api-key: ${ANTHROPIC_API_KEY:}
+      model: claude-sonnet-4-6
+      max-tokens: 512
+      request-timeout-seconds: 30
+
 # OpenAPI
 springdoc:
   api-docs:
@@ -107,6 +152,10 @@ spring:
 
   liquibase:
     enabled: true
+
+bipros:
+  errors:
+    include-detail: false  # hide stack traces from clients in prod
 
 logging:
   level:

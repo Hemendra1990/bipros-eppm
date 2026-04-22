@@ -20,6 +20,16 @@
             <artifactId>bipros-common</artifactId>
         </dependency>
 
+        <!-- Satellite adapter + AI analyzer + raster storage live in the
+             integration module so the vendor SDKs don't leak into the gis
+             module. bipros-gis owns the ingestion orchestration that glues
+             them together with WbsPolygon + SatelliteImage entities. -->
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-integration</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -42,6 +52,25 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- PostGIS / geometry column support for WbsPolygon.polygon. Pulls in
+             JTS Topology Suite transitively, which provides Polygon, Point,
+             GeoJsonReader, GeoJsonWriter used by WbsPolygonService. -->
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-spatial</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.locationtech.jts.io</groupId>
+            <artifactId>jts-io-common</artifactId>
+            <version>1.19.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

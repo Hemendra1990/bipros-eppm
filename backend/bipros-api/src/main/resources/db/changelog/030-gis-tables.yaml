@@ -1,0 +1,209 @@
+databaseChangeLog:
+
+  # =========================================================================
+  # 030: GIS tables — PostGIS geometry for WBS polygons + raster tiles metadata
+  # =========================================================================
+  # Formalises the `gis` schema that was previously `create-drop` only.
+  # Requires the postgis extension; schema.sql + the postgis/postgis image
+  # in docker-compose.yml take care of that for dev. Prod clusters must
+  # `CREATE EXTENSION postgis` before the first deploy.
+  # =========================================================================
+
+  - changeSet:
+      id: 030-enable-postgis
+      author: bipros
+      changes:
+        - sql:
+            sql: CREATE EXTENSION IF NOT EXISTS postgis
+      rollback:
+        - sql:
+            sql: DROP EXTENSION IF EXISTS postgis
+
+  - changeSet:
+      id: 030-create-gis-layers-table
+      author: bipros
+      changes:
+        - createTable:
+            tableName: gis_layers
+            schemaName: gis
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: layer_name, type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: layer_type, type: VARCHAR(30), constraints: { nullable: false } }
+              - column: { name: description, type: TEXT }
+              - column: { name: is_visible, type: BOOLEAN, defaultValueBoolean: true, constraints: { nullable: false } }
+              - column: { name: opacity, type: DOUBLE PRECISION, defaultValueNumeric: 1.0, constraints: { nullable: false } }
+              - column: { name: sort_order, type: INT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT, defaultValueNumeric: 0 }
+        - createIndex:
+            indexName: idx_gis_layers_project
+            schemaName: gis
+            tableName: gis_layers
+            columns:
+              - column: { name: project_id }
+
+  - changeSet:
+      id: 030-create-wbs-polygons-table
+      author: bipros
+      changes:
+        - createTable:
+            tableName: wbs_polygons
+            schemaName: gis
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: wbs_node_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: layer_id, type: UUID, constraints: { nullable: false, foreignKeyName: fk_wbs_polygons_layer, references: "gis.gis_layers(id)" } }
+              - column: { name: wbs_code, type: VARCHAR(50), constraints: { nullable: false } }
+              - column: { name: wbs_name, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: center_latitude, type: DOUBLE PRECISION, constraints: { nullable: false } }
+              - column: { name: center_longitude, type: DOUBLE PRECISION, constraints: { nullable: false } }
+              - column: { name: area_in_sq_meters, type: DOUBLE PRECISION }
+              - column: { name: fill_color, type: VARCHAR(7), defaultValue: "#3388ff", constraints: { nullable: false } }
+              - column: { name: stroke_color, type: VARCHAR(7), defaultValue: "#000000", constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT, defaultValueNumeric: 0 }
+        # PostGIS geometry column. Liquibase doesn't know the geometry type
+        # natively, so we add it via raw SQL — this also keeps the SRID
+        # constraint explicit.
+        - sql:
+            sql: >
+              ALTER TABLE gis.wbs_polygons
+              ADD COLUMN polygon geometry(Polygon, 4326) NOT NULL
+        - sql:
+            sql: >
+              CREATE INDEX idx_wbs_polygons_polygon
+              ON gis.wbs_polygons USING GIST (polygon)
+        - createIndex:
+            indexName: idx_wbs_polygons_project
+            schemaName: gis
+            tableName: wbs_polygons
+            columns:
+              - column: { name: project_id }
+
+  - changeSet:
+      id: 030-create-satellite-images-table
+      author: bipros
+      changes:
+        - createTable:
+            tableName: satellite_images
+            schemaName: gis
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: layer_id, type: UUID, constraints: { foreignKeyName: fk_sat_images_layer, references: "gis.gis_layers(id)" } }
+              - column: { name: image_name, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: description, type: TEXT }
+              - column: { name: scene_id, type: VARCHAR(200), constraints: { unique: true } }
+              - column: { name: capture_date, type: DATE, constraints: { nullable: false } }
+              - column: { name: source, type: VARCHAR(30), constraints: { nullable: false } }
+              - column: { name: cloud_cover_percent, type: DOUBLE PRECISION }
+              - column: { name: resolution, type: VARCHAR(30) }
+              - column: { name: file_path, type: VARCHAR(512) }
+              - column: { name: file_size, type: BIGINT }
+              - column: { name: mime_type, type: VARCHAR(100) }
+              - column: { name: status, type: VARCHAR(20), constraints: { nullable: false } }
+              - column: { name: north_bound, type: DOUBLE PRECISION }
+              - column: { name: south_bound, type: DOUBLE PRECISION }
+              - column: { name: east_bound, type: DOUBLE PRECISION }
+              - column: { name: west_bound, type: DOUBLE PRECISION }
+              - column: { name: bounding_box_geojson, type: TEXT }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT, defaultValueNumeric: 0 }
+        - createIndex:
+            indexName: idx_sat_images_project_capture
+            schemaName: gis
+            tableName: satellite_images
+            columns:
+              - column: { name: project_id }
+              - column: { name: capture_date, descending: true }
+
+  - changeSet:
+      id: 030-create-construction-progress-snapshots-table
+      author: bipros
+      changes:
+        - createTable:
+            tableName: construction_progress_snapshots
+            schemaName: gis
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: wbs_polygon_id, type: UUID, constraints: { nullable: false, foreignKeyName: fk_cps_polygon, references: "gis.wbs_polygons(id)" } }
+              - column: { name: satellite_image_id, type: UUID, constraints: { foreignKeyName: fk_cps_image, references: "gis.satellite_images(id)" } }
+              - column: { name: capture_date, type: DATE, constraints: { nullable: false } }
+              - column: { name: derived_progress_percent, type: DOUBLE PRECISION }
+              - column: { name: contractor_claimed_percent, type: DOUBLE PRECISION }
+              - column: { name: variance_percent, type: DOUBLE PRECISION }
+              - column: { name: ai_progress_percent, type: DOUBLE PRECISION }
+              - column: { name: cvi, type: DOUBLE PRECISION }
+              - column: { name: edi, type: DOUBLE PRECISION }
+              - column: { name: ndvi_change, type: DOUBLE PRECISION }
+              - column: { name: wbs_package_code, type: VARCHAR(60) }
+              - column: { name: alert_flag, type: VARCHAR(30) }
+              - column: { name: analysis_method, type: VARCHAR(30), constraints: { nullable: false } }
+              - column: { name: analyzer_id, type: VARCHAR(50) }
+              - column: { name: analysis_duration_ms, type: INT }
+              - column: { name: analysis_cost_micros, type: BIGINT }
+              - column: { name: remarks, type: TEXT }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT, defaultValueNumeric: 0 }
+        - createIndex:
+            indexName: idx_cps_project
+            schemaName: gis
+            tableName: construction_progress_snapshots
+            columns:
+              - column: { name: project_id }
+        - createIndex:
+            indexName: idx_cps_wbs_package_capture
+            schemaName: gis
+            tableName: construction_progress_snapshots
+            columns:
+              - column: { name: wbs_package_code }
+              - column: { name: capture_date, descending: true }
+
+  - changeSet:
+      id: 030-create-satellite-scene-ingestion-log-table
+      author: bipros
+      changes:
+        - createTable:
+            tableName: satellite_scene_ingestion_log
+            schemaName: gis
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: vendor_id, type: VARCHAR(50), constraints: { nullable: false } }
+              - column: { name: from_date, type: DATE, constraints: { nullable: false } }
+              - column: { name: to_date, type: DATE, constraints: { nullable: false } }
+              - column: { name: run_started_at, type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: run_finished_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: scenes_fetched, type: INT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: snapshots_created, type: INT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: status, type: VARCHAR(20), constraints: { nullable: false } }
+              - column: { name: metadata_json, type: TEXT }
+              - column: { name: errors_json, type: TEXT }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: CURRENT_TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT, defaultValueNumeric: 0 }
+        - createIndex:
+            indexName: idx_ssi_log_project_started
+            schemaName: gis
+            tableName: satellite_scene_ingestion_log
+            columns:
+              - column: { name: project_id }
+              - column: { name: run_started_at, descending: true }

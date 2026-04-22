@@ -1,16 +1,26 @@
 package com.bipros.gis.domain.model;
 
 import com.bipros.common.model.BaseEntity;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.locationtech.jts.geom.Polygon;
 
 import java.util.UUID;
 
+/**
+ * WBS package boundary as a PostGIS geometry. Stored in EPSG:4326 (WGS84 lat/lon)
+ * so satellite imagery — which Sentinel Hub serves in 4326 by default — aligns
+ * without a reprojection step. GeoJSON in and out of the service layer is handled
+ * by {@link com.bipros.gis.application.service.WbsPolygonService} via JTS
+ * GeoJsonReader/Writer; the entity itself carries the native geometry.
+ */
 @Entity
 @Table(name = "wbs_polygons", schema = "gis")
 @Data
@@ -39,9 +49,13 @@ public class WbsPolygon extends BaseEntity {
     @Column(name = "wbs_name", nullable = false, length = 200)
     private String wbsName;
 
-    @NotNull(message = "Polygon GeoJSON is required")
-    @Column(name = "polygon_geojson", nullable = false, columnDefinition = "TEXT")
-    private String polygonGeoJson;
+    /**
+     * Polygon geometry in EPSG:4326. hibernate-spatial maps this to
+     * {@code geometry(Polygon, 4326)} in PostGIS.
+     */
+    @NotNull(message = "Polygon is required")
+    @Column(name = "polygon", nullable = false, columnDefinition = "geometry(Polygon,4326)")
+    private Polygon polygon;
 
     @NotNull(message = "Center latitude is required")
     @Column(name = "center_latitude", nullable = false)

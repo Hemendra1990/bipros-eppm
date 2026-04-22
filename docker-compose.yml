@@ -1,6 +1,10 @@
 services:
   postgresql:
-    image: postgres:17-alpine
+    # postgis/postgis:17-3.5 ships Postgres 17 + PostGIS 3.5 extensions so that
+    # the gis module's wbs_polygons geometry column is resolvable without a
+    # separate extension installer step. Bipros only uses PostGIS for polygons
+    # right now but the same image works for future raster / topology needs.
+    image: postgis/postgis:17-3.5
     container_name: bipros-postgres
     environment:
       POSTGRES_PASSWORD: postgres_password
@@ -44,6 +48,29 @@ services:
       timeout: 5s
       retries: 5
 
+  # S3-compatible object store for satellite raster tiles. Prod can point the
+  # storage adapter at AWS S3; dev uses MinIO so `docker compose up -d` gives a
+  # working pipeline without AWS credentials.
+  minio:
+    image: minio/minio:latest
+    container_name: bipros-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
