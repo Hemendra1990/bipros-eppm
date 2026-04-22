@@ -217,13 +217,29 @@ public class ActivityService {
     Double oldPercent = activity.getPercentComplete();
     var oldActualStart = activity.getActualStartDate();
     var oldActualFinish = activity.getActualFinishDate();
+    var oldStatus = activity.getStatus();
 
     activity.setPercentComplete(percentComplete);
     activity.setActualStartDate(actualStart);
     activity.setActualFinishDate(actualFinish);
 
+    // Derive status from progress. Rules (single source of truth for /progress
+    // endpoint): 100% → COMPLETED; 0% with no actual start → NOT_STARTED;
+    // everything else (any progress OR actual-start set) → IN_PROGRESS.
+    if (percentComplete >= 100.0) {
+      activity.setStatus(com.bipros.activity.domain.model.ActivityStatus.COMPLETED);
+    } else if (percentComplete > 0.0 || actualStart != null) {
+      activity.setStatus(com.bipros.activity.domain.model.ActivityStatus.IN_PROGRESS);
+    } else {
+      activity.setStatus(com.bipros.activity.domain.model.ActivityStatus.NOT_STARTED);
+    }
+
     Activity updated = activityRepository.save(activity);
     log.info("Progress updated successfully: id={}", id);
+
+    if (!java.util.Objects.equals(oldStatus, updated.getStatus())) {
+      auditService.logUpdate("Activity", id, "status", oldStatus, updated.getStatus());
+    }
 
     // Audit progress changes
     if (!java.util.Objects.equals(percentComplete, oldPercent)) {
