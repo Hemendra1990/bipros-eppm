@@ -337,4 +337,15 @@ export const gisApi = {
     apiClient.get<{ data: IngestionLogEntry[] }>(
       `/v1/projects/${projectId}/gis/ingestion-log`
     ),
+
+  /**
+   * Fetch the raw raster bytes for one satellite image. Returns an ArrayBuffer
+   * so the gallery can wrap it in a Blob + object URL for {@code <img src>}.
+   * Routed through apiClient so the JWT + auto-refresh interceptors apply.
+   */
+  getSatelliteImageThumbnail: (projectId: UUID, imageId: UUID) =>
+    apiClient.get<ArrayBuffer>(
+      `/v1/projects/${projectId}/gis/satellite-images/${imageId}/thumbnail`,
+      { responseType: "arraybuffer" }
+    ),
 };

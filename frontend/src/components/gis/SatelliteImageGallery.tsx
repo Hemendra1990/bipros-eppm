@@ -1,7 +1,72 @@
 "use client";
 
-import { SatelliteImage } from "@/lib/api/gisApi";
+import { useEffect, useState } from "react";
+import { gisApi, SatelliteImage } from "@/lib/api/gisApi";
 import { formatDate } from "date-fns";
+
+/**
+ * One thumbnail tile. Fetches the raster bytes via the authenticated apiClient,
+ * wraps them in a blob URL, renders with an {@code <img>}. Blob URLs are
+ * revoked on unmount so navigating away doesn't leak Blob references.
+ */
+function SatelliteThumbnail({
+  projectId,
+  imageId,
+  mimeType,
+}: {
+  projectId: string;
+  imageId: string;
+  mimeType?: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let revoked: string | null = null;
+    let cancelled = false;
+    gisApi
+      .getSatelliteImageThumbnail(
+        projectId as `${string}-${string}-${string}-${string}-${string}`,
+        imageId as `${string}-${string}-${string}-${string}-${string}`
+      )
+      .then((response) => {
+        if (cancelled) return;
+        const blob = new Blob([response.data], {
+          type: mimeType || "image/png",
+        });
+        const url = URL.createObjectURL(blob);
+        revoked = url;
+        setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [projectId, imageId, mimeType]);
+
+  if (error) {
+    return (
+      <div className="bg-surface-hover h-32 flex items-center justify-center text-text-muted">
+        <span className="text-xs">⚠ thumbnail unavailable</span>
+      </div>
+    );
+  }
+  if (!src) {
+    return (
+      <div className="bg-surface-hover h-32 flex items-center justify-center text-text-muted animate-pulse">
+        <span className="text-3xl">📡</span>
+      </div>
+    );
+  }
+  return (
+    // next/image can't open blob: URLs, so use a plain <img>.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="Satellite tile" className="h-32 w-full object-cover bg-black" />
+  );
+}
 
 interface SatelliteImageGalleryProps {
   projectId: string;
@@ -37,9 +102,11 @@ export function SatelliteImageGallery({
               key={image.id}
               className="bg-surface/50 rounded-lg border border-border overflow-hidden hover:shadow-lg transition-shadow"
             >
-              <div className="bg-surface-hover h-32 flex items-center justify-center text-text-muted">
-                <span className="text-3xl">📡</span>
-              </div>
+              <SatelliteThumbnail
+                projectId={projectId}
+                imageId={image.id}
+                mimeType={image.mimeType}
+              />
 
               <div className="p-4">
                 <h4 className="font-medium text-text-primary text-sm mb-2 line-clamp-2">
