@@ -104,7 +104,8 @@ public class ActivityService {
     if (request.percentCompleteType() != null) {
       activity.setPercentCompleteType(request.percentCompleteType());
     }
-    if (request.status() != null) {
+    boolean statusExplicit = request.status() != null;
+    if (statusExplicit) {
       activity.setStatus(request.status());
     }
 
@@ -114,6 +115,14 @@ public class ActivityService {
     activity.setPhysicalPercentComplete(request.physicalPercentComplete());
     activity.setActualStartDate(request.actualStartDate());
     activity.setActualFinishDate(request.actualFinishDate());
+
+    // When the caller didn't pass an explicit status, derive it from the same
+    // progress/actual-date signals that /progress uses — so editing an activity
+    // to 5% + today's actualStart in the UI form correctly flips NOT_STARTED → IN_PROGRESS
+    // without forcing every form to include a status dropdown.
+    if (!statusExplicit) {
+      applyStatusFromProgress(activity);
+    }
     activity.setCalendarId(request.calendarId());
     activity.setPrimaryConstraintType(request.primaryConstraintType());
     activity.setPrimaryConstraintDate(request.primaryConstraintDate());
@@ -222,17 +231,7 @@ public class ActivityService {
     activity.setPercentComplete(percentComplete);
     activity.setActualStartDate(actualStart);
     activity.setActualFinishDate(actualFinish);
-
-    // Derive status from progress. Rules (single source of truth for /progress
-    // endpoint): 100% → COMPLETED; 0% with no actual start → NOT_STARTED;
-    // everything else (any progress OR actual-start set) → IN_PROGRESS.
-    if (percentComplete >= 100.0) {
-      activity.setStatus(com.bipros.activity.domain.model.ActivityStatus.COMPLETED);
-    } else if (percentComplete > 0.0 || actualStart != null) {
-      activity.setStatus(com.bipros.activity.domain.model.ActivityStatus.IN_PROGRESS);
-    } else {
-      activity.setStatus(com.bipros.activity.domain.model.ActivityStatus.NOT_STARTED);
-    }
+    applyStatusFromProgress(activity);
 
     Activity updated = activityRepository.save(activity);
     log.info("Progress updated successfully: id={}", id);
@@ -299,5 +298,29 @@ public class ActivityService {
     }
 
     log.info("Actuals applied successfully for project: projectId={}", projectId);
+  }
+
+  /**
+   * Derive status from progress. Single source of truth used by both
+   * {@link #updateProgress} and {@link #updateActivity} (when the caller
+   * hasn't passed an explicit status).
+   * <ul>
+   *   <li>percentComplete ≥ 100 → COMPLETED</li>
+   *   <li>percentComplete &gt; 0 OR actualStartDate set → IN_PROGRESS</li>
+   *   <li>otherwise → NOT_STARTED</li>
+   * </ul>
+   */
+  private void applyStatusFromProgress(Activity activity) {
+    Double pct = activity.getPercentComplete();
+    boolean hasActualStart = activity.getActualStartDate() != null;
+    com.bipros.activity.domain.model.ActivityStatus derived;
+    if (pct != null && pct >= 100.0) {
+      derived = com.bipros.activity.domain.model.ActivityStatus.COMPLETED;
+    } else if ((pct != null && pct > 0.0) || hasActualStart) {
+      derived = com.bipros.activity.domain.model.ActivityStatus.IN_PROGRESS;
+    } else {
+      derived = com.bipros.activity.domain.model.ActivityStatus.NOT_STARTED;
+    }
+    activity.setStatus(derived);
   }
 }
