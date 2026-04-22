@@ -58,6 +58,7 @@ export default function ProjectDetailLayout({
     { label: "Schedule Health", href: `/projects/${projectId}/schedule-health` },
     { label: "Schedule Compression", href: `/projects/${projectId}/schedule-compression` },
     { label: "Risk Analysis", href: `/projects/${projectId}/risk-analysis` },
+    { label: "Activity Correlations", href: `/projects/${projectId}/activity-correlations` },
     { label: "Predictions", href: `/projects/${projectId}/predictions` },
     { label: "RA Bills", href: `/projects/${projectId}/ra-bills` },
     { label: "Drawings", href: `/projects/${projectId}/drawings` },

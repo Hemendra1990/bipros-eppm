@@ -1,21 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Play, AlertCircle, CheckCircle2, Clock } from "lucide-react";
-import { monteCarloApi } from "@/lib/api/monteCarloApi";
+import { monteCarloApi, type MonteCarloRunRequest, type DistributionType } from "@/lib/api/monteCarloApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+
+const TABS = ["overview", "criticality", "tornado", "milestones", "cashflow", "drivers"] as const;
+type Tab = typeof TABS[number];
+const TAB_LABELS: Record<Tab, string> = {
+  overview: "Overview",
+  criticality: "Criticality",
+  tornado: "Tornado",
+  milestones: "Milestones",
+  cashflow: "Cash Flow",
+  drivers: "Risk Drivers",
+};
+
+function buildHistogram(values: number[], bins = 20): { range: string; count: number; mid: number }[] {
+  if (!values.length) return [];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) return [{ range: `${min}`, count: values.length, mid: min }];
+  const width = (max - min) / bins;
+  const counts = new Array(bins).fill(0);
+  for (const v of values) {
+    const i = Math.min(bins - 1, Math.floor((v - min) / width));
+    counts[i]++;
+  }
+  return counts.map((count, i) => {
+    const lo = min + i * width;
+    const hi = lo + width;
+    return { range: `${Math.round(lo)}–${Math.round(hi)}`, count, mid: (lo + hi) / 2 };
+  });
+}
 
 export default function RiskAnalysisPage() {
   const params = useParams();
   const projectId = params.projectId as string;
-  const [iterations, setIterations] = useState(10000);
+  const [tab, setTab] = useState<Tab>("overview");
   const [showRunDialog, setShowRunDialog] = useState(false);
+  const [runRequest, setRunRequest] = useState<MonteCarloRunRequest>({
+    iterations: 10000,
+    defaultDistribution: "TRIANGULAR",
+    fallbackVariancePct: 0.2,
+    enableRisks: false,
+  });
 
   const { data: latestSim, isLoading, refetch } = useQuery({
     queryKey: ["monte-carlo", projectId],
@@ -23,61 +58,92 @@ export default function RiskAnalysisPage() {
     retry: false,
   });
 
-  const { data: allSims } = useQuery({
-    queryKey: ["monte-carlo-list", projectId],
-    queryFn: () => monteCarloApi.listSimulations(projectId),
+  const sim = latestSim?.data;
+
+  const { data: activityStats } = useQuery({
+    queryKey: ["monte-carlo-activity-stats", projectId, sim?.id],
+    queryFn: () => (sim?.id ? monteCarloApi.getActivityStats(projectId, sim.id) : Promise.resolve(null)),
+    enabled: !!sim?.id,
+    retry: false,
+  });
+
+  const { data: tornado } = useQuery({
+    queryKey: ["monte-carlo-tornado", projectId, sim?.id, "duration"],
+    queryFn: () => (sim?.id ? monteCarloApi.getTornado(projectId, sim.id, "duration") : Promise.resolve(null)),
+    enabled: !!sim?.id && tab === "tornado",
+    retry: false,
+  });
+
+  const { data: milestones } = useQuery({
+    queryKey: ["monte-carlo-milestones", projectId, sim?.id],
+    queryFn: () => (sim?.id ? monteCarloApi.getMilestoneStats(projectId, sim.id) : Promise.resolve(null)),
+    enabled: !!sim?.id && tab === "milestones",
+    retry: false,
+  });
+
+  const { data: cashflow } = useQuery({
+    queryKey: ["monte-carlo-cashflow", projectId, sim?.id],
+    queryFn: () => (sim?.id ? monteCarloApi.getCashflow(projectId, sim.id) : Promise.resolve(null)),
+    enabled: !!sim?.id && tab === "cashflow",
+    retry: false,
+  });
+
+  const { data: drivers } = useQuery({
+    queryKey: ["monte-carlo-drivers", projectId, sim?.id],
+    queryFn: () => (sim?.id ? monteCarloApi.getRiskContributions(projectId, sim.id) : Promise.resolve(null)),
+    enabled: !!sim?.id && tab === "drivers",
     retry: false,
   });
 
   const runMutation = useMutation({
-    mutationFn: () => monteCarloApi.runSimulation(projectId, iterations),
+    mutationFn: (req: MonteCarloRunRequest) => monteCarloApi.runSimulation(projectId, req),
     onSuccess: () => {
       setShowRunDialog(false);
       refetch();
     },
   });
 
-  // Prepare histogram data from simulation results
-  const histogramData = latestSim?.data?.results && latestSim.data
-    ? Array.from({ length: 10 }, (_, i) => {
-        const data = latestSim.data!;
-        const min = data.baselineDuration * 0.8 + (data.baselineDuration * 0.4 * i) / 10;
-        const max = min + (data.baselineDuration * 0.4) / 10;
-        const count = (data.results || []).filter(
-          (r) => r.projectDuration >= min && r.projectDuration < max
-        ).length;
-        return {
-          range: `${Math.round(min)}-${Math.round(max)}`,
-          count,
-          minVal: min,
-        };
-      })
-    : [];
+  const durationHistogram = useMemo(
+    () => buildHistogram((sim?.results ?? []).map((r) => r.projectDuration)),
+    [sim?.results]
+  );
+  const costHistogram = useMemo(
+    () => buildHistogram((sim?.results ?? []).map((r) => parseFloat(r.projectCost))),
+    [sim?.results]
+  );
 
-  const statusConfig = {
+  const statusConfig: Record<string, { icon: typeof Clock; color: string; bg: string }> = {
     PENDING: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10" },
     RUNNING: { icon: Clock, color: "text-blue-400", bg: "bg-blue-500/10" },
     COMPLETED: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10" },
     FAILED: { icon: AlertCircle, color: "text-red-400", bg: "bg-red-500/10" },
   };
+  const status = sim?.status ?? "COMPLETED";
+  const StatusIcon = statusConfig[status]?.icon ?? Clock;
+  const statusColor = statusConfig[status]?.color ?? "text-slate-400";
+  const statusBg = statusConfig[status]?.bg ?? "bg-slate-900/80";
 
-  const status = latestSim?.data?.status || "COMPLETED";
-  const StatusIcon = statusConfig[status as keyof typeof statusConfig]?.icon || Clock;
-  const statusColor = statusConfig[status as keyof typeof statusConfig]?.color || "text-slate-400";
-  const statusBg = statusConfig[status as keyof typeof statusConfig]?.bg || "bg-slate-900/80";
+  const pctDelta = (v: number | null | undefined, baseline: number | undefined | null) => {
+    if (v == null || !baseline || baseline === 0) return "";
+    const pct = ((v - baseline) / baseline) * 100;
+    return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% vs baseline`;
+  };
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Risk Analysis - Monte Carlo Simulation" description="Run probabilistic simulations to understand project duration and cost ranges" />
+      <PageHeader
+        title="Risk Analysis — Monte Carlo Simulation"
+        description="Probabilistic schedule & cost simulation via real CPM + PERT sampling"
+      />
 
       <TabTip
         title="Monte Carlo Risk Simulation"
-        description="Run probabilistic simulations (10,000 iterations) to determine the likely range of project completion dates and costs. Accounts for uncertainty in activity durations."
+        description="Every iteration samples a duration per activity from its configured distribution, runs CPM, and records project duration + cost. P50/P80 answer 'likely-case' and 'conservative' finish dates."
       />
 
-      {/* Run Simulation Card */}
+      {/* Run controls */}
       <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">Monte Carlo Simulation</h2>
           <Button
             onClick={() => setShowRunDialog(!showRunDialog)}
@@ -85,210 +151,495 @@ export default function RiskAnalysisPage() {
             className="flex items-center gap-2"
           >
             <Play className="w-4 h-4" />
-            {runMutation.isPending ? "Running..." : "Run Simulation"}
+            {runMutation.isPending ? "Running…" : "Run Simulation"}
           </Button>
         </div>
 
         {showRunDialog && (
-          <div className="mb-6 p-4 bg-blue-500/10 border border-blue-200 rounded-lg">
-            <label className="block text-sm font-medium text-white mb-2">
-              Number of Iterations
+          <div className="mb-2 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block text-sm">
+              <span className="text-white">Iterations</span>
+              <input
+                type="number"
+                value={runRequest.iterations}
+                onChange={(e) => setRunRequest({ ...runRequest, iterations: parseInt(e.target.value) || 10000 })}
+                min={100} max={100000} step={1000}
+                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+              />
             </label>
-            <input
-              type="number"
-              value={iterations}
-              onChange={(e) => setIterations(parseInt(e.target.value))}
-              min="1000"
-              max="100000"
-              step="1000"
-              className="w-full px-3 py-2 border border-slate-700 rounded-md text-sm"
-            />
-            <p className="text-xs text-slate-400 mt-2">More iterations = more accurate results (default 10,000)</p>
-            <div className="flex gap-2 mt-4">
+            <label className="block text-sm">
+              <span className="text-white">Default distribution</span>
+              <select
+                value={runRequest.defaultDistribution}
+                onChange={(e) => setRunRequest({ ...runRequest, defaultDistribution: e.target.value as DistributionType })}
+                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+              >
+                <option value="TRIANGULAR">Triangular</option>
+                <option value="BETA_PERT">Beta-PERT</option>
+                <option value="UNIFORM">Uniform</option>
+                <option value="NORMAL">Normal</option>
+                <option value="LOGNORMAL">Lognormal</option>
+                <option value="TRIGEN">Trigen</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-white">Fallback variance (±%)</span>
+              <input
+                type="number"
+                value={(runRequest.fallbackVariancePct ?? 0.2) * 100}
+                onChange={(e) =>
+                  setRunRequest({ ...runRequest, fallbackVariancePct: (parseFloat(e.target.value) || 20) / 100 })
+                }
+                min={0} max={90}
+                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Used when an activity has no PERT estimate.
+              </p>
+            </label>
+            <label className="block text-sm">
+              <span className="text-white">Random seed (optional)</span>
+              <input
+                type="number"
+                value={runRequest.randomSeed ?? ""}
+                onChange={(e) =>
+                  setRunRequest({ ...runRequest, randomSeed: e.target.value ? parseInt(e.target.value) : null })
+                }
+                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+                placeholder="Leave blank for non-reproducible"
+              />
+            </label>
+            <label className="md:col-span-2 flex items-center gap-2 text-sm text-white cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!runRequest.enableRisks}
+                onChange={(e) => setRunRequest({ ...runRequest, enableRisks: e.target.checked })}
+              />
+              <span>
+                Enable risk register drivers — each open risk with probability + affected activities + impact
+                fires Bernoulli per iteration and adds its schedule &amp; cost impact.
+              </span>
+            </label>
+            <div className="md:col-span-2 flex gap-2">
               <Button
-                onClick={() => runMutation.mutate()}
+                onClick={() => runMutation.mutate(runRequest)}
                 disabled={runMutation.isPending}
               >
-                {runMutation.isPending ? "Running..." : "Start Simulation"}
+                {runMutation.isPending ? "Running…" : "Start Simulation"}
               </Button>
-              <Button
-                onClick={() => setShowRunDialog(false)}
-                variant="outline"
-              >
-                Cancel
-              </Button>
+              <Button onClick={() => setShowRunDialog(false)} variant="outline">Cancel</Button>
             </div>
+            {runMutation.isError && (
+              <div className="md:col-span-2 text-sm text-red-400">
+                {(runMutation.error as Error)?.message ?? "Run failed"}
+              </div>
+            )}
           </div>
         )}
 
-        {!latestSim?.data && !isLoading && (
+        {!sim && !isLoading && (
           <EmptyState
             icon={AlertCircle}
             title="No Simulation Data"
-            description="Run a Monte Carlo simulation to analyze project duration and cost distributions"
+            description="Run a Monte Carlo simulation to analyze project duration and cost distributions. An active project baseline is required."
           />
         )}
       </div>
 
-      {/* Simulation Results */}
-      {latestSim?.data && (
+      {sim && (
         <>
-          {/* Status and Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className={`${statusBg} rounded-lg border border-slate-800 p-4`}>
-              <div className="flex items-center gap-2 mb-2">
-                <StatusIcon className={`w-5 h-5 ${statusColor}`} />
-                <span className="text-sm font-medium text-slate-400">Status</span>
+          {/* Tabs */}
+          <div className="flex gap-2 border-b border-slate-800">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2 font-medium text-sm ${
+                  tab === t
+                    ? "border-b-2 border-blue-600 text-blue-400"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {TAB_LABELS[t]}
+              </button>
+            ))}
+          </div>
+
+          {tab === "overview" && (
+            <>
+              {/* Status + baseline strip */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className={`${statusBg} rounded-lg border border-slate-800 p-4`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <StatusIcon className={`w-5 h-5 ${statusColor}`} />
+                    <span className="text-sm font-medium text-slate-400">Status</span>
+                  </div>
+                  <p className={`text-2xl font-bold ${statusColor}`}>{status}</p>
+                </div>
+
+                <div className="bg-blue-500/10 rounded-lg border border-slate-800 p-4">
+                  <p className="text-sm font-medium text-slate-400 mb-2">Baseline Duration</p>
+                  <p className="text-2xl font-bold text-blue-400">{Math.round(sim.baselineDuration)} days</p>
+                  {sim.baselineId && (
+                    <p className="text-xs text-slate-500 mt-1">baseline {sim.baselineId.slice(0, 8)}</p>
+                  )}
+                </div>
+
+                <div className="bg-purple-500/10 rounded-lg border border-slate-800 p-4">
+                  <p className="text-sm font-medium text-slate-400 mb-2">Baseline Cost</p>
+                  <p className="text-2xl font-bold text-purple-300">
+                    {parseFloat(sim.baselineCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+
+                <div className="bg-slate-800/50 rounded-lg border border-slate-800 p-4">
+                  <p className="text-sm font-medium text-slate-400 mb-2">Iterations</p>
+                  <p className="text-2xl font-bold text-white">{sim.iterations.toLocaleString()}</p>
+                  {sim.dataDate && <p className="text-xs text-slate-500 mt-1">data date {sim.dataDate}</p>}
+                </div>
               </div>
-              <p className={`text-2xl font-bold ${statusColor}`}>{status}</p>
-            </div>
 
-            <div className="bg-blue-500/10 rounded-lg border border-slate-800 p-4">
-              <p className="text-sm font-medium text-slate-400 mb-2">Baseline Duration</p>
-              <p className="text-2xl font-bold text-blue-400">{Math.round(latestSim.data.baselineDuration)} days</p>
-            </div>
+              {/* Duration percentiles table */}
+              <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Duration distribution (days)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 text-sm">
+                  {[
+                    { label: "P10", v: sim.p10Duration },
+                    { label: "P25", v: sim.p25Duration },
+                    { label: "P50", v: sim.confidenceP50Duration },
+                    { label: "P75", v: sim.p75Duration },
+                    { label: "P80", v: sim.confidenceP80Duration },
+                    { label: "P90", v: sim.p90Duration },
+                    { label: "P95", v: sim.p95Duration },
+                    { label: "P99", v: sim.p99Duration },
+                  ].map(({ label, v }) => (
+                    <div key={label} className="bg-slate-800/40 rounded border border-slate-800 p-3">
+                      <p className="text-xs uppercase text-slate-400">{label}</p>
+                      <p className="text-lg font-semibold text-white">
+                        {v != null ? Math.round(v) : "—"}
+                      </p>
+                      <p className="text-xs text-slate-500">{pctDelta(v, sim.baselineDuration)}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-xs text-slate-400">
+                  Mean {sim.meanDuration != null ? sim.meanDuration.toFixed(1) : "—"} days
+                  , σ {sim.stddevDuration != null ? sim.stddevDuration.toFixed(1) : "—"} days
+                </div>
 
-            <div className="bg-emerald-500/10 rounded-lg border border-slate-800 p-4">
-              <p className="text-sm font-medium text-slate-400 mb-2">P50 Duration (50th percentile)</p>
-              <p className="text-2xl font-bold text-emerald-400">{Math.round(latestSim.data.confidenceP50Duration || 0)} days</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {latestSim.data.confidenceP50Duration && latestSim.data.baselineDuration
-                  ? `+${Math.round(((latestSim.data.confidenceP50Duration - latestSim.data.baselineDuration) / latestSim.data.baselineDuration) * 100)}% vs baseline`
-                  : ""}
-              </p>
-            </div>
+                {durationHistogram.length > 0 && (
+                  <div className="mt-6">
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart data={durationHistogram}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="range" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 11 }} />
+                        <YAxis />
+                        <Tooltip formatter={(v) => `${v} iterations`} />
+                        <ReferenceLine
+                          x={durationHistogram.reduce((best, b) =>
+                            Math.abs(b.mid - sim.baselineDuration) < Math.abs(best.mid - sim.baselineDuration) ? b : best
+                          ).range}
+                          stroke="#ef4444"
+                          label={{ value: "Baseline", position: "top", fill: "#ef4444" }}
+                        />
+                        <Bar dataKey="count" fill="#3b82f6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
 
-            <div className="bg-orange-500/10 rounded-lg border border-slate-800 p-4">
-              <p className="text-sm font-medium text-slate-400 mb-2">P80 Duration (80th percentile)</p>
-              <p className="text-2xl font-bold text-orange-600">{Math.round(latestSim.data.confidenceP80Duration || 0)} days</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {latestSim.data.confidenceP80Duration && latestSim.data.baselineDuration
-                  ? `+${Math.round(((latestSim.data.confidenceP80Duration - latestSim.data.baselineDuration) / latestSim.data.baselineDuration) * 100)}% vs baseline`
-                  : ""}
-              </p>
-            </div>
-          </div>
+              {/* Cost percentiles table */}
+              <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Cost distribution</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 text-sm">
+                  {[
+                    { label: "P10", v: sim.p10Cost },
+                    { label: "P25", v: sim.p25Cost },
+                    { label: "P50", v: sim.confidenceP50Cost },
+                    { label: "P75", v: sim.p75Cost },
+                    { label: "P80", v: sim.confidenceP80Cost },
+                    { label: "P90", v: sim.p90Cost },
+                    { label: "P95", v: sim.p95Cost },
+                    { label: "P99", v: sim.p99Cost },
+                  ].map(({ label, v }) => (
+                    <div key={label} className="bg-slate-800/40 rounded border border-slate-800 p-3">
+                      <p className="text-xs uppercase text-slate-400">{label}</p>
+                      <p className="text-lg font-semibold text-white">
+                        {v != null ? Math.round(parseFloat(v)).toLocaleString() : "—"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-xs text-slate-400">
+                  Mean {sim.meanCost != null ? Math.round(parseFloat(sim.meanCost)).toLocaleString() : "—"}
+                  , σ {sim.stddevCost != null ? Math.round(parseFloat(sim.stddevCost)).toLocaleString() : "—"}
+                </div>
 
-          {/* Cost Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-purple-500/10 rounded-lg border border-slate-800 p-4">
-              <p className="text-sm font-medium text-slate-400 mb-2">Baseline Cost</p>
-              <p className="text-2xl font-bold text-purple-600">${latestSim.data.baselineCost}</p>
-            </div>
+                {costHistogram.length > 0 && (
+                  <div className="mt-6">
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart data={costHistogram}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="range" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 11 }} />
+                        <YAxis />
+                        <Tooltip formatter={(v) => `${v} iterations`} />
+                        <Bar dataKey="count" fill="#a855f7" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
-            <div className="bg-indigo-500/10 rounded-lg border border-slate-800 p-4">
-              <p className="text-sm font-medium text-slate-400 mb-2">P50 Cost</p>
-              <p className="text-2xl font-bold text-indigo-600">${latestSim.data.confidenceP50Cost}</p>
-            </div>
-
-            <div className="bg-pink-50 rounded-lg border border-slate-800 p-4">
-              <p className="text-sm font-medium text-slate-400 mb-2">P80 Cost</p>
-              <p className="text-2xl font-bold text-pink-600">${latestSim.data.confidenceP80Cost}</p>
-            </div>
-          </div>
-
-          {/* Duration Distribution Chart */}
-          {histogramData.length > 0 && (
+          {tab === "criticality" && (
             <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Project Duration Distribution</h3>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={histogramData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="range"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis label={{ value: "Frequency", angle: -90, position: "insideLeft" }} />
-                  <Tooltip formatter={(value) => `${value} iterations`} />
-                  <Legend />
-                  <ReferenceLine
-                    x={`${Math.round(latestSim.data.baselineDuration)}`}
-                    stroke="#ef4444"
-                    label={{ value: "Baseline", position: "top", fill: "#ef4444" }}
-                  />
-                  <Bar dataKey="count" fill="#3b82f6" name="Count" />
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-4 p-4 bg-blue-500/10 rounded border border-blue-200">
-                <p className="text-sm text-slate-300">
-                  <strong>Interpretation:</strong> This histogram shows the frequency distribution of project durations across all {latestSim.data.iterations} simulation iterations.
-                  The <span className="text-red-400 font-medium">red line</span> shows your baseline duration.
-                  A 50% chance the project will complete by the P50 value (median), and 80% by the P80 value.
-                </p>
-              </div>
+              <h3 className="text-lg font-semibold text-white mb-4">Criticality index by activity</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Fraction of iterations each activity appeared on the critical path. 1.0 = always on critical path.
+                Duration sensitivity is the Pearson correlation between the activity&apos;s sampled duration and project duration.
+              </p>
+              {!activityStats?.data?.length && (
+                <p className="text-sm text-slate-500">No activity stats available.</p>
+              )}
+              {activityStats?.data?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-300">
+                        <th className="text-left py-2 px-3">Activity</th>
+                        <th className="text-right py-2 px-3">Criticality</th>
+                        <th className="text-right py-2 px-3">Sensitivity</th>
+                        <th className="text-right py-2 px-3">Cruciality</th>
+                        <th className="text-right py-2 px-3">Mean dur.</th>
+                        <th className="text-right py-2 px-3">σ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activityStats.data.map((s) => (
+                        <tr key={s.id} className="border-b border-slate-800/50">
+                          <td className="py-2 px-3">
+                            <span className="text-white">{s.activityCode ?? s.activityId.slice(0, 8)}</span>
+                            <span className="text-slate-500 ml-2">{s.activityName}</span>
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {(s.criticalityIndex * 100).toFixed(1)}%
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {s.durationSensitivity != null ? s.durationSensitivity.toFixed(2) : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {s.cruciality != null ? s.cruciality.toFixed(2) : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {s.durationMean != null ? s.durationMean.toFixed(1) : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {s.durationStddev != null ? s.durationStddev.toFixed(2) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </div>
           )}
 
-          {/* Simulation Details */}
-          <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Simulation Details</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-slate-400 uppercase font-medium">Iterations</p>
-                <p className="text-lg font-semibold text-white">{latestSim.data.iterations}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase font-medium">Completed At</p>
-                <p className="text-lg font-semibold text-white">
-                  {latestSim.data.completedAt
-                    ? new Date(latestSim.data.completedAt).toLocaleDateString()
-                    : "Pending"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase font-medium">Created At</p>
-                <p className="text-lg font-semibold text-white">
-                  {new Date(latestSim.data.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase font-medium">Simulation ID</p>
-                <p className="text-sm font-mono text-white">{latestSim.data.id.substring(0, 8)}...</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Previous Simulations */}
-          {allSims?.data && allSims.data.length > 1 && (
+          {tab === "tornado" && (
             <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Previous Simulations</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800">
-                      <th className="text-left py-3 px-4 font-medium text-slate-300">Date</th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-300">Iterations</th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-300">P50 Duration</th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-300">P80 Duration</th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-300">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allSims.data.slice(1, 6).map((sim) => (
-                      <tr key={sim.id} className="border-b border-slate-800/50">
-                        <td className="py-3 px-4">{new Date(sim.createdAt).toLocaleDateString()}</td>
-                        <td className="py-3 px-4">{sim.iterations}</td>
-                        <td className="py-3 px-4">{Math.round(sim.confidenceP50Duration || 0)} days</td>
-                        <td className="py-3 px-4">{Math.round(sim.confidenceP80Duration || 0)} days</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            sim.status === "COMPLETED"
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : sim.status === "FAILED"
-                                ? "bg-red-500/10 text-red-400"
-                                : "bg-amber-500/10 text-amber-400"
-                          }`}>
-                            {sim.status}
-                          </span>
-                        </td>
+              <h3 className="text-lg font-semibold text-white mb-2">Duration sensitivity (Tornado)</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Activities ranked by |Pearson correlation| of their sampled duration against project duration.
+                Longer bars = more influence on how long the project runs.
+              </p>
+              {!tornado?.data?.length && <p className="text-sm text-slate-500">No tornado data available.</p>}
+              {tornado?.data?.length ? (() => {
+                const rows = tornado.data.slice(0, 20);
+                const scale = Math.max(
+                  ...rows.map((r) => Math.abs(r.durationSensitivity ?? 0)),
+                  0.01
+                );
+                return (
+                  <div className="space-y-2">
+                    {rows.map((r) => {
+                      const s = r.durationSensitivity ?? 0;
+                      const pct = (Math.abs(s) / scale) * 50; // 0..50% of row width
+                      const positive = s >= 0;
+                      return (
+                        <div key={r.id} className="flex items-center gap-3 text-xs">
+                          <div className="w-48 text-slate-300 truncate">
+                            <span className="text-white">{r.activityCode ?? r.activityId.slice(0, 8)}</span>
+                            <span className="text-slate-500 ml-2">{r.activityName}</span>
+                          </div>
+                          <div className="relative flex-1 h-5 bg-slate-800 rounded">
+                            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-600" />
+                            {!positive && (
+                              <div
+                                className="absolute top-0 bottom-0 bg-red-500/70 rounded-l"
+                                style={{ right: "50%", width: `${pct}%` }}
+                              />
+                            )}
+                            {positive && (
+                              <div
+                                className="absolute top-0 bottom-0 bg-emerald-500/70 rounded-r"
+                                style={{ left: "50%", width: `${pct}%` }}
+                              />
+                            )}
+                          </div>
+                          <div className="w-16 text-right text-white">{s.toFixed(2)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })() : null}
+            </div>
+          )}
+
+          {tab === "milestones" && (
+            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
+              <h3 className="text-lg font-semibold text-white mb-2">Milestone finish-date probabilities</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Per-milestone percentile finish dates across all iterations. A milestone is any activity with
+                type START_MILESTONE or FINISH_MILESTONE. Planned column is the baseline finish date.
+              </p>
+              {!milestones?.data?.length && (
+                <p className="text-sm text-slate-500">No milestones in the project&apos;s activity list.</p>
+              )}
+              {milestones?.data?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-300">
+                        <th className="text-left py-2 px-3">Milestone</th>
+                        <th className="text-left py-2 px-3">Planned</th>
+                        <th className="text-left py-2 px-3">P50 finish</th>
+                        <th className="text-left py-2 px-3">P80 finish</th>
+                        <th className="text-left py-2 px-3">P90 finish</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {milestones.data.map((m) => (
+                        <tr key={m.id} className="border-b border-slate-800/50">
+                          <td className="py-2 px-3">
+                            <span className="text-white">{m.activityCode ?? m.activityId.slice(0, 8)}</span>
+                            <span className="text-slate-500 ml-2">{m.activityName}</span>
+                          </td>
+                          <td className="py-2 px-3">{m.plannedFinishDate ?? "—"}</td>
+                          <td className="py-2 px-3">{m.p50FinishDate ?? "—"}</td>
+                          <td className="py-2 px-3">{m.p80FinishDate ?? "—"}</td>
+                          <td className="py-2 px-3">{m.p90FinishDate ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {tab === "cashflow" && (
+            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
+              <h3 className="text-lg font-semibold text-white mb-2">Probabilistic cash flow (S-curve)</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Cumulative spend by month-end. P10/P50/P80/P90 bands show the full stochastic envelope; spread
+                between bands at each period tells you how much schedule/cost uncertainty drives that period.
+              </p>
+              {!cashflow?.data?.length && <p className="text-sm text-slate-500">No cash-flow data available.</p>}
+              {cashflow?.data?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-300">
+                        <th className="text-left py-2 px-3">Period end</th>
+                        <th className="text-right py-2 px-3">P10 cumulative</th>
+                        <th className="text-right py-2 px-3">P50 cumulative</th>
+                        <th className="text-right py-2 px-3">P80 cumulative</th>
+                        <th className="text-right py-2 px-3">P90 cumulative</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cashflow.data.map((b) => (
+                        <tr key={b.id} className="border-b border-slate-800/50">
+                          <td className="py-2 px-3">{b.periodEndDate}</td>
+                          <td className="py-2 px-3 text-right">
+                            {b.p10Cumulative != null ? Math.round(parseFloat(b.p10Cumulative)).toLocaleString() : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {b.p50Cumulative != null ? Math.round(parseFloat(b.p50Cumulative)).toLocaleString() : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {b.p80Cumulative != null ? Math.round(parseFloat(b.p80Cumulative)).toLocaleString() : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {b.p90Cumulative != null ? Math.round(parseFloat(b.p90Cumulative)).toLocaleString() : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {tab === "drivers" && (
+            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
+              <h3 className="text-lg font-semibold text-white mb-2">Risk-register contributions</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Per risk: how often the Bernoulli draw fired across iterations (<em>Rate</em>), mean schedule and
+                cost impact when it did, and the activities it was wired to. Risks only contribute when the run
+                had &quot;Enable risk drivers&quot; on and the risk has a non-zero probability + affected activities.
+              </p>
+              {!drivers?.data?.length && (
+                <p className="text-sm text-slate-500">
+                  No drivers recorded. Enable risk drivers on the Run dialog and ensure risks have probability,
+                  affected activities, and a non-zero schedule/cost impact.
+                </p>
+              )}
+              {drivers?.data?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-300">
+                        <th className="text-left py-2 px-3">Risk</th>
+                        <th className="text-right py-2 px-3">Rate</th>
+                        <th className="text-right py-2 px-3">Hits</th>
+                        <th className="text-right py-2 px-3">Mean Δ days</th>
+                        <th className="text-right py-2 px-3">Mean Δ cost</th>
+                        <th className="text-left py-2 px-3">Activities</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drivers.data.map((c) => (
+                        <tr key={c.id} className="border-b border-slate-800/50">
+                          <td className="py-2 px-3">
+                            <span className="text-white">{c.riskCode ?? c.riskId.slice(0, 8)}</span>
+                            <span className="text-slate-500 ml-2">{c.riskTitle}</span>
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {c.occurrenceRate != null ? `${(c.occurrenceRate * 100).toFixed(1)}%` : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">{c.occurrences ?? 0}</td>
+                          <td className="py-2 px-3 text-right">
+                            {c.meanDurationImpact != null ? c.meanDurationImpact.toFixed(1) : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {c.meanCostImpact != null
+                              ? Math.round(parseFloat(c.meanCostImpact)).toLocaleString()
+                              : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-xs text-slate-400 truncate max-w-xs">
+                            {c.affectedActivityIds ?? ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </div>
           )}
         </>

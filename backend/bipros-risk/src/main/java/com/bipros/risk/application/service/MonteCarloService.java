@@ -1,11 +1,27 @@
 package com.bipros.risk.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.risk.application.dto.MonteCarloActivityStatDto;
 import com.bipros.risk.application.dto.MonteCarloResultDto;
+import com.bipros.risk.application.dto.MonteCarloRunRequest;
 import com.bipros.risk.application.dto.MonteCarloSimulationDto;
+import com.bipros.risk.application.simulation.MonteCarloEngine;
+import com.bipros.risk.application.simulation.MonteCarloInput;
+import com.bipros.risk.domain.model.DistributionType;
+import com.bipros.risk.application.dto.MonteCarloCashflowBucketDto;
+import com.bipros.risk.application.dto.MonteCarloMilestoneStatDto;
+import com.bipros.risk.application.dto.MonteCarloRiskContributionDto;
+import com.bipros.risk.domain.model.MonteCarloActivityStat;
+import com.bipros.risk.domain.model.MonteCarloCashflowBucket;
+import com.bipros.risk.domain.model.MonteCarloMilestoneStat;
 import com.bipros.risk.domain.model.MonteCarloResult;
+import com.bipros.risk.domain.model.MonteCarloRiskContribution;
 import com.bipros.risk.domain.model.MonteCarloSimulation;
+import com.bipros.risk.domain.repository.MonteCarloActivityStatRepository;
+import com.bipros.risk.domain.repository.MonteCarloCashflowBucketRepository;
+import com.bipros.risk.domain.repository.MonteCarloMilestoneStatRepository;
 import com.bipros.risk.domain.repository.MonteCarloResultRepository;
+import com.bipros.risk.domain.repository.MonteCarloRiskContributionRepository;
 import com.bipros.risk.domain.repository.MonteCarloSimulationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,9 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Random;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -29,119 +44,133 @@ public class MonteCarloService {
 
     private final MonteCarloSimulationRepository simulationRepository;
     private final MonteCarloResultRepository resultRepository;
+    private final MonteCarloActivityStatRepository activityStatRepository;
+    private final MonteCarloMilestoneStatRepository milestoneStatRepository;
+    private final MonteCarloCashflowBucketRepository cashflowBucketRepository;
+    private final MonteCarloRiskContributionRepository riskContributionRepository;
+    private final MonteCarloEngine engine;
 
-    public MonteCarloSimulationDto runSimulation(UUID projectId, int iterations) {
-        log.info("Starting Monte Carlo simulation for project: {} with {} iterations", projectId, iterations);
+    public MonteCarloSimulationDto runSimulation(UUID projectId, MonteCarloRunRequest request) {
+        int iterations = request != null && request.getIterations() != null ? request.getIterations() : 10_000;
+        DistributionType dist = request != null && request.getDefaultDistribution() != null
+            ? request.getDefaultDistribution() : DistributionType.TRIANGULAR;
+        double variance = request != null && request.getFallbackVariancePct() != null
+            ? request.getFallbackVariancePct() : 0.2;
+        boolean enableRisks = request != null && Boolean.TRUE.equals(request.getEnableRisks());
+        Long seed = request != null ? request.getRandomSeed() : null;
 
-        // For this implementation, we use a simplified approach:
-        // - Baseline duration and cost are provided externally (from project schedule)
-        // - We simulate variations using ±20% for duration and ±15% for cost
-        // - In production, integrate with bipros-scheduling module to get PERT estimates
+        log.info("Starting Monte Carlo: project={} iterations={} distribution={} variance={} seed={}",
+            projectId, iterations, dist, variance, seed);
 
-        MonteCarloSimulation simulation = new MonteCarloSimulation();
-        simulation.setProjectId(projectId);
-        simulation.setSimulationName("Monte Carlo Run - " + Instant.now());
-        simulation.setIterations(iterations);
-        simulation.setStatus(MonteCarloSimulation.MonteCarloStatus.RUNNING);
+        MonteCarloSimulation sim = new MonteCarloSimulation();
+        sim.setProjectId(projectId);
+        sim.setSimulationName("Monte Carlo " + Instant.now());
+        sim.setIterations(iterations);
+        sim.setStatus(MonteCarloSimulation.MonteCarloStatus.RUNNING);
+        // Required columns: populate before first save. Engine result overwrites these.
+        sim.setBaselineDuration(0.0);
+        sim.setBaselineCost(BigDecimal.ZERO);
+        sim.setConfigJson(String.format(
+            "{\"distribution\":\"%s\",\"variance\":%s,\"enableRisks\":%s,\"seed\":%s}",
+            dist, variance, enableRisks, seed));
+        sim = simulationRepository.save(sim);
 
-        // Placeholder baseline values - in production, fetch from project schedule
-        Double baselineDuration = 100.0; // days
-        BigDecimal baselineCost = BigDecimal.valueOf(1000000); // amount
+        MonteCarloInput input = new MonteCarloInput(projectId, iterations, dist, variance, enableRisks, seed);
+        try {
+            MonteCarloEngine.EngineResult result = engine.run(input);
 
-        simulation.setBaselineDuration(baselineDuration);
-        simulation.setBaselineCost(baselineCost);
+            sim.setBaselineId(result.baselineId());
+            sim.setBaselineDuration(result.baselineDuration());
+            sim.setBaselineCost(result.baselineCost());
+            sim.setDataDate(result.dataDate());
 
-        MonteCarloSimulation savedSim = simulationRepository.save(simulation);
+            var d = result.durationStats();
+            sim.setP10Duration(d.p10());
+            sim.setP25Duration(d.p25());
+            sim.setConfidenceP50Duration(d.p50());
+            sim.setP75Duration(d.p75());
+            sim.setConfidenceP80Duration(d.p80());
+            sim.setP90Duration(d.p90());
+            sim.setP95Duration(d.p95());
+            sim.setP99Duration(d.p99());
+            sim.setMeanDuration(d.mean());
+            sim.setStddevDuration(d.stddev());
 
-        // Run simulations
-        List<MonteCarloResult> results = runSimulationIterations(savedSim.getId(), iterations, baselineDuration, baselineCost);
-        resultRepository.saveAll(results);
+            var c = result.costStats();
+            sim.setP10Cost(c.p10());
+            sim.setP25Cost(c.p25());
+            sim.setConfidenceP50Cost(c.p50());
+            sim.setP75Cost(c.p75());
+            sim.setConfidenceP80Cost(c.p80());
+            sim.setP90Cost(c.p90());
+            sim.setP95Cost(c.p95());
+            sim.setP99Cost(c.p99());
+            sim.setMeanCost(c.mean());
+            sim.setStddevCost(c.stddev());
 
-        // Calculate percentiles (P50 and P80)
-        List<Double> sortedDurations = results.stream()
-            .map(MonteCarloResult::getProjectDuration)
-            .sorted()
-            .collect(Collectors.toList());
+            sim.setIterationsCompleted(iterations);
+            sim.setStatus(MonteCarloSimulation.MonteCarloStatus.COMPLETED);
+            sim.setCompletedAt(Instant.now());
+            MonteCarloSimulation savedSim = simulationRepository.save(sim);
 
-        List<BigDecimal> sortedCosts = results.stream()
-            .map(MonteCarloResult::getProjectCost)
-            .sorted()
-            .collect(Collectors.toList());
+            // Persist per-iteration project-level series.
+            double[] durations = result.iterationDurations();
+            BigDecimal[] costs = result.iterationCosts();
+            List<MonteCarloResult> rows = new ArrayList<>(durations.length);
+            for (int i = 0; i < durations.length; i++) {
+                MonteCarloResult r = new MonteCarloResult();
+                r.setSimulationId(savedSim.getId());
+                r.setIterationNumber(i + 1);
+                r.setProjectDuration(durations[i]);
+                r.setProjectCost(costs[i]);
+                rows.add(r);
+            }
+            resultRepository.saveAll(rows);
 
-        int p50Index = (int) (sortedDurations.size() * 0.5);
-        int p80Index = (int) (sortedDurations.size() * 0.8);
+            // Persist per-activity stats.
+            for (MonteCarloActivityStat stat : result.activityStats()) {
+                stat.setSimulationId(savedSim.getId());
+            }
+            activityStatRepository.saveAll(result.activityStats());
 
-        Double p50Duration = sortedDurations.get(p50Index);
-        Double p80Duration = sortedDurations.get(p80Index);
-        BigDecimal p50Cost = sortedCosts.get(p50Index);
-        BigDecimal p80Cost = sortedCosts.get(p80Index);
+            // Persist milestone stats.
+            for (MonteCarloMilestoneStat m : result.milestoneStats()) {
+                m.setSimulationId(savedSim.getId());
+            }
+            milestoneStatRepository.saveAll(result.milestoneStats());
 
-        savedSim.setConfidenceP50Duration(p50Duration);
-        savedSim.setConfidenceP80Duration(p80Duration);
-        savedSim.setConfidenceP50Cost(p50Cost);
-        savedSim.setConfidenceP80Cost(p80Cost);
-        savedSim.setStatus(MonteCarloSimulation.MonteCarloStatus.COMPLETED);
-        savedSim.setCompletedAt(Instant.now());
+            // Persist cashflow buckets.
+            for (MonteCarloCashflowBucket b : result.cashflow()) {
+                b.setSimulationId(savedSim.getId());
+            }
+            cashflowBucketRepository.saveAll(result.cashflow());
 
-        MonteCarloSimulation completed = simulationRepository.save(savedSim);
+            // Persist risk contributions.
+            for (MonteCarloRiskContribution rc : result.riskContributions()) {
+                rc.setSimulationId(savedSim.getId());
+            }
+            riskContributionRepository.saveAll(result.riskContributions());
 
-        log.info("Monte Carlo simulation completed. P50 Duration: {}, P80 Duration: {}", p50Duration, p80Duration);
-
-        return MonteCarloSimulationDto.from(completed);
-    }
-
-    private List<MonteCarloResult> runSimulationIterations(UUID simulationId, int iterations, Double baselineDuration, BigDecimal baselineCost) {
-        List<MonteCarloResult> results = new ArrayList<>();
-        Random random = new Random();
-
-        // Duration variation: ±20%, Cost variation: ±15%
-        Double durationVariation = baselineDuration * 0.2;
-        Double costVariation = baselineCost.doubleValue() * 0.15;
-
-        for (int i = 1; i <= iterations; i++) {
-            // Triangular distribution sampling for duration
-            Double min = baselineDuration - durationVariation;
-            Double max = baselineDuration + durationVariation;
-            Double mode = baselineDuration;
-
-            Double sampledDuration = sampleTriangular(random, min, mode, max);
-
-            // Cost variation (simplified linear relationship with duration)
-            Double costFactor = sampledDuration / baselineDuration;
-            BigDecimal sampledCost = baselineCost.multiply(BigDecimal.valueOf(costFactor));
-
-            MonteCarloResult result = new MonteCarloResult();
-            result.setSimulationId(simulationId);
-            result.setIterationNumber(i);
-            result.setProjectDuration(sampledDuration);
-            result.setProjectCost(sampledCost);
-
-            results.add(result);
-        }
-
-        return results;
-    }
-
-    private Double sampleTriangular(Random random, Double min, Double mode, Double max) {
-        double u = random.nextDouble();
-        double fc = (mode - min) / (max - min);
-
-        if (u < fc) {
-            return min + Math.sqrt(u * (max - min) * (mode - min));
-        } else {
-            return max - Math.sqrt((1 - u) * (max - min) * (max - mode));
+            return MonteCarloSimulationDto.from(savedSim);
+        } catch (RuntimeException ex) {
+            log.error("Monte Carlo failed for project {}: {}", projectId, ex.getMessage(), ex);
+            sim.setStatus(MonteCarloSimulation.MonteCarloStatus.FAILED);
+            sim.setErrorMessage(ex.getMessage());
+            sim.setCompletedAt(Instant.now());
+            simulationRepository.save(sim);
+            throw ex;
         }
     }
 
     public MonteCarloSimulationDto getLatestSimulation(UUID projectId) {
-        MonteCarloSimulation simulation = simulationRepository.findLatestByProjectId(projectId)
-            .orElseThrow(() -> new ResourceNotFoundException("MonteCarloSimulation", projectId));
-
-        List<MonteCarloResult> results = resultRepository.findBySimulationIdOrderByIterationNumber(simulation.getId());
-        MonteCarloSimulationDto dto = MonteCarloSimulationDto.from(simulation);
-        dto.setResults(results.stream().map(MonteCarloResultDto::from).collect(Collectors.toList()));
-
-        return dto;
+        return simulationRepository.findLatestByProjectId(projectId)
+            .map(simulation -> {
+                List<MonteCarloResult> results = resultRepository.findBySimulationIdOrderByIterationNumber(simulation.getId());
+                MonteCarloSimulationDto dto = MonteCarloSimulationDto.from(simulation);
+                dto.setResults(results.stream().map(MonteCarloResultDto::from).collect(Collectors.toList()));
+                return dto;
+            })
+            .orElse(null);
     }
 
     public MonteCarloSimulationDto getSimulation(UUID simulationId) {
@@ -151,14 +180,36 @@ public class MonteCarloService {
         List<MonteCarloResult> results = resultRepository.findBySimulationIdOrderByIterationNumber(simulationId);
         MonteCarloSimulationDto dto = MonteCarloSimulationDto.from(simulation);
         dto.setResults(results.stream().map(MonteCarloResultDto::from).collect(Collectors.toList()));
-
         return dto;
     }
 
     public List<MonteCarloSimulationDto> listProjectSimulations(UUID projectId) {
-        List<MonteCarloSimulation> simulations = simulationRepository.findByProjectIdOrderByCreatedAtDesc(projectId);
-        return simulations.stream()
+        return simulationRepository.findByProjectIdOrderByCreatedAtDesc(projectId).stream()
             .map(MonteCarloSimulationDto::from)
+            .collect(Collectors.toList());
+    }
+
+    public List<MonteCarloActivityStatDto> getActivityStats(UUID simulationId) {
+        return activityStatRepository.findBySimulationIdOrderByCriticalityIndexDesc(simulationId).stream()
+            .map(MonteCarloActivityStatDto::from)
+            .collect(Collectors.toList());
+    }
+
+    public List<MonteCarloMilestoneStatDto> getMilestoneStats(UUID simulationId) {
+        return milestoneStatRepository.findBySimulationId(simulationId).stream()
+            .map(MonteCarloMilestoneStatDto::from)
+            .collect(Collectors.toList());
+    }
+
+    public List<MonteCarloCashflowBucketDto> getCashflow(UUID simulationId) {
+        return cashflowBucketRepository.findBySimulationIdOrderByPeriodEndDate(simulationId).stream()
+            .map(MonteCarloCashflowBucketDto::from)
+            .collect(Collectors.toList());
+    }
+
+    public List<MonteCarloRiskContributionDto> getRiskContributions(UUID simulationId) {
+        return riskContributionRepository.findBySimulationIdOrderByOccurrenceRateDesc(simulationId).stream()
+            .map(MonteCarloRiskContributionDto::from)
             .collect(Collectors.toList());
     }
 }

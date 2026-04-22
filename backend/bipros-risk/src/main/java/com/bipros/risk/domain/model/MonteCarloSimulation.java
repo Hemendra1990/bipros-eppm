@@ -13,6 +13,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -32,23 +33,48 @@ public class MonteCarloSimulation extends BaseEntity {
     @Column(nullable = false)
     private Integer iterations = 10000;
 
-    @Column
-    private Double confidenceP50Duration;
+    @Column private Double p10Duration;
+    @Column private Double p25Duration;
+    @Column private Double confidenceP50Duration;
+    @Column private Double p75Duration;
+    @Column private Double confidenceP80Duration;
+    @Column private Double p90Duration;
+    @Column private Double p95Duration;
+    @Column private Double p99Duration;
+    @Column private Double meanDuration;
+    @Column private Double stddevDuration;
 
-    @Column
-    private Double confidenceP80Duration;
-
-    @Column
-    private BigDecimal confidenceP50Cost;
-
-    @Column
-    private BigDecimal confidenceP80Cost;
+    @Column private BigDecimal p10Cost;
+    @Column private BigDecimal p25Cost;
+    @Column private BigDecimal confidenceP50Cost;
+    @Column private BigDecimal p75Cost;
+    @Column private BigDecimal confidenceP80Cost;
+    @Column private BigDecimal p90Cost;
+    @Column private BigDecimal p95Cost;
+    @Column private BigDecimal p99Cost;
+    @Column private BigDecimal meanCost;
+    @Column private BigDecimal stddevCost;
 
     @Column(nullable = false)
     private Double baselineDuration;
 
     @Column(nullable = false)
     private BigDecimal baselineCost;
+
+    @Column
+    private UUID baselineId;
+
+    @Column
+    private LocalDate dataDate;
+
+    @Column
+    private Integer iterationsCompleted;
+
+    @Column(columnDefinition = "TEXT")
+    private String configJson;
+
+    @Column(columnDefinition = "TEXT")
+    private String errorMessage;
 
     @Column
     private Instant completedAt;
