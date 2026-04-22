@@ -10,6 +10,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Polygon;
 
 import java.util.UUID;
@@ -54,6 +56,7 @@ public class WbsPolygon extends BaseEntity {
      * {@code geometry(Polygon, 4326)} in PostGIS.
      */
     @NotNull(message = "Polygon is required")
+    @JdbcTypeCode(SqlTypes.GEOMETRY)
     @Column(name = "polygon", nullable = false, columnDefinition = "geometry(Polygon,4326)")
     private Polygon polygon;
 
