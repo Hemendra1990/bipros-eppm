@@ -105,22 +105,22 @@ export function DataTable<T = unknown>({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 shadow-xl">
+    <div className="rounded-xl border border-border bg-surface/50 shadow-xl">
       {searchable && (
-        <div className="border-b border-slate-800/50 bg-slate-900/60 px-4 py-3">
+        <div className="border-b border-border/50 bg-surface/60 px-4 py-3">
           <div className="relative max-w-sm">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(0); }}
               placeholder={searchPlaceholder}
-              className="w-full rounded-md border border-slate-700 bg-slate-800 py-1.5 pl-9 pr-8 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-border bg-surface-hover py-1.5 pl-9 pr-8 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
             {searchQuery && (
               <button
                 onClick={() => { setSearchQuery(""); setCurrentPage(0); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
               >
                 <X size={14} />
               </button>
@@ -128,14 +128,21 @@ export function DataTable<T = unknown>({
           </div>
         </div>
       )}
-      <table className="min-w-full divide-y divide-slate-800/50">
-        <thead className="bg-slate-900/80 border-b border-slate-700/50">
+      {/*
+        Horizontal scroll: many tables (e.g. activities with 14+ columns) exceed the
+        viewport. The outer card keeps rounded corners; this inner div is the actual
+        scroll container. Cells use whitespace-nowrap so dates/amounts don't wrap
+        vertically and force uselessly-tall rows.
+      */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full w-max divide-y divide-border/50">
+        <thead className="bg-surface/80 border-b border-border/50">
           <tr>
             {columns.map((col) => (
               <th
                 key={String(col.key)}
-                className={`px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 ${
-                  col.sortable ? "cursor-pointer hover:bg-slate-800/50" : ""
+                className={`whitespace-nowrap px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-secondary ${
+                  col.sortable ? "cursor-pointer hover:bg-surface-hover/50" : ""
                 } ${col.className ?? ""}`}
                 onClick={() => col.sortable && handleSort(String(col.key))}
               >
@@ -144,7 +151,7 @@ export function DataTable<T = unknown>({
                   {col.sortable && (
                     <ArrowUpDown
                       size={14}
-                      className={`text-slate-500 transition-opacity ${
+                      className={`text-text-muted transition-opacity ${
                         sortKey === col.key ? "opacity-100" : "opacity-30"
                       }`}
                     />
@@ -154,12 +161,12 @@ export function DataTable<T = unknown>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-800/50">
+        <tbody className="divide-y divide-border/50">
           {paginatedData.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-6 py-8 text-center text-sm text-slate-400"
+                className="px-6 py-8 text-center text-sm text-text-secondary"
               >
                 No data available
               </td>
@@ -168,13 +175,13 @@ export function DataTable<T = unknown>({
             paginatedData.map((row, idx) => (
               <tr
                 key={getRowKey(row, safePage * pageSize + idx)}
-                className={`border-b border-slate-800/50 transition-colors ${onRowClick ? "cursor-pointer hover:bg-slate-800/30" : ""}`}
+                className={`border-b border-border/50 transition-colors ${onRowClick ? "cursor-pointer hover:bg-surface-hover/30" : ""}`}
                 onClick={() => onRowClick?.(row)}
               >
                 {columns.map((col) => (
                   <td
                     key={String(col.key)}
-                    className={`px-6 py-4 text-sm text-slate-300 ${col.className ?? ""}`}
+                    className={`whitespace-nowrap px-6 py-4 text-sm text-text-secondary ${col.className ?? ""}`}
                   >
                     {col.render
                       ? col.render((row as Record<string, unknown>)[col.key], row)
@@ -186,11 +193,12 @@ export function DataTable<T = unknown>({
           )}
         </tbody>
       </table>
+      </div>
 
       {/* Pagination Footer */}
       {sortedData.length > 0 && (
-        <div className="flex items-center justify-between border-t border-slate-800/50 bg-slate-900/60 px-6 py-3">
-          <div className="flex items-center gap-3 text-sm text-slate-400">
+        <div className="flex items-center justify-between border-t border-border/50 bg-surface/60 px-6 py-3">
+          <div className="flex items-center gap-3 text-sm text-text-secondary">
             <span>
               {startRow}–{endRow} of {sortedData.length}
             </span>
@@ -200,7 +208,7 @@ export function DataTable<T = unknown>({
                 setPageSize(Number(e.target.value));
                 setCurrentPage(0);
               }}
-              className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 focus:border-blue-500 focus:outline-none"
+              className="rounded border border-border bg-surface-hover px-2 py-1 text-xs text-text-secondary focus:border-accent focus:outline-none"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
@@ -213,31 +221,31 @@ export function DataTable<T = unknown>({
             <button
               onClick={() => setCurrentPage(0)}
               disabled={safePage === 0}
-              className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="rounded px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed"
             >
               First
             </button>
             <button
               onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
               disabled={safePage === 0}
-              className="rounded p-1 text-slate-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="rounded p-1 text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="px-3 text-sm text-slate-300">
+            <span className="px-3 text-sm text-text-secondary">
               {safePage + 1} / {totalPages}
             </span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={safePage >= totalPages - 1}
-              className="rounded p-1 text-slate-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="rounded p-1 text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <ChevronRight size={16} />
             </button>
             <button
               onClick={() => setCurrentPage(totalPages - 1)}
               disabled={safePage >= totalPages - 1}
-              className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="rounded px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed"
             >
               Last
             </button>
