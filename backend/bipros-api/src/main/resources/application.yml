@@ -115,7 +115,9 @@ bipros:
   # claude-vision and set ANTHROPIC_API_KEY to enable.
   ai:
     progress-analyzer:
-      provider: none
+      # Flip to "claude-vision" to enable the analyzer; requires ANTHROPIC_API_KEY.
+      # Set to "none" to skip analysis (ingestion still fetches + stores imagery).
+      provider: claude-vision
       anthropic-api-key: ${ANTHROPIC_API_KEY:}
       model: claude-sonnet-4-6
       max-tokens: 512

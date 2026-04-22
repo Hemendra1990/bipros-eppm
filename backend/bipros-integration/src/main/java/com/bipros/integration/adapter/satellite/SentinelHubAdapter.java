@@ -97,6 +97,8 @@ public class SentinelHubAdapter implements SatelliteAdapter {
 
     @Override public String vendorId() { return VENDOR_ID; }
 
+    @Override public String rasterContentType() { return "image/png"; }
+
     @Override
     public List<SceneDescriptor> findImagery(Polygon aoi, LocalDate from, LocalDate to) {
         String token = getToken();
@@ -167,7 +169,12 @@ public class SentinelHubAdapter implements SatelliteAdapter {
         ArrayNode responses = output.putArray("responses");
         ObjectNode respDef = responses.addObject();
         respDef.put("identifier", "default");
-        respDef.putObject("format").put("type", "image/tiff");
+        // Request PNG (not TIFF) so the downstream vision LLM — Claude,
+        // OpenAI — can consume the raster directly. We're not doing geo-
+        // processing on the pixels, only visual analysis, so PNG is lossless
+        // enough and avoids a server-side TIFF→PNG step. Override via the
+        // rasterContentType() method if an analyzer does need GeoTIFF.
+        respDef.putObject("format").put("type", "image/png");
 
         // evalscript
         request.put("evalscript", EVAL_SCRIPT);
@@ -175,7 +182,7 @@ public class SentinelHubAdapter implements SatelliteAdapter {
         byte[] bytes = http.post()
             .uri("/api/v1/process")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-            .header(HttpHeaders.ACCEPT, "image/tiff")
+            .header(HttpHeaders.ACCEPT, "image/png")
             .contentType(MediaType.APPLICATION_JSON)
             .body(request)
             .retrieve()
