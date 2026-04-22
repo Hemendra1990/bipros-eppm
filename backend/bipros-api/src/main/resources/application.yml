@@ -93,8 +93,20 @@ bipros:
       cron: "0 0 3 * * *"
       max-days-lookback: 7
     sentinel-hub:
-      enabled: false
-      base-url: https://services.sentinel-hub.com
+      enabled: true
+      # IMPORTANT: CDSE (Copernicus Data Space Ecosystem) and legacy Sentinel Hub
+      # are independent services with independent credentials:
+      #   CDSE    — free tier, signup at https://dataspace.copernicus.eu,
+      #             API host: https://sh.dataspace.copernicus.eu,
+      #             OAuth:    https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token
+      #   Legacy  — paid/trial, signup at https://www.sentinel-hub.com,
+      #             API host: https://services.sentinel-hub.com,
+      #             OAuth:    https://services.sentinel-hub.com/oauth/token
+      # Pick the matching pair; pasting CDSE credentials at the legacy host
+      # (or vice-versa) yields 401 "Please provide a valid access token" at
+      # the catalog/process step even after OAuth succeeds.
+      base-url: https://sh.dataspace.copernicus.eu
+      token-url: https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token
       client-id: ${SENTINEL_HUB_CLIENT_ID:}
       client-secret: ${SENTINEL_HUB_CLIENT_SECRET:}
 
