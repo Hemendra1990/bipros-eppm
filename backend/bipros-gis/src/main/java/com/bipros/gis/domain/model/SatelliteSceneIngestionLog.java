@@ -44,14 +44,20 @@ public class SatelliteSceneIngestionLog extends BaseEntity {
     @Column
     private Instant runFinishedAt;
 
+    // @Builder.Default preserves the field initialiser when Lombok generates
+    // the builder, otherwise unset fields are null and the NOT NULL constraint
+    // fires on the initial RUNNING row before scenesFetched has a value.
     @Column(nullable = false)
+    @Builder.Default
     private Integer scenesFetched = 0;
 
     @Column(nullable = false)
+    @Builder.Default
     private Integer snapshotsCreated = 0;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @Builder.Default
     private Status status = Status.RUNNING;
 
     @Column(columnDefinition = "TEXT")

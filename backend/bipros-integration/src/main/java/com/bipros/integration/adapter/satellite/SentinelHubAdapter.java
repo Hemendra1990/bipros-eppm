@@ -56,10 +56,12 @@ public class SentinelHubAdapter implements SatelliteAdapter {
         """;
 
     private final RestClient http;
+    private final RestClient tokenHttp;
     private final ObjectMapper json;
     private final String clientId;
     private final String clientSecret;
     private final String baseUrl;
+    private final String tokenUrl;
     private final GeoJsonWriter geoJsonWriter = new GeoJsonWriter();
 
     // Cached OAuth2 bearer — refreshed when within 5 min of expiry.
@@ -68,7 +70,18 @@ public class SentinelHubAdapter implements SatelliteAdapter {
 
     public SentinelHubAdapter(
         ObjectMapper objectMapper,
-        @Value("${bipros.satellite.sentinel-hub.base-url:https://services.sentinel-hub.com}") String baseUrl,
+        // Default base URL is Copernicus Data Space Ecosystem (CDSE). CDSE-issued
+        // OAuth clients (free tier created at dataspace.copernicus.eu) work only
+        // against sh.dataspace.copernicus.eu; the classic services.sentinel-hub.com
+        // requires a separate legacy account. Override via
+        // bipros.satellite.sentinel-hub.base-url for legacy credentials.
+        @Value("${bipros.satellite.sentinel-hub.base-url:https://sh.dataspace.copernicus.eu}") String baseUrl,
+        // CDSE's OAuth runs on a separate identity service (Keycloak). The classic
+        // Sentinel Hub put OAuth at {baseUrl}/oauth/token; CDSE puts it at the URL
+        // below. Override the default if you're on classic Sentinel Hub.
+        @Value("${bipros.satellite.sentinel-hub.token-url:"
+            + "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token}")
+        String tokenUrl,
         @Value("${bipros.satellite.sentinel-hub.client-id}") String clientId,
         @Value("${bipros.satellite.sentinel-hub.client-secret}") String clientSecret
     ) {
@@ -76,7 +89,9 @@ public class SentinelHubAdapter implements SatelliteAdapter {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.baseUrl = baseUrl;
+        this.tokenUrl = tokenUrl;
         this.http = RestClient.builder().baseUrl(baseUrl).build();
+        this.tokenHttp = RestClient.builder().build();
         this.geoJsonWriter.setEncodeCRS(false);
     }
 
@@ -176,11 +191,14 @@ public class SentinelHubAdapter implements SatelliteAdapter {
         if (cachedToken != null && Instant.now().isBefore(tokenExpiresAt.minus(Duration.ofMinutes(5)))) {
             return cachedToken;
         }
-        log.debug("[SentinelHub] refreshing OAuth2 token");
-        // Sentinel Hub accepts form-urlencoded credentials on /oauth/token.
-        String form = "grant_type=client_credentials&client_id=" + clientId + "&client_secret=" + clientSecret;
-        JsonNode resp = http.post()
-            .uri("/oauth/token")
+        log.debug("[SentinelHub] refreshing OAuth2 token via {}", tokenUrl);
+        // URL-encoded form body — works for both CDSE (Keycloak) and legacy
+        // Sentinel Hub OAuth2 endpoints.
+        String form = "grant_type=client_credentials"
+            + "&client_id=" + java.net.URLEncoder.encode(clientId, java.nio.charset.StandardCharsets.UTF_8)
+            + "&client_secret=" + java.net.URLEncoder.encode(clientSecret, java.nio.charset.StandardCharsets.UTF_8);
+        JsonNode resp = tokenHttp.post()
+            .uri(tokenUrl)
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
             .body(form)
             .retrieve()
