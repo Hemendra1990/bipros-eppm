@@ -8,18 +8,18 @@ interface StatusBadgeProps {
 }
 
 const statusStyles: Record<string, string> = {
-  PLANNED: "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50",
-  ACTIVE: "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
-  INACTIVE: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
-  COMPLETED: "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20",
-  LOW: "bg-emerald-500/10 text-green-400 ring-1 ring-green-500/20",
-  MEDIUM: "bg-orange-500/10 text-orange-400 ring-1 ring-orange-500/20",
-  HIGH: "bg-red-500/10 text-red-400 ring-1 ring-red-500/20",
-  CRITICAL: "bg-red-500/15 text-red-300 ring-1 ring-red-500/30",
+  PLANNED: "bg-surface-hover text-text-secondary ring-1 ring-border",
+  ACTIVE: "bg-success/10 text-success ring-1 ring-success/20",
+  INACTIVE: "bg-warning/10 text-warning ring-1 ring-warning/20",
+  COMPLETED: "bg-accent/10 text-accent ring-1 ring-accent/20",
+  LOW: "bg-success/10 text-success ring-1 ring-success/20",
+  MEDIUM: "bg-warning/10 text-warning ring-1 ring-warning/20",
+  HIGH: "bg-danger/10 text-danger ring-1 ring-danger/20",
+  CRITICAL: "bg-danger/15 text-danger ring-1 ring-danger/30",
 };
 
 export function StatusBadge({ status, variant = "default" }: StatusBadgeProps) {
-  const style = statusStyles[status] ?? "bg-slate-700/30 text-slate-400 ring-1 ring-slate-600/30";
+  const style = statusStyles[status] ?? "bg-surface-hover/30 text-text-secondary ring-1 ring-border";
   const size = variant === "compact" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-xs";
 
   return (

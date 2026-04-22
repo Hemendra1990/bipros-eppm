@@ -84,17 +84,17 @@ export default function GlobalChangePage() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold">Global Change</h1>
-        <p className="mt-2 text-slate-400">
+        <p className="mt-2 text-text-secondary">
           Apply batch updates to activities matching specific criteria
         </p>
       </div>
 
-      {error && <div className="rounded bg-red-500/10 p-4 text-red-400">{error}</div>}
-      {success && <div className="rounded bg-emerald-500/10 p-4 text-emerald-400">{success}</div>}
+      {error && <div className="rounded bg-danger/10 p-4 text-danger">{error}</div>}
+      {success && <div className="rounded bg-success/10 p-4 text-success">{success}</div>}
 
-      <div className="rounded border border-slate-700 bg-slate-900/50 p-6">
+      <div className="rounded border border-border bg-surface/50 p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <fieldset className="space-y-4 border-b border-slate-800 pb-6">
+          <fieldset className="space-y-4 border-b border-border pb-6">
             <legend className="text-lg font-semibold">Filter Criteria</legend>
 
             <div>
@@ -109,7 +109,7 @@ export default function GlobalChangePage() {
                     filterValue: "",
                   })
                 }
-                className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                className="mt-1 w-full rounded border border-border px-3 py-2"
               >
                 {filterFieldOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -126,7 +126,7 @@ export default function GlobalChangePage() {
                   required
                   value={formData.filterValue}
                   onChange={(e) => setFormData({ ...formData, filterValue: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                  className="mt-1 w-full rounded border border-border px-3 py-2"
                 >
                   <option value="">-- Select Status --</option>
                   {statusOptions.map((status) => (
@@ -140,7 +140,7 @@ export default function GlobalChangePage() {
                   required
                   value={formData.filterValue}
                   onChange={(e) => setFormData({ ...formData, filterValue: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                  className="mt-1 w-full rounded border border-border px-3 py-2"
                 >
                   <option value="">-- Select --</option>
                   <option value="true">True</option>
@@ -153,13 +153,13 @@ export default function GlobalChangePage() {
                   value={formData.filterValue}
                   onChange={(e) => setFormData({ ...formData, filterValue: e.target.value })}
                   placeholder="Enter filter value"
-                  className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                  className="mt-1 w-full rounded border border-border px-3 py-2"
                 />
               )}
             </div>
           </fieldset>
 
-          <fieldset className="space-y-4 border-b border-slate-800 pb-6">
+          <fieldset className="space-y-4 border-b border-border pb-6">
             <legend className="text-lg font-semibold">Update Action</legend>
 
             <div>
@@ -174,7 +174,7 @@ export default function GlobalChangePage() {
                     updateValue: "",
                   })
                 }
-                className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                className="mt-1 w-full rounded border border-border px-3 py-2"
               >
                 {updateFieldOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -196,7 +196,7 @@ export default function GlobalChangePage() {
                       operation: e.target.value as "SET" | "ADD" | "SUBTRACT",
                     })
                   }
-                  className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                  className="mt-1 w-full rounded border border-border px-3 py-2"
                 >
                   <option value="SET">Set</option>
                   <option value="ADD">Add</option>
@@ -211,7 +211,7 @@ export default function GlobalChangePage() {
                     required
                     value={formData.updateValue}
                     onChange={(e) => setFormData({ ...formData, updateValue: e.target.value })}
-                    className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                    className="mt-1 w-full rounded border border-border px-3 py-2"
                   >
                     <option value="">-- Select Status --</option>
                     {statusOptions.map((status) => (
@@ -227,14 +227,14 @@ export default function GlobalChangePage() {
                     value={formData.updateValue}
                     onChange={(e) => setFormData({ ...formData, updateValue: e.target.value })}
                     placeholder="Enter value"
-                    className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                    className="mt-1 w-full rounded border border-border px-3 py-2"
                   />
                 )}
               </div>
             </div>
           </fieldset>
 
-          <div className="rounded bg-blue-500/10 p-4">
+          <div className="rounded bg-accent/10 p-4">
             <p className="text-sm text-blue-300">
               <strong>Preview:</strong> This change will update the <strong>{formData.updateField}</strong> field
               using <strong>{formData.operation}</strong> operation for all activities where{" "}
@@ -246,14 +246,14 @@ export default function GlobalChangePage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="rounded bg-green-600 px-6 py-2 text-white hover:bg-green-600 disabled:opacity-50"
+              className="rounded bg-green-600 px-6 py-2 text-text-primary hover:bg-green-600 disabled:opacity-50"
             >
               {isLoading ? "Applying..." : "Apply Global Change"}
             </button>
             <button
               type="button"
               onClick={handleReset}
-              className="rounded bg-slate-600 px-6 py-2 text-white hover:bg-slate-700"
+              className="rounded bg-border px-6 py-2 text-text-primary hover:bg-surface-active"
             >
               Reset
             </button>

@@ -15,13 +15,13 @@ const AVAILABLE_ROLES = ["ROLE_ADMIN", "ROLE_MANAGER", "ROLE_USER", "ROLE_VIEWER
 function RoleBadge({ role }: { role: string }) {
   const label = role.replace("ROLE_", "");
   const colors: Record<string, string> = {
-    ADMIN: "bg-red-500/20 text-red-400",
-    MANAGER: "bg-amber-500/20 text-amber-400",
-    USER: "bg-blue-500/20 text-blue-400",
-    VIEWER: "bg-slate-500/20 text-slate-400",
+    ADMIN: "bg-red-500/20 text-danger",
+    MANAGER: "bg-amber-500/20 text-warning",
+    USER: "bg-blue-500/20 text-accent",
+    VIEWER: "bg-surface-active/50 text-text-secondary",
   };
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[label] ?? "bg-slate-500/20 text-slate-400"}`}>
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[label] ?? "bg-surface-active/50 text-text-secondary"}`}>
       {label}
     </span>
   );
@@ -57,8 +57,8 @@ function RoleEditor({ user, onClose }: { user: UserResponse; onClose: () => void
           onClick={() => toggleRole(role)}
           className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
             selectedRoles.includes(role)
-              ? "bg-blue-600 text-white"
-              : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+              ? "bg-accent text-text-primary"
+              : "bg-surface-hover text-text-secondary hover:bg-surface-active"
           }`}
         >
           {role.replace("ROLE_", "")}
@@ -67,13 +67,13 @@ function RoleEditor({ user, onClose }: { user: UserResponse; onClose: () => void
       <button
         onClick={() => mutation.mutate()}
         disabled={mutation.isPending}
-        className="ml-2 rounded bg-green-600 px-2 py-0.5 text-xs text-white hover:bg-green-500 disabled:opacity-50"
+        className="ml-2 rounded bg-green-600 px-2 py-0.5 text-xs text-text-primary hover:bg-green-500 disabled:opacity-50"
       >
         {mutation.isPending ? "..." : "Save"}
       </button>
       <button
         onClick={onClose}
-        className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-600"
+        className="rounded bg-surface-active px-2 py-0.5 text-xs text-text-secondary hover:bg-border"
       >
         Cancel
       </button>
@@ -126,7 +126,7 @@ export default function UsersPage() {
             ))}
             <button
               onClick={() => setEditingUserId(row.id)}
-              className="ml-2 text-slate-500 hover:text-blue-400 transition-colors"
+              className="ml-2 text-text-muted hover:text-accent transition-colors"
               title="Edit roles"
             >
               <Shield size={14} />
@@ -140,7 +140,7 @@ export default function UsersPage() {
       render: (value) => (
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-            value ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+            value ? "bg-success/20 text-success" : "bg-red-500/20 text-danger"
           }`}
         >
           {value ? <ShieldCheck size={12} /> : null}
@@ -159,8 +159,8 @@ export default function UsersPage() {
           disabled={toggleMutation.isPending}
           className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
             row.enabled
-              ? "text-red-400 hover:bg-red-500/10"
-              : "text-green-400 hover:bg-green-500/10"
+              ? "text-danger hover:bg-danger/10"
+              : "text-success hover:bg-success/10"
           }`}
           title={row.enabled ? "Disable user" : "Enable user"}
         >
@@ -179,14 +179,14 @@ export default function UsersPage() {
       />
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-500/10 p-4 text-sm text-red-400">
+        <div className="mb-4 rounded-md bg-danger/10 p-4 text-sm text-danger">
           {getErrorMessage(error, "Failed to load users")}
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 shadow-lg">
+      <div className="rounded-xl border border-border bg-surface/50 shadow-lg">
         {isLoading ? (
-          <div className="p-8 text-center text-slate-400">Loading users...</div>
+          <div className="p-8 text-center text-text-secondary">Loading users...</div>
         ) : (
           <DataTable columns={columns} data={users} rowKey="id" />
         )}

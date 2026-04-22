@@ -122,7 +122,7 @@ export default function ActivityDetailPage() {
   };
 
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading activity...</div>;
+    return <div className="text-center text-text-muted">Loading activity...</div>;
   }
 
   if (!activity) {
@@ -138,7 +138,7 @@ export default function ActivityDetailPage() {
           <button
             onClick={handleStartEdit}
             disabled={isEditing}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
           >
             {isEditing ? "Editing..." : "Edit"}
           </button>
@@ -146,7 +146,7 @@ export default function ActivityDetailPage() {
       />
 
       {error && (
-        <div className="mb-6 rounded-md bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
+        <div className="mb-6 rounded-md bg-danger/10 p-4 text-sm text-danger">{error}</div>
       )}
 
       {isEditing ? (
@@ -172,72 +172,72 @@ function ViewMode({ activity, projectId }: { activity: ActivityResponse; project
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Status</h3>
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Status</h3>
           <div className="mt-2">
             <StatusBadge status={activity.status} />
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">% Complete</h3>
-          <p className="mt-2 text-2xl font-bold text-white">{activity.percentComplete}%</p>
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">% Complete</h3>
+          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.percentComplete}%</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Duration</h3>
-          <p className="mt-2 text-2xl font-bold text-white">{activity.duration} days</p>
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Duration</h3>
+          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.duration} days</p>
         </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Remaining Duration</h3>
-          <p className="mt-2 text-2xl font-bold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Remaining Duration</h3>
+          <p className="mt-2 text-2xl font-bold text-text-primary">
             {activity.remainingDuration} days
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Total Float</h3>
-          <p className="mt-2 text-2xl font-bold text-white">{activity.totalFloat} days</p>
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Total Float</h3>
+          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.totalFloat} days</p>
         </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Slack</h3>
-          <p className="mt-2 text-2xl font-bold text-white">{activity.slack} days</p>
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Slack</h3>
+          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.slack} days</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Planned Start Date</h3>
-          <p className="mt-2 text-lg text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Planned Start Date</h3>
+          <p className="mt-2 text-lg text-text-primary">
             {activity.plannedStartDate || "Not set"}
           </p>
         </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Planned Finish Date</h3>
-          <p className="mt-2 text-lg text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Planned Finish Date</h3>
+          <p className="mt-2 text-lg text-text-primary">
             {activity.plannedFinishDate || "Not set"}
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Actual Start Date</h3>
-          <p className="mt-2 text-lg text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Actual Start Date</h3>
+          <p className="mt-2 text-lg text-text-primary">
             {activity.actualStartDate || "Not started"}
           </p>
         </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="text-sm font-medium text-slate-300">Actual Finish Date</h3>
-          <p className="mt-2 text-lg text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Actual Finish Date</h3>
+          <p className="mt-2 text-lg text-text-primary">
             {activity.actualFinishDate || "Not finished"}
           </p>
         </div>
@@ -285,34 +285,34 @@ function EditForm({
   onPertChange,
 }: EditFormProps) {
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
+    <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
       <form onSubmit={onSubmit} className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-slate-300">Name *</label>
+          <label className="block text-sm font-medium text-text-secondary">Name *</label>
           <input
             type="text"
             name="name"
             value={data.name || ""}
             onChange={onChange}
-            className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="Activity name"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300">Duration (days)</label>
+            <label className="block text-sm font-medium text-text-secondary">Duration (days)</label>
             <input
               type="number"
               name="originalDuration"
               value={data.originalDuration || 0}
               onChange={onChange}
               min="0"
-              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300">% Complete</label>
+            <label className="block text-sm font-medium text-text-secondary">% Complete</label>
             <input
               type="number"
               name="percentComplete"
@@ -320,48 +320,48 @@ function EditForm({
               onChange={onChange}
               min="0"
               max="100"
-              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300">Planned Start Date</label>
+            <label className="block text-sm font-medium text-text-secondary">Planned Start Date</label>
             <input
               type="date"
               name="plannedStartDate"
               value={data.plannedStartDate || ""}
               onChange={onChange}
-              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300">Planned Finish Date</label>
+            <label className="block text-sm font-medium text-text-secondary">Planned Finish Date</label>
             <input
               type="date"
               name="plannedFinishDate"
               value={data.plannedFinishDate || ""}
               onChange={onChange}
-              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300">Actual Start Date</label>
+            <label className="block text-sm font-medium text-text-secondary">Actual Start Date</label>
             <input
               type="date"
               name="actualStartDate"
               value={data.actualStartDate || ""}
               onChange={onChange}
-              className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">
+            <label className="block text-sm font-medium text-text-secondary">
               Actual Finish Date
             </label>
             <input
@@ -369,31 +369,31 @@ function EditForm({
               name="actualFinishDate"
               value={data.actualFinishDate || ""}
               onChange={onChange}
-              className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
         </div>
 
-        <div className="border-t border-slate-800 pt-6">
+        <div className="border-t border-border pt-6">
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
               id="usePert"
               checked={usePert}
               onChange={onTogglePert}
-              className="rounded border-slate-700"
+              className="rounded border-border"
             />
-            <label htmlFor="usePert" className="text-sm font-medium text-slate-300">
+            <label htmlFor="usePert" className="text-sm font-medium text-text-secondary">
               Use PERT Estimation
             </label>
           </div>
         </div>
 
         {usePert && (
-          <div className="space-y-6 rounded-lg border border-amber-200 bg-amber-500/10 p-4">
+          <div className="space-y-6 rounded-lg border border-warning/30 bg-warning/10 p-4">
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Optimistic (days)
                 </label>
                 <input
@@ -403,13 +403,13 @@ function EditForm({
                   onChange={onPertChange}
                   min="0"
                   step="0.5"
-                  className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   placeholder="Optimistic"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Most Likely (days)
                 </label>
                 <input
@@ -419,13 +419,13 @@ function EditForm({
                   onChange={onPertChange}
                   min="0"
                   step="0.5"
-                  className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   placeholder="Most Likely"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Pessimistic (days)
                 </label>
                 <input
@@ -435,24 +435,24 @@ function EditForm({
                   onChange={onPertChange}
                   min="0"
                   step="0.5"
-                  className="mt-1 block w-full rounded-md border border-slate-700 px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   placeholder="Pessimistic"
                 />
               </div>
             </div>
 
-            <div className="rounded-lg bg-slate-900/50 p-4">
-              <div className="text-sm font-medium text-slate-300">Calculated Values</div>
+            <div className="rounded-lg bg-surface/50 p-4">
+              <div className="text-sm font-medium text-text-secondary">Calculated Values</div>
               <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-slate-400">Expected Duration:</span>
-                  <span className="ml-2 font-semibold text-white">
+                  <span className="text-text-secondary">Expected Duration:</span>
+                  <span className="ml-2 font-semibold text-text-primary">
                     {pertData.expectedDuration.toFixed(2)} days
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Standard Deviation:</span>
-                  <span className="ml-2 font-semibold text-white">
+                  <span className="text-text-secondary">Standard Deviation:</span>
+                  <span className="ml-2 font-semibold text-text-primary">
                     {pertData.standardDeviation.toFixed(2)} days
                   </span>
                 </div>
@@ -465,14 +465,14 @@ function EditForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
           >
             {isSubmitting ? "Saving..." : "Save Changes"}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md bg-slate-700/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
+            className="rounded-md bg-surface-active/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active"
           >
             Cancel
           </button>

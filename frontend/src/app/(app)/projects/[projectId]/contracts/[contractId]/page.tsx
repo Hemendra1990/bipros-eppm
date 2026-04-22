@@ -82,11 +82,11 @@ export default function ContractDetailPage() {
   });
 
   if (isLoading) {
-    return <div className="p-6 text-center text-slate-500">Loading contract...</div>;
+    return <div className="p-6 text-center text-text-muted">Loading contract...</div>;
   }
 
   if (!contractData) {
-    return <div className="p-6 text-center text-red-400">Contract not found</div>;
+    return <div className="p-6 text-center text-danger">Contract not found</div>;
   }
 
   const tabs = [
@@ -99,29 +99,29 @@ export default function ContractDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">{contractData.contractNumber}</h1>
-        <p className="text-sm text-slate-400 mt-1">Contractor: {contractData.contractorName}</p>
+        <h1 className="text-2xl font-bold text-text-primary">{contractData.contractNumber}</h1>
+        <p className="text-sm text-text-secondary mt-1">Contractor: {contractData.contractorName}</p>
         <div className="mt-4 grid grid-cols-4 gap-4">
-          <div className="bg-slate-900/80 rounded-xl p-3 border border-slate-800">
-            <p className="text-xs text-slate-400">Contract Value</p>
-            <p className="text-lg font-semibold text-white">{contractData.contractValue.toLocaleString()}</p>
+          <div className="bg-surface/80 rounded-xl p-3 border border-border">
+            <p className="text-xs text-text-secondary">Contract Value</p>
+            <p className="text-lg font-semibold text-text-primary">{contractData.contractValue.toLocaleString()}</p>
           </div>
-          <div className="bg-slate-900/80 rounded-xl p-3 border border-slate-800">
-            <p className="text-xs text-slate-400">Status</p>
-            <p className="text-lg font-semibold text-white">{contractData.status}</p>
+          <div className="bg-surface/80 rounded-xl p-3 border border-border">
+            <p className="text-xs text-text-secondary">Status</p>
+            <p className="text-lg font-semibold text-text-primary">{contractData.status}</p>
           </div>
-          <div className="bg-slate-900/80 rounded-xl p-3 border border-slate-800">
-            <p className="text-xs text-slate-400">Type</p>
-            <p className="text-lg font-semibold text-white">{contractData.contractType}</p>
+          <div className="bg-surface/80 rounded-xl p-3 border border-border">
+            <p className="text-xs text-text-secondary">Type</p>
+            <p className="text-lg font-semibold text-text-primary">{contractData.contractType}</p>
           </div>
-          <div className="bg-slate-900/80 rounded-xl p-3 border border-slate-800">
-            <p className="text-xs text-slate-400">Duration</p>
-            <p className="text-lg font-semibold text-white">{contractData.dlpMonths} months</p>
+          <div className="bg-surface/80 rounded-xl p-3 border border-border">
+            <p className="text-xs text-text-secondary">Duration</p>
+            <p className="text-lg font-semibold text-text-primary">{contractData.dlpMonths} months</p>
           </div>
         </div>
       </div>
 
-      <div className="border-b border-slate-800">
+      <div className="border-b border-border">
         <nav className="flex gap-8" aria-label="Tabs">
           {tabs.map((t) => (
             <a
@@ -129,8 +129,8 @@ export default function ContractDetailPage() {
               href={`?tab=${t.id}`}
               className={`px-1 py-4 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === t.id
-                  ? "border-blue-500 text-blue-400"
-                  : "border-transparent text-slate-400 hover:text-white hover:border-slate-700"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
               }`}
             >
               {t.label}
@@ -209,22 +209,22 @@ function MilestonesTab({ contractId, milestones, isCreating, onCreate }: Milesto
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Milestone"}
       </button>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3 shadow-xl">
+        <form onSubmit={handleSubmit} className="bg-surface/50 border border-border rounded-xl p-4 space-y-3 shadow-xl">
           <div className="grid grid-cols-2 gap-3">
-            <input type="text" name="milestoneCode" placeholder="Code" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="text" name="milestoneName" placeholder="Name" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="date" name="targetDate" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white" />
-            <input type="date" name="actualDate" placeholder="Actual Date (optional)" className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="paymentPercentage" placeholder="Payment %" step="0.01" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="amount" placeholder="Amount" step="0.01" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
+            <input type="text" name="milestoneCode" placeholder="Code" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="text" name="milestoneName" placeholder="Name" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="date" name="targetDate" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary" />
+            <input type="date" name="actualDate" placeholder="Actual Date (optional)" className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="paymentPercentage" placeholder="Payment %" step="0.01" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="amount" placeholder="Amount" step="0.01" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
           </div>
-          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600 disabled:bg-slate-600">
+          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600 disabled:bg-border">
             Create
           </button>
         </form>
@@ -232,16 +232,16 @@ function MilestonesTab({ contractId, milestones, isCreating, onCreate }: Milesto
 
       <div className="space-y-2">
         {milestones.length === 0 ? (
-          <p className="text-slate-500 text-center py-4">No milestones</p>
+          <p className="text-text-muted text-center py-4">No milestones</p>
         ) : (
           milestones.map((m) => (
-            <div key={m.id} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl">
+            <div key={m.id} className="bg-surface/50 border border-border rounded-xl p-4 shadow-xl">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-semibold text-white">{m.milestoneName}</p>
-                  <p className="text-sm text-slate-400">Target: {new Date(m.targetDate).toLocaleDateString()}</p>
-                  <p className="text-sm text-slate-400">Payment: {m.paymentPercentage}% | Amount: {m.amount.toLocaleString()}</p>
-                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50">{m.status}</span>
+                  <p className="font-semibold text-text-primary">{m.milestoneName}</p>
+                  <p className="text-sm text-text-secondary">Target: {new Date(m.targetDate).toLocaleDateString()}</p>
+                  <p className="text-sm text-text-secondary">Payment: {m.paymentPercentage}% | Amount: {m.amount.toLocaleString()}</p>
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-surface-active/50 text-text-secondary ring-1 ring-border/50">{m.status}</span>
                 </div>
               </div>
             </div>
@@ -282,23 +282,23 @@ function VariationOrdersTab({ contractId, variationOrders, isCreating, onCreate 
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Variation Order"}
       </button>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3 shadow-xl">
+        <form onSubmit={handleSubmit} className="bg-surface/50 border border-border rounded-xl p-4 space-y-3 shadow-xl">
           <div className="grid grid-cols-2 gap-3">
-            <input type="text" name="voNumber" placeholder="VO Number" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="voValue" placeholder="Value" step="0.01" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <textarea name="description" placeholder="Description" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg col-span-2 text-white placeholder-slate-500"></textarea>
-            <textarea name="justification" placeholder="Justification" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg col-span-2 text-white placeholder-slate-500"></textarea>
-            <input type="number" name="impactOnBudget" placeholder="Budget Impact" step="0.01" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="impactOnScheduleDays" placeholder="Schedule Impact (days)" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="text" name="approvedBy" placeholder="Approved By (optional)" className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg col-span-2 text-white placeholder-slate-500" />
+            <input type="text" name="voNumber" placeholder="VO Number" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="voValue" placeholder="Value" step="0.01" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <textarea name="description" placeholder="Description" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg col-span-2 text-text-primary placeholder-text-muted"></textarea>
+            <textarea name="justification" placeholder="Justification" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg col-span-2 text-text-primary placeholder-text-muted"></textarea>
+            <input type="number" name="impactOnBudget" placeholder="Budget Impact" step="0.01" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="impactOnScheduleDays" placeholder="Schedule Impact (days)" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="text" name="approvedBy" placeholder="Approved By (optional)" className="px-3 py-2 bg-surface-hover border border-border rounded-lg col-span-2 text-text-primary placeholder-text-muted" />
           </div>
-          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600 disabled:bg-slate-600">
+          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600 disabled:bg-border">
             Create
           </button>
         </form>
@@ -306,17 +306,17 @@ function VariationOrdersTab({ contractId, variationOrders, isCreating, onCreate 
 
       <div className="space-y-2">
         {variationOrders.length === 0 ? (
-          <p className="text-slate-500 text-center py-4">No variation orders</p>
+          <p className="text-text-muted text-center py-4">No variation orders</p>
         ) : (
           variationOrders.map((vo) => (
-            <div key={vo.id} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl">
+            <div key={vo.id} className="bg-surface/50 border border-border rounded-xl p-4 shadow-xl">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <p className="font-semibold text-white">{vo.voNumber}</p>
-                  <p className="text-sm text-slate-400">{vo.description}</p>
-                  <p className="text-sm text-slate-400">Value: {vo.voValue.toLocaleString()} | Budget Impact: {vo.impactOnBudget.toLocaleString()}</p>
-                  <p className="text-sm text-slate-400">Schedule Impact: {vo.impactOnScheduleDays} days</p>
-                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50">{vo.status}</span>
+                  <p className="font-semibold text-text-primary">{vo.voNumber}</p>
+                  <p className="text-sm text-text-secondary">{vo.description}</p>
+                  <p className="text-sm text-text-secondary">Value: {vo.voValue.toLocaleString()} | Budget Impact: {vo.impactOnBudget.toLocaleString()}</p>
+                  <p className="text-sm text-text-secondary">Schedule Impact: {vo.impactOnScheduleDays} days</p>
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-surface-active/50 text-text-secondary ring-1 ring-border/50">{vo.status}</span>
                 </div>
               </div>
             </div>
@@ -355,27 +355,27 @@ function PerformanceBondsTab({ contractId, bonds, isCreating, onCreate }: Perfor
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Bond"}
       </button>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3 shadow-xl">
+        <form onSubmit={handleSubmit} className="bg-surface/50 border border-border rounded-xl p-4 space-y-3 shadow-xl">
           <div className="grid grid-cols-2 gap-3">
-            <select name="bondType" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white">
+            <select name="bondType" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary">
               <option value="">Select Type</option>
               <option value="PERFORMANCE_GUARANTEE">Performance Guarantee</option>
               <option value="EMD">EMD</option>
               <option value="ADVANCE_GUARANTEE">Advance Guarantee</option>
               <option value="RETENTION">Retention</option>
             </select>
-            <input type="number" name="bondValue" placeholder="Value" step="0.01" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="text" name="bankName" placeholder="Bank Name" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="date" name="issueDate" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white" />
-            <input type="date" name="expiryDate" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white" />
+            <input type="number" name="bondValue" placeholder="Value" step="0.01" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="text" name="bankName" placeholder="Bank Name" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="date" name="issueDate" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary" />
+            <input type="date" name="expiryDate" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary" />
           </div>
-          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600 disabled:bg-slate-600">
+          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600 disabled:bg-border">
             Create
           </button>
         </form>
@@ -383,16 +383,16 @@ function PerformanceBondsTab({ contractId, bonds, isCreating, onCreate }: Perfor
 
       <div className="space-y-2">
         {bonds.length === 0 ? (
-          <p className="text-slate-500 text-center py-4">No bonds</p>
+          <p className="text-text-muted text-center py-4">No bonds</p>
         ) : (
           bonds.map((bond) => (
-            <div key={bond.id} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl">
+            <div key={bond.id} className="bg-surface/50 border border-border rounded-xl p-4 shadow-xl">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-semibold text-white">{bond.bondType}</p>
-                  <p className="text-sm text-slate-400">Bank: {bond.bankName}</p>
-                  <p className="text-sm text-slate-400">Value: {bond.bondValue.toLocaleString()} | Valid: {new Date(bond.issueDate).toLocaleDateString()} - {new Date(bond.expiryDate).toLocaleDateString()}</p>
-                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50">{bond.status}</span>
+                  <p className="font-semibold text-text-primary">{bond.bondType}</p>
+                  <p className="text-sm text-text-secondary">Bank: {bond.bankName}</p>
+                  <p className="text-sm text-text-secondary">Value: {bond.bondValue.toLocaleString()} | Valid: {new Date(bond.issueDate).toLocaleDateString()} - {new Date(bond.expiryDate).toLocaleDateString()}</p>
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-surface-active/50 text-text-secondary ring-1 ring-border/50">{bond.status}</span>
                 </div>
               </div>
             </div>
@@ -433,23 +433,23 @@ function ScorecardTab({ contractId, scorecards, isCreating, onCreate }: Scorecar
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Scorecard"}
       </button>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3 shadow-xl">
+        <form onSubmit={handleSubmit} className="bg-surface/50 border border-border rounded-xl p-4 space-y-3 shadow-xl">
           <div className="grid grid-cols-2 gap-3">
-            <input type="text" name="period" placeholder="Period (e.g., Q1-2024)" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="qualityScore" placeholder="Quality Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="safetyScore" placeholder="Safety Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="progressScore" placeholder="Progress Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="paymentComplianceScore" placeholder="Payment Compliance Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <input type="number" name="overallScore" placeholder="Overall Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500" />
-            <textarea name="remarks" placeholder="Remarks (optional)" className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg col-span-2 text-white placeholder-slate-500"></textarea>
+            <input type="text" name="period" placeholder="Period (e.g., Q1-2024)" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="qualityScore" placeholder="Quality Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="safetyScore" placeholder="Safety Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="progressScore" placeholder="Progress Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="paymentComplianceScore" placeholder="Payment Compliance Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <input type="number" name="overallScore" placeholder="Overall Score" step="0.1" min="0" max="10" required className="px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted" />
+            <textarea name="remarks" placeholder="Remarks (optional)" className="px-3 py-2 bg-surface-hover border border-border rounded-lg col-span-2 text-text-primary placeholder-text-muted"></textarea>
           </div>
-          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600 disabled:bg-slate-600">
+          <button type="submit" disabled={isCreating} className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600 disabled:bg-border">
             Create
           </button>
         </form>
@@ -457,36 +457,36 @@ function ScorecardTab({ contractId, scorecards, isCreating, onCreate }: Scorecar
 
       <div className="space-y-2">
         {scorecards.length === 0 ? (
-          <p className="text-slate-500 text-center py-4">No scorecards</p>
+          <p className="text-text-muted text-center py-4">No scorecards</p>
         ) : (
           scorecards.map((sc) => (
-            <div key={sc.id} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl">
+            <div key={sc.id} className="bg-surface/50 border border-border rounded-xl p-4 shadow-xl">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <p className="font-semibold text-white">{sc.period}</p>
+                  <p className="font-semibold text-text-primary">{sc.period}</p>
                   <div className="mt-2 grid grid-cols-5 gap-2 text-sm">
                     <div>
-                      <p className="text-slate-400">Quality</p>
-                      <p className="font-semibold text-white">{sc.qualityScore}</p>
+                      <p className="text-text-secondary">Quality</p>
+                      <p className="font-semibold text-text-primary">{sc.qualityScore}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Safety</p>
-                      <p className="font-semibold text-white">{sc.safetyScore}</p>
+                      <p className="text-text-secondary">Safety</p>
+                      <p className="font-semibold text-text-primary">{sc.safetyScore}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Progress</p>
-                      <p className="font-semibold text-white">{sc.progressScore}</p>
+                      <p className="text-text-secondary">Progress</p>
+                      <p className="font-semibold text-text-primary">{sc.progressScore}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Compliance</p>
-                      <p className="font-semibold text-white">{sc.paymentComplianceScore}</p>
+                      <p className="text-text-secondary">Compliance</p>
+                      <p className="font-semibold text-text-primary">{sc.paymentComplianceScore}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Overall</p>
-                      <p className="font-semibold text-white">{sc.overallScore}</p>
+                      <p className="text-text-secondary">Overall</p>
+                      <p className="font-semibold text-text-primary">{sc.overallScore}</p>
                     </div>
                   </div>
-                  {sc.remarks && <p className="text-sm text-slate-400 mt-2">{sc.remarks}</p>}
+                  {sc.remarks && <p className="text-sm text-text-secondary mt-2">{sc.remarks}</p>}
                 </div>
               </div>
             </div>

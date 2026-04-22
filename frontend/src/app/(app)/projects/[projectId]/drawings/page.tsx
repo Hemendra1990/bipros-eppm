@@ -85,17 +85,17 @@ export default function DrawingsPage() {
   ) => {
     switch (status) {
       case "PRELIMINARY":
-        return "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20";
+        return "bg-warning/10 text-warning ring-1 ring-amber-500/20";
       case "IFA":
-        return "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20";
+        return "bg-accent/10 text-accent ring-1 ring-accent/20";
       case "IFC":
-        return "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20";
+        return "bg-success/10 text-success ring-1 ring-success/20";
       case "AS_BUILT":
         return "bg-purple-500/10 text-purple-400 ring-1 ring-purple-500/20";
       case "SUPERSEDED":
-        return "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50";
+        return "bg-surface-active/50 text-text-secondary ring-1 ring-border/50";
       default:
-        return "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50";
+        return "bg-surface-active/50 text-text-secondary ring-1 ring-border/50";
     }
   };
 
@@ -120,14 +120,14 @@ export default function DrawingsPage() {
       />
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white">Drawing Register</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-text-primary">Drawing Register</h1>
+          <p className="text-sm text-text-secondary mt-1">
             {drawings.length} drawing{drawings.length !== 1 ? "s" : ""} found
           </p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium"
+          className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
         >
           + Add Drawing
         </button>
@@ -135,15 +135,15 @@ export default function DrawingsPage() {
 
       {/* Create Form */}
       {showForm && (
-        <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-6 shadow-xl">
+        <div className="bg-surface/50 rounded-xl border border-border p-6 shadow-xl">
           {error && (
-            <div className="mb-4 rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+            <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">
               {error}
             </div>
           )}
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 Drawing Number
               </label>
               <input
@@ -152,29 +152,29 @@ export default function DrawingsPage() {
                 value={formData.drawingNumber}
                 onChange={handleFormChange}
                 placeholder="e.g., DWG-001"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Title</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Title</label>
               <input
                 type="text"
                 name="title"
                 value={formData.title}
                 onChange={handleFormChange}
                 placeholder="Drawing title"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 Discipline
               </label>
               <select
                 name="discipline"
                 value={formData.discipline}
                 onChange={handleFormChange}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               >
                 <option value="CIVIL">CIVIL</option>
                 <option value="STRUCTURAL">STRUCTURAL</option>
@@ -185,23 +185,23 @@ export default function DrawingsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Revision</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Revision</label>
               <input
                 type="text"
                 name="revision"
                 value={formData.revision}
                 onChange={handleFormChange}
                 placeholder="e.g., A, B, C"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">Status</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Status</label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleFormChange}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               >
                 <option value="PRELIMINARY">PRELIMINARY</option>
                 <option value="IFA">IFA (Issued for Approval)</option>
@@ -214,14 +214,14 @@ export default function DrawingsPage() {
               <button
                 type="submit"
                 disabled={createDrawingMutation.isPending}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:bg-slate-600 transition-colors font-medium"
+                className="flex-1 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors font-medium"
               >
                 {createDrawingMutation.isPending ? "Creating..." : "Create Drawing"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="flex-1 px-4 py-2 border border-slate-700 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors font-medium"
+                className="flex-1 px-4 py-2 border border-border bg-surface-hover text-text-secondary rounded-lg hover:bg-surface-active transition-colors font-medium"
               >
                 Cancel
               </button>
@@ -230,41 +230,41 @@ export default function DrawingsPage() {
         </div>
       )}
 
-      <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden shadow-xl">
+      <div className="bg-surface/50 rounded-xl border border-border overflow-hidden shadow-xl">
         {drawings.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900/80 border-b border-slate-800">
+              <thead className="bg-surface/80 border-b border-border">
                 <tr>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
                     Drawing Number
                   </th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Title</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Discipline</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Revision</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Title</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Discipline</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Revision</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
                     Revision Date
                   </th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Status</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Package</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Scale</th>
-                  <th className="px-6 py-3 text-center font-semibold text-slate-400">Actions</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Status</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Package</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Scale</th>
+                  <th className="px-6 py-3 text-center font-semibold text-text-secondary">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
+              <tbody className="divide-y divide-border/50">
                 {drawings.map((drawing) => (
-                  <tr key={drawing.id} className="hover:bg-slate-800/30 transition-colors border-slate-800/50">
-                    <td className="px-6 py-4 text-white font-medium">
+                  <tr key={drawing.id} className="hover:bg-surface-hover/30 transition-colors border-border/50">
+                    <td className="px-6 py-4 text-text-primary font-medium">
                       {drawing.drawingNumber}
                     </td>
-                    <td className="px-6 py-4 text-white">{drawing.title}</td>
+                    <td className="px-6 py-4 text-text-primary">{drawing.title}</td>
                     <td className="px-6 py-4">
                       <span className="flex items-center gap-2">
                         {getDisciplineIcon(drawing.discipline)} {drawing.discipline}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-400">{drawing.revision}</td>
-                    <td className="px-6 py-4 text-slate-400 text-xs">
+                    <td className="px-6 py-4 text-text-secondary">{drawing.revision}</td>
+                    <td className="px-6 py-4 text-text-secondary text-xs">
                       {new Date(drawing.revisionDate).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
@@ -276,10 +276,10 @@ export default function DrawingsPage() {
                         {drawing.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-400 text-sm">{drawing.packageCode}</td>
-                    <td className="px-6 py-4 text-slate-400 text-sm">{drawing.scale}</td>
+                    <td className="px-6 py-4 text-text-secondary text-sm">{drawing.packageCode}</td>
+                    <td className="px-6 py-4 text-text-secondary text-sm">{drawing.scale}</td>
                     <td className="px-6 py-4 text-center">
-                      <button className="text-blue-400 hover:text-blue-300 text-xs font-medium">
+                      <button className="text-accent hover:text-blue-300 text-xs font-medium">
                         View
                       </button>
                     </td>
@@ -290,7 +290,7 @@ export default function DrawingsPage() {
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-slate-500">No drawings found</p>
+            <p className="text-text-muted">No drawings found</p>
           </div>
         )}
       </div>

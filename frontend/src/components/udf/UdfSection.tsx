@@ -110,10 +110,10 @@ export function UdfSection({ entityId, subject, projectId, readOnly = false, tit
   };
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+    <div className="rounded-xl border border-border bg-surface/50 p-6">
       <div className="mb-4 flex items-center gap-2">
-        <Settings2 size={16} className="text-slate-400" />
-        <h3 className="text-sm font-semibold text-slate-300">{title}</h3>
+        <Settings2 size={16} className="text-text-secondary" />
+        <h3 className="text-sm font-semibold text-text-secondary">{title}</h3>
       </div>
       <UdfValueRenderer
         fields={mappedFields}

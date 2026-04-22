@@ -26,9 +26,9 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
 
   if (activities.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-        <p className="text-slate-400">No activities to display</p>
-        <p className="mt-2 text-sm text-slate-500">Create activities and add dependencies to see the network diagram.</p>
+      <div className="rounded-lg border border-dashed border-border py-12 text-center">
+        <p className="text-text-secondary">No activities to display</p>
+        <p className="mt-2 text-sm text-text-muted">Create activities and add dependencies to see the network diagram.</p>
       </div>
     );
   }
@@ -51,10 +51,10 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white">Activity Network Diagram</h2>
+      <h2 className="text-lg font-semibold text-text-primary">Activity Network Diagram</h2>
 
-      <div className="overflow-auto rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-        <svg width={svgWidth} height={svgHeight} className="bg-slate-900/50">
+      <div className="overflow-auto rounded-lg border border-border bg-surface/50 p-4">
+        <svg width={svgWidth} height={svgHeight} className="bg-surface/50">
           <defs>
             {/* Arrowhead marker for relationship lines */}
             <marker
@@ -65,7 +65,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
               refY="3"
               orient="auto"
             >
-              <polygon points="0 0, 10 3, 0 6" fill="#94a3b8" />
+              <polygon points="0 0, 10 3, 0 6" fill="var(--text-muted)" />
             </marker>
             <marker
               id="arrowhead-critical"
@@ -75,7 +75,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
               refY="3"
               orient="auto"
             >
-              <polygon points="0 0, 10 3, 0 6" fill="#dc2626" />
+              <polygon points="0 0, 10 3, 0 6" fill="var(--danger)" />
             </marker>
           </defs>
 
@@ -100,7 +100,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y1={y1}
                   x2={x2}
                   y2={y2}
-                  stroke={isCritical ? "#dc2626" : "#64748b"}
+                  stroke={isCritical ? "var(--danger)" : "var(--text-muted)"}
                   strokeWidth="2"
                   markerEnd={isCritical ? "url(#arrowhead-critical)" : "url(#arrowhead)"}
                 />
@@ -109,7 +109,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                     x={(x1 + x2) / 2}
                     y={(y1 + y2) / 2 - 5}
                     fontSize="11"
-                    fill="#94a3b8"
+                    fill="var(--text-secondary)"
                     textAnchor="middle"
                   >
                     {rel.relationshipType}
@@ -133,8 +133,8 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y}
                   width={boxWidth}
                   height={boxHeight}
-                  fill="#1e293b"
-                  stroke={isCritical ? "#dc2626" : "#3b82f6"}
+                  fill="var(--surface-hover)"
+                  stroke={isCritical ? "var(--danger)" : "var(--accent)"}
                   strokeWidth={isCritical ? "3" : "2"}
                   rx="4"
                 />
@@ -145,7 +145,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y + 18}
                   fontSize="12"
                   fontWeight="bold"
-                  fill="#cbd5e1"
+                  fill="var(--text-secondary)"
                   className="font-mono"
                 >
                   {node.activity.code}
@@ -156,7 +156,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   x={node.x + 8}
                   y={node.y + 35}
                   fontSize="11"
-                  fill="#374151"
+                  fill="var(--text-muted)"
                   className="max-w-xs truncate"
                 >
                   {node.activity.name.substring(0, 30)}
@@ -169,12 +169,12 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y1={node.y + 42}
                   x2={node.x + boxWidth}
                   y2={node.y + 42}
-                  stroke="#1e293b"
+                  stroke="var(--border)"
                   strokeWidth="1"
                 />
 
                 {/* Schedule info: ES / EF (top row) */}
-                <text x={node.x + 8} y={node.y + 58} fontSize="9" fill="#6b7280">
+                <text x={node.x + 8} y={node.y + 58} fontSize="9" fill="var(--text-muted)">
                   ES
                 </text>
                 <text
@@ -182,13 +182,13 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y + 70}
                   fontSize="10"
                   fontWeight="bold"
-                  fill="#111827"
+                  fill="var(--text-primary)"
                   className="font-mono"
                 >
                   {formatDate(node.activity.earlyStartDate)}
                 </text>
 
-                <text x={node.x + 65} y={node.y + 58} fontSize="9" fill="#6b7280">
+                <text x={node.x + 65} y={node.y + 58} fontSize="9" fill="var(--text-muted)">
                   EF
                 </text>
                 <text
@@ -196,13 +196,13 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y + 70}
                   fontSize="10"
                   fontWeight="bold"
-                  fill="#111827"
+                  fill="var(--text-primary)"
                   className="font-mono"
                 >
                   {formatDate(node.activity.earlyFinishDate)}
                 </text>
 
-                <text x={node.x + 122} y={node.y + 58} fontSize="9" fill="#6b7280">
+                <text x={node.x + 122} y={node.y + 58} fontSize="9" fill="var(--text-muted)">
                   Float
                 </text>
                 <text
@@ -210,14 +210,14 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y + 70}
                   fontSize="10"
                   fontWeight={isCritical ? "bold" : "normal"}
-                  fill={isCritical ? "#dc2626" : "#111827"}
+                  fill={isCritical ? "var(--danger)" : "var(--text-primary)"}
                   className="font-mono"
                 >
                   {(node.activity.totalFloat ?? 0).toFixed(1)}
                 </text>
 
                 {/* Schedule info: LS / LF (bottom row) */}
-                <text x={node.x + 8} y={node.y + 82} fontSize="9" fill="#6b7280">
+                <text x={node.x + 8} y={node.y + 82} fontSize="9" fill="var(--text-muted)">
                   LS
                 </text>
                 <text
@@ -225,13 +225,13 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y + 94}
                   fontSize="10"
                   fontWeight="bold"
-                  fill="#111827"
+                  fill="var(--text-primary)"
                   className="font-mono"
                 >
                   {formatDate(node.activity.lateStartDate)}
                 </text>
 
-                <text x={node.x + 65} y={node.y + 82} fontSize="9" fill="#6b7280">
+                <text x={node.x + 65} y={node.y + 82} fontSize="9" fill="var(--text-muted)">
                   LF
                 </text>
                 <text
@@ -239,7 +239,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                   y={node.y + 94}
                   fontSize="10"
                   fontWeight="bold"
-                  fill="#111827"
+                  fill="var(--text-primary)"
                   className="font-mono"
                 >
                   {formatDate(node.activity.lateFinishDate)}
@@ -251,14 +251,14 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-6 rounded-lg border border-slate-800 bg-slate-900/80 p-4">
+      <div className="flex flex-wrap gap-6 rounded-lg border border-border bg-surface/80 p-4">
         <div className="flex items-center gap-2">
-          <div className="h-4 w-12 border-2 border-blue-500 rounded" />
-          <span className="text-sm text-slate-300">Normal Activity</span>
+          <div className="h-4 w-12 border-2 border-accent rounded" />
+          <span className="text-sm text-text-secondary">Normal Activity</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-4 w-12 border-3 border-red-600 rounded" />
-          <span className="text-sm text-slate-300">Critical Activity</span>
+          <div className="h-4 w-12 border-3 border-danger rounded" />
+          <span className="text-sm text-text-secondary">Critical Activity</span>
         </div>
       </div>
     </div>

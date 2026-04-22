@@ -62,15 +62,15 @@ export default function GisViewerPage() {
         title="GIS Map Viewer"
         description="View your project location on a map. Add GIS layers, upload satellite images, and track construction progress geographically."
       />
-      <div className="flex gap-2 border-b border-slate-800">
+      <div className="flex gap-2 border-b border-border">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2 font-medium text-sm transition-colors ${
               activeTab === tab.id
-                ? "border-b-2 border-blue-600 text-blue-400"
-                : "text-slate-400 hover:text-white"
+                ? "border-b-2 border-blue-600 text-accent"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
             {tab.label}
@@ -83,13 +83,13 @@ export default function GisViewerPage() {
           <div>
             {geoJsonLoading ? (
               <div className="flex items-center justify-center h-96">
-                <span className="text-slate-500">Loading map data...</span>
+                <span className="text-text-muted">Loading map data...</span>
               </div>
             ) : geoJsonResponse?.data ? (
               <MapViewer geoJsonData={geoJsonResponse.data} />
             ) : (
               <div className="flex items-center justify-center h-96">
-                <span className="text-slate-500">
+                <span className="text-text-muted">
                   No polygon data available
                 </span>
               </div>
@@ -103,7 +103,7 @@ export default function GisViewerPage() {
               <GisLayerList projectId={projectId} layers={layersResponse.data} />
             ) : (
               <div className="flex items-center justify-center h-96">
-                <span className="text-slate-500">No layers available</span>
+                <span className="text-text-muted">No layers available</span>
               </div>
             )}
           </div>
@@ -115,7 +115,7 @@ export default function GisViewerPage() {
               <SatelliteImageGallery projectId={projectId} images={satelliteImagesResponse.data} />
             ) : (
               <div className="flex items-center justify-center h-96">
-                <span className="text-slate-500">
+                <span className="text-text-muted">
                   No satellite images available
                 </span>
               </div>
@@ -129,7 +129,7 @@ export default function GisViewerPage() {
               <ProgressVarianceTable projectId={projectId} variance={varianceResponse.data} />
             ) : (
               <div className="flex items-center justify-center h-96">
-                <span className="text-slate-500">
+                <span className="text-text-muted">
                   No progress data available
                 </span>
               </div>

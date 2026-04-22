@@ -16,23 +16,23 @@ export function GanttSidebar({ activities, rowHeight }: GanttSidebarProps) {
     <div>
       {/* Header */}
       <div
-        className="sticky top-0 bg-slate-900/80 border-b border-slate-700 flex"
+        className="sticky top-0 bg-surface/80 border-b border-border flex"
         style={{ height: headerHeight }}
       >
-        <div style={{ minWidth: "60px" }} className="p-3 flex items-center justify-center border-r border-slate-700">
-          <span className="text-xs font-semibold text-slate-300 text-center">Code</span>
+        <div style={{ minWidth: "60px" }} className="p-3 flex items-center justify-center border-r border-border">
+          <span className="text-xs font-semibold text-text-secondary text-center">Code</span>
         </div>
-        <div style={{ minWidth: "180px" }} className="p-3 flex items-center justify-center border-r border-slate-700">
-          <span className="text-xs font-semibold text-slate-300 text-center">Name</span>
+        <div style={{ minWidth: "180px" }} className="p-3 flex items-center justify-center border-r border-border">
+          <span className="text-xs font-semibold text-text-secondary text-center">Name</span>
         </div>
-        <div style={{ minWidth: "48px" }} className="p-3 flex items-center justify-center border-r border-slate-700">
-          <span className="text-xs font-semibold text-slate-300 text-center">Dur</span>
+        <div style={{ minWidth: "48px" }} className="p-3 flex items-center justify-center border-r border-border">
+          <span className="text-xs font-semibold text-text-secondary text-center">Dur</span>
         </div>
-        <div style={{ minWidth: "90px" }} className="p-3 flex items-center justify-center border-r border-slate-700">
-          <span className="text-xs font-semibold text-slate-300 text-center">Start</span>
+        <div style={{ minWidth: "90px" }} className="p-3 flex items-center justify-center border-r border-border">
+          <span className="text-xs font-semibold text-text-secondary text-center">Start</span>
         </div>
         <div style={{ minWidth: "90px" }} className="p-3 flex items-center justify-center">
-          <span className="text-xs font-semibold text-slate-300 text-center">End</span>
+          <span className="text-xs font-semibold text-text-secondary text-center">End</span>
         </div>
       </div>
 
@@ -49,27 +49,27 @@ export function GanttSidebar({ activities, rowHeight }: GanttSidebarProps) {
         return (
           <div
             key={a.id}
-            className="flex border-b border-slate-800 hover:bg-slate-800/50"
+            className="flex border-b border-border hover:bg-surface-hover/50"
             style={{ height: rowHeight }}
           >
-            <div style={{ minWidth: "60px" }} className="p-2 flex items-center border-r border-slate-800 overflow-hidden">
-              <span className="text-xs font-medium text-white truncate">{a.code}</span>
+            <div style={{ minWidth: "60px" }} className="p-2 flex items-center border-r border-border overflow-hidden">
+              <span className="text-xs font-medium text-text-primary truncate">{a.code}</span>
             </div>
-            <div style={{ minWidth: "180px" }} className="p-2 flex items-center border-r border-slate-800 overflow-hidden">
-              <span className="text-xs text-slate-300 truncate" title={a.name}>
+            <div style={{ minWidth: "180px" }} className="p-2 flex items-center border-r border-border overflow-hidden">
+              <span className="text-xs text-text-secondary truncate" title={a.name}>
                 {a.name}
               </span>
             </div>
-            <div style={{ minWidth: "48px" }} className="p-2 flex items-center justify-center border-r border-slate-800">
-              <span className="text-xs text-slate-300">{durationText}</span>
+            <div style={{ minWidth: "48px" }} className="p-2 flex items-center justify-center border-r border-border">
+              <span className="text-xs text-text-secondary">{durationText}</span>
             </div>
-            <div style={{ minWidth: "90px" }} className="p-2 flex items-center justify-center border-r border-slate-800">
-              <span className="text-xs text-slate-300">
+            <div style={{ minWidth: "90px" }} className="p-2 flex items-center justify-center border-r border-border">
+              <span className="text-xs text-text-secondary">
                 {startStr ? format(new Date(startStr), "d MMM yyyy") : "-"}
               </span>
             </div>
             <div style={{ minWidth: "90px" }} className="p-2 flex items-center justify-center">
-              <span className="text-xs text-slate-300">
+              <span className="text-xs text-text-secondary">
                 {finishStr ? format(new Date(finishStr), "d MMM yyyy") : "-"}
               </span>
             </div>

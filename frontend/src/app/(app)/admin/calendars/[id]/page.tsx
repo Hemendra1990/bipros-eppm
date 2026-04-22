@@ -262,11 +262,11 @@ export default function CalendarDetailPage() {
   ];
 
   const inputClass =
-    "mt-1 block w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm";
+    "mt-1 block w-full rounded-md border border-border bg-surface-hover/50 px-3 py-2 text-text-primary placeholder-gray-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent text-sm";
 
   if (isLoading) {
     return (
-      <div className="py-12 text-center text-slate-500">
+      <div className="py-12 text-center text-text-muted">
         Loading calendar...
       </div>
     );
@@ -280,7 +280,7 @@ export default function CalendarDetailPage() {
         actions={
           <button
             onClick={() => router.push("/admin/calendars")}
-            className="inline-flex items-center gap-2 rounded-md bg-slate-700/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
+            className="inline-flex items-center gap-2 rounded-md bg-surface-active/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active"
           >
             <ArrowLeft size={16} />
             Back
@@ -289,18 +289,18 @@ export default function CalendarDetailPage() {
       />
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+        <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 rounded-md bg-green-500/10 p-3 text-sm text-green-400">
+        <div className="mb-4 rounded-md bg-success/10 p-3 text-sm text-success">
           {success}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 rounded-lg bg-slate-800/50 p-1">
+      <div className="mb-6 flex gap-1 rounded-lg bg-surface-hover/50 p-1">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -311,8 +311,8 @@ export default function CalendarDetailPage() {
             }}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? "bg-blue-600 text-white"
-                : "text-slate-400 hover:text-white"
+                ? "bg-accent text-text-primary"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
             {tab.label}
@@ -322,10 +322,10 @@ export default function CalendarDetailPage() {
 
       {/* Details Tab */}
       {activeTab === "details" && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Name *
               </label>
               <input
@@ -336,7 +336,7 @@ export default function CalendarDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Type
               </label>
               <select
@@ -354,7 +354,7 @@ export default function CalendarDetailPage() {
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Description
               </label>
               <input
@@ -366,7 +366,7 @@ export default function CalendarDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Hours / Day
               </label>
               <input
@@ -379,7 +379,7 @@ export default function CalendarDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Days / Week
               </label>
               <input
@@ -396,7 +396,7 @@ export default function CalendarDetailPage() {
             <button
               onClick={handleSaveDetails}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
             >
               <Save size={16} />
               {saving ? "Saving..." : "Save Details"}
@@ -407,8 +407,8 @@ export default function CalendarDetailPage() {
 
       {/* Work Week Tab */}
       {activeTab === "workweek" && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <div className="mb-4 flex items-center gap-2 text-sm text-slate-400">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <div className="mb-4 flex items-center gap-2 text-sm text-text-secondary">
             <Clock size={16} />
             Configure working hours for each day of the week. Non-working days
             ignore time ranges.
@@ -416,7 +416,7 @@ export default function CalendarDetailPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700 text-left text-slate-400">
+                <tr className="border-b border-border text-left text-text-secondary">
                   <th className="pb-3 pr-4 font-medium">Day</th>
                   <th className="pb-3 pr-4 font-medium">Type</th>
                   <th className="pb-3 pr-4 font-medium">Morning Start</th>
@@ -427,8 +427,8 @@ export default function CalendarDetailPage() {
               </thead>
               <tbody>
                 {workWeek.map((row, idx) => (
-                  <tr key={row.dayOfWeek} className="border-b border-slate-800">
-                    <td className="py-3 pr-4 font-medium text-slate-200">
+                  <tr key={row.dayOfWeek} className="border-b border-border">
+                    <td className="py-3 pr-4 font-medium text-text-primary">
                       {DAY_LABELS[row.dayOfWeek]}
                     </td>
                     <td className="py-3 pr-4">
@@ -437,7 +437,7 @@ export default function CalendarDetailPage() {
                         onChange={(e) =>
                           updateWorkWeekRow(idx, "dayType", e.target.value)
                         }
-                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-white"
+                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary"
                       >
                         <option value="WORKING">Working</option>
                         <option value="NON_WORKING">Non-Working</option>
@@ -451,7 +451,7 @@ export default function CalendarDetailPage() {
                           updateWorkWeekRow(idx, "startTime1", e.target.value)
                         }
                         disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-white disabled:opacity-40"
+                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
                       />
                     </td>
                     <td className="py-3 pr-4">
@@ -462,7 +462,7 @@ export default function CalendarDetailPage() {
                           updateWorkWeekRow(idx, "endTime1", e.target.value)
                         }
                         disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-white disabled:opacity-40"
+                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
                       />
                     </td>
                     <td className="py-3 pr-4">
@@ -473,7 +473,7 @@ export default function CalendarDetailPage() {
                           updateWorkWeekRow(idx, "startTime2", e.target.value)
                         }
                         disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-white disabled:opacity-40"
+                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
                       />
                     </td>
                     <td className="py-3">
@@ -484,7 +484,7 @@ export default function CalendarDetailPage() {
                           updateWorkWeekRow(idx, "endTime2", e.target.value)
                         }
                         disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-white disabled:opacity-40"
+                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
                       />
                     </td>
                   </tr>
@@ -496,7 +496,7 @@ export default function CalendarDetailPage() {
             <button
               onClick={handleSaveWorkWeek}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
             >
               <Save size={16} />
               {saving ? "Saving..." : "Save Work Week"}
@@ -509,13 +509,13 @@ export default function CalendarDetailPage() {
       {activeTab === "exceptions" && (
         <div className="space-y-6">
           {/* Add Exception Form */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h3 className="mb-4 text-sm font-semibold text-slate-200">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h3 className="mb-4 text-sm font-semibold text-text-primary">
               Add Exception Day
             </h3>
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-400">
+                <label className="block text-xs font-medium text-text-secondary">
                   Date *
                 </label>
                 <input
@@ -526,7 +526,7 @@ export default function CalendarDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400">
+                <label className="block text-xs font-medium text-text-secondary">
                   Name
                 </label>
                 <input
@@ -538,7 +538,7 @@ export default function CalendarDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400">
+                <label className="block text-xs font-medium text-text-secondary">
                   Day Type
                 </label>
                 <select
@@ -559,7 +559,7 @@ export default function CalendarDetailPage() {
               excDayType === "EXCEPTION_WORKING") && (
               <div className="mt-4 grid grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400">
+                  <label className="block text-xs font-medium text-text-secondary">
                     Morning Start
                   </label>
                   <input
@@ -570,7 +570,7 @@ export default function CalendarDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400">
+                  <label className="block text-xs font-medium text-text-secondary">
                     Morning End
                   </label>
                   <input
@@ -581,7 +581,7 @@ export default function CalendarDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400">
+                  <label className="block text-xs font-medium text-text-secondary">
                     Afternoon Start
                   </label>
                   <input
@@ -592,7 +592,7 @@ export default function CalendarDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400">
+                  <label className="block text-xs font-medium text-text-secondary">
                     Afternoon End
                   </label>
                   <input
@@ -608,7 +608,7 @@ export default function CalendarDetailPage() {
               <button
                 onClick={handleAddException}
                 disabled={saving}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
               >
                 <Plus size={16} />
                 {saving ? "Adding..." : "Add Exception"}
@@ -617,12 +617,12 @@ export default function CalendarDetailPage() {
           </div>
 
           {/* Exceptions List */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h3 className="mb-4 text-sm font-semibold text-slate-200">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h3 className="mb-4 text-sm font-semibold text-text-primary">
               Exceptions ({now.getFullYear()})
             </h3>
             {exceptions.length === 0 ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-text-muted">
                 No exceptions defined for this year.
               </p>
             ) : (
@@ -630,27 +630,27 @@ export default function CalendarDetailPage() {
                 {exceptions.map((exc) => (
                   <div
                     key={exc.id}
-                    className="flex items-center justify-between rounded-md border border-slate-800 px-4 py-3"
+                    className="flex items-center justify-between rounded-md border border-border px-4 py-3"
                   >
                     <div className="flex items-center gap-4">
-                      <span className="text-sm font-medium text-slate-200">
+                      <span className="text-sm font-medium text-text-primary">
                         {exc.exceptionDate}
                       </span>
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-text-secondary">
                         {exc.name || "—"}
                       </span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           exc.dayType === "NON_WORKING" ||
                           exc.dayType === "EXCEPTION_NON_WORKING"
-                            ? "bg-red-500/20 text-red-400"
-                            : "bg-green-500/20 text-green-400"
+                            ? "bg-red-500/20 text-danger"
+                            : "bg-success/20 text-success"
                         }`}
                       >
                         {exc.dayType.replace(/_/g, " ")}
                       </span>
                       {exc.startTime1 && (
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-text-muted">
                           {exc.startTime1}–{exc.endTime1}
                           {exc.startTime2 ? `, ${exc.startTime2}–${exc.endTime2}` : ""}
                         </span>
@@ -658,7 +658,7 @@ export default function CalendarDetailPage() {
                     </div>
                     <button
                       onClick={() => handleRemoveException(exc.id)}
-                      className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                      className="rounded p-1 text-text-muted hover:bg-danger/10 hover:text-danger"
                     >
                       <Trash2 size={14} />
                     </button>

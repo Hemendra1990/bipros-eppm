@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { format, eachMonthOfInterval, eachDayOfInterval, addDays, differenceInDays } from "date-fns";
+import { format, eachMonthOfInterval, addDays, differenceInDays } from "date-fns";
 
 interface DateRange {
   start: Date;
@@ -24,7 +24,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
   const headerHeight = 80;
 
   return (
-    <svg width={totalWidth} height={headerHeight} className="sticky top-0 bg-slate-900/50 border-b border-slate-800">
+    <svg width={totalWidth} height={headerHeight} className="sticky top-0 bg-surface/50 border-b border-border">
       {/* Month headers */}
       <g>
         {months.map((month, idx) => {
@@ -48,8 +48,8 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                 y="0"
                 width={width}
                 height="40"
-                fill="#1e293b"
-                stroke="#475569"
+                fill="var(--surface-hover)"
+                stroke="var(--border)"
                 strokeWidth="1"
               />
               <text
@@ -58,7 +58,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                 textAnchor="middle"
                 fontSize="13"
                 fontWeight="bold"
-                fill="#cbd5e1"
+                fill="var(--text-secondary)"
               >
                 {format(month, "MMM yyyy")}
               </text>
@@ -82,7 +82,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                   x={x + 5}
                   y="72"
                   fontSize="11"
-                  fill="#94a3b8"
+                  fill="var(--text-muted)"
                   fontWeight="600"
                 >
                   W{Math.ceil((i + 1) / 7)}
@@ -93,7 +93,7 @@ export function GanttTimescale({ dateRange, pixelsPerDay }: GanttTimescaleProps)
                 y1="40"
                 x2={x}
                 y2="80"
-                stroke={isMonday ? "#64748b" : "#334155"}
+                stroke={isMonday ? "var(--text-muted)" : "var(--border)"}
                 strokeWidth={isMonday ? "1" : "0.5"}
               />
             </g>

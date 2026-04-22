@@ -60,7 +60,7 @@ const columns: ColumnDef<RiskResponse>[] = [
     label: "RAG",
     render: (_val: unknown, row: RiskResponse) => {
       const rag = computeRag(row);
-      if (!rag) return <span className="text-slate-500">—</span>;
+      if (!rag) return <span className="text-text-muted">—</span>;
       return (
         <span className={`px-2 py-1 rounded text-xs font-bold ${ragColors[rag] || ""}`}>
           {rag}
@@ -95,7 +95,7 @@ const columns: ColumnDef<RiskResponse>[] = [
     label: "Residual",
     render: (val: unknown) => {
       const score = val as number;
-      return <span className="font-mono text-slate-400">{score?.toFixed(1)}</span>;
+      return <span className="font-mono text-text-secondary">{score?.toFixed(1)}</span>;
     },
   },
 ];
@@ -146,23 +146,23 @@ export default function RisksPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-fuchsia-900/20 rounded-lg border border-fuchsia-800 p-4">
-          <p className="text-xs text-slate-400 uppercase">Crimson</p>
+          <p className="text-xs text-text-secondary uppercase">Crimson</p>
           <p className="text-2xl font-bold text-fuchsia-300">{crimsonCount}</p>
         </div>
-        <div className="bg-red-900/20 rounded-lg border border-red-800 p-4">
-          <p className="text-xs text-slate-400 uppercase">Red</p>
-          <p className="text-2xl font-bold text-red-300">{redCount}</p>
+        <div className="bg-danger/10 rounded-lg border border-red-800 p-4">
+          <p className="text-xs text-text-secondary uppercase">Red</p>
+          <p className="text-2xl font-bold text-danger">{redCount}</p>
         </div>
-        <div className="bg-amber-900/20 rounded-lg border border-amber-800 p-4">
-          <p className="text-xs text-slate-400 uppercase">Amber</p>
-          <p className="text-2xl font-bold text-amber-300">{amberCount}</p>
+        <div className="bg-warning/10 rounded-lg border border-amber-800 p-4">
+          <p className="text-xs text-text-secondary uppercase">Amber</p>
+          <p className="text-2xl font-bold text-warning">{amberCount}</p>
         </div>
-        <div className="bg-emerald-900/20 rounded-lg border border-emerald-800 p-4">
-          <p className="text-xs text-slate-400 uppercase">Green</p>
-          <p className="text-2xl font-bold text-emerald-300">{greenCount}</p>
+        <div className="bg-success/10 rounded-lg border border-emerald-800 p-4">
+          <p className="text-xs text-text-secondary uppercase">Green</p>
+          <p className="text-2xl font-bold text-success">{greenCount}</p>
         </div>
         <div className="bg-blue-900/20 rounded-lg border border-blue-800 p-4">
-          <p className="text-xs text-slate-400 uppercase">Opportunities</p>
+          <p className="text-xs text-text-secondary uppercase">Opportunities</p>
           <p className="text-2xl font-bold text-blue-300">{opportunityCount}</p>
         </div>
       </div>
@@ -177,30 +177,30 @@ export default function RisksPage() {
 
       {/* Create Form */}
       {showCreateForm && (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-white">New Risk</h3>
+        <div className="bg-surface/50 rounded-lg border border-border p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-text-primary">New Risk</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Code</label>
+              <label className="block text-sm text-text-secondary mb-1">Code</label>
               <input
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-white"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded text-sm text-text-primary"
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                 placeholder="RISK-DMIC-025"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Title</label>
+              <label className="block text-sm text-text-secondary mb-1">Title</label>
               <input
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-white"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded text-sm text-text-primary"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Category</label>
+              <label className="block text-sm text-text-secondary mb-1">Category</label>
               <select
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-white"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded text-sm text-text-primary"
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value as CreateRiskRequest["category"] })}
               >
@@ -210,34 +210,34 @@ export default function RisksPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Probability (1-5)</label>
+              <label className="block text-sm text-text-secondary mb-1">Probability (1-5)</label>
               <input
                 type="number"
                 min={1}
                 max={5}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-white"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded text-sm text-text-primary"
                 value={formData.probability}
                 onChange={(e) => setFormData({ ...formData, probability: +e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Impact Cost (1-5)</label>
+              <label className="block text-sm text-text-secondary mb-1">Impact Cost (1-5)</label>
               <input
                 type="number"
                 min={1}
                 max={5}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-white"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded text-sm text-text-primary"
                 value={formData.impactCost}
                 onChange={(e) => setFormData({ ...formData, impactCost: +e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Impact Schedule (1-5)</label>
+              <label className="block text-sm text-text-secondary mb-1">Impact Schedule (1-5)</label>
               <input
                 type="number"
                 min={1}
                 max={5}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-white"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded text-sm text-text-primary"
                 value={formData.impactSchedule}
                 onChange={(e) => setFormData({ ...formData, impactSchedule: +e.target.value })}
               />
@@ -254,7 +254,7 @@ export default function RisksPage() {
 
       {/* Risk Table */}
       {isLoading ? (
-        <div className="text-center py-12 text-slate-400">Loading risks...</div>
+        <div className="text-center py-12 text-text-secondary">Loading risks...</div>
       ) : risks.length === 0 ? (
         <EmptyState
           icon={AlertTriangle}

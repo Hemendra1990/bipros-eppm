@@ -38,7 +38,7 @@ function useDialog() {
   return context;
 }
 
-export interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type DialogContentProps = React.HTMLAttributes<HTMLDivElement>;
 
 export function DialogContent({ className = '', children, ...props }: DialogContentProps) {
   const { isOpen, onOpenChange } = useDialog();
@@ -48,13 +48,13 @@ export function DialogContent({ className = '', children, ...props }: DialogCont
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
       <div
-        className={`bg-slate-900/50 rounded-lg shadow-lg max-w-md w-full mx-4 ${className}`}
+        className={`bg-surface rounded-lg shadow-lg max-w-md w-full mx-4 border border-border ${className}`}
         {...props}
       >
         {children}
         <button
           onClick={() => onOpenChange(false)}
-          className="absolute top-2 right-2 text-slate-500 hover:text-slate-300"
+          className="absolute top-2 right-2 text-text-muted hover:text-text-primary"
         >
           ×
         </button>
@@ -63,14 +63,14 @@ export function DialogContent({ className = '', children, ...props }: DialogCont
   );
 }
 
-export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type DialogHeaderProps = React.HTMLAttributes<HTMLDivElement>;
 
 export function DialogHeader({ className = '', ...props }: DialogHeaderProps) {
-  return <div className={`px-6 py-4 border-b border-slate-800 ${className}`} {...props} />;
+  return <div className={`px-6 py-4 border-b border-border ${className}`} {...props} />;
 }
 
-export interface DialogTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {}
+export type DialogTitleProps = React.HTMLAttributes<HTMLHeadingElement>;
 
 export function DialogTitle({ className = '', ...props }: DialogTitleProps) {
-  return <h2 className={`text-lg font-semibold ${className}`} {...props} />;
+  return <h2 className={`text-lg font-semibold text-text-primary ${className}`} {...props} />;
 }

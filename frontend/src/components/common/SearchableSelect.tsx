@@ -119,21 +119,21 @@ export function SearchableSelect({
           onClick={handleOpen}
           disabled={disabled}
           className={cn(
-            "flex w-full items-center justify-between rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-left",
-            "focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-slate-600",
-            value ? "text-white" : "text-slate-500"
+            "flex w-full items-center justify-between rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-left",
+            "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent",
+            disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-border",
+            value ? "text-text-primary" : "text-text-muted"
           )}
         >
           <span className="truncate">{selectedLabel || placeholder}</span>
-          <ChevronDown size={16} className="ml-2 text-slate-400 flex-shrink-0" />
+          <ChevronDown size={16} className="ml-2 text-text-secondary flex-shrink-0" />
         </button>
       )}
 
       {/* Search Input (shown when open) */}
       {isOpen && (
-        <div className="flex items-center rounded-md border border-blue-500 bg-slate-800 ring-1 ring-blue-500">
-          <Search size={14} className="ml-3 text-slate-400 flex-shrink-0" />
+        <div className="flex items-center rounded-md border border-accent bg-surface-hover ring-1 ring-blue-500">
+          <Search size={14} className="ml-3 text-text-secondary flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -141,7 +141,7 @@ export function SearchableSelect({
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className="w-full bg-transparent px-2 py-2 text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="w-full bg-transparent px-2 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none"
           />
           {(search || value) && (
             <button
@@ -154,7 +154,7 @@ export function SearchableSelect({
                   setIsOpen(false);
                 }
               }}
-              className="mr-2 text-slate-400 hover:text-white flex-shrink-0"
+              className="mr-2 text-text-secondary hover:text-text-primary flex-shrink-0"
             >
               <X size={14} />
             </button>
@@ -166,10 +166,10 @@ export function SearchableSelect({
       {isOpen && (
         <ul
           ref={listRef}
-          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-700 bg-slate-800 py-1 shadow-lg"
+          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-surface-hover py-1 shadow-lg"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-slate-500">No matches found</li>
+            <li className="px-3 py-2 text-sm text-text-muted">No matches found</li>
           ) : (
             filtered.map((option, index) => (
               <li
@@ -179,10 +179,10 @@ export function SearchableSelect({
                 className={cn(
                   "cursor-pointer px-3 py-2 text-sm transition-colors",
                   index === highlightedIndex
-                    ? "bg-blue-600 text-white"
+                    ? "bg-accent text-text-primary"
                     : option.value === value
-                      ? "bg-blue-500/10 text-blue-400"
-                      : "text-slate-300 hover:bg-slate-700"
+                      ? "bg-accent/10 text-accent"
+                      : "text-text-secondary hover:bg-surface-active"
                 )}
               >
                 {option.label}

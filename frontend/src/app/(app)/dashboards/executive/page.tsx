@@ -116,35 +116,35 @@ export default function ExecutiveDashboardPage() {
       case "CRIMSON":
         return "bg-rose-700/20 text-rose-200";
       case "RED":
-        return "bg-red-500/10 text-red-300";
+        return "bg-danger/10 text-danger";
       case "AMBER":
-        return "bg-amber-500/10 text-amber-300";
+        return "bg-warning/10 text-warning";
       case "GREEN":
-        return "bg-emerald-500/10 text-emerald-300";
+        return "bg-success/10 text-success";
       case "OPPORTUNITY":
         return "bg-sky-500/10 text-sky-300";
       default:
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "GREEN":
-        return "text-emerald-400";
+        return "text-success";
       case "AMBER":
-        return "text-amber-400";
+        return "text-warning";
       case "RED":
-        return "text-red-400";
+        return "text-danger";
       default:
-        return "text-slate-400";
+        return "text-text-secondary";
     }
   };
 
   if (isLoadingConfig) {
     return (
       <div className="flex items-center justify-center p-6">
-        <div className="text-slate-500">Loading dashboard...</div>
+        <div className="text-text-muted">Loading dashboard...</div>
       </div>
     );
   }
@@ -153,15 +153,15 @@ export default function ExecutiveDashboardPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-4">
         <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-slate-800">
+          <button className="rounded p-1 hover:bg-surface-hover">
             <ArrowLeft size={20} />
           </button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-text-primary">
             Executive Dashboard
           </h1>
-          <p className="text-slate-400">
+          <p className="text-text-secondary">
             Corridor-level overview and strategic metrics
           </p>
         </div>
@@ -170,17 +170,17 @@ export default function ExecutiveDashboardPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Projects Overview */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Project Portfolio
             </h2>
             {isLoadingProjects ? (
-              <div className="text-center text-slate-400">
+              <div className="text-center text-text-secondary">
                 Loading projects...
               </div>
             ) : projects.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-                <p className="text-slate-400">No projects available</p>
+              <div className="rounded-lg border border-dashed border-border py-8 text-center">
+                <p className="text-text-secondary">No projects available</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -196,15 +196,15 @@ export default function ExecutiveDashboardPage() {
                   return (
                     <div
                       key={project.id}
-                      className="rounded-lg border border-slate-800 bg-slate-800/50 p-4 cursor-pointer hover:bg-slate-700/50 transition"
+                      className="rounded-lg border border-border bg-surface-hover/50 p-4 cursor-pointer hover:bg-surface-active/50 transition"
                       onClick={() => setSelectedProjectId(project.id)}
                     >
                       <div className="mb-3 flex items-start justify-between">
                         <div>
-                          <h3 className="font-medium text-white">
+                          <h3 className="font-medium text-text-primary">
                             {project.name}
                           </h3>
-                          <p className="text-sm text-slate-400">
+                          <p className="text-sm text-text-secondary">
                             {project.description}
                           </p>
                         </div>
@@ -221,14 +221,14 @@ export default function ExecutiveDashboardPage() {
                         {/* Progress */}
                         <div>
                           <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-medium text-slate-400">
+                            <span className="text-xs font-medium text-text-secondary">
                               Progress
                             </span>
-                            <span className="text-xs font-semibold text-white">
+                            <span className="text-xs font-semibold text-text-primary">
                               {progressPercent}%
                             </span>
                           </div>
-                          <div className="h-2 w-full rounded-full bg-slate-700">
+                          <div className="h-2 w-full rounded-full bg-surface-active">
                             <div
                               className="h-2 rounded-full bg-blue-500 transition-all"
                               style={{ width: `${progressPercent}%` }}
@@ -239,21 +239,21 @@ export default function ExecutiveDashboardPage() {
                         {/* Budget */}
                         <div>
                           <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-medium text-slate-400">
+                            <span className="text-xs font-medium text-text-secondary">
                               Budget Utilization
                             </span>
-                            <span className="text-xs font-semibold text-white">
+                            <span className="text-xs font-semibold text-text-primary">
                               {formatCrores(spentCrores)} / {formatCrores(budgetCrores)}
                             </span>
                           </div>
-                          <div className="h-2 w-full rounded-full bg-slate-700">
+                          <div className="h-2 w-full rounded-full bg-surface-active">
                             <div
                               className={`h-2 rounded-full transition-all ${
                                 budgetUtilization > 90
                                   ? "bg-red-500"
                                   : budgetUtilization > 75
                                     ? "bg-amber-500"
-                                    : "bg-emerald-500"
+                                    : "bg-success"
                               }`}
                               style={{ width: `${Math.min(budgetUtilization, 100)}%` }}
                             />
@@ -269,26 +269,26 @@ export default function ExecutiveDashboardPage() {
         </div>
 
         {/* Top Risks */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">
             Top 5 Risks
           </h2>
           {isLoadingRisks ? (
-            <div className="text-center text-slate-400">Loading risks...</div>
+            <div className="text-center text-text-secondary">Loading risks...</div>
           ) : !topRisks || topRisks.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-              <p className="text-slate-400">No risks available</p>
+            <div className="rounded-lg border border-dashed border-border py-8 text-center">
+              <p className="text-text-secondary">No risks available</p>
             </div>
           ) : (
             <div className="space-y-3">
               {topRisks.map((risk: RiskResponse) => (
-                <div key={risk.id} className="rounded-lg border border-slate-800 bg-slate-800/50 p-3">
+                <div key={risk.id} className="rounded-lg border border-border bg-surface-hover/50 p-3">
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                      <div className="text-[10px] uppercase tracking-wide text-text-muted">
                         {risk.code}
                       </div>
-                      <span className="text-sm font-medium text-white">
+                      <span className="text-sm font-medium text-text-primary">
                         {risk.title}
                       </span>
                     </div>
@@ -300,11 +300,11 @@ export default function ExecutiveDashboardPage() {
                       {risk.rag || "—"}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 line-clamp-2">
+                  <p className="text-xs text-text-secondary line-clamp-2">
                     {risk.description || "No description"}
                   </p>
                   {risk.residualRiskScore != null && (
-                    <div className="mt-2 text-[11px] text-slate-500">
+                    <div className="mt-2 text-[11px] text-text-muted">
                       Residual score: {Number(risk.residualRiskScore).toFixed(1)}
                     </div>
                   )}
@@ -317,20 +317,20 @@ export default function ExecutiveDashboardPage() {
 
       {/* Project KPIs */}
       {selectedProjectId && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">
             Project KPIs
           </h2>
           {isLoadingKpis ? (
-            <div className="text-center text-slate-400">Loading KPIs...</div>
+            <div className="text-center text-text-secondary">Loading KPIs...</div>
           ) : projectKpis && projectKpis.data && projectKpis.data.length > 0 ? (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {projectKpis.data.map((kpi) => (
                 <div
                   key={kpi.id}
-                  className="rounded-lg border border-slate-800 bg-slate-800/50 p-4 text-center"
+                  className="rounded-lg border border-border bg-surface-hover/50 p-4 text-center"
                 >
-                  <div className="mb-2 text-sm font-medium text-slate-400">
+                  <div className="mb-2 text-sm font-medium text-text-secondary">
                     KPI {kpi.kpiDefinitionId}
                   </div>
                   <div
@@ -343,10 +343,10 @@ export default function ExecutiveDashboardPage() {
                   <div
                     className={`mt-2 inline-block rounded-full px-2 py-1 text-xs font-semibold ${
                       kpi.status === "GREEN"
-                        ? "bg-emerald-500/10 text-emerald-300"
+                        ? "bg-success/10 text-success"
                         : kpi.status === "AMBER"
-                          ? "bg-amber-500/10 text-amber-300"
-                          : "bg-red-500/10 text-red-300"
+                          ? "bg-warning/10 text-warning"
+                          : "bg-danger/10 text-danger"
                     }`}
                   >
                     {kpi.status}
@@ -355,8 +355,8 @@ export default function ExecutiveDashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-              <p className="text-slate-400">No KPIs available for this project</p>
+            <div className="rounded-lg border border-dashed border-border py-8 text-center">
+              <p className="text-text-secondary">No KPIs available for this project</p>
             </div>
           )}
         </div>

@@ -221,7 +221,7 @@ export default function ProjectDetailPage() {
         <div className="flex gap-2">
           <Link
             href={`/projects/${projectId}/activities/${value}`}
-            className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+            className="text-accent hover:text-blue-300 text-sm font-medium"
           >
             Edit
           </Link>
@@ -231,7 +231,7 @@ export default function ProjectDetailPage() {
                 deleteActivityMutation.mutate(String(value));
               }
             }}
-            className="text-red-400 hover:text-red-300 text-sm font-medium"
+            className="text-danger hover:text-danger text-sm font-medium"
           >
             Delete
           </button>
@@ -243,12 +243,12 @@ export default function ProjectDetailPage() {
   if (isLoadingProject || isResolvingCode) {
     return (
       <div className="space-y-4">
-        <div className="h-8 w-48 animate-pulse rounded bg-slate-800/50" />
+        <div className="h-8 w-48 animate-pulse rounded bg-surface-hover/50" />
         <div className="grid grid-cols-2 gap-6">
-          <div className="h-28 animate-pulse rounded-xl bg-slate-800/50" />
-          <div className="h-28 animate-pulse rounded-xl bg-slate-800/50" />
+          <div className="h-28 animate-pulse rounded-xl bg-surface-hover/50" />
+          <div className="h-28 animate-pulse rounded-xl bg-surface-hover/50" />
         </div>
-        <div className="h-32 animate-pulse rounded-xl bg-slate-800/50" />
+        <div className="h-32 animate-pulse rounded-xl bg-surface-hover/50" />
       </div>
     );
   }
@@ -256,9 +256,9 @@ export default function ProjectDetailPage() {
   if (!project) {
     return (
       <div className="py-12 text-center">
-        <p className="text-red-400">Project not found</p>
+        <p className="text-danger">Project not found</p>
         {!isUuid && (
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-text-muted">
             No project with code &ldquo;{projectId}&rdquo; was found. Try using the project&apos;s UUID or navigate from the projects list.
           </p>
         )}
@@ -425,12 +425,12 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h3 className="text-sm font-medium text-slate-400">Code</h3>
-          <p className="mt-2 text-2xl font-bold text-white">{project.code}</p>
+        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <h3 className="text-sm font-medium text-text-secondary">Code</h3>
+          <p className="mt-2 text-2xl font-bold text-text-primary">{project.code}</p>
         </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h3 className="text-sm font-medium text-slate-400">Status</h3>
+        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <h3 className="text-sm font-medium text-text-secondary">Status</h3>
           <div className="mt-2 flex items-center gap-3">
             <StatusBadge status={project.status} />
             {availableTransitions.length > 0 && (
@@ -440,7 +440,7 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
                     key={t.value}
                     onClick={() => handleStatusTransition(t.value)}
                     disabled={isTransitioning}
-                    className="rounded-md border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-slate-800/50 disabled:opacity-50"
+                    className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50 disabled:opacity-50"
                   >
                     {isTransitioning ? "..." : t.label}
                   </button>
@@ -451,25 +451,25 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-        <h3 className="text-sm font-medium text-slate-400">Description</h3>
-        <p className="mt-2 text-white">{project.description || "No description"}</p>
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+        <h3 className="text-sm font-medium text-text-secondary">Description</h3>
+        <p className="mt-2 text-text-primary">{project.description || "No description"}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h3 className="text-sm font-medium text-slate-400">Planned Start Date</h3>
-          <p className="mt-2 text-lg text-white">{formatDate(project.plannedStartDate)}</p>
+        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <h3 className="text-sm font-medium text-text-secondary">Planned Start Date</h3>
+          <p className="mt-2 text-lg text-text-primary">{formatDate(project.plannedStartDate)}</p>
         </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h3 className="text-sm font-medium text-slate-400">Planned Finish Date</h3>
-          <p className="mt-2 text-lg text-white">{formatDate(project.plannedFinishDate)}</p>
+        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <h3 className="text-sm font-medium text-text-secondary">Planned Finish Date</h3>
+          <p className="mt-2 text-lg text-text-primary">{formatDate(project.plannedFinishDate)}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h3 className="text-sm font-medium text-slate-400">Priority</h3>
+        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <h3 className="text-sm font-medium text-text-secondary">Priority</h3>
           <p className={`mt-2 text-lg font-medium ${getPriorityInfo(project.priority).color}`}>
             {getPriorityInfo(project.priority).label} ({project.priority})
           </p>
@@ -478,13 +478,13 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
       </div>
 
       {/* KPI Mini-Dashboard */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Key Performance Indicators</h3>
+          <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Key Performance Indicators</h3>
           <button
             onClick={() => calculateKpisMutation.mutate()}
             disabled={calculateKpisMutation.isPending}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/50 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50 disabled:opacity-50"
           >
             <RefreshCw size={12} className={calculateKpisMutation.isPending ? "animate-spin" : ""} />
             {calculateKpisMutation.isPending ? "Calculating..." : "Recalculate"}
@@ -493,27 +493,27 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         {isLoadingKpis ? (
           <div className="grid grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-800/50" />
+              <div key={i} className="h-20 animate-pulse rounded-lg bg-surface-hover/50" />
             ))}
           </div>
         ) : kpiSnapshots.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-            <p className="text-slate-400 text-sm">No KPI data yet. Click &quot;Recalculate&quot; to generate KPI snapshots.</p>
+          <div className="rounded-lg border border-dashed border-border py-8 text-center">
+            <p className="text-text-secondary text-sm">No KPI data yet. Click &quot;Recalculate&quot; to generate KPI snapshots.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {kpiSnapshots.map((kpi: KpiSnapshot) => {
               const def = kpiDefMap.get(kpi.kpiDefinitionId);
-              const statusColor = kpi.status === "GREEN" ? "text-emerald-400" : kpi.status === "AMBER" ? "text-amber-400" : "text-red-400";
-              const statusBg = kpi.status === "GREEN" ? "bg-emerald-500/10 border-emerald-500/20" : kpi.status === "AMBER" ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+              const statusColor = kpi.status === "GREEN" ? "text-success" : kpi.status === "AMBER" ? "text-warning" : "text-danger";
+              const statusBg = kpi.status === "GREEN" ? "bg-success/10 border-success/20" : kpi.status === "AMBER" ? "bg-warning/10 border-warning/20" : "bg-danger/10 border-danger/20";
               return (
                 <div key={kpi.id} className={`rounded-lg border p-4 ${statusBg}`}>
-                  <p className="text-xs font-medium text-slate-400 truncate">{def?.name ?? kpi.kpiDefinitionId}</p>
+                  <p className="text-xs font-medium text-text-secondary truncate">{def?.name ?? kpi.kpiDefinitionId}</p>
                   <p className={`mt-1 text-2xl font-bold ${statusColor}`}>
                     {typeof kpi.value === "number" ? kpi.value.toFixed(2) : kpi.value}
-                    {def?.unit ? <span className="ml-1 text-sm font-normal text-slate-500">{def.unit}</span> : null}
+                    {def?.unit ? <span className="ml-1 text-sm font-normal text-text-muted">{def.unit}</span> : null}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-text-muted">
                     {kpi.calculatedAt ? new Date(kpi.calculatedAt).toLocaleDateString() : ""}
                   </p>
                 </div>
@@ -549,36 +549,36 @@ function DataDateCard({ project }: { project: ProjectResponse }) {
   };
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-      <h3 className="text-sm font-medium text-slate-400">Data Date</h3>
+    <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+      <h3 className="text-sm font-medium text-text-secondary">Data Date</h3>
       {isEditing ? (
         <div className="mt-2 flex items-center gap-2">
           <input
             type="date"
             value={dateValue}
             onChange={(e) => setDateValue(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded-md border border-border bg-surface-hover px-3 py-1.5 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
           >
             {isSaving ? "..." : "Save"}
           </button>
           <button
             onClick={() => { setIsEditing(false); setDateValue(project.dataDate ?? ""); }}
-            className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/50"
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
           >
             Cancel
           </button>
         </div>
       ) : (
         <div className="mt-2 flex items-center gap-3">
-          <p className="text-lg text-white">{project.dataDate ? formatDate(project.dataDate) : "Not set"}</p>
+          <p className="text-lg text-text-primary">{project.dataDate ? formatDate(project.dataDate) : "Not set"}</p>
           <button
             onClick={() => setIsEditing(true)}
-            className="rounded-md border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-slate-800/50"
+            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
           >
             Set
           </button>
@@ -631,7 +631,7 @@ function ActivitiesTab({
       return {
         ...col,
         render: (value, row: ActivityResponse & { isCritical: boolean }) => (
-          <span className={row.isCritical ? "font-bold text-red-400" : ""}>
+          <span className={row.isCritical ? "font-bold text-danger" : ""}>
             {String(value)}
           </span>
         ),
@@ -641,7 +641,7 @@ function ActivitiesTab({
       return {
         ...col,
         render: (value, row: ActivityResponse & { isCritical: boolean }) => (
-          <span className={row.isCritical ? "font-bold text-red-400" : ""}>
+          <span className={row.isCritical ? "font-bold text-danger" : ""}>
             {String(value)}
           </span>
         ),
@@ -657,19 +657,19 @@ function ActivitiesTab({
     render: (_value, row) => {
       const p = row.predCount;
       const s = row.succCount;
-      if (p === 0 && s === 0) return <span className="text-slate-600">—</span>;
+      if (p === 0 && s === 0) return <span className="text-text-muted">—</span>;
       return (
-        <span className="text-xs text-slate-300">
-          {p > 0 && <span className="text-blue-400">{p}P</span>}
+        <span className="text-xs text-text-secondary">
+          {p > 0 && <span className="text-accent">{p}P</span>}
           {p > 0 && s > 0 && " / "}
-          {s > 0 && <span className="text-green-400">{s}S</span>}
+          {s > 0 && <span className="text-success">{s}S</span>}
         </span>
       );
     },
   });
 
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading activities...</div>;
+    return <div className="text-center text-text-muted">Loading activities...</div>;
   }
 
   return (
@@ -677,7 +677,7 @@ function ActivitiesTab({
       <div className="flex gap-3">
         <Link
           href={`/projects/${projectId}/activities/new`}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
         >
           <Plus size={16} />
           New Activity
@@ -685,7 +685,7 @@ function ActivitiesTab({
         <button
           onClick={onRunSchedule}
           disabled={isScheduling}
-          className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:bg-slate-500"
+          className="inline-flex items-center gap-2 rounded-md bg-success px-4 py-2 text-sm font-medium text-text-primary hover:bg-success/80 disabled:opacity-50"
         >
           <Play size={16} />
           {isScheduling ? "Running..." : "Run Schedule"}
@@ -693,11 +693,11 @@ function ActivitiesTab({
       </div>
 
       {scheduleError && (
-        <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">{scheduleError}</div>
+        <div className="rounded-md bg-danger/10 p-4 text-sm text-danger">{scheduleError}</div>
       )}
 
       {criticalPathIds.size > 0 && (
-        <div className="rounded-md bg-amber-500/10 p-4 text-sm text-amber-400">
+        <div className="rounded-md bg-warning/10 p-4 text-sm text-warning">
           <strong>Critical activities (shown in red):</strong> {criticalPathIds.size} activities
           on critical path
         </div>
@@ -728,7 +728,7 @@ function GanttTab({
   baselineActivities?: Array<{ activityId: string; baselineStartDate: string | null; baselineFinishDate: string | null }>;
 }) {
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading activities...</div>;
+    return <div className="text-center text-text-muted">Loading activities...</div>;
   }
 
   if (activities.length === 0) {
@@ -833,7 +833,7 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
   };
 
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading WBS...</div>;
+    return <div className="text-center text-text-muted">Loading WBS...</div>;
   }
 
   return (
@@ -841,14 +841,14 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
       <div className="flex justify-end gap-2">
         <button
           onClick={() => setShowTemplateSelector(!showTemplateSelector)}
-          className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-800/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
         >
           <FileText size={16} />
           Apply Template
         </button>
         <button
           onClick={handleAddRoot}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
         >
           <Plus size={16} />
           Add WBS Node
@@ -856,11 +856,11 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
       </div>
 
       {showTemplateSelector && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-lg">
-          <h3 className="text-sm font-semibold text-white mb-3">Select a WBS Template to Apply</h3>
-          <p className="text-xs text-slate-500 mb-4">This will create WBS nodes from the template structure. Existing nodes will not be affected.</p>
+        <div className="rounded-xl border border-border bg-surface/50 p-4 shadow-lg">
+          <h3 className="text-sm font-semibold text-text-primary mb-3">Select a WBS Template to Apply</h3>
+          <p className="text-xs text-text-muted mb-4">This will create WBS nodes from the template structure. Existing nodes will not be affected.</p>
           {!templatesData?.data || (Array.isArray(templatesData.data) && templatesData.data.length === 0) ? (
-            <p className="text-sm text-slate-500">No templates available. Create templates in Settings &gt; WBS Templates.</p>
+            <p className="text-sm text-text-muted">No templates available. Create templates in Settings &gt; WBS Templates.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {(Array.isArray(templatesData.data) ? templatesData.data : []).map((template: WbsTemplateResponse) => (
@@ -872,29 +872,29 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
                     }
                   }}
                   disabled={applyTemplateMutation.isPending}
-                  className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 text-left hover:border-blue-500/50 hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  className="rounded-lg border border-border bg-surface-hover/50 p-4 text-left hover:border-accent/50 hover:bg-surface-hover transition-colors disabled:opacity-50"
                 >
-                  <div className="text-sm font-medium text-white">{template.name}</div>
-                  <div className="text-xs text-slate-400 mt-1">{template.assetClass}</div>
+                  <div className="text-sm font-medium text-text-primary">{template.name}</div>
+                  <div className="text-xs text-text-secondary mt-1">{template.assetClass}</div>
                   {template.description && (
-                    <div className="text-xs text-slate-500 mt-2 line-clamp-2">{template.description}</div>
+                    <div className="text-xs text-text-muted mt-2 line-clamp-2">{template.description}</div>
                   )}
                 </button>
               ))}
             </div>
           )}
           <div className="mt-3">
-            <button onClick={() => setShowTemplateSelector(false)} className="text-sm text-slate-400 hover:text-white">Cancel</button>
+            <button onClick={() => setShowTemplateSelector(false)} className="text-sm text-text-secondary hover:text-text-primary">Cancel</button>
           </div>
         </div>
       )}
 
       {showForm && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-lg">
+        <div className="rounded-xl border border-border bg-surface/50 p-4 shadow-lg">
           <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="text-sm text-slate-400">
+            <div className="text-sm text-text-secondary">
               {parentNode
-                ? <>Adding child under: <span className="font-medium text-blue-400">{parentNode.code} — {parentNode.name}</span></>
+                ? <>Adding child under: <span className="font-medium text-accent">{parentNode.code} — {parentNode.name}</span></>
                 : "Adding top-level WBS node"
               }
             </div>
@@ -904,7 +904,7 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
                 placeholder="Code (e.g., PHASE-1)"
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="flex-1 rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="flex-1 rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
                 required
                 autoFocus
               />
@@ -913,20 +913,20 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
                 placeholder="Name (e.g., Design Phase)"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="flex-1 rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="flex-1 rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
                 required
               />
               <button
                 type="submit"
                 disabled={createMutation.isPending}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
               >
                 {createMutation.isPending ? "Creating..." : "Create"}
               </button>
               <button
                 type="button"
                 onClick={() => { setShowForm(false); setParentNode(null); }}
-                className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                className="rounded-md border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover"
               >
                 Cancel
               </button>
@@ -936,13 +936,13 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
       )}
 
       {wbsTree.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-          <h3 className="text-lg font-medium text-white">No WBS Structure</h3>
-          <p className="mt-2 text-slate-500">Click &quot;Add WBS Node&quot; above to create your first work package.</p>
+        <div className="rounded-lg border border-dashed border-border py-12 text-center">
+          <h3 className="text-lg font-medium text-text-primary">No WBS Structure</h3>
+          <p className="mt-2 text-text-muted">Click &quot;Add WBS Node&quot; above to create your first work package.</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h2 className="mb-4 text-lg font-semibold text-white">Work Breakdown Structure</h2>
+        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">Work Breakdown Structure</h2>
           <WbsTree
             nodes={wbsTree}
             onAddChild={handleAddChild}
@@ -955,8 +955,8 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
 
       {selectedWbs && (
         <div className="space-y-2">
-          <div className="text-sm text-slate-400">
-            Custom fields for: <span className="font-medium text-blue-400">{selectedWbs.code} — {selectedWbs.name}</span>
+          <div className="text-sm text-text-secondary">
+            Custom fields for: <span className="font-medium text-accent">{selectedWbs.code} — {selectedWbs.name}</span>
           </div>
           <UdfSection entityId={selectedWbs.id} subject="WBS" projectId={projectId} />
         </div>
@@ -1011,7 +1011,7 @@ function WbsTree({
           <div key={node.id}>
             <div
               onClick={() => onSelect?.(node)}
-              className={`group flex items-center hover:bg-slate-800/50 rounded-md py-1 pr-2 transition-colors cursor-pointer ${selectedId === node.id ? "bg-blue-500/10 ring-1 ring-blue-500/30" : ""}`}
+              className={`group flex items-center hover:bg-surface-hover/50 rounded-md py-1 pr-2 transition-colors cursor-pointer ${selectedId === node.id ? "bg-accent/10 ring-1 ring-blue-500/30" : ""}`}
             >
               {/* Tree guide lines */}
               {Array.from({ length: level }).map((_, i) => (
@@ -1019,16 +1019,16 @@ function WbsTree({
                   {isLast[i] ? (
                     <span className="w-px" />
                   ) : (
-                    <span className="w-px bg-slate-700 h-full min-h-[28px]" />
+                    <span className="w-px bg-surface-active h-full min-h-[28px]" />
                   )}
                 </span>
               ))}
 
               {/* Branch connector */}
               {level > 0 && (
-                <span className="inline-flex w-6 items-center justify-center flex-shrink-0 text-slate-700">
+                <span className="inline-flex w-6 items-center justify-center flex-shrink-0 text-text-muted">
                   {isLastNode ? "└" : "├"}
-                  <span className="inline-block w-2 h-px bg-slate-700" />
+                  <span className="inline-block w-2 h-px bg-surface-active" />
                 </span>
               )}
 
@@ -1037,7 +1037,7 @@ function WbsTree({
                 onClick={() => hasChildren && toggle(node.id)}
                 className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded ${
                   hasChildren
-                    ? "text-slate-400 hover:text-white hover:bg-slate-700 cursor-pointer"
+                    ? "text-text-secondary hover:text-text-primary hover:bg-surface-active cursor-pointer"
                     : "text-transparent cursor-default"
                 }`}
               >
@@ -1050,27 +1050,27 @@ function WbsTree({
               <span className="flex-shrink-0 mr-2">
                 {hasChildren ? (
                   isOpen ? (
-                    <FolderOpen size={16} className="text-amber-400" />
+                    <FolderOpen size={16} className="text-warning" />
                   ) : (
                     <Folder size={16} className="text-amber-500" />
                   )
                 ) : (
-                  <File size={16} className="text-slate-500" />
+                  <File size={16} className="text-text-muted" />
                 )}
               </span>
 
               {/* Node content */}
-              <span className="font-semibold text-blue-400 mr-2 flex-shrink-0">{node.code}</span>
-              <span className="text-slate-300 truncate">{node.name}</span>
+              <span className="font-semibold text-accent mr-2 flex-shrink-0">{node.code}</span>
+              <span className="text-text-secondary truncate">{node.name}</span>
 
               {/* Duration / percent badges */}
               {node.summaryDuration != null && (
-                <span className="ml-2 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400 flex-shrink-0">
+                <span className="ml-2 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-secondary flex-shrink-0">
                   {node.summaryDuration}d
                 </span>
               )}
               {node.summaryPercentComplete != null && (
-                <span className="ml-1 rounded-full bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-400 flex-shrink-0">
+                <span className="ml-1 rounded-full bg-emerald-900/40 px-2 py-0.5 text-xs text-success flex-shrink-0">
                   {node.summaryPercentComplete}%
                 </span>
               )}
@@ -1079,14 +1079,14 @@ function WbsTree({
               <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button
                   onClick={() => onAddChild(node)}
-                  className="rounded p-1 text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400"
+                  className="rounded p-1 text-text-muted hover:bg-success/10 hover:text-success"
                   title="Add child node"
                 >
                   <Plus size={14} />
                 </button>
                 <button
                   onClick={() => onDelete(node)}
-                  className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                  className="rounded p-1 text-text-muted hover:bg-danger/10 hover:text-danger"
                   title="Delete node"
                 >
                   <Trash2 size={14} />
@@ -1127,7 +1127,7 @@ function NetworkTab({
   isLoading: boolean;
 }) {
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading network diagram...</div>;
+    return <div className="text-center text-text-muted">Loading network diagram...</div>;
   }
 
   if (activities.length === 0) {
@@ -1235,7 +1235,7 @@ function BaselinesTab({
   };
 
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading baselines...</div>;
+    return <div className="text-center text-text-muted">Loading baselines...</div>;
   }
 
   return (
@@ -1243,7 +1243,7 @@ function BaselinesTab({
       {!showForm && (
         <button
           onClick={() => setShowForm(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
         >
           <Plus size={16} />
           Create Baseline
@@ -1251,26 +1251,26 @@ function BaselinesTab({
       )}
 
       {showForm && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-          <h3 className="mb-4 text-lg font-semibold text-white">Create New Baseline</h3>
+        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <h3 className="mb-4 text-lg font-semibold text-text-primary">Create New Baseline</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300">Name</label>
+              <label className="block text-sm font-medium text-text-secondary">Name</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
                 placeholder="Baseline name"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300">Type</label>
+              <label className="block text-sm font-medium text-text-secondary">Type</label>
               <select
                 value={formData.baselineType}
                 onChange={(e) => setFormData({ ...formData, baselineType: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none"
               >
                 <option value="PROJECT">PROJECT</option>
                 <option value="PRIMARY">PRIMARY</option>
@@ -1282,14 +1282,14 @@ function BaselinesTab({
               <button
                 type="submit"
                 disabled={isCreating}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-500"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
               >
                 {isCreating ? "Creating..." : "Create"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
               >
                 Cancel
               </button>
@@ -1307,11 +1307,11 @@ function BaselinesTab({
       ) : (
         <div className="space-y-4">
           {baselines.map((baseline) => (
-            <div key={baseline.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+            <div key={baseline.id} className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white">{baseline.name}</h3>
-                  <div className="mt-2 space-y-1 text-sm text-slate-400">
+                  <h3 className="text-lg font-semibold text-text-primary">{baseline.name}</h3>
+                  <div className="mt-2 space-y-1 text-sm text-text-secondary">
                     <p>Type: {baseline.baselineType}</p>
                     <p>Date: {new Date(baseline.baselineDate).toLocaleDateString()}</p>
                     <p>Activities: {baseline.totalActivities}</p>
@@ -1322,7 +1322,7 @@ function BaselinesTab({
                   <button
                     onClick={() => handleViewVariance(baseline.id)}
                     disabled={loadingVarianceId === baseline.id}
-                    className="inline-flex items-center gap-2 rounded-md bg-slate-800/50 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700/50 disabled:bg-slate-500"
+                    className="inline-flex items-center gap-2 rounded-md bg-surface-hover/50 px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active/50 disabled:opacity-50"
                   >
                     <Eye size={16} />
                     {expandedBaselineId === baseline.id ? "Hide Variance" : "View Variance"}
@@ -1330,7 +1330,7 @@ function BaselinesTab({
                   <button
                     onClick={() => handleCompareSchedule(baseline.id)}
                     disabled={loadingComparisonId === baseline.id}
-                    className="inline-flex items-center gap-2 rounded-md bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20 disabled:bg-slate-500"
+                    className="inline-flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent-hover/20 disabled:opacity-50"
                   >
                     <Eye size={16} />
                     {comparisonBaselineId === baseline.id ? "Hide Compare" : "Compare"}
@@ -1342,7 +1342,7 @@ function BaselinesTab({
                       }
                     }}
                     disabled={isDeleting}
-                    className="inline-flex items-center gap-2 rounded-md bg-red-500/10 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 disabled:bg-slate-500"
+                    className="inline-flex items-center gap-2 rounded-md bg-danger/10 px-3 py-2 text-sm font-medium text-danger hover:bg-danger/20 disabled:opacity-50"
                   >
                     <Trash2 size={16} />
                     Delete
@@ -1351,15 +1351,15 @@ function BaselinesTab({
               </div>
 
               {expandedBaselineId === baseline.id && varianceData[baseline.id] && (
-                <div className="mt-6 border-t border-slate-800 pt-6">
-                  <h4 className="mb-4 font-semibold text-white">Variance Dashboard</h4>
+                <div className="mt-6 border-t border-border pt-6">
+                  <h4 className="mb-4 font-semibold text-text-primary">Variance Dashboard</h4>
                   <VarianceDashboard data={varianceData[baseline.id]} />
                 </div>
               )}
 
               {comparisonBaselineId === baseline.id && comparisonData[baseline.id] && (
-                <div className="mt-6 border-t border-slate-800 pt-6">
-                  <h4 className="mb-4 font-semibold text-white">Schedule Comparison</h4>
+                <div className="mt-6 border-t border-border pt-6">
+                  <h4 className="mb-4 font-semibold text-text-primary">Schedule Comparison</h4>
                   <ScheduleComparisonTable data={comparisonData[baseline.id]} />
                 </div>
               )}
@@ -1373,9 +1373,9 @@ function BaselinesTab({
 
 function ComingSoonTab({ tabName }: { tabName: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-      <h3 className="text-lg font-medium text-white capitalize">{tabName}</h3>
-      <p className="mt-2 text-slate-500">This feature is coming soon.</p>
+    <div className="rounded-lg border border-dashed border-border py-12 text-center">
+      <h3 className="text-lg font-medium text-text-primary capitalize">{tabName}</h3>
+      <p className="mt-2 text-text-muted">This feature is coming soon.</p>
     </div>
   );
 }

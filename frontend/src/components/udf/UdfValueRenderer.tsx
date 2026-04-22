@@ -32,19 +32,19 @@ export function UdfValueRenderer({
 }: UdfValueRendererProps) {
   if (fields.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-slate-500">
+      <p className="py-4 text-center text-sm text-text-muted">
         No custom fields defined for this item.
       </p>
     );
   }
 
   const inputClass =
-    "block w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    "block w-full rounded-md border border-border bg-surface-hover/50 px-3 py-1.5 text-sm text-text-primary placeholder-gray-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
 
   const renderInput = (field: UdfValue) => {
     if (readOnly) {
       return (
-        <span className="text-sm text-slate-300">
+        <span className="text-sm text-text-secondary">
           {formatValue(field) || "—"}
         </span>
       );
@@ -106,11 +106,11 @@ export function UdfValueRenderer({
         const Icon = TYPE_ICONS[field.dataType] ?? Type;
         return (
           <div key={field.fieldId} className="flex items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-slate-800">
-              <Icon size={14} className="text-blue-400" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-surface-hover">
+              <Icon size={14} className="text-accent" />
             </div>
             <div className="w-36 shrink-0">
-              <span className="text-sm font-medium text-slate-300">
+              <span className="text-sm font-medium text-text-secondary">
                 {field.fieldName}
               </span>
             </div>

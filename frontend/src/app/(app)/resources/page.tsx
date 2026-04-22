@@ -99,7 +99,7 @@ export default function ResourcesPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleEdit(row)}
-            className="text-slate-400 hover:text-blue-400"
+            className="text-text-secondary hover:text-accent"
             title="Edit resource"
           >
             <Pencil size={16} />
@@ -111,7 +111,7 @@ export default function ResourcesPage() {
               }
             }}
             disabled={deleteMutation.isPending}
-            className="text-slate-400 hover:text-red-400 disabled:text-slate-500"
+            className="text-text-secondary hover:text-danger disabled:text-text-muted"
             title="Delete resource"
           >
             <Trash2 size={16} />
@@ -129,7 +129,7 @@ export default function ResourcesPage() {
         actions={
           <Link
             href="/resources/new"
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
           >
             <Plus size={16} />
             New Resource
@@ -143,11 +143,11 @@ export default function ResourcesPage() {
       />
 
       {isLoading && (
-        <div className="py-12 text-center text-slate-500">Loading resources...</div>
+        <div className="py-12 text-center text-text-muted">Loading resources...</div>
       )}
 
       {error && (
-        <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">
+        <div className="rounded-md bg-danger/10 p-4 text-sm text-danger">
           Failed to load resources. Is the backend running?
         </div>
       )}
@@ -164,38 +164,38 @@ export default function ResourcesPage() {
       {/* Edit Resource Modal */}
       {editingResource && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Edit Resource: {editingResource.code}
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300">Name</label>
+                <label className="block text-sm font-medium text-text-secondary">Name</label>
                 <input
                   type="text"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Status</label>
+                  <label className="block text-sm font-medium text-text-secondary">Status</label>
                   <select
                     value={editForm.status}
                     onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   >
                     <option value="ACTIVE">Active</option>
                     <option value="INACTIVE">Inactive</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Resource Type</label>
+                  <label className="block text-sm font-medium text-text-secondary">Resource Type</label>
                   <select
                     value={editForm.resourceType}
                     onChange={(e) => setEditForm({ ...editForm, resourceType: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   >
                     <option value="LABOR">Labor</option>
                     <option value="NONLABOR">Nonlabor</option>
@@ -205,63 +205,63 @@ export default function ResourcesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Max Units/Day</label>
+                  <label className="block text-sm font-medium text-text-secondary">Max Units/Day</label>
                   <input
                     type="number"
                     value={editForm.maxUnitsPerDay}
                     onChange={(e) => setEditForm({ ...editForm, maxUnitsPerDay: parseFloat(e.target.value) || 0 })}
                     min="0"
                     step="0.1"
-                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Hourly Rate</label>
+                  <label className="block text-sm font-medium text-text-secondary">Hourly Rate</label>
                   <input
                     type="number"
                     value={editForm.hourlyRate}
                     onChange={(e) => setEditForm({ ...editForm, hourlyRate: parseFloat(e.target.value) || 0 })}
                     min="0"
                     step="0.01"
-                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Cost Per Use</label>
+                  <label className="block text-sm font-medium text-text-secondary">Cost Per Use</label>
                   <input
                     type="number"
                     value={editForm.costPerUse}
                     onChange={(e) => setEditForm({ ...editForm, costPerUse: parseFloat(e.target.value) || 0 })}
                     min="0"
                     step="0.01"
-                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Overtime Rate</label>
+                  <label className="block text-sm font-medium text-text-secondary">Overtime Rate</label>
                   <input
                     type="number"
                     value={editForm.overtimeRate}
                     onChange={(e) => setEditForm({ ...editForm, overtimeRate: parseFloat(e.target.value) || 0 })}
                     min="0"
                     step="0.01"
-                    className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   onClick={() => setEditingResource(null)}
-                  className="rounded-md border border-slate-700 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+                  className="rounded-md border border-border bg-surface/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={updateMutation.isPending}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
                 >
                   {updateMutation.isPending ? "Saving..." : "Save Changes"}
                 </button>

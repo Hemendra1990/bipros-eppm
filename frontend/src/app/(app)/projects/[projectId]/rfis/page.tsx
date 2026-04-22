@@ -109,30 +109,30 @@ export default function RfisPage() {
   const getStatusColor = (status: "OPEN" | "RESPONDED" | "CLOSED" | "OVERDUE") => {
     switch (status) {
       case "OPEN":
-        return "bg-red-500/10 text-red-400 ring-1 ring-red-500/20";
+        return "bg-danger/10 text-danger ring-1 ring-red-500/20";
       case "RESPONDED":
-        return "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20";
+        return "bg-accent/10 text-accent ring-1 ring-accent/20";
       case "CLOSED":
-        return "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20";
+        return "bg-success/10 text-success ring-1 ring-success/20";
       case "OVERDUE":
         return "bg-orange-500/10 text-orange-400 ring-1 ring-orange-500/20";
       default:
-        return "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50";
+        return "bg-surface-active/50 text-text-secondary ring-1 ring-border/50";
     }
   };
 
   const getPriorityColor = (priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL") => {
     switch (priority) {
       case "LOW":
-        return "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50";
+        return "bg-surface-active/50 text-text-secondary ring-1 ring-border/50";
       case "MEDIUM":
-        return "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20";
+        return "bg-warning/10 text-warning ring-1 ring-amber-500/20";
       case "HIGH":
         return "bg-orange-500/10 text-orange-400 ring-1 ring-orange-500/20";
       case "CRITICAL":
-        return "bg-red-500/10 text-red-400 ring-1 ring-red-500/20";
+        return "bg-danger/10 text-danger ring-1 ring-red-500/20";
       default:
-        return "bg-slate-700/50 text-slate-300 ring-1 ring-slate-600/50";
+        return "bg-surface-active/50 text-text-secondary ring-1 ring-border/50";
     }
   };
 
@@ -154,14 +154,14 @@ export default function RfisPage() {
       />
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white">Request for Information</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-text-primary">Request for Information</h1>
+          <p className="text-sm text-text-secondary mt-1">
             {filteredRfis.length} RFI{filteredRfis.length !== 1 ? "s" : ""} found
           </p>
         </div>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium"
+          className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
         >
           + Create RFI
         </button>
@@ -169,15 +169,15 @@ export default function RfisPage() {
 
       {/* Create Form */}
       {showCreateForm && (
-        <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-6 shadow-xl">
+        <div className="bg-surface/50 rounded-xl border border-border p-6 shadow-xl">
           {error && (
-            <div className="mb-4 rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+            <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">
               {error}
             </div>
           )}
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 RFI Number
               </label>
               <input
@@ -186,16 +186,16 @@ export default function RfisPage() {
                 value={formData.rfiNumber}
                 onChange={handleFormChange}
                 placeholder="e.g., RFI-001"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Priority</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Priority</label>
               <select
                 name="priority"
                 value={formData.priority}
                 onChange={handleFormChange}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               >
                 <option value="LOW">LOW</option>
                 <option value="MEDIUM">MEDIUM</option>
@@ -204,18 +204,18 @@ export default function RfisPage() {
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">Subject</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Subject</label>
               <input
                 type="text"
                 name="subject"
                 value={formData.subject}
                 onChange={handleFormChange}
                 placeholder="Brief description of RFI"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 Description
               </label>
               <textarea
@@ -224,11 +224,11 @@ export default function RfisPage() {
                 onChange={handleFormChange}
                 placeholder="Detailed description"
                 rows={3}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 Raised By
               </label>
               <input
@@ -237,11 +237,11 @@ export default function RfisPage() {
                 value={formData.raisedBy}
                 onChange={handleFormChange}
                 placeholder="Your name"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 Assigned To
               </label>
               <input
@@ -250,41 +250,41 @@ export default function RfisPage() {
                 value={formData.assignedTo}
                 onChange={handleFormChange}
                 placeholder="Assignee"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Raised Date *</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Raised Date *</label>
               <input
                 type="date"
                 name="raisedDate"
                 value={formData.raisedDate}
                 onChange={handleFormChange}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Due Date *</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Due Date *</label>
               <input
                 type="date"
                 name="dueDate"
                 value={formData.dueDate}
                 onChange={handleFormChange}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
               />
             </div>
             <div className="col-span-2 flex gap-3">
               <button
                 type="submit"
                 disabled={createRfiMutation.isPending}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:bg-slate-600 transition-colors font-medium"
+                className="flex-1 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors font-medium"
               >
                 {createRfiMutation.isPending ? "Creating..." : "Create RFI"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateForm(false)}
-                className="flex-1 px-4 py-2 border border-slate-700 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors font-medium"
+                className="flex-1 px-4 py-2 border border-border bg-surface-hover text-text-secondary rounded-lg hover:bg-surface-active transition-colors font-medium"
               >
                 Cancel
               </button>
@@ -294,15 +294,15 @@ export default function RfisPage() {
       )}
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 border-b border-slate-800">
+      <div className="flex gap-2 border-b border-border">
         {["ALL", "OPEN", "RESPONDED", "CLOSED", "OVERDUE"].map((status) => (
           <button
             key={status}
             onClick={() => setFilterStatus(status)}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
               filterStatus === status
-                ? "border-b-2 border-blue-500 text-blue-400"
-                : "text-slate-400 hover:text-white"
+                ? "border-b-2 border-accent text-accent"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
             {status}
@@ -311,44 +311,44 @@ export default function RfisPage() {
       </div>
 
       {/* RFI List */}
-      <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden shadow-xl">
+      <div className="bg-surface/50 rounded-xl border border-border overflow-hidden shadow-xl">
         {filteredRfis.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900/80 border-b border-slate-800">
+              <thead className="bg-surface/80 border-b border-border">
                 <tr>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
                     RFI Number
                   </th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Subject</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Subject</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
                     Raised By
                   </th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
                     Assigned To
                   </th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Priority</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Status</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-400">Due Date</th>
-                  <th className="px-6 py-3 text-center font-semibold text-slate-400">
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Priority</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Status</th>
+                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Due Date</th>
+                  <th className="px-6 py-3 text-center font-semibold text-text-secondary">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
+              <tbody className="divide-y divide-border/50">
                 {filteredRfis.map((rfi) => (
                   <tr
                     key={rfi.id}
-                    className={`hover:bg-slate-800/30 transition-colors border-slate-800/50 ${
+                    className={`hover:bg-surface-hover/30 transition-colors border-border/50 ${
                       isOverdue(rfi.dueDate) && rfi.status !== "CLOSED"
                         ? "bg-orange-500/10"
                         : ""
                     }`}
                   >
-                    <td className="px-6 py-4 text-white font-medium">{rfi.rfiNumber}</td>
-                    <td className="px-6 py-4 text-white max-w-xs truncate">{rfi.subject}</td>
-                    <td className="px-6 py-4 text-slate-400 text-sm">{rfi.raisedBy}</td>
-                    <td className="px-6 py-4 text-slate-400 text-sm">{rfi.assignedTo}</td>
+                    <td className="px-6 py-4 text-text-primary font-medium">{rfi.rfiNumber}</td>
+                    <td className="px-6 py-4 text-text-primary max-w-xs truncate">{rfi.subject}</td>
+                    <td className="px-6 py-4 text-text-secondary text-sm">{rfi.raisedBy}</td>
+                    <td className="px-6 py-4 text-text-secondary text-sm">{rfi.assignedTo}</td>
                     <td className="px-6 py-4">
                       <span
                         className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(
@@ -369,7 +369,7 @@ export default function RfisPage() {
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <div className="flex flex-col gap-1">
-                        <span className="text-slate-400">
+                        <span className="text-text-secondary">
                           {new Date(rfi.dueDate).toLocaleDateString()}
                         </span>
                         {getDueDateAlert(rfi.dueDate, rfi.status) && (
@@ -380,7 +380,7 @@ export default function RfisPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <button className="text-blue-400 hover:text-blue-300 text-xs font-medium">
+                      <button className="text-accent hover:text-blue-300 text-xs font-medium">
                         View
                       </button>
                     </td>
@@ -391,7 +391,7 @@ export default function RfisPage() {
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-slate-500">
+            <p className="text-text-muted">
               {filterStatus === "ALL" ? "No RFIs found" : `No ${filterStatus} RFIs found`}
             </p>
           </div>

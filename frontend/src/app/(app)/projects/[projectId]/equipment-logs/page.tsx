@@ -151,7 +151,7 @@ export default function EquipmentLogsPage() {
   };
 
   if (isLoading && logs.length === 0) {
-    return <div className="p-6 text-slate-500">Loading equipment logs...</div>;
+    return <div className="p-6 text-text-muted">Loading equipment logs...</div>;
   }
 
   return (
@@ -161,32 +161,32 @@ export default function EquipmentLogsPage() {
         description="Track equipment deployed on site — utilization hours, breakdown incidents, and deployment location. Helps monitor equipment productivity."
       />
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4 text-white">Equipment Logs</h1>
+        <h1 className="text-3xl font-bold mb-4 text-text-primary">Equipment Logs</h1>
 
         {/* Utilization Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
-            <p className="text-sm text-slate-400 mb-1">Total Equipment</p>
-            <p className="text-2xl font-bold text-blue-400">{utilization.length}</p>
+          <div className="bg-accent/10 p-4 rounded-lg border border-accent/20">
+            <p className="text-sm text-text-secondary mb-1">Total Equipment</p>
+            <p className="text-2xl font-bold text-accent">{utilization.length}</p>
           </div>
-          <div className="bg-emerald-500/10 p-4 rounded-lg border border-emerald-500/20">
-            <p className="text-sm text-slate-400 mb-1">Avg Utilization</p>
-            <p className="text-2xl font-bold text-emerald-400">
+          <div className="bg-success/10 p-4 rounded-lg border border-success/20">
+            <p className="text-sm text-text-secondary mb-1">Avg Utilization</p>
+            <p className="text-2xl font-bold text-success">
               {utilization.length > 0
                 ? (utilization.reduce((sum, u) => sum + u.utilizationPercentage, 0) / utilization.length).toFixed(1)
                 : 0}
               %
             </p>
           </div>
-          <div className="bg-red-500/10 p-4 rounded-lg border border-red-500/20">
-            <p className="text-sm text-slate-400 mb-1">Total Breakdown Hours</p>
-            <p className="text-2xl font-bold text-red-400">
+          <div className="bg-danger/10 p-4 rounded-lg border border-danger/20">
+            <p className="text-sm text-text-secondary mb-1">Total Breakdown Hours</p>
+            <p className="text-2xl font-bold text-danger">
               {utilization.reduce((sum, u) => sum + u.totalBreakdownHours, 0).toFixed(1)}h
             </p>
           </div>
-          <div className="bg-amber-500/10 p-4 rounded-lg border border-amber-500/20">
-            <p className="text-sm text-slate-400 mb-1">Total Idle Hours</p>
-            <p className="text-2xl font-bold text-amber-400">
+          <div className="bg-warning/10 p-4 rounded-lg border border-warning/20">
+            <p className="text-sm text-text-secondary mb-1">Total Idle Hours</p>
+            <p className="text-2xl font-bold text-warning">
               {utilization.reduce((sum, u) => sum + u.totalIdleHours, 0).toFixed(1)}h
             </p>
           </div>
@@ -194,18 +194,18 @@ export default function EquipmentLogsPage() {
 
         <button
           onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          className="mb-6 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
         >
           {showForm ? "Cancel" : "Add Equipment Log"}
         </button>
 
-        {error && <div className="text-red-400 mb-4">{error}</div>}
+        {error && <div className="text-danger mb-4">{error}</div>}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 mb-6 shadow-xl">
+          <form onSubmit={handleSubmit} className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Resource</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Resource</label>
                 <SearchableSelect
                   value={formData.resourceId}
                   onChange={(val) => setFormData({ ...formData, resourceId: val })}
@@ -217,79 +217,79 @@ export default function EquipmentLogsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Log Date</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Log Date</label>
                 <input
                   type="date"
                   value={formData.logDate}
                   onChange={(e) => setFormData({ ...formData, logDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Deployment Site</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Deployment Site</label>
                 <input
                   type="text"
                   value={formData.deploymentSite}
                   onChange={(e) => setFormData({ ...formData, deploymentSite: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Operating Hours</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Operating Hours</label>
                 <input
                   type="number"
                   step="0.1"
                   value={formData.operatingHours}
                   onChange={(e) => setFormData({ ...formData, operatingHours: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Idle Hours</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Idle Hours</label>
                 <input
                   type="number"
                   step="0.1"
                   value={formData.idleHours}
                   onChange={(e) => setFormData({ ...formData, idleHours: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Breakdown Hours</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Breakdown Hours</label>
                 <input
                   type="number"
                   step="0.1"
                   value={formData.breakdownHours}
                   onChange={(e) => setFormData({ ...formData, breakdownHours: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Fuel Consumed (L)</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Fuel Consumed (L)</label>
                 <input
                   type="number"
                   step="0.1"
                   value={formData.fuelConsumed}
                   onChange={(e) => setFormData({ ...formData, fuelConsumed: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Operator Name</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Operator Name</label>
                 <input
                   type="text"
                   value={formData.operatorName}
                   onChange={(e) => setFormData({ ...formData, operatorName: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Status</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Status</label>
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 >
                   <option value="WORKING">Working</option>
                   <option value="IDLE">Idle</option>
@@ -298,23 +298,23 @@ export default function EquipmentLogsPage() {
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-slate-300">Remarks</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Remarks</label>
                 <textarea
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   rows={3}
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600">
+              <button type="submit" className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600">
                 Save Log
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-600"
+                className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded-lg hover:bg-border"
               >
                 Cancel
               </button>
@@ -324,17 +324,17 @@ export default function EquipmentLogsPage() {
 
         {/* Logs Table */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-slate-800">
+          <table className="w-full border-collapse border border-border">
             <thead>
-              <tr className="bg-slate-900/80">
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Date</th>
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Resource</th>
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Site</th>
-                <th className="border border-slate-800 px-4 py-2 text-right text-slate-400">Operating Hrs</th>
-                <th className="border border-slate-800 px-4 py-2 text-right text-slate-400">Idle Hrs</th>
-                <th className="border border-slate-800 px-4 py-2 text-right text-slate-400">Breakdown Hrs</th>
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Status</th>
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Operator</th>
+              <tr className="bg-surface/80">
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Resource</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Site</th>
+                <th className="border border-border px-4 py-2 text-right text-text-secondary">Operating Hrs</th>
+                <th className="border border-border px-4 py-2 text-right text-text-secondary">Idle Hrs</th>
+                <th className="border border-border px-4 py-2 text-right text-text-secondary">Breakdown Hrs</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Status</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Operator</th>
               </tr>
             </thead>
             <tbody>
@@ -344,29 +344,29 @@ export default function EquipmentLogsPage() {
                   ? `${res.code} \u2014 ${res.name}`
                   : `${log.resourceId.substring(0, 8)}...`;
                 return (
-                <tr key={log.id} className="hover:bg-slate-800/30 text-white">
-                  <td className="border border-slate-800 px-4 py-2">{log.logDate}</td>
-                  <td className="border border-slate-800 px-4 py-2">{resourceLabel}</td>
-                  <td className="border border-slate-800 px-4 py-2">{log.deploymentSite || "-"}</td>
-                  <td className="border border-slate-800 px-4 py-2 text-right">{log.operatingHours || 0}</td>
-                  <td className="border border-slate-800 px-4 py-2 text-right">{log.idleHours || 0}</td>
-                  <td className="border border-slate-800 px-4 py-2 text-right">{log.breakdownHours || 0}</td>
-                  <td className="border border-slate-800 px-4 py-2">
+                <tr key={log.id} className="hover:bg-surface-hover/30 text-text-primary">
+                  <td className="border border-border px-4 py-2">{log.logDate}</td>
+                  <td className="border border-border px-4 py-2">{resourceLabel}</td>
+                  <td className="border border-border px-4 py-2">{log.deploymentSite || "-"}</td>
+                  <td className="border border-border px-4 py-2 text-right">{log.operatingHours || 0}</td>
+                  <td className="border border-border px-4 py-2 text-right">{log.idleHours || 0}</td>
+                  <td className="border border-border px-4 py-2 text-right">{log.breakdownHours || 0}</td>
+                  <td className="border border-border px-4 py-2">
                     <span
-                      className={`px-2 py-1 rounded text-white text-sm ${
+                      className={`px-2 py-1 rounded text-text-primary text-sm ${
                         log.status === "WORKING"
-                          ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
+                          ? "bg-success/10 text-success ring-1 ring-success/20"
                           : log.status === "IDLE"
-                            ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                            ? "bg-warning/10 text-warning ring-1 ring-amber-500/20"
                             : log.status === "UNDER_MAINTENANCE"
-                              ? "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20"
-                              : "bg-red-500/10 text-red-400 ring-1 ring-red-500/20"
+                              ? "bg-accent/10 text-accent ring-1 ring-accent/20"
+                              : "bg-danger/10 text-danger ring-1 ring-red-500/20"
                       }`}
                     >
                       {log.status.replace(/_/g, " ")}
                     </span>
                   </td>
-                  <td className="border border-slate-800 px-4 py-2">{log.operatorName || "-"}</td>
+                  <td className="border border-border px-4 py-2">{log.operatorName || "-"}</td>
                 </tr>
                 );
               })}
@@ -380,15 +380,15 @@ export default function EquipmentLogsPage() {
             <button
               onClick={() => loadEquipmentLogs(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded disabled:opacity-50"
+              className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded disabled:opacity-50"
             >
               Previous
             </button>
-            <span className="px-4 py-2 text-slate-300">{page + 1}</span>
+            <span className="px-4 py-2 text-text-secondary">{page + 1}</span>
             <button
               onClick={() => loadEquipmentLogs(page + 1)}
               disabled={(page + 1) * 20 >= totalElements}
-              className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded disabled:opacity-50"
+              className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded disabled:opacity-50"
             >
               Next
             </button>

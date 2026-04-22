@@ -63,7 +63,7 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
     const popupContainer = document.createElement("div");
     popupContainer.id = "popup";
     popupContainer.className =
-      "absolute bg-slate-900 rounded-lg shadow-lg p-4 z-50 border border-slate-700";
+      "absolute bg-surface rounded-lg shadow-lg p-4 z-50 border border-border";
     document.body.appendChild(popupContainer);
 
     const popup = new Overlay({
@@ -109,10 +109,10 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
           const div = document.createElement('div');
           div.className = 'text-sm';
           const h3 = document.createElement('h3');
-          h3.className = 'font-bold text-white';
+          h3.className = 'font-bold text-text-primary';
           h3.textContent = props.wbsCode;
           const p = document.createElement('p');
-          p.className = 'text-slate-300';
+          p.className = 'text-text-secondary';
           p.textContent = props.wbsName;
           div.appendChild(h3);
           div.appendChild(p);
@@ -142,14 +142,14 @@ export function MapViewer({ geoJsonData }: MapViewerProps) {
     <div className="relative w-full">
       <div
         ref={mapRef}
-        className="w-full h-96 bg-slate-800 rounded-lg border border-slate-700"
+        className="w-full h-96 bg-surface-hover rounded-lg border border-border"
       />
       {selectedPolygon && (
         <div className="mt-4 p-3 bg-blue-950 border border-blue-700 rounded">
-          <p className="text-sm font-medium text-white">
+          <p className="text-sm font-medium text-text-primary">
             Selected: {String(selectedPolygon.wbsCode ?? "")}
           </p>
-          <p className="text-sm text-slate-300">{String(selectedPolygon.wbsName ?? "")}</p>
+          <p className="text-sm text-text-secondary">{String(selectedPolygon.wbsName ?? "")}</p>
         </div>
       )}
     </div>

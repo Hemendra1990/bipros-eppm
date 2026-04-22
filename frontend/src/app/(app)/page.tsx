@@ -14,14 +14,14 @@ const navigationCards = [
     description: "Manage enterprise project structure and schedules",
     href: "/projects",
     icon: FolderTree,
-    color: "bg-blue-500/10 text-blue-700",
+    color: "bg-accent/10 text-accent",
   },
   {
     title: "Resources",
     description: "Allocate and level resources across projects",
     href: "/resources",
     icon: Users,
-    color: "bg-emerald-500/10 text-emerald-400",
+    color: "bg-success/10 text-success",
   },
   {
     title: "Calendars",
@@ -35,7 +35,7 @@ const navigationCards = [
     description: "S-curves, EVM dashboards, and custom reports",
     href: "/reports",
     icon: BarChart3,
-    color: "bg-amber-500/10 text-amber-400",
+    color: "bg-warning/10 text-warning",
   },
 ];
 
@@ -123,20 +123,20 @@ async function fetchMetrics(): Promise<MetricsData> {
 function MetricCard({ label, value, icon: Icon, color }: { label: string; value: number | string; icon: LucideIcon; color: string }) {
   // Map color values to dark theme variants
   const colorAccent: Record<string, { bg: string; text: string; border: string; accentBg: string }> = {
-    "text-blue-700": { bg: "bg-slate-900/60 border-l-4 border-blue-500", text: "text-blue-400", border: "border border-slate-800", accentBg: "bg-blue-500/10" },
-    "text-emerald-400": { bg: "bg-slate-900/60 border-l-4 border-emerald-500", text: "text-emerald-400", border: "border border-slate-800", accentBg: "bg-emerald-500/10" },
-    "text-purple-400": { bg: "bg-slate-900/60 border-l-4 border-cyan-500", text: "text-cyan-400", border: "border border-slate-800", accentBg: "bg-cyan-500/10" },
-    "text-amber-400": { bg: "bg-slate-900/60 border-l-4 border-purple-500", text: "text-purple-400", border: "border border-slate-800", accentBg: "bg-purple-500/10" },
-    "text-red-400": { bg: "bg-slate-900/60 border-l-4 border-red-500", text: "text-red-400", border: "border border-slate-800", accentBg: "bg-red-500/10" },
+    "text-accent": { bg: "bg-surface/60 border-l-4 border-accent", text: "text-accent", border: "border border-border", accentBg: "bg-accent/10" },
+    "text-success": { bg: "bg-surface/60 border-l-4 border-success", text: "text-success", border: "border border-border", accentBg: "bg-success/10" },
+    "text-purple-400": { bg: "bg-surface/60 border-l-4 border-info", text: "text-info", border: "border border-border", accentBg: "bg-cyan-500/10" },
+    "text-warning": { bg: "bg-surface/60 border-l-4 border-purple-400", text: "text-purple-400", border: "border border-border", accentBg: "bg-purple-500/10" },
+    "text-danger": { bg: "bg-surface/60 border-l-4 border-danger", text: "text-danger", border: "border border-border", accentBg: "bg-danger/10" },
   };
 
-  const colorConfig = colorAccent[color] || { bg: "bg-slate-900/60", text: "text-slate-300", border: "border border-slate-800", accentBg: "bg-slate-700/30" };
+  const colorConfig = colorAccent[color] || { bg: "bg-surface/60", text: "text-text-secondary", border: "border border-border", accentBg: "bg-surface-active/30" };
 
   return (
     <div className={`rounded-xl p-6 shadow-lg ${colorConfig.bg} ${colorConfig.border}`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-slate-400 uppercase tracking-wide">{label}</p>
+          <p className="text-sm text-text-secondary uppercase tracking-wide">{label}</p>
           <p className={`mt-2 text-3xl font-bold ${colorConfig.text}`}>{value}</p>
         </div>
         <div className={`rounded-lg p-3 ${colorConfig.accentBg}`}>
@@ -163,7 +163,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="mb-8 text-2xl font-bold text-white">Dashboard</h1>
+      <h1 className="mb-8 text-2xl font-bold text-text-primary">Dashboard</h1>
 
       <TabTip
         title="Dashboard"
@@ -174,37 +174,37 @@ export default function DashboardPage() {
       {isLoading ? (
         <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-slate-800/50" />
+            <div key={i} className="h-32 animate-pulse rounded-xl bg-surface-hover/50" />
           ))}
         </div>
       ) : (
         <>
           {/* Project Status Metrics */}
           <div className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold text-white">Project Status</h2>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">Project Status</h2>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard label="Planned" value={metrics?.plannedCount || 0} icon={FolderTree} color="text-blue-700" />
-              <MetricCard label="Active" value={metrics?.activeCount || 0} icon={TrendingUp} color="text-emerald-400" />
+              <MetricCard label="Planned" value={metrics?.plannedCount || 0} icon={FolderTree} color="text-accent" />
+              <MetricCard label="Active" value={metrics?.activeCount || 0} icon={TrendingUp} color="text-success" />
               <MetricCard label="Completed" value={metrics?.completedCount || 0} icon={BarChart3} color="text-purple-400" />
-              <MetricCard label="Resources" value={metrics?.resourceCount || 0} icon={Users} color="text-amber-400" />
+              <MetricCard label="Resources" value={metrics?.resourceCount || 0} icon={Users} color="text-warning" />
             </div>
           </div>
 
           {/* Activity Summary */}
           <div className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold text-white">Activity Summary</h2>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">Activity Summary</h2>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <MetricCard
                 label="Total Activities"
                 value={metrics?.activities.totalActivities || 0}
                 icon={Clock}
-                color="text-blue-700"
+                color="text-accent"
               />
               <MetricCard
                 label="Critical Activities"
                 value={metrics?.activities.criticalActivities || 0}
                 icon={AlertCircle}
-                color="text-red-400"
+                color="text-danger"
               />
               <MetricCard
                 label="Overdue"
@@ -217,44 +217,44 @@ export default function DashboardPage() {
 
           {/* Recent Projects */}
           <div className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold text-white">Recent Projects</h2>
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/50 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">Recent Projects</h2>
+            <div className="overflow-x-auto rounded-xl border border-border bg-surface/50 shadow-xl">
               <table className="w-full">
-                <thead className="border-b border-slate-700/50 bg-slate-900/80">
+                <thead className="border-b border-border/50 bg-surface/80">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-400">Project Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-400">Status</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-400">Created</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-secondary">Project Name</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-secondary">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-secondary">Created</th>
                   </tr>
                 </thead>
                 <tbody>
                   {metrics?.recentProjects && metrics.recentProjects.length > 0 ? (
                     metrics.recentProjects.map((project) => (
-                      <tr key={project.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                        <td className="px-6 py-4 text-sm font-medium text-slate-300">
-                          <Link href={`/projects/${project.id}`} className="text-blue-400 hover:text-blue-300">
+                      <tr key={project.id} className="border-b border-border/50 hover:bg-surface-hover/30 transition-colors">
+                        <td className="px-6 py-4 text-sm font-medium text-text-secondary">
+                          <Link href={`/projects/${project.id}`} className="text-accent hover:text-blue-300">
                             {project.name}
                           </Link>
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ring-1 ${
                             project.status === "ACTIVE"
-                              ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20"
+                              ? "bg-success/10 text-success ring-success/20"
                               : project.status === "PLANNED"
-                                ? "bg-blue-500/10 text-blue-400 ring-blue-500/20"
-                                : "bg-slate-700/50 text-slate-300 ring-slate-600/50"
+                                ? "bg-accent/10 text-accent ring-accent/20"
+                                : "bg-surface-active/50 text-text-secondary ring-border/50"
                           }`}>
                             {project.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-400">
+                        <td className="px-6 py-4 text-sm text-text-secondary">
                           {new Date(project.createdAt).toLocaleDateString()}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={3} className="px-6 py-4 text-center text-sm text-slate-500">
+                      <td colSpan={3} className="px-6 py-4 text-center text-sm text-text-muted">
                         No recent projects
                       </td>
                     </tr>
@@ -268,21 +268,21 @@ export default function DashboardPage() {
 
       {/* Navigation Cards */}
       <div className="mt-8">
-        <h2 className="mb-4 text-lg font-semibold text-white">Quick Actions</h2>
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {navigationCards.map((card) => (
             <Link
               key={card.title}
               href={card.href}
-              className="group rounded-xl border border-slate-800 bg-slate-900/40 p-6 shadow-lg hover:border-slate-700 hover:bg-slate-800/50 transition-all"
+              className="group rounded-xl border border-border bg-surface/40 p-6 shadow-lg hover:border-border hover:bg-surface-hover/50 transition-all"
             >
-              <div className={`mb-4 inline-flex rounded-lg p-3 bg-blue-500/10`}>
-                <card.icon size={24} className="text-blue-400" />
+              <div className={`mb-4 inline-flex rounded-lg p-3 bg-accent/10`}>
+                <card.icon size={24} className="text-accent" />
               </div>
-              <h2 className="text-lg font-semibold text-white group-hover:text-blue-300">
+              <h2 className="text-lg font-semibold text-text-primary group-hover:text-blue-300">
                 {card.title}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">{card.description}</p>
+              <p className="mt-1 text-sm text-text-muted">{card.description}</p>
             </Link>
           ))}
         </div>

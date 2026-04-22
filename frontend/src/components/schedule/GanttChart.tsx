@@ -5,7 +5,6 @@ import {
   differenceInDays,
   min as getMin,
   max as getMax,
-  format,
   addDays,
   startOfDay,
 } from "date-fns";
@@ -93,9 +92,9 @@ export function GanttChart({
 
   if (!dateRange || activities.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-        <p className="text-slate-400">No activities to display</p>
-        <p className="mt-2 text-sm text-slate-500">Create activities first, then run the scheduler to see them on the Gantt chart.</p>
+      <div className="rounded-lg border border-dashed border-border py-12 text-center">
+        <p className="text-text-secondary">No activities to display</p>
+        <p className="mt-2 text-sm text-text-muted">Create activities first, then run the scheduler to see them on the Gantt chart.</p>
       </div>
     );
   }
@@ -137,15 +136,15 @@ export function GanttChart({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Gantt Chart</h2>
+        <h2 className="text-lg font-semibold text-text-primary">Gantt Chart</h2>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm text-slate-300">
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
             <label>Progress Spotlight:</label>
             <input
               type="date"
               value={startDateFilter}
               onChange={(e) => setStartDateFilter(e.target.value)}
-              className="rounded border border-slate-700 px-2 py-1 bg-slate-900/50 text-white"
+              className="rounded border border-border px-2 py-1 bg-surface/50 text-text-primary"
               placeholder="Start"
             />
             <span>to</span>
@@ -153,7 +152,7 @@ export function GanttChart({
               type="date"
               value={endDateFilter}
               onChange={(e) => setEndDateFilter(e.target.value)}
-              className="rounded border border-slate-700 px-2 py-1 bg-slate-900/50 text-white"
+              className="rounded border border-border px-2 py-1 bg-surface/50 text-text-primary"
               placeholder="End"
             />
             {(startDateFilter || endDateFilter) && (
@@ -162,14 +161,14 @@ export function GanttChart({
                   setStartDateFilter("");
                   setEndDateFilter("");
                 }}
-                className="text-xs text-blue-400 hover:underline"
+                className="text-xs text-accent hover:underline"
               >
                 Clear
               </button>
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
             Zoom:
             <input
               type="range"
@@ -184,11 +183,11 @@ export function GanttChart({
         </div>
       </div>
 
-      <div className="flex gap-4 border border-slate-800 rounded-lg overflow-hidden bg-slate-900/50">
+      <div className="flex gap-4 border border-border rounded-lg overflow-hidden bg-surface/50">
         {/* Sidebar */}
         <div
           ref={sidebarRef}
-          className="w-[480px] shrink-0 overflow-y-auto border-r border-slate-800"
+          className="w-[480px] shrink-0 overflow-y-auto border-r border-border"
           onScroll={handleSidebarScroll}
         >
           <GanttSidebar activities={activities} rowHeight={rowHeight} />
@@ -206,7 +205,7 @@ export function GanttChart({
             <svg
               width={totalWidth}
               height={activities.length * rowHeight + timelineStartY}
-              className="bg-slate-900/50"
+              className="bg-surface/50"
             >
               <defs>
                 {/* Arrowhead marker for relationship lines */}
@@ -218,7 +217,7 @@ export function GanttChart({
                   refY="3"
                   orient="auto"
                 >
-                  <polygon points="0 0, 10 3, 0 6" fill="#9ca3af" />
+                  <polygon points="0 0, 10 3, 0 6" fill="var(--text-muted)" />
                 </marker>
                 <marker
                   id="arrowhead-critical"
@@ -228,7 +227,7 @@ export function GanttChart({
                   refY="3"
                   orient="auto"
                 >
-                  <polygon points="0 0, 10 3, 0 6" fill="#ef4444" />
+                  <polygon points="0 0, 10 3, 0 6" fill="var(--danger)" />
                 </marker>
               </defs>
 
@@ -275,44 +274,44 @@ export function GanttChart({
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-6 rounded-lg border border-slate-800 bg-slate-900/80 p-4">
+      <div className="flex flex-wrap gap-6 rounded-lg border border-border bg-surface/80 p-4">
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 rounded bg-blue-500" />
-          <span className="text-sm text-slate-300">Normal</span>
+          <div className="h-4 w-4 rounded bg-accent" />
+          <span className="text-sm text-text-secondary">Normal</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 rounded bg-red-500" />
-          <span className="text-sm text-slate-300">Critical Path</span>
+          <div className="h-4 w-4 rounded bg-danger" />
+          <span className="text-sm text-text-secondary">Critical Path</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 rounded bg-emerald-500" />
-          <span className="text-sm text-slate-300">Completed</span>
+          <div className="h-4 w-4 rounded bg-success" />
+          <span className="text-sm text-text-secondary">Completed</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 rounded bg-slate-500" />
-          <span className="text-sm text-slate-300">Not Started</span>
+          <div className="h-4 w-4 rounded bg-text-muted" />
+          <span className="text-sm text-text-secondary">Not Started</span>
         </div>
         {(startDateFilter || endDateFilter) && (
           <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded bg-yellow-300" />
-            <span className="text-sm text-slate-300">In Spotlight Range</span>
+            <div className="h-4 w-4 rounded bg-warning" />
+            <span className="text-sm text-text-secondary">In Spotlight Range</span>
           </div>
         )}
         {baselineActivities.length > 0 && (
           <div className="flex items-center gap-2">
-            <div className="h-2 w-4 rounded bg-slate-500" style={{ opacity: 0.5 }} />
-            <span className="text-sm text-slate-300">Baseline</span>
+            <div className="h-2 w-4 rounded bg-text-muted" style={{ opacity: 0.5 }} />
+            <span className="text-sm text-text-secondary">Baseline</span>
           </div>
         )}
         {relationships.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="w-6 h-4 relative">
               <svg width="24" height="16" viewBox="0 0 24 16" className="absolute">
-                <path d="M 0 8 L 24 8" stroke="#64748b" strokeWidth="1.5" fill="none" />
-                <polygon points="24,8 18,5 18,11" fill="#64748b" />
+                <path d="M 0 8 L 24 8" stroke="var(--text-muted)" strokeWidth="1.5" fill="none" />
+                <polygon points="24,8 18,5 18,11" fill="var(--text-muted)" />
               </svg>
             </div>
-            <span className="text-sm text-slate-300">Relationships</span>
+            <span className="text-sm text-text-secondary">Relationships</span>
           </div>
         )}
       </div>
@@ -358,7 +357,7 @@ function renderGridLines(
           y1="0"
           x2={x}
           y2={height}
-          stroke="#1e293b"
+          stroke="var(--border)"
           strokeWidth="1"
           strokeDasharray="2,2"
         />
@@ -373,8 +372,9 @@ function renderTodayLine(
   dateRange: DateRange,
   pixelsPerDay: number,
   height: number,
-  startY: number
+  _startY: number
 ): React.ReactNode | null {
+  void _startY;
   const today = startOfDay(new Date());
 
   if (today < dateRange.start || today > addDays(dateRange.start, dateRange.days)) {
@@ -391,7 +391,7 @@ function renderTodayLine(
         y1="0"
         x2={x}
         y2={height}
-        stroke="#ef4444"
+        stroke="var(--danger)"
         strokeWidth="2"
         strokeDasharray="4,4"
       />
@@ -399,7 +399,7 @@ function renderTodayLine(
         x={x + 4}
         y="12"
         fontSize="12"
-        fill="#ef4444"
+        fill="var(--danger)"
         fontWeight="bold"
       >
         Today
@@ -429,11 +429,9 @@ function renderRelationshipLines(
     const succActivity = activities[succIdx];
 
     // Get dates
-    const predStartStr = predActivity.plannedStartDate || predActivity.earlyStartDate;
     const predEndStr = predActivity.plannedFinishDate || predActivity.earlyFinishDate;
     const succStartStr = succActivity.plannedStartDate || succActivity.earlyStartDate;
 
-    const predStart = predStartStr ? startOfDay(new Date(predStartStr)) : null;
     const predEnd = predEndStr ? startOfDay(new Date(predEndStr)) : null;
     const succStart = succStartStr ? startOfDay(new Date(succStartStr)) : null;
 
@@ -459,7 +457,7 @@ function renderRelationshipLines(
       <g key={`rel-${idx}`} opacity="0.6">
         <path
           d={`M ${predX} ${predY} L ${midX} ${predY} L ${midX} ${succY} L ${succX} ${succY}`}
-          stroke={isCritical ? "#ef4444" : "#9ca3af"}
+          stroke={isCritical ? "var(--danger)" : "var(--text-muted)"}
           strokeWidth="1.5"
           fill="none"
           markerEnd={isCritical ? "url(#arrowhead-critical)" : "url(#arrowhead)"}

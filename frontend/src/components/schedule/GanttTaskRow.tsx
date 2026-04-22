@@ -150,7 +150,7 @@ export function GanttTaskRow({
           y={y + barHeight + 4}
           width={baselineWidth}
           height={6}
-          fill="#6b7280"
+          fill="var(--text-muted)"
           opacity="0.5"
           rx="1"
         />
@@ -184,7 +184,7 @@ export function GanttTaskRow({
         rx="2"
         className={`${cursorClass} hover:opacity-100 transition-opacity`}
         onMouseDown={handleMouseDown}
-        onClick={(e) => {
+        onClick={() => {
           if (!isDragging) {
             onActivityClick?.(activity.id);
           }
@@ -225,7 +225,7 @@ export function GanttTaskRow({
           x={x + width + 6}
           y={y + rowHeight / 2 + 4}
           fontSize="10"
-          fill="#94a3b8"
+          fill="var(--text-muted)"
           className="pointer-events-none select-none"
         >
           {deltaDays > 0 ? "+" : ""}
@@ -244,13 +244,13 @@ export function GanttTaskRow({
 
 function getBarColor(activity: ActivityResponse): string {
   if (activity.status === "COMPLETED") {
-    return "#10b981";
+    return "var(--success)";
   }
   if (activity.totalFloat === 0) {
-    return "#ef4444";
+    return "var(--danger)";
   }
   if (activity.status === "NOT_STARTED") {
-    return "#9ca3af";
+    return "var(--text-muted)";
   }
-  return "#3b82f6";
+  return "var(--accent)";
 }

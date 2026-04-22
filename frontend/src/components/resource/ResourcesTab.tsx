@@ -141,14 +141,14 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       <div className="flex items-center gap-3">
         <button
           onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
         >
           <Plus size={16} />
           Assign Resource
         </button>
         <button
           onClick={() => setShowLeveling(true)}
-          className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-active"
         >
           <SlidersHorizontal size={16} />
           Level Resources
@@ -156,11 +156,11 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       </div>
 
       {showForm && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-          <h3 className="mb-4 text-lg font-semibold text-white">Assign Resource to Activity</h3>
+        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-text-primary">Assign Resource to Activity</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300">Activity</label>
+              <label className="block text-sm font-medium text-text-secondary">Activity</label>
               <SearchableSelect
                 value={formData.activityId}
                 onChange={(val) =>
@@ -175,7 +175,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">Resource</label>
+              <label className="block text-sm font-medium text-text-secondary">Resource</label>
               <SearchableSelect
                 value={formData.resourceId}
                 onChange={(val) =>
@@ -190,7 +190,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">Planned Units</label>
+              <label className="block text-sm font-medium text-text-secondary">Planned Units</label>
               <input
                 type="number"
                 value={formData.plannedUnits}
@@ -198,18 +198,18 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
                   setFormData({ ...formData, plannedUnits: e.target.value })
                 }
                 step="0.01"
-                className="mt-1 block w-full rounded-md border-slate-700 px-3 py-2 border bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:outline-none"
+                className="mt-1 block w-full rounded-md border-border px-3 py-2 border bg-surface/50 text-text-primary shadow-sm focus:border-accent focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">Rate Type</label>
+              <label className="block text-sm font-medium text-text-secondary">Rate Type</label>
               <select
                 value={formData.rateType}
                 onChange={(e) =>
                   setFormData({ ...formData, rateType: e.target.value })
                 }
-                className="mt-1 block w-full rounded-md border-slate-700 px-3 py-2 border bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:outline-none"
+                className="mt-1 block w-full rounded-md border-border px-3 py-2 border bg-surface/50 text-text-primary shadow-sm focus:border-accent focus:outline-none"
               >
                 <option value="FIXED">Fixed</option>
                 <option value="HOURLY">Hourly</option>
@@ -226,13 +226,13 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
                   !formData.resourceId ||
                   !formData.plannedUnits
                 }
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-700"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
               >
                 {assignMutation.isPending ? "Assigning..." : "Assign"}
               </button>
               <button
                 onClick={() => setShowForm(false)}
-                className="rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
               >
                 Cancel
               </button>
@@ -241,14 +241,14 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-white">Resource Assignments</h3>
+      <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+        <h3 className="mb-4 text-lg font-semibold text-text-primary">Resource Assignments</h3>
         {isLoadingAssignments ? (
-          <div className="text-center text-slate-400">Loading assignments...</div>
+          <div className="text-center text-text-secondary">Loading assignments...</div>
         ) : assignments.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-            <h3 className="text-lg font-medium text-white">No Assignments</h3>
-            <p className="mt-2 text-slate-400">No resource assignments yet. Create one to get started.</p>
+          <div className="rounded-lg border border-dashed border-border py-12 text-center">
+            <h3 className="text-lg font-medium text-text-primary">No Assignments</h3>
+            <p className="mt-2 text-text-secondary">No resource assignments yet. Create one to get started.</p>
           </div>
         ) : (
           <DataTable
@@ -266,17 +266,17 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
 
       {selectedAssignment && (
         <div className="space-y-2">
-          <div className="text-sm text-slate-400">
-            Custom fields for: <span className="font-medium text-blue-400">{selectedAssignment.resourceName} → {selectedAssignment.activityName}</span>
+          <div className="text-sm text-text-secondary">
+            Custom fields for: <span className="font-medium text-accent">{selectedAssignment.resourceName} → {selectedAssignment.activityName}</span>
           </div>
           <UdfSection entityId={selectedAssignment.id} subject="RESOURCE_ASSIGNMENT" projectId={projectId} />
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-white">Resource Histogram</h3>
+      <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+        <h3 className="mb-4 text-lg font-semibold text-text-primary">Resource Histogram</h3>
         <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-300 mb-2">Select Resource</label>
+          <label className="block text-sm font-medium text-text-secondary mb-2">Select Resource</label>
           <SearchableSelect
             value={selectedResourceId}
             onChange={(val) => setSelectedResourceId(val)}
@@ -289,14 +289,14 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
         </div>
 
         {!selectedResourceId ? (
-          <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-            <p className="text-slate-400">Select a resource to view planned vs actual usage over time.</p>
+          <div className="rounded-lg border border-dashed border-border py-12 text-center">
+            <p className="text-text-secondary">Select a resource to view planned vs actual usage over time.</p>
           </div>
         ) : isLoadingHistogram ? (
-          <div className="text-center text-slate-400">Loading histogram data...</div>
+          <div className="text-center text-text-secondary">Loading histogram data...</div>
         ) : histogramEntries.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-            <p className="text-slate-400">No histogram data available for this resource.</p>
+          <div className="rounded-lg border border-dashed border-border py-12 text-center">
+            <p className="text-text-secondary">No histogram data available for this resource.</p>
           </div>
         ) : (
           <div className="w-full h-96">

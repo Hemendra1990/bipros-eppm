@@ -53,8 +53,8 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
       <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className="font-semibold text-lg text-white">Cash Flow Report</h3>
-            <p className="text-sm text-slate-400">Planned vs Actual vs Forecasted cash flows</p>
+            <h3 className="font-semibold text-lg text-text-primary">Cash Flow Report</h3>
+            <p className="text-sm text-text-secondary">Planned vs Actual vs Forecasted cash flows</p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -69,7 +69,7 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
       </div>
 
       {/* Chart */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+      <div className="bg-surface/50 border border-border rounded-lg p-4">
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -120,35 +120,35 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Total Planned</p>
-          <p className="text-3xl font-bold text-blue-400">${totals.totalPlanned.toFixed(2)}</p>
+        <div className="bg-surface/50 border border-border rounded-lg p-4">
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-2">Total Planned</p>
+          <p className="text-3xl font-bold text-accent">${totals.totalPlanned.toFixed(2)}</p>
         </div>
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Total Actual</p>
-          <p className="text-3xl font-bold text-emerald-400">${totals.totalActual.toFixed(2)}</p>
+        <div className="bg-surface/50 border border-border rounded-lg p-4">
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-2">Total Actual</p>
+          <p className="text-3xl font-bold text-success">${totals.totalActual.toFixed(2)}</p>
         </div>
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Total Forecast</p>
+        <div className="bg-surface/50 border border-border rounded-lg p-4">
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-2">Total Forecast</p>
           <p className="text-3xl font-bold text-amber-600">${totals.totalForecast.toFixed(2)}</p>
         </div>
       </div>
 
       {/* Variance Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-          <h4 className="font-semibold text-white mb-3">Planned vs Actual</h4>
+        <div className="bg-surface/50 border border-border rounded-lg p-4">
+          <h4 className="font-semibold text-text-primary mb-3">Planned vs Actual</h4>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Variance</span>
-              <span className={`font-semibold ${variance.planned >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              <span className="text-text-secondary">Variance</span>
+              <span className={`font-semibold ${variance.planned >= 0 ? "text-success" : "text-danger"}`}>
                 ${variance.planned.toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Status</span>
+              <span className="text-text-secondary">Status</span>
               <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                variance.planned >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+                variance.planned >= 0 ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
               }`}>
                 {variance.planned >= 0 ? "Under Budget" : "Over Budget"}
               </span>
@@ -156,19 +156,19 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
           </div>
         </div>
 
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-          <h4 className="font-semibold text-white mb-3">Forecast vs Actual</h4>
+        <div className="bg-surface/50 border border-border rounded-lg p-4">
+          <h4 className="font-semibold text-text-primary mb-3">Forecast vs Actual</h4>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Remaining</span>
-              <span className={`font-semibold ${variance.forecast >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              <span className="text-text-secondary">Remaining</span>
+              <span className={`font-semibold ${variance.forecast >= 0 ? "text-success" : "text-danger"}`}>
                 ${variance.forecast.toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Status</span>
+              <span className="text-text-secondary">Status</span>
               <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                variance.forecast >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-orange-500/10 text-orange-400"
+                variance.forecast >= 0 ? "bg-success/10 text-success" : "bg-orange-500/10 text-orange-400"
               }`}>
                 {variance.forecast >= 0 ? "On Track" : "At Risk"}
               </span>
@@ -178,45 +178,45 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
       </div>
 
       {/* Data Table */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-        <h4 className="font-semibold text-white mb-4">Detailed Cash Flow</h4>
+      <div className="bg-surface/50 border border-border rounded-lg p-4">
+        <h4 className="font-semibold text-text-primary mb-4">Detailed Cash Flow</h4>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800">
-                <th className="text-left py-3 px-2 text-slate-400 font-semibold">Period</th>
+              <tr className="border-b border-border">
+                <th className="text-left py-3 px-2 text-text-secondary font-semibold">Period</th>
                 {!showCumulative && (
                   <>
-                    <th className="text-right py-3 px-2 text-slate-400 font-semibold">Planned</th>
-                    <th className="text-right py-3 px-2 text-slate-400 font-semibold">Actual</th>
-                    <th className="text-right py-3 px-2 text-slate-400 font-semibold">Forecast</th>
+                    <th className="text-right py-3 px-2 text-text-secondary font-semibold">Planned</th>
+                    <th className="text-right py-3 px-2 text-text-secondary font-semibold">Actual</th>
+                    <th className="text-right py-3 px-2 text-text-secondary font-semibold">Forecast</th>
                   </>
                 )}
                 {showCumulative && (
                   <>
-                    <th className="text-right py-3 px-2 text-slate-400 font-semibold">Cum. Planned</th>
-                    <th className="text-right py-3 px-2 text-slate-400 font-semibold">Cum. Actual</th>
-                    <th className="text-right py-3 px-2 text-slate-400 font-semibold">Cum. Forecast</th>
+                    <th className="text-right py-3 px-2 text-text-secondary font-semibold">Cum. Planned</th>
+                    <th className="text-right py-3 px-2 text-text-secondary font-semibold">Cum. Actual</th>
+                    <th className="text-right py-3 px-2 text-text-secondary font-semibold">Cum. Forecast</th>
                   </>
                 )}
               </tr>
             </thead>
             <tbody>
               {data.map((entry, idx) => (
-                <tr key={idx} className="border-b border-slate-800/50 hover:bg-slate-900/80">
-                  <td className="py-3 px-2 text-white font-semibold">{entry.period}</td>
+                <tr key={idx} className="border-b border-border/50 hover:bg-surface/80">
+                  <td className="py-3 px-2 text-text-primary font-semibold">{entry.period}</td>
                   {!showCumulative && (
                     <>
-                      <td className="py-3 px-2 text-right text-slate-300">${entry.planned.toFixed(2)}</td>
-                      <td className="py-3 px-2 text-right text-slate-300">${entry.actual.toFixed(2)}</td>
-                      <td className="py-3 px-2 text-right text-slate-300">${entry.forecast.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right text-text-secondary">${entry.planned.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right text-text-secondary">${entry.actual.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right text-text-secondary">${entry.forecast.toFixed(2)}</td>
                     </>
                   )}
                   {showCumulative && (
                     <>
-                      <td className="py-3 px-2 text-right text-slate-300">${entry.cumulativePlanned.toFixed(2)}</td>
-                      <td className="py-3 px-2 text-right text-slate-300">${entry.cumulativeActual.toFixed(2)}</td>
-                      <td className="py-3 px-2 text-right text-slate-300">${entry.cumulativeForecast.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right text-text-secondary">${entry.cumulativePlanned.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right text-text-secondary">${entry.cumulativeActual.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right text-text-secondary">${entry.cumulativeForecast.toFixed(2)}</td>
                     </>
                   )}
                 </tr>

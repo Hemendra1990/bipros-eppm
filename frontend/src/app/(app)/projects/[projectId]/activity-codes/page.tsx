@@ -110,7 +110,7 @@ export default function ActivityCodesPage() {
   if (isLoading && codes.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <p className="text-slate-500">Loading activity codes...</p>
+        <p className="text-text-muted">Loading activity codes...</p>
       </div>
     );
   }
@@ -122,17 +122,17 @@ export default function ActivityCodesPage() {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
+            className="rounded bg-accent px-4 py-2 text-text-primary hover:bg-accent-hover"
           >
             New Activity Code
           </button>
         )}
       </div>
 
-      {error && <div className="rounded bg-red-500/10 p-4 text-red-400">{error}</div>}
+      {error && <div className="rounded bg-danger/10 p-4 text-danger">{error}</div>}
 
       {showForm && (
-        <div className="rounded border border-slate-700 bg-slate-900/80 p-6">
+        <div className="rounded border border-border bg-surface/80 p-6">
           <h2 className="mb-4 text-xl font-semibold">
             {editingId ? "Edit Activity Code" : "Create Activity Code"}
           </h2>
@@ -144,7 +144,7 @@ export default function ActivityCodesPage() {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                className="mt-1 w-full rounded border border-border px-3 py-2"
               />
             </div>
 
@@ -153,7 +153,7 @@ export default function ActivityCodesPage() {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                className="mt-1 w-full rounded border border-border px-3 py-2"
                 rows={3}
               />
             </div>
@@ -169,7 +169,7 @@ export default function ActivityCodesPage() {
                     scope: e.target.value as "GLOBAL" | "EPS" | "PROJECT",
                   })
                 }
-                className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                className="mt-1 w-full rounded border border-border px-3 py-2"
               >
                 <option value="PROJECT">Project</option>
                 <option value="EPS">EPS</option>
@@ -184,21 +184,21 @@ export default function ActivityCodesPage() {
                 value={formData.parentId}
                 onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
                 placeholder="Leave empty for root"
-                className="mt-1 w-full rounded border border-slate-700 px-3 py-2"
+                className="mt-1 w-full rounded border border-border px-3 py-2"
               />
             </div>
 
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="rounded bg-green-600 px-4 py-2 text-white hover:bg-green-600"
+                className="rounded bg-green-600 px-4 py-2 text-text-primary hover:bg-green-600"
               >
                 {editingId ? "Update" : "Create"}
               </button>
               <button
                 type="button"
                 onClick={handleCancel}
-                className="rounded bg-slate-600 px-4 py-2 text-white hover:bg-slate-700"
+                className="rounded bg-border px-4 py-2 text-text-primary hover:bg-surface-active"
               >
                 Cancel
               </button>
@@ -207,9 +207,9 @@ export default function ActivityCodesPage() {
         </div>
       )}
 
-      <div className="rounded border border-slate-700 bg-slate-900/50">
+      <div className="rounded border border-border bg-surface/50">
         <table className="w-full">
-          <thead className="bg-slate-800/50">
+          <thead className="bg-surface-hover/50">
             <tr>
               <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Scope</th>
@@ -220,32 +220,32 @@ export default function ActivityCodesPage() {
           <tbody>
             {codes.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-4 text-center text-slate-500">
+                <td colSpan={4} className="px-6 py-4 text-center text-text-muted">
                   No activity codes found
                 </td>
               </tr>
             ) : (
               codes.map((code) => (
-                <tr key={code.id} className="border-t border-slate-800 hover:bg-slate-900/80">
+                <tr key={code.id} className="border-t border-border hover:bg-surface/80">
                   <td className="px-6 py-4 font-medium">{code.name}</td>
                   <td className="px-6 py-4">
-                    <span className="inline-block rounded bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-300">
+                    <span className="inline-block rounded bg-accent/10 px-2 py-1 text-xs font-medium text-blue-300">
                       {code.scope}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-400">
+                  <td className="px-6 py-4 text-sm text-text-secondary">
                     {code.description || "—"}
                   </td>
                   <td className="space-x-2 px-6 py-4 text-right">
                     <button
                       onClick={() => handleEdit(code)}
-                      className="text-blue-400 hover:underline"
+                      className="text-accent hover:underline"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(code.id)}
-                      className="text-red-400 hover:underline"
+                      className="text-danger hover:underline"
                     >
                       Delete
                     </button>
@@ -262,7 +262,7 @@ export default function ActivityCodesPage() {
           <button
             onClick={() => loadActivityCodes(Math.max(0, page - 1))}
             disabled={page === 0}
-            className="rounded px-3 py-1 text-sm hover:bg-slate-700/50 disabled:opacity-50"
+            className="rounded px-3 py-1 text-sm hover:bg-surface-active/50 disabled:opacity-50"
           >
             Previous
           </button>
@@ -272,7 +272,7 @@ export default function ActivityCodesPage() {
           <button
             onClick={() => loadActivityCodes(page + 1)}
             disabled={(page + 1) * 20 >= totalElements}
-            className="rounded px-3 py-1 text-sm hover:bg-slate-700/50 disabled:opacity-50"
+            className="rounded px-3 py-1 text-sm hover:bg-surface-active/50 disabled:opacity-50"
           >
             Next
           </button>

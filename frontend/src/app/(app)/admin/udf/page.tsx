@@ -13,6 +13,7 @@ import {
   type UserDefinedFieldDto,
   type CreateUserDefinedFieldRequest,
 } from "@/lib/api/udfApi";
+import { projectApi } from "@/lib/api/projectApi";
 
 const SUBJECTS: UdfSubject[] = ["ACTIVITY", "RESOURCE_ASSIGNMENT", "WBS", "PROJECT"];
 const DATA_TYPES: UdfDataType[] = ["TEXT", "NUMBER", "COST", "DATE", "INDICATOR", "CODE"];
@@ -33,9 +34,14 @@ const DATA_TYPE_ICONS: Record<UdfDataType, typeof Type> = {
   CODE: Tag,
 };
 
+type ScopeFilter = "GLOBAL" | "PROJECT";
+
 export default function UdfAdminPage() {
   const queryClient = useQueryClient();
   const [selectedSubject, setSelectedSubject] = useState<UdfSubject>("ACTIVITY");
+  // Scope filter: GLOBAL shows org-wide fields; PROJECT shows fields scoped to a chosen project.
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("GLOBAL");
+  const [filterProjectId, setFilterProjectId] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [editingField, setEditingField] = useState<UserDefinedFieldDto | null>(null);
   const [error, setError] = useState("");
@@ -52,8 +58,21 @@ export default function UdfAdminPage() {
   const [formSortOrder, setFormSortOrder] = useState(0);
 
   const { data: fieldsData, isLoading } = useQuery({
-    queryKey: ["udf-fields", selectedSubject],
-    queryFn: () => udfApi.listFields(selectedSubject),
+    queryKey: ["udf-fields", selectedSubject, scopeFilter, filterProjectId],
+    queryFn: () => udfApi.listFields(
+      selectedSubject,
+      scopeFilter,
+      scopeFilter === "PROJECT" && filterProjectId ? filterProjectId : undefined,
+    ),
+    // Don't hit the API for PROJECT scope with no project chosen — would return [] anyway.
+    enabled: scopeFilter === "GLOBAL" || !!filterProjectId,
+  });
+
+  const { data: projectsData } = useQuery({
+    queryKey: ["projects-for-udf-filter"],
+    queryFn: () => projectApi.listProjects(0, 100),
+    enabled: scopeFilter === "PROJECT",
+    select: (r) => r.data?.content ?? [],
   });
 
   const fields: UserDefinedFieldDto[] = fieldsData?.data ?? [];
@@ -137,7 +156,7 @@ export default function UdfAdminPage() {
   };
 
   const inputClass =
-    "mt-1 block w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm";
+    "mt-1 block w-full rounded-md border border-border bg-surface-hover/50 px-3 py-2 text-text-primary placeholder-gray-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent text-sm";
 
   return (
     <div>
@@ -147,7 +166,7 @@ export default function UdfAdminPage() {
         actions={
           <button
             onClick={openCreateForm}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
           >
             <Plus size={16} />
             New Field
@@ -156,21 +175,21 @@ export default function UdfAdminPage() {
       />
 
       {error && !showForm && (
-        <div className="mb-4 rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+        <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">
           {error}
         </div>
       )}
 
       {/* Subject Filter Tabs */}
-      <div className="mb-6 flex gap-1 rounded-lg bg-slate-800/50 p-1">
+      <div className="mb-4 flex gap-1 rounded-lg bg-surface-hover/50 p-1">
         {SUBJECTS.map((subject) => (
           <button
             key={subject}
             onClick={() => setSelectedSubject(subject)}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               selectedSubject === subject
-                ? "bg-blue-600 text-white"
-                : "text-slate-400 hover:text-white"
+                ? "bg-accent text-text-primary"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
             {SUBJECT_LABELS[subject]}
@@ -178,11 +197,41 @@ export default function UdfAdminPage() {
         ))}
       </div>
 
+      {/* Scope filter: GLOBAL vs per-project */}
+      <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
+        <span className="text-text-secondary">Scope:</span>
+        <div className="flex gap-1 rounded-md bg-surface-hover/50 p-1">
+          {(["GLOBAL", "PROJECT"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setScopeFilter(s)}
+              className={`rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
+                scopeFilter === s ? "bg-accent text-text-primary" : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              {s === "GLOBAL" ? "Global (org-wide)" : "Per-project"}
+            </button>
+          ))}
+        </div>
+        {scopeFilter === "PROJECT" && (
+          <select
+            value={filterProjectId}
+            onChange={(e) => setFilterProjectId(e.target.value)}
+            className="rounded-md border border-border bg-surface-hover/50 px-3 py-1.5 text-xs text-text-primary focus:border-accent focus:outline-none"
+          >
+            <option value="">-- Select a project --</option>
+            {(projectsData ?? []).map((p) => (
+              <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
       {/* Create/Edit Form Modal */}
       {showForm && (
-        <div className="mb-6 rounded-lg border border-slate-700 bg-slate-900/80 p-6">
+        <div className="mb-6 rounded-lg border border-border bg-surface/80 p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-200">
+            <h3 className="text-sm font-semibold text-text-primary">
               {editingField ? "Edit Field" : "New Field"}
             </h3>
             <button
@@ -190,21 +239,21 @@ export default function UdfAdminPage() {
                 setShowForm(false);
                 resetForm();
               }}
-              className="rounded p-1 text-slate-400 hover:text-white"
+              className="rounded p-1 text-text-secondary hover:text-text-primary"
             >
               <X size={16} />
             </button>
           </div>
 
           {error && (
-            <div className="mb-4 rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+            <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">
               {error}
             </div>
           )}
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-400">
+              <label className="block text-xs font-medium text-text-secondary">
                 Name *
               </label>
               <input
@@ -216,7 +265,7 @@ export default function UdfAdminPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400">
+              <label className="block text-xs font-medium text-text-secondary">
                 Data Type
               </label>
               <select
@@ -232,7 +281,7 @@ export default function UdfAdminPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400">
+              <label className="block text-xs font-medium text-text-secondary">
                 Scope
               </label>
               <select
@@ -245,7 +294,7 @@ export default function UdfAdminPage() {
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-slate-400">
+              <label className="block text-xs font-medium text-text-secondary">
                 Description
               </label>
               <input
@@ -257,7 +306,7 @@ export default function UdfAdminPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400">
+              <label className="block text-xs font-medium text-text-secondary">
                 Sort Order
               </label>
               <input
@@ -268,7 +317,7 @@ export default function UdfAdminPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400">
+              <label className="block text-xs font-medium text-text-secondary">
                 Default Value
               </label>
               <input
@@ -280,19 +329,19 @@ export default function UdfAdminPage() {
               />
             </div>
             <div className="flex items-end gap-3">
-              <label className="flex items-center gap-2 text-sm text-slate-300">
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
                 <input
                   type="checkbox"
                   checked={formIsFormula}
                   onChange={(e) => setFormIsFormula(e.target.checked)}
-                  className="rounded border-slate-600"
+                  className="rounded border-border"
                 />
                 Formula Field
               </label>
             </div>
             {formIsFormula && (
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-slate-400">
+                <label className="block text-xs font-medium text-text-secondary">
                   Formula Expression
                 </label>
                 <input
@@ -310,7 +359,7 @@ export default function UdfAdminPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
             >
               {saving
                 ? "Saving..."
@@ -323,7 +372,7 @@ export default function UdfAdminPage() {
                 setShowForm(false);
                 resetForm();
               }}
-              className="rounded-md bg-slate-700/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
+              className="rounded-md bg-surface-active/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active"
             >
               Cancel
             </button>
@@ -333,13 +382,17 @@ export default function UdfAdminPage() {
 
       {/* Fields List */}
       {isLoading && (
-        <div className="py-12 text-center text-slate-500">Loading fields...</div>
+        <div className="py-12 text-center text-text-muted">Loading fields...</div>
       )}
 
       {!isLoading && fields.length === 0 && !showForm && (
         <EmptyState
           title="No fields defined"
-          description={`No user defined fields for ${SUBJECT_LABELS[selectedSubject]} yet. Create one to get started.`}
+          description={
+            scopeFilter === "PROJECT" && !filterProjectId
+              ? "Select a project above to view its scoped UDFs."
+              : `No ${scopeFilter === "PROJECT" ? "project-scoped" : "global"} user defined fields for ${SUBJECT_LABELS[selectedSubject]} yet. Create one to get started.`
+          }
         />
       )}
 
@@ -350,31 +403,31 @@ export default function UdfAdminPage() {
             return (
               <div
                 key={field.id}
-                className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-5 py-4"
+                className="flex items-center justify-between rounded-lg border border-border bg-surface/50 px-5 py-4"
               >
                 <div className="flex items-center gap-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800">
-                    <Icon size={16} className="text-blue-400" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-hover">
+                    <Icon size={16} className="text-accent" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-200">
+                      <span className="text-sm font-medium text-text-primary">
                         {field.name}
                       </span>
-                      <span className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">
+                      <span className="rounded bg-surface-hover px-1.5 py-0.5 text-xs text-text-secondary">
                         {field.dataType}
                       </span>
-                      <span className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-500">
+                      <span className="rounded bg-surface-hover px-1.5 py-0.5 text-xs text-text-muted">
                         {field.scope}
                       </span>
                       {field.isFormula && (
-                        <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-xs text-purple-400">
+                        <span className="rounded bg-purple-500/10 px-1.5 py-0.5 text-xs text-purple-400">
                           Formula
                         </span>
                       )}
                     </div>
                     {field.description && (
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-xs text-text-muted">
                         {field.description}
                       </p>
                     )}
@@ -383,13 +436,13 @@ export default function UdfAdminPage() {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => openEditForm(field)}
-                    className="rounded p-2 text-slate-500 hover:bg-slate-800 hover:text-blue-400"
+                    className="rounded p-2 text-text-muted hover:bg-surface-hover hover:text-accent"
                   >
                     <Pencil size={14} />
                   </button>
                   <button
                     onClick={() => handleDelete(field.id)}
-                    className="rounded p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                    className="rounded p-2 text-text-muted hover:bg-danger/10 hover:text-danger"
                   >
                     <Trash2 size={14} />
                   </button>

@@ -98,7 +98,7 @@ export const activityApi = {
 
   getCriticalPath: (projectId: string) =>
     apiClient
-      .get<ApiResponse<ActivityResponse[]>>(`/v1/projects/${projectId}/critical-path`)
+      .get<ApiResponse<ActivityResponse[]>>(`/v1/projects/${projectId}/schedule/critical-path`)
       .then((r) => r.data),
 
   getRelationships: (projectId: string) =>

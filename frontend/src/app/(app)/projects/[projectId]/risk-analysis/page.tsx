@@ -113,15 +113,15 @@ export default function RiskAnalysisPage() {
   );
 
   const statusConfig: Record<string, { icon: typeof Clock; color: string; bg: string }> = {
-    PENDING: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10" },
-    RUNNING: { icon: Clock, color: "text-blue-400", bg: "bg-blue-500/10" },
-    COMPLETED: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-    FAILED: { icon: AlertCircle, color: "text-red-400", bg: "bg-red-500/10" },
+    PENDING: { icon: Clock, color: "text-warning", bg: "bg-warning/10" },
+    RUNNING: { icon: Clock, color: "text-accent", bg: "bg-accent/10" },
+    COMPLETED: { icon: CheckCircle2, color: "text-success", bg: "bg-success/10" },
+    FAILED: { icon: AlertCircle, color: "text-danger", bg: "bg-danger/10" },
   };
   const status = sim?.status ?? "COMPLETED";
   const StatusIcon = statusConfig[status]?.icon ?? Clock;
-  const statusColor = statusConfig[status]?.color ?? "text-slate-400";
-  const statusBg = statusConfig[status]?.bg ?? "bg-slate-900/80";
+  const statusColor = statusConfig[status]?.color ?? "text-text-secondary";
+  const statusBg = statusConfig[status]?.bg ?? "bg-surface/80";
 
   const pctDelta = (v: number | null | undefined, baseline: number | undefined | null) => {
     if (v == null || !baseline || baseline === 0) return "";
@@ -142,9 +142,9 @@ export default function RiskAnalysisPage() {
       />
 
       {/* Run controls */}
-      <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
+      <div className="bg-surface/50 rounded-lg border border-border p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Monte Carlo Simulation</h2>
+          <h2 className="text-lg font-semibold text-text-primary">Monte Carlo Simulation</h2>
           <Button
             onClick={() => setShowRunDialog(!showRunDialog)}
             disabled={runMutation.isPending}
@@ -156,23 +156,23 @@ export default function RiskAnalysisPage() {
         </div>
 
         {showRunDialog && (
-          <div className="mb-2 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mb-2 p-4 bg-accent/10 border border-accent/30 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block text-sm">
-              <span className="text-white">Iterations</span>
+              <span className="text-text-primary">Iterations</span>
               <input
                 type="number"
                 value={runRequest.iterations}
                 onChange={(e) => setRunRequest({ ...runRequest, iterations: parseInt(e.target.value) || 10000 })}
                 min={100} max={100000} step={1000}
-                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+                className="mt-1 w-full px-3 py-2 border border-border rounded-md text-sm bg-surface text-text-primary"
               />
             </label>
             <label className="block text-sm">
-              <span className="text-white">Default distribution</span>
+              <span className="text-text-primary">Default distribution</span>
               <select
                 value={runRequest.defaultDistribution}
                 onChange={(e) => setRunRequest({ ...runRequest, defaultDistribution: e.target.value as DistributionType })}
-                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+                className="mt-1 w-full px-3 py-2 border border-border rounded-md text-sm bg-surface text-text-primary"
               >
                 <option value="TRIANGULAR">Triangular</option>
                 <option value="BETA_PERT">Beta-PERT</option>
@@ -183,7 +183,7 @@ export default function RiskAnalysisPage() {
               </select>
             </label>
             <label className="block text-sm">
-              <span className="text-white">Fallback variance (±%)</span>
+              <span className="text-text-primary">Fallback variance (±%)</span>
               <input
                 type="number"
                 value={(runRequest.fallbackVariancePct ?? 0.2) * 100}
@@ -191,25 +191,25 @@ export default function RiskAnalysisPage() {
                   setRunRequest({ ...runRequest, fallbackVariancePct: (parseFloat(e.target.value) || 20) / 100 })
                 }
                 min={0} max={90}
-                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+                className="mt-1 w-full px-3 py-2 border border-border rounded-md text-sm bg-surface text-text-primary"
               />
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-text-secondary mt-1">
                 Used when an activity has no PERT estimate.
               </p>
             </label>
             <label className="block text-sm">
-              <span className="text-white">Random seed (optional)</span>
+              <span className="text-text-primary">Random seed (optional)</span>
               <input
                 type="number"
                 value={runRequest.randomSeed ?? ""}
                 onChange={(e) =>
                   setRunRequest({ ...runRequest, randomSeed: e.target.value ? parseInt(e.target.value) : null })
                 }
-                className="mt-1 w-full px-3 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+                className="mt-1 w-full px-3 py-2 border border-border rounded-md text-sm bg-surface text-text-primary"
                 placeholder="Leave blank for non-reproducible"
               />
             </label>
-            <label className="md:col-span-2 flex items-center gap-2 text-sm text-white cursor-pointer">
+            <label className="md:col-span-2 flex items-center gap-2 text-sm text-text-primary cursor-pointer">
               <input
                 type="checkbox"
                 checked={!!runRequest.enableRisks}
@@ -230,7 +230,7 @@ export default function RiskAnalysisPage() {
               <Button onClick={() => setShowRunDialog(false)} variant="outline">Cancel</Button>
             </div>
             {runMutation.isError && (
-              <div className="md:col-span-2 text-sm text-red-400">
+              <div className="md:col-span-2 text-sm text-danger">
                 {(runMutation.error as Error)?.message ?? "Run failed"}
               </div>
             )}
@@ -249,15 +249,15 @@ export default function RiskAnalysisPage() {
       {sim && (
         <>
           {/* Tabs */}
-          <div className="flex gap-2 border-b border-slate-800">
+          <div className="flex gap-2 border-b border-border">
             {TABS.map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={`px-4 py-2 font-medium text-sm ${
                   tab === t
-                    ? "border-b-2 border-blue-600 text-blue-400"
-                    : "text-slate-400 hover:text-white"
+                    ? "border-b-2 border-blue-600 text-accent"
+                    : "text-text-secondary hover:text-text-primary"
                 }`}
               >
                 {TAB_LABELS[t]}
@@ -269,39 +269,39 @@ export default function RiskAnalysisPage() {
             <>
               {/* Status + baseline strip */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className={`${statusBg} rounded-lg border border-slate-800 p-4`}>
+                <div className={`${statusBg} rounded-lg border border-border p-4`}>
                   <div className="flex items-center gap-2 mb-2">
                     <StatusIcon className={`w-5 h-5 ${statusColor}`} />
-                    <span className="text-sm font-medium text-slate-400">Status</span>
+                    <span className="text-sm font-medium text-text-secondary">Status</span>
                   </div>
                   <p className={`text-2xl font-bold ${statusColor}`}>{status}</p>
                 </div>
 
-                <div className="bg-blue-500/10 rounded-lg border border-slate-800 p-4">
-                  <p className="text-sm font-medium text-slate-400 mb-2">Baseline Duration</p>
-                  <p className="text-2xl font-bold text-blue-400">{Math.round(sim.baselineDuration)} days</p>
+                <div className="bg-accent/10 rounded-lg border border-border p-4">
+                  <p className="text-sm font-medium text-text-secondary mb-2">Baseline Duration</p>
+                  <p className="text-2xl font-bold text-accent">{Math.round(sim.baselineDuration)} days</p>
                   {sim.baselineId && (
-                    <p className="text-xs text-slate-500 mt-1">baseline {sim.baselineId.slice(0, 8)}</p>
+                    <p className="text-xs text-text-muted mt-1">baseline {sim.baselineId.slice(0, 8)}</p>
                   )}
                 </div>
 
-                <div className="bg-purple-500/10 rounded-lg border border-slate-800 p-4">
-                  <p className="text-sm font-medium text-slate-400 mb-2">Baseline Cost</p>
-                  <p className="text-2xl font-bold text-purple-300">
+                <div className="bg-purple-500/10 rounded-lg border border-border p-4">
+                  <p className="text-sm font-medium text-text-secondary mb-2">Baseline Cost</p>
+                  <p className="text-2xl font-bold text-purple-400">
                     {parseFloat(sim.baselineCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </p>
                 </div>
 
-                <div className="bg-slate-800/50 rounded-lg border border-slate-800 p-4">
-                  <p className="text-sm font-medium text-slate-400 mb-2">Iterations</p>
-                  <p className="text-2xl font-bold text-white">{sim.iterations.toLocaleString()}</p>
-                  {sim.dataDate && <p className="text-xs text-slate-500 mt-1">data date {sim.dataDate}</p>}
+                <div className="bg-surface-hover/50 rounded-lg border border-border p-4">
+                  <p className="text-sm font-medium text-text-secondary mb-2">Iterations</p>
+                  <p className="text-2xl font-bold text-text-primary">{sim.iterations.toLocaleString()}</p>
+                  {sim.dataDate && <p className="text-xs text-text-muted mt-1">data date {sim.dataDate}</p>}
                 </div>
               </div>
 
               {/* Duration percentiles table */}
-              <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Duration distribution (days)</h3>
+              <div className="bg-surface/50 rounded-lg border border-border p-6">
+                <h3 className="text-lg font-semibold text-text-primary mb-4">Duration distribution (days)</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 text-sm">
                   {[
                     { label: "P10", v: sim.p10Duration },
@@ -313,16 +313,16 @@ export default function RiskAnalysisPage() {
                     { label: "P95", v: sim.p95Duration },
                     { label: "P99", v: sim.p99Duration },
                   ].map(({ label, v }) => (
-                    <div key={label} className="bg-slate-800/40 rounded border border-slate-800 p-3">
-                      <p className="text-xs uppercase text-slate-400">{label}</p>
-                      <p className="text-lg font-semibold text-white">
+                    <div key={label} className="bg-surface-hover/40 rounded border border-border p-3">
+                      <p className="text-xs uppercase text-text-secondary">{label}</p>
+                      <p className="text-lg font-semibold text-text-primary">
                         {v != null ? Math.round(v) : "—"}
                       </p>
-                      <p className="text-xs text-slate-500">{pctDelta(v, sim.baselineDuration)}</p>
+                      <p className="text-xs text-text-muted">{pctDelta(v, sim.baselineDuration)}</p>
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 text-xs text-slate-400">
+                <div className="mt-3 text-xs text-text-secondary">
                   Mean {sim.meanDuration != null ? sim.meanDuration.toFixed(1) : "—"} days
                   , σ {sim.stddevDuration != null ? sim.stddevDuration.toFixed(1) : "—"} days
                 </div>
@@ -350,8 +350,8 @@ export default function RiskAnalysisPage() {
               </div>
 
               {/* Cost percentiles table */}
-              <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Cost distribution</h3>
+              <div className="bg-surface/50 rounded-lg border border-border p-6">
+                <h3 className="text-lg font-semibold text-text-primary mb-4">Cost distribution</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 text-sm">
                   {[
                     { label: "P10", v: sim.p10Cost },
@@ -363,15 +363,15 @@ export default function RiskAnalysisPage() {
                     { label: "P95", v: sim.p95Cost },
                     { label: "P99", v: sim.p99Cost },
                   ].map(({ label, v }) => (
-                    <div key={label} className="bg-slate-800/40 rounded border border-slate-800 p-3">
-                      <p className="text-xs uppercase text-slate-400">{label}</p>
-                      <p className="text-lg font-semibold text-white">
+                    <div key={label} className="bg-surface-hover/40 rounded border border-border p-3">
+                      <p className="text-xs uppercase text-text-secondary">{label}</p>
+                      <p className="text-lg font-semibold text-text-primary">
                         {v != null ? Math.round(parseFloat(v)).toLocaleString() : "—"}
                       </p>
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 text-xs text-slate-400">
+                <div className="mt-3 text-xs text-text-secondary">
                   Mean {sim.meanCost != null ? Math.round(parseFloat(sim.meanCost)).toLocaleString() : "—"}
                   , σ {sim.stddevCost != null ? Math.round(parseFloat(sim.stddevCost)).toLocaleString() : "—"}
                 </div>
@@ -394,20 +394,20 @@ export default function RiskAnalysisPage() {
           )}
 
           {tab === "criticality" && (
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Criticality index by activity</h3>
-              <p className="text-sm text-slate-400 mb-4">
+            <div className="bg-surface/50 rounded-lg border border-border p-6">
+              <h3 className="text-lg font-semibold text-text-primary mb-4">Criticality index by activity</h3>
+              <p className="text-sm text-text-secondary mb-4">
                 Fraction of iterations each activity appeared on the critical path. 1.0 = always on critical path.
                 Duration sensitivity is the Pearson correlation between the activity&apos;s sampled duration and project duration.
               </p>
               {!activityStats?.data?.length && (
-                <p className="text-sm text-slate-500">No activity stats available.</p>
+                <p className="text-sm text-text-muted">No activity stats available.</p>
               )}
               {activityStats?.data?.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-800 text-slate-300">
+                      <tr className="border-b border-border text-text-secondary">
                         <th className="text-left py-2 px-3">Activity</th>
                         <th className="text-right py-2 px-3">Criticality</th>
                         <th className="text-right py-2 px-3">Sensitivity</th>
@@ -418,10 +418,10 @@ export default function RiskAnalysisPage() {
                     </thead>
                     <tbody>
                       {activityStats.data.map((s) => (
-                        <tr key={s.id} className="border-b border-slate-800/50">
+                        <tr key={s.id} className="border-b border-border/50">
                           <td className="py-2 px-3">
-                            <span className="text-white">{s.activityCode ?? s.activityId.slice(0, 8)}</span>
-                            <span className="text-slate-500 ml-2">{s.activityName}</span>
+                            <span className="text-text-primary">{s.activityCode ?? s.activityId.slice(0, 8)}</span>
+                            <span className="text-text-muted ml-2">{s.activityName}</span>
                           </td>
                           <td className="py-2 px-3 text-right">
                             {(s.criticalityIndex * 100).toFixed(1)}%
@@ -448,13 +448,13 @@ export default function RiskAnalysisPage() {
           )}
 
           {tab === "tornado" && (
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">Duration sensitivity (Tornado)</h3>
-              <p className="text-sm text-slate-400 mb-4">
+            <div className="bg-surface/50 rounded-lg border border-border p-6">
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Duration sensitivity (Tornado)</h3>
+              <p className="text-sm text-text-secondary mb-4">
                 Activities ranked by |Pearson correlation| of their sampled duration against project duration.
                 Longer bars = more influence on how long the project runs.
               </p>
-              {!tornado?.data?.length && <p className="text-sm text-slate-500">No tornado data available.</p>}
+              {!tornado?.data?.length && <p className="text-sm text-text-muted">No tornado data available.</p>}
               {tornado?.data?.length ? (() => {
                 const rows = tornado.data.slice(0, 20);
                 const scale = Math.max(
@@ -469,12 +469,12 @@ export default function RiskAnalysisPage() {
                       const positive = s >= 0;
                       return (
                         <div key={r.id} className="flex items-center gap-3 text-xs">
-                          <div className="w-48 text-slate-300 truncate">
-                            <span className="text-white">{r.activityCode ?? r.activityId.slice(0, 8)}</span>
-                            <span className="text-slate-500 ml-2">{r.activityName}</span>
+                          <div className="w-48 text-text-secondary truncate">
+                            <span className="text-text-primary">{r.activityCode ?? r.activityId.slice(0, 8)}</span>
+                            <span className="text-text-muted ml-2">{r.activityName}</span>
                           </div>
-                          <div className="relative flex-1 h-5 bg-slate-800 rounded">
-                            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-600" />
+                          <div className="relative flex-1 h-5 bg-surface-hover rounded">
+                            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border" />
                             {!positive && (
                               <div
                                 className="absolute top-0 bottom-0 bg-red-500/70 rounded-l"
@@ -483,12 +483,12 @@ export default function RiskAnalysisPage() {
                             )}
                             {positive && (
                               <div
-                                className="absolute top-0 bottom-0 bg-emerald-500/70 rounded-r"
+                                className="absolute top-0 bottom-0 bg-success/70 rounded-r"
                                 style={{ left: "50%", width: `${pct}%` }}
                               />
                             )}
                           </div>
-                          <div className="w-16 text-right text-white">{s.toFixed(2)}</div>
+                          <div className="w-16 text-right text-text-primary">{s.toFixed(2)}</div>
                         </div>
                       );
                     })}
@@ -499,20 +499,20 @@ export default function RiskAnalysisPage() {
           )}
 
           {tab === "milestones" && (
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">Milestone finish-date probabilities</h3>
-              <p className="text-sm text-slate-400 mb-4">
+            <div className="bg-surface/50 rounded-lg border border-border p-6">
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Milestone finish-date probabilities</h3>
+              <p className="text-sm text-text-secondary mb-4">
                 Per-milestone percentile finish dates across all iterations. A milestone is any activity with
                 type START_MILESTONE or FINISH_MILESTONE. Planned column is the baseline finish date.
               </p>
               {!milestones?.data?.length && (
-                <p className="text-sm text-slate-500">No milestones in the project&apos;s activity list.</p>
+                <p className="text-sm text-text-muted">No milestones in the project&apos;s activity list.</p>
               )}
               {milestones?.data?.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-800 text-slate-300">
+                      <tr className="border-b border-border text-text-secondary">
                         <th className="text-left py-2 px-3">Milestone</th>
                         <th className="text-left py-2 px-3">Planned</th>
                         <th className="text-left py-2 px-3">P50 finish</th>
@@ -522,10 +522,10 @@ export default function RiskAnalysisPage() {
                     </thead>
                     <tbody>
                       {milestones.data.map((m) => (
-                        <tr key={m.id} className="border-b border-slate-800/50">
+                        <tr key={m.id} className="border-b border-border/50">
                           <td className="py-2 px-3">
-                            <span className="text-white">{m.activityCode ?? m.activityId.slice(0, 8)}</span>
-                            <span className="text-slate-500 ml-2">{m.activityName}</span>
+                            <span className="text-text-primary">{m.activityCode ?? m.activityId.slice(0, 8)}</span>
+                            <span className="text-text-muted ml-2">{m.activityName}</span>
                           </td>
                           <td className="py-2 px-3">{m.plannedFinishDate ?? "—"}</td>
                           <td className="py-2 px-3">{m.p50FinishDate ?? "—"}</td>
@@ -541,18 +541,18 @@ export default function RiskAnalysisPage() {
           )}
 
           {tab === "cashflow" && (
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">Probabilistic cash flow (S-curve)</h3>
-              <p className="text-sm text-slate-400 mb-4">
+            <div className="bg-surface/50 rounded-lg border border-border p-6">
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Probabilistic cash flow (S-curve)</h3>
+              <p className="text-sm text-text-secondary mb-4">
                 Cumulative spend by month-end. P10/P50/P80/P90 bands show the full stochastic envelope; spread
                 between bands at each period tells you how much schedule/cost uncertainty drives that period.
               </p>
-              {!cashflow?.data?.length && <p className="text-sm text-slate-500">No cash-flow data available.</p>}
+              {!cashflow?.data?.length && <p className="text-sm text-text-muted">No cash-flow data available.</p>}
               {cashflow?.data?.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-800 text-slate-300">
+                      <tr className="border-b border-border text-text-secondary">
                         <th className="text-left py-2 px-3">Period end</th>
                         <th className="text-right py-2 px-3">P10 cumulative</th>
                         <th className="text-right py-2 px-3">P50 cumulative</th>
@@ -562,7 +562,7 @@ export default function RiskAnalysisPage() {
                     </thead>
                     <tbody>
                       {cashflow.data.map((b) => (
-                        <tr key={b.id} className="border-b border-slate-800/50">
+                        <tr key={b.id} className="border-b border-border/50">
                           <td className="py-2 px-3">{b.periodEndDate}</td>
                           <td className="py-2 px-3 text-right">
                             {b.p10Cumulative != null ? Math.round(parseFloat(b.p10Cumulative)).toLocaleString() : "—"}
@@ -586,15 +586,15 @@ export default function RiskAnalysisPage() {
           )}
 
           {tab === "drivers" && (
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">Risk-register contributions</h3>
-              <p className="text-sm text-slate-400 mb-4">
+            <div className="bg-surface/50 rounded-lg border border-border p-6">
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Risk-register contributions</h3>
+              <p className="text-sm text-text-secondary mb-4">
                 Per risk: how often the Bernoulli draw fired across iterations (<em>Rate</em>), mean schedule and
                 cost impact when it did, and the activities it was wired to. Risks only contribute when the run
                 had &quot;Enable risk drivers&quot; on and the risk has a non-zero probability + affected activities.
               </p>
               {!drivers?.data?.length && (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-text-muted">
                   No drivers recorded. Enable risk drivers on the Run dialog and ensure risks have probability,
                   affected activities, and a non-zero schedule/cost impact.
                 </p>
@@ -603,7 +603,7 @@ export default function RiskAnalysisPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-800 text-slate-300">
+                      <tr className="border-b border-border text-text-secondary">
                         <th className="text-left py-2 px-3">Risk</th>
                         <th className="text-right py-2 px-3">Rate</th>
                         <th className="text-right py-2 px-3">Hits</th>
@@ -614,10 +614,10 @@ export default function RiskAnalysisPage() {
                     </thead>
                     <tbody>
                       {drivers.data.map((c) => (
-                        <tr key={c.id} className="border-b border-slate-800/50">
+                        <tr key={c.id} className="border-b border-border/50">
                           <td className="py-2 px-3">
-                            <span className="text-white">{c.riskCode ?? c.riskId.slice(0, 8)}</span>
-                            <span className="text-slate-500 ml-2">{c.riskTitle}</span>
+                            <span className="text-text-primary">{c.riskCode ?? c.riskId.slice(0, 8)}</span>
+                            <span className="text-text-muted ml-2">{c.riskTitle}</span>
                           </td>
                           <td className="py-2 px-3 text-right">
                             {c.occurrenceRate != null ? `${(c.occurrenceRate * 100).toFixed(1)}%` : "—"}
@@ -631,7 +631,7 @@ export default function RiskAnalysisPage() {
                               ? Math.round(parseFloat(c.meanCostImpact)).toLocaleString()
                               : "—"}
                           </td>
-                          <td className="py-2 px-3 text-xs text-slate-400 truncate max-w-xs">
+                          <td className="py-2 px-3 text-xs text-text-secondary truncate max-w-xs">
                             {c.affectedActivityIds ?? ""}
                           </td>
                         </tr>

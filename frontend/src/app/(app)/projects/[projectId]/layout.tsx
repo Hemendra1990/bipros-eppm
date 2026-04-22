@@ -30,11 +30,11 @@ export default function ProjectDetailLayout({
   const project = projectData?.data;
 
   if (isLoading) {
-    return <div className="p-6 text-center text-slate-500">Loading...</div>;
+    return <div className="p-6 text-center text-text-muted">Loading...</div>;
   }
 
   if (!project) {
-    return <div className="p-6 text-center text-red-400">Project not found</div>;
+    return <div className="p-6 text-center text-danger">Project not found</div>;
   }
 
   // Tab-based navigation (query parameter)
@@ -95,11 +95,11 @@ export default function ProjectDetailLayout({
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">{project.name}</h1>
-        <p className="text-sm text-slate-400">{project.code}</p>
+        <h1 className="text-2xl font-bold text-text-primary">{project.name}</h1>
+        <p className="text-sm text-text-secondary">{project.code}</p>
       </div>
 
-      <div className="border-b border-slate-800">
+      <div className="border-b border-border">
         <nav className="flex items-center gap-8" aria-label="Tabs">
           {tabs.map((t) => {
             const isActive = isTabActive(t);
@@ -116,8 +116,8 @@ export default function ProjectDetailLayout({
                 className={cn(
                   "px-1 py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer",
                   isActive
-                    ? "border-blue-500 text-blue-400"
-                    : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                    ? "border-accent text-accent"
+                    : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
                 )}
               >
                 {t.label}
@@ -129,7 +129,7 @@ export default function ProjectDetailLayout({
           <div className="relative">
             <button
               onClick={() => setMoreDropdownOpen(!moreDropdownOpen)}
-              className="flex items-center gap-1 px-1 py-4 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-1 py-4 text-sm font-medium border-b-2 border-transparent text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
             >
               More
               <ChevronDown
@@ -142,7 +142,7 @@ export default function ProjectDetailLayout({
             </button>
 
             {moreDropdownOpen && (
-              <div className="absolute right-0 mt-0 w-48 bg-slate-900/50 border border-slate-800 rounded-md shadow-lg z-10">
+              <div className="absolute right-0 mt-0 w-48 bg-surface/50 border border-border rounded-md shadow-lg z-10">
                 {moreLinks.map((link) => (
                   <button
                     key={link.href}
@@ -150,7 +150,7 @@ export default function ProjectDetailLayout({
                       router.push(link.href);
                       setMoreDropdownOpen(false);
                     }}
-                    className="block w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/50 hover:text-white first:rounded-t-md last:rounded-b-md transition-colors"
+                    className="block w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary first:rounded-t-md last:rounded-b-md transition-colors"
                   >
                     {link.label}
                   </button>

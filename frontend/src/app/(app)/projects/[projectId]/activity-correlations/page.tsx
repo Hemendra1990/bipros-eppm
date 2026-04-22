@@ -71,15 +71,15 @@ export default function ActivityCorrelationsPage() {
         description="When two activities' durations tend to move together (shared labour, common weather exposure, same vendor) their variance compounds on the critical path. Set a positive coefficient for activities that run long together, negative for ones where slowdown in one frees up resource for the other. Coefficients must be in (-1, 1); large values near ±1 may be auto-regularised if the matrix stops being positive semi-definite."
       />
 
-      <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Add correlation</h2>
+      <div className="bg-surface/50 rounded-lg border border-border p-6">
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Add correlation</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <label className="block text-sm md:col-span-1">
-            <span className="text-white">Activity A</span>
+            <span className="text-text-primary">Activity A</span>
             <select
               value={a}
               onChange={(e) => setA(e.target.value)}
-              className="mt-1 w-full px-2 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+              className="mt-1 w-full px-2 py-2 border border-border rounded-md text-sm bg-surface text-text-primary"
             >
               <option value="">Select…</option>
               {activities.map((act) => (
@@ -90,11 +90,11 @@ export default function ActivityCorrelationsPage() {
             </select>
           </label>
           <label className="block text-sm md:col-span-1">
-            <span className="text-white">Activity B</span>
+            <span className="text-text-primary">Activity B</span>
             <select
               value={b}
               onChange={(e) => setB(e.target.value)}
-              className="mt-1 w-full px-2 py-2 border border-slate-700 rounded-md text-sm bg-slate-900 text-white"
+              className="mt-1 w-full px-2 py-2 border border-border rounded-md text-sm bg-surface text-text-primary"
             >
               <option value="">Select…</option>
               {activities.map((act) => (
@@ -105,7 +105,7 @@ export default function ActivityCorrelationsPage() {
             </select>
           </label>
           <label className="block text-sm md:col-span-1">
-            <span className="text-white">Coefficient ({coef.toFixed(2)})</span>
+            <span className="text-text-primary">Coefficient ({coef.toFixed(2)})</span>
             <input
               type="range"
               min={-0.95}
@@ -127,17 +127,17 @@ export default function ActivityCorrelationsPage() {
             </Button>
           </div>
           {upsertMutation.isError && (
-            <div className="md:col-span-4 text-sm text-red-400">
+            <div className="md:col-span-4 text-sm text-danger">
               {(upsertMutation.error as Error)?.message ?? "Save failed"}
             </div>
           )}
         </div>
       </div>
 
-      <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Configured correlations</h2>
+      <div className="bg-surface/50 rounded-lg border border-border p-6">
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Configured correlations</h2>
 
-        {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
+        {isLoading && <p className="text-sm text-text-secondary">Loading…</p>}
 
         {!isLoading && !correlations?.data?.length && (
           <EmptyState
@@ -151,7 +151,7 @@ export default function ActivityCorrelationsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-300">
+                <tr className="border-b border-border text-text-secondary">
                   <th className="text-left py-2 px-3">Activity A</th>
                   <th className="text-left py-2 px-3">Activity B</th>
                   <th className="text-right py-2 px-3">Coefficient</th>
@@ -160,13 +160,13 @@ export default function ActivityCorrelationsPage() {
               </thead>
               <tbody>
                 {correlations.data.map((c) => (
-                  <tr key={c.id ?? `${c.activityAId}-${c.activityBId}`} className="border-b border-slate-800/50">
-                    <td className="py-2 px-3 text-white">{labelOf(c.activityAId)}</td>
-                    <td className="py-2 px-3 text-white">{labelOf(c.activityBId)}</td>
-                    <td className="py-2 px-3 text-right text-white">{c.coefficient.toFixed(2)}</td>
+                  <tr key={c.id ?? `${c.activityAId}-${c.activityBId}`} className="border-b border-border/50">
+                    <td className="py-2 px-3 text-text-primary">{labelOf(c.activityAId)}</td>
+                    <td className="py-2 px-3 text-text-primary">{labelOf(c.activityBId)}</td>
+                    <td className="py-2 px-3 text-right text-text-primary">{c.coefficient.toFixed(2)}</td>
                     <td className="py-2 px-3 text-right">
                       <button
-                        className="text-red-400 hover:text-red-300 cursor-pointer"
+                        className="text-danger hover:text-danger cursor-pointer"
                         onClick={() =>
                           deleteMutation.mutate({ aId: c.activityAId, bId: c.activityBId })
                         }

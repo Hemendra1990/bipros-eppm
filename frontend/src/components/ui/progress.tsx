@@ -10,11 +10,11 @@ export function Progress({ value = 0, max = 100, className = '', ...props }: Pro
 
   return (
     <div
-      className={`h-4 w-full overflow-hidden rounded-full bg-slate-700/50 ${className}`}
+      className={`h-4 w-full overflow-hidden rounded-full bg-surface-hover ${className}`}
       {...props}
     >
       <div
-        className="h-full bg-blue-600 transition-all"
+        className="h-full bg-accent transition-all"
         style={{ width: `${percentage}%` }}
       />
     </div>

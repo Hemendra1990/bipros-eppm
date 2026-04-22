@@ -3,6 +3,7 @@
 import { LogOut, User } from "lucide-react";
 import { useAuthStore } from "@/lib/state/store";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export function Header() {
   const { user, clearAuth } = useAuthStore();
@@ -25,6 +26,7 @@ export function Header() {
         </h1>
       </div>
       <div className="flex items-center gap-4">
+        <ThemeToggle />
         {user && (
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <User size={16} />

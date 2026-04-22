@@ -86,12 +86,12 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl">
+      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg border border-border bg-surface p-6 shadow-xl">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Resource Leveling</h2>
+          <h2 className="text-xl font-bold text-text-primary">Resource Leveling</h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="rounded-md p-1 text-text-secondary hover:bg-surface-hover hover:text-text-primary"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -101,7 +101,7 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
 
         {/* Mode Selector */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-300 mb-2">Leveling Mode</label>
+          <label className="block text-sm font-medium text-text-secondary mb-2">Leveling Mode</label>
           <div className="grid grid-cols-3 gap-3">
             {LEVELING_MODES.map((m) => (
               <button
@@ -109,12 +109,12 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
                 onClick={() => { setMode(m.value); setResult(null); }}
                 className={`rounded-lg border p-3 text-left transition-colors ${
                   mode === m.value
-                    ? "border-blue-500 bg-blue-950/50"
-                    : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+                    ? "border-accent bg-blue-950/50"
+                    : "border-border bg-surface-hover/50 hover:border-border"
                 }`}
               >
-                <div className="text-sm font-medium text-white">{m.label}</div>
-                <div className="mt-1 text-xs text-slate-400">{m.description}</div>
+                <div className="text-sm font-medium text-text-primary">{m.label}</div>
+                <div className="mt-1 text-xs text-text-secondary">{m.description}</div>
               </button>
             ))}
           </div>
@@ -122,8 +122,8 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
 
         {/* Utilization Chart (Before) */}
         {chartData.length > 0 && (
-          <div className="mb-6 rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-            <h3 className="mb-3 text-sm font-semibold text-slate-300">Resource Utilization Profile</h3>
+          <div className="mb-6 rounded-lg border border-border bg-surface/50 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-text-secondary">Resource Utilization Profile</h3>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -146,7 +146,7 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
           <button
             onClick={() => levelMutation.mutate()}
             disabled={levelMutation.isPending}
-            className="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400"
+            className="rounded-md bg-accent px-6 py-2.5 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active disabled:text-text-secondary"
           >
             {levelMutation.isPending ? "Running..." : `Run ${selectedMode?.label ?? "Leveling"}`}
           </button>
@@ -157,22 +157,22 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
           <div className="space-y-4">
             {/* Metrics Cards */}
             <div className="grid grid-cols-4 gap-3">
-              <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                <div className="text-xs text-slate-400">Activities Shifted</div>
-                <div className="mt-1 text-lg font-bold text-white">{result.activitiesShifted}</div>
+              <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                <div className="text-xs text-text-secondary">Activities Shifted</div>
+                <div className="mt-1 text-lg font-bold text-text-primary">{result.activitiesShifted}</div>
               </div>
-              <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                <div className="text-xs text-slate-400">Iterations</div>
-                <div className="mt-1 text-lg font-bold text-white">{result.iterationsUsed}</div>
+              <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                <div className="text-xs text-text-secondary">Iterations</div>
+                <div className="mt-1 text-lg font-bold text-text-primary">{result.iterationsUsed}</div>
               </div>
-              <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                <div className="text-xs text-slate-400">Peak Before</div>
-                <div className="mt-1 text-lg font-bold text-red-300">
+              <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                <div className="text-xs text-text-secondary">Peak Before</div>
+                <div className="mt-1 text-lg font-bold text-danger">
                   {(result.peakUtilizationBefore * 100).toFixed(1)}%
                 </div>
               </div>
-              <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                <div className="text-xs text-slate-400">Peak After</div>
+              <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                <div className="text-xs text-text-secondary">Peak After</div>
                 <div className={`mt-1 text-lg font-bold ${
                   result.peakUtilizationAfter <= 1 ? "text-green-300" : "text-yellow-300"
                 }`}>
@@ -183,12 +183,12 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
 
             {/* Shifted Activities Table */}
             {result.shiftedActivities.length > 0 && (
-              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-                <h3 className="mb-3 text-sm font-semibold text-slate-300">Shifted Activities</h3>
+              <div className="rounded-lg border border-border bg-surface/50 p-4">
+                <h3 className="mb-3 text-sm font-semibold text-text-secondary">Shifted Activities</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700 text-left text-slate-400">
+                      <tr className="border-b border-border text-left text-text-secondary">
                         <th className="px-3 py-2">Activity ID</th>
                         <th className="px-3 py-2">Original Start</th>
                         <th className="px-3 py-2">New Start</th>
@@ -197,11 +197,11 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
                     </thead>
                     <tbody>
                       {result.shiftedActivities.map((sa) => (
-                        <tr key={sa.activityId} className="border-b border-slate-800 hover:bg-slate-800/50">
-                          <td className="px-3 py-2 font-mono text-xs text-white">
+                        <tr key={sa.activityId} className="border-b border-border hover:bg-surface-hover/50">
+                          <td className="px-3 py-2 font-mono text-xs text-text-primary">
                             {sa.activityId.substring(0, 8)}...
                           </td>
-                          <td className="px-3 py-2 text-slate-300">{sa.originalStart}</td>
+                          <td className="px-3 py-2 text-text-secondary">{sa.originalStart}</td>
                           <td className="px-3 py-2 text-blue-300">{sa.newStart}</td>
                           <td className="px-3 py-2 text-right text-yellow-300">+{sa.delayDays}</td>
                         </tr>
@@ -214,11 +214,11 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
 
             {/* Messages */}
             {result.messages.length > 0 && (
-              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-                <h3 className="mb-2 text-sm font-semibold text-slate-300">Log</h3>
+              <div className="rounded-lg border border-border bg-surface/50 p-4">
+                <h3 className="mb-2 text-sm font-semibold text-text-secondary">Log</h3>
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {result.messages.map((msg, i) => (
-                    <div key={i} className="text-xs text-slate-400">{msg}</div>
+                    <div key={i} className="text-xs text-text-secondary">{msg}</div>
                   ))}
                 </div>
               </div>
@@ -228,7 +228,7 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
 
         {/* Error */}
         {levelMutation.isError && (
-          <div className="mt-4 rounded-lg border border-red-800 bg-red-950/50 p-3 text-sm text-red-300">
+          <div className="mt-4 rounded-lg border border-red-800 bg-red-950/50 p-3 text-sm text-danger">
             Leveling failed: {levelMutation.error instanceof Error ? levelMutation.error.message : "Unknown error"}
           </div>
         )}

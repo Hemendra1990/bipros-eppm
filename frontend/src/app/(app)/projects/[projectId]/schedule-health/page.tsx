@@ -27,7 +27,7 @@ export default function ScheduleHealthPage() {
   });
 
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading schedule health...</div>;
+    return <div className="text-center text-text-muted">Loading schedule health...</div>;
   }
 
   if (error) {
@@ -40,7 +40,7 @@ export default function ScheduleHealthPage() {
 
   if (!health) {
     return (
-      <div className="text-center text-slate-500">
+      <div className="text-center text-text-muted">
         No schedule health data available. Please run a schedule.
       </div>
     );
@@ -49,23 +49,23 @@ export default function ScheduleHealthPage() {
   const getRiskColor = (riskLevel: string) => {
     switch (riskLevel) {
       case "LOW":
-        return "bg-emerald-500/10 text-emerald-300";
+        return "bg-success/10 text-success";
       case "MEDIUM":
-        return "bg-amber-500/10 text-amber-300";
+        return "bg-warning/10 text-warning";
       case "HIGH":
         return "bg-orange-500/10 text-orange-300";
       case "CRITICAL":
-        return "bg-red-500/10 text-red-300";
+        return "bg-danger/10 text-danger";
       default:
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
     }
   };
 
   const getHealthScoreColor = (score: number) => {
-    if (score >= 80) return "text-emerald-400";
-    if (score >= 60) return "text-amber-400";
+    if (score >= 80) return "text-success";
+    if (score >= 60) return "text-warning";
     if (score >= 40) return "text-orange-600";
-    return "text-red-400";
+    return "text-danger";
   };
 
   const chartData = [
@@ -100,14 +100,14 @@ export default function ScheduleHealthPage() {
           description="Analyzes your schedule quality by examining float distribution, near-critical activities, and schedule density. Run a schedule first to see results."
         />
         {/* Health Score Card */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 shadow-sm">
+        <div className="rounded-lg border border-border bg-surface/50 p-8 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-slate-300">Health Score</h3>
+              <h3 className="text-sm font-medium text-text-secondary">Health Score</h3>
               <p className={`mt-2 text-5xl font-bold ${getHealthScoreColor(health.healthScore)}`}>
                 {health.healthScore.toFixed(1)}
               </p>
-              <p className="mt-2 text-sm text-slate-400">out of 100</p>
+              <p className="mt-2 text-sm text-text-secondary">out of 100</p>
             </div>
             <div className={`rounded-lg ${getRiskColor(health.riskLevel)} px-6 py-3`}>
               <span className="text-lg font-semibold">{health.riskLevel}</span>
@@ -141,8 +141,8 @@ export default function ScheduleHealthPage() {
         </div>
 
         {/* Float Distribution Chart */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-          <h3 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-text-primary">
             Float Distribution
           </h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -157,35 +157,35 @@ export default function ScheduleHealthPage() {
         </div>
 
         {/* Activity Summary Table */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-          <h3 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-text-primary">
             Activity Status Summary
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-slate-800 bg-slate-900/80">
+              <thead className="border-b border-border bg-surface/80">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
                     Category
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
                     Count
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
                     Percentage
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
                     Status
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
+              <tbody className="divide-y divide-border/50">
                 <tr>
-                  <td className="px-4 py-3 text-sm text-white">Critical Path</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-white">
+                  <td className="px-4 py-3 text-sm text-text-primary">Critical Path</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
                     {health.criticalActivities}
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-400">
+                  <td className="px-4 py-3 text-sm text-text-secondary">
                     {(
                       (health.criticalActivities / health.totalActivities) *
                       100
@@ -193,19 +193,19 @@ export default function ScheduleHealthPage() {
                     %
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-block rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300">
+                    <span className="inline-block rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger">
                       Risk
                     </span>
                   </td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-white">
+                  <td className="px-4 py-3 text-sm text-text-primary">
                     Near-Critical (1-5 days float)
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-white">
+                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
                     {health.nearCriticalActivities}
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-400">
+                  <td className="px-4 py-3 text-sm text-text-secondary">
                     {(
                       (health.nearCriticalActivities / health.totalActivities) *
                       100
@@ -213,21 +213,21 @@ export default function ScheduleHealthPage() {
                     %
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-block rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-800">
+                    <span className="inline-block rounded-full bg-warning/10 px-3 py-1 text-xs font-semibold text-amber-800">
                       Watch
                     </span>
                   </td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-white">
+                  <td className="px-4 py-3 text-sm text-text-primary">
                     Healthy (&gt;5 days float)
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-white">
+                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
                     {health.totalActivities -
                       health.criticalActivities -
                       health.nearCriticalActivities}
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-400">
+                  <td className="px-4 py-3 text-sm text-text-secondary">
                     {(
                       ((health.totalActivities -
                         health.criticalActivities -
@@ -238,7 +238,7 @@ export default function ScheduleHealthPage() {
                     %
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-block rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                    <span className="inline-block rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
                       Good
                     </span>
                   </td>
@@ -260,17 +260,17 @@ interface MetricCardProps {
 
 function MetricCard({ label, value, color }: MetricCardProps) {
   const colorClasses = {
-    blue: "bg-blue-500/10 border-blue-200",
-    red: "bg-red-500/10 border-red-200",
-    amber: "bg-amber-500/10 border-amber-200",
-    green: "bg-emerald-500/10 border-green-200",
+    blue: "bg-accent/10 border-blue-200",
+    red: "bg-danger/10 border-red-200",
+    amber: "bg-warning/10 border-warning/30",
+    green: "bg-success/10 border-green-200",
   };
 
   const textColorClasses = {
-    blue: "text-blue-400",
-    red: "text-red-400",
+    blue: "text-accent",
+    red: "text-danger",
     amber: "text-amber-900",
-    green: "text-emerald-400",
+    green: "text-success",
   };
 
   return (

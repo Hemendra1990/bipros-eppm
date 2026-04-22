@@ -117,7 +117,7 @@ export default function LabourReturnsPage() {
   };
 
   if (isLoading && returns.length === 0) {
-    return <div className="p-6 text-slate-500">Loading labour returns...</div>;
+    return <div className="p-6 text-text-muted">Loading labour returns...</div>;
   }
 
   return (
@@ -127,38 +127,38 @@ export default function LabourReturnsPage() {
         description="Daily labour count by contractor and skill category. Track workforce deployment across different work sites."
       />
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4 text-white">Labour Returns</h1>
+        <h1 className="text-3xl font-bold mb-4 text-text-primary">Labour Returns</h1>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
-            <p className="text-sm text-slate-400 mb-1">Total Headcount</p>
-            <p className="text-2xl font-bold text-blue-400">
+          <div className="bg-accent/10 p-4 rounded-lg border border-accent/20">
+            <p className="text-sm text-text-secondary mb-1">Total Headcount</p>
+            <p className="text-2xl font-bold text-accent">
               {summary.reduce((sum, s) => sum + s.totalHeadCount, 0)}
             </p>
           </div>
-          <div className="bg-emerald-500/10 p-4 rounded-lg border border-emerald-500/20">
-            <p className="text-sm text-slate-400 mb-1">Total Man-Days</p>
-            <p className="text-2xl font-bold text-emerald-400">
+          <div className="bg-success/10 p-4 rounded-lg border border-success/20">
+            <p className="text-sm text-text-secondary mb-1">Total Man-Days</p>
+            <p className="text-2xl font-bold text-success">
               {summary.reduce((sum, s) => sum + s.totalManDays, 0).toFixed(1)}
             </p>
           </div>
           <div className="bg-purple-500/10 p-4 rounded-lg border border-purple-500/20">
-            <p className="text-sm text-slate-400 mb-1">Returns Submitted</p>
+            <p className="text-sm text-text-secondary mb-1">Returns Submitted</p>
             <p className="text-2xl font-bold text-purple-400">{totalElements}</p>
           </div>
         </div>
 
         {/* Skill Category Breakdown */}
         {summary.length > 0 && (
-          <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 mb-6 shadow-xl">
-            <h3 className="font-bold text-lg mb-3 text-white">Deployment by Skill Category</h3>
+          <div className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl">
+            <h3 className="font-bold text-lg mb-3 text-text-primary">Deployment by Skill Category</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               {summary.map((s) => (
-                <div key={s.skillCategory} className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                  <p className="text-sm text-slate-400">{skillCategoryLabel[s.skillCategory]}</p>
-                  <p className="text-xl font-bold text-white">{s.totalHeadCount}</p>
-                  <p className="text-xs text-slate-500">{s.totalManDays.toFixed(1)} man-days</p>
+                <div key={s.skillCategory} className="bg-surface-hover/50 p-3 rounded border border-border">
+                  <p className="text-sm text-text-secondary">{skillCategoryLabel[s.skillCategory]}</p>
+                  <p className="text-xl font-bold text-text-primary">{s.totalHeadCount}</p>
+                  <p className="text-xs text-text-muted">{s.totalManDays.toFixed(1)} man-days</p>
                 </div>
               ))}
             </div>
@@ -167,42 +167,42 @@ export default function LabourReturnsPage() {
 
         <button
           onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          className="mb-6 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
         >
           {showForm ? "Cancel" : "Add Labour Return"}
         </button>
 
-        {error && <div className="text-red-400 mb-4">{error}</div>}
+        {error && <div className="text-danger mb-4">{error}</div>}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 mb-6 shadow-xl">
+          <form onSubmit={handleSubmit} className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Contractor Name</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Contractor Name</label>
                 <input
                   type="text"
                   value={formData.contractorName}
                   onChange={(e) => setFormData({ ...formData, contractorName: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Return Date</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Return Date</label>
                 <input
                   type="date"
                   value={formData.returnDate}
                   onChange={(e) => setFormData({ ...formData, returnDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Skill Category</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Skill Category</label>
                 <select
                   value={formData.skillCategory}
                   onChange={(e) => setFormData({ ...formData, skillCategory: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   required
                 >
                   <option value="UNSKILLED">Unskilled</option>
@@ -213,55 +213,55 @@ export default function LabourReturnsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Headcount</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Headcount</label>
                 <input
                   type="number"
                   min="1"
                   value={formData.headCount}
                   onChange={(e) => setFormData({ ...formData, headCount: parseInt(e.target.value) || 1 })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Man-Days</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Man-Days</label>
                 <input
                   type="number"
                   step="0.1"
                   min="0"
                   value={formData.manDays}
                   onChange={(e) => setFormData({ ...formData, manDays: parseFloat(e.target.value) || 1 })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-300">Site Location</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Site Location</label>
                 <input
                   type="text"
                   value={formData.siteLocation}
                   onChange={(e) => setFormData({ ...formData, siteLocation: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-slate-300">Remarks</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Remarks</label>
                 <textarea
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-white rounded-lg"
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   rows={3}
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-600">
+              <button type="submit" className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600">
                 Save Return
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-600"
+                className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded-lg hover:bg-border"
               >
                 Cancel
               </button>
@@ -271,30 +271,30 @@ export default function LabourReturnsPage() {
 
         {/* Returns Table */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-slate-800">
+          <table className="w-full border-collapse border border-border">
             <thead>
-              <tr className="bg-slate-900/80">
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Date</th>
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Contractor</th>
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Skill Category</th>
-                <th className="border border-slate-800 px-4 py-2 text-right text-slate-400">Headcount</th>
-                <th className="border border-slate-800 px-4 py-2 text-right text-slate-400">Man-Days</th>
-                <th className="border border-slate-800 px-4 py-2 text-left text-slate-400">Site Location</th>
+              <tr className="bg-surface/80">
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Contractor</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Skill Category</th>
+                <th className="border border-border px-4 py-2 text-right text-text-secondary">Headcount</th>
+                <th className="border border-border px-4 py-2 text-right text-text-secondary">Man-Days</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Site Location</th>
               </tr>
             </thead>
             <tbody>
               {returns.map((ret) => (
-                <tr key={ret.id} className="hover:bg-slate-800/30 text-white">
-                  <td className="border border-slate-800 px-4 py-2">{ret.returnDate}</td>
-                  <td className="border border-slate-800 px-4 py-2">{ret.contractorName}</td>
-                  <td className="border border-slate-800 px-4 py-2">
-                    <span className="px-2 py-1 bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20 rounded text-sm">
+                <tr key={ret.id} className="hover:bg-surface-hover/30 text-text-primary">
+                  <td className="border border-border px-4 py-2">{ret.returnDate}</td>
+                  <td className="border border-border px-4 py-2">{ret.contractorName}</td>
+                  <td className="border border-border px-4 py-2">
+                    <span className="px-2 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded text-sm">
                       {skillCategoryLabel[ret.skillCategory]}
                     </span>
                   </td>
-                  <td className="border border-slate-800 px-4 py-2 text-right font-semibold">{ret.headCount}</td>
-                  <td className="border border-slate-800 px-4 py-2 text-right">{ret.manDays.toFixed(1)}</td>
-                  <td className="border border-slate-800 px-4 py-2">{ret.siteLocation || "-"}</td>
+                  <td className="border border-border px-4 py-2 text-right font-semibold">{ret.headCount}</td>
+                  <td className="border border-border px-4 py-2 text-right">{ret.manDays.toFixed(1)}</td>
+                  <td className="border border-border px-4 py-2">{ret.siteLocation || "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -307,15 +307,15 @@ export default function LabourReturnsPage() {
             <button
               onClick={() => loadLabourReturns(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded disabled:opacity-50"
+              className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded disabled:opacity-50"
             >
               Previous
             </button>
-            <span className="px-4 py-2 text-slate-300">{page + 1}</span>
+            <span className="px-4 py-2 text-text-secondary">{page + 1}</span>
             <button
               onClick={() => loadLabourReturns(page + 1)}
               disabled={(page + 1) * 20 >= totalElements}
-              className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded disabled:opacity-50"
+              className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded disabled:opacity-50"
             >
               Next
             </button>

@@ -100,58 +100,58 @@ export default function NewProjectPage() {
       </div>
       <PageHeader title="New Project" description="Create a new project to get started" />
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="flex items-center justify-between rounded-md bg-red-500/10 p-4 text-sm text-red-400">
+            <div className="flex items-center justify-between rounded-md bg-danger/10 p-4 text-sm text-danger">
               <span>{error}</span>
-              <button type="button" onClick={() => setError("")} className="ml-3 text-red-400 hover:text-red-300">&times;</button>
+              <button type="button" onClick={() => setError("")} className="ml-3 text-danger hover:text-danger">&times;</button>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300">Code *</label>
+              <label className="block text-sm font-medium text-text-secondary">Code *</label>
               <input
                 type="text"
                 name="code"
                 value={formData.code}
                 onChange={handleChange}
-                className={`mt-1 block w-full rounded-md border ${fieldErrors.code ? "border-red-500" : "border-slate-700"} bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                className={`mt-1 block w-full rounded-md border ${fieldErrors.code ? "border-danger" : "border-border"} bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent`}
                 placeholder="e.g., PROJ-001"
               />
-              {fieldErrors.code && <p className="mt-1 text-xs text-red-400">{fieldErrors.code}</p>}
+              {fieldErrors.code && <p className="mt-1 text-xs text-danger">{fieldErrors.code}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">Name *</label>
+              <label className="block text-sm font-medium text-text-secondary">Name *</label>
               <input
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className={`mt-1 block w-full rounded-md border ${fieldErrors.name ? "border-red-500" : "border-slate-700"} bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                className={`mt-1 block w-full rounded-md border ${fieldErrors.name ? "border-danger" : "border-border"} bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent`}
                 placeholder="e.g., Website Redesign"
               />
-              {fieldErrors.name && <p className="mt-1 text-xs text-red-400">{fieldErrors.name}</p>}
+              {fieldErrors.name && <p className="mt-1 text-xs text-danger">{fieldErrors.name}</p>}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">Description</label>
+            <label className="block text-sm font-medium text-text-secondary">Description</label>
             <textarea
               name="description"
               value={formData.description || ""}
               onChange={handleChange}
               rows={4}
-              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               placeholder="Project description"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300">EPS Node *</label>
+              <label className="block text-sm font-medium text-text-secondary">EPS Node *</label>
               <SearchableSelect
                 value={formData.epsNodeId}
                 onChange={(val) => { if (error) setError(""); if (fieldErrors.epsNodeId) setFieldErrors((prev) => { const next = { ...prev }; delete next.epsNodeId; return next; }); setFormData((prev) => ({ ...prev, epsNodeId: val })); }}
@@ -162,11 +162,11 @@ export default function NewProjectPage() {
                 }))}
                 disabled={isLoadingEps}
               />
-              {fieldErrors.epsNodeId && <p className="mt-1 text-xs text-red-400">{fieldErrors.epsNodeId}</p>}
+              {fieldErrors.epsNodeId && <p className="mt-1 text-xs text-danger">{fieldErrors.epsNodeId}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">OBS Node</label>
+              <label className="block text-sm font-medium text-text-secondary">OBS Node</label>
               <SearchableSelect
                 value={formData.obsNodeId || ""}
                 onChange={(val) => { if (error) setError(""); setFormData((prev) => ({ ...prev, obsNodeId: val })); }}
@@ -182,12 +182,12 @@ export default function NewProjectPage() {
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300">Priority</label>
+              <label className="block text-sm font-medium text-text-secondary">Priority</label>
               <select
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((p) => (
                   <option key={p} value={p}>
@@ -200,27 +200,27 @@ export default function NewProjectPage() {
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300">Planned Start Date *</label>
+              <label className="block text-sm font-medium text-text-secondary">Planned Start Date *</label>
               <input
                 type="date"
                 name="plannedStartDate"
                 value={formData.plannedStartDate}
                 onChange={handleChange}
-                className={`mt-1 block w-full rounded-md border ${fieldErrors.plannedStartDate ? "border-red-500" : "border-slate-700"} bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                className={`mt-1 block w-full rounded-md border ${fieldErrors.plannedStartDate ? "border-danger" : "border-border"} bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent`}
               />
-              {fieldErrors.plannedStartDate && <p className="mt-1 text-xs text-red-400">{fieldErrors.plannedStartDate}</p>}
+              {fieldErrors.plannedStartDate && <p className="mt-1 text-xs text-danger">{fieldErrors.plannedStartDate}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">Planned Finish Date *</label>
+              <label className="block text-sm font-medium text-text-secondary">Planned Finish Date *</label>
               <input
                 type="date"
                 name="plannedFinishDate"
                 value={formData.plannedFinishDate || ""}
                 onChange={handleChange}
-                className={`mt-1 block w-full rounded-md border ${fieldErrors.plannedFinishDate ? "border-red-500" : "border-slate-700"} bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                className={`mt-1 block w-full rounded-md border ${fieldErrors.plannedFinishDate ? "border-danger" : "border-border"} bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent`}
               />
-              {fieldErrors.plannedFinishDate && <p className="mt-1 text-xs text-red-400">{fieldErrors.plannedFinishDate}</p>}
+              {fieldErrors.plannedFinishDate && <p className="mt-1 text-xs text-danger">{fieldErrors.plannedFinishDate}</p>}
             </div>
           </div>
 
@@ -228,14 +228,14 @@ export default function NewProjectPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-500"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
             >
               {isSubmitting ? "Creating..." : "Create Project"}
             </button>
             <button
               type="button"
               onClick={() => router.back()}
-              className="rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
             >
               Cancel
             </button>

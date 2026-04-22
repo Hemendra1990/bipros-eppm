@@ -80,31 +80,31 @@ export function UdfFieldForm({
   };
 
   const inputClass =
-    "mt-1 block w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm";
+    "mt-1 block w-full rounded-md border border-border bg-surface-hover/50 px-3 py-2 text-text-primary placeholder-gray-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent text-sm";
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-6">
+    <div className="rounded-lg border border-border bg-surface/80 p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-200">
+        <h3 className="text-sm font-semibold text-text-primary">
           {editingField ? "Edit Field" : "New Field"}
         </h3>
         <button
           onClick={onCancel}
-          className="rounded p-1 text-slate-400 hover:text-white"
+          className="rounded p-1 text-text-secondary hover:text-text-primary"
         >
           <X size={16} />
         </button>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+        <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-xs font-medium text-slate-400">
+          <label className="block text-xs font-medium text-text-secondary">
             Name *
           </label>
           <input
@@ -116,7 +116,7 @@ export function UdfFieldForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-400">
+          <label className="block text-xs font-medium text-text-secondary">
             Data Type
           </label>
           <select
@@ -132,7 +132,7 @@ export function UdfFieldForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-400">
+          <label className="block text-xs font-medium text-text-secondary">
             Scope
           </label>
           <select
@@ -145,7 +145,7 @@ export function UdfFieldForm({
           </select>
         </div>
         <div className="col-span-2">
-          <label className="block text-xs font-medium text-slate-400">
+          <label className="block text-xs font-medium text-text-secondary">
             Description
           </label>
           <input
@@ -157,7 +157,7 @@ export function UdfFieldForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-400">
+          <label className="block text-xs font-medium text-text-secondary">
             Sort Order
           </label>
           <input
@@ -168,7 +168,7 @@ export function UdfFieldForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-400">
+          <label className="block text-xs font-medium text-text-secondary">
             Default Value
           </label>
           <input
@@ -180,19 +180,19 @@ export function UdfFieldForm({
           />
         </div>
         <div className="flex items-end gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input
               type="checkbox"
               checked={isFormula}
               onChange={(e) => setIsFormula(e.target.checked)}
-              className="rounded border-slate-600"
+              className="rounded border-border"
             />
             Formula Field
           </label>
         </div>
         {isFormula && (
           <div className="col-span-3">
-            <label className="block text-xs font-medium text-slate-400">
+            <label className="block text-xs font-medium text-text-secondary">
               Formula Expression
             </label>
             <textarea
@@ -210,7 +210,7 @@ export function UdfFieldForm({
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
         >
           {saving
             ? "Saving..."
@@ -220,7 +220,7 @@ export function UdfFieldForm({
         </button>
         <button
           onClick={onCancel}
-          className="rounded-md bg-slate-700/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
+          className="rounded-md bg-surface-active/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active"
         >
           Cancel
         </button>

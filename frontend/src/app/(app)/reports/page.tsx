@@ -291,18 +291,18 @@ export default function ReportsPage() {
         description="Generate standard project reports including Monthly Progress, EVM Analysis, Cash Flow, Resource Utilization, Risk Register, and Contract Status reports."
       />
 
-      <div className="mb-8 rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-        <h2 className="mb-4 text-lg font-semibold text-white">Report Filters</h2>
+      <div className="mb-8 rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">Report Filters</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-slate-300">Project</label>
+            <label className="block text-sm font-medium text-text-secondary">Project</label>
             <select
               value={selectedProjectId || ""}
               onChange={(e) => {
                 setSelectedProjectId(e.target.value || null);
                 setSelectedResourceId(null);
               }}
-              className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none"
             >
               <option value="">Select a project...</option>
               {projects.map((p) => (
@@ -314,11 +314,11 @@ export default function ReportsPage() {
           </div>
           {selectedProjectId && (
             <div>
-              <label className="block text-sm font-medium text-slate-300">Resource (Optional)</label>
+              <label className="block text-sm font-medium text-text-secondary">Resource (Optional)</label>
               <select
                 value={selectedResourceId || ""}
                 onChange={(e) => setSelectedResourceId(e.target.value || null)}
-                className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none"
               >
                 <option value="">All resources</option>
                 {resources.map((r) => (
@@ -334,13 +334,13 @@ export default function ReportsPage() {
 
       {/* Report Tabs */}
       <div className="mb-8">
-        <div className="flex gap-4 border-b border-slate-800">
+        <div className="flex gap-4 border-b border-border">
           <button
             onClick={() => setActiveTab("standard")}
             className={`px-4 py-3 font-medium ${
               activeTab === "standard"
-                ? "border-b-2 border-blue-500 text-blue-400"
-                : "text-slate-400 hover:text-slate-200"
+                ? "border-b-2 border-accent text-accent"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
             Standard Reports
@@ -349,8 +349,8 @@ export default function ReportsPage() {
             onClick={() => setActiveTab("classic")}
             className={`px-4 py-3 font-medium ${
               activeTab === "classic"
-                ? "border-b-2 border-blue-500 text-blue-400"
-                : "text-slate-400 hover:text-slate-200"
+                ? "border-b-2 border-accent text-accent"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
             Classic Reports
@@ -362,50 +362,50 @@ export default function ReportsPage() {
       {activeTab === "standard" && (
         <div className="space-y-8">
           {monthlyProgressData && !monthlyProgressLoading && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <MonthlyProgressReport data={monthlyProgressData as any} />
             </div>
           )}
 
           {evmReportData && !evmReportLoading && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <EvmReport data={evmReportData as any} />
             </div>
           )}
 
           {cashFlowData && !cashFlowLoading && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <CashFlowReport data={cashFlowData as any} />
             </div>
           )}
 
           {contractStatusData && !contractStatusLoading && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <ContractStatusReport data={contractStatusData as any} />
             </div>
           )}
 
           {riskRegisterData && !riskRegisterLoading && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <RiskRegisterReport data={riskRegisterData as any} />
             </div>
           )}
 
           {resourceUtilizationData && !resourceUtilizationLoading && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <ResourceUtilizationReport data={resourceUtilizationData as any} />
             </div>
           )}
 
           {!selectedProjectId && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-6 text-center">
-              <p className="text-amber-400">Select a project to view standard reports</p>
+            <div className="rounded-lg border border-warning/30 bg-warning/10 p-6 text-center">
+              <p className="text-warning">Select a project to view standard reports</p>
             </div>
           )}
 
           {selectedProjectId && (monthlyProgressLoading || evmReportLoading || cashFlowLoading || contractStatusLoading || riskRegisterLoading || resourceUtilizationLoading) && (
-            <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-6 text-center">
-              <p className="text-blue-400">Loading reports...</p>
+            <div className="rounded-lg border border-accent/30 bg-accent/10 p-6 text-center">
+              <p className="text-accent">Loading reports...</p>
             </div>
           )}
 
@@ -421,8 +421,8 @@ export default function ReportsPage() {
           )}
 
           {standardReportsAllEmpty && !standardReportsAllFailed && (
-            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-6 text-center">
-              <p className="text-slate-300">No standard reports available for this project</p>
+            <div className="rounded-lg border border-border bg-surface-hover/40 p-6 text-center">
+              <p className="text-text-secondary">No standard reports available for this project</p>
             </div>
           )}
         </div>
@@ -435,15 +435,15 @@ export default function ReportsPage() {
             {reportCards.map((card) => (
               <div
                 key={card.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg hover:shadow-xl transition-shadow"
+                className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg hover:shadow-xl transition-shadow"
               >
-                <div className="mb-4 text-slate-500">{card.icon}</div>
-                <h3 className="mb-2 text-lg font-semibold text-white">{card.title}</h3>
-                <p className="mb-6 text-sm text-slate-400">{card.description}</p>
+                <div className="mb-4 text-text-muted">{card.icon}</div>
+                <h3 className="mb-2 text-lg font-semibold text-text-primary">{card.title}</h3>
+                <p className="mb-6 text-sm text-text-secondary">{card.description}</p>
                 <button
                   onClick={() => handleGenerateReport(card.id)}
                   disabled={generatingReport === card.id || !selectedProjectId}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-500 transition-colors"
+                  className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50 transition-colors"
                 >
                   {generatingReport === card.id ? "Generating..." : "Generate"}
                 </button>
@@ -455,11 +455,11 @@ export default function ReportsPage() {
 
       {/* Classic Report Output */}
       {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow || reportData.scheduleComparison || reportData.customReports) && (
-        <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-          <h2 className="mb-6 text-lg font-semibold text-white">Generated Report</h2>
+        <div className="mt-8 rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+          <h2 className="mb-6 text-lg font-semibold text-text-primary">Generated Report</h2>
           {reportData.scurve && (
             <div className="mb-8">
-              <h3 className="mb-4 font-semibold text-slate-300">S-Curve Analysis</h3>
+              <h3 className="mb-4 font-semibold text-text-secondary">S-Curve Analysis</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={reportData.scurve}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -476,7 +476,7 @@ export default function ReportsPage() {
           )}
           {reportData.histogram && (
             <div className="mb-8">
-              <h3 className="mb-4 font-semibold text-slate-300">Resource Histogram</h3>
+              <h3 className="mb-4 font-semibold text-text-secondary">Resource Histogram</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={reportData.histogram}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -496,7 +496,7 @@ export default function ReportsPage() {
           )}
           {reportData.cashflow && (
             <div className="mb-6">
-              <h3 className="mb-4 font-semibold text-slate-300">Cash Flow Analysis</h3>
+              <h3 className="mb-4 font-semibold text-text-secondary">Cash Flow Analysis</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={reportData.cashflow}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -512,14 +512,14 @@ export default function ReportsPage() {
           )}
           {reportData.scheduleComparison && (
             <div className="mb-6">
-              <h3 className="mb-4 font-semibold text-slate-300">Schedule Comparison</h3>
+              <h3 className="mb-4 font-semibold text-text-secondary">Schedule Comparison</h3>
               {reportData.scheduleComparison.length === 0 ? (
-                <p className="text-sm text-slate-400">No schedule comparison data available. Create a baseline first.</p>
+                <p className="text-sm text-text-secondary">No schedule comparison data available. Create a baseline first.</p>
               ) : (
                 <div className="overflow-auto">
                   <table className="w-full text-sm text-left">
                     <thead>
-                      <tr className="border-b border-slate-700 text-slate-400">
+                      <tr className="border-b border-border text-text-secondary">
                         <th className="px-3 py-2">Activity</th>
                         <th className="px-3 py-2">Baseline Start</th>
                         <th className="px-3 py-2">Current Start</th>
@@ -531,16 +531,16 @@ export default function ReportsPage() {
                     </thead>
                     <tbody>
                       {reportData.scheduleComparison.map((row) => (
-                        <tr key={row.activityCode} className="border-b border-slate-800 text-slate-300">
+                        <tr key={row.activityCode} className="border-b border-border text-text-secondary">
                           <td className="px-3 py-2 font-mono">{row.activityCode}</td>
                           <td className="px-3 py-2">{row.baselineStart ?? "N/A"}</td>
                           <td className="px-3 py-2">{row.currentStart ?? "N/A"}</td>
-                          <td className={`px-3 py-2 font-mono ${row.startVarianceDays > 0 ? "text-red-400" : row.startVarianceDays < 0 ? "text-green-400" : ""}`}>
+                          <td className={`px-3 py-2 font-mono ${row.startVarianceDays > 0 ? "text-danger" : row.startVarianceDays < 0 ? "text-success" : ""}`}>
                             {row.startVarianceDays > 0 ? `+${row.startVarianceDays}` : row.startVarianceDays}
                           </td>
                           <td className="px-3 py-2">{row.baselineFinish ?? "N/A"}</td>
                           <td className="px-3 py-2">{row.currentFinish ?? "N/A"}</td>
-                          <td className={`px-3 py-2 font-mono ${row.finishVarianceDays > 0 ? "text-red-400" : row.finishVarianceDays < 0 ? "text-green-400" : ""}`}>
+                          <td className={`px-3 py-2 font-mono ${row.finishVarianceDays > 0 ? "text-danger" : row.finishVarianceDays < 0 ? "text-success" : ""}`}>
                             {row.finishVarianceDays > 0 ? `+${row.finishVarianceDays}` : row.finishVarianceDays}
                           </td>
                         </tr>
@@ -553,16 +553,16 @@ export default function ReportsPage() {
           )}
           {reportData.customReports && (
             <div className="mb-6">
-              <h3 className="mb-4 font-semibold text-slate-300">Custom Reports</h3>
+              <h3 className="mb-4 font-semibold text-text-secondary">Custom Reports</h3>
               {reportData.customReports.length === 0 ? (
-                <p className="text-sm text-slate-400">No custom reports configured for this project.</p>
+                <p className="text-sm text-text-secondary">No custom reports configured for this project.</p>
               ) : (
                 <div className="space-y-2">
                   {reportData.customReports.map((report) => (
-                    <div key={report.id} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/50 px-4 py-3">
+                    <div key={report.id} className="flex items-center justify-between rounded-lg border border-border bg-surface-hover/50 px-4 py-3">
                       <div>
-                        <p className="font-medium text-white">{report.name}</p>
-                        <p className="text-xs text-slate-400">{report.type} &middot; Created {report.createdAt}</p>
+                        <p className="font-medium text-text-primary">{report.name}</p>
+                        <p className="text-xs text-text-secondary">{report.type} &middot; Created {report.createdAt}</p>
                       </div>
                     </div>
                   ))}
@@ -575,13 +575,13 @@ export default function ReportsPage() {
 
       {/* Export Reports */}
       {activeTab === "classic" && (
-        <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-white">Export Reports</h2>
+        <div className="mt-8 rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">Export Reports</h2>
           <div className="flex gap-3">
             <button
               onClick={() => downloadReport("EXCEL")}
               disabled={downloadingReport === "EXCEL"}
-              className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:bg-slate-600"
+              className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-text-primary hover:bg-green-600 disabled:bg-border"
             >
               <Download size={16} />
               {downloadingReport === "EXCEL" ? "Exporting..." : "Export to Excel"}
@@ -589,7 +589,7 @@ export default function ReportsPage() {
             <button
               onClick={() => downloadReport("PDF")}
               disabled={downloadingReport === "PDF"}
-              className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:bg-slate-600"
+              className="inline-flex items-center gap-2 rounded-md bg-danger px-4 py-2 text-sm font-medium text-text-primary hover:bg-danger disabled:bg-border"
             >
               <Download size={16} />
               {downloadingReport === "PDF" ? "Exporting..." : "Export to PDF"}

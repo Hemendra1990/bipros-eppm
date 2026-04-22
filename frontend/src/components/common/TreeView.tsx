@@ -162,11 +162,11 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
         {node.children && node.children.length > 0 ? (
           <button
             onClick={() => toggleNode(node.id)}
-            className="p-0.5 hover:bg-slate-800/50 rounded"
+            className="p-0.5 hover:bg-surface-hover/50 rounded"
           >
             <ChevronRight
               size={16}
-              className={`text-slate-500 transition-transform ${expanded[node.id] ? "rotate-90" : ""}`}
+              className={`text-text-muted transition-transform ${expanded[node.id] ? "rotate-90" : ""}`}
             />
           </button>
         ) : (
@@ -182,17 +182,17 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
           className={`flex-1 rounded-lg px-2 py-1 text-left text-sm transition-colors cursor-pointer ${
             isDropTarget
               ? "bg-blue-500/20 ring-2 ring-blue-500/50 ring-inset"
-              : "hover:bg-slate-800/50"
+              : "hover:bg-surface-hover/50"
           }`}
         >
           {renderNode ? (
             renderNode(node)
           ) : (
             <span>
-              <span className="font-medium text-blue-400">{node.code}</span>
-              <span className="ml-2 text-slate-300">{node.name}</span>
+              <span className="font-medium text-accent">{node.code}</span>
+              <span className="ml-2 text-text-secondary">{node.name}</span>
               {node.children && (
-                <span className="ml-2 text-xs text-slate-500">({node.children.length})</span>
+                <span className="ml-2 text-xs text-text-muted">({node.children.length})</span>
               )}
             </span>
           )}
@@ -200,7 +200,7 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
       </div>
 
       {expanded[node.id] && node.children && node.children.length > 0 && (
-        <div className="ml-6 border-l border-slate-700 pl-0">
+        <div className="ml-6 border-l border-border pl-0">
           <TreeNodeList
             nodes={node.children}
             allNodes={nodes}
@@ -343,8 +343,8 @@ export function TreeView<T extends { id: string; code: string; name: string; chi
             onDrop={handleRootDrop}
             className={`mt-2 rounded-lg border-2 border-dashed px-4 py-3 text-center text-xs transition-colors ${
               isRootDropTarget
-                ? "border-blue-500 bg-blue-500/10 text-blue-400"
-                : "border-slate-700 text-slate-500"
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-text-muted"
             }`}
           >
             Drop here to make a root node

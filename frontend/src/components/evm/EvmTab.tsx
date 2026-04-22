@@ -50,28 +50,28 @@ const fmtPct = (v: number | null | undefined) => `${(v ?? 0).toFixed(1)}%`;
 function WbsEvmRow({ node, depth = 0 }: { node: WbsEvmNode; depth?: number }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const hasChildren = node.children && node.children.length > 0;
-  const svColor = node.scheduleVariance >= 0 ? "text-green-400" : "text-red-400";
-  const cvColor = node.costVariance >= 0 ? "text-green-400" : "text-red-400";
+  const svColor = node.scheduleVariance >= 0 ? "text-success" : "text-danger";
+  const cvColor = node.costVariance >= 0 ? "text-success" : "text-danger";
 
   return (
     <>
-      <tr className="border-b border-slate-800 hover:bg-slate-800/50">
+      <tr className="border-b border-border hover:bg-surface-hover/50">
         <td className="px-3 py-2 text-sm" style={{ paddingLeft: `${depth * 20 + 12}px` }}>
           {hasChildren && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="mr-1 text-slate-400 hover:text-white"
+              className="mr-1 text-text-secondary hover:text-text-primary"
             >
               {expanded ? "\u25BC" : "\u25B6"}
             </button>
           )}
-          <span className="text-slate-400">{node.code}</span>{" "}
-          <span className="text-white">{node.name}</span>
+          <span className="text-text-secondary">{node.code}</span>{" "}
+          <span className="text-text-primary">{node.name}</span>
         </td>
         <td className="px-3 py-2 text-right text-sm">{fmt(node.budgetAtCompletion)}</td>
         <td className="px-3 py-2 text-right text-sm text-blue-300">{fmt(node.plannedValue)}</td>
         <td className="px-3 py-2 text-right text-sm text-green-300">{fmt(node.earnedValue)}</td>
-        <td className="px-3 py-2 text-right text-sm text-red-300">{fmt(node.actualCost)}</td>
+        <td className="px-3 py-2 text-right text-sm text-danger">{fmt(node.actualCost)}</td>
         <td className={`px-3 py-2 text-right text-sm ${svColor}`}>{fmt(node.scheduleVariance)}</td>
         <td className={`px-3 py-2 text-right text-sm ${cvColor}`}>{fmt(node.costVariance)}</td>
         <td className="px-3 py-2 text-right text-sm">{fmtIdx(node.schedulePerformanceIndex)}</td>
@@ -151,15 +151,15 @@ export function EvmTab({ projectId }: { projectId: string }) {
   const colorMap: Record<string, string> = {
     blue: "bg-blue-950 border-blue-700 text-blue-300",
     green: "bg-green-950 border-green-700 text-green-300",
-    red: "bg-red-950 border-red-700 text-red-300",
-    purple: "bg-purple-950 border-purple-700 text-purple-300",
+    red: "bg-red-950 border-red-700 text-danger",
+    purple: "bg-purple-950 border-purple-700 text-purple-400",
     indigo: "bg-indigo-950 border-indigo-700 text-indigo-300",
     cyan: "bg-cyan-950 border-cyan-700 text-cyan-300",
     pink: "bg-pink-950 border-pink-700 text-pink-300",
     orange: "bg-orange-950 border-orange-700 text-orange-300",
     yellow: "bg-yellow-950 border-yellow-700 text-yellow-300",
     lime: "bg-lime-950 border-lime-700 text-lime-300",
-    slate: "bg-slate-950 border-slate-700 text-slate-300",
+    slate: "bg-background border-border text-text-secondary",
   };
 
   const wbsNodes = (wbsData?.data as WbsEvmNode[] | undefined) ?? [];
@@ -169,11 +169,11 @@ export function EvmTab({ projectId }: { projectId: string }) {
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-400">EVM Technique</label>
+          <label className="mb-1 block text-xs font-medium text-text-secondary">EVM Technique</label>
           <select
             value={technique}
             onChange={(e) => setTechnique(e.target.value as EvmTechnique)}
-            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
+            className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
           >
             {TECHNIQUES.map((t) => (
               <option key={t.value} value={t.value}>
@@ -183,11 +183,11 @@ export function EvmTab({ projectId }: { projectId: string }) {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-400">ETC Method</label>
+          <label className="mb-1 block text-xs font-medium text-text-secondary">ETC Method</label>
           <select
             value={etcMethod}
             onChange={(e) => setEtcMethod(e.target.value as EtcMethod)}
-            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
+            className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
           >
             {ETC_METHODS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -199,20 +199,20 @@ export function EvmTab({ projectId }: { projectId: string }) {
         <button
           onClick={() => calculateMutation.mutate()}
           disabled={calculateMutation.isPending}
-          className="rounded-md bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-700"
+          className="rounded-md bg-accent px-6 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
         >
           {calculateMutation.isPending ? "Calculating..." : "Calculate EVM"}
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-800">
+      <div className="flex gap-1 border-b border-border">
         <button
           onClick={() => setActiveTab("summary")}
           className={`px-4 py-2 text-sm font-medium ${
             activeTab === "summary"
-              ? "border-b-2 border-blue-500 text-blue-400"
-              : "text-slate-400 hover:text-white"
+              ? "border-b-2 border-accent text-accent"
+              : "text-text-secondary hover:text-text-primary"
           }`}
         >
           Summary
@@ -221,8 +221,8 @@ export function EvmTab({ projectId }: { projectId: string }) {
           onClick={() => setActiveTab("wbs")}
           className={`px-4 py-2 text-sm font-medium ${
             activeTab === "wbs"
-              ? "border-b-2 border-blue-500 text-blue-400"
-              : "text-slate-400 hover:text-white"
+              ? "border-b-2 border-accent text-accent"
+              : "text-text-secondary hover:text-text-primary"
           }`}
         >
           WBS Drill-Down
@@ -232,18 +232,18 @@ export function EvmTab({ projectId }: { projectId: string }) {
       {activeTab === "summary" && (
         <>
           {isLoadingMetrics ? (
-            <div className="text-center text-slate-400">Loading EVM metrics...</div>
+            <div className="text-center text-text-secondary">Loading EVM metrics...</div>
           ) : (
             <>
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-slate-300">Basic Values</h3>
+                <h3 className="mb-3 text-sm font-semibold text-text-secondary">Basic Values</h3>
                 <div className="grid grid-cols-3 gap-4">
                   {metricCards.map((card) => (
                     <div
                       key={card.label}
                       className={`rounded-lg border p-4 ${colorMap[card.color]}`}
                     >
-                      <p className="text-xs font-medium text-slate-400">{card.label}</p>
+                      <p className="text-xs font-medium text-text-secondary">{card.label}</p>
                       <p className="mt-2 text-xl font-bold">{card.value}</p>
                     </div>
                   ))}
@@ -251,14 +251,14 @@ export function EvmTab({ projectId }: { projectId: string }) {
               </div>
 
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-slate-300">Performance Metrics</h3>
+                <h3 className="mb-3 text-sm font-semibold text-text-secondary">Performance Metrics</h3>
                 <div className="grid grid-cols-4 gap-4">
                   {performanceCards.map((card) => (
                     <div
                       key={card.label}
                       className={`rounded-lg border p-4 ${colorMap[card.color]}`}
                     >
-                      <p className="text-xs font-medium text-slate-400">{card.label}</p>
+                      <p className="text-xs font-medium text-text-secondary">{card.label}</p>
                       <p className="mt-2 text-xl font-bold">{card.value}</p>
                     </div>
                   ))}
@@ -266,14 +266,14 @@ export function EvmTab({ projectId }: { projectId: string }) {
               </div>
 
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-slate-300">Completion Metrics</h3>
+                <h3 className="mb-3 text-sm font-semibold text-text-secondary">Completion Metrics</h3>
                 <div className="grid grid-cols-5 gap-4">
                   {completionCards.map((card) => (
                     <div
                       key={card.label}
                       className={`rounded-lg border p-4 ${colorMap[card.color]}`}
                     >
-                      <p className="text-xs font-medium text-slate-400">{card.label}</p>
+                      <p className="text-xs font-medium text-text-secondary">{card.label}</p>
                       <p className="mt-2 text-xl font-bold">{card.value}</p>
                     </div>
                   ))}
@@ -283,15 +283,15 @@ export function EvmTab({ projectId }: { projectId: string }) {
           )}
 
           {isLoadingHistory ? (
-            <div className="text-center text-slate-400">Loading EVM history...</div>
+            <div className="text-center text-text-secondary">Loading EVM history...</div>
           ) : chartData.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-              <h3 className="text-lg font-medium text-white">No History</h3>
-              <p className="mt-2 text-slate-400">Calculate EVM to generate historical data.</p>
+            <div className="rounded-lg border border-dashed border-border py-12 text-center">
+              <h3 className="text-lg font-medium text-text-primary">No History</h3>
+              <p className="mt-2 text-text-secondary">Calculate EVM to generate historical data.</p>
             </div>
           ) : (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold text-white">EVM S-Curve</h3>
+            <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+              <h3 className="mb-4 text-lg font-semibold text-text-primary">EVM S-Curve</h3>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -337,36 +337,36 @@ export function EvmTab({ projectId }: { projectId: string }) {
       )}
 
       {activeTab === "wbs" && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 shadow-sm">
+        <div className="rounded-lg border border-border bg-surface/50 shadow-sm">
           <div className="overflow-x-auto">
             {isLoadingWbs ? (
-              <div className="py-12 text-center text-slate-400">Loading WBS EVM data...</div>
+              <div className="py-12 text-center text-text-secondary">Loading WBS EVM data...</div>
             ) : wbsNodes.length === 0 ? (
               <div className="py-12 text-center">
-                <h3 className="text-lg font-medium text-white">No WBS Data</h3>
-                <p className="mt-2 text-slate-400">
+                <h3 className="text-lg font-medium text-text-primary">No WBS Data</h3>
+                <p className="mt-2 text-text-secondary">
                   Calculate EVM to generate WBS-level metrics.
                 </p>
               </div>
             ) : (
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-slate-700 bg-slate-800/50">
-                    <th className="px-3 py-3 text-xs font-semibold text-slate-300">WBS</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-slate-300">
+                  <tr className="border-b border-border bg-surface-hover/50">
+                    <th className="px-3 py-3 text-xs font-semibold text-text-secondary">WBS</th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
                       BAC
                     </th>
                     <th className="px-3 py-3 text-right text-xs font-semibold text-blue-300">PV</th>
                     <th className="px-3 py-3 text-right text-xs font-semibold text-green-300">
                       EV
                     </th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-red-300">AC</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-slate-300">SV</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-slate-300">CV</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-slate-300">
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-danger">AC</th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">SV</th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">CV</th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
                       SPI
                     </th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-slate-300">
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
                       CPI
                     </th>
                   </tr>

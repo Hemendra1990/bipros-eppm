@@ -52,7 +52,7 @@ export default function CalendarsPage() {
         actions={
           <button
             onClick={() => router.push("/admin/calendars/new")}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
           >
             <Plus size={16} />
             New Calendar
@@ -61,11 +61,11 @@ export default function CalendarsPage() {
       />
 
       {isLoading && (
-        <div className="py-12 text-center text-slate-500">Loading calendars...</div>
+        <div className="py-12 text-center text-text-muted">Loading calendars...</div>
       )}
 
       {error && (
-        <div className="rounded-md bg-red-500/10 p-4 text-sm text-red-400">
+        <div className="rounded-md bg-danger/10 p-4 text-sm text-danger">
           Failed to load calendars. Is the backend running?
         </div>
       )}

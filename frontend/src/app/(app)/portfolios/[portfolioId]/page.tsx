@@ -93,11 +93,11 @@ export default function PortfolioDetailPage() {
   };
 
   if (loading) {
-    return <div className="text-center text-slate-500">Loading portfolio...</div>;
+    return <div className="text-center text-text-muted">Loading portfolio...</div>;
   }
 
   if (!portfolio) {
-    return <div className="text-center text-slate-500">Portfolio not found</div>;
+    return <div className="text-center text-text-muted">Portfolio not found</div>;
   }
 
   return (
@@ -105,24 +105,24 @@ export default function PortfolioDetailPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/portfolios"
-          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-slate-400 hover:bg-slate-800/50"
+          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-text-secondary hover:bg-surface-hover/50"
         >
           <ArrowLeft size={18} />
           Back
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-white">{portfolio.name}</h1>
-          <p className="text-sm text-slate-400">{portfolio.code}</p>
+          <h1 className="text-3xl font-bold text-text-primary">{portfolio.name}</h1>
+          <p className="text-sm text-text-secondary">{portfolio.code}</p>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+        <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">
           {error}
         </div>
       )}
 
-      <div className="border-b border-slate-800">
+      <div className="border-b border-border">
         <div className="flex gap-4">
           {(["projects", "scoring", "optimization", "scenarios"] as const).map((tab) => (
             <button
@@ -130,8 +130,8 @@ export default function PortfolioDetailPage() {
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 font-medium transition-colors ${
                 activeTab === tab
-                  ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-b-2 border-accent text-accent"
+                  : "text-text-secondary hover:text-text-primary"
               }`}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -143,10 +143,10 @@ export default function PortfolioDetailPage() {
       {activeTab === "projects" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Portfolio Projects</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Portfolio Projects</h2>
             <button
               onClick={() => setShowAddProject(!showAddProject)}
-              className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+              className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
             >
               <Plus size={16} />
               Add Project
@@ -154,7 +154,7 @@ export default function PortfolioDetailPage() {
           </div>
 
           {showAddProject && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-lg">
+            <div className="rounded-xl border border-border bg-surface/50 p-4 shadow-lg">
               <div className="flex gap-2">
                 <div className="flex-1">
                   <SearchableSelect
@@ -171,13 +171,13 @@ export default function PortfolioDetailPage() {
                 </div>
                 <button
                   onClick={handleAddProject}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
                 >
                   Add
                 </button>
                 <button
                   onClick={() => setShowAddProject(false)}
-                  className="rounded-md border border-slate-700 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+                  className="rounded-md border border-border bg-surface/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
                 >
                   Cancel
                 </button>
@@ -186,23 +186,23 @@ export default function PortfolioDetailPage() {
           )}
 
           {projects.length === 0 ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-8 text-center shadow-lg">
-              <p className="text-slate-500">No projects in this portfolio yet.</p>
+            <div className="rounded-xl border border-border bg-surface/50 p-8 text-center shadow-lg">
+              <p className="text-text-muted">No projects in this portfolio yet.</p>
             </div>
           ) : (
             <div className="space-y-2">
               {projects.map((project) => (
                 <div
                   key={project.projectId}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-lg"
+                  className="flex items-center justify-between rounded-xl border border-border bg-surface/50 p-4 shadow-lg"
                 >
                   <div>
-                    <p className="font-medium text-white">{project.projectName}</p>
-                    <p className="text-sm text-slate-400">{project.projectCode}</p>
+                    <p className="font-medium text-text-primary">{project.projectName}</p>
+                    <p className="text-sm text-text-secondary">{project.projectCode}</p>
                   </div>
                   <button
                     onClick={() => handleRemoveProject(project.projectId)}
-                    className="rounded px-2 py-1 text-sm text-red-400 hover:bg-red-500/10"
+                    className="rounded px-2 py-1 text-sm text-danger hover:bg-danger/10"
                   >
                     Remove
                   </button>
@@ -216,18 +216,18 @@ export default function PortfolioDetailPage() {
       {activeTab === "scoring" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Scoring & Ranking</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Scoring & Ranking</h2>
             <button
               onClick={handleCalculateRanking}
-              className="flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+              className="flex items-center gap-2 rounded-md bg-success px-3 py-2 text-sm font-medium text-text-primary hover:bg-success/80"
             >
               <Calculator size={16} />
               Calculate Ranking
             </button>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-            <p className="text-slate-400">
+          <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <p className="text-text-secondary">
               Scoring criteria and project rankings will be displayed here.
             </p>
           </div>
@@ -237,23 +237,23 @@ export default function PortfolioDetailPage() {
       {activeTab === "optimization" && (
         <div className="space-y-6">
           {/* Budget-Constrained Optimization */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+          <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
             <div className="flex items-center gap-2 mb-4">
-              <Zap size={20} className="text-amber-400" />
-              <h3 className="text-lg font-semibold text-white">Portfolio Optimization</h3>
+              <Zap size={20} className="text-warning" />
+              <h3 className="text-lg font-semibold text-text-primary">Portfolio Optimization</h3>
             </div>
-            <p className="mb-4 text-sm text-slate-400">
+            <p className="mb-4 text-sm text-text-secondary">
               Select the best combination of projects that maximizes weighted score within your budget constraint (greedy knapsack algorithm).
             </p>
             <div className="flex items-end gap-3 mb-4">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Budget Limit</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Budget Limit</label>
                 <input
                   type="number"
                   value={budgetLimit}
                   onChange={(e) => setBudgetLimit(e.target.value)}
                   placeholder="e.g. 1000000"
-                  className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
                 />
               </div>
               <button
@@ -272,7 +272,7 @@ export default function PortfolioDetailPage() {
                   }
                 }}
                 disabled={optimizing}
-                className="flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-400"
+                className="flex items-center gap-2 rounded-md bg-warning px-4 py-2 text-sm font-medium text-text-primary hover:bg-warning disabled:bg-surface-active disabled:text-text-secondary"
               >
                 <Zap size={16} />
                 {optimizing ? "Optimizing..." : "Run Optimization"}
@@ -282,20 +282,20 @@ export default function PortfolioDetailPage() {
             {optimizationResult && (
               <div className="space-y-4">
                 <div className="grid grid-cols-4 gap-3">
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                    <div className="text-xs text-slate-400">Selected</div>
+                  <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                    <div className="text-xs text-text-secondary">Selected</div>
                     <div className="mt-1 text-lg font-bold text-green-300">{optimizationResult.totalSelected}</div>
                   </div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                    <div className="text-xs text-slate-400">Excluded</div>
-                    <div className="mt-1 text-lg font-bold text-red-300">{optimizationResult.totalExcluded}</div>
+                  <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                    <div className="text-xs text-text-secondary">Excluded</div>
+                    <div className="mt-1 text-lg font-bold text-danger">{optimizationResult.totalExcluded}</div>
                   </div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                    <div className="text-xs text-slate-400">Total Score</div>
-                    <div className="mt-1 text-lg font-bold text-white">{optimizationResult.totalScore.toFixed(2)}</div>
+                  <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                    <div className="text-xs text-text-secondary">Total Score</div>
+                    <div className="mt-1 text-lg font-bold text-text-primary">{optimizationResult.totalScore.toFixed(2)}</div>
                   </div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                    <div className="text-xs text-slate-400">Remaining Budget</div>
+                  <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                    <div className="text-xs text-text-secondary">Remaining Budget</div>
                     <div className="mt-1 text-lg font-bold text-blue-300">
                       {optimizationResult.remainingBudget != null
                         ? optimizationResult.remainingBudget.toLocaleString()
@@ -305,10 +305,10 @@ export default function PortfolioDetailPage() {
                 </div>
 
                 {optimizationResult.messages.length > 0 && (
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3 max-h-48 overflow-y-auto">
-                    <h4 className="text-xs font-semibold text-slate-400 mb-2">Optimization Log</h4>
+                  <div className="rounded-lg border border-border bg-surface/70 p-3 max-h-48 overflow-y-auto">
+                    <h4 className="text-xs font-semibold text-text-secondary mb-2">Optimization Log</h4>
                     {optimizationResult.messages.map((msg, i) => (
-                      <div key={i} className="text-xs text-slate-400 py-0.5">{msg}</div>
+                      <div key={i} className="text-xs text-text-secondary py-0.5">{msg}</div>
                     ))}
                   </div>
                 )}
@@ -317,17 +317,17 @@ export default function PortfolioDetailPage() {
           </div>
 
           {/* What-If Analysis */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
+          <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
             <div className="flex items-center gap-2 mb-4">
               <FlaskConical size={20} className="text-purple-400" />
-              <h3 className="text-lg font-semibold text-white">What-If Analysis</h3>
+              <h3 className="text-lg font-semibold text-text-primary">What-If Analysis</h3>
             </div>
-            <p className="mb-4 text-sm text-slate-400">
+            <p className="mb-4 text-sm text-text-secondary">
               Simulate adding or removing a project to see the impact on portfolio score and budget.
             </p>
             <div className="flex items-end gap-3 mb-4">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-400 mb-1">Project</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Project</label>
                 <SearchableSelect
                   value={whatIfProjectId}
                   onChange={(val) => setWhatIfProjectId(val)}
@@ -339,11 +339,11 @@ export default function PortfolioDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Action</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Action</label>
                 <select
                   value={whatIfAction}
                   onChange={(e) => setWhatIfAction(e.target.value as "add" | "remove")}
-                  className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                  className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
                 >
                   <option value="add">Add Project</option>
                   <option value="remove">Remove Project</option>
@@ -367,7 +367,7 @@ export default function PortfolioDetailPage() {
                   }
                 }}
                 disabled={runningWhatIf || !whatIfProjectId}
-                className="flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:bg-slate-700 disabled:text-slate-400"
+                className="flex items-center gap-2 rounded-md bg-purple-500 px-4 py-2 text-sm font-medium text-text-primary hover:bg-purple-400 disabled:bg-surface-active disabled:text-text-secondary"
               >
                 <FlaskConical size={16} />
                 {runningWhatIf ? "Analyzing..." : "Simulate"}
@@ -376,24 +376,24 @@ export default function PortfolioDetailPage() {
 
             {whatIfResult && (
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                  <div className="text-xs text-slate-400">Score Impact</div>
-                  <div className={`mt-1 text-lg font-bold ${whatIfResult.scoreDelta >= 0 ? "text-green-300" : "text-red-300"}`}>
+                <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                  <div className="text-xs text-text-secondary">Score Impact</div>
+                  <div className={`mt-1 text-lg font-bold ${whatIfResult.scoreDelta >= 0 ? "text-green-300" : "text-danger"}`}>
                     {whatIfResult.scoreDelta >= 0 ? "+" : ""}{whatIfResult.scoreDelta.toFixed(2)}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-text-muted">
                     {whatIfResult.scoreBefore.toFixed(2)} → {whatIfResult.scoreAfter.toFixed(2)}
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                  <div className="text-xs text-slate-400">Budget Impact</div>
+                <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                  <div className="text-xs text-text-secondary">Budget Impact</div>
                   <div className={`mt-1 text-lg font-bold ${whatIfResult.budgetDelta <= 0 ? "text-green-300" : "text-yellow-300"}`}>
                     {whatIfResult.budgetDelta >= 0 ? "+" : ""}{whatIfResult.budgetDelta}
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                  <div className="text-xs text-slate-400">Within Budget</div>
-                  <div className={`mt-1 text-lg font-bold ${whatIfResult.withinBudget ? "text-green-300" : "text-red-300"}`}>
+                <div className="rounded-lg border border-border bg-surface-hover/50 p-3">
+                  <div className="text-xs text-text-secondary">Within Budget</div>
+                  <div className={`mt-1 text-lg font-bold ${whatIfResult.withinBudget ? "text-green-300" : "text-danger"}`}>
                     {whatIfResult.withinBudget ? "Yes" : "No"}
                   </div>
                 </div>
@@ -406,21 +406,21 @@ export default function PortfolioDetailPage() {
       {activeTab === "scenarios" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Scenarios</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Scenarios</h2>
             <div className="flex gap-2">
-              <button className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700">
+              <button className="flex items-center gap-2 rounded-md border border-border bg-surface-hover/50 px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active">
                 <GitCompare size={16} />
                 Compare Scenarios
               </button>
-              <button className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500">
+              <button className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover">
                 <Plus size={16} />
                 New Scenario
               </button>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg">
-            <p className="text-slate-400">
+          <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <p className="text-text-secondary">
               Create scenarios to model different project selections and compare their impact on portfolio performance.
             </p>
           </div>

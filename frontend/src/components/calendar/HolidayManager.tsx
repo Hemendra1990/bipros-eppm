@@ -68,18 +68,18 @@ export function HolidayManager({
   };
 
   const inputClass =
-    "rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    "rounded-md border border-border bg-surface-hover/50 px-3 py-2 text-sm text-text-primary placeholder-gray-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-200">
+        <h3 className="text-sm font-semibold text-text-primary">
           Holidays & Exceptions
         </h3>
         <button
           type="button"
           onClick={() => setShowAddForm(!showAddForm)}
-          className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+          className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover"
         >
           <Plus size={14} />
           Add Holiday
@@ -88,14 +88,14 @@ export function HolidayManager({
 
       {/* Quick-add presets */}
       <div className="flex flex-wrap gap-2">
-        <span className="text-xs text-slate-500">Quick add:</span>
+        <span className="text-xs text-text-muted">Quick add:</span>
         {PRESET_HOLIDAYS.map((preset) => (
           <button
             key={preset.name}
             type="button"
             onClick={() => handleAddPreset(preset)}
             disabled={saving}
-            className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50"
+            className="rounded bg-surface-hover px-2 py-1 text-xs text-text-secondary hover:bg-surface-active hover:text-text-primary disabled:opacity-50"
           >
             {preset.name}
           </button>
@@ -104,9 +104,9 @@ export function HolidayManager({
 
       {/* Add form */}
       {showAddForm && (
-        <div className="flex items-end gap-3 rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+        <div className="flex items-end gap-3 rounded-lg border border-border bg-surface/60 p-4">
           <div>
-            <label className="block text-xs font-medium text-slate-400">
+            <label className="block text-xs font-medium text-text-secondary">
               Date *
             </label>
             <input
@@ -117,7 +117,7 @@ export function HolidayManager({
             />
           </div>
           <div className="flex-1">
-            <label className="block text-xs font-medium text-slate-400">
+            <label className="block text-xs font-medium text-text-secondary">
               Name
             </label>
             <input
@@ -132,14 +132,14 @@ export function HolidayManager({
             type="button"
             onClick={handleAdd}
             disabled={saving || !date}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
           >
             {saving ? "Adding..." : "Add"}
           </button>
           <button
             type="button"
             onClick={() => setShowAddForm(false)}
-            className="rounded-md bg-slate-700/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
+            className="rounded-md bg-surface-active/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active"
           >
             Cancel
           </button>
@@ -148,7 +148,7 @@ export function HolidayManager({
 
       {/* Exceptions list */}
       {exceptions.length === 0 && (
-        <p className="py-4 text-center text-sm text-slate-500">
+        <p className="py-4 text-center text-sm text-text-muted">
           No holidays or exceptions defined.
         </p>
       )}
@@ -164,10 +164,10 @@ export function HolidayManager({
             .map((exc) => (
               <div
                 key={exc.id}
-                className="flex items-center justify-between rounded-lg border border-slate-800/50 bg-slate-900/30 px-4 py-3"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-surface/30 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-slate-300">
+                  <span className="text-sm font-medium text-text-secondary">
                     {new Date(exc.exceptionDate).toLocaleDateString(undefined, {
                       weekday: "short",
                       year: "numeric",
@@ -176,15 +176,15 @@ export function HolidayManager({
                     })}
                   </span>
                   {exc.name && (
-                    <span className="text-sm text-slate-400">
+                    <span className="text-sm text-text-secondary">
                       {exc.name}
                     </span>
                   )}
                   <span
                     className={`rounded px-2 py-0.5 text-xs ${
                       exc.dayType === "NON_WORKING"
-                        ? "bg-red-500/10 text-red-400"
-                        : "bg-emerald-500/10 text-emerald-400"
+                        ? "bg-danger/10 text-danger"
+                        : "bg-success/10 text-success"
                     }`}
                   >
                     {exc.dayType.replace("_", " ")}
@@ -193,7 +193,7 @@ export function HolidayManager({
                 <button
                   type="button"
                   onClick={() => onRemove(exc.id)}
-                  className="rounded p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                  className="rounded p-1.5 text-text-muted hover:bg-danger/10 hover:text-danger"
                 >
                   <Trash2 size={14} />
                 </button>

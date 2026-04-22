@@ -37,12 +37,12 @@ const MODULE_LABEL: Record<IcpmsModule, string> = {
 };
 
 const LEVEL_STYLE: Record<ModuleAccessLevel, string> = {
-  NONE: "bg-slate-800 text-slate-600",
-  VIEW: "bg-slate-600/40 text-slate-200",
-  EDIT: "bg-blue-600/40 text-blue-200",
-  CERTIFY: "bg-emerald-600/40 text-emerald-200",
-  APPROVE: "bg-amber-600/40 text-amber-200",
-  FULL: "bg-purple-600/40 text-purple-200",
+  NONE: "bg-surface-hover text-text-muted",
+  VIEW: "bg-border/40 text-text-primary",
+  EDIT: "bg-accent/40 text-blue-200",
+  CERTIFY: "bg-success/40 text-emerald-200",
+  APPROVE: "bg-warning/40 text-amber-200",
+  FULL: "bg-purple-500/40 text-purple-200",
 };
 
 const LEVEL_SHORT: Record<ModuleAccessLevel, string> = {
@@ -90,9 +90,9 @@ export default function UserAccessPage() {
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="overflow-hidden rounded-lg border border-slate-700">
+        <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-xs">
-            <thead className="bg-slate-800/60 text-slate-300">
+            <thead className="bg-surface-hover/60 text-text-secondary">
               <tr>
                 <th className="px-3 py-2 text-left">User</th>
                 <th className="px-3 py-2 text-left">Organisation</th>
@@ -101,17 +101,17 @@ export default function UserAccessPage() {
                 <th className="px-3 py-2 text-left">Auth</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-border">
               {usersLoading && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={5} className="px-3 py-6 text-center text-text-muted">
                     Loading users…
                   </td>
                 </tr>
               )}
               {!usersLoading && users.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={5} className="px-3 py-6 text-center text-text-muted">
                     No users seeded.
                   </td>
                 </tr>
@@ -123,23 +123,23 @@ export default function UserAccessPage() {
                   <tr
                     key={u.id}
                     onClick={() => setSelectedUserId(u.id)}
-                    className={`cursor-pointer hover:bg-slate-800/60 ${isSelected ? "bg-slate-800/80" : ""}`}
+                    className={`cursor-pointer hover:bg-surface-hover/60 ${isSelected ? "bg-surface-hover/80" : ""}`}
                   >
                     <td className="px-3 py-2">
-                      <div className="font-medium text-slate-200">{u.username}</div>
-                      <div className="text-slate-500">{u.email}</div>
+                      <div className="font-medium text-text-primary">{u.username}</div>
+                      <div className="text-text-muted">{u.email}</div>
                     </td>
-                    <td className="px-3 py-2 text-slate-300">
+                    <td className="px-3 py-2 text-text-secondary">
                       {org ? org.shortName ?? org.code : "—"}
                     </td>
-                    <td className="px-3 py-2 text-slate-300">{u.designation ?? "—"}</td>
-                    <td className="px-3 py-2 text-slate-300">{u.primaryIcpmsRole ?? "—"}</td>
+                    <td className="px-3 py-2 text-text-secondary">{u.designation ?? "—"}</td>
+                    <td className="px-3 py-2 text-text-secondary">{u.primaryIcpmsRole ?? "—"}</td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         {(u.authMethods ?? []).map((a) => (
                           <span
                             key={a}
-                            className="rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-300"
+                            className="rounded bg-surface-active/60 px-1.5 py-0.5 text-[10px] text-text-secondary"
                           >
                             {a.replace(/_/g, " ")}
                           </span>
@@ -153,19 +153,19 @@ export default function UserAccessPage() {
           </table>
         </div>
 
-        <aside className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-200">
+        <aside className="rounded-lg border border-border bg-surface/40 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-text-primary">
             {selectedUserId ? "Access Matrix" : "Select a user to see access matrix"}
           </h3>
 
           {selectedUserId && accessLoading && (
-            <div className="text-sm text-slate-500">Loading access…</div>
+            <div className="text-sm text-text-muted">Loading access…</div>
           )}
 
           {access && (
             <>
               <div className="mb-4">
-                <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+                <div className="mb-2 text-xs uppercase tracking-wide text-text-muted">
                   Modules (M1–M9)
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
@@ -183,27 +183,27 @@ export default function UserAccessPage() {
                     );
                   })}
                 </div>
-                <div className="mt-2 text-[10px] text-slate-500">
+                <div className="mt-2 text-[10px] text-text-muted">
                   V=View · E=Edit · C=Certify · A=Approve · F=Full
                 </div>
               </div>
 
               <div>
-                <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+                <div className="mb-2 text-xs uppercase tracking-wide text-text-muted">
                   Corridor Scope
                 </div>
                 {access.allCorridors ? (
-                  <span className="rounded bg-emerald-600/30 px-2 py-1 text-xs text-emerald-200">
+                  <span className="rounded bg-success/30 px-2 py-1 text-xs text-emerald-200">
                     All Corridors
                   </span>
                 ) : access.corridorScopes.length === 0 ? (
-                  <span className="text-xs text-slate-500">No scope assigned</span>
+                  <span className="text-xs text-text-muted">No scope assigned</span>
                 ) : (
                   <div className="flex flex-wrap gap-1">
                     {access.corridorScopes.map((id) => (
                       <span
                         key={id}
-                        className="rounded bg-blue-600/30 px-2 py-1 text-[10px] text-blue-200"
+                        className="rounded bg-accent/30 px-2 py-1 text-[10px] text-blue-200"
                       >
                         {id.slice(0, 8)}…
                       </span>

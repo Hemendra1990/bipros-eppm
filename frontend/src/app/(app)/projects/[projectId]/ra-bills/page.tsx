@@ -15,17 +15,17 @@ import { Plus } from "lucide-react";
 import { TabTip } from "@/components/common/TabTip";
 
 const gateBadge = (gate?: SatelliteGate | null) => {
-  if (!gate) return "bg-slate-700/40 text-slate-300";
+  if (!gate) return "bg-surface-active/40 text-text-secondary";
   switch (gate) {
     case "PASS":
-      return "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+      return "bg-success/20 text-success border border-success/40";
     case "HOLD_VARIANCE":
-      return "bg-amber-500/20 text-amber-300 border border-amber-500/40";
+      return "bg-amber-500/20 text-warning border border-warning/40";
     case "RED_VARIANCE":
     case "HOLD_SATELLITE_DISPUTE":
-      return "bg-red-500/20 text-red-300 border border-red-500/40";
+      return "bg-red-500/20 text-danger border border-danger/40";
     default:
-      return "bg-slate-700/40 text-slate-300";
+      return "bg-surface-active/40 text-text-secondary";
   }
 };
 
@@ -33,7 +33,7 @@ const statusBadge = (status: string) => {
   switch (status) {
     case "PAID":
     case "PAID_PMC_OVERRIDE":
-      return "bg-emerald-500/20 text-emerald-300";
+      return "bg-success/20 text-success";
     case "APPROVED":
     case "CERTIFIED":
       return "bg-blue-500/20 text-blue-300";
@@ -41,11 +41,11 @@ const statusBadge = (status: string) => {
     case "SUBMITTED":
       return "bg-indigo-500/20 text-indigo-300";
     case "HOLD_SATELLITE_DISPUTE":
-      return "bg-amber-500/20 text-amber-300";
+      return "bg-amber-500/20 text-warning";
     case "REJECTED":
-      return "bg-red-500/20 text-red-300";
+      return "bg-red-500/20 text-danger";
     default:
-      return "bg-slate-700/40 text-slate-300";
+      return "bg-surface-active/40 text-text-secondary";
   }
 };
 
@@ -117,7 +117,7 @@ export default function RaBillsPage() {
       sortable: true,
       render: (value, row) => {
         const gate = value as SatelliteGate | null | undefined;
-        if (!gate) return <span className="text-slate-500">—</span>;
+        if (!gate) return <span className="text-text-muted">—</span>;
         const variance = row.satelliteGateVariance;
         return (
           <span
@@ -181,7 +181,7 @@ export default function RaBillsPage() {
   };
 
   const inputCls =
-    "mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 text-white placeholder-slate-500 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm";
+    "mt-1 block w-full rounded-md border border-border bg-surface-hover text-text-primary placeholder-text-muted shadow-sm focus:border-accent focus:ring-accent sm:text-sm";
 
   return (
     <div className="space-y-6 p-6">
@@ -190,7 +190,7 @@ export default function RaBillsPage() {
         description="RA Bills are periodic payment certificates for contractors. The Satellite Gate compares contractor-claimed progress against AI-derived satellite progress — variance >5% holds the bill, >10% is a hard stop."
       />
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white">RA Bills</h1>
+        <h1 className="text-3xl font-bold text-text-primary">RA Bills</h1>
         <Button
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="gap-2"
@@ -201,14 +201,14 @@ export default function RaBillsPage() {
       </div>
 
       {showCreateForm && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-xl">
-          <h2 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-xl">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">
             Create New RA Bill
           </h2>
           <form onSubmit={handleCreateBill} className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Bill Number
                 </label>
                 <input
@@ -220,7 +220,7 @@ export default function RaBillsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   WBS Package Code
                 </label>
                 <input
@@ -231,7 +231,7 @@ export default function RaBillsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Contract ID (Optional)
                 </label>
                 <input type="text" name="contractId" className={inputCls} />
@@ -240,7 +240,7 @@ export default function RaBillsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Bill Period From
                 </label>
                 <input
@@ -251,7 +251,7 @@ export default function RaBillsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Bill Period To
                 </label>
                 <input
@@ -265,7 +265,7 @@ export default function RaBillsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Gross Amount (₹)
                 </label>
                 <input
@@ -277,7 +277,7 @@ export default function RaBillsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Contractor Claimed Progress %
                 </label>
                 <input
@@ -292,13 +292,13 @@ export default function RaBillsPage() {
               </div>
             </div>
 
-            <div className="rounded-md border border-slate-800 bg-slate-950/40 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <div className="rounded-md border border-border bg-background/40 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 Deduction Breakdown (CPWD standard)
               </p>
               <div className="grid grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-xs text-slate-400">
+                  <label className="block text-xs text-text-secondary">
                     Mob Advance (10%)
                   </label>
                   <input
@@ -309,7 +309,7 @@ export default function RaBillsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400">
+                  <label className="block text-xs text-text-secondary">
                     Retention (5%)
                   </label>
                   <input
@@ -320,7 +320,7 @@ export default function RaBillsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400">
+                  <label className="block text-xs text-text-secondary">
                     TDS (2%)
                   </label>
                   <input
@@ -331,7 +331,7 @@ export default function RaBillsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400">
+                  <label className="block text-xs text-text-secondary">
                     GST (18%)
                   </label>
                   <input
@@ -342,14 +342,14 @@ export default function RaBillsPage() {
                   />
                 </div>
               </div>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-text-muted">
                 Net amount and total deductions are derived from the four
                 breakdowns.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Remarks (Optional)
               </label>
               <textarea
@@ -363,14 +363,14 @@ export default function RaBillsPage() {
               <button
                 type="submit"
                 disabled={createBillMutation.isPending}
-                className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-500 disabled:opacity-50"
+                className="rounded-md bg-accent px-4 py-2 text-text-primary hover:bg-accent-hover disabled:opacity-50"
               >
                 {createBillMutation.isPending ? "Creating..." : "Create Bill"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateForm(false)}
-                className="rounded-md bg-slate-700/50 px-4 py-2 text-slate-300 hover:bg-slate-600"
+                className="rounded-md bg-surface-active/50 px-4 py-2 text-text-secondary hover:bg-border"
               >
                 Cancel
               </button>
@@ -379,14 +379,14 @@ export default function RaBillsPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-semibold text-white">RA Bills List</h2>
+      <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-xl">
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">RA Bills List</h2>
         {isLoadingBills ? (
-          <div className="text-center text-slate-500">Loading RA Bills...</div>
+          <div className="text-center text-text-muted">Loading RA Bills...</div>
         ) : bills.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-            <h3 className="text-lg font-medium text-white">No RA Bills</h3>
-            <p className="mt-2 text-slate-500">
+          <div className="rounded-lg border border-dashed border-border py-12 text-center">
+            <h3 className="text-lg font-medium text-text-primary">No RA Bills</h3>
+            <p className="mt-2 text-text-muted">
               No RA bills created yet. Create one to get started.
             </p>
           </div>
@@ -401,33 +401,33 @@ export default function RaBillsPage() {
       </div>
 
       {selectedBillId && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 shadow-xl">
-          <h2 className="mb-4 text-lg font-semibold text-white">Bill Items</h2>
+        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-xl">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">Bill Items</h2>
           {isLoadingItems ? (
-            <div className="text-center text-slate-500">
+            <div className="text-center text-text-muted">
               Loading bill items...
             </div>
           ) : billItems.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-              <p className="text-slate-500">No items in this bill yet.</p>
+            <div className="rounded-lg border border-dashed border-border py-8 text-center">
+              <p className="text-text-muted">No items in this bill yet.</p>
             </div>
           ) : (
             <div className="space-y-4">
               {billItems.map((item) => (
                 <div
                   key={item.id}
-                  className="flex justify-between border-b border-slate-700 pb-4"
+                  className="flex justify-between border-b border-border pb-4"
                 >
                   <div>
-                    <p className="font-medium text-white">{item.itemCode}</p>
-                    <p className="text-sm text-slate-500">{item.description}</p>
+                    <p className="font-medium text-text-primary">{item.itemCode}</p>
+                    <p className="text-sm text-text-muted">{item.description}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-white">
+                    <p className="font-medium text-text-primary">
                       ₹{Number(item.amount).toLocaleString("en-IN")}
                     </p>
                     {item.unit && (
-                      <p className="text-sm text-slate-500">Unit: {item.unit}</p>
+                      <p className="text-sm text-text-muted">Unit: {item.unit}</p>
                     )}
                   </div>
                 </div>

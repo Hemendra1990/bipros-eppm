@@ -148,11 +148,18 @@ export function CostsTab({ projectId }: { projectId: string }) {
   const periodAggregations: PeriodCostAggregation[] = periodData?.data ?? [];
   const wbsTree: WbsNodeResponse[] = wbsData?.data ?? [];
 
+  // Budget precedence: (1) WBS nodes' declared `budgetCrores` (the legacy DMIC
+  // planning flow), else (2) cost-summary `totalBudget` (sum of expense
+  // budgetedCost — the flow our seed script uses). Without this fallback, any
+  // project that plans via expenses displays Total Budget ₹0.00cr despite
+  // having real budget data.
   const wbsBudgetCrores = pickTopLevelBudget(wbsTree);
+  const summaryBudgetCrores = (summary?.totalBudget ?? 0) / INR_PER_CRORE;
+  const budgetCrores = wbsBudgetCrores > 0 ? wbsBudgetCrores : summaryBudgetCrores;
   // summary amounts are INR; convert to crores for display.
   const actualCrores = (summary?.totalActual ?? 0) / INR_PER_CRORE;
-  const remainingCrores = Math.max(wbsBudgetCrores - actualCrores, 0);
-  const atCompletionCrores = Math.max(wbsBudgetCrores, actualCrores);
+  const remainingCrores = Math.max(budgetCrores - actualCrores, 0);
+  const atCompletionCrores = Math.max(budgetCrores, actualCrores);
 
   const chartData = forecastItems.map((item) => ({
     period: item.period,
@@ -167,7 +174,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
   const summaryCards: SummaryCard[] = [
     {
       label: "Total Budget",
-      value: formatCrores(wbsBudgetCrores),
+      value: formatCrores(budgetCrores),
       color: "blue",
     },
     {
@@ -225,22 +232,22 @@ export function CostsTab({ projectId }: { projectId: string }) {
     yellow: "bg-yellow-950 border-yellow-700",
     purple: "bg-purple-950 border-purple-700",
     red: "bg-red-950 border-red-700",
-    slate: "bg-slate-900 border-slate-700",
+    slate: "bg-surface border-border",
   };
 
   const textColorMap: Record<string, string> = {
     blue: "text-blue-300",
     green: "text-green-300",
     yellow: "text-yellow-300",
-    purple: "text-purple-300",
-    red: "text-red-300",
-    slate: "text-slate-300",
+    purple: "text-purple-400",
+    red: "text-danger",
+    slate: "text-text-secondary",
   };
 
   return (
     <div className="space-y-6">
       {isLoadingSummary ? (
-        <div className="text-center text-slate-400">Loading cost summary...</div>
+        <div className="text-center text-text-secondary">Loading cost summary...</div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -249,7 +256,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 key={card.label}
                 className={`rounded-lg border p-4 ${colorMap[card.color]}`}
               >
-                <h3 className="text-sm font-medium text-slate-300">{card.label}</h3>
+                <h3 className="text-sm font-medium text-text-secondary">{card.label}</h3>
                 <p className={`mt-2 text-2xl font-bold ${textColorMap[card.color]}`}>
                   {card.value}
                 </p>
@@ -264,7 +271,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                   key={card.label}
                   className={`rounded-lg border p-4 ${colorMap[card.color]}`}
                 >
-                  <h3 className="text-sm font-medium text-slate-300">{card.label}</h3>
+                  <h3 className="text-sm font-medium text-text-secondary">{card.label}</h3>
                   <p className={`mt-2 text-xl font-bold ${textColorMap[card.color]}`}>
                     {card.value}
                   </p>
@@ -276,15 +283,15 @@ export function CostsTab({ projectId }: { projectId: string }) {
       )}
 
       {/* Cash Flow S-Curve with Forecast Method Selector */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+      <div className="rounded-lg border border-border bg-surface/50 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Cash Flow S-Curve</h3>
+          <h3 className="text-lg font-semibold text-text-primary">Cash Flow S-Curve</h3>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-slate-400">Forecast Method:</label>
+            <label className="text-sm text-text-secondary">Forecast Method:</label>
             <select
               value={forecastMethod}
               onChange={(e) => setForecastMethod(e.target.value as ForecastMethod)}
-              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-border bg-surface-hover px-3 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none"
             >
               {FORECAST_METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -295,8 +302,8 @@ export function CostsTab({ projectId }: { projectId: string }) {
           </div>
         </div>
         {chartData.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-            <p className="text-slate-400">No forecast data available. Create financial periods and expenses first.</p>
+          <div className="rounded-lg border border-dashed border-border py-12 text-center">
+            <p className="text-text-secondary">No forecast data available. Create financial periods and expenses first.</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
@@ -360,14 +367,14 @@ export function CostsTab({ projectId }: { projectId: string }) {
 
       {/* Period-by-Period Cost Table */}
       {periodAggregations.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h3 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h3 className="mb-4 text-lg font-semibold text-text-primary">
             Period Cost Breakdown
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700 text-left text-slate-400">
+                <tr className="border-b border-border text-left text-text-secondary">
                   <th className="px-3 py-2">Period</th>
                   <th className="px-3 py-2 text-right">Budget (₹cr)</th>
                   <th className="px-3 py-2 text-right">Actual (₹cr)</th>
@@ -380,9 +387,9 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 {periodAggregations.map((pa) => (
                   <tr
                     key={pa.periodId}
-                    className="border-b border-slate-800 hover:bg-slate-800/50"
+                    className="border-b border-border hover:bg-surface-hover/50"
                   >
-                    <td className="px-3 py-2 text-white">{pa.periodName}</td>
+                    <td className="px-3 py-2 text-text-primary">{pa.periodName}</td>
                     <td className="px-3 py-2 text-right text-blue-300">
                       {formatInrAsCrores(pa.budget)}
                     </td>
@@ -391,7 +398,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                     </td>
                     <td
                       className={`px-3 py-2 text-right ${
-                        pa.variance >= 0 ? "text-green-300" : "text-red-300"
+                        pa.variance >= 0 ? "text-green-300" : "text-danger"
                       }`}
                     >
                       {formatInrAsCrores(pa.variance)}
@@ -399,7 +406,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                     <td className="px-3 py-2 text-right text-yellow-300">
                       {formatInrAsCrores(pa.earnedValue)}
                     </td>
-                    <td className="px-3 py-2 text-right text-purple-300">
+                    <td className="px-3 py-2 text-right text-purple-400">
                       {formatInrAsCrores(pa.plannedValue)}
                     </td>
                   </tr>
@@ -412,10 +419,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
 
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Expenses</h3>
+          <h3 className="text-lg font-semibold text-text-primary">Expenses</h3>
           <button
             onClick={() => setShowExpenseForm(!showExpenseForm)}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
           >
             <Plus size={16} />
             Add Expense
@@ -423,7 +430,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
         </div>
 
         {showExpenseForm && (
-          <div className="mb-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+          <div className="mb-4 rounded-lg border border-border bg-surface-hover/50 p-4">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -433,33 +440,33 @@ export function CostsTab({ projectId }: { projectId: string }) {
               className="grid grid-cols-2 gap-4 lg:grid-cols-4"
             >
               <div>
-                <label className="block text-xs font-medium text-slate-400">Description *</label>
+                <label className="block text-xs font-medium text-text-secondary">Description *</label>
                 <input
                   type="text"
                   value={expenseForm.description}
                   onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
-                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   placeholder="e.g., Concrete delivery"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400">Amount ({baseCurrency.symbol}) *</label>
+                <label className="block text-xs font-medium text-text-secondary">Amount ({baseCurrency.symbol}) *</label>
                 <input
                   type="number"
                   value={expenseForm.amount || ""}
                   onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
                   min="0"
                   step="0.01"
-                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   placeholder="e.g., 5000"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400">Category</label>
+                <label className="block text-xs font-medium text-text-secondary">Category</label>
                 <select
                   value={expenseForm.category}
                   onChange={(e) => setExpenseForm((prev) => ({ ...prev, category: e.target.value }))}
-                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 >
                   <option value="LABOR">Labor</option>
                   <option value="MATERIAL">Material</option>
@@ -470,26 +477,26 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400">Date</label>
+                <label className="block text-xs font-medium text-text-secondary">Date</label>
                 <input
                   type="date"
                   value={expenseForm.expenseDate}
                   onChange={(e) => setExpenseForm((prev) => ({ ...prev, expenseDate: e.target.value }))}
-                  className="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
               <div className="col-span-full flex gap-2">
                 <button
                   type="submit"
                   disabled={createExpenseMutation.isPending}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
                 >
                   {createExpenseMutation.isPending ? "Saving..." : "Save Expense"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowExpenseForm(false)}
-                  className="rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50"
+                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
                 >
                   Cancel
                 </button>
@@ -499,11 +506,11 @@ export function CostsTab({ projectId }: { projectId: string }) {
         )}
 
         {isLoadingExpenses ? (
-          <div className="text-center text-slate-500">Loading expenses...</div>
+          <div className="text-center text-text-muted">Loading expenses...</div>
         ) : expenses.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 py-12 text-center">
-            <h3 className="text-lg font-medium text-white">No Expenses</h3>
-            <p className="mt-2 text-slate-500">No expenses recorded yet.</p>
+          <div className="rounded-lg border border-dashed border-border py-12 text-center">
+            <h3 className="text-lg font-medium text-text-primary">No Expenses</h3>
+            <p className="mt-2 text-text-muted">No expenses recorded yet.</p>
           </div>
         ) : (
           <DataTable columns={expenseColumns} data={expenses} rowKey="id" />

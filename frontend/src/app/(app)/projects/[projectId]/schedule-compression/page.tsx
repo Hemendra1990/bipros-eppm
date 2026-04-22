@@ -66,8 +66,8 @@ export default function ScheduleCompressionPage() {
           onClick={() => setActiveTab("fast-track")}
           className={`px-4 py-2 font-medium ${
             activeTab === "fast-track"
-              ? "border-b-2 border-blue-600 text-blue-400"
-              : "text-slate-400 hover:text-white"
+              ? "border-b-2 border-blue-600 text-accent"
+              : "text-text-secondary hover:text-text-primary"
           }`}
         >
           Fast-Tracking
@@ -76,8 +76,8 @@ export default function ScheduleCompressionPage() {
           onClick={() => setActiveTab("crash")}
           className={`px-4 py-2 font-medium ${
             activeTab === "crash"
-              ? "border-b-2 border-blue-600 text-blue-400"
-              : "text-slate-400 hover:text-white"
+              ? "border-b-2 border-blue-600 text-accent"
+              : "text-text-secondary hover:text-text-primary"
           }`}
         >
           Crashing
@@ -86,8 +86,8 @@ export default function ScheduleCompressionPage() {
           onClick={() => setActiveTab("scenarios")}
           className={`px-4 py-2 font-medium ${
             activeTab === "scenarios"
-              ? "border-b-2 border-blue-600 text-blue-400"
-              : "text-slate-400 hover:text-white"
+              ? "border-b-2 border-blue-600 text-accent"
+              : "text-text-secondary hover:text-text-primary"
           }`}
         >
           Scenario Comparison
@@ -123,10 +123,10 @@ interface FastTrackingSectionProps {
 
 function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
   return (
-    <div className="bg-slate-900/50 rounded-lg border border-slate-800 shadow-sm">
-      <div className="border-b border-slate-800 px-6 py-4">
+    <div className="bg-surface/50 rounded-lg border border-border shadow-sm">
+      <div className="border-b border-border px-6 py-4">
         <h2 className="text-lg font-semibold">Fast-Tracking Analysis</h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-text-secondary">
           Identify activities with parallel execution potential by converting FS relationships to SS
         </p>
       </div>
@@ -135,7 +135,7 @@ function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
         <Button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}
-          className="bg-blue-600 hover:bg-blue-500"
+          className="bg-accent hover:bg-accent-hover"
         >
           {mutation.isPending ? "Analyzing..." : "Analyze Fast-Tracking"}
         </Button>
@@ -148,29 +148,29 @@ function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
                 <div className="text-2xl font-bold">
                   {mutation.data.data?.originalDuration?.toFixed(1)} days
                 </div>
-                <p className="text-sm text-slate-400">Original Duration</p>
+                <p className="text-sm text-text-secondary">Original Duration</p>
               </div>
 
               <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
-                <div className="text-2xl font-bold text-emerald-400">
+                <div className="text-2xl font-bold text-success">
                   -{mutation.data.data?.durationSaved?.toFixed(1)} days
                 </div>
-                <p className="text-sm text-slate-400">Potential Savings</p>
+                <p className="text-sm text-text-secondary">Potential Savings</p>
               </div>
 
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
                 <div className="text-2xl font-bold text-purple-600">
                   {mutation.data.data?.compressedDuration?.toFixed(1)} days
                 </div>
-                <p className="text-sm text-slate-400">Compressed Duration</p>
+                <p className="text-sm text-text-secondary">Compressed Duration</p>
               </div>
             </div>
 
             {/* Recommendations Table */}
             {(mutation.data.data?.recommendations?.length ?? 0) > 0 && (
-              <div className="overflow-x-auto border border-slate-800 rounded-lg">
+              <div className="overflow-x-auto border border-border rounded-lg">
                 <table className="w-full">
-                  <thead className="bg-slate-900/80 border-b border-slate-800">
+                  <thead className="bg-surface/80 border-b border-border">
                     <tr>
                       <th className="px-4 py-2 text-left text-sm font-semibold">Activity Code</th>
                       <th className="px-4 py-2 text-left text-sm font-semibold">Original Duration</th>
@@ -180,15 +180,15 @@ function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
                   </thead>
                   <tbody>
                     {mutation.data.data?.recommendations?.map((rec: CompressionRecommendation, idx: number) => (
-                      <tr key={idx} className="border-b border-slate-800 hover:bg-slate-900/80">
+                      <tr key={idx} className="border-b border-border hover:bg-surface/80">
                         <td className="px-4 py-3 font-medium">{rec.activityCode}</td>
                         <td className="px-4 py-3">{rec.originalDuration?.toFixed(1)} days</td>
                         <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-emerald-500/10 text-emerald-300 rounded">
+                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-success/10 text-success rounded">
                             {rec.durationSaved?.toFixed(1)} days
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-400">{rec.reason}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">{rec.reason}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -199,7 +199,7 @@ function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
         )}
 
         {mutation.isError && (
-          <div className="text-red-500 p-3 bg-red-500/10 rounded border border-red-200">
+          <div className="text-red-500 p-3 bg-danger/10 rounded border border-red-200">
             Failed to analyze fast-tracking. Please ensure a schedule has been calculated.
           </div>
         )}
@@ -214,10 +214,10 @@ interface CrashingSectionProps {
 
 function CrashingSection({ mutation }: CrashingSectionProps) {
   return (
-    <div className="bg-slate-900/50 rounded-lg border border-slate-800 shadow-sm">
-      <div className="border-b border-slate-800 px-6 py-4">
+    <div className="bg-surface/50 rounded-lg border border-border shadow-sm">
+      <div className="border-b border-border px-6 py-4">
         <h2 className="text-lg font-semibold">Crashing Analysis</h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-text-secondary">
           Identify critical activities that can be compressed by adding resources
         </p>
       </div>
@@ -226,7 +226,7 @@ function CrashingSection({ mutation }: CrashingSectionProps) {
         <Button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}
-          className="bg-red-600 hover:bg-red-600"
+          className="bg-danger hover:bg-danger"
         >
           {mutation.isPending ? "Analyzing..." : "Analyze Crashing"}
         </Button>
@@ -239,36 +239,36 @@ function CrashingSection({ mutation }: CrashingSectionProps) {
                 <div className="text-2xl font-bold">
                   {mutation.data.data?.originalDuration?.toFixed(1)} days
                 </div>
-                <p className="text-sm text-slate-400">Original Duration</p>
+                <p className="text-sm text-text-secondary">Original Duration</p>
               </div>
 
               <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-6 border border-red-200">
-                <div className="text-2xl font-bold text-red-400">
+                <div className="text-2xl font-bold text-danger">
                   -{mutation.data.data?.durationSaved?.toFixed(1)} days
                 </div>
-                <p className="text-sm text-slate-400">Potential Savings</p>
+                <p className="text-sm text-text-secondary">Potential Savings</p>
               </div>
 
               <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border border-yellow-200">
-                <div className="text-2xl font-bold text-amber-400">
+                <div className="text-2xl font-bold text-warning">
                   ${mutation.data.data?.additionalCost?.toFixed(2)}
                 </div>
-                <p className="text-sm text-slate-400">Additional Cost</p>
+                <p className="text-sm text-text-secondary">Additional Cost</p>
               </div>
 
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
                 <div className="text-2xl font-bold text-purple-600">
                   {mutation.data.data?.compressedDuration?.toFixed(1)} days
                 </div>
-                <p className="text-sm text-slate-400">Compressed Duration</p>
+                <p className="text-sm text-text-secondary">Compressed Duration</p>
               </div>
             </div>
 
             {/* Recommendations Table */}
             {(mutation.data.data?.recommendations?.length ?? 0) > 0 && (
-              <div className="overflow-x-auto border border-slate-800 rounded-lg">
+              <div className="overflow-x-auto border border-border rounded-lg">
                 <table className="w-full">
-                  <thead className="bg-slate-900/80 border-b border-slate-800">
+                  <thead className="bg-surface/80 border-b border-border">
                     <tr>
                       <th className="px-4 py-2 text-left text-sm font-semibold">Activity Code</th>
                       <th className="px-4 py-2 text-left text-sm font-semibold">Original Duration</th>
@@ -280,19 +280,19 @@ function CrashingSection({ mutation }: CrashingSectionProps) {
                   </thead>
                   <tbody>
                     {mutation.data.data?.recommendations?.map((rec: CompressionRecommendation, idx: number) => (
-                      <tr key={idx} className="border-b border-slate-800 hover:bg-slate-900/80">
+                      <tr key={idx} className="border-b border-border hover:bg-surface/80">
                         <td className="px-4 py-3 font-medium">{rec.activityCode}</td>
                         <td className="px-4 py-3">{rec.originalDuration?.toFixed(1)} days</td>
                         <td className="px-4 py-3">{rec.newDuration?.toFixed(1)} days</td>
                         <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-red-500/10 text-red-300 rounded">
+                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-danger/10 text-danger rounded">
                             {rec.durationSaved?.toFixed(1)} days
                           </span>
                         </td>
                         <td className="px-4 py-3">
                           ${rec.additionalCost && rec.durationSaved ? (rec.additionalCost / rec.durationSaved).toFixed(2) : "N/A"}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-400">{rec.reason}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">{rec.reason}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -303,7 +303,7 @@ function CrashingSection({ mutation }: CrashingSectionProps) {
         )}
 
         {mutation.isError && (
-          <div className="text-red-500 p-3 bg-red-500/10 rounded border border-red-200">
+          <div className="text-red-500 p-3 bg-danger/10 rounded border border-red-200">
             Failed to analyze crashing. Please ensure a schedule has been calculated.
           </div>
         )}
@@ -332,10 +332,10 @@ function ScenarioComparisonSection({
   comparisonQuery,
 }: ScenarioComparisonSectionProps) {
   return (
-    <div className="bg-slate-900/50 rounded-lg border border-slate-800 shadow-sm">
-      <div className="border-b border-slate-800 px-6 py-4">
+    <div className="bg-surface/50 rounded-lg border border-border shadow-sm">
+      <div className="border-b border-border px-6 py-4">
         <h2 className="text-lg font-semibold">Scenario Comparison</h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-text-secondary">
           Compare two scenarios to evaluate their impacts on project duration and cost
         </p>
       </div>
@@ -343,7 +343,7 @@ function ScenarioComparisonSection({
       <div className="p-6 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Scenario 1
             </label>
             <SearchableSelect
@@ -363,7 +363,7 @@ function ScenarioComparisonSection({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Scenario 2
             </label>
             <SearchableSelect
@@ -388,37 +388,37 @@ function ScenarioComparisonSection({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
-                <div className="text-sm text-slate-400 mb-2">
+                <div className="text-sm text-text-secondary mb-2">
                   {comparisonQuery.data.data?.scenario1Name}
                 </div>
                 <div className="text-2xl font-bold">
                   {comparisonQuery.data.data?.duration1?.toFixed(1)} days
                 </div>
-                <p className="text-xs text-slate-500 mt-2">Duration</p>
+                <p className="text-xs text-text-muted mt-2">Duration</p>
               </div>
 
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
-                <div className="text-sm text-slate-400 mb-2">
+                <div className="text-sm text-text-secondary mb-2">
                   {comparisonQuery.data.data?.scenario2Name}
                 </div>
                 <div className="text-2xl font-bold">
                   {comparisonQuery.data.data?.duration2?.toFixed(1)} days
                 </div>
-                <p className="text-xs text-slate-500 mt-2">Duration</p>
+                <p className="text-xs text-text-muted mt-2">Duration</p>
               </div>
             </div>
 
-            <div className="border-2 border-green-500 bg-emerald-500/10 rounded-lg p-6">
-              <div className="text-sm text-slate-400 mb-2">Duration Difference</div>
-              <div className="text-3xl font-bold text-emerald-400">
+            <div className="border-2 border-green-500 bg-success/10 rounded-lg p-6">
+              <div className="text-sm text-text-secondary mb-2">Duration Difference</div>
+              <div className="text-3xl font-bold text-success">
                 {(comparisonQuery.data.data?.durationDifference || 0) > 0 ? "+" : ""}
                 {comparisonQuery.data.data?.durationDifference?.toFixed(1)} days
               </div>
             </div>
 
             {(comparisonQuery.data?.data?.activitiesChanged ?? 0) > 0 && (
-              <div className="bg-slate-900/80 p-4 rounded border border-slate-800">
-                <p className="text-sm text-slate-400">
+              <div className="bg-surface/80 p-4 rounded border border-border">
+                <p className="text-sm text-text-secondary">
                   <strong>{comparisonQuery.data?.data?.activitiesChanged}</strong> activities changed between scenarios
                 </p>
               </div>
@@ -427,13 +427,13 @@ function ScenarioComparisonSection({
         )}
 
         {comparisonQuery.isError && (
-          <div className="text-red-500 p-3 bg-red-500/10 rounded border border-red-200">
+          <div className="text-red-500 p-3 bg-danger/10 rounded border border-red-200">
             Failed to load scenarios. Please ensure scenarios have been created.
           </div>
         )}
 
         {!comparisonQuery.data && selectedScenarios.scenario1 && selectedScenarios.scenario2 && (
-          <div className="text-center text-slate-500 py-8">
+          <div className="text-center text-text-muted py-8">
             Loading comparison...
           </div>
         )}

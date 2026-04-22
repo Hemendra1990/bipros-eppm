@@ -161,22 +161,22 @@ export default function ProgrammeDashboardPage() {
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return "bg-emerald-500/10 text-emerald-300";
+        return "bg-success/10 text-success";
       case "IN_PROGRESS":
-        return "bg-blue-500/10 text-blue-300";
+        return "bg-accent/10 text-blue-300";
       case "PENDING":
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
       default:
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
     }
   };
 
   const getScoreColor = (score: number | null) => {
-    if (score == null) return "text-slate-500";
-    if (score >= 90) return "text-emerald-400";
-    if (score >= 80) return "text-blue-400";
-    if (score >= 70) return "text-amber-400";
-    return "text-red-400";
+    if (score == null) return "text-text-muted";
+    if (score >= 90) return "text-success";
+    if (score >= 80) return "text-accent";
+    if (score >= 70) return "text-warning";
+    return "text-danger";
   };
 
   const formatScore = (score: number | null) =>
@@ -185,7 +185,7 @@ export default function ProgrammeDashboardPage() {
   if (isLoadingConfig) {
     return (
       <div className="flex items-center justify-center p-6">
-        <div className="text-slate-500">Loading dashboard...</div>
+        <div className="text-text-muted">Loading dashboard...</div>
       </div>
     );
   }
@@ -194,23 +194,23 @@ export default function ProgrammeDashboardPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-4">
         <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-slate-800">
+          <button className="rounded p-1 hover:bg-surface-hover">
             <ArrowLeft size={20} />
           </button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-text-primary">
             Programme Dashboard
           </h1>
-          <p className="text-slate-400">
+          <p className="text-text-secondary">
             Earned Value Management and contractor performance
           </p>
         </div>
       </div>
 
       {/* EVM Metrics */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">
+      <div className="rounded-lg border border-border bg-surface/50 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">
           Earned Value Metrics
         </h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -219,40 +219,40 @@ export default function ProgrammeDashboardPage() {
             return (
               <div
                 key={project.id}
-                className="rounded-lg border border-slate-800 bg-slate-800/50 p-4 cursor-pointer hover:bg-slate-700/50 transition"
+                className="rounded-lg border border-border bg-surface-hover/50 p-4 cursor-pointer hover:bg-surface-active/50 transition"
                 onClick={() => setSelectedProjectId(project.id)}
               >
-                <h3 className="mb-4 font-medium text-white">
+                <h3 className="mb-4 font-medium text-text-primary">
                   {project.name}
                 </h3>
                 <div className="space-y-3">
                   <div>
-                    <div className="text-xs font-medium text-slate-400">
+                    <div className="text-xs font-medium text-text-secondary">
                       Schedule Performance Index (SPI)
                     </div>
                     <div
                       className={`text-2xl font-bold ${
                         evm && evm.spi >= 0.95
-                          ? "text-emerald-400"
+                          ? "text-success"
                           : evm && evm.spi >= 0.9
-                            ? "text-blue-400"
-                            : "text-red-400"
+                            ? "text-accent"
+                            : "text-danger"
                       }`}
                     >
                       {evm ? evm.spi.toFixed(2) : "N/A"}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs font-medium text-slate-400">
+                    <div className="text-xs font-medium text-text-secondary">
                       Cost Performance Index (CPI)
                     </div>
                     <div
                       className={`text-2xl font-bold ${
                         evm && evm.cpi >= 0.95
-                          ? "text-emerald-400"
+                          ? "text-success"
                           : evm && evm.cpi >= 0.9
-                            ? "text-blue-400"
-                            : "text-red-400"
+                            ? "text-accent"
+                            : "text-danger"
                       }`}
                     >
                       {evm ? evm.cpi.toFixed(2) : "N/A"}
@@ -267,18 +267,18 @@ export default function ProgrammeDashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Milestones */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">
             Milestone Tracker
           </h2>
           <div className="space-y-3">
             {milestonesToDisplay.map((milestone) => (
               <div
                 key={milestone.id}
-                className="rounded-lg border border-slate-800 bg-slate-800/50 p-4"
+                className="rounded-lg border border-border bg-surface-hover/50 p-4"
               >
                 <div className="mb-2 flex items-start justify-between">
-                  <h3 className="font-medium text-white">
+                  <h3 className="font-medium text-text-primary">
                     {milestone.name}
                   </h3>
                   <span
@@ -289,7 +289,7 @@ export default function ProgrammeDashboardPage() {
                     {milestone.status}
                   </span>
                 </div>
-                <div className="text-sm text-slate-400">
+                <div className="text-sm text-text-secondary">
                   Planned:{" "}
                   {new Date(milestone.plannedDate).toLocaleDateString()}
                   {milestone.actualDate &&
@@ -301,25 +301,25 @@ export default function ProgrammeDashboardPage() {
         </div>
 
         {/* Contractor Scorecards */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-white">
+        <div className="rounded-lg border border-border bg-surface/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-text-primary">
             Contractor Performance
           </h2>
           {contractors.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-              <p className="text-slate-400">No EPC contractors registered</p>
+            <div className="rounded-lg border border-dashed border-border py-8 text-center">
+              <p className="text-text-secondary">No EPC contractors registered</p>
             </div>
           ) : (
             <div className="space-y-4">
               {contractors.map((contractor) => (
                 <div
                   key={contractor.id}
-                  className="rounded-lg border border-slate-800 bg-slate-800/50 p-4"
+                  className="rounded-lg border border-border bg-surface-hover/50 p-4"
                 >
-                  <h3 className="mb-3 font-medium text-white">{contractor.name}</h3>
+                  <h3 className="mb-3 font-medium text-text-primary">{contractor.name}</h3>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-400">
+                      <span className="text-xs font-medium text-text-secondary">
                         Performance
                       </span>
                       <span
@@ -328,7 +328,7 @@ export default function ProgrammeDashboardPage() {
                         {formatScore(contractor.performanceScore)}
                       </span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-slate-700">
+                    <div className="h-1.5 w-full rounded-full bg-surface-active">
                       <div
                         className="h-1.5 rounded-full bg-blue-500"
                         style={{ width: `${contractor.performanceScore ?? 0}%` }}
@@ -336,7 +336,7 @@ export default function ProgrammeDashboardPage() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-400">
+                      <span className="text-xs font-medium text-text-secondary">
                         Safety
                       </span>
                       <span
@@ -345,15 +345,15 @@ export default function ProgrammeDashboardPage() {
                         {formatScore(contractor.safetyScore)}
                       </span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-slate-700">
+                    <div className="h-1.5 w-full rounded-full bg-surface-active">
                       <div
-                        className="h-1.5 rounded-full bg-emerald-500"
+                        className="h-1.5 rounded-full bg-success"
                         style={{ width: `${contractor.safetyScore ?? 0}%` }}
                       />
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-400">
+                      <span className="text-xs font-medium text-text-secondary">
                         Compliance
                       </span>
                       <span
@@ -362,7 +362,7 @@ export default function ProgrammeDashboardPage() {
                         {formatScore(contractor.complianceScore)}
                       </span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-slate-700">
+                    <div className="h-1.5 w-full rounded-full bg-surface-active">
                       <div
                         className="h-1.5 rounded-full bg-purple-500"
                         style={{ width: `${contractor.complianceScore ?? 0}%` }}

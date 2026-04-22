@@ -129,43 +129,43 @@ export default function OperationalDashboardPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "PAID":
-        return "bg-emerald-500/10 text-emerald-300";
+        return "bg-success/10 text-success";
       case "APPROVED":
-        return "bg-blue-500/10 text-blue-300";
+        return "bg-accent/10 text-blue-300";
       case "CERTIFIED":
-        return "bg-purple-500/10 text-purple-300";
+        return "bg-purple-500/10 text-purple-400";
       case "SUBMITTED":
-        return "bg-amber-500/10 text-amber-300";
+        return "bg-warning/10 text-warning";
       case "DRAFT":
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
       default:
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
     }
   };
 
   const getActivityStatusColor = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return "bg-emerald-500/10 text-emerald-300";
+        return "bg-success/10 text-success";
       case "IN_PROGRESS":
-        return "bg-blue-500/10 text-blue-300";
+        return "bg-accent/10 text-blue-300";
       case "PENDING":
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
       default:
-        return "bg-slate-800/50 text-slate-100";
+        return "bg-surface-hover/50 text-text-primary";
     }
   };
 
   const getResourceColor = (percentage: number) => {
     if (percentage >= 90) return "bg-red-500";
     if (percentage >= 75) return "bg-amber-500";
-    return "bg-emerald-500";
+    return "bg-success";
   };
 
   if (isLoadingConfig) {
     return (
       <div className="flex items-center justify-center p-6">
-        <div className="text-slate-500">Loading dashboard...</div>
+        <div className="text-text-muted">Loading dashboard...</div>
       </div>
     );
   }
@@ -174,23 +174,23 @@ export default function OperationalDashboardPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-4">
         <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-slate-800/50">
+          <button className="rounded p-1 hover:bg-surface-hover/50">
             <ArrowLeft size={20} />
           </button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-text-primary">
             Operational Dashboard
           </h1>
-          <p className="text-slate-400">
+          <p className="text-text-secondary">
             RA bills, resources, and WBS-level activity progress
           </p>
         </div>
       </div>
 
       {/* Project Selection */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">
+      <div className="rounded-lg border border-border bg-surface/50 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">
           Select Project
         </h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -200,12 +200,12 @@ export default function OperationalDashboardPage() {
               onClick={() => setSelectedProjectId(project.id)}
               className={`rounded-lg border-2 p-3 text-left transition ${
                 selectedProjectId === project.id
-                  ? "border-blue-500 bg-blue-500/10"
-                  : "border-slate-800 hover:border-blue-300"
+                  ? "border-accent bg-accent/10"
+                  : "border-border hover:border-blue-300"
               }`}
             >
-              <div className="font-medium text-white">{project.name}</div>
-              <div className="text-xs text-slate-500">
+              <div className="font-medium text-text-primary">{project.name}</div>
+              <div className="text-xs text-text-muted">
                 {project.description}
               </div>
             </button>
@@ -216,48 +216,48 @@ export default function OperationalDashboardPage() {
       {selectedProjectId && (
         <>
           {/* RA Bills Status */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               RA Bills Status
             </h2>
             {isLoadingRaBills ? (
-              <div className="text-center text-slate-500">
+              <div className="text-center text-text-muted">
                 Loading RA bills...
               </div>
             ) : raBills.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-                <p className="text-slate-500">No RA bills available</p>
+              <div className="rounded-lg border border-dashed border-border py-8 text-center">
+                <p className="text-text-muted">No RA bills available</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-800">
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
+                    <tr className="border-b border-border">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                         Bill Number
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                         Period
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                         Amount
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-white">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                         Status
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {raBills.map((bill: RaBillRow) => (
-                      <tr key={bill.id} className="border-b border-slate-800/50">
-                        <td className="px-4 py-3 text-sm text-white">
+                      <tr key={bill.id} className="border-b border-border/50">
+                        <td className="px-4 py-3 text-sm text-text-primary">
                           {bill.billNumber}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-400">
+                        <td className="px-4 py-3 text-sm text-text-secondary">
                           {new Date(bill.billPeriodFrom).toLocaleDateString()} -{" "}
                           {new Date(bill.billPeriodTo).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-3 text-sm font-medium text-white">
+                        <td className="px-4 py-3 text-sm font-medium text-text-primary">
                           {formatDefaultCurrency(bill.netAmount)}
                         </td>
                         <td className="px-4 py-3 text-sm">
@@ -278,23 +278,23 @@ export default function OperationalDashboardPage() {
           </div>
 
           {/* Resource Utilization */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Resource Utilization
             </h2>
             <div className="space-y-4">
               {mockResourceUtilization.map((resource) => (
                 <div key={resource.resourceType}>
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-white">
+                    <span className="font-medium text-text-primary">
                       {resource.resourceType}
                     </span>
-                    <span className="text-sm text-slate-400">
+                    <span className="text-sm text-text-secondary">
                       {resource.utilized} / {resource.allocated} (
                       {resource.percentage.toFixed(1)}%)
                     </span>
                   </div>
-                  <div className="h-3 w-full rounded-full bg-slate-700/50">
+                  <div className="h-3 w-full rounded-full bg-surface-active/50">
                     <div
                       className={`h-3 rounded-full transition-all ${getResourceColor(
                         resource.percentage
@@ -308,22 +308,22 @@ export default function OperationalDashboardPage() {
           </div>
 
           {/* Activity Progress by WBS */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Activity Progress by WBS
             </h2>
             <div className="space-y-4">
               {mockActivityProgress.map((activity) => (
                 <div
                   key={activity.wbsCode}
-                  className="rounded-lg border border-slate-800 p-4"
+                  className="rounded-lg border border-border p-4"
                 >
                   <div className="mb-3 flex items-start justify-between">
                     <div>
-                      <h3 className="font-medium text-white">
+                      <h3 className="font-medium text-text-primary">
                         {activity.wbsCode}
                       </h3>
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-text-secondary">
                         {activity.description}
                       </p>
                     </div>
@@ -339,14 +339,14 @@ export default function OperationalDashboardPage() {
                   <div className="space-y-2">
                     <div>
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-slate-400">
+                        <span className="text-xs font-medium text-text-secondary">
                           Planned Progress
                         </span>
-                        <span className="text-xs font-semibold text-white">
+                        <span className="text-xs font-semibold text-text-primary">
                           {activity.plannedProgress}%
                         </span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-slate-700/50">
+                      <div className="h-2 w-full rounded-full bg-surface-active/50">
                         <div
                           className="h-2 rounded-full bg-blue-500"
                           style={{ width: `${activity.plannedProgress}%` }}
@@ -356,18 +356,18 @@ export default function OperationalDashboardPage() {
 
                     <div>
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-slate-400">
+                        <span className="text-xs font-medium text-text-secondary">
                           Actual Progress
                         </span>
-                        <span className="text-xs font-semibold text-white">
+                        <span className="text-xs font-semibold text-text-primary">
                           {activity.actualProgress}%
                         </span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-slate-700/50">
+                      <div className="h-2 w-full rounded-full bg-surface-active/50">
                         <div
                           className={`h-2 rounded-full ${
                             activity.actualProgress >= activity.plannedProgress
-                              ? "bg-emerald-500"
+                              ? "bg-success"
                               : "bg-amber-500"
                           }`}
                           style={{ width: `${activity.actualProgress}%` }}

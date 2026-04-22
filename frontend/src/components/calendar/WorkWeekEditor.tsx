@@ -109,18 +109,18 @@ export function WorkWeekEditor({
   };
 
   const inputClass =
-    "w-20 rounded border border-slate-700 bg-slate-800/50 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none";
+    "w-20 rounded border border-border bg-surface-hover/50 px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none";
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-slate-200">
+      <h3 className="text-sm font-semibold text-text-primary">
         Work Week Pattern
       </h3>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-800 text-left text-xs text-slate-400">
+            <tr className="border-b border-border text-left text-xs text-text-secondary">
               <th className="py-2 pr-4">Day</th>
               <th className="py-2 pr-4">Working</th>
               <th className="py-2 pr-4">Shift 1 Start</th>
@@ -135,9 +135,9 @@ export function WorkWeekEditor({
               return (
                 <tr
                   key={day}
-                  className="border-b border-slate-800/50"
+                  className="border-b border-border/50"
                 >
-                  <td className="py-2 pr-4 font-medium text-slate-300">
+                  <td className="py-2 pr-4 font-medium text-text-secondary">
                     {DAY_LABELS[day]}
                   </td>
                   <td className="py-2 pr-4">
@@ -146,8 +146,8 @@ export function WorkWeekEditor({
                       onClick={() => toggleDay(day)}
                       className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
                         d.working
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-slate-700/50 text-slate-500"
+                          ? "bg-success/20 text-success"
+                          : "bg-surface-active/50 text-text-muted"
                       }`}
                     >
                       {d.working ? "Working" : "Non-Working"}
@@ -208,7 +208,7 @@ export function WorkWeekEditor({
         type="button"
         onClick={handleSave}
         disabled={saving}
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:bg-slate-600"
+        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
       >
         {saving ? "Saving..." : "Save Work Week"}
       </button>

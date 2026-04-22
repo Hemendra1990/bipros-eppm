@@ -8,21 +8,21 @@ interface VarianceDashboardProps {
 }
 
 function getVarianceColor(value: number): string {
-  if (value > 0) return "text-red-400";
-  if (value < 0) return "text-emerald-400";
-  return "text-slate-400";
+  if (value > 0) return "text-danger";
+  if (value < 0) return "text-success";
+  return "text-text-secondary";
 }
 
 function getVarianceBg(value: number): string {
-  if (value > 0) return "bg-red-500/10 border-red-500/20";
-  if (value < 0) return "bg-emerald-500/10 border-emerald-500/20";
-  return "bg-slate-800/50 border-slate-700/50";
+  if (value > 0) return "bg-danger/10 border-danger/20";
+  if (value < 0) return "bg-success/10 border-success/20";
+  return "bg-surface-hover/50 border-border/50";
 }
 
 export function VarianceDashboard({ data }: VarianceDashboardProps) {
   if (data.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center text-slate-400">
+      <div className="rounded-lg border border-border bg-surface/50 p-8 text-center text-text-secondary">
         No variance data available
       </div>
     );
@@ -61,9 +61,9 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
   const maxBucket = Math.max(...buckets.map((b) => b.count), 1);
 
   const bucketColors = [
-    "bg-emerald-500",
+    "bg-success",
     "bg-emerald-400",
-    "bg-slate-500",
+    "bg-surface-active",
     "bg-amber-400",
     "bg-red-400",
     "bg-red-500",
@@ -74,7 +74,7 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className={`rounded-lg border p-4 ${getVarianceBg(avgStartVariance)}`}>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+          <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
             Avg Start Variance
           </p>
           <p className={`mt-1 text-2xl font-bold ${getVarianceColor(avgStartVariance)}`}>
@@ -83,7 +83,7 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
           </p>
         </div>
         <div className={`rounded-lg border p-4 ${getVarianceBg(avgFinishVariance)}`}>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+          <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
             Avg Finish Variance
           </p>
           <p className={`mt-1 text-2xl font-bold ${getVarianceColor(avgFinishVariance)}`}>
@@ -92,21 +92,21 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
           </p>
         </div>
         <div className={`rounded-lg border p-4 ${getVarianceBg(totalCostVariance)}`}>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+          <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
             Total Cost Variance
           </p>
           <p className={`mt-1 text-2xl font-bold ${getVarianceColor(totalCostVariance)}`}>
             {totalCostVariance > 0 ? "+" : ""}{formatDefaultCurrency(Math.abs(totalCostVariance))}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-700/50 bg-slate-800/50 p-4">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+        <div className="rounded-lg border border-border/50 bg-surface-hover/50 p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
             Activities On Track
           </p>
-          <p className="mt-1 text-2xl font-bold text-white">
+          <p className="mt-1 text-2xl font-bold text-text-primary">
             {onTrackPct}%
           </p>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-text-secondary">
             {onTrack} of {totalActivities}
           </p>
         </div>
@@ -114,29 +114,29 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
 
       {/* Status Breakdown */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-center">
-          <p className="text-3xl font-bold text-emerald-400">{ahead}</p>
-          <p className="text-sm text-emerald-300">Ahead ({aheadPct}%)</p>
+        <div className="rounded-lg border border-success/20 bg-success/10 p-4 text-center">
+          <p className="text-3xl font-bold text-success">{ahead}</p>
+          <p className="text-sm text-success">Ahead ({aheadPct}%)</p>
         </div>
-        <div className="rounded-lg border border-slate-700/50 bg-slate-800/50 p-4 text-center">
-          <p className="text-3xl font-bold text-white">{onTrack}</p>
-          <p className="text-sm text-slate-400">On Track ({onTrackPct}%)</p>
+        <div className="rounded-lg border border-border/50 bg-surface-hover/50 p-4 text-center">
+          <p className="text-3xl font-bold text-text-primary">{onTrack}</p>
+          <p className="text-sm text-text-secondary">On Track ({onTrackPct}%)</p>
         </div>
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-center">
-          <p className="text-3xl font-bold text-red-400">{delayedFinish}</p>
-          <p className="text-sm text-red-300">Delayed ({delayedPct}%)</p>
+        <div className="rounded-lg border border-danger/20 bg-danger/10 p-4 text-center">
+          <p className="text-3xl font-bold text-danger">{delayedFinish}</p>
+          <p className="text-sm text-danger">Delayed ({delayedPct}%)</p>
         </div>
       </div>
 
       {/* Variance Distribution Chart */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-        <h4 className="mb-4 text-sm font-semibold text-white">
+      <div className="rounded-lg border border-border bg-surface/50 p-6">
+        <h4 className="mb-4 text-sm font-semibold text-text-primary">
           Finish Variance Distribution
         </h4>
         <div className="space-y-2">
           {buckets.map((bucket, i) => (
             <div key={bucket.label} className="flex items-center gap-3">
-              <span className="w-24 text-right text-xs text-slate-400">
+              <span className="w-24 text-right text-xs text-text-secondary">
                 {bucket.label}
               </span>
               <div className="flex-1">
@@ -148,7 +148,7 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
                   }}
                 />
               </div>
-              <span className="w-8 text-right text-xs font-medium text-slate-300">
+              <span className="w-8 text-right text-xs font-medium text-text-secondary">
                 {bucket.count}
               </span>
             </div>

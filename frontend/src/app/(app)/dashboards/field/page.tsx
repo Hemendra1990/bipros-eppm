@@ -159,44 +159,44 @@ export default function FieldDashboardPage() {
   const getActivityStatusColor = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return "text-emerald-400";
+        return "text-success";
       case "IN_PROGRESS":
-        return "text-blue-400";
+        return "text-accent";
       case "PENDING":
-        return "text-slate-400";
+        return "text-text-secondary";
       default:
-        return "text-slate-400";
+        return "text-text-secondary";
     }
   };
 
   const getActivityStatusBg = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return "bg-emerald-500/10";
+        return "bg-success/10";
       case "IN_PROGRESS":
-        return "bg-blue-500/10";
+        return "bg-accent/10";
       case "PENDING":
-        return "bg-slate-800/50";
+        return "bg-surface-hover/50";
       default:
-        return "bg-slate-800/50";
+        return "bg-surface-hover/50";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return <CheckCircle size={16} className="text-emerald-400" />;
+        return <CheckCircle size={16} className="text-success" />;
       case "IN_PROGRESS":
-        return <Clock size={16} className="text-blue-400" />;
+        return <Clock size={16} className="text-accent" />;
       default:
-        return <AlertCircle size={16} className="text-slate-400" />;
+        return <AlertCircle size={16} className="text-text-secondary" />;
     }
   };
 
   if (isLoadingConfig) {
     return (
       <div className="flex items-center justify-center p-6">
-        <div className="text-slate-400">Loading dashboard...</div>
+        <div className="text-text-secondary">Loading dashboard...</div>
       </div>
     );
   }
@@ -205,23 +205,23 @@ export default function FieldDashboardPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-4">
         <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-slate-800">
+          <button className="rounded p-1 hover:bg-surface-hover">
             <ArrowLeft size={20} />
           </button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-text-primary">
             Field Dashboard
           </h1>
-          <p className="text-slate-400">
+          <p className="text-text-secondary">
             Real-time site activities and work progress
           </p>
         </div>
       </div>
 
       {/* Project Selection */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">
+      <div className="rounded-lg border border-border bg-surface/50 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">
           Select Project
         </h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -231,12 +231,12 @@ export default function FieldDashboardPage() {
               onClick={() => setSelectedProjectId(project.id)}
               className={`rounded-lg border-2 p-3 text-left transition ${
                 selectedProjectId === project.id
-                  ? "border-blue-500 bg-blue-950"
-                  : "border-slate-700 hover:border-blue-500"
+                  ? "border-accent bg-blue-950"
+                  : "border-border hover:border-accent"
               }`}
             >
-              <div className="font-medium text-white">{project.name}</div>
-              <div className="text-xs text-slate-400">
+              <div className="font-medium text-text-primary">{project.name}</div>
+              <div className="text-xs text-text-secondary">
                 {project.description}
               </div>
             </button>
@@ -247,17 +247,17 @@ export default function FieldDashboardPage() {
       {selectedProjectId && (
         <>
           {/* Daily Worklogs Summary */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Daily Worklogs
             </h2>
             {isLoadingLabour || isLoadingEquipmentLogs ? (
-              <div className="py-8 text-center text-slate-400">
+              <div className="py-8 text-center text-text-secondary">
                 Loading worklog data...
               </div>
             ) : !hasAnyWorklogData ? (
-              <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-                <p className="text-slate-400">
+              <div className="rounded-lg border border-dashed border-border py-8 text-center">
+                <p className="text-text-secondary">
                   No daily worklogs for this project yet.
                 </p>
               </div>
@@ -266,9 +266,9 @@ export default function FieldDashboardPage() {
                 {dailyWorklogs.map((log) => (
                   <div
                     key={log.date}
-                    className="rounded-lg border border-slate-800 bg-slate-800/50 p-4"
+                    className="rounded-lg border border-border bg-surface-hover/50 p-4"
                   >
-                    <div className="mb-3 font-medium text-white">
+                    <div className="mb-3 font-medium text-text-primary">
                       {new Date(log.date + "T00:00:00Z").toLocaleDateString(
                         "en-US",
                         {
@@ -280,24 +280,24 @@ export default function FieldDashboardPage() {
                     </div>
                     <div className="space-y-2">
                       <div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-text-secondary">
                           Equipment Logs
                         </div>
-                        <div className="text-2xl font-bold text-blue-400">
+                        <div className="text-2xl font-bold text-accent">
                           {log.logs}
                         </div>
                       </div>
                       <div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-text-secondary">
                           Operating Hrs
                         </div>
-                        <div className="text-2xl font-bold text-emerald-400">
+                        <div className="text-2xl font-bold text-success">
                           {log.operatingHours.toFixed(1)}h
                         </div>
                       </div>
                       <div>
-                        <div className="text-xs text-slate-400">Headcount</div>
-                        <div className="text-2xl font-bold text-amber-400">
+                        <div className="text-xs text-text-secondary">Headcount</div>
+                        <div className="text-2xl font-bold text-warning">
                           {log.headCount}
                         </div>
                       </div>
@@ -309,41 +309,41 @@ export default function FieldDashboardPage() {
           </div>
 
           {/* Active Sites */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Active Sites
             </h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {mockActiveSites.map((site) => (
                 <div
                   key={site.id}
-                  className="rounded-lg border border-slate-800 bg-slate-800/50 p-4"
+                  className="rounded-lg border border-border bg-surface-hover/50 p-4"
                 >
-                  <h3 className="mb-3 font-medium text-white">
+                  <h3 className="mb-3 font-medium text-text-primary">
                     {site.name}
                   </h3>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">Workers</span>
-                      <span className="font-semibold text-white">
+                      <span className="text-sm text-text-secondary">Workers</span>
+                      <span className="font-semibold text-text-primary">
                         {site.workers}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">Equipment</span>
-                      <span className="font-semibold text-white">
+                      <span className="text-sm text-text-secondary">Equipment</span>
+                      <span className="font-semibold text-text-primary">
                         {site.equipment}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-text-secondary">
                         Safety Incidents
                       </span>
                       <span
                         className={`font-semibold ${
                           site.safetyIncidents === 0
-                            ? "text-emerald-400"
-                            : "text-red-400"
+                            ? "text-success"
+                            : "text-danger"
                         }`}
                       >
                         {site.safetyIncidents}
@@ -356,24 +356,24 @@ export default function FieldDashboardPage() {
           </div>
 
           {/* Site Activities */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="rounded-lg border border-border bg-surface/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Site Activities
             </h2>
             {isLoadingActivities ? (
-              <div className="text-center text-slate-400">
+              <div className="text-center text-text-secondary">
                 Loading activities...
               </div>
             ) : activities.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
-                <p className="text-slate-400">No activities available</p>
+              <div className="rounded-lg border border-dashed border-border py-8 text-center">
+                <p className="text-text-secondary">No activities available</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {activities.slice(0, 10).map((activity: ActivityResponse) => (
                   <div
                     key={activity.id}
-                    className={`rounded-lg border border-slate-700 bg-slate-800/50 p-4 ${getActivityStatusBg(
+                    className={`rounded-lg border border-border bg-surface-hover/50 p-4 ${getActivityStatusBg(
                       activity.status
                     )}`}
                   >
@@ -381,11 +381,11 @@ export default function FieldDashboardPage() {
                       <div className="flex items-start gap-3">
                         {getStatusIcon(activity.status)}
                         <div>
-                          <h3 className="font-medium text-white">
+                          <h3 className="font-medium text-text-primary">
                             {activity.name}
                           </h3>
                           {activity.code && (
-                            <p className="text-sm text-slate-400">
+                            <p className="text-sm text-text-secondary">
                               Code: {activity.code}
                             </p>
                           )}
@@ -394,10 +394,10 @@ export default function FieldDashboardPage() {
                       <span
                         className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
                           activity.status === "COMPLETED"
-                            ? "bg-green-200 text-emerald-300"
+                            ? "bg-green-200 text-success"
                             : activity.status === "IN_PROGRESS"
                               ? "bg-blue-200 text-blue-300"
-                              : "bg-slate-700/50 text-slate-100"
+                              : "bg-surface-active/50 text-text-primary"
                         }`}
                       >
                         {activity.status}
@@ -407,18 +407,18 @@ export default function FieldDashboardPage() {
                     <div className="space-y-2">
                       <div>
                         <div className="mb-1 flex items-center justify-between">
-                          <span className="text-xs font-medium text-slate-400">
+                          <span className="text-xs font-medium text-text-secondary">
                             Progress
                           </span>
-                          <span className="text-xs font-semibold text-white">
+                          <span className="text-xs font-semibold text-text-primary">
                             {activity.percentComplete || 0}%
                           </span>
                         </div>
-                        <div className="h-2 w-full rounded-full bg-slate-700">
+                        <div className="h-2 w-full rounded-full bg-surface-active">
                           <div
                             className={`h-2 rounded-full ${
                               activity.status === "COMPLETED"
-                                ? "bg-emerald-500"
+                                ? "bg-success"
                                 : "bg-blue-500"
                             }`}
                             style={{ width: `${activity.percentComplete || 0}%` }}
@@ -426,7 +426,7 @@ export default function FieldDashboardPage() {
                         </div>
                       </div>
 
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-text-secondary">
                         {activity.plannedStartDate ? new Date(activity.plannedStartDate).toLocaleDateString() : "TBD"} to{" "}
                         {activity.plannedFinishDate ? new Date(activity.plannedFinishDate).toLocaleDateString() : "TBD"}
                       </div>
