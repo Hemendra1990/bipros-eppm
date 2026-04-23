@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, TrendingUp, DollarSign, GitCompare, FileText, Download } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, GitCompare, Download } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
@@ -51,12 +51,6 @@ const reportCards: ReportCard[] = [
     title: "Schedule Comparison",
     description: "Compare baseline vs current schedule",
   },
-  {
-    id: "custom-reports",
-    icon: <FileText size={32} />,
-    title: "Custom Reports",
-    description: "Create and manage custom project reports",
-  },
 ];
 
 interface SCurveChartData {
@@ -98,7 +92,6 @@ interface ReportChartData {
   histogram?: HistogramChartData[];
   cashflow?: CashFlowChartData[];
   scheduleComparison?: ScheduleComparisonChartData[];
-  customReports?: Array<{ id: string; name: string; type: string; createdAt: string }>;
 }
 
 export default function ReportsPage() {
@@ -245,11 +238,6 @@ export default function ReportsPage() {
         if (response.data) {
           const data = response.data as { activities?: ScheduleComparisonChartData[] };
           setReportData({ scheduleComparison: data.activities ?? [] });
-        }
-      } else if (reportId === "custom-reports" && selectedProjectId) {
-        const response = await reportApi.listCustomReports(selectedProjectId);
-        if (response.data) {
-          setReportData({ customReports: response.data as any });
         }
       }
     } catch (error) {
@@ -454,7 +442,7 @@ export default function ReportsPage() {
       )}
 
       {/* Classic Report Output */}
-      {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow || reportData.scheduleComparison || reportData.customReports) && (
+      {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow || reportData.scheduleComparison) && (
         <div className="mt-8 rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
           <h2 className="mb-6 text-lg font-semibold text-text-primary">Generated Report</h2>
           {reportData.scurve && (
@@ -547,25 +535,6 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </div>
-          )}
-          {reportData.customReports && (
-            <div className="mb-6">
-              <h3 className="mb-4 font-semibold text-text-secondary">Custom Reports</h3>
-              {reportData.customReports.length === 0 ? (
-                <p className="text-sm text-text-secondary">No custom reports configured for this project.</p>
-              ) : (
-                <div className="space-y-2">
-                  {reportData.customReports.map((report) => (
-                    <div key={report.id} className="flex items-center justify-between rounded-lg border border-border bg-surface-hover/50 px-4 py-3">
-                      <div>
-                        <p className="font-medium text-text-primary">{report.name}</p>
-                        <p className="text-xs text-text-secondary">{report.type} &middot; Created {report.createdAt}</p>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>

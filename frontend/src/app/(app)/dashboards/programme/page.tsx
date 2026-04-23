@@ -7,17 +7,10 @@ import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { organisationApi } from "@/lib/api/organisationApi";
 import { analyticsApi, type ContractorPerformance } from "@/lib/api/analyticsApi";
+import { portfolioReportApi, type PortfolioEvmRow } from "@/lib/api/portfolioReportApi";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { ProjectResponse, ActivityResponse, OrganisationResponse } from "@/lib/types";
-
-interface EvmMetrics {
-  projectId: string;
-  spi: number;
-  cpi: number;
-  currentPv: number;
-  currentEv: number;
-}
 
 interface Milestone {
   id: string;
@@ -74,6 +67,19 @@ export default function ProgrammeDashboardPage() {
     staleTime: 60_000,
   });
 
+  // Portfolio-level EVM rollup — one round-trip for every visible project, backed
+  // by the latest EvmCalculation per project.
+  const { data: evmRollupResponse } = useQuery({
+    queryKey: ["portfolio", "evm-rollup"],
+    queryFn: () => portfolioReportApi.getEvmRollup(),
+    staleTime: 60_000,
+  });
+  const evmByProjectId = useMemo(() => {
+    const map = new Map<string, PortfolioEvmRow>();
+    (evmRollupResponse?.data ?? []).forEach((row) => map.set(row.projectId, row));
+    return map;
+  }, [evmRollupResponse]);
+
   const projects = projectsData?.data?.content ?? [];
   const activities = activitiesData?.data?.content ?? [];
   const epcContractors: OrganisationResponse[] = epcContractorsData?.data ?? [];
@@ -82,19 +88,6 @@ export default function ProgrammeDashboardPage() {
     (contractorPerfData ?? []).forEach((p) => map.set(p.orgCode, p));
     return map;
   }, [contractorPerfData]);
-
-  // Mock EVM metrics — seeded by project index to avoid re-render instability
-  const mockEvmMetrics: EvmMetrics[] = useMemo(
-    () =>
-      projects.map((p: ProjectResponse, i: number) => ({
-        projectId: p.id,
-        spi: 0.92 + ((i * 7 + 3) % 16) / 100,
-        cpi: 0.88 + ((i * 11 + 5) % 20) / 100,
-        currentPv: ((i * 13 + 7) % 100) * 10000,
-        currentEv: ((i * 17 + 3) % 95) * 10000,
-      })),
-    [projects]
-  );
 
   // Convert activities to milestone format
   const mockMilestones: Milestone[] = activities
@@ -215,7 +208,7 @@ export default function ProgrammeDashboardPage() {
         </h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           {projects.map((project: ProjectResponse) => {
-            const evm = mockEvmMetrics.find((m) => m.projectId === project.id);
+            const evm = evmByProjectId.get(project.id);
             return (
               <div
                 key={project.id}

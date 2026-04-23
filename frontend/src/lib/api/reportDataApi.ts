@@ -138,4 +138,18 @@ export const reportDataApi = {
         `/v1/reports/resource-utilization?projectId=${projectId}`
       )
       .then((r) => r.data.data),
+
+  getWbsProgress: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<WbsProgressRow[]>>(`/v1/projects/${projectId}/wbs-progress`)
+      .then((r) => r.data.data),
 };
+
+export interface WbsProgressRow {
+  wbsCode: string;
+  wbsName: string;
+  level: number | null;
+  plannedPct: number;
+  actualPct: number;
+  variancePct: number;
+}
