@@ -174,7 +174,7 @@ public class ReportService {
                 "SELECT COALESCE(SUM(budgeted_cost), 0) FROM cost.activity_expenses e " +
                 "JOIN activity.activities a ON e.activity_id = a.id " +
                 "WHERE e.project_id = ?1 AND a.planned_finish_date <= ?2")
-            .setParameter(1, projectId.toString())
+            .setParameter(1, projectId)
             .setParameter(2, periodEnd)
             .getSingleResult();
         BigDecimal pv = pvResult != null ? new BigDecimal(pvResult.toString()) : BigDecimal.ZERO;
@@ -183,7 +183,7 @@ public class ReportService {
         Object evResult = em.createNativeQuery(
                 "SELECT COALESCE(SUM(budgeted_cost * percent_complete / 100.0), 0) FROM cost.activity_expenses " +
                 "WHERE project_id = ?1 AND planned_start_date <= ?2")
-            .setParameter(1, projectId.toString())
+            .setParameter(1, projectId)
             .setParameter(2, periodEnd)
             .getSingleResult();
         BigDecimal ev = evResult != null ? new BigDecimal(evResult.toString()) : BigDecimal.ZERO;
@@ -192,7 +192,7 @@ public class ReportService {
         Object acResult = em.createNativeQuery(
                 "SELECT COALESCE(SUM(actual_cost), 0) FROM cost.activity_expenses " +
                 "WHERE project_id = ?1 AND planned_start_date <= ?2")
-            .setParameter(1, projectId.toString())
+            .setParameter(1, projectId)
             .setParameter(2, periodEnd)
             .getSingleResult();
         BigDecimal ac = acResult != null ? new BigDecimal(acResult.toString()) : BigDecimal.ZERO;
@@ -223,7 +223,7 @@ public class ReportService {
     try {
       Object maxResult = em.createNativeQuery(
               "SELECT max_units_per_day FROM resource.resources WHERE id = ?1")
-          .setParameter(1, resourceId.toString())
+          .setParameter(1, resourceId)
           .getSingleResult();
       if (maxResult != null) {
         maxAvailable = ((Number) maxResult).doubleValue();
@@ -238,8 +238,8 @@ public class ReportService {
               "WHERE project_id = ?1 AND resource_id = ?2 " +
               "AND planned_start_date <= ?4 AND planned_finish_date >= ?3 " +
               "ORDER BY planned_start_date")
-          .setParameter(1, projectId.toString())
-          .setParameter(2, resourceId.toString())
+          .setParameter(1, projectId)
+          .setParameter(2, resourceId)
           .setParameter(3, start)
           .setParameter(4, end)
           .getResultList();
@@ -294,7 +294,7 @@ public class ReportService {
               "SELECT code, name, status, planned_start_date, planned_finish_date, " +
               "original_duration, total_float, is_critical, remaining_duration " +
               "FROM activity.activities WHERE project_id = ?1 ORDER BY code")
-          .setParameter(1, projectId.toString())
+          .setParameter(1, projectId)
           .getResultList();
 
       return results.stream().map(row -> {
@@ -323,7 +323,7 @@ public class ReportService {
       List<Object> results = em.createNativeQuery(
               "SELECT name, budgeted_cost, actual_cost, remaining_cost, at_completion_cost " +
               "FROM cost.activity_expenses WHERE project_id = ?1 ORDER BY name")
-          .setParameter(1, projectId.toString())
+          .setParameter(1, projectId)
           .getResultList();
 
       return results.stream().map(row -> {
@@ -346,7 +346,7 @@ public class ReportService {
     try {
       Object result = em.createNativeQuery(
               "SELECT name FROM project.projects WHERE id = ?1")
-          .setParameter(1, projectId.toString())
+          .setParameter(1, projectId)
           .getSingleResult();
       return result != null ? result.toString() : "Project " + projectId;
     } catch (Exception e) {
