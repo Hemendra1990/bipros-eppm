@@ -20,7 +20,7 @@ import {
   LoadingBlock,
   SectionCard,
   formatCrore,
-} from "./chartPrimitives";
+} from "@/components/common/dashboard/primitives";
 
 export function CashFlowOutlookChart() {
   const { data, isLoading, isError } = useQuery({

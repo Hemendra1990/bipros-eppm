@@ -16,9 +16,6 @@ import { GanttChart } from "@/components/schedule/GanttChart";
 import { ResourcesTab } from "@/components/resource/ResourcesTab";
 import { CostsTab } from "@/components/cost/CostsTab";
 import { EvmTab } from "@/components/evm/EvmTab";
-import { ProjectStatusSnapshot } from "@/components/reports/project/ProjectStatusSnapshot";
-import { ComplianceChecklist } from "@/components/reports/project/ComplianceChecklist";
-import { MilestoneTracker } from "@/components/reports/project/MilestoneTracker";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
 import { ListTodo, Plus, Play, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
@@ -367,9 +364,6 @@ export default function ProjectDetailPage() {
       {tab === "resources" && <ResourcesTab projectId={projectId} />}
       {tab === "costs" && <CostsTab projectId={projectId} />}
       {tab === "evm" && <EvmTab projectId={projectId} />}
-      {tab === "status" && <ProjectStatusSnapshot projectId={projectId} />}
-      {tab === "compliance" && <ComplianceChecklist projectId={projectId} />}
-      {tab === "milestones" && <MilestoneTracker projectId={projectId} />}
     </div>
   );
 }

@@ -48,9 +48,6 @@ export default function ProjectDetailLayout({
     { id: "resources", label: "Resources", href: null },
     { id: "costs", label: "Costs", href: null },
     { id: "evm", label: "EVM", href: null },
-    { id: "status", label: "Status", href: null },
-    { id: "compliance", label: "Compliance", href: null },
-    { id: "milestones", label: "Milestones", href: null },
     // These navigate to separate route pages:
     { id: "contracts", label: "Contracts", href: `/projects/${projectId}/contracts` },
     { id: "documents", label: "Documents", href: `/projects/${projectId}/documents` },

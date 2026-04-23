@@ -7,11 +7,16 @@ export interface SectionNavItem {
   label: string;
 }
 
-interface PortfolioSectionNavProps {
+interface SectionNavProps {
   sections: SectionNavItem[];
 }
 
-export function PortfolioSectionNav({ sections }: PortfolioSectionNavProps) {
+/**
+ * Sticky pill navigator for a single-canvas page. Pass section anchors (id + label)
+ * and render `<section id="…" className="scroll-mt-20">` in the page body.
+ * Highlights the active pill as the user scrolls via IntersectionObserver.
+ */
+export function SectionNav({ sections }: SectionNavProps) {
   const [active, setActive] = useState(sections[0]?.id);
 
   useEffect(() => {
@@ -35,14 +40,13 @@ export function PortfolioSectionNav({ sections }: PortfolioSectionNavProps) {
   const jumpTo = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
-    // Offset for sticky nav (~56px) + a little breathing room
     const y = el.getBoundingClientRect().top + window.scrollY - 72;
     window.scrollTo({ top: y, behavior: "smooth" });
   };
 
   return (
     <nav
-      aria-label="Portfolio sections"
+      aria-label="Page sections"
       className="sticky top-0 z-10 -mx-6 mb-6 border-b border-border bg-surface/90 px-6 py-3 backdrop-blur"
     >
       <div className="flex flex-wrap gap-2">

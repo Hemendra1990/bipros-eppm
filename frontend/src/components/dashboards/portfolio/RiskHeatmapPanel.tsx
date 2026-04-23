@@ -8,7 +8,7 @@ import {
   LoadingBlock,
   SectionCard,
   truncate,
-} from "./chartPrimitives";
+} from "@/components/common/dashboard/primitives";
 
 function cellColor(probability: number, impact: number): string {
   const score = probability * impact;

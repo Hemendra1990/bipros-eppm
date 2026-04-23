@@ -9,7 +9,7 @@ import {
   LoadingBlock,
   SectionCard,
   truncate,
-} from "./chartPrimitives";
+} from "@/components/common/dashboard/primitives";
 
 function tick(ok: boolean | null | undefined) {
   if (ok === true) return <Check size={16} className="text-success" strokeWidth={3} />;

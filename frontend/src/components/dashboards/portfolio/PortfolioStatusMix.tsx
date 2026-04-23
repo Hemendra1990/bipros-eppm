@@ -16,7 +16,7 @@ import {
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-} from "./chartPrimitives";
+} from "@/components/common/dashboard/primitives";
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: CHART_COLORS.ev,

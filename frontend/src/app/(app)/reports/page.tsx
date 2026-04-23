@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { BarChart3, TrendingUp, DollarSign, GitCompare, Download, ArrowUpRight } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, GitCompare, Download, FolderKanban } from "lucide-react";
+import { ProjectReportsCanvas } from "@/components/reports/project-canvas/ProjectReportsCanvas";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
@@ -96,7 +96,7 @@ interface ReportChartData {
 }
 
 export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<"classic" | "standard">("standard");
+  const [activeTab, setActiveTab] = useState<"classic" | "standard" | "project">("project");
   const [generatingReport, setGeneratingReport] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
@@ -325,6 +325,17 @@ export default function ReportsPage() {
       <div className="mb-8">
         <div className="flex items-center gap-4 border-b border-border">
           <button
+            onClick={() => setActiveTab("project")}
+            className={`inline-flex items-center gap-2 px-4 py-3 font-medium ${
+              activeTab === "project"
+                ? "border-b-2 border-accent text-accent"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            <FolderKanban size={16} />
+            Project Reports
+          </button>
+          <button
             onClick={() => setActiveTab("standard")}
             className={`px-4 py-3 font-medium ${
               activeTab === "standard"
@@ -347,15 +358,19 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="mb-6 flex items-center justify-end">
-        <Link
-          href="/dashboards/portfolio"
-          className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-accent"
-        >
-          Looking for cross-project analytics? Open the Portfolio Dashboard
-          <ArrowUpRight size={14} />
-        </Link>
-      </div>
+
+      {/* Project Reports Tab — single scrollable canvas */}
+      {activeTab === "project" && (
+        <>
+          {!selectedProjectId ? (
+            <div className="rounded-lg border border-warning/30 bg-warning/10 p-6 text-center">
+              <p className="text-warning">Select a project above to view its report canvas</p>
+            </div>
+          ) : (
+            <ProjectReportsCanvas projectId={selectedProjectId} />
+          )}
+        </>
+      )}
 
       {/* Standard Reports Tab */}
       {activeTab === "standard" && (

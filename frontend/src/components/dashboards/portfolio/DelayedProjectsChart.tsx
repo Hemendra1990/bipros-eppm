@@ -19,7 +19,7 @@ import {
   LoadingBlock,
   SectionCard,
   truncate,
-} from "./chartPrimitives";
+} from "@/components/common/dashboard/primitives";
 
 export function DelayedProjectsChart() {
   const { data, isLoading, isError } = useQuery({

@@ -11,10 +11,7 @@ import { DelayedProjectsChart } from "@/components/dashboards/portfolio/DelayedP
 import { EvmRollupChart } from "@/components/dashboards/portfolio/EvmRollupChart";
 import { FundingUtilizationChart } from "@/components/dashboards/portfolio/FundingUtilizationChart";
 import { PortfolioKpiRow } from "@/components/dashboards/portfolio/PortfolioKpiRow";
-import {
-  PortfolioSectionNav,
-  type SectionNavItem,
-} from "@/components/dashboards/portfolio/PortfolioSectionNav";
+import { SectionNav, type SectionNavItem } from "@/components/common/dashboard/SectionNav";
 import { PortfolioStatusMix } from "@/components/dashboards/portfolio/PortfolioStatusMix";
 import { RiskHeatmapPanel } from "@/components/dashboards/portfolio/RiskHeatmapPanel";
 import { ScheduleHealthChart } from "@/components/dashboards/portfolio/ScheduleHealthChart";
@@ -47,7 +44,7 @@ export default function PortfolioDashboardPage() {
         />
       </div>
 
-      <PortfolioSectionNav sections={sections} />
+      <SectionNav sections={sections} />
 
       <div className="space-y-6">
         <section id="overview" className="scroll-mt-20 space-y-6">

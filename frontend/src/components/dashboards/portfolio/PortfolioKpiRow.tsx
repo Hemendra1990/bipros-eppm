@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Briefcase, Coins, Flame, ShieldAlert, Wallet, Zap } from "lucide-react";
 import { KpiTile } from "@/components/common/KpiTile";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
-import { LoadingBlock, EmptyBlock, formatCrore } from "./chartPrimitives";
+import { LoadingBlock, EmptyBlock, formatCrore } from "@/components/common/dashboard/primitives";
 
 export function PortfolioKpiRow() {
   const { data, isLoading, isError } = useQuery({

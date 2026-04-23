@@ -20,7 +20,7 @@ import {
   SectionCard,
   formatCrore,
   truncate,
-} from "./chartPrimitives";
+} from "@/components/common/dashboard/primitives";
 
 export function CostOverrunChart() {
   const { data, isLoading, isError } = useQuery({
