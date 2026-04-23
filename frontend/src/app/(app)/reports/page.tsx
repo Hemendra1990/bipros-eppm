@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, TrendingUp, DollarSign, GitCompare, Download, FolderKanban } from "lucide-react";
+import { ArrowLeft, BarChart3, TrendingUp, DollarSign, GitCompare, Download, FolderKanban } from "lucide-react";
 import { ProjectReportsCanvas } from "@/components/reports/project-canvas/ProjectReportsCanvas";
+import { downloadCsv, toCsv } from "@/lib/utils/csvExport";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
@@ -101,7 +102,7 @@ export default function ReportsPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [reportData, setReportData] = useState<ReportChartData>({});
-  const [downloadingReport, setDownloadingReport] = useState<string | null>(null);
+  const generatedReportRef = useRef<HTMLDivElement | null>(null);
 
   const { data: projectsData } = useQuery({
     queryKey: ["projects"],
@@ -195,6 +196,71 @@ export default function ReportsPage() {
     ? (rawResources as ResourceResponse[])
     : ((rawResources as { content?: ResourceResponse[] } | undefined)?.content ?? []);
 
+  const selectedProject = projects.find(
+    (p: ProjectResponse) => p.id === selectedProjectId,
+  );
+
+  const exportFileStem = (reportId: string) => {
+    const code = selectedProject?.code ?? selectedProjectId ?? "project";
+    const date = new Date().toISOString().slice(0, 10);
+    return `${code}_${reportId}_${date}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+  };
+
+  const exportCurrentReportCsv = () => {
+    if (reportData.scurve) {
+      downloadCsv(
+        exportFileStem("s-curve"),
+        toCsv(reportData.scurve, [
+          { key: "period", header: "Period" },
+          { key: "pv", header: "Planned Value" },
+          { key: "ev", header: "Earned Value" },
+          { key: "ac", header: "Actual Cost" },
+        ]),
+      );
+      return;
+    }
+    if (reportData.histogram) {
+      const rows = reportData.histogram;
+      const resourceCols = Object.keys(rows[0] ?? {}).filter((k) => k !== "date");
+      const cols = [
+        { key: "date", header: "Date" },
+        ...resourceCols.map((k) => ({ key: k, header: k })),
+      ];
+      downloadCsv(exportFileStem("resource-histogram"), toCsv(rows, cols));
+      return;
+    }
+    if (reportData.cashflow) {
+      downloadCsv(
+        exportFileStem("cash-flow"),
+        toCsv(reportData.cashflow, [
+          { key: "period", header: "Period" },
+          { key: "income", header: "Income" },
+          { key: "expense", header: "Expense" },
+        ]),
+      );
+      return;
+    }
+    if (reportData.scheduleComparison) {
+      downloadCsv(
+        exportFileStem("schedule-comparison"),
+        toCsv(reportData.scheduleComparison, [
+          { key: "activityCode", header: "Activity Code" },
+          { key: "activityName", header: "Activity Name" },
+          { key: "baselineStart", header: "Baseline Start" },
+          { key: "currentStart", header: "Current Start" },
+          { key: "startVarianceDays", header: "Start Variance (days)" },
+          { key: "baselineFinish", header: "Baseline Finish" },
+          { key: "currentFinish", header: "Current Finish" },
+          { key: "finishVarianceDays", header: "Finish Variance (days)" },
+        ]),
+      );
+      return;
+    }
+    toast.error("Nothing to export yet — generate a report first");
+  };
+
+  const clearGeneratedReport = () => setReportData({});
+
   const handleGenerateReport = async (reportId: string) => {
     setGeneratingReport(reportId);
     try {
@@ -241,30 +307,19 @@ export default function ReportsPage() {
           setReportData({ scheduleComparison: data.activities ?? [] });
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to generate report");
     } finally {
       setGeneratingReport(null);
-    }
-  };
-
-  const downloadReport = async (format: "EXCEL" | "PDF") => {
-    setDownloadingReport(format);
-    try {
-      const response = await reportApi.executeReport(format);
-      if (response.data?.id) {
-        const downloadResponse = await reportApi.downloadReport(response.data.id);
-        const url = window.URL.createObjectURL(new Blob([downloadResponse.data]));
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `report-${response.data.id}.${format === "EXCEL" ? "xlsx" : "pdf"}`;
-        link.click();
-        window.URL.revokeObjectURL(url);
-      }
-    } catch (error) {
-      console.error("Failed to download report:", error);
-    } finally {
-      setDownloadingReport(null);
+      // Scroll the rendered result into view on the next frame so the user
+      // immediately sees what they clicked for, instead of a silent state change
+      // that happens below the fold.
+      requestAnimationFrame(() => {
+        generatedReportRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
     }
   };
 
@@ -469,8 +524,29 @@ export default function ReportsPage() {
 
       {/* Classic Report Output */}
       {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow || reportData.scheduleComparison) && (
-        <div className="mt-8 rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
-          <h2 className="mb-6 text-lg font-semibold text-text-primary">Generated Report</h2>
+        <div
+          ref={generatedReportRef}
+          className="mt-8 scroll-mt-4 rounded-lg border border-border bg-surface/50 p-6 shadow-sm"
+        >
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-text-primary">Generated Report</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={clearGeneratedReport}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+              >
+                <ArrowLeft size={14} />
+                Back to reports
+              </button>
+              <button
+                onClick={exportCurrentReportCsv}
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
+              >
+                <Download size={14} />
+                Download CSV
+              </button>
+            </div>
+          </div>
           {reportData.scurve && (
             <div className="mb-8">
               <h3 className="mb-4 font-semibold text-text-secondary">S-Curve Analysis</h3>
@@ -568,30 +644,6 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Export Reports */}
-      {activeTab === "classic" && (
-        <div className="mt-8 rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-text-primary">Export Reports</h2>
-          <div className="flex gap-3">
-            <button
-              onClick={() => downloadReport("EXCEL")}
-              disabled={downloadingReport === "EXCEL"}
-              className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-text-primary hover:bg-green-600 disabled:bg-border"
-            >
-              <Download size={16} />
-              {downloadingReport === "EXCEL" ? "Exporting..." : "Export to Excel"}
-            </button>
-            <button
-              onClick={() => downloadReport("PDF")}
-              disabled={downloadingReport === "PDF"}
-              className="inline-flex items-center gap-2 rounded-md bg-danger px-4 py-2 text-sm font-medium text-text-primary hover:bg-danger disabled:bg-border"
-            >
-              <Download size={16} />
-              {downloadingReport === "PDF" ? "Exporting..." : "Export to PDF"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
