@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, TrendingUp, DollarSign, GitCompare, Download } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, TrendingUp, DollarSign, GitCompare, Download, Building2 } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
@@ -322,7 +323,7 @@ export default function ReportsPage() {
 
       {/* Report Tabs */}
       <div className="mb-8">
-        <div className="flex gap-4 border-b border-border">
+        <div className="flex items-center gap-4 border-b border-border">
           <button
             onClick={() => setActiveTab("standard")}
             className={`px-4 py-3 font-medium ${
@@ -343,6 +344,13 @@ export default function ReportsPage() {
           >
             Classic Reports
           </button>
+          <Link
+            href="/reports/portfolio"
+            className="ml-auto inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          >
+            <Building2 size={16} />
+            Portfolio Reports
+          </Link>
         </div>
       </div>
 
