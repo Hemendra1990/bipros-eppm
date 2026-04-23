@@ -36,5 +36,9 @@ public record CreateActivityRequest(
 
     LocalDate plannedFinishDate,
 
-    UUID calendarId
+    UUID calendarId,
+
+    Long chainageFromM,
+
+    Long chainageToM
 ) {}

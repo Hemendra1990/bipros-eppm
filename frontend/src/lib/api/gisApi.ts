@@ -38,6 +38,7 @@ export interface GeoJsonFeatureCollection {
     properties: {
       wbsCode: string;
       wbsName: string;
+      wbsNodeId: string;
       fillColor: string;
       strokeColor: string;
       id: string;
@@ -326,11 +327,16 @@ export const gisApi = {
 
   // Satellite ingestion (Phase 2-4): manually trigger a fetch+analyze run,
   // and inspect recent runs for a "last sync" indicator.
-  ingestSatellite: (projectId: UUID, from: string, to: string) =>
+  ingestSatellite: (
+    projectId: UUID,
+    from: string,
+    to: string,
+    polygonId?: UUID
+  ) =>
     apiClient.post<{ data: IngestionResult }>(
       `/v1/projects/${projectId}/gis/ingest`,
       null,
-      { params: { from, to } }
+      { params: polygonId ? { from, to, polygonId } : { from, to } }
     ),
 
   getIngestionLog: (projectId: UUID) =>

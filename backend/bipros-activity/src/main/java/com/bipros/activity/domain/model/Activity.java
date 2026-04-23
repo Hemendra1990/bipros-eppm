@@ -133,4 +133,12 @@ public class Activity extends BaseEntity {
 
   @Column(columnDefinition = "TEXT")
   private String notes;
+
+  /** Linear referencing: chainage start in metres (e.g. 145000 = km 145+000). */
+  @Column(name = "chainage_from_m")
+  private Long chainageFromM;
+
+  /** Linear referencing: chainage end in metres (e.g. 145500 = km 145+500). */
+  @Column(name = "chainage_to_m")
+  private Long chainageToM;
 }

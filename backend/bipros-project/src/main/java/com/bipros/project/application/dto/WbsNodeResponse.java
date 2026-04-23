@@ -28,6 +28,8 @@ public record WbsNodeResponse(
     LocalDate plannedFinish,
     BigDecimal budgetCrores,
     String gisPolygonId,
+    Long chainageFromM,
+    Long chainageToM,
     List<WbsNodeResponse> children
 ) {
 }

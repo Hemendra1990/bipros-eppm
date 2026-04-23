@@ -55,6 +55,14 @@ export default function ProjectDetailLayout({
   ];
 
   const moreLinks = [
+    { label: "Relationships", href: `/projects/${projectId}/relationships` },
+    { label: "BOQ & Budget", href: `/projects/${projectId}/boq` },
+    { label: "DPR (Daily Report)", href: `/projects/${projectId}/dpr` },
+    { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },
+    { label: "Material Consumption", href: `/projects/${projectId}/material-consumption` },
+    { label: "Resource Deployment", href: `/projects/${projectId}/resource-deployment` },
+    { label: "Weather Log", href: `/projects/${projectId}/weather-log` },
+    { label: "Next Day Plan", href: `/projects/${projectId}/next-day-plan` },
     { label: "Schedule Health", href: `/projects/${projectId}/schedule-health` },
     { label: "Schedule Compression", href: `/projects/${projectId}/schedule-compression` },
     { label: "Risk Analysis", href: `/projects/${projectId}/risk-analysis` },
@@ -142,7 +150,7 @@ export default function ProjectDetailLayout({
             </button>
 
             {moreDropdownOpen && (
-              <div className="absolute right-0 mt-0 w-48 bg-surface/50 border border-border rounded-md shadow-lg z-10">
+              <div className="absolute right-0 mt-0 w-48 bg-surface border border-border rounded-md shadow-lg z-50">
                 {moreLinks.map((link) => (
                   <button
                     key={link.href}

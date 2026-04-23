@@ -1,8 +1,10 @@
 package com.bipros.resource.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.resource.application.dto.AssignUserToRoleRequest;
 import com.bipros.resource.application.dto.CreateRoleRequest;
 import com.bipros.resource.application.dto.RoleResponse;
+import com.bipros.resource.application.dto.UserResourceRoleResponse;
 import com.bipros.resource.application.service.RoleService;
 import com.bipros.resource.domain.model.ResourceType;
 import jakarta.validation.Valid;
@@ -74,6 +76,28 @@ public class RoleController {
   public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable UUID id) {
     log.info("DELETE /v1/roles/{} - Deleting role", id);
     roleService.deleteRole(id);
+    return ResponseEntity.ok(ApiResponse.ok(null));
+  }
+
+  // ───────────────────── User ↔ ResourceRole assignment ─────────────────────
+
+  @GetMapping("/{roleId}/users")
+  public ResponseEntity<ApiResponse<List<UserResourceRoleResponse>>> listUsers(@PathVariable UUID roleId) {
+    return ResponseEntity.ok(ApiResponse.ok(roleService.listUsersForRole(roleId)));
+  }
+
+  @PostMapping("/{roleId}/users")
+  public ResponseEntity<ApiResponse<UserResourceRoleResponse>> assignUser(
+      @PathVariable UUID roleId,
+      @Valid @RequestBody AssignUserToRoleRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(roleService.assignUser(roleId, request)));
+  }
+
+  @DeleteMapping("/{roleId}/users/{assignmentId}")
+  public ResponseEntity<ApiResponse<Void>> unassignUser(
+      @PathVariable UUID roleId,
+      @PathVariable UUID assignmentId) {
+    roleService.unassignUser(roleId, assignmentId);
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
 }

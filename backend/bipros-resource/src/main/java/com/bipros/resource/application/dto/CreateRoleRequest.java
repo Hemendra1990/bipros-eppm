@@ -11,4 +11,8 @@ public record CreateRoleRequest(
     @NotBlank(message = "Name is required") String name,
     String description,
     @NotNull(message = "Resource type is required") ResourceType resourceType,
-    BigDecimal defaultRate) {}
+    BigDecimal defaultRate,
+    String rateUnit,
+    BigDecimal budgetedRate,
+    BigDecimal actualRate,
+    String rateRemarks) {}

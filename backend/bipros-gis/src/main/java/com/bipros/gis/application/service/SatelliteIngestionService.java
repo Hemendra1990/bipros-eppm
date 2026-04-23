@@ -57,6 +57,25 @@ public class SatelliteIngestionService {
 
     @Transactional
     public IngestionResult runForProject(UUID projectId, LocalDate from, LocalDate to) {
+        return run(projectId, polygonRepository.findByProjectId(projectId), from, to);
+    }
+
+    /**
+     * Scope a run to a single polygon — used immediately after a user draws
+     * a new boundary so we don't re-scan every polygon in the project.
+     * Backed by the same idempotent code path as {@link #runForProject}; the
+     * caller just passes a one-element polygon list.
+     */
+    @Transactional
+    public IngestionResult runForPolygon(UUID projectId, UUID polygonId, LocalDate from, LocalDate to) {
+        WbsPolygon polygon = polygonRepository.findById(polygonId)
+            .filter(p -> p.getProjectId().equals(projectId))
+            .orElseThrow(() -> new com.bipros.common.exception.ResourceNotFoundException(
+                "WbsPolygon", polygonId.toString()));
+        return run(projectId, List.of(polygon), from, to);
+    }
+
+    private IngestionResult run(UUID projectId, List<WbsPolygon> polygons, LocalDate from, LocalDate to) {
         Instant started = Instant.now();
         SatelliteAdapter adapter = adapterRegistry.defaultAdapter();
 
@@ -70,7 +89,6 @@ public class SatelliteIngestionService {
             .build();
         auditLog = logRepository.save(auditLog);
 
-        List<WbsPolygon> polygons = polygonRepository.findByProjectId(projectId);
         int scenesFetched = 0;
         int scenesSkipped = 0;
         int snapshotsCreated = 0;

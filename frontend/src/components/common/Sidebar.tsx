@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   Building2,
   UserCog,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAppStore } from "@/lib/state/store";
@@ -45,6 +46,9 @@ const adminNavigation = [
   { name: "Organisations", href: "/admin/organisations", icon: Building2 },
   { name: "User Access", href: "/admin/user-access", icon: UserCog },
   { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
+  { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge },
+  { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge },
+  { name: "Resource Roles", href: "/admin/resource-roles", icon: Users },
   { name: "Integrations", href: "/admin/integrations", icon: Plug },
   { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal },
 ];

@@ -3,11 +3,15 @@ package com.bipros.resource.application.service;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
+import com.bipros.resource.application.dto.AssignUserToRoleRequest;
 import com.bipros.resource.application.dto.CreateRoleRequest;
 import com.bipros.resource.application.dto.RoleResponse;
+import com.bipros.resource.application.dto.UserResourceRoleResponse;
 import com.bipros.resource.domain.model.Role;
 import com.bipros.resource.domain.model.ResourceType;
+import com.bipros.resource.domain.model.UserResourceRole;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
+import com.bipros.resource.domain.repository.UserResourceRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +27,7 @@ import java.util.UUID;
 public class RoleService {
 
   private final ResourceRoleRepository roleRepository;
+  private final UserResourceRoleRepository userResourceRoleRepository;
   private final AuditService auditService;
 
   public RoleResponse createRole(CreateRoleRequest request) {
@@ -38,6 +43,10 @@ public class RoleService {
         .description(request.description())
         .resourceType(request.resourceType())
         .defaultRate(request.defaultRate())
+        .rateUnit(request.rateUnit())
+        .budgetedRate(request.budgetedRate())
+        .actualRate(request.actualRate())
+        .rateRemarks(request.rateRemarks())
         .sortOrder(0)
         .build();
 
@@ -86,6 +95,10 @@ public class RoleService {
     role.setDescription(request.description());
     role.setResourceType(request.resourceType());
     role.setDefaultRate(request.defaultRate());
+    role.setRateUnit(request.rateUnit());
+    role.setBudgetedRate(request.budgetedRate());
+    role.setActualRate(request.actualRate());
+    role.setRateRemarks(request.rateRemarks());
 
     Role updated = roleRepository.save(role);
     log.info("Role updated: id={}", id);
@@ -106,5 +119,55 @@ public class RoleService {
 
     // Audit log deletion
     auditService.logDelete("Role", id);
+  }
+
+  // ───────────────────── User ↔ ResourceRole assignment ─────────────────────
+
+  public UserResourceRoleResponse assignUser(UUID roleId, AssignUserToRoleRequest request) {
+    if (!roleRepository.existsById(roleId)) {
+      throw new ResourceNotFoundException("Role", roleId);
+    }
+    userResourceRoleRepository.findByUserIdAndResourceRoleId(request.userId(), roleId)
+        .ifPresent(existing -> {
+          throw new BusinessRuleException("USER_ROLE_ALREADY_ASSIGNED",
+              "User " + request.userId() + " is already assigned to role " + roleId);
+        });
+    UserResourceRole urr = UserResourceRole.builder()
+        .userId(request.userId())
+        .resourceRoleId(roleId)
+        .assignedFrom(request.assignedFrom())
+        .assignedTo(request.assignedTo())
+        .remarks(request.remarks())
+        .build();
+    UserResourceRole saved = userResourceRoleRepository.save(urr);
+    auditService.logCreate("UserResourceRole", saved.getId(), UserResourceRoleResponse.from(saved));
+    return UserResourceRoleResponse.from(saved);
+  }
+
+  public void unassignUser(UUID roleId, UUID assignmentId) {
+    UserResourceRole urr = userResourceRoleRepository.findById(assignmentId)
+        .orElseThrow(() -> new ResourceNotFoundException("UserResourceRole", assignmentId));
+    if (!urr.getResourceRoleId().equals(roleId)) {
+      throw new ResourceNotFoundException("UserResourceRole", assignmentId);
+    }
+    userResourceRoleRepository.delete(urr);
+    auditService.logDelete("UserResourceRole", assignmentId);
+  }
+
+  @Transactional(readOnly = true)
+  public List<UserResourceRoleResponse> listUsersForRole(UUID roleId) {
+    if (!roleRepository.existsById(roleId)) {
+      throw new ResourceNotFoundException("Role", roleId);
+    }
+    return userResourceRoleRepository.findByResourceRoleId(roleId).stream()
+        .map(UserResourceRoleResponse::from)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<UserResourceRoleResponse> listRolesForUser(UUID userId) {
+    return userResourceRoleRepository.findByUserId(userId).stream()
+        .map(UserResourceRoleResponse::from)
+        .toList();
   }
 }

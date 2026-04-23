@@ -1,5 +1,7 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
@@ -21,8 +23,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -33,7 +38,31 @@ public class ResourceAssignmentService {
   private final ResourceAssignmentRepository assignmentRepository;
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository rateRepository;
+  private final ActivityRepository activityRepository;
   private final AuditService auditService;
+
+  /** Batch-hydrate resource + activity names onto a list of assignments in 2 queries total. */
+  private List<ResourceAssignmentResponse> hydrate(List<ResourceAssignment> assignments) {
+    if (assignments.isEmpty()) return List.of();
+    var resourceIds = assignments.stream().map(ResourceAssignment::getResourceId).distinct().toList();
+    var activityIds = assignments.stream().map(ResourceAssignment::getActivityId).distinct().toList();
+    Map<UUID, String> resourceNames = resourceRepository.findAllById(resourceIds).stream()
+        .collect(Collectors.toMap(Resource::getId, Resource::getName));
+    Map<UUID, String> activityNames = activityRepository.findAllById(activityIds).stream()
+        .collect(Collectors.toMap(Activity::getId, Activity::getName));
+    return assignments.stream()
+        .map(a -> ResourceAssignmentResponse.from(a,
+            resourceNames.get(a.getResourceId()),
+            activityNames.get(a.getActivityId())))
+        .toList();
+  }
+
+  /** Single-assignment hydration path. */
+  private ResourceAssignmentResponse hydrate(ResourceAssignment a) {
+    String rn = resourceRepository.findById(a.getResourceId()).map(Resource::getName).orElse(null);
+    String an = activityRepository.findById(a.getActivityId()).map(Activity::getName).orElse(null);
+    return ResourceAssignmentResponse.from(a, rn, an);
+  }
 
   public ResourceAssignmentResponse assignResource(CreateResourceAssignmentRequest request) {
     log.info("Assigning resource: activityId={}, resourceId={}, projectId={}",
@@ -82,24 +111,21 @@ public class ResourceAssignmentService {
     ResourceAssignment saved = assignmentRepository.save(assignment);
     log.info("Resource assignment created: id={}", saved.getId());
 
-    // Audit log creation
-    auditService.logCreate("ResourceAssignment", saved.getId(), ResourceAssignmentResponse.from(saved));
-
-    return ResourceAssignmentResponse.from(saved);
+    ResourceAssignmentResponse response = hydrate(saved);
+    auditService.logCreate("ResourceAssignment", saved.getId(), response);
+    return response;
   }
 
   public ResourceAssignmentResponse getAssignment(UUID id) {
     log.info("Fetching resource assignment: id={}", id);
     ResourceAssignment assignment = assignmentRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("ResourceAssignment", id));
-    return ResourceAssignmentResponse.from(assignment);
+    return hydrate(assignment);
   }
 
   public List<ResourceAssignmentResponse> getAssignmentsByActivity(UUID activityId) {
     log.info("Fetching assignments for activity: {}", activityId);
-    return assignmentRepository.findByActivityId(activityId).stream()
-        .map(ResourceAssignmentResponse::from)
-        .toList();
+    return hydrate(assignmentRepository.findByActivityId(activityId));
   }
 
   public List<ResourceAssignmentResponse> getAssignmentsByResource(UUID resourceId) {
@@ -107,16 +133,12 @@ public class ResourceAssignmentService {
     if (!resourceRepository.existsById(resourceId)) {
       throw new ResourceNotFoundException("Resource", resourceId);
     }
-    return assignmentRepository.findByResourceId(resourceId).stream()
-        .map(ResourceAssignmentResponse::from)
-        .toList();
+    return hydrate(assignmentRepository.findByResourceId(resourceId));
   }
 
   public List<ResourceAssignmentResponse> getAssignmentsByProject(UUID projectId) {
     log.info("Fetching assignments for project: {}", projectId);
-    return assignmentRepository.findByProjectId(projectId).stream()
-        .map(ResourceAssignmentResponse::from)
-        .toList();
+    return hydrate(assignmentRepository.findByProjectId(projectId));
   }
 
   public ResourceAssignmentResponse updateAssignment(UUID id, CreateResourceAssignmentRequest request) {
@@ -150,10 +172,9 @@ public class ResourceAssignmentService {
     ResourceAssignment updated = assignmentRepository.save(assignment);
     log.info("Resource assignment updated: id={}", id);
 
-    // Audit log update
-    auditService.logUpdate("ResourceAssignment", id, "assignment", assignment, ResourceAssignmentResponse.from(updated));
-
-    return ResourceAssignmentResponse.from(updated);
+    ResourceAssignmentResponse response = hydrate(updated);
+    auditService.logUpdate("ResourceAssignment", id, "assignment", assignment, response);
+    return response;
   }
 
   public void removeAssignment(UUID assignmentId) {

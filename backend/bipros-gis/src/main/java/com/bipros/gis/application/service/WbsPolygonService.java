@@ -101,6 +101,7 @@ public class WbsPolygonService {
                     Map<String, Object> properties = new HashMap<>();
                     properties.put("wbsCode", polygon.getWbsCode());
                     properties.put("wbsName", polygon.getWbsName());
+                    properties.put("wbsNodeId", polygon.getWbsNodeId().toString());
                     properties.put("fillColor", polygon.getFillColor());
                     properties.put("strokeColor", polygon.getStrokeColor());
                     properties.put("id", polygon.getId().toString());

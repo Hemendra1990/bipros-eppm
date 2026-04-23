@@ -58,6 +58,15 @@ public class Resource extends BaseEntity {
   @Column(name = "resource_category", length = 40)
   private ResourceCategory resourceCategory;
 
+  /**
+   * Coarse "Unit Rate Master" bucket (Daily Cost Report, Section A): EQUIPMENT / MATERIAL /
+   * SUB_CONTRACT. Manpower lives on {@code ResourceRole} instead and is not stored here.
+   * Nullable for backwards-compat with existing seeders.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "cost_category", length = 20)
+  private CostCategory costCategory;
+
   /** IC-PMS M8 unit of measure for the pool. */
   @Enumerated(EnumType.STRING)
   @Column(name = "unit", length = 20)

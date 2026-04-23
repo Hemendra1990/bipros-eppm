@@ -16,12 +16,28 @@ public record RoleResponse(
     BigDecimal defaultRate,
     Double defaultUnitsPerTime,
     Integer sortOrder,
+    String rateUnit,
+    BigDecimal budgetedRate,
+    BigDecimal actualRate,
+    BigDecimal rateVariance,
+    BigDecimal rateVariancePercent,
+    String rateRemarks,
     Instant createdAt,
     Instant updatedAt,
     String createdBy,
     String updatedBy) {
 
   public static RoleResponse from(Role role) {
+    BigDecimal budgeted = role.getBudgetedRate();
+    BigDecimal actual = role.getActualRate();
+    BigDecimal variance = null;
+    BigDecimal variancePct = null;
+    if (budgeted != null && actual != null) {
+      variance = actual.subtract(budgeted);
+      if (budgeted.signum() != 0) {
+        variancePct = variance.divide(budgeted, 6, java.math.RoundingMode.HALF_UP);
+      }
+    }
     return new RoleResponse(
         role.getId(),
         role.getCode(),
@@ -31,6 +47,12 @@ public record RoleResponse(
         role.getDefaultRate(),
         role.getDefaultUnitsPerTime(),
         role.getSortOrder(),
+        role.getRateUnit(),
+        budgeted,
+        actual,
+        variance,
+        variancePct,
+        role.getRateRemarks(),
         role.getCreatedAt(),
         role.getUpdatedAt(),
         role.getCreatedBy(),

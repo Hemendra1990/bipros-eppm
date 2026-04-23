@@ -54,6 +54,8 @@ public class ActivityService {
     activity.setPlannedStartDate(request.plannedStartDate());
     activity.setPlannedFinishDate(request.plannedFinishDate());
     activity.setCalendarId(request.calendarId());
+    activity.setChainageFromM(request.chainageFromM());
+    activity.setChainageToM(request.chainageToM());
     activity.setPercentComplete(0.0);
 
     // Auto-calculate originalDuration from dates if not provided
@@ -132,6 +134,12 @@ public class ActivityService {
     activity.setResumeDate(request.resumeDate());
     if (request.notes() != null) {
       activity.setNotes(request.notes());
+    }
+    if (request.chainageFromM() != null) {
+      activity.setChainageFromM(request.chainageFromM());
+    }
+    if (request.chainageToM() != null) {
+      activity.setChainageToM(request.chainageToM());
     }
 
     Activity updated = activityRepository.save(activity);

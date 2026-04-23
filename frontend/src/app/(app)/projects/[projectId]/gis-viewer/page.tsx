@@ -1,26 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
-import { MapViewer } from "@/components/gis/MapViewer";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import type Feature from "ol/Feature";
+import type Polygon from "ol/geom/Polygon";
+import { MapViewer, type LayerVisibility } from "@/components/gis/MapViewer";
+import { ScenePicker } from "@/components/gis/ScenePicker";
+import { LayerControlPanel } from "@/components/gis/LayerControlPanel";
 import { GisLayerList } from "@/components/gis/GisLayerList";
 import { SatelliteImageGallery } from "@/components/gis/SatelliteImageGallery";
 import { ProgressVarianceTable } from "@/components/gis/ProgressVarianceTable";
+import { MapModeToolbar, type MapMode } from "@/components/gis/MapModeToolbar";
+import {
+  DrawReviewPanel,
+  type DrawPayload,
+} from "@/components/gis/DrawReviewPanel";
+import { PolygonEditPanel } from "@/components/gis/PolygonEditPanel";
 import { TabTip } from "@/components/common/TabTip";
 import { Button } from "@/components/ui/button";
-import { gisApi, type IngestionResult } from "@/lib/api/gisApi";
+import {
+  gisApi,
+  type IngestionResult,
+  type SatelliteImage,
+  type GeoJsonFeatureCollection,
+} from "@/lib/api/gisApi";
+import { projectApi } from "@/lib/api/projectApi";
+import { useSceneBlobUrl } from "@/lib/gis/useSceneBlobUrl";
+import {
+  computeGeoJsonExtent4326,
+  bboxIntersects,
+  type Bbox4326,
+} from "@/lib/gis/extent";
+import { computePolygonMeta, type PolygonMeta } from "@/lib/gis/geometry";
 
 type TabId = "map" | "layers" | "satellite" | "progress";
+
+type FeatureJson = GeoJsonFeatureCollection["features"][number];
 
 export default function GisViewerPage() {
   const params = useParams();
   const projectId = params.projectId as `${string}-${string}-${string}-${string}-${string}`;
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabId>("map");
   const qc = useQueryClient();
 
-  // Default to a 7-day window ending today (matches the nightly scheduler default).
-  // Lazy initialisers keep render pure under React 19's hooks/purity rule.
+  const [visibility, setVisibility] = useState<LayerVisibility>({
+    baseMap: true,
+    polygons: true,
+    satellite: true,
+  });
+  const [satelliteOpacity, setSatelliteOpacity] = useState(0.8);
+  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  const [fitSignal, setFitSignal] = useState(0);
+  const [showAllScenes, setShowAllScenes] = useState(false);
+
+  // Drawing / editing state.
+  const [mapMode, setMapMode] = useState<MapMode>("view");
+  const [pendingDrawMeta, setPendingDrawMeta] = useState<PolygonMeta | null>(
+    null
+  );
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(
+    null
+  );
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+
   const [ingestFrom, setIngestFrom] = useState(
     () => new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10)
   );
@@ -38,35 +84,336 @@ export default function GisViewerPage() {
 
   const { data: geoJsonResponse, isLoading: geoJsonLoading } = useQuery({
     queryKey: ["gis", projectId, "geojson"],
-    queryFn: async () => {
-      const response = await gisApi.getPolygonsAsGeoJson(projectId);
-      return response.data;
-    },
+    queryFn: async () => (await gisApi.getPolygonsAsGeoJson(projectId)).data,
   });
 
   const { data: layersResponse } = useQuery({
     queryKey: ["gis", projectId, "layers"],
-    queryFn: async () => {
-      const response = await gisApi.getLayers(projectId);
-      return response.data;
-    },
+    queryFn: async () => (await gisApi.getLayers(projectId)).data,
   });
 
   const { data: satelliteImagesResponse } = useQuery({
     queryKey: ["gis", projectId, "satellite-images"],
-    queryFn: async () => {
-      const response = await gisApi.getSatelliteImages(projectId);
-      return response.data;
-    },
+    queryFn: async () => (await gisApi.getSatelliteImages(projectId)).data,
   });
 
   const { data: varianceResponse } = useQuery({
     queryKey: ["gis", projectId, "progress-variance"],
-    queryFn: async () => {
-      const response = await gisApi.getProgressVariance(projectId);
-      return response.data;
+    queryFn: async () => (await gisApi.getProgressVariance(projectId)).data,
+  });
+
+  const { data: wbsTreeResponse } = useQuery({
+    queryKey: ["project", projectId, "wbs-tree"],
+    queryFn: () => projectApi.getWbsTree(projectId),
+  });
+  const wbsTree = wbsTreeResponse?.data ?? [];
+
+  const allScenes: SatelliteImage[] = useMemo(
+    () => satelliteImagesResponse?.data ?? [],
+    [satelliteImagesResponse]
+  );
+
+  const polygonExtent4326 = useMemo(
+    () =>
+      geoJsonResponse?.data
+        ? computeGeoJsonExtent4326(geoJsonResponse.data)
+        : null,
+    [geoJsonResponse]
+  );
+
+  const relevantScenes = useMemo(() => {
+    if (showAllScenes || !polygonExtent4326) return allScenes;
+    return allScenes.filter((s) => {
+      if (
+        typeof s.westBound !== "number" ||
+        typeof s.southBound !== "number" ||
+        typeof s.eastBound !== "number" ||
+        typeof s.northBound !== "number"
+      ) {
+        return false;
+      }
+      const sceneBox: Bbox4326 = [
+        s.westBound,
+        s.southBound,
+        s.eastBound,
+        s.northBound,
+      ];
+      return bboxIntersects(sceneBox, polygonExtent4326);
+    });
+  }, [allScenes, polygonExtent4326, showAllScenes]);
+
+  const selectedScene = useMemo(
+    () => relevantScenes.find((s) => s.id === selectedSceneId) ?? null,
+    [relevantScenes, selectedSceneId]
+  );
+
+  const wbsPolygonLayer = useMemo(
+    () => layersResponse?.data?.find((l) => l.layerType === "WBS_POLYGON"),
+    [layersResponse]
+  );
+
+  const features: FeatureJson[] = useMemo(
+    () => geoJsonResponse?.data?.features ?? [],
+    [geoJsonResponse]
+  );
+  const mappedNodeIds = useMemo(
+    () => new Set(features.map((f) => f.properties.wbsNodeId)),
+    [features]
+  );
+  const selectedFeature = useMemo(
+    () => features.find((f) => f.properties.id === selectedFeatureId) ?? null,
+    [features, selectedFeatureId]
+  );
+
+  // --- Mutations ------------------------------------------------------------
+
+  const createPolygon = useMutation({
+    mutationFn: async (args: {
+      layerId: string;
+      payload: DrawPayload;
+      meta: PolygonMeta;
+    }) => {
+      const { payload, meta, layerId } = args;
+      const response = await gisApi.createPolygon(projectId, {
+        wbsNodeId: payload.wbsNodeId as `${string}-${string}-${string}-${string}-${string}`,
+        layerId: layerId as `${string}-${string}-${string}-${string}-${string}`,
+        wbsCode: payload.wbsCode,
+        wbsName: payload.wbsName,
+        polygonGeoJson: meta.geoJsonString,
+        centerLatitude: meta.centerLat,
+        centerLongitude: meta.centerLon,
+        areaInSqMeters: meta.areaSqM,
+        fillColor: payload.fillColor,
+        strokeColor: payload.strokeColor,
+      });
+      return response.data.data;
+    },
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "geojson"] });
+      setPendingDrawMeta(null);
+      setMutationError(null);
+      // Land the user on the new polygon in modify mode so they can kick off
+      // satellite-imagery download for it without hunting through tabs.
+      setSelectedFeatureId(created.id as string);
+      setMapMode("modify");
+      setLastSavedAt(null);
+    },
+    onError: (err: unknown) => {
+      setMutationError(err instanceof Error ? err.message : String(err));
     },
   });
+
+  // Keep a lightweight in-flight guard per-polygon so sequential modifyend
+  // events for the same feature don't stack up.
+  const modifyTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
+
+  const updatePolygon = useMutation({
+    mutationFn: async (args: {
+      polygonId: string;
+      feature: FeatureJson;
+      meta: PolygonMeta;
+    }) => {
+      const { polygonId, feature, meta } = args;
+      await gisApi.updatePolygon(
+        projectId,
+        polygonId as `${string}-${string}-${string}-${string}-${string}`,
+        {
+          wbsCode: feature.properties.wbsCode,
+          wbsName: feature.properties.wbsName,
+          polygonGeoJson: meta.geoJsonString,
+          centerLatitude: meta.centerLat,
+          centerLongitude: meta.centerLon,
+          areaInSqMeters: meta.areaSqM,
+          fillColor: feature.properties.fillColor,
+          strokeColor: feature.properties.strokeColor,
+        }
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "geojson"] });
+      setLastSavedAt(new Date());
+      setMutationError(null);
+    },
+    onError: (err: unknown) => {
+      setMutationError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const [fetchResult, setFetchResult] = useState<
+    { fetched: number; skipped: number; errors: number; errorMessages: string[] } | null
+  >(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const fetchImageryForPolygon = useMutation({
+    mutationFn: async (polygonId: string) => {
+      const to = new Date().toISOString().slice(0, 10);
+      const from = new Date(Date.now() - 30 * 24 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const response = await gisApi.ingestSatellite(
+        projectId,
+        from,
+        to,
+        polygonId as `${string}-${string}-${string}-${string}-${string}`
+      );
+      return response.data.data;
+    },
+    onSuccess: (result) => {
+      setFetchResult({
+        fetched: result.scenesFetched,
+        skipped: result.scenesSkippedDedupe,
+        errors: result.errors.length,
+        errorMessages: result.errors,
+      });
+      setFetchError(null);
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "satellite-images"] });
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "progress-variance"] });
+    },
+    onError: (err: unknown) => {
+      setFetchError(err instanceof Error ? err.message : String(err));
+      setFetchResult(null);
+    },
+  });
+
+  const deletePolygon = useMutation({
+    mutationFn: (polygonId: string) =>
+      gisApi.deletePolygon(
+        projectId,
+        polygonId as `${string}-${string}-${string}-${string}-${string}`
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "geojson"] });
+      setSelectedFeatureId(null);
+      setMutationError(null);
+    },
+    onError: (err: unknown) => {
+      setMutationError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const createDefaultLayer = useMutation({
+    mutationFn: () =>
+      gisApi.createLayer(projectId, {
+        layerName: "WBS Polygons",
+        layerType: "WBS_POLYGON",
+        isVisible: true,
+        opacity: 1,
+        sortOrder: 0,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "layers"] });
+    },
+  });
+
+  // --- Map-mode handlers ----------------------------------------------------
+
+  const handleDrawEnd = useCallback((geom: Polygon) => {
+    setPendingDrawMeta(computePolygonMeta(geom));
+    setMutationError(null);
+  }, []);
+
+  const handleModifyEnd = useCallback(
+    (feature: Feature) => {
+      const polygonId = feature.get("id") as string | undefined;
+      if (!polygonId) return;
+      const geom = feature.getGeometry();
+      if (!geom || !("getInteriorPoint" in geom)) return;
+      const meta = computePolygonMeta(geom as Polygon);
+
+      const featureJson = features.find((f) => f.properties.id === polygonId);
+      if (!featureJson) return;
+
+      // Debounce per-feature so a chain of vertex drags collapses to one PUT.
+      const timers = modifyTimersRef.current;
+      const existing = timers.get(polygonId);
+      if (existing) clearTimeout(existing);
+      const handle = setTimeout(() => {
+        timers.delete(polygonId);
+        updatePolygon.mutate({ polygonId, feature: featureJson, meta });
+      }, 500);
+      timers.set(polygonId, handle);
+    },
+    [features, updatePolygon]
+  );
+
+  const handleDeleteClick = useCallback(
+    (feature: Feature) => {
+      const polygonId = feature.get("id") as string | undefined;
+      const wbsCode = feature.get("wbsCode") as string | undefined;
+      if (!polygonId) return;
+      const ok = window.confirm(
+        `Delete polygon ${wbsCode ?? polygonId}? This cannot be undone.`
+      );
+      if (!ok) return;
+      deletePolygon.mutate(polygonId);
+    },
+    [deletePolygon]
+  );
+
+  const handleSelectFeature = useCallback((feature: Feature | null) => {
+    setSelectedFeatureId(feature ? (feature.get("id") as string) : null);
+    setLastSavedAt(null);
+    setFetchResult(null);
+    setFetchError(null);
+  }, []);
+
+  const handleModeChange = useCallback((next: MapMode) => {
+    setMapMode(next);
+    setPendingDrawMeta(null);
+    setSelectedFeatureId(null);
+    setMutationError(null);
+    setLastSavedAt(null);
+    setFetchResult(null);
+    setFetchError(null);
+  }, []);
+
+  // --- Scene default + URL sync (unchanged from previous) -------------------
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (relevantScenes.length === 0) {
+      if (selectedSceneId !== null) setSelectedSceneId(null);
+      return;
+    }
+    if (selectedSceneId && relevantScenes.some((s) => s.id === selectedSceneId)) {
+      return;
+    }
+    const urlScene = searchParams.get("scene");
+    const fromUrl = urlScene && relevantScenes.find((s) => s.id === urlScene);
+    if (fromUrl) {
+      setSelectedSceneId(fromUrl.id as string);
+      return;
+    }
+    const latest = [...relevantScenes].sort(
+      (a, b) =>
+        new Date(b.captureDate).getTime() - new Date(a.captureDate).getTime()
+    )[0];
+    setSelectedSceneId(latest.id as string);
+  }, [relevantScenes, searchParams, selectedSceneId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    const current = searchParams.get("scene");
+    if (selectedSceneId && current !== selectedSceneId) {
+      const qs = new URLSearchParams(searchParams.toString());
+      qs.set("scene", selectedSceneId);
+      router.replace(`?${qs.toString()}`, { scroll: false });
+    } else if (!selectedSceneId && current) {
+      const qs = new URLSearchParams(searchParams.toString());
+      qs.delete("scene");
+      const suffix = qs.toString();
+      router.replace(suffix ? `?${suffix}` : "", { scroll: false });
+    }
+  }, [selectedSceneId, router, searchParams]);
+
+  const { url: sceneBlobUrl, error: sceneBlobError } = useSceneBlobUrl(
+    projectId,
+    selectedSceneId
+  );
+
+  const canEdit = !!wbsPolygonLayer;
 
   const tabs = [
     { id: "map" as TabId, label: "Map Viewer" },
@@ -75,11 +422,15 @@ export default function GisViewerPage() {
     { id: "progress" as TabId, label: "Progress Tracking" },
   ];
 
+  // What side panel to show in the right column.
+  const showDrawReview = mapMode === "draw" && pendingDrawMeta !== null;
+  const showPolygonEdit = mapMode === "modify" && selectedFeature !== null;
+
   return (
     <div className="flex flex-col h-full gap-4 p-4">
       <TabTip
         title="GIS Map Viewer"
-        description="View your project location on a map. Add GIS layers, upload satellite images, and track construction progress geographically."
+        description="View your project location on a map. Draw, edit, and delete WBS polygons; step through satellite scenes; track construction progress geographically."
       />
       <div className="flex gap-2 border-b border-border">
         {tabs.map((tab) => (
@@ -99,19 +450,147 @@ export default function GisViewerPage() {
 
       <div className="flex-1 overflow-auto">
         {activeTab === "map" && (
-          <div>
-            {geoJsonLoading ? (
-              <div className="flex items-center justify-center h-96">
-                <span className="text-text-muted">Loading map data...</span>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4">
+            <div className="flex flex-col gap-3 min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <MapModeToolbar
+                  mode={mapMode}
+                  onModeChange={handleModeChange}
+                  canEdit={canEdit}
+                  editDisabledReason={
+                    canEdit
+                      ? undefined
+                      : "No WBS_POLYGON layer configured for this project."
+                  }
+                />
+                {!canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => createDefaultLayer.mutate()}
+                    disabled={createDefaultLayer.isPending}
+                  >
+                    {createDefaultLayer.isPending
+                      ? "Creating layer…"
+                      : "Create default polygon layer"}
+                  </Button>
+                )}
+                {mapMode === "modify" && !selectedFeatureId && (
+                  <span className="text-xs text-text-muted">
+                    Click a polygon to select it, then drag a vertex.
+                  </span>
+                )}
+                {mapMode === "delete" && (
+                  <span className="text-xs text-text-muted">
+                    Click a polygon to delete it.
+                  </span>
+                )}
               </div>
-            ) : geoJsonResponse?.data ? (
-              <MapViewer geoJsonData={geoJsonResponse.data} />
+              <ScenePicker
+                scenes={relevantScenes}
+                selectedSceneId={selectedSceneId}
+                onChange={setSelectedSceneId}
+              />
+              {!showAllScenes &&
+                polygonExtent4326 &&
+                allScenes.length > 0 &&
+                relevantScenes.length === 0 && (
+                  <div className="rounded-md border border-yellow-800 bg-yellow-950/40 px-3 py-2 text-xs text-yellow-200 flex items-center justify-between gap-2">
+                    <span>
+                      No scenes intersect this project&apos;s polygon area.
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAllScenes(true)}
+                    >
+                      Show all
+                    </Button>
+                  </div>
+                )}
+              {sceneBlobError && (
+                <div className="rounded-md border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+                  Could not load scene imagery · {selectedSceneId}
+                </div>
+              )}
+              {geoJsonLoading ? (
+                <div className="flex items-center justify-center h-96 rounded-lg border border-border bg-surface/50">
+                  <span className="text-text-muted">Loading map data...</span>
+                </div>
+              ) : (
+                <MapViewer
+                  geoJsonData={
+                    geoJsonResponse?.data ?? {
+                      type: "FeatureCollection",
+                      features: [],
+                    }
+                  }
+                  visibility={visibility}
+                  satelliteOpacity={satelliteOpacity}
+                  selectedScene={selectedScene}
+                  sceneBlobUrl={sceneBlobUrl}
+                  fitPolygonsSignal={fitSignal}
+                  mode={mapMode}
+                  onDrawEnd={handleDrawEnd}
+                  onModifyEnd={handleModifyEnd}
+                  onDeleteClick={handleDeleteClick}
+                  onSelectFeature={handleSelectFeature}
+                />
+              )}
+            </div>
+            {showDrawReview && pendingDrawMeta && wbsPolygonLayer ? (
+              <DrawReviewPanel
+                meta={pendingDrawMeta}
+                tree={wbsTree}
+                mappedNodeIds={mappedNodeIds}
+                isSaving={createPolygon.isPending}
+                saveError={mutationError}
+                onSave={(payload) =>
+                  createPolygon.mutate({
+                    layerId: wbsPolygonLayer.id as string,
+                    payload,
+                    meta: pendingDrawMeta,
+                  })
+                }
+                onDiscard={() => {
+                  setPendingDrawMeta(null);
+                  setMutationError(null);
+                }}
+              />
+            ) : showPolygonEdit && selectedFeature ? (
+              <PolygonEditPanel
+                polygon={selectedFeature}
+                isSaving={updatePolygon.isPending}
+                saveError={mutationError}
+                lastSavedAt={lastSavedAt}
+                isDeleting={deletePolygon.isPending}
+                isFetchingImagery={fetchImageryForPolygon.isPending}
+                fetchResult={fetchResult}
+                fetchError={fetchError}
+                onFetchImagery={() =>
+                  fetchImageryForPolygon.mutate(selectedFeature.properties.id)
+                }
+                onDelete={() => {
+                  const ok = window.confirm(
+                    `Delete polygon ${selectedFeature.properties.wbsCode}? This cannot be undone.`
+                  );
+                  if (ok) deletePolygon.mutate(selectedFeature.properties.id);
+                }}
+              />
             ) : (
-              <div className="flex items-center justify-center h-96">
-                <span className="text-text-muted">
-                  No polygon data available
-                </span>
-              </div>
+              <LayerControlPanel
+                projectId={projectId}
+                visibility={visibility}
+                onVisibilityChange={setVisibility}
+                satelliteOpacity={satelliteOpacity}
+                onSatelliteOpacityChange={setSatelliteOpacity}
+                selectedScene={selectedScene}
+                onZoomToPolygons={() => setFitSignal((n) => n + 1)}
+                canZoomToPolygons={!!polygonExtent4326}
+                backendLayers={layersResponse?.data}
+              />
             )}
           </div>
         )}
@@ -130,10 +609,6 @@ export default function GisViewerPage() {
 
         {activeTab === "satellite" && (
           <div className="space-y-4">
-            {/* Run Ingestion panel: picks a date window and fires the
-                satellite ingestion pipeline on-demand. Useful for demos and
-                initial backfills. Nightly runs are handled by
-                SatelliteIngestionScheduler on the backend. */}
             <div className="rounded-lg border border-border bg-surface/50 p-4">
               <div className="flex flex-wrap items-end gap-3">
                 <label className="text-sm">

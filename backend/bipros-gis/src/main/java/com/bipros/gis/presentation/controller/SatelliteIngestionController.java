@@ -47,9 +47,12 @@ public class SatelliteIngestionController {
     public ResponseEntity<ApiResponse<IngestionResult>> ingest(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam(required = false) UUID polygonId
     ) {
-        IngestionResult result = ingestionService.runForProject(projectId, from, to);
+        IngestionResult result = polygonId != null
+            ? ingestionService.runForPolygon(projectId, polygonId, from, to)
+            : ingestionService.runForProject(projectId, from, to);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 

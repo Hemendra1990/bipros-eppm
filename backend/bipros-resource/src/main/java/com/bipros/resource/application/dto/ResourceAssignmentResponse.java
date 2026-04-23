@@ -10,7 +10,9 @@ import java.util.UUID;
 public record ResourceAssignmentResponse(
     UUID id,
     UUID activityId,
+    String activityName,
     UUID resourceId,
+    String resourceName,
     UUID roleId,
     UUID projectId,
     Double plannedUnits,
@@ -32,11 +34,19 @@ public record ResourceAssignmentResponse(
     String createdBy,
     String updatedBy) {
 
+  /** Legacy constructor — names null; prefer {@link #from(ResourceAssignment, String, String)}. */
   public static ResourceAssignmentResponse from(ResourceAssignment assignment) {
+    return from(assignment, null, null);
+  }
+
+  public static ResourceAssignmentResponse from(
+      ResourceAssignment assignment, String resourceName, String activityName) {
     return new ResourceAssignmentResponse(
         assignment.getId(),
         assignment.getActivityId(),
+        activityName,
         assignment.getResourceId(),
+        resourceName,
         assignment.getRoleId(),
         assignment.getProjectId(),
         assignment.getPlannedUnits(),

@@ -37,6 +37,11 @@ public class WbsService {
             throw new ResourceNotFoundException("Project", request.projectId());
         }
 
+        if (wbsNodeRepository.existsByCode(request.code())) {
+            throw new BusinessRuleException("WBS_CODE_DUPLICATE",
+                    "WBS node with code " + request.code() + " already exists");
+        }
+
         WbsNode node = new WbsNode();
         node.setCode(request.code());
         node.setName(request.name());
@@ -144,6 +149,8 @@ public class WbsService {
             node.getPlannedFinish(),
             node.getBudgetCrores(),
             node.getGisPolygonId(),
+            node.getChainageFromM(),
+            node.getChainageToM(),
             childResponses
         );
     }

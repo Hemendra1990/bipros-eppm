@@ -216,11 +216,17 @@ public class DataSeeder implements CommandLineRunner {
   private void seedBaseCurrency() {
     log.debug("Seeding base currency");
 
-    Currency usd =
-        new Currency("USD", "United States Dollar", "$", BigDecimal.ONE, true, 2);
+    // INR as base (Indian market: IOCL, DMIC, government tenders). USD also
+    // loaded as a non-base currency so FX-denominated contracts have an option.
+    Currency inr =
+        new Currency("INR", "Indian Rupee", "₹", BigDecimal.ONE, true, 2);
+    currencyRepository.save(inr);
 
+    Currency usd =
+        new Currency("USD", "United States Dollar", "$", BigDecimal.valueOf(0.012), false, 2);
     currencyRepository.save(usd);
-    log.debug("Created base currency: USD");
+
+    log.debug("Created base currency: INR (+ USD as secondary)");
   }
 
   private void seedGlobalSettings() {

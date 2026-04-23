@@ -84,6 +84,14 @@ public class WbsNode extends BaseEntity implements HierarchyNode {
     @Column(name = "gis_polygon_id", length = 40)
     private String gisPolygonId;
 
+    /** Linear referencing: chainage start in metres (e.g. 145000 = km 145+000). */
+    @Column(name = "chainage_from_m")
+    private Long chainageFromM;
+
+    /** Linear referencing: chainage end in metres (e.g. 165000 = km 165+000). */
+    @Column(name = "chainage_to_m")
+    private Long chainageToM;
+
     @Override
     public int getSortOrder() {
         return sortOrder != null ? sortOrder : 0;

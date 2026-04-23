@@ -58,4 +58,23 @@ public class Role extends BaseEntity {
   @Column(name = "sort_order", nullable = false, columnDefinition = "INTEGER DEFAULT 0")
   @Default
   private Integer sortOrder = 0;
+
+  // ─── Unit-Rate-Master extensions (Daily Cost Report, Section A) ───
+  // These let a Manpower role carry budgeted & actual day-rates directly so the Unit Rate Master
+  // view can render "General Labourer / Day / 450 / 470 / +20 / 4.4%" the same way Resource does
+  // for Equipment/Material/Sub-Contract.
+
+  /** Unit label for the rate (e.g. "Day", "Hour"). */
+  @Column(name = "rate_unit", length = 20)
+  private String rateUnit;
+
+  @Column(name = "budgeted_rate", precision = 19, scale = 4)
+  private BigDecimal budgetedRate;
+
+  @Column(name = "actual_rate", precision = 19, scale = 4)
+  private BigDecimal actualRate;
+
+  /** Free-text bucket for remarks column in the Unit Rate Master (e.g. "Over budget"). */
+  @Column(name = "rate_remarks", length = 500)
+  private String rateRemarks;
 }

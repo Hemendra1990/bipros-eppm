@@ -185,8 +185,11 @@ public class CalendarService {
     Calendar calendar = calendarRepository.findById(calendarId)
         .orElseThrow(() -> new ResourceNotFoundException("Calendar", calendarId));
 
-    // Delete existing work weeks
+    // Delete existing work weeks. Must flush before the subsequent saveAll so the DELETE
+    // hits the DB before the INSERT — otherwise the (calendar_id, day_of_week) unique
+    // constraint fires because Hibernate holds both rows in the persistence context.
     workWeekRepository.deleteByCalendarId(calendarId);
+    workWeekRepository.flush();
 
     // Create new ones
     List<CalendarWorkWeek> workWeeks = requests.stream()

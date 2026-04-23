@@ -18,4 +18,6 @@ public interface WbsNodeRepository extends JpaRepository<WbsNode, UUID> {
     List<WbsNode> findByProjectIdOrderBySortOrder(UUID projectId);
 
     Optional<WbsNode> findByCode(String code);
+
+    boolean existsByCode(String code);
 }

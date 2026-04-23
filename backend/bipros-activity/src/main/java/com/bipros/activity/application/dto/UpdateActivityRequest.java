@@ -55,5 +55,9 @@ public record UpdateActivityRequest(
 
     LocalDate resumeDate,
 
-    String notes
+    String notes,
+
+    Long chainageFromM,
+
+    Long chainageToM
 ) {}

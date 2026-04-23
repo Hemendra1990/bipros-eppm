@@ -20,7 +20,7 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true)
 public class Project extends BaseEntity {
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 50)
     private String code;
 
     @Column(nullable = false, length = 100)

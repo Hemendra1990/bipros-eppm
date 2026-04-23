@@ -1,5 +1,8 @@
 package com.bipros.calendar.application.service;
 
+import com.bipros.calendar.application.dto.CalendarWorkWeekRequest;
+import com.bipros.calendar.domain.model.Calendar;
+import com.bipros.calendar.domain.model.CalendarType;
 import com.bipros.calendar.domain.model.CalendarWorkWeek;
 import com.bipros.calendar.domain.model.DayType;
 import com.bipros.calendar.domain.repository.CalendarActivityCounter;
@@ -21,9 +24,14 @@ import java.time.LocalTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CalendarService Tests")
@@ -238,6 +246,36 @@ class CalendarServiceTest {
 
       assertEquals(LocalDate.of(2025, 1, 6), result);
       assertEquals(DayOfWeek.MONDAY, result.getDayOfWeek());
+    }
+  }
+
+  @Nested
+  @DisplayName("setWorkWeek (replace all 7 days)")
+  class SetWorkWeek {
+
+    @Test
+    @DisplayName("flushes repository between delete and insert to avoid unique-constraint hit")
+    void flushesBeforeInsert() {
+      Calendar calendar = Calendar.builder().calendarType(CalendarType.PROJECT).build();
+      calendar.setId(calendarId);
+      when(calendarRepository.findById(calendarId)).thenReturn(Optional.of(calendar));
+      when(workWeekRepository.saveAll(any(List.class))).thenAnswer(inv -> inv.getArgument(0));
+
+      List<CalendarWorkWeekRequest> requests = List.of(
+          new CalendarWorkWeekRequest("MONDAY", DayType.WORKING,
+              LocalTime.of(8, 0), LocalTime.of(12, 0),
+              LocalTime.of(13, 0), LocalTime.of(17, 0)),
+          new CalendarWorkWeekRequest("SUNDAY", DayType.NON_WORKING, null, null, null, null)
+      );
+
+      calendarService.setWorkWeek(calendarId, requests);
+
+      // The fix: delete -> flush -> saveAll, in that order, so the DELETE hits the DB
+      // before the INSERT and the (calendar_id, day_of_week) unique constraint doesn't fire.
+      var order = inOrder(workWeekRepository);
+      order.verify(workWeekRepository).deleteByCalendarId(calendarId);
+      order.verify(workWeekRepository).flush();
+      order.verify(workWeekRepository).saveAll(any(List.class));
     }
   }
 

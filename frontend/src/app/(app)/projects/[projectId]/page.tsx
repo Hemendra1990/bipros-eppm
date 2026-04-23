@@ -17,7 +17,7 @@ import { ResourcesTab } from "@/components/resource/ResourcesTab";
 import { CostsTab } from "@/components/cost/CostsTab";
 import { EvmTab } from "@/components/evm/EvmTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Trash2, Eye, FileText, ChevronRight, ChevronDown, Folder, FolderOpen, File, RefreshCw } from "lucide-react";
+import { ListTodo, Plus, Play, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
@@ -344,6 +344,7 @@ export default function ProjectDetailPage() {
       )}
       {tab === "network" && (
         <NetworkTab
+          projectId={projectId}
           activities={activities}
           relationships={relationshipsData?.data ?? []}
           isLoading={isLoadingActivities || isLoadingRelationships}
@@ -1114,10 +1115,12 @@ function WbsTree({
 }
 
 function NetworkTab({
+  projectId,
   activities,
   relationships,
   isLoading,
 }: {
+  projectId: string;
   activities: ActivityResponse[];
   relationships: Array<{
     predecessorActivityId: string;
@@ -1126,6 +1129,8 @@ function NetworkTab({
   }>;
   isLoading: boolean;
 }) {
+  const router = useRouter();
+
   if (isLoading) {
     return <div className="text-center text-text-muted">Loading network diagram...</div>;
   }
@@ -1140,7 +1145,23 @@ function NetworkTab({
     );
   }
 
-  return <NetworkDiagram activities={activities} relationships={relationships} />;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-text-secondary">
+          {relationships.length} relationship(s) defined
+        </p>
+        <button
+          onClick={() => router.push(`/projects/${projectId}/relationships`)}
+          className="flex items-center gap-1 rounded-md bg-accent/20 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/30 transition-colors"
+        >
+          Manage Relationships
+          <ArrowRight size={14} />
+        </button>
+      </div>
+      <NetworkDiagram activities={activities} relationships={relationships} />
+    </div>
+  );
 }
 
 function BaselinesTab({
