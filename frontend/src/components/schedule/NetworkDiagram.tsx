@@ -35,7 +35,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
 
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
 
-  const { nodes, depthLevels, svgWidth, svgHeight } = useMemo(() => {
+  const { nodes, svgWidth, svgHeight } = useMemo(() => {
     return calculateLayout(activities, relationships);
   }, [activities, relationships]);
 
