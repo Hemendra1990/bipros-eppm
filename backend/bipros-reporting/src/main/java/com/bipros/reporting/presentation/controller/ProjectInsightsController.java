@@ -164,7 +164,7 @@ public class ProjectInsightsController {
             scheduleRag, costRag, scopeRag, riskRag, hseRag,
             topIssues, nextMilestoneName, nextMilestoneDate,
             cpi, spi, physicalPct, plannedPct, activeRisks, 0L,
-            scaleMoney(bac), scaleMoney(eac),
+            toCrores(bac), toCrores(eac),
             p.getUpdatedAt()));
   }
 

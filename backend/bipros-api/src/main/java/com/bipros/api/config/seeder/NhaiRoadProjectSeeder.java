@@ -140,6 +140,8 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   private final NhaiRoadProjectWorkbookReader reader;
   private final ActivityRepository activityRepository;
   private final ActivityRelationshipRepository activityRelationshipRepository;
+  private final jakarta.persistence.EntityManager entityManager;
+  private final javax.sql.DataSource dataSource;
 
   @Override
   @Transactional
@@ -189,8 +191,51 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
       sanityCheck(project.getId(), boqRows);
       log.info("[NH-48] done. WBS nodes={}, resources={}, manpower roles={}",
           wbs.size(), resources.size(), unitRates.stream().filter(u -> "Manpower".equalsIgnoreCase(u.category())).count());
+
+      // Flush JPA writes so the SQL bundle (run below) sees this project's rows via
+      // native subqueries like (SELECT id FROM project.projects WHERE code = ?).
+      entityManager.flush();
+      loadReportsDataSqlBundle(projectCode);
       return null;
     });
+  }
+
+  /**
+   * Reads {@code classpath:seed-data/road-project/reports/*.sql} and executes each
+   * file in lexical order via {@link org.springframework.jdbc.datasource.init.ScriptUtils}.
+   * The bundle fills the tables that back the project-level report canvas (risks,
+   * EVM, cash flow, RA bills, VOs, contracts, compliance, etc.) — shape that the
+   * Excel-driven seed above deliberately leaves blank. Each SQL file resolves the
+   * project by natural key via subqueries, so no Java glue is needed beyond this
+   * loader.
+   *
+   * <p>Idempotent via a sentinel count on {@code risk.risks} for this project.
+   * Safe to re-run because on {@code ddl-auto: create-drop} the database is empty
+   * at boot.
+   */
+  private void loadReportsDataSqlBundle(String projectCode) {
+    try (var conn = dataSource.getConnection()) {
+      boolean wasAutoCommit = conn.getAutoCommit();
+      conn.setAutoCommit(true);
+      try {
+        var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver();
+        var files = resolver.getResources("classpath:seed-data/road-project/reports/*.sql");
+        if (files.length == 0) {
+          log.info("[NH-48 reports] no SQL bundle found — skipping");
+          return;
+        }
+        java.util.Arrays.sort(files, java.util.Comparator.comparing(org.springframework.core.io.Resource::getFilename));
+        log.info("[NH-48 reports] running {} demo-data SQL file(s) for '{}'", files.length, projectCode);
+        for (var f : files) {
+          log.info("[NH-48 reports] executing {}", f.getFilename());
+          org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(conn, f);
+        }
+      } finally {
+        conn.setAutoCommit(wasAutoCommit);
+      }
+    } catch (Exception e) {
+      log.error("[NH-48 reports] failed to load SQL bundle: {}", e.getMessage(), e);
+    }
   }
 
   // ─────────────────────────── EPS ───────────────────────────
