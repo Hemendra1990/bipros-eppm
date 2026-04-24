@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Database } from "lucide-react";
 import { projectApi } from "@/lib/api/projectApi";
 import { cn } from "@/lib/utils/cn";
 
@@ -21,6 +21,7 @@ export default function ProjectDetailLayout({
   const isOnSubRoute = pathname !== `/projects/${projectId}` && !pathname.endsWith(`/projects/${projectId}`);
   const activeTab = isOnSubRoute ? null : (searchParams.get("tab") || "overview");
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+  const [masterDataOpen, setMasterDataOpen] = useState(false);
 
   const { data: projectData, isLoading } = useQuery({
     queryKey: ["project", projectId],
@@ -54,12 +55,21 @@ export default function ProjectDetailLayout({
     { id: "gis", label: "GIS", href: `/projects/${projectId}/gis-viewer` },
   ];
 
+  // PMS Master Data — the 5 project-scoped reference entities from TESTING_GUIDE.md §2
+  const masterDataLinks = [
+    { label: "BOQ & Budget", href: `/projects/${projectId}/boq` },
+    { label: "Stretches", href: `/projects/${projectId}/stretches` },
+    { label: "Material Sources", href: `/projects/${projectId}/material-sources` },
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials` },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register` },
+  ];
+
   const moreLinks = [
     { label: "Relationships", href: `/projects/${projectId}/relationships` },
-    { label: "BOQ & Budget", href: `/projects/${projectId}/boq` },
     { label: "DPR (Daily Report)", href: `/projects/${projectId}/dpr` },
     { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },
     { label: "Material Consumption", href: `/projects/${projectId}/material-consumption` },
+    { label: "Material Reconciliation", href: `/projects/${projectId}/material-reconciliation` },
     { label: "Resource Deployment", href: `/projects/${projectId}/resource-deployment` },
     { label: "Weather Log", href: `/projects/${projectId}/weather-log` },
     { label: "Next Day Plan", href: `/projects/${projectId}/next-day-plan` },
@@ -73,17 +83,12 @@ export default function ProjectDetailLayout({
     { label: "RFIs", href: `/projects/${projectId}/rfis` },
     { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
     { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
-    { label: "Materials", href: `/projects/${projectId}/material-reconciliation` },
-    // PMS MasterData screens
-    { label: "Stretches", href: `/projects/${projectId}/stretches` },
-    { label: "Material Sources", href: `/projects/${projectId}/material-sources` },
-    { label: "Material Catalogue", href: `/projects/${projectId}/materials` },
-    { label: "Stock Register", href: `/projects/${projectId}/stock-register` },
     { label: "GRNs", href: `/projects/${projectId}/grns` },
     { label: "Issues", href: `/projects/${projectId}/issues` },
   ];
 
-  // Check if any "More" link is active (check first so we can exclude them below)
+  // Check if any dropdown link is active (check first so we can exclude them below)
+  const isMasterDataActive = masterDataLinks.some((link) => pathname.includes(link.href));
   const isMoreActive = moreLinks.some((link) => pathname.includes(link.href));
 
   // Check if any href-based tab matches
@@ -100,7 +105,7 @@ export default function ProjectDetailLayout({
     }
     // On a sub-route: check if the pathname contains /activities/, /activity-codes/ etc.
     // that should map back to the query-based tab
-    if (isOnSubRoute && !isMoreActive && !isAnyHrefTabActive) {
+    if (isOnSubRoute && !isMasterDataActive && !isMoreActive && !isAnyHrefTabActive) {
       const subRouteSegment = pathname.replace(`/projects/${projectId}`, "").split("/")[1];
       if (tab.id === "activities" && (subRouteSegment === "activities" || subRouteSegment === "activity-codes")) return true;
     }
@@ -140,11 +145,67 @@ export default function ProjectDetailLayout({
             );
           })}
 
+          {/* Master Data Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setMasterDataOpen(!masterDataOpen);
+                setMoreDropdownOpen(false);
+              }}
+              className={cn(
+                "flex items-center gap-1.5 px-1 py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer",
+                isMasterDataActive
+                  ? "border-accent text-accent"
+                  : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
+              )}
+            >
+              <Database size={15} strokeWidth={1.75} />
+              Master data
+              <ChevronDown
+                size={16}
+                className={cn(
+                  "transition-transform duration-200",
+                  masterDataOpen && "rotate-180"
+                )}
+              />
+            </button>
+
+            {masterDataOpen && (
+              <div className="absolute right-0 mt-0 w-56 bg-surface border border-border rounded-md shadow-lg z-50">
+                {masterDataLinks.map((link) => (
+                  <button
+                    key={link.href}
+                    onClick={() => {
+                      router.push(link.href);
+                      setMasterDataOpen(false);
+                    }}
+                    className={cn(
+                      "block w-full text-left px-4 py-2 text-sm first:rounded-t-md last:rounded-b-md transition-colors",
+                      pathname.includes(link.href)
+                        ? "bg-surface-hover/50 text-accent font-semibold"
+                        : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+                    )}
+                  >
+                    {link.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* More Dropdown */}
           <div className="relative">
             <button
-              onClick={() => setMoreDropdownOpen(!moreDropdownOpen)}
-              className="flex items-center gap-1 px-1 py-4 text-sm font-medium border-b-2 border-transparent text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+              onClick={() => {
+                setMoreDropdownOpen(!moreDropdownOpen);
+                setMasterDataOpen(false);
+              }}
+              className={cn(
+                "flex items-center gap-1 px-1 py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer",
+                isMoreActive
+                  ? "border-accent text-accent"
+                  : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
+              )}
             >
               More
               <ChevronDown
