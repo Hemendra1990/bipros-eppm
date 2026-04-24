@@ -139,7 +139,7 @@ export default function ProjectsPage() {
           {statusFilter !== "All" && (
             <button
               onClick={() => setStatusFilter("All")}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[#E8D68A] bg-gold-tint px-2.5 py-1 text-[11px] font-semibold text-gold-ink hover:bg-[#EFDD94]"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold-tint px-2.5 py-1 text-[11px] font-semibold text-gold-ink hover:bg-gold/20"
             >
               Status: {statusFilter} <span aria-hidden>✕</span>
             </button>
@@ -147,7 +147,7 @@ export default function ProjectsPage() {
           {priorityFilter !== "All" && (
             <button
               onClick={() => setPriorityFilter("All")}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[#E8D68A] bg-gold-tint px-2.5 py-1 text-[11px] font-semibold text-gold-ink hover:bg-[#EFDD94]"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold-tint px-2.5 py-1 text-[11px] font-semibold text-gold-ink hover:bg-gold/20"
             >
               Priority: {priorityFilter} <span aria-hidden>✕</span>
             </button>
@@ -170,7 +170,7 @@ export default function ProjectsPage() {
       )}
 
       {error && (
-        <div className="rounded-xl border border-[#E5C4C4] bg-[#F5E2E2] p-4 text-sm text-burgundy">
+        <div className="rounded-xl border border-burgundy/30 bg-burgundy/10 p-4 text-sm text-burgundy">
           Failed to load projects. Is the backend running?
         </div>
       )}
@@ -209,7 +209,7 @@ export default function ProjectsPage() {
                   return (
                     <tr
                       key={project.id}
-                      className="border-b border-[#F4EDD8] transition-colors last:border-b-0 hover:bg-ivory"
+                      className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory"
                     >
                       <td className="px-4 py-3.5">
                         <Link

@@ -86,10 +86,10 @@ function Kpi({
     tone === "critical"
       ? "border-l-[3px] border-l-burgundy"
       : tone === "warning"
-        ? "border-l-[3px] border-l-[#C7882E]"
+        ? "border-l-[3px] border-l-bronze-warn"
         : "";
   const kickerColor =
-    tone === "critical" ? "text-burgundy" : tone === "warning" ? "text-[#8B5E14]" : "text-gold-deep";
+    tone === "critical" ? "text-burgundy" : tone === "warning" ? "text-bronze-warn" : "text-gold-deep";
 
   return (
     <div
@@ -216,7 +216,7 @@ export default function DashboardPage() {
             <tbody>
               {metrics?.recentProjects && metrics.recentProjects.length > 0 ? (
                 metrics.recentProjects.map((p) => (
-                  <tr key={p.id} className="border-b border-[#F4EDD8] transition-colors last:border-b-0 hover:bg-ivory">
+                  <tr key={p.id} className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory">
                     <td className="px-4 py-3.5">
                       <Link href={`/projects/${p.id}`} className="font-semibold text-charcoal hover:text-gold-deep">
                         {p.name}
@@ -252,10 +252,9 @@ export default function DashboardPage() {
             <Link
               key={card.title}
               href={card.href}
-              className="group relative rounded-xl border border-hairline bg-paper p-5 transition-all duration-200 hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] hover:-translate-y-0.5 hover:border-[#F0E3A7]"
+              className="group relative rounded-xl border border-hairline bg-paper p-5 transition-all duration-200 hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] hover:-translate-y-0.5 hover:border-gold/40"
             >
-              <div className="mb-3.5 flex h-9 w-9 items-center justify-center rounded-[10px] text-gold-deep"
-                   style={{ background: "linear-gradient(135deg,#FDF6DD,#F5E7B5)" }}>
+              <div className="mb-3.5 flex h-9 w-9 items-center justify-center rounded-[10px] bg-gold-tint text-gold-deep">
                 <card.icon size={18} strokeWidth={1.5} />
               </div>
               <div className="font-display text-lg font-semibold tracking-tight text-charcoal">

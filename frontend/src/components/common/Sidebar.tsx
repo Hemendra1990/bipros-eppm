@@ -87,7 +87,7 @@ export function Sidebar() {
       )}
     >
       {/* Brand + collapse */}
-      <div className="flex items-center justify-between border-b border-[#F4EDD8] px-4 py-5">
+      <div className="flex items-center justify-between border-b border-hairline px-4 py-5">
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2.5">
             <div
@@ -196,7 +196,7 @@ export function Sidebar() {
 
       {/* User chip */}
       {!sidebarCollapsed && (
-        <div className="border-t border-[#F4EDD8] p-3">
+        <div className="border-t border-hairline p-3">
           <div className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 hover:bg-ivory">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-full bg-parchment text-gold-deep font-display font-semibold text-xs"

@@ -64,7 +64,7 @@ export function Header() {
                   {c.label}
                 </Link>
               )}
-              {!last && <span className="text-[#D1C7A0]" aria-hidden>›</span>}
+              {!last && <span className="text-ash" aria-hidden>›</span>}
             </span>
           );
         })}
@@ -75,7 +75,7 @@ export function Header() {
         type="button"
         className={cn(
           "ml-4 flex h-10 max-w-[440px] flex-1 items-center gap-2.5 rounded-[10px] border border-hairline bg-ivory px-3.5",
-          "text-[13px] text-slate hover:border-[#D1C7A0] transition-colors"
+          "text-[13px] text-slate hover:border-gold-deep/50 transition-colors"
         )}
         title="Search (⌘K)"
       >

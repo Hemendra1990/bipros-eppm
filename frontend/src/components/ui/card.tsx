@@ -12,7 +12,7 @@ const variantClass: Record<Variant, string> = {
   elevated: "border border-hairline shadow-[0_1px_2px_rgba(28,28,28,0.04)]",
   interactive:
     "border border-hairline cursor-pointer transition-all duration-200 " +
-    "hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] hover:-translate-y-0.5 hover:border-[#F0E3A7]",
+    "hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] hover:-translate-y-0.5 hover:border-gold/40",
   accent: "border border-hairline border-l-[3px] border-l-gold",
 };
 

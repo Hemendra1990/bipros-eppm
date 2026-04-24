@@ -100,35 +100,58 @@
 }
 
 .dark {
-  /* LEFT INTENTIONALLY UNTOUCHED — dark-mode harmonisation is out of scope.
-     Users who explicitly toggle dark still see the original blue palette. */
-  --background: #0a0e1a;
-  --foreground: #e2e8f0;
-  --surface: #111827;
-  --surface-hover: #1e293b;
-  --surface-active: #253449;
-  --border: #1e293b;
-  --border-subtle: #162032;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --accent-glow: rgba(59, 130, 246, 0.15);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --info: #06b6d4;
-  --input: #1e293b;
-  --ring: #3b82f6;
-  --muted-foreground: #94a3b8;
-  --glass-bg: rgba(17, 24, 39, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --scrollbar-thumb: #1e293b;
-  --scrollbar-track: #0a0e1a;
-  --selection-bg: rgba(59, 130, 246, 0.3);
-  --selection-color: #f1f5f9;
-  --grid-color: rgba(255, 255, 255, 0.02);
+  /* ---- Dark palette — White & Gold identity (obsidian + warm gold) ----
+     Both the legacy aliases AND the new canonical tokens flip together so
+     inherited pages and rebuilt pages read as one product in dark mode. */
+
+  /* legacy aliases — repointed at the new dark palette (was slate/blue) */
+  --background: #0F0F0F;          /* paper */
+  --foreground: #F5F2E8;          /* warm off-white */
+  --surface: #0F0F0F;
+  --surface-hover: #161616;       /* ivory-dark */
+  --surface-active: #1E1E1E;      /* parchment-dark */
+  --border: #2A2520;              /* warm hairline */
+  --border-subtle: #2F2F32;       /* cool divider */
+  --accent: #D4AF37;              /* gold — same */
+  --accent-hover: #E5C458;        /* brighter gold for hover on dark */
+  --accent-glow: rgba(212, 175, 55, 0.20);
+  --text-primary: #F5F2E8;
+  --text-secondary: #A1A1A6;      /* slate-dark */
+  --text-muted: #6B6B6F;          /* ash-dark */
+  --success: #5BB088;             /* emerald-dark */
+  --warning: #E5A553;             /* bronze-warn-dark */
+  --danger: #D66060;              /* burgundy-dark */
+  --info: #94A3B8;                /* steel-dark */
+  --input: #2F2F32;
+  --ring: #D4AF37;
+  --muted-foreground: #A1A1A6;
+
+  /* canonical tokens — flipped for dark */
+  --paper: #0F0F0F;
+  --ivory: #161616;
+  --parchment: #1E1E1E;
+  --charcoal: #F5F2E8;
+  --slate: #A1A1A6;
+  --ash: #6B6B6F;
+  --hairline: #2A2520;
+  --divider: #2F2F32;
+  --gold: #D4AF37;
+  --gold-deep: #E5C458;            /* hover brighter in dark */
+  --gold-ink: #F5E7B5;             /* on-dark-gold text (inverted) */
+  --gold-tint: #3A2F10;            /* dark warm-gold subtle bg (inverted) */
+  --emerald: #5BB088;
+  --bronze-warn: #E5A553;
+  --burgundy: #D66060;
+  --steel: #94A3B8;
+
+  /* glass / scrollbar / selection / grid — dark tuning */
+  --glass-bg: rgba(15, 15, 15, 0.7);
+  --glass-border: rgba(245, 242, 232, 0.06);
+  --scrollbar-thumb: #2A2520;
+  --scrollbar-track: #0F0F0F;
+  --selection-bg: rgba(212, 175, 55, 0.30);
+  --selection-color: #F5F2E8;
+  --grid-color: rgba(245, 242, 232, 0.03);
 }
 
 * {

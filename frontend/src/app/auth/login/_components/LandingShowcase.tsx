@@ -50,7 +50,7 @@ export function LandingShowcase() {
 
       {/* Gantt */}
       <div className="rounded-2xl border border-hairline bg-paper p-4 shadow-[0_4px_20px_rgba(28,28,28,0.05)]">
-        <div className="flex justify-between border-b border-[#F4EDD8] px-2 pb-2.5 font-mono text-[10px] tracking-[0.08em] text-slate">
+        <div className="flex justify-between border-b border-hairline px-2 pb-2.5 font-mono text-[10px] tracking-[0.08em] text-slate">
           <span>NORTHWEST RAIL EXT · WBS 1.4.2</span>
           <span>JAN · FEB · MAR · APR · MAY · JUN</span>
         </div>

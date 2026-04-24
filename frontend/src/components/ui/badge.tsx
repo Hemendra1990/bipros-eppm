@@ -16,11 +16,11 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 
 const variants: Record<BadgeVariant, string> = {
   neutral: "bg-ivory text-charcoal border-hairline",
-  gold: "bg-gold-tint text-gold-ink border-[#E8D68A]",
-  success: "bg-[#E5F1EB] text-emerald border-[#C8E0D3]",
-  warning: "bg-[#FBEDD5] text-[#8B5E14] border-[#F0DDAE]",
-  danger: "bg-[#F5E2E2] text-burgundy border-[#E5C4C4]",
-  info: "bg-[#E8ECF1] text-steel border-[#CFD6DF]",
+  gold: "bg-gold-tint text-gold-ink border-gold/40",
+  success: "bg-emerald/10 text-emerald border-emerald/30",
+  warning: "bg-bronze-warn/15 text-bronze-warn border-bronze-warn/30",
+  danger: "bg-burgundy/10 text-burgundy border-burgundy/30",
+  info: "bg-steel/10 text-steel border-steel/30",
 };
 
 export function Badge({
