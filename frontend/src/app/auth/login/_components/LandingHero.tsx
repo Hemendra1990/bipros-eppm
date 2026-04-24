@@ -160,7 +160,7 @@ export function LandingHero() {
           placeholder="you@company.com"
           required
           autoComplete="username"
-          className="mb-3 h-10 w-full rounded-[10px] border border-divider bg-paper px-3.5 text-sm text-charcoal placeholder:text-ash outline-none transition-all duration-120 hover:border-[#D1C7A0] focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+          className="mb-3 h-10 w-full rounded-[10px] border border-divider bg-paper px-3.5 text-sm text-charcoal placeholder:text-ash outline-none transition-all duration-[120ms] hover:border-[#D1C7A0] focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
         />
 
         <label className="block text-xs font-semibold text-charcoal mb-1.5">Password</label>
@@ -171,7 +171,7 @@ export function LandingHero() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="h-10 w-full rounded-[10px] border border-divider bg-paper px-3.5 pr-10 text-sm text-charcoal outline-none transition-all duration-120 hover:border-[#D1C7A0] focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+            className="h-10 w-full rounded-[10px] border border-divider bg-paper px-3.5 pr-10 text-sm text-charcoal outline-none transition-all duration-[120ms] hover:border-[#D1C7A0] focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
           />
           <button
             type="button"
