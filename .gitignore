@@ -39,3 +39,6 @@ docker/data/
 
 # LLM-maintained project wiki (auto-generated)
 .claude/wiki/
+
+# Superpowers brainstorming session artifacts
+.superpowers/
