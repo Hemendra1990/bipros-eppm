@@ -8,8 +8,6 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 const fraunces = Fraunces({
   subsets: ["latin"],
   axes: ["opsz"],
-  weight: ["500", "600", "700"],
-  style: ["normal", "italic"],
   variable: "--font-fraunces",
   display: "swap",
 });
