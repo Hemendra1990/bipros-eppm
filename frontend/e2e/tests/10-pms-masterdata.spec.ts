@@ -97,7 +97,10 @@ test.describe("PMS MasterData", () => {
     const projectId = page.url().split("/projects/")[1].split("/")[0];
 
     await page.goto(`/projects/${projectId}/stock-register`);
-    await expect(page.getByRole("heading", { name: /stock/i })).toBeVisible();
+    // h1 title — not the empty-state "No stock transactions yet" heading.
+    await expect(
+      page.getByRole("heading", { name: /stock & inventory register/i, level: 1 }),
+    ).toBeVisible();
   });
 
   test("Create stretch — new form saves and appears in the list", async ({ page }) => {

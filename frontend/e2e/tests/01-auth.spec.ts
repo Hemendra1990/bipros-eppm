@@ -11,8 +11,8 @@ test.describe('Authentication', () => {
 
   test('login with invalid credentials shows error', async ({ page }) => {
     await page.goto('/auth/login');
-    await page.locator('#username').fill('admin');
-    await page.locator('#password').fill('wrong_password');
+    await page.locator('input[name="username"]').fill('admin');
+    await page.locator('input[name="password"]').fill('wrong_password');
     await page.getByRole('button', { name: /sign in/i }).click();
     // Inline error in red box or toast notification
     await expect(page.getByText('Invalid username or password').first()).toBeVisible({ timeout: 10_000 });
