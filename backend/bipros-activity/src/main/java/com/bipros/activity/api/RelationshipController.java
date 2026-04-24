@@ -38,6 +38,14 @@ public class RelationshipController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  /** Fetch a single relationship by id for consistency with other resource-by-id endpoints. */
+  @GetMapping("/{relationshipId}")
+  public ResponseEntity<ApiResponse<RelationshipResponse>> getRelationship(
+      @PathVariable UUID projectId,
+      @PathVariable UUID relationshipId) {
+    return ResponseEntity.ok(ApiResponse.ok(relationshipService.getRelationship(relationshipId)));
+  }
+
   @PutMapping("/{relationshipId}")
   public ResponseEntity<ApiResponse<RelationshipResponse>> updateRelationship(
       @PathVariable UUID projectId,

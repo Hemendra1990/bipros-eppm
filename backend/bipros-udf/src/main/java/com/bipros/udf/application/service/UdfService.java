@@ -82,6 +82,13 @@ public class UdfService {
     }
 
     @Transactional(readOnly = true)
+    public List<UserDefinedFieldDto> listAllFields() {
+        return userDefinedFieldRepository.findAll().stream()
+            .map(this::mapToDto)
+            .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public List<UserDefinedFieldDto> getFieldsBySubject(UdfSubject subject, UdfScope scope, UUID projectId) {
         List<UserDefinedField> fields;
         if (scope == UdfScope.PROJECT && projectId != null) {

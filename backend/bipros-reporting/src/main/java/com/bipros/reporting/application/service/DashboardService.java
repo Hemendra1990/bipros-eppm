@@ -36,6 +36,14 @@ public class DashboardService {
     @PersistenceContext private EntityManager em;
 
     @Transactional(readOnly = true)
+    public List<DashboardConfigDto> listDashboards() {
+        return dashboardConfigRepository.findAll()
+                .stream()
+                .map(DashboardConfigDto::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public DashboardConfigDto getDashboardByTier(String tier) {
         var dashboardTier = DashboardConfig.DashboardTier.valueOf(tier);
         var entity = dashboardConfigRepository.findByTier(dashboardTier)

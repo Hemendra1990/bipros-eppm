@@ -34,6 +34,35 @@ public class UdfController {
 
     private final UdfService udfService;
 
+    /**
+     * Discovery endpoint. Lists the supported UDF subjects and scopes so clients can build the
+     * drop-downs that drive {@link #listFields} without having to hard-code enum values.
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> catalog() {
+        java.util.Map<String, Object> body = java.util.Map.of(
+            "subjects", java.util.Arrays.stream(UdfSubject.values()).map(Enum::name).toList(),
+            "scopes", java.util.Arrays.stream(UdfScope.values()).map(Enum::name).toList(),
+            "endpoints", java.util.List.of(
+                "GET /v1/udf/fields?subject={subject}&scope={scope}&projectId={optional uuid}",
+                "POST /v1/udf/fields",
+                "PUT /v1/udf/fields/{fieldId}",
+                "DELETE /v1/udf/fields/{fieldId}",
+                "GET /v1/udf/values/{entityId}",
+                "PUT /v1/udf/values/{fieldId}/{entityId}"));
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    /** Legacy alias (pluralised path). Same payload as {@link #catalog()}. */
+    @GetMapping("-definitions")
+    public ResponseEntity<ApiResponse<List<UserDefinedFieldDto>>> listAllDefinitions(
+        @RequestParam(required = false) UdfSubject subject) {
+        List<UserDefinedFieldDto> fields = subject != null
+            ? udfService.getFieldsBySubject(subject, UdfScope.GLOBAL, null)
+            : udfService.listAllFields();
+        return ResponseEntity.ok(ApiResponse.ok(fields));
+    }
+
     @PostMapping("/fields")
     public ResponseEntity<ApiResponse<UserDefinedFieldDto>> createField(
         @Valid @RequestBody CreateUserDefinedFieldRequest request) {
@@ -44,11 +73,13 @@ public class UdfController {
 
     @GetMapping("/fields")
     public ResponseEntity<ApiResponse<List<UserDefinedFieldDto>>> listFields(
-        @RequestParam UdfSubject subject,
+        @RequestParam(required = false) UdfSubject subject,
         @RequestParam(required = false) UdfScope scope,
         @RequestParam(required = false) UUID projectId) {
         UdfScope resolvedScope = scope != null ? scope : UdfScope.GLOBAL;
-        List<UserDefinedFieldDto> fields = udfService.getFieldsBySubject(subject, resolvedScope, projectId);
+        List<UserDefinedFieldDto> fields = subject != null
+            ? udfService.getFieldsBySubject(subject, resolvedScope, projectId)
+            : udfService.listAllFields();
         return ResponseEntity.ok(ApiResponse.ok(fields));
     }
 

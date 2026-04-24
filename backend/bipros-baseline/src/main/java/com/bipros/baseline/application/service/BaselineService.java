@@ -45,10 +45,16 @@ public class BaselineService {
 
   @Transactional
   public BaselineResponse createBaseline(UUID projectId, CreateBaselineRequest request) {
-    // Deactivate any existing baseline of the same type for this project
+    // Enforce name-uniqueness per project+type so the schedule history can't collect
+    // indistinguishable "BL-QA-001" snapshots (BUG-037).
     List<Baseline> existingBaselines =
         baselineRepository.findByProjectIdAndBaselineType(projectId, request.baselineType());
     for (Baseline baseline : existingBaselines) {
+      if (request.name() != null && request.name().equalsIgnoreCase(baseline.getName())) {
+        throw new com.bipros.common.exception.BusinessRuleException(
+            "DUPLICATE_CODE",
+            "A baseline named '" + request.name() + "' already exists for this project and type");
+      }
       baseline.setIsActive(false);
       baselineRepository.save(baseline);
     }
@@ -66,28 +72,19 @@ public class BaselineService {
     Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
         .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
 
-    // Compute project-level metrics from activities
+    // Compute project-level metrics BEFORE the first save so totalActivities/totalCost/
+    // project dates land in the initial INSERT — otherwise the response DTO may be serialised
+    // from a stale entity reference and render as 0/null (BUG-038).
     BigDecimal totalCost = BigDecimal.ZERO;
     LocalDate projectStart = null;
     LocalDate projectFinish = null;
+    java.util.List<BaselineActivity> stagedActivities = new java.util.ArrayList<>(activities.size());
 
-    // Create new baseline
-    Baseline baseline = new Baseline();
-    baseline.setProjectId(projectId);
-    baseline.setName(request.name());
-    baseline.setDescription(request.description());
-    baseline.setBaselineType(request.baselineType());
-    baseline.setBaselineDate(LocalDate.now());
-    baseline.setIsActive(true);
-    Baseline saved = baselineRepository.save(baseline);
-
-    // Snapshot each activity
     for (Activity activity : activities) {
       BigDecimal plannedCost = calculatePlannedCost(activity, expensesByActivity, assignmentsByActivity);
       BigDecimal actualCost = calculateActualCost(activity, expensesByActivity, assignmentsByActivity);
 
       BaselineActivity ba = new BaselineActivity();
-      ba.setBaselineId(saved.getId());
       ba.setActivityId(activity.getId());
       ba.setEarlyStart(activity.getPlannedStartDate());
       ba.setEarlyFinish(activity.getPlannedFinishDate());
@@ -100,11 +97,10 @@ public class BaselineService {
       ba.setPlannedCost(plannedCost);
       ba.setActualCost(actualCost);
       ba.setPercentComplete(activity.getPercentComplete());
-      baselineActivityRepository.save(ba);
+      stagedActivities.add(ba);
 
       totalCost = totalCost.add(plannedCost);
 
-      // Track project date range
       if (activity.getPlannedStartDate() != null) {
         if (projectStart == null || activity.getPlannedStartDate().isBefore(projectStart)) {
           projectStart = activity.getPlannedStartDate();
@@ -117,19 +113,28 @@ public class BaselineService {
       }
     }
 
-    // Update baseline with computed metrics
-    saved.setTotalActivities(activities.size());
-    saved.setTotalCost(totalCost);
-    saved.setProjectStartDate(projectStart);
-    saved.setProjectFinishDate(projectFinish);
-    if (projectStart != null && projectFinish != null) {
-      saved.setProjectDuration((double) ChronoUnit.DAYS.between(projectStart, projectFinish));
-    } else {
-      saved.setProjectDuration(0.0);
-    }
-    saved = baselineRepository.save(saved);
-    auditService.logCreate("Baseline", saved.getId(), BaselineResponse.from(saved));
+    Baseline baseline = new Baseline();
+    baseline.setProjectId(projectId);
+    baseline.setName(request.name());
+    baseline.setDescription(request.description());
+    baseline.setBaselineType(request.baselineType());
+    baseline.setBaselineDate(LocalDate.now());
+    baseline.setIsActive(true);
+    baseline.setTotalActivities(activities.size());
+    baseline.setTotalCost(totalCost);
+    baseline.setProjectStartDate(projectStart);
+    baseline.setProjectFinishDate(projectFinish);
+    baseline.setProjectDuration(projectStart != null && projectFinish != null
+        ? (double) ChronoUnit.DAYS.between(projectStart, projectFinish)
+        : 0.0);
+    Baseline saved = baselineRepository.save(baseline);
 
+    for (BaselineActivity ba : stagedActivities) {
+      ba.setBaselineId(saved.getId());
+      baselineActivityRepository.save(ba);
+    }
+
+    auditService.logCreate("Baseline", saved.getId(), BaselineResponse.from(saved));
     return BaselineResponse.from(saved);
   }
 

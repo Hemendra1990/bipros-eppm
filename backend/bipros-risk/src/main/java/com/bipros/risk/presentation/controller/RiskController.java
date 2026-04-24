@@ -44,6 +44,29 @@ public class RiskController {
             .body(ApiResponse.ok(risk));
     }
 
+    /**
+     * Aggregate risk summary. Mapped BEFORE {@link #getRisk} so Spring picks up the literal
+     * "summary" segment rather than trying to convert it to a UUID path variable.
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getRisksSummary(
+        @PathVariable UUID projectId,
+        @RequestParam(required = false) RiskStatus status) {
+        List<RiskSummary> risks = riskService.listRisks(projectId, status);
+        BigDecimal exposure = riskService.calculateRiskExposure(projectId);
+        Map<String, List<RiskSummary>> matrix = riskService.getRiskMatrix(projectId);
+        Map<String, Object> body = Map.of(
+            "totalRisks", risks.size(),
+            "exposure", exposure,
+            "byStatus", risks.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                    r -> r.getStatus() != null ? r.getStatus().name() : "UNKNOWN",
+                    java.util.stream.Collectors.counting())),
+            "matrix", matrix
+        );
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
     @GetMapping("/{riskId}")
     public ResponseEntity<ApiResponse<RiskSummary>> getRisk(
         @PathVariable UUID projectId,

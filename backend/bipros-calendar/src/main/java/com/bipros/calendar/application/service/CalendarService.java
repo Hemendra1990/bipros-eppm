@@ -337,65 +337,66 @@ public class CalendarService {
     return 0.0;
   }
 
-  /** Add working days to a start date. */
+  /**
+   * Add working days to a start date using "start-of-day" convention: the returned date is the
+   * date AFTER the last day of work. So {@code addWorkingDays(start, 0) == start}, and
+   * {@code addWorkingDays(monday, 5)} returns the following Monday (after five working days of
+   * Mon-Fri). Matches the CPM scheduler's convention where earlyFinish = earlyStart + duration.
+   */
   @Transactional(readOnly = true)
   public LocalDate addWorkingDays(UUID calendarId, LocalDate start, double days) {
     log.debug("Adding {} working days from {} for calendar: id={}", days, start, calendarId);
 
     LocalDate current = start;
     double remaining = days;
-
     while (remaining > 0) {
       if (isWorkingDay(calendarId, current)) {
         remaining--;
-        if (remaining > 0) {
-          current = current.plusDays(1);
-        }
-      } else {
-        current = current.plusDays(1);
       }
+      current = current.plusDays(1);
     }
-
     return current;
   }
 
-  /** Subtract working days from a date. */
+  /**
+   * Subtract working days from a date. Inverse of {@link #addWorkingDays}:
+   * {@code subtractWorkingDays(addWorkingDays(d, n), n) == d} when bounds land on working days.
+   */
   @Transactional(readOnly = true)
   public LocalDate subtractWorkingDays(UUID calendarId, LocalDate from, double days) {
     log.debug("Subtracting {} working days from {} for calendar: id={}", days, from, calendarId);
 
     LocalDate current = from;
     double remaining = days;
-
     while (remaining > 0) {
+      current = current.minusDays(1);
       if (isWorkingDay(calendarId, current)) {
         remaining--;
-        if (remaining > 0) {
-          current = current.minusDays(1);
-        }
-      } else {
-        current = current.minusDays(1);
       }
     }
-
     return current;
   }
 
-  /** Count working days between two dates (inclusive). */
+  /**
+   * Count working days in the half-open interval [start, end). Same-day returns 0 so this is
+   * consistent with {@link #addWorkingDays}: the count of working days from {@code d} to
+   * {@code addWorkingDays(d, n)} is {@code n}.
+   */
   @Transactional(readOnly = true)
   public double countWorkingDays(UUID calendarId, LocalDate start, LocalDate end) {
     log.debug("Counting working days from {} to {} for calendar: id={}", start, end, calendarId);
 
+    if (!start.isBefore(end)) {
+      return 0.0;
+    }
     double count = 0;
     LocalDate current = start;
-
-    while (!current.isAfter(end)) {
+    while (current.isBefore(end)) {
       if (isWorkingDay(calendarId, current)) {
         count++;
       }
       current = current.plusDays(1);
     }
-
     return count;
   }
 

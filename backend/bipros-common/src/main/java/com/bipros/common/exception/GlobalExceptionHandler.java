@@ -91,11 +91,47 @@ public class GlobalExceptionHandler {
     /** Client sent syntactically invalid JSON (e.g. unescaped quote, trailing comma). */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleMalformedRequest(HttpMessageNotReadableException ex) {
-        String cause = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+        Throwable mostSpecific = ex.getMostSpecificCause();
+        // Jackson surfaces invalid enum values as InvalidFormatException. Format a clean message
+        // that lists the valid values rather than leaking package-qualified Java class names.
+        if (mostSpecific instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException ife
+            && ife.getTargetType() != null && ife.getTargetType().isEnum()) {
+            String fieldPath = ife.getPath().stream()
+                .map(com.fasterxml.jackson.databind.JsonMappingException.Reference::getFieldName)
+                .filter(java.util.Objects::nonNull)
+                .reduce((a, b) -> a + "." + b)
+                .orElse("value");
+            String allowed = java.util.Arrays.stream(ife.getTargetType().getEnumConstants())
+                .map(Object::toString)
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
+            String msg = String.format("Invalid value for '%s': must be one of [%s]", fieldPath, allowed);
+            log.warn("Enum deserialization failed: {}", msg);
+            List<ApiError.FieldError> details = List.of(new ApiError.FieldError(fieldPath, msg));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(new ApiError("VALIDATION_ERROR", msg, details)));
+        }
+        String cause = mostSpecific != null ? mostSpecific.getMessage() : ex.getMessage();
         log.warn("Malformed request body: {}", cause);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("MALFORMED_JSON",
                         "Request body could not be parsed: " + cause));
+    }
+
+    /**
+     * Path variable or query parameter of the wrong type — most commonly "Failed to convert value
+     * 'summary' to UUID" when a collection endpoint and a resource-by-id endpoint live on the
+     * same path prefix and the more specific literal route isn't matched.
+     */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        String expectedType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "expected type";
+        String msg = String.format("Parameter '%s' has invalid value '%s' (expected %s)",
+            ex.getName(), ex.getValue(), expectedType);
+        log.warn("Argument type mismatch: {}", msg);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("INVALID_PARAMETER", msg));
     }
 
     /** Required query/form parameter was not provided. */

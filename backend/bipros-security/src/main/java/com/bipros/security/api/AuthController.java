@@ -4,7 +4,9 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.security.application.dto.AuthResponse;
 import com.bipros.security.application.dto.LoginRequest;
 import com.bipros.security.application.dto.RegisterRequest;
+import com.bipros.security.application.dto.UserResponse;
 import com.bipros.security.application.service.AuthService;
+import com.bipros.security.application.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -13,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +29,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserService userService;
+
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Current user", description = "Return the currently authenticated user profile")
+    public ResponseEntity<ApiResponse<UserResponse>> me() {
+        return ResponseEntity.ok(ApiResponse.ok(userService.getCurrentUser()));
+    }
 
     @PostMapping("/login")
     @Operation(summary = "User login", description = "Authenticate user and return JWT tokens")

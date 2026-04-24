@@ -13,19 +13,21 @@ export function formatDate(date: string | null | undefined): string {
   });
 }
 
-const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: "Critical", color: "text-red-400" },
-  2: { label: "Very High", color: "text-red-400" },
-  3: { label: "High", color: "text-orange-400" },
-  4: { label: "Medium-High", color: "text-orange-400" },
-  5: { label: "Medium", color: "text-yellow-400" },
-  6: { label: "Medium-Low", color: "text-yellow-400" },
-  7: { label: "Low", color: "text-slate-400" },
-  8: { label: "Very Low", color: "text-slate-400" },
-  9: { label: "Minimal", color: "text-slate-500" },
-  10: { label: "None", color: "text-slate-500" },
-};
-
-export function getPriorityInfo(priority: number): { label: string; color: string } {
-  return PRIORITY_LABELS[priority] ?? { label: `P${priority}`, color: "text-slate-400" };
+/**
+ * Priority is a 1-100 integer (1 = highest). Display labels are derived from bucketing the value
+ * so both data seeded on a 1-10 scale and projects created on the 1-100 scale produce the same
+ * six labels everywhere in the UI.
+ */
+export function getPriorityInfo(priority: number | null | undefined): { label: string; color: string } {
+  if (priority == null || Number.isNaN(priority)) {
+    return { label: "—", color: "text-slate-500" };
+  }
+  // Clamp into 1-100 for bucketing, but keep the raw value visible for out-of-range data.
+  const p = Math.max(1, Math.min(100, Math.round(priority)));
+  if (p <= 10) return { label: "Critical", color: "text-red-400" };
+  if (p <= 25) return { label: "Very High", color: "text-red-400" };
+  if (p <= 40) return { label: "High", color: "text-orange-400" };
+  if (p <= 60) return { label: "Medium", color: "text-yellow-400" };
+  if (p <= 80) return { label: "Low", color: "text-slate-400" };
+  return { label: "Very Low", color: "text-slate-500" };
 }

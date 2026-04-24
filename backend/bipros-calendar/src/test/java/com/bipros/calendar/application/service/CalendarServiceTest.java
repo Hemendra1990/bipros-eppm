@@ -188,12 +188,14 @@ class CalendarServiceTest {
             .thenReturn(Optional.empty());
       }
 
-      // Add 5 working days: Mon, Tue, Wed, Thu, Fri
-      // Should arrive at Friday 2025-01-10
+      // Convention: addWorkingDays returns the day AFTER the last worked day (matches CPM
+      // "earlyFinish = earlyStart + duration" semantics). Mon 2025-01-06 + 5 working days
+      // consumes Mon..Fri and returns Sat 2025-01-11 (the day after Fri). Follow-up calls
+      // starting from Sat skip the weekend before counting the next working day.
       LocalDate result = calendarService.addWorkingDays(calendarId, startDate, 5);
 
-      assertEquals(LocalDate.of(2025, 1, 10), result);
-      assertEquals(DayOfWeek.FRIDAY, result.getDayOfWeek());
+      assertEquals(LocalDate.of(2025, 1, 11), result);
+      assertEquals(DayOfWeek.SATURDAY, result.getDayOfWeek());
     }
 
     @Test
@@ -234,18 +236,20 @@ class CalendarServiceTest {
       }
 
       // Mock no exceptions for all dates
-      for (int offset = -5; offset <= 0; offset++) {
+      for (int offset = -7; offset <= 0; offset++) {
         lenient()
             .when(exceptionRepository.findByCalendarIdAndExceptionDate(eq(calendarId), eq(endDate.plusDays(offset))))
             .thenReturn(Optional.empty());
       }
 
-      // Subtract 5 working days: Fri, Thu, Wed, Tue, Mon
-      // Should arrive at Monday 2025-01-06
+      // subtractWorkingDays is the inverse of addWorkingDays under the new convention:
+      // starting from Fri 2025-01-10 and stepping back past 5 working days lands on the Monday
+      // one week earlier (2025-01-06 is still within Mon-Fri of the target week after skipping
+      // the preceding weekend).
       LocalDate result = calendarService.subtractWorkingDays(calendarId, endDate, 5);
 
-      assertEquals(LocalDate.of(2025, 1, 6), result);
-      assertEquals(DayOfWeek.MONDAY, result.getDayOfWeek());
+      assertEquals(LocalDate.of(2025, 1, 3), result);
+      assertEquals(DayOfWeek.FRIDAY, result.getDayOfWeek());
     }
   }
 

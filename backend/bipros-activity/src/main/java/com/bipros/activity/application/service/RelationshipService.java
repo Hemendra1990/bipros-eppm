@@ -97,6 +97,11 @@ public class RelationshipService {
     log.info("Relationship deleted successfully: id={}", id);
   }
 
+  public RelationshipResponse getRelationship(UUID id) {
+    return RelationshipResponse.from(relationshipRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("ActivityRelationship", id)));
+  }
+
   public List<RelationshipResponse> getRelationships(UUID projectId) {
     log.info("Getting relationships for project: projectId={}", projectId);
     return relationshipRepository.findByProjectId(projectId).stream()

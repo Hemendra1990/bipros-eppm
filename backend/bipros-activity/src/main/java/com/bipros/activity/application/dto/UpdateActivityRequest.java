@@ -1,15 +1,12 @@
 package com.bipros.activity.application.dto;
 
 import com.bipros.activity.domain.model.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import java.time.LocalDate;
 import java.util.UUID;
 
 public record UpdateActivityRequest(
-    @NotBlank(message = "Name is required")
     String name,
 
     String description,
@@ -31,7 +28,6 @@ public record UpdateActivityRequest(
     ActivityStatus status,
 
     @PositiveOrZero(message = "Percent complete must be zero or positive")
-    @NotNull(message = "Percent complete is required")
     Double percentComplete,
 
     @PositiveOrZero(message = "Physical percent complete must be zero or positive")

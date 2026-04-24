@@ -24,6 +24,13 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
+    /** List all configured dashboards. Serves {@code GET /v1/dashboards} so consumers can
+     * discover tier ids before drilling into {@code /v1/dashboards/{tier}}. */
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<DashboardConfigDto>>> listDashboards() {
+        return ResponseEntity.ok(ApiResponse.ok(dashboardService.listDashboards()));
+    }
+
     @GetMapping("/{tier}")
     public ResponseEntity<ApiResponse<DashboardConfigDto>> getDashboardByTier(
             @PathVariable String tier) {

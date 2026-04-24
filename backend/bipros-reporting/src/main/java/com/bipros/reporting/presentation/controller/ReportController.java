@@ -27,6 +27,14 @@ public class ReportController {
 
   private final ReportService reportService;
 
+  /** Alias for {@code /reports/definitions}. Dashboards and links that expect the bare
+   * {@code /v1/reports} collection endpoint land here instead of receiving a 404. */
+  @GetMapping
+  public ApiResponse<List<ReportDefinitionResponse>> listReports(
+      @RequestParam(required = false) ReportType type) {
+    return ApiResponse.ok(reportService.listReportDefinitions(type));
+  }
+
   @PostMapping("/definitions")
   public ApiResponse<ReportDefinitionResponse> createReportDefinition(
       @Valid @RequestBody CreateReportDefinitionRequest request) {

@@ -264,21 +264,18 @@ public class SchedulingService {
     }
   }
 
-  @Transactional(readOnly = true)
   public ScheduleResultResponse getLatestSchedule(UUID projectId) {
     log.debug("Fetching latest schedule for project: id={}", projectId);
 
     return scheduleResultRepository.findTopByProjectIdOrderByCalculatedAtDesc(projectId)
         .map(ScheduleResultResponse::from)
-        .orElseThrow(() -> new ResourceNotFoundException("ScheduleResult", projectId));
+        .orElseGet(() -> scheduleProject(projectId, SchedulingOption.RETAINED_LOGIC));
   }
 
-  @Transactional(readOnly = true)
   public List<ScheduleActivityResultResponse> getCriticalPath(UUID projectId) {
     log.debug("Fetching critical path for project: id={}", projectId);
 
-    ScheduleResult latestSchedule = scheduleResultRepository.findTopByProjectIdOrderByCalculatedAtDesc(projectId)
-        .orElseThrow(() -> new ResourceNotFoundException("ScheduleResult", projectId));
+    ScheduleResult latestSchedule = ensureSchedule(projectId);
 
     return scheduleActivityResultRepository.findByScheduleResultIdAndIsCritical(latestSchedule.getId(), true)
         .stream()
@@ -286,12 +283,10 @@ public class SchedulingService {
         .toList();
   }
 
-  @Transactional(readOnly = true)
   public List<FloatPathResponse> getFloatPaths(UUID projectId) {
     log.debug("Fetching float paths for project: id={}", projectId);
 
-    ScheduleResult latestSchedule = scheduleResultRepository.findTopByProjectIdOrderByCalculatedAtDesc(projectId)
-        .orElseThrow(() -> new ResourceNotFoundException("ScheduleResult", projectId));
+    ScheduleResult latestSchedule = ensureSchedule(projectId);
 
     List<ScheduleActivityResult> activityResults = scheduleActivityResultRepository
         .findByScheduleResultId(latestSchedule.getId());
@@ -319,16 +314,28 @@ public class SchedulingService {
         .toList();
   }
 
-  @Transactional(readOnly = true)
   public List<ScheduleActivityResultResponse> getAllScheduledActivities(UUID projectId) {
     log.debug("Fetching all scheduled activities for project: id={}", projectId);
 
-    ScheduleResult latestSchedule = scheduleResultRepository.findTopByProjectIdOrderByCalculatedAtDesc(projectId)
-        .orElseThrow(() -> new ResourceNotFoundException("ScheduleResult", projectId));
+    ScheduleResult latestSchedule = ensureSchedule(projectId);
 
     return scheduleActivityResultRepository.findByScheduleResultId(latestSchedule.getId())
         .stream()
         .map(ScheduleActivityResultResponse::from)
         .toList();
+  }
+
+  /**
+   * Return the latest schedule for the project, running the scheduler on demand when none exists
+   * yet. Keeps GET endpoints useful for freshly-imported projects where nobody has clicked
+   * "Schedule" yet.
+   */
+  private ScheduleResult ensureSchedule(UUID projectId) {
+    return scheduleResultRepository.findTopByProjectIdOrderByCalculatedAtDesc(projectId)
+        .orElseGet(() -> {
+          scheduleProject(projectId, SchedulingOption.RETAINED_LOGIC);
+          return scheduleResultRepository.findTopByProjectIdOrderByCalculatedAtDesc(projectId)
+              .orElseThrow(() -> new ResourceNotFoundException("ScheduleResult", projectId));
+        });
   }
 }

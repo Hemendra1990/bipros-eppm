@@ -34,6 +34,18 @@ public class ActivityService {
     log.info("Creating activity: code={}, name={}, projectId={}", request.code(), request.name(),
         request.projectId());
 
+    if (request.plannedStartDate() != null
+        && request.plannedFinishDate() != null
+        && request.plannedFinishDate().isBefore(request.plannedStartDate())) {
+      throw new BusinessRuleException(
+          "INVALID_DATE_RANGE",
+          "plannedFinishDate must be on or after plannedStartDate");
+    }
+
+    boolean isMilestone = request.activityType() != null
+        && (request.activityType() == com.bipros.activity.domain.model.ActivityType.START_MILESTONE
+            || request.activityType() == com.bipros.activity.domain.model.ActivityType.FINISH_MILESTONE);
+
     Activity activity = new Activity();
     activity.setCode(request.code());
     activity.setName(request.name());
@@ -51,18 +63,36 @@ public class ActivityService {
       activity.setPercentCompleteType(request.percentCompleteType());
     }
 
-    activity.setPlannedStartDate(request.plannedStartDate());
-    activity.setPlannedFinishDate(request.plannedFinishDate());
+    // Milestones collapse to a point — plannedFinish := plannedStart. For START_MILESTONE, this
+    // is the start date; for FINISH_MILESTONE, the finish date if supplied wins.
+    LocalDate plannedStart = request.plannedStartDate();
+    LocalDate plannedFinish = request.plannedFinishDate();
+    if (isMilestone) {
+      if (request.activityType() == com.bipros.activity.domain.model.ActivityType.FINISH_MILESTONE
+          && plannedFinish != null) {
+        plannedStart = plannedFinish;
+      } else if (plannedStart != null) {
+        plannedFinish = plannedStart;
+      } else if (plannedFinish != null) {
+        plannedStart = plannedFinish;
+      }
+    }
+    activity.setPlannedStartDate(plannedStart);
+    activity.setPlannedFinishDate(plannedFinish);
     activity.setCalendarId(request.calendarId());
     activity.setChainageFromM(request.chainageFromM());
     activity.setChainageToM(request.chainageToM());
     activity.setPercentComplete(0.0);
 
-    // Auto-calculate originalDuration from dates if not provided
-    Double duration = request.originalDuration();
-    if (duration == null && request.plannedStartDate() != null && request.plannedFinishDate() != null) {
-      duration = (double) java.time.temporal.ChronoUnit.DAYS.between(
-          request.plannedStartDate(), request.plannedFinishDate());
+    Double duration;
+    if (isMilestone) {
+      // Milestones have zero duration; silently normalise any caller-supplied value.
+      duration = 0.0;
+    } else {
+      duration = request.originalDuration();
+      if (duration == null && plannedStart != null && plannedFinish != null) {
+        duration = (double) java.time.temporal.ChronoUnit.DAYS.between(plannedStart, plannedFinish);
+      }
     }
     activity.setOriginalDuration(duration);
     activity.setRemainingDuration(duration);
@@ -91,8 +121,12 @@ public class ActivityService {
     var oldActualStart = activity.getActualStartDate();
     var oldActualFinish = activity.getActualFinishDate();
 
-    activity.setName(request.name());
-    activity.setDescription(request.description());
+    if (request.name() != null) {
+      activity.setName(request.name());
+    }
+    if (request.description() != null) {
+      activity.setDescription(request.description());
+    }
 
     if (request.wbsNodeId() != null) {
       activity.setWbsNodeId(request.wbsNodeId());
@@ -111,27 +145,54 @@ public class ActivityService {
       activity.setStatus(request.status());
     }
 
-    activity.setOriginalDuration(request.originalDuration());
-    activity.setRemainingDuration(request.remainingDuration());
-    activity.setPercentComplete(request.percentComplete());
-    activity.setPhysicalPercentComplete(request.physicalPercentComplete());
-    activity.setActualStartDate(request.actualStartDate());
-    activity.setActualFinishDate(request.actualFinishDate());
+    if (request.originalDuration() != null) {
+      activity.setOriginalDuration(request.originalDuration());
+    }
+    if (request.remainingDuration() != null) {
+      activity.setRemainingDuration(request.remainingDuration());
+    }
+    boolean progressChanged = request.percentComplete() != null
+        || request.actualStartDate() != null
+        || request.actualFinishDate() != null;
+    if (request.percentComplete() != null) {
+      activity.setPercentComplete(request.percentComplete());
+    }
+    if (request.physicalPercentComplete() != null) {
+      activity.setPhysicalPercentComplete(request.physicalPercentComplete());
+    }
+    if (request.actualStartDate() != null) {
+      activity.setActualStartDate(request.actualStartDate());
+    }
+    if (request.actualFinishDate() != null) {
+      activity.setActualFinishDate(request.actualFinishDate());
+    }
 
-    // When the caller didn't pass an explicit status, derive it from the same
-    // progress/actual-date signals that /progress uses — so editing an activity
-    // to 5% + today's actualStart in the UI form correctly flips NOT_STARTED → IN_PROGRESS
-    // without forcing every form to include a status dropdown.
-    if (!statusExplicit) {
+    // When progress changed but status wasn't explicitly set, derive status from the
+    // same progress/actual-date signals that /progress uses.
+    if (!statusExplicit && progressChanged) {
       applyStatusFromProgress(activity);
     }
-    activity.setCalendarId(request.calendarId());
-    activity.setPrimaryConstraintType(request.primaryConstraintType());
-    activity.setPrimaryConstraintDate(request.primaryConstraintDate());
-    activity.setSecondaryConstraintType(request.secondaryConstraintType());
-    activity.setSecondaryConstraintDate(request.secondaryConstraintDate());
-    activity.setSuspendDate(request.suspendDate());
-    activity.setResumeDate(request.resumeDate());
+    if (request.calendarId() != null) {
+      activity.setCalendarId(request.calendarId());
+    }
+    if (request.primaryConstraintType() != null) {
+      activity.setPrimaryConstraintType(request.primaryConstraintType());
+    }
+    if (request.primaryConstraintDate() != null) {
+      activity.setPrimaryConstraintDate(request.primaryConstraintDate());
+    }
+    if (request.secondaryConstraintType() != null) {
+      activity.setSecondaryConstraintType(request.secondaryConstraintType());
+    }
+    if (request.secondaryConstraintDate() != null) {
+      activity.setSecondaryConstraintDate(request.secondaryConstraintDate());
+    }
+    if (request.suspendDate() != null) {
+      activity.setSuspendDate(request.suspendDate());
+    }
+    if (request.resumeDate() != null) {
+      activity.setResumeDate(request.resumeDate());
+    }
     if (request.notes() != null) {
       activity.setNotes(request.notes());
     }
@@ -140,6 +201,15 @@ public class ActivityService {
     }
     if (request.chainageToM() != null) {
       activity.setChainageToM(request.chainageToM());
+    }
+
+    // Enforce date-order across the planned window after any updates
+    LocalDate ps = activity.getPlannedStartDate();
+    LocalDate pf = activity.getPlannedFinishDate();
+    if (ps != null && pf != null && pf.isBefore(ps)) {
+      throw new BusinessRuleException(
+          "INVALID_DATE_RANGE",
+          "plannedFinishDate must be on or after plannedStartDate");
     }
 
     Activity updated = activityRepository.save(activity);

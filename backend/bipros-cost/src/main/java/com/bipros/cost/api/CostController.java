@@ -142,6 +142,16 @@ public class CostController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    /**
+     * Alias for {@code /projects/{projectId}/funding}. Dashboards and third-party consumers
+     * reach for the longer "funding-sources" suffix; both forms resolve to the same allocations.
+     */
+    @GetMapping("/projects/{projectId}/funding-sources")
+    public ResponseEntity<ApiResponse<List<ProjectFundingDto>>> getProjectFundingSources(
+            @PathVariable UUID projectId) {
+        return ResponseEntity.ok(ApiResponse.ok(costService.getProjectFunding(projectId)));
+    }
+
     @DeleteMapping("/projects/{projectId}/funding/{fundingId}")
     public ResponseEntity<ApiResponse<Void>> deleteProjectFunding(
             @PathVariable UUID projectId,

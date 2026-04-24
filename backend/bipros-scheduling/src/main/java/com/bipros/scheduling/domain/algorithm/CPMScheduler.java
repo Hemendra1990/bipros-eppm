@@ -158,20 +158,30 @@ public class CPMScheduler {
       }
     }
 
-    // Calculate floats and mark critical path
-    log.debug("Calculating floats and marking critical path");
-    for (UUID activityId : data.activities().stream().map(SchedulableActivity::id).toList()) {
-      ScheduledActivity scheduled = scheduledActivities.get(activityId);
-      double totalFloat = calendarCalculator.countWorkingDays(
-          defaultCalendarId,
-          scheduled.getEarlyStart(),
-          scheduled.getLateStart());
+    // Calculate floats
+    log.debug("Calculating floats");
+    double minTotalFloat = Double.POSITIVE_INFINITY;
+    for (SchedulableActivity activity : data.activities()) {
+      ScheduledActivity scheduled = scheduledActivities.get(activity.id());
+      double totalFloat = computeWorkingDayDelta(
+          scheduled.getEarlyStart(), scheduled.getLateStart());
       scheduled.setTotalFloat(totalFloat);
-      scheduled.setCritical(totalFloat == 0);
 
-      if (totalFloat < 0) {
-        warnings.add("Activity " + activityId + " has negative float (" + totalFloat + " days)");
+      if (totalFloat < minTotalFloat) {
+        minTotalFloat = totalFloat;
       }
+      if (totalFloat < 0) {
+        warnings.add("Activity " + activity.id() + " has negative float (" + totalFloat + " days)");
+      }
+    }
+
+    // Mark critical path. Activities with totalFloat == minTotalFloat lie on the longest path
+    // (in P6 terms the critical path is TF<=0, but if there are no zero-float activities we
+    // still surface the longest path so `critical-path` is never empty when a schedule exists).
+    final double criticalFloat = Math.max(minTotalFloat, 0.0);
+    final double epsilon = 1e-6;
+    for (ScheduledActivity scheduled : scheduledActivities.values()) {
+      scheduled.setCritical(scheduled.getTotalFloat() <= criticalFloat + epsilon);
     }
 
     // Calculate free float for each activity
@@ -180,10 +190,8 @@ public class CPMScheduler {
       ScheduledActivity predecessor = scheduledActivities.get(rel.predecessorId());
 
       if (rel.type().equals("FS")) {
-        double freeFloat = calendarCalculator.countWorkingDays(
-            defaultCalendarId,
-            predecessor.getEarlyFinish(),
-            successor.getEarlyStart());
+        double freeFloat = computeWorkingDayDelta(
+            predecessor.getEarlyFinish(), successor.getEarlyStart());
         successor.setFreeFloat(Math.min(successor.getFreeFloat(), freeFloat));
       }
     }
@@ -343,6 +351,20 @@ public class CPMScheduler {
           activity.remainingDuration());
       scheduled.setLateStart(lateStart);
     }
+  }
+
+  /**
+   * Working-day distance from {@code from} to {@code to}. Positive if {@code from <= to}, negative
+   * otherwise. {@code countWorkingDays} is half-open [start, end) so same-day returns 0.
+   */
+  private double computeWorkingDayDelta(LocalDate from, LocalDate to) {
+    if (from.isEqual(to)) {
+      return 0.0;
+    }
+    if (from.isBefore(to)) {
+      return calendarCalculator.countWorkingDays(defaultCalendarId, from, to);
+    }
+    return -calendarCalculator.countWorkingDays(defaultCalendarId, to, from);
   }
 
   private LocalDate calculateRelationshipContribution(

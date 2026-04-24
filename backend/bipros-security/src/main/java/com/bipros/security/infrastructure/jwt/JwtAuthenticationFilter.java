@@ -64,8 +64,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
-        return path.startsWith("/v1/auth/") ||
-               path.startsWith("/swagger-ui/") ||
+        // Skip the filter only for the three permit-all auth endpoints; every other /v1/auth/*
+        // route (e.g. /v1/auth/me) still needs the token parsed so the user is authenticated.
+        if ("/v1/auth/login".equals(path)
+                || "/v1/auth/register".equals(path)
+                || "/v1/auth/refresh".equals(path)) {
+            return true;
+        }
+        return path.startsWith("/swagger-ui/") ||
                path.startsWith("/swagger-ui.html") ||
                path.startsWith("/v3/api-docs/");
     }

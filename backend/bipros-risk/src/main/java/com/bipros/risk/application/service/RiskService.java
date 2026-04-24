@@ -32,10 +32,15 @@ public class RiskService {
     private final AuditService auditService;
 
     public RiskSummary createRisk(UUID projectId, CreateRiskRequest request) {
+        String title = request.requiredTitle();
+        if (title == null) {
+            throw new com.bipros.common.exception.BusinessRuleException(
+                "TITLE_REQUIRED", "Risk title (or name) is required");
+        }
         Risk risk = new Risk();
         risk.setProjectId(projectId);
         risk.setCode(request.getCode());
-        risk.setTitle(request.getTitle());
+        risk.setTitle(title);
         risk.setDescription(request.getDescription());
         risk.setCategory(request.getCategory());
         risk.setProbability(request.getProbability());

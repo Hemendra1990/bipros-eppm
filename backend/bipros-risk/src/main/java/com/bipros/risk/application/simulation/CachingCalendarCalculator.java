@@ -43,16 +43,17 @@ public final class CachingCalendarCalculator implements CalendarCalculator {
 
     private CalendarWindow buildWindow(UUID calendarId) {
         BitSet working = new BitSet(horizonDays + 1);
-        int[] prefix = new int[horizonDays + 2]; // prefix[i] = count of working days in [0, i)
+        // prefix[i] = count of working days in [origin, origin + i) (half-open, start inclusive, end exclusive)
+        int[] prefix = new int[horizonDays + 2];
         int count = 0;
         for (int i = 0; i <= horizonDays; i++) {
             LocalDate d = origin.plusDays(i);
             boolean w = delegate.isWorkingDay(calendarId, d);
             if (w) {
                 working.set(i);
-                count++;
             }
-            prefix[i + 1] = count;
+            prefix[i + 1] = count + (w ? 1 : 0);
+            if (w) count++;
         }
         return new CalendarWindow(working, prefix);
     }
@@ -89,16 +90,16 @@ public final class CachingCalendarCalculator implements CalendarCalculator {
         BitSet working = window(calendarId).working;
         int i = idx;
         int taken = 0;
+        // Step past target working days; return the day AFTER the N-th one.
         while (i <= horizonDays) {
             if (working.get(i)) {
                 taken++;
-                if (taken >= target) return origin.plusDays(i);
             }
             i++;
+            if (taken >= target) return origin.plusDays(i);
         }
-        // Fallthrough: run out of horizon; delegate for the remainder.
         int remainder = target - taken;
-        LocalDate tail = origin.plusDays(horizonDays);
+        LocalDate tail = origin.plusDays(horizonDays + 1);
         return delegate.addWorkingDays(calendarId, tail, remainder);
     }
 
@@ -109,7 +110,8 @@ public final class CachingCalendarCalculator implements CalendarCalculator {
         int target = (int) Math.round(days);
         if (target <= 0) return from;
         BitSet working = window(calendarId).working;
-        int i = idx;
+        // Inverse of addWorkingDays: step backwards past target working days, land on the N-th.
+        int i = idx - 1;
         int taken = 0;
         while (i >= 0) {
             if (working.get(i)) {
@@ -129,9 +131,9 @@ public final class CachingCalendarCalculator implements CalendarCalculator {
         if (a < 0 || b < 0 || a > horizonDays || b > horizonDays) {
             return delegate.countWorkingDays(calendarId, start, end);
         }
-        if (b < a) return 0;
+        if (b <= a) return 0;
         int[] prefix = window(calendarId).prefix;
-        return prefix[b + 1] - prefix[a]; // inclusive both ends
+        return prefix[b] - prefix[a]; // half-open [start, end)
     }
 
     private record CalendarWindow(BitSet working, int[] prefix) {}
