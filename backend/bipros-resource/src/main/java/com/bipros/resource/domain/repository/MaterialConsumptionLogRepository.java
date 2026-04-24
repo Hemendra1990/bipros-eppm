@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface MaterialConsumptionLogRepository
@@ -14,4 +15,11 @@ public interface MaterialConsumptionLogRepository
 
   List<MaterialConsumptionLog> findByProjectIdAndLogDateBetweenOrderByLogDateAscIdAsc(
       UUID projectId, LocalDate from, LocalDate to);
+
+  /**
+   * One row per (project, material, day). Used by {@code MaterialIssueService} to aggregate
+   * multiple issues on the same day into a single consumption-log entry.
+   */
+  Optional<MaterialConsumptionLog> findByProjectIdAndResourceIdAndLogDate(
+      UUID projectId, UUID resourceId, LocalDate logDate);
 }

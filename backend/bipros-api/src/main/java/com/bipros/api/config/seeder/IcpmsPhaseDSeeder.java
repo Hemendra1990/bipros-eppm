@@ -15,10 +15,12 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.application.service.ResourceUtilisationService;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceCategory;
+import com.bipros.resource.domain.model.ResourceRate;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.model.ResourceUnit;
 import com.bipros.resource.domain.model.UtilisationStatus;
+import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +56,7 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
     private final DocumentFolderRepository folderRepository;
     private final DocumentRepository documentRepository;
     private final ResourceRepository resourceRepository;
+    private final ResourceRateRepository resourceRateRepository;
     private final ResourceUtilisationService utilisationService;
     private final OrganisationRepository organisationRepository;
 
@@ -387,10 +390,36 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
         }
         r.setStatus(ResourceStatus.ACTIVE);
         r.setSortOrder(0);
+        // Derive hourly rate from dailyCostLakh so ResourceResponse has non-zero rate fields
+        // (BUG-027): 1 lakh = 100 000 INR, standard working day = 8 hours.
+        double hourly = dailyCostLakh != null
+            ? dailyCostLakh.doubleValue() * 100_000d / 8d
+            : 0d;
+        r.setHourlyRate(hourly);
+        r.setOvertimeRate(hourly * 1.5);
         Resource saved = resourceRepository.save(r);
+
+        // Seed standard + overtime ResourceRate rows so /resources/{id}/rates is non-empty
+        // and assignment cost derivation has something to multiply against (BUG-029).
+        if (dailyCostLakh != null && dailyCostLakh.signum() > 0) {
+            BigDecimal standardRate = dailyCostLakh.multiply(BigDecimal.valueOf(100_000))
+                .divide(BigDecimal.valueOf(8), 2, java.math.RoundingMode.HALF_UP);
+            BigDecimal overtimeRate = standardRate.multiply(BigDecimal.valueOf(1.5));
+            persistRate(saved.getId(), "STANDARD", standardRate);
+            persistRate(saved.getId(), "OVERTIME", overtimeRate);
+        }
 
         // Record daily log — aggregator computes utilisation% and sets band
         utilisationService.recordDaily(saved.getId(), logDate, planned, actual, wbsPackage, null);
+    }
+
+    private void persistRate(UUID resourceId, String rateType, BigDecimal pricePerUnit) {
+        ResourceRate rate = new ResourceRate();
+        rate.setResourceId(resourceId);
+        rate.setRateType(rateType);
+        rate.setPricePerUnit(pricePerUnit);
+        rate.setEffectiveDate(LocalDate.of(2024, 1, 1));
+        resourceRateRepository.save(rate);
     }
 
     /** IC-PMS M8 WBS → EPC contractor mapping per Excel M5_Contract_Register. */

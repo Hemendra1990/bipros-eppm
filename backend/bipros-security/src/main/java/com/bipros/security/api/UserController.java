@@ -2,21 +2,24 @@ package com.bipros.security.api;
 
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.common.dto.PagedResponse;
+import com.bipros.security.application.dto.UpdateUserProfileRequest;
 import com.bipros.security.application.dto.UserAccessResponse;
 import com.bipros.security.application.dto.UserResponse;
 import com.bipros.security.application.service.UserAccessService;
 import com.bipros.security.application.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -79,6 +82,17 @@ public class UserController {
             return ResponseEntity.status(404)
                     .body(ApiResponse.error("NOT_FOUND", e.getMessage()));
         }
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Update personnel profile",
+        description = "Update mobile, department, joining dates, presence status and other "
+            + "Personnel Master (Screen 07) fields for a user.")
+    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserProfileRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.updateProfile(id, request)));
     }
 
     @GetMapping("/{id}/access")

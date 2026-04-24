@@ -203,13 +203,40 @@ export function CostsTab({ projectId }: { projectId: string }) {
         },
         {
           label: "CPI",
-          value: summary.costPerformanceIndex.toFixed(4),
-          color: summary.costPerformanceIndex >= 1 ? "green" : "red",
+          value: summary.costPerformanceIndex != null
+            ? summary.costPerformanceIndex.toFixed(4)
+            : "—",
+          color: summary.costPerformanceIndex != null
+            ? summary.costPerformanceIndex >= 1
+              ? "green"
+              : "red"
+            : "slate",
         },
         {
           label: "Expenses",
           value: String(summary.expenseCount),
           color: "slate",
+        },
+      ]
+    : [];
+
+  // PMS MasterData procurement roll-up — shown only when the project has material activity.
+  const procurementCards: SummaryCard[] = summary && (summary.materialProcurementCost ?? 0) > 0
+    ? [
+        {
+          label: "Material Procured",
+          value: formatInrAsCrores(summary.materialProcurementCost ?? 0),
+          color: "blue",
+        },
+        {
+          label: "Open Stock Value",
+          value: formatInrAsCrores(summary.openStockValue ?? 0),
+          color: "yellow",
+        },
+        {
+          label: "Material Issued",
+          value: formatInrAsCrores(summary.materialIssuedCost ?? 0),
+          color: "green",
         },
       ]
     : [];
@@ -277,6 +304,27 @@ export function CostsTab({ projectId }: { projectId: string }) {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {procurementCards.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-secondary">
+                Material Procurement
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                {procurementCards.map((card) => (
+                  <div
+                    key={card.label}
+                    className={`rounded-lg border p-4 ${colorMap[card.color]}`}
+                  >
+                    <h4 className="text-sm font-medium text-text-secondary">{card.label}</h4>
+                    <p className={`mt-2 text-xl font-bold ${textColorMap[card.color]}`}>
+                      {card.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>

@@ -286,6 +286,13 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
         project.setDataDate(LocalDate.of(2026, 4, 1));
         project.setStatus(ProjectStatus.ACTIVE);
         project.setPriority(100);
+        project.setCategory(com.bipros.project.domain.model.ProjectCategory.EXPRESSWAY);
+        project.setMorthCode("DMIC-01");
+        project.setFromChainageM(0L);
+        project.setToChainageM(1504_000L);
+        project.setFromLocation("Delhi");
+        project.setToLocation("Mumbai");
+        project.setTotalLengthKm(new java.math.BigDecimal("1504.000"));
         project = projectRepository.save(project);
 
         return new DmicHierarchy(programme, geoNodes, obsNodes, project);

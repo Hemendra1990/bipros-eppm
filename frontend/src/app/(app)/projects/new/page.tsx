@@ -189,7 +189,7 @@ export default function NewProjectPage() {
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((p) => (
+                {[5, 20, 35, 50, 65, 80, 95].map((p) => (
                   <option key={p} value={p}>
                     {p} - {getPriorityInfo(p).label}
                   </option>
@@ -221,6 +221,203 @@ export default function NewProjectPage() {
                 className={`mt-1 block w-full rounded-md border ${fieldErrors.plannedFinishDate ? "border-danger" : "border-border"} bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent`}
               />
               {fieldErrors.plannedFinishDate && <p className="mt-1 text-xs text-danger">{fieldErrors.plannedFinishDate}</p>}
+            </div>
+          </div>
+
+          {/* ── PMS MasterData Screen 01 fields ── */}
+          <div className="border-t border-border pt-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-text-secondary">
+              Project Category & Corridor (optional)
+            </h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Category</label>
+                <select
+                  value={formData.category ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      category: (e.target.value || null) as CreateProjectRequest["category"],
+                    }))
+                  }
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="">—</option>
+                  <option value="HIGHWAY">Highway</option>
+                  <option value="EXPRESSWAY">Expressway</option>
+                  <option value="RURAL_ROAD">Rural Road</option>
+                  <option value="STATE_HIGHWAY">State Highway</option>
+                  <option value="URBAN_ROAD">Urban Road</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">MoRTH Code</label>
+                <input
+                  value={formData.morthCode ?? ""}
+                  onChange={(e) => setFormData((f) => ({ ...f, morthCode: e.target.value || null }))}
+                  placeholder="NH-48"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">From Chainage (m)</label>
+                <input
+                  type="number"
+                  value={formData.fromChainageM ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      fromChainageM: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                  placeholder="145000"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">To Chainage (m)</label>
+                <input
+                  type="number"
+                  value={formData.toChainageM ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      toChainageM: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                  placeholder="165000"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">From Location</label>
+                <input
+                  value={formData.fromLocation ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({ ...f, fromLocation: e.target.value || null }))
+                  }
+                  placeholder="Km 145+000"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">To Location</label>
+                <input
+                  value={formData.toLocation ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({ ...f, toLocation: e.target.value || null }))
+                  }
+                  placeholder="Km 165+000"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-text-secondary">
+              Primary Contract (optional)
+            </h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Contract Number</label>
+                <input
+                  value={formData.contract?.contractNumber ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      contract: { ...(f.contract ?? {}), contractNumber: e.target.value || null },
+                    }))
+                  }
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Contract Type</label>
+                <select
+                  value={formData.contract?.contractType ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      contract: {
+                        ...(f.contract ?? {}),
+                        contractType: (e.target.value || null) as
+                          | NonNullable<CreateProjectRequest["contract"]>["contractType"]
+                          | null,
+                      },
+                    }))
+                  }
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="">—</option>
+                  <option value="EPC">EPC</option>
+                  <option value="BOT">BOT</option>
+                  <option value="HAM">HAM</option>
+                  <option value="ITEM_RATE">Item Rate</option>
+                  <option value="LUMP_SUM">Lump Sum</option>
+                  <option value="ANNUITY">Annuity</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-6 grid grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Contract Value (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.contract?.contractValue ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      contract: {
+                        ...(f.contract ?? {}),
+                        contractValue: e.target.value ? Number(e.target.value) : null,
+                      },
+                    }))
+                  }
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Revised Value (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.contract?.revisedValue ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      contract: {
+                        ...(f.contract ?? {}),
+                        revisedValue: e.target.value ? Number(e.target.value) : null,
+                      },
+                    }))
+                  }
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">DLP Months</label>
+                <input
+                  type="number"
+                  value={formData.contract?.dlpMonths ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      contract: {
+                        ...(f.contract ?? {}),
+                        dlpMonths: e.target.value ? Number(e.target.value) : null,
+                      },
+                    }))
+                  }
+                  placeholder="60"
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
             </div>
           </div>
 

@@ -70,8 +70,10 @@ export interface ResourceResponse {
   updatedAt: string;
 }
 
+export type ResourceOwnership = "OWNED" | "HIRED" | "SUB_CONTRACTOR_PROVIDED";
+
 export interface CreateResourceRequest {
-  code: string;
+  code?: string;
   name: string;
   type: "LABOR" | "NONLABOR" | "MATERIAL";
   maxUnits?: number;
@@ -79,6 +81,14 @@ export interface CreateResourceRequest {
   costPerUse?: number;
   overtimeRate?: number;
   calendarId?: string;
+  // PMS MasterData Screen 04 equipment fields
+  capacitySpec?: string;
+  makeModel?: string;
+  quantityAvailable?: number;
+  ownershipType?: ResourceOwnership;
+  standardOutputPerDay?: number;
+  standardOutputUnit?: string;
+  fuelLitresPerHour?: number;
 }
 
 export interface UpdateResourceRequest {

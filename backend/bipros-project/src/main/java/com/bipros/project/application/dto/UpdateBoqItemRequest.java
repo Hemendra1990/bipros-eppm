@@ -1,6 +1,8 @@
 package com.bipros.project.application.dto;
 
+import com.bipros.project.domain.model.BoqStatus;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -14,5 +16,7 @@ public record UpdateBoqItemRequest(
     @PositiveOrZero BigDecimal boqRate,
     @PositiveOrZero BigDecimal budgetedRate,
     @PositiveOrZero BigDecimal qtyExecutedToDate,
-    @PositiveOrZero BigDecimal actualRate
+    @PositiveOrZero BigDecimal actualRate,
+    @Size(max = 80) String chapter,
+    BoqStatus status
 ) {}

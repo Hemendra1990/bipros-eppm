@@ -8,6 +8,7 @@ import com.bipros.project.application.dto.BoqSummaryResponse;
 import com.bipros.project.application.dto.CreateBoqItemRequest;
 import com.bipros.project.application.dto.UpdateBoqItemRequest;
 import com.bipros.project.domain.model.BoqItem;
+import com.bipros.project.domain.model.BoqStatus;
 import com.bipros.project.domain.repository.BoqItemRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
@@ -49,8 +50,11 @@ public class BoqService {
         .budgetedRate(request.budgetedRate())
         .qtyExecutedToDate(request.qtyExecutedToDate())
         .actualRate(request.actualRate())
+        .chapter(request.chapter())
+        .status(request.status())
         .build();
     BoqCalculator.recompute(item);
+    applyAutoStatus(item);
     BoqItem saved = boqItemRepository.save(item);
     auditService.logCreate("BoqItem", saved.getId(), BoqItemResponse.from(saved));
     return BoqItemResponse.from(saved);
@@ -72,8 +76,11 @@ public class BoqService {
               .budgetedRate(r.budgetedRate())
               .qtyExecutedToDate(r.qtyExecutedToDate())
               .actualRate(r.actualRate())
+              .chapter(r.chapter())
+              .status(r.status())
               .build();
           BoqCalculator.recompute(item);
+          applyAutoStatus(item);
           return item;
         })
         .toList();
@@ -92,7 +99,10 @@ public class BoqService {
     if (request.budgetedRate() != null) item.setBudgetedRate(request.budgetedRate());
     if (request.qtyExecutedToDate() != null) item.setQtyExecutedToDate(request.qtyExecutedToDate());
     if (request.actualRate() != null) item.setActualRate(request.actualRate());
+    if (request.chapter() != null) item.setChapter(request.chapter());
+    if (request.status() != null) item.setStatus(request.status());
     BoqCalculator.recompute(item);
+    applyAutoStatus(item);
     BoqItem saved = boqItemRepository.save(item);
     auditService.logUpdate("BoqItem", itemId, "boqItem", item, BoqItemResponse.from(saved));
     return BoqItemResponse.from(saved);
@@ -110,8 +120,31 @@ public class BoqService {
       BigDecimal current = item.getQtyExecutedToDate() != null ? item.getQtyExecutedToDate() : BigDecimal.ZERO;
       item.setQtyExecutedToDate(current.add(deltaQty));
       BoqCalculator.recompute(item);
+      applyAutoStatus(item);
       boqItemRepository.save(item);
     });
+  }
+
+  /**
+   * Auto-transition BOQ status from progress:
+   * <ul>
+   *   <li>percent ≥ 100% → COMPLETED</li>
+   *   <li>0 &lt; percent &lt; 100% → ACTIVE</li>
+   *   <li>percent = 0 or null → PENDING</li>
+   * </ul>
+   * {@link BoqStatus#ON_HOLD} is a manual state — once set by the caller it stays until an
+   * explicit change. PMS MasterData Screen 03 description: "Status auto-updates".
+   */
+  private static void applyAutoStatus(BoqItem item) {
+    if (item.getStatus() == BoqStatus.ON_HOLD) return;
+    BigDecimal pct = item.getPercentComplete();
+    if (pct == null || pct.signum() == 0) {
+      item.setStatus(BoqStatus.PENDING);
+    } else if (pct.compareTo(BigDecimal.ONE) >= 0) {
+      item.setStatus(BoqStatus.COMPLETED);
+    } else {
+      item.setStatus(BoqStatus.ACTIVE);
+    }
   }
 
   public void deleteItem(UUID projectId, UUID itemId) {

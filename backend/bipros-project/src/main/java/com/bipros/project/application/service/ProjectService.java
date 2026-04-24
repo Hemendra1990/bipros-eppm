@@ -4,8 +4,13 @@ import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
+import com.bipros.contract.domain.model.Contract;
+import com.bipros.contract.domain.model.ContractStatus;
+import com.bipros.contract.domain.repository.ContractRepository;
 import com.bipros.project.application.dto.CreateProjectRequest;
+import com.bipros.project.application.dto.CreateProjectRequest.ContractSummaryInput;
 import com.bipros.project.application.dto.ProjectResponse;
+import com.bipros.project.application.dto.ProjectResponse.ContractSummary;
 import com.bipros.project.application.dto.UpdateProjectRequest;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
@@ -20,9 +25,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -38,6 +46,7 @@ public class ProjectService {
     private final WbsNodeRepository wbsNodeRepository;
     private final ProjectActivityCounter projectActivityCounter;
     private final AuditService auditService;
+    private final ContractRepository contractRepository;
 
     public ProjectResponse createProject(CreateProjectRequest request) {
         log.info("Creating project with code: {}", request.code());
@@ -50,10 +59,20 @@ public class ProjectService {
             throw new ResourceNotFoundException("EpsNode", request.epsNodeId());
         }
 
+        if (request.plannedStartDate() != null
+            && request.plannedFinishDate() != null
+            && request.plannedFinishDate().isBefore(request.plannedStartDate())) {
+            throw new BusinessRuleException(
+                "INVALID_DATE_RANGE",
+                "plannedFinishDate must be on or after plannedStartDate");
+        }
+
+        validateChainage(request.fromChainageM(), request.toChainageM());
+
         Project project = new Project();
         project.setCode(request.code());
-        project.setName(request.name());
-        project.setDescription(request.description());
+        project.setName(sanitizeText(request.name()));
+        project.setDescription(sanitizeText(request.description()));
         project.setEpsNodeId(request.epsNodeId());
         project.setObsNodeId(request.obsNodeId());
         project.setPlannedStartDate(request.plannedStartDate());
@@ -61,9 +80,21 @@ public class ProjectService {
         if (request.priority() != null) {
             project.setPriority(request.priority());
         }
+        project.setCategory(request.category());
+        project.setMorthCode(request.morthCode());
+        project.setFromChainageM(request.fromChainageM());
+        project.setToChainageM(request.toChainageM());
+        project.setFromLocation(sanitizeText(request.fromLocation()));
+        project.setToLocation(sanitizeText(request.toLocation()));
+        project.setTotalLengthKm(deriveTotalLengthKm(
+            request.fromChainageM(), request.toChainageM(), request.totalLengthKm()));
 
         Project saved = projectRepository.save(project);
         log.info("Project created with ID: {}", saved.getId());
+
+        if (request.contract() != null) {
+            upsertPrimaryContract(saved, request.contract());
+        }
 
         // Audit log creation
         auditService.logCreate("Project", saved.getId(), buildProjectResponse(saved));
@@ -92,10 +123,10 @@ public class ProjectService {
         var oldDataDate = project.getDataDate();
 
         if (request.name() != null) {
-            project.setName(request.name());
+            project.setName(sanitizeText(request.name()));
         }
         if (request.description() != null) {
-            project.setDescription(request.description());
+            project.setDescription(sanitizeText(request.description()));
         }
         if (request.obsNodeId() != null) {
             project.setObsNodeId(request.obsNodeId());
@@ -105,6 +136,14 @@ public class ProjectService {
         }
         if (request.plannedFinishDate() != null) {
             project.setPlannedFinishDate(request.plannedFinishDate());
+        }
+
+        var resolvedStart = project.getPlannedStartDate();
+        var resolvedFinish = project.getPlannedFinishDate();
+        if (resolvedStart != null && resolvedFinish != null && resolvedFinish.isBefore(resolvedStart)) {
+            throw new BusinessRuleException(
+                "INVALID_DATE_RANGE",
+                "plannedFinishDate must be on or after plannedStartDate");
         }
         if (request.mustFinishByDate() != null) {
             project.setMustFinishByDate(request.mustFinishByDate());
@@ -118,9 +157,38 @@ public class ProjectService {
         if (request.dataDate() != null) {
             project.setDataDate(request.dataDate());
         }
+        if (request.category() != null) {
+            project.setCategory(request.category());
+        }
+        if (request.morthCode() != null) {
+            project.setMorthCode(request.morthCode());
+        }
+        if (request.fromChainageM() != null) {
+            project.setFromChainageM(request.fromChainageM());
+        }
+        if (request.toChainageM() != null) {
+            project.setToChainageM(request.toChainageM());
+        }
+        if (request.fromLocation() != null) {
+            project.setFromLocation(sanitizeText(request.fromLocation()));
+        }
+        if (request.toLocation() != null) {
+            project.setToLocation(sanitizeText(request.toLocation()));
+        }
+        validateChainage(project.getFromChainageM(), project.getToChainageM());
+        // Recompute derived length whenever chainages change (respecting an explicit override).
+        if (request.fromChainageM() != null || request.toChainageM() != null
+            || request.totalLengthKm() != null) {
+            project.setTotalLengthKm(deriveTotalLengthKm(
+                project.getFromChainageM(), project.getToChainageM(), request.totalLengthKm()));
+        }
 
         Project updated = projectRepository.save(project);
         log.info("Project updated: {}", id);
+
+        if (request.contract() != null) {
+            upsertPrimaryContract(updated, request.contract());
+        }
 
         // Audit log updates for all changed fields
         if (request.name() != null && !request.name().equals(oldName)) {
@@ -242,12 +310,120 @@ public class ProjectService {
             project.getStatus(),
             project.getMustFinishByDate(),
             project.getPriority(),
+            project.getCategory(),
+            project.getMorthCode(),
+            project.getFromChainageM(),
+            project.getToChainageM(),
+            project.getFromLocation(),
+            project.getToLocation(),
+            project.getTotalLengthKm(),
+            primaryContractSummary(project.getId()),
             toLocalDateTime(project.getCreatedAt()),
             toLocalDateTime(project.getUpdatedAt())
         );
     }
 
+    /**
+     * Pick the "primary" contract for a project. Prefers the first ACTIVE row; otherwise falls
+     * back to the earliest-started row. Returns {@code null} if the project has no contracts yet.
+     */
+    private ContractSummary primaryContractSummary(UUID projectId) {
+        List<Contract> contracts = contractRepository.findByProjectId(projectId);
+        if (contracts.isEmpty()) return null;
+        Contract primary = contracts.stream()
+            .filter(c -> c.getStatus() == ContractStatus.ACTIVE)
+            .findFirst()
+            .orElseGet(() -> contracts.stream()
+                .sorted(Comparator.comparing(Contract::getStartDate,
+                    Comparator.nullsLast(Comparator.naturalOrder())))
+                .findFirst().orElse(null));
+        if (primary == null) return null;
+        return new ContractSummary(
+            primary.getId(),
+            primary.getContractNumber(),
+            primary.getContractType(),
+            primary.getContractValue(),
+            primary.getRevisedValue(),
+            primary.getStartDate(),
+            primary.getCompletionDate(),
+            primary.getDlpMonths()
+        );
+    }
+
+    /**
+     * Upsert the project's primary Contract from the flat {@link ContractSummaryInput}. Creates
+     * a new row the first time; otherwise updates the existing primary in place. Validates that
+     * {@code revisedValue >= contractValue} when both are present.
+     */
+    private void upsertPrimaryContract(Project project, ContractSummaryInput input) {
+        if (input == null) return;
+        if (input.revisedValue() != null && input.contractValue() != null
+            && input.revisedValue().compareTo(input.contractValue()) < 0) {
+            throw new BusinessRuleException(
+                "INVALID_CONTRACT_VALUE",
+                "revisedValue must be greater than or equal to contractValue");
+        }
+        List<Contract> existing = contractRepository.findByProjectId(project.getId());
+        Contract contract = existing.stream()
+            .filter(c -> c.getStatus() == ContractStatus.ACTIVE)
+            .findFirst()
+            .orElseGet(() -> existing.isEmpty() ? new Contract() : existing.get(0));
+        boolean isNew = contract.getId() == null;
+        contract.setProjectId(project.getId());
+        if (input.contractNumber() != null) contract.setContractNumber(input.contractNumber());
+        if (contract.getContractNumber() == null || contract.getContractNumber().isBlank()) {
+            // Contract number is mandatory on the schema; synthesise one if the caller omitted it.
+            contract.setContractNumber("CT-" + project.getCode());
+        }
+        if (input.contractType() != null) contract.setContractType(input.contractType());
+        if (input.contractValue() != null) contract.setContractValue(input.contractValue());
+        if (input.revisedValue() != null) contract.setRevisedValue(input.revisedValue());
+        if (input.startDate() != null) contract.setStartDate(input.startDate());
+        if (input.completionDate() != null) contract.setCompletionDate(input.completionDate());
+        if (input.dlpMonths() != null) contract.setDlpMonths(input.dlpMonths());
+        if (input.contractorName() != null) contract.setContractorName(input.contractorName());
+        if (contract.getContractorName() == null || contract.getContractorName().isBlank()) {
+            contract.setContractorName("TBD");
+        }
+        if (contract.getContractType() == null) {
+            // Contract.contractType is NOT NULL — fall back to LUMP_SUM when the caller hasn't chosen.
+            contract.setContractType(com.bipros.contract.domain.model.ContractType.LUMP_SUM);
+        }
+        contractRepository.save(contract);
+        if (isNew) {
+            log.info("Primary contract created for project: projectId={}, contractNumber={}",
+                project.getId(), contract.getContractNumber());
+        }
+    }
+
+    private void validateChainage(Long from, Long to) {
+        if (from != null && to != null && to < from) {
+            throw new BusinessRuleException(
+                "INVALID_CHAINAGE_RANGE",
+                "toChainageM must be on or after fromChainageM");
+        }
+    }
+
+    private BigDecimal deriveTotalLengthKm(Long from, Long to, BigDecimal explicit) {
+        if (explicit != null) return explicit;
+        if (from == null || to == null || to < from) return null;
+        return BigDecimal.valueOf(to - from)
+            .divide(BigDecimal.valueOf(1000), 3, RoundingMode.HALF_UP);
+    }
+
     private LocalDateTime toLocalDateTime(Instant instant) {
         return instant != null ? LocalDateTime.ofInstant(instant, ZoneId.systemDefault()) : null;
+    }
+
+    /**
+     * Strip HTML-ish tags from free-text fields. The UI escapes on render so there's no XSS risk,
+     * but storing {@code <script>} payloads verbatim fails data-hygiene reviews and pollutes
+     * exports/search. Tags are removed (not encoded) so the value round-trips cleanly through
+     * downstream consumers.
+     */
+    private static String sanitizeText(String value) {
+        if (value == null) return null;
+        String stripped = value.replaceAll("<[^>]*>", "").trim();
+        return stripped.isEmpty() ? null : stripped;
     }
 }

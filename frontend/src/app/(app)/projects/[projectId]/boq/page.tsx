@@ -295,8 +295,10 @@ export default function BoqPage() {
             <thead>
               <tr className="bg-surface/80">
                 <th className="border border-border px-4 py-2 text-left text-text-secondary">Item No.</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Chapter</th>
                 <th className="border border-border px-4 py-2 text-left text-text-secondary">Description</th>
                 <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
+                <th className="border border-border px-4 py-2 text-left text-text-secondary">Status</th>
                 <th className="border border-border px-4 py-2 text-right text-text-secondary">BOQ Qty</th>
                 <th className="border border-border px-4 py-2 text-right text-text-secondary">BOQ Rate</th>
                 <th className="border border-border px-4 py-2 text-right text-text-secondary">BOQ Amount</th>
@@ -319,8 +321,28 @@ export default function BoqPage() {
                 return (
                   <tr key={item.id} className="hover:bg-surface-hover/30 text-text-primary">
                     <td className="border border-border px-4 py-2">{item.itemNo}</td>
+                    <td className="border border-border px-4 py-2 text-text-secondary">{item.chapter ?? "—"}</td>
                     <td className="border border-border px-4 py-2">{item.description}</td>
                     <td className="border border-border px-4 py-2">{item.unit}</td>
+                    <td className="border border-border px-4 py-2">
+                      {item.status ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            item.status === "COMPLETED"
+                              ? "bg-blue-500/20 text-blue-300"
+                              : item.status === "ACTIVE"
+                                ? "bg-success/20 text-success"
+                                : item.status === "ON_HOLD"
+                                  ? "bg-amber-500/20 text-warning"
+                                  : "bg-slate-500/20 text-slate-300"
+                          }`}
+                        >
+                          {item.status.replace("_", " ")}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="border border-border px-4 py-2 text-right">{formatAmount(item.boqQty)}</td>
                     <td className="border border-border px-4 py-2 text-right">{formatAmount(item.boqRate)}</td>
                     <td className="border border-border px-4 py-2 text-right">{formatAmount(item.boqAmount)}</td>
@@ -399,7 +421,7 @@ export default function BoqPage() {
             {summary && (
               <tfoot>
                 <tr className="sticky bottom-0 bg-surface/95 backdrop-blur text-text-primary font-semibold">
-                  <td className="border border-border px-4 py-2" colSpan={5}>
+                  <td className="border border-border px-4 py-2" colSpan={7}>
                     Grand Total
                   </td>
                   <td className="border border-border px-4 py-2 text-right">

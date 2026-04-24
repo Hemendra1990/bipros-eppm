@@ -29,12 +29,14 @@ public class ResourceService {
   public ResourceResponse createResource(CreateResourceRequest request) {
     log.info("Creating resource: code={}, type={}", request.code(), request.resourceType());
 
-    if (resourceRepository.findByCode(request.code()).isPresent()) {
-      throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE", "Resource with code " + request.code() + " already exists");
+    String code = request.code() != null && !request.code().isBlank()
+        ? request.code() : generateResourceCode(request.resourceType());
+    if (resourceRepository.findByCode(code).isPresent()) {
+      throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE", "Resource with code " + code + " already exists");
     }
 
     Resource resource = Resource.builder()
-        .code(request.code())
+        .code(code)
         .name(request.name())
         .resourceType(request.resourceType())
         .parentId(request.parentId())
@@ -47,6 +49,14 @@ public class ResourceService {
         .hourlyRate(request.hourlyRate() != null ? request.hourlyRate() : 0.0)
         .costPerUse(request.costPerUse() != null ? request.costPerUse() : 0.0)
         .overtimeRate(request.overtimeRate() != null ? request.overtimeRate() : 0.0)
+        .unit(request.unit())
+        .capacitySpec(request.capacitySpec())
+        .makeModel(request.makeModel())
+        .quantityAvailable(request.quantityAvailable())
+        .ownershipType(request.ownershipType())
+        .standardOutputPerDay(request.standardOutputPerDay())
+        .standardOutputUnit(request.standardOutputUnit())
+        .fuelLitresPerHour(request.fuelLitresPerHour())
         .sortOrder(0)
         .build();
 
@@ -134,6 +144,30 @@ public class ResourceService {
     if (request.overtimeRate() != null) {
       resource.setOvertimeRate(request.overtimeRate());
     }
+    if (request.unit() != null) {
+      resource.setUnit(request.unit());
+    }
+    if (request.capacitySpec() != null) {
+      resource.setCapacitySpec(request.capacitySpec());
+    }
+    if (request.makeModel() != null) {
+      resource.setMakeModel(request.makeModel());
+    }
+    if (request.quantityAvailable() != null) {
+      resource.setQuantityAvailable(request.quantityAvailable());
+    }
+    if (request.ownershipType() != null) {
+      resource.setOwnershipType(request.ownershipType());
+    }
+    if (request.standardOutputPerDay() != null) {
+      resource.setStandardOutputPerDay(request.standardOutputPerDay());
+    }
+    if (request.standardOutputUnit() != null) {
+      resource.setStandardOutputUnit(request.standardOutputUnit());
+    }
+    if (request.fuelLitresPerHour() != null) {
+      resource.setFuelLitresPerHour(request.fuelLitresPerHour());
+    }
 
     Resource updated = resourceRepository.save(resource);
     log.info("Resource updated: id={}", id);
@@ -144,6 +178,31 @@ public class ResourceService {
     }
 
     return ResourceResponse.from(updated);
+  }
+
+  /**
+   * Auto-generate a code per PMS MasterData Screen 04: {@code EQ-NNN} for equipment
+   * (ResourceType.NONLABOR maps to equipment in the MasterData taxonomy), {@code LAB-NNN} for
+   * labor, {@code MAT-NNN} for materials, {@code RES-NNN} for anything else. Walks the existing
+   * {@code code} column to find the next available suffix so multi-process inserts don't collide.
+   */
+  private String generateResourceCode(ResourceType type) {
+    String prefix = switch (type) {
+      case NONLABOR -> "EQ";
+      case LABOR -> "LAB";
+      case MATERIAL -> "MAT";
+    };
+    int next = 1;
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile("^" + prefix + "-(\\d+)$");
+    for (Resource r : resourceRepository.findAll()) {
+      if (r.getCode() == null) continue;
+      java.util.regex.Matcher m = p.matcher(r.getCode());
+      if (m.matches()) {
+        int n = Integer.parseInt(m.group(1));
+        if (n >= next) next = n + 1;
+      }
+    }
+    return String.format("%s-%03d", prefix, next);
   }
 
   public void deleteResource(UUID id) {

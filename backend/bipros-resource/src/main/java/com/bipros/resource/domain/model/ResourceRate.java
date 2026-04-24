@@ -3,6 +3,8 @@ package com.bipros.resource.domain.model;
 import com.bipros.common.model.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -55,4 +57,37 @@ public class ResourceRate extends BaseEntity {
 
   @Column(name = "max_units_per_time")
   private Double maxUnitsPerTime;
+
+  // ── PMS MasterData Screen 05 (Unit Rate Master) fields ───────────────────
+
+  /**
+   * Internal budgeted cost rate approved at project baseline. When only {@link #pricePerUnit}
+   * is supplied by a legacy client we copy it here so analytics reports work without a back-fill.
+   */
+  @Column(name = "budgeted_rate", precision = 19, scale = 4)
+  private BigDecimal budgetedRate;
+
+  /**
+   * Current market or invoice rate being paid on site. Compared with {@link #budgetedRate} to
+   * produce the Variance column on the Unit Rate Master register.
+   */
+  @Column(name = "actual_rate", precision = 19, scale = 4)
+  private BigDecimal actualRate;
+
+  /** End of the effective window; {@code null} means the rate is still active. */
+  @Column(name = "effective_to")
+  private LocalDate effectiveTo;
+
+  /** User who approved this rate. FK into security.users, nullable for system-imported rows. */
+  @Column(name = "approved_by_user_id")
+  private UUID approvedByUserId;
+
+  /** Denormalised user display name so exports work without a join. */
+  @Column(name = "approved_by_name", length = 120)
+  private String approvedByName;
+
+  /** Screen 05 Resource Category tab — EQUIPMENT / MANPOWER / MATERIAL / SUB_CONTRACT. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "category", length = 20)
+  private UnitRateCategory category;
 }

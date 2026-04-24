@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -53,4 +54,38 @@ public class Project extends BaseEntity {
 
     @Column(nullable = false)
     private Integer priority = 50;
+
+    // ── Master Data Screen 01 fields (PMS MasterData UI Screens Final) ────────────
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "category", length = 30)
+    private ProjectCategory category;
+
+    /** MoRTH/NHAI category code linked to {@link #category}. Free text to allow sub-codes. */
+    @Column(name = "morth_code", length = 20)
+    private String morthCode;
+
+    /** Start chainage in metres (e.g. 145 km +000 = 145_000). */
+    @Column(name = "from_chainage_m")
+    private Long fromChainageM;
+
+    /** End chainage in metres. */
+    @Column(name = "to_chainage_m")
+    private Long toChainageM;
+
+    /** Free-text place name for the start chainage. */
+    @Column(name = "from_location", length = 120)
+    private String fromLocation;
+
+    /** Free-text place name for the end chainage. */
+    @Column(name = "to_location", length = 120)
+    private String toLocation;
+
+    /**
+     * Total corridor length in km. Persisted (rather than always-derived) so exports and
+     * dashboards don't have to recompute from chainage metres. Kept in sync by the service
+     * whenever {@link #fromChainageM} / {@link #toChainageM} change.
+     */
+    @Column(name = "total_length_km", precision = 10, scale = 3)
+    private BigDecimal totalLengthKm;
 }

@@ -7,6 +7,8 @@ import com.bipros.project.application.dto.CreateWbsNodeRequest;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
 import com.bipros.project.application.dto.WbsNodeResponse;
 import com.bipros.project.domain.model.WbsNode;
+import com.bipros.project.domain.model.WbsStatus;
+import com.bipros.project.domain.model.WbsType;
 import com.bipros.project.domain.repository.ProjectActivityCounter;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
@@ -50,6 +52,23 @@ public class WbsService {
         node.setObsNodeId(request.obsNodeId());
         node.setSortOrder(0);
 
+        // Derive level and apply sensible defaults so POSTing with only {code,name,projectId}
+        // doesn't leave the node half-populated (BUG-016).
+        Integer level = request.wbsLevel();
+        if (level == null) {
+            if (request.parentId() != null) {
+                Integer parentLevel = wbsNodeRepository.findById(request.parentId())
+                    .map(WbsNode::getWbsLevel).orElse(0);
+                level = (parentLevel == null ? 0 : parentLevel) + 1;
+            } else {
+                level = 1;
+            }
+        }
+        node.setWbsLevel(level);
+        node.setWbsType(request.wbsType() != null ? request.wbsType()
+            : (request.parentId() == null ? WbsType.NODE : WbsType.WORK_PACKAGE));
+        node.setWbsStatus(request.wbsStatus() != null ? request.wbsStatus() : WbsStatus.NOT_STARTED);
+
         WbsNode saved = wbsNodeRepository.save(node);
         log.info("WBS node created with ID: {}", saved.getId());
         auditService.logCreate("WbsNode", saved.getId(), request);
@@ -65,16 +84,41 @@ public class WbsService {
 
         String oldName = node.getName();
         Integer oldSortOrder = node.getSortOrder();
+        UUID oldParentId = node.getParentId();
 
         node.setName(request.name());
         if (request.sortOrder() != null) {
             node.setSortOrder(request.sortOrder());
         }
 
+        if (request.parentId() != null) {
+            if (request.parentId().equals(id)) {
+                throw new BusinessRuleException("INVALID_PARENT",
+                    "WBS node cannot be its own parent");
+            }
+            // Detect descendant cycles: walk up the proposed parent's ancestry; if we hit `id`,
+            // the move would create a loop.
+            UUID ancestor = request.parentId();
+            int guard = 0;
+            while (ancestor != null && guard++ < 1000) {
+                if (ancestor.equals(id)) {
+                    throw new BusinessRuleException("INVALID_PARENT",
+                        "Moving this WBS node under the requested parent would create a cycle");
+                }
+                UUID next = wbsNodeRepository.findById(ancestor)
+                    .map(WbsNode::getParentId).orElse(null);
+                ancestor = next;
+            }
+            node.setParentId(request.parentId());
+        }
+
         WbsNode updated = wbsNodeRepository.save(node);
         log.info("WBS node updated: {}", id);
         auditService.logUpdate("WbsNode", id, "name", oldName, updated.getName());
         auditService.logUpdate("WbsNode", id, "sortOrder", oldSortOrder, updated.getSortOrder());
+        if (request.parentId() != null && !request.parentId().equals(oldParentId)) {
+            auditService.logUpdate("WbsNode", id, "parentId", oldParentId, updated.getParentId());
+        }
 
         return buildNodeResponse(updated);
     }

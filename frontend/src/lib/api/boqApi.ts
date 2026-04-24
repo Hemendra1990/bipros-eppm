@@ -1,6 +1,8 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
+export type BoqStatus = "PENDING" | "ACTIVE" | "COMPLETED" | "ON_HOLD";
+
 export interface BoqItemResponse {
   id: string;
   projectId: string;
@@ -19,6 +21,9 @@ export interface BoqItemResponse {
   percentComplete: number | null;
   costVariance: number | null;
   costVariancePercent: number | null;
+  // PMS MasterData Screen 03
+  chapter: string | null;
+  status: BoqStatus | null;
 }
 
 export interface BoqSummaryResponse {

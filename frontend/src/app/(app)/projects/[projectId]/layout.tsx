@@ -74,6 +74,13 @@ export default function ProjectDetailLayout({
     { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
     { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
     { label: "Materials", href: `/projects/${projectId}/material-reconciliation` },
+    // PMS MasterData screens
+    { label: "Stretches", href: `/projects/${projectId}/stretches` },
+    { label: "Material Sources", href: `/projects/${projectId}/material-sources` },
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials` },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register` },
+    { label: "GRNs", href: `/projects/${projectId}/grns` },
+    { label: "Issues", href: `/projects/${projectId}/issues` },
   ];
 
   // Check if any "More" link is active (check first so we can exclude them below)

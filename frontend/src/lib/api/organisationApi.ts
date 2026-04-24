@@ -1,5 +1,10 @@
 import { apiClient } from "./client";
-import type { ApiResponse, OrganisationResponse, OrganisationType } from "../types";
+import type {
+  ApiResponse,
+  CreateOrganisationRequest,
+  OrganisationResponse,
+  OrganisationType,
+} from "../types";
 
 export const organisationApi = {
   listAll: () =>
@@ -12,4 +17,22 @@ export const organisationApi = {
 
   get: (id: string) =>
     apiClient.get<ApiResponse<OrganisationResponse>>(`/v1/organisations/${id}`).then((r) => r.data),
+
+  create: (body: CreateOrganisationRequest) =>
+    apiClient
+      .post<ApiResponse<OrganisationResponse>>("/v1/organisations", body)
+      .then((r) => r.data),
+
+  update: (id: string, body: CreateOrganisationRequest) =>
+    apiClient
+      .put<ApiResponse<OrganisationResponse>>(`/v1/organisations/${id}`, body)
+      .then((r) => r.data),
+
+  delete: (id: string) =>
+    apiClient.delete<ApiResponse<void>>(`/v1/organisations/${id}`).then((r) => r.data),
+
+  assignProjects: (id: string, projectIds: string[]) =>
+    apiClient
+      .post<ApiResponse<OrganisationResponse>>(`/v1/organisations/${id}/projects`, { projectIds })
+      .then((r) => r.data),
 };

@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
@@ -72,6 +73,33 @@ public class User extends BaseEntity {
 
     @OneToMany(mappedBy = "user", fetch = FetchType.EAGER)
     private Set<UserRole> roles = new HashSet<>();
+
+    // ── PMS MasterData Screen 07 (Personnel Master) fields ───────────────────
+
+    /** Auto-generated employee code {@code EMP-NNN}, unique per project. */
+    @Column(name = "employee_code", length = 20, unique = true)
+    private String employeeCode;
+
+    /** Site contact number (format: {@code +91 XXXXX-XXXXX}). */
+    @Column(name = "mobile", length = 20)
+    private String mobile;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "department", length = 20)
+    private Department department;
+
+    /** Date of joining the project. */
+    @Column(name = "joining_date")
+    private LocalDate joiningDate;
+
+    /** Expected last date of assignment on this project. Alert raised when < 30 days remaining. */
+    @Column(name = "contract_end_date")
+    private LocalDate contractEndDate;
+
+    /** Current site-presence status (ON_SITE / ON_LEAVE / TRANSFERRED / RELEASED). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "presence_status", length = 20)
+    private PresenceStatus presenceStatus;
 
     public User(String username, String email, String passwordHash) {
         this.username = username;

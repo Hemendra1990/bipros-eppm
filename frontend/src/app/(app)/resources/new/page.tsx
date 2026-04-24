@@ -44,7 +44,7 @@ export default function NewResourcePage() {
     setError("");
 
     const errors: Record<string, string> = {};
-    if (!formData.code.trim()) errors.code = "Resource code is required";
+    // Code is now optional — server auto-generates EQ-/LAB-/MAT-NNN when blank.
     if (!formData.name.trim()) errors.name = "Resource name is required";
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -191,6 +191,115 @@ export default function NewResourcePage() {
               />
             </div>
           </div>
+
+          {formData.type === "NONLABOR" && (
+            <div className="border-t border-border pt-6">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-text-secondary">
+                Equipment Specifications
+              </h3>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Capacity / Spec</label>
+                  <input
+                    value={formData.capacitySpec ?? ""}
+                    onChange={(e) => setFormData((f) => ({ ...f, capacitySpec: e.target.value }))}
+                    placeholder="1.0 Cum, 60 TPH, 5.5 m"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Make / Model</label>
+                  <input
+                    value={formData.makeModel ?? ""}
+                    onChange={(e) => setFormData((f) => ({ ...f, makeModel: e.target.value }))}
+                    placeholder="JCB 210, CAT 320D"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 grid grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Quantity Available</label>
+                  <input
+                    type="number"
+                    value={formData.quantityAvailable ?? ""}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        quantityAvailable: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                      }))
+                    }
+                    min="0"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Ownership</label>
+                  <select
+                    value={formData.ownershipType ?? ""}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        ownershipType: (e.target.value ||
+                          undefined) as CreateResourceRequest["ownershipType"],
+                      }))
+                    }
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="">—</option>
+                    <option value="OWNED">Owned</option>
+                    <option value="HIRED">Hired</option>
+                    <option value="SUB_CONTRACTOR_PROVIDED">Sub-contractor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Fuel (L/hour)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData.fuelLitresPerHour ?? ""}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        fuelLitresPerHour: e.target.value ? Number(e.target.value) : undefined,
+                      }))
+                    }
+                    min="0"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Standard Output / Day</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.standardOutputPerDay ?? ""}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        standardOutputPerDay: e.target.value ? Number(e.target.value) : undefined,
+                      }))
+                    }
+                    min="0"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Output Unit</label>
+                  <input
+                    value={formData.standardOutputUnit ?? ""}
+                    onChange={(e) =>
+                      setFormData((f) => ({ ...f, standardOutputUnit: e.target.value }))
+                    }
+                    placeholder="Cum, MT, Sqm"
+                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-6">
             <button

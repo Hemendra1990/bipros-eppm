@@ -154,4 +154,35 @@ public class Resource extends BaseEntity {
   @Column(name = "sort_order", nullable = false, columnDefinition = "INTEGER DEFAULT 0")
   @Default
   private Integer sortOrder = 0;
+
+  // ── PMS MasterData Screen 04 (Equipment Master) fields ───────────────────
+
+  /** Technical specification: bucket size, tonnage, width, etc. E.g. "1.0 Cum", "60 TPH", "5.5 m". */
+  @Column(name = "capacity_spec", length = 80)
+  private String capacitySpec;
+
+  /** Manufacturer and model number. */
+  @Column(name = "make_model", length = 80)
+  private String makeModel;
+
+  /** Total number of units of this equipment type available on site. */
+  @Column(name = "quantity_available")
+  private Integer quantityAvailable;
+
+  /** OWNED / HIRED / SUB_CONTRACTOR_PROVIDED — drives hire-rate applicability. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "ownership_type", length = 30)
+  private ResourceOwnership ownershipType;
+
+  /** Expected daily production output (e.g. 500 Cum/day for an excavator). From productivity norms. */
+  @Column(name = "standard_output_per_day")
+  private Double standardOutputPerDay;
+
+  /** Average fuel burn in litres per hour — used in equipment cost computations. */
+  @Column(name = "fuel_litres_per_hour", precision = 10, scale = 2)
+  private BigDecimal fuelLitresPerHour;
+
+  /** Uncompressed unit of the {@link #standardOutputPerDay} metric (e.g. "Cum", "MT", "Sqm"). */
+  @Column(name = "standard_output_unit", length = 20)
+  private String standardOutputUnit;
 }

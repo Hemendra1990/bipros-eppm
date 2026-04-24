@@ -22,8 +22,12 @@ export interface CostSummary {
   totalRemaining: number;
   atCompletion: number;
   costVariance: number;
-  costPerformanceIndex: number;
+  costPerformanceIndex: number | null;
   expenseCount: number;
+  // PMS MasterData procurement roll-ups (nullable when the project has no material activity).
+  materialProcurementCost: number | null;
+  openStockValue: number | null;
+  materialIssuedCost: number | null;
 }
 
 export interface CashFlowForecastItem {

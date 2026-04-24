@@ -10,6 +10,13 @@ public record UpdateEpsNodeRequest(
 
     UUID obsId,
 
-    Integer sortOrder
+    Integer sortOrder,
+
+    /** For WBS updates: moves the node to a new parent. Reject self- and descendant-cycles. */
+    UUID parentId
 ) {
+    /** Legacy constructor for callers that predate the parentId field. */
+    public UpdateEpsNodeRequest(String name, UUID obsId, Integer sortOrder) {
+        this(name, obsId, sortOrder, null);
+    }
 }

@@ -1,6 +1,7 @@
 package com.bipros.project.application.dto;
 
 import com.bipros.project.domain.model.BoqItem;
+import com.bipros.project.domain.model.BoqStatus;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -22,7 +23,9 @@ public record BoqItemResponse(
     BigDecimal actualAmount,
     BigDecimal percentComplete,
     BigDecimal costVariance,
-    BigDecimal costVariancePercent
+    BigDecimal costVariancePercent,
+    String chapter,
+    BoqStatus status
 ) {
   public static BoqItemResponse from(BoqItem b) {
     return new BoqItemResponse(
@@ -42,7 +45,9 @@ public record BoqItemResponse(
         b.getActualAmount(),
         b.getPercentComplete(),
         b.getCostVariance(),
-        b.getCostVariancePercent()
+        b.getCostVariancePercent(),
+        b.getChapter(),
+        b.getStatus()
     );
   }
 }

@@ -57,6 +57,46 @@ public class ResourceAssignmentService {
         .toList();
   }
 
+  /**
+   * Pick the latest rate (by effectiveDate) for the resource+type and multiply by units.
+   *
+   * <p>Prefers the PMS MasterData {@code budgetedRate} when set (Screen 05) so project-baseline
+   * rate locks take effect; falls back to the legacy {@code pricePerUnit} otherwise. Callers
+   * that want the current market rate should use {@link #computeActualCost} instead.
+   */
+  private BigDecimal computePlannedCost(UUID resourceId, String rateType, Double plannedUnits) {
+    if (plannedUnits == null || rateType == null) return null;
+    List<ResourceRate> rates = rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
+        resourceId, rateType);
+    if (rates.isEmpty()) return null;
+    ResourceRate latest = rates.get(0);
+    BigDecimal baseRate = latest.getBudgetedRate() != null
+        ? latest.getBudgetedRate()
+        : latest.getPricePerUnit();
+    if (baseRate == null) return null;
+    return baseRate.multiply(BigDecimal.valueOf(plannedUnits));
+  }
+
+  /**
+   * Compute incurred cost using the market/actual rate when set (PMS Screen 05), else fall back
+   * to the budgeted or legacy price. Used by cost-summary / EVM callers that need AC.
+   */
+  @SuppressWarnings("unused")
+  private BigDecimal computeActualCost(UUID resourceId, String rateType, Double actualUnits) {
+    if (actualUnits == null || rateType == null) return null;
+    List<ResourceRate> rates = rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
+        resourceId, rateType);
+    if (rates.isEmpty()) return null;
+    ResourceRate latest = rates.get(0);
+    BigDecimal rate = latest.getActualRate() != null
+        ? latest.getActualRate()
+        : latest.getBudgetedRate() != null
+            ? latest.getBudgetedRate()
+            : latest.getPricePerUnit();
+    if (rate == null) return null;
+    return rate.multiply(BigDecimal.valueOf(actualUnits));
+  }
+
   /** Single-assignment hydration path. */
   private ResourceAssignmentResponse hydrate(ResourceAssignment a) {
     String rn = resourceRepository.findById(a.getResourceId()).map(Resource::getName).orElse(null);
@@ -85,15 +125,22 @@ public class ResourceAssignmentService {
               ", resourceId=" + request.resourceId());
         });
 
-    BigDecimal plannedCost = null;
-    if (request.plannedUnits() != null && request.rateType() != null) {
-      List<ResourceRate> rates = rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
-          request.resourceId(), request.rateType());
-      if (!rates.isEmpty()) {
-        ResourceRate latestRate = rates.get(0);
-        plannedCost = latestRate.getPricePerUnit().multiply(BigDecimal.valueOf(request.plannedUnits()));
+    // Default to STANDARD rate when the caller didn't specify one (BUG-031).
+    String effectiveRateType = request.rateType() != null ? request.rateType() : "STANDARD";
+
+    // Back-fill planned dates from the activity when not provided (BUG-031).
+    LocalDate plannedStart = request.plannedStartDate();
+    LocalDate plannedFinish = request.plannedFinishDate();
+    if (plannedStart == null || plannedFinish == null) {
+      Activity activity = activityRepository.findById(request.activityId()).orElse(null);
+      if (activity != null) {
+        if (plannedStart == null) plannedStart = activity.getPlannedStartDate();
+        if (plannedFinish == null) plannedFinish = activity.getPlannedFinishDate();
       }
     }
+
+    BigDecimal plannedCost = computePlannedCost(
+        request.resourceId(), effectiveRateType, request.plannedUnits());
 
     ResourceAssignment assignment = ResourceAssignment.builder()
         .activityId(request.activityId())
@@ -101,10 +148,10 @@ public class ResourceAssignmentService {
         .roleId(request.roleId())
         .projectId(request.projectId())
         .plannedUnits(request.plannedUnits())
-        .rateType(request.rateType())
+        .rateType(effectiveRateType)
         .resourceCurveId(request.resourceCurveId())
-        .plannedStartDate(request.plannedStartDate())
-        .plannedFinishDate(request.plannedFinishDate())
+        .plannedStartDate(plannedStart)
+        .plannedFinishDate(plannedFinish)
         .plannedCost(plannedCost)
         .build();
 

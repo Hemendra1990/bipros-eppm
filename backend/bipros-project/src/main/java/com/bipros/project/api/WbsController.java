@@ -39,7 +39,12 @@ public class WbsController {
     public ResponseEntity<ApiResponse<WbsNodeResponse>> createNode(
         @PathVariable UUID projectId,
         @Valid @RequestBody CreateWbsNodeRequest request) {
-        WbsNodeResponse response = wbsService.createNode(request);
+        // Path parameter wins; the body's projectId (if any) is ignored so callers don't have
+        // to duplicate it (BUG-012).
+        CreateWbsNodeRequest normalised = new CreateWbsNodeRequest(
+            request.code(), request.name(), request.parentId(), projectId, request.obsNodeId(),
+            request.wbsType(), request.wbsStatus(), request.wbsLevel());
+        WbsNodeResponse response = wbsService.createNode(normalised);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 

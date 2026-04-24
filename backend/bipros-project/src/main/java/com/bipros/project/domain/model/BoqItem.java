@@ -3,6 +3,8 @@ package com.bipros.project.domain.model;
 import com.bipros.common.model.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -97,4 +99,17 @@ public class BoqItem extends BaseEntity {
   /** Derived: costVariance / earnedBudget (qtyExecutedToDate × budgetedRate). Nullable when earnedBudget = 0. */
   @Column(name = "cost_variance_percent", precision = 9, scale = 6)
   private BigDecimal costVariancePercent;
+
+  /**
+   * MoRTH chapter grouping (e.g. "1 - Earthwork", "3 - Bituminous"). Free text so contracts with
+   * non-standard chapter numbering still fit; the UI's Chapter dropdown is populated from
+   * distinct values across the project.
+   */
+  @Column(name = "chapter", length = 80)
+  private String chapter;
+
+  /** Lifecycle status per PMS MasterData Screen 03. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", length = 20)
+  private BoqStatus status;
 }

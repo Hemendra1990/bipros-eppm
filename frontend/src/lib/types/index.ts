@@ -22,6 +22,10 @@ export interface FieldError {
 
 export interface PagedResponse<T> {
   content: T[];
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
   pagination: {
     totalElements: number;
     totalPages: number;
@@ -65,6 +69,14 @@ export interface UserResponse {
   designation?: string | null;
   primaryIcpmsRole?: string | null;
   authMethods?: AuthMethod[] | null;
+  // PMS MasterData Screen 07 — Personnel Master
+  employeeCode?: string | null;
+  mobile?: string | null;
+  department?: Department | null;
+  joiningDate?: string | null;
+  contractEndDate?: string | null;
+  presenceStatus?: PresenceStatus | null;
+  assignedStretchIds?: string[] | null;
 }
 
 // === Project Structure ===
@@ -104,6 +116,24 @@ export interface ProjectResponse {
   status: ProjectStatus;
   mustFinishByDate: string | null;
   priority: number;
+  // PMS MasterData Screen 01 fields
+  category: string | null;
+  morthCode: string | null;
+  fromChainageM: number | null;
+  toChainageM: number | null;
+  fromLocation: string | null;
+  toLocation: string | null;
+  totalLengthKm: number | null;
+  contract: {
+    contractId: string | null;
+    contractNumber: string | null;
+    contractType: string | null;
+    contractValue: number | null;
+    revisedValue: number | null;
+    startDate: string | null;
+    completionDate: string | null;
+    dlpMonths: number | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -143,6 +173,15 @@ export interface CreateProjectRequest {
   plannedStartDate: string;
   plannedFinishDate?: string;
   priority?: number;
+  // PMS MasterData Screen 01 enrichment
+  category?: ProjectCategory | null;
+  morthCode?: string | null;
+  fromChainageM?: number | null;
+  toChainageM?: number | null;
+  fromLocation?: string | null;
+  toLocation?: string | null;
+  totalLengthKm?: number | null;
+  contract?: ContractSummaryInput | null;
 }
 
 export interface UpdateProjectRequest {
@@ -512,13 +551,6 @@ export type ContractStatus =
   | "COMPLETED"
   | "TERMINATED"
   | "DLP";
-export type ContractType =
-  | "EPC_LUMP_SUM_FIDIC_YELLOW"
-  | "EPC_LUMP_SUM_FIDIC_RED"
-  | "EPC_LUMP_SUM_FIDIC_SILVER"
-  | "ITEM_RATE_FIDIC_RED"
-  | "PERCENTAGE_BASED_PMC"
-  | "LUMP_SUM_UNIT_RATE";
 export type MilestoneStatus = "PENDING" | "ACHIEVED" | "DELAYED" | "WAIVED";
 export type VariationOrderStatus = "INITIATED" | "RECOMMENDED" | "APPROVED" | "REJECTED";
 export type BondType = "PERFORMANCE_GUARANTEE" | "EMD" | "ADVANCE_GUARANTEE" | "RETENTION";
@@ -809,7 +841,23 @@ export interface CreateCorridorCodeRequest {
 
 // === IC-PMS Master Data ===
 
-export type OrganisationType = "EMPLOYER" | "SPV" | "PMC" | "EPC_CONTRACTOR" | "GOVERNMENT_AUDITOR";
+export type OrganisationType =
+  | "EMPLOYER"
+  | "SPV"
+  | "PMC"
+  | "EPC_CONTRACTOR"
+  | "GOVERNMENT_AUDITOR"
+  | "MAIN_CONTRACTOR"
+  | "SUB_CONTRACTOR"
+  | "CONSULTANT"
+  | "IE"
+  | "SUPPLIER";
+
+export type OrganisationRegistrationStatus =
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "CLOSED"
+  | "PENDING_KYC";
 
 export interface OrganisationResponse {
   id: string;
@@ -819,6 +867,334 @@ export interface OrganisationResponse {
   organisationType: OrganisationType;
   parentOrganisationId: string | null;
   active: boolean;
+  contactPersonName: string | null;
+  contactMobile: string | null;
+  contactEmail: string | null;
+  pan: string | null;
+  gstin: string | null;
+  registrationNumber: string | null;
+  addressLine: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  registrationStatus: OrganisationRegistrationStatus | null;
+  associatedProjectIds: string[];
+}
+
+export interface CreateOrganisationRequest {
+  code?: string | null;
+  name: string;
+  shortName?: string | null;
+  organisationType: OrganisationType;
+  parentOrganisationId?: string | null;
+  active?: boolean;
+  contactPersonName?: string | null;
+  contactMobile?: string | null;
+  contactEmail?: string | null;
+  pan?: string | null;
+  gstin?: string | null;
+  registrationNumber?: string | null;
+  addressLine?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  registrationStatus?: OrganisationRegistrationStatus | null;
+  associatedProjectIds?: string[];
+}
+
+// === PMS MasterData UI Screens ===
+
+export type ProjectCategory =
+  | "HIGHWAY"
+  | "EXPRESSWAY"
+  | "RURAL_ROAD"
+  | "STATE_HIGHWAY"
+  | "URBAN_ROAD"
+  | "OTHER";
+
+export type ContractType =
+  | "EPC_LUMP_SUM_FIDIC_YELLOW"
+  | "EPC_LUMP_SUM_FIDIC_RED"
+  | "EPC_LUMP_SUM_FIDIC_SILVER"
+  | "ITEM_RATE_FIDIC_RED"
+  | "PERCENTAGE_BASED_PMC"
+  | "LUMP_SUM_UNIT_RATE"
+  | "EPC"
+  | "BOT"
+  | "HAM"
+  | "ITEM_RATE"
+  | "LUMP_SUM"
+  | "ANNUITY";
+
+export interface ProjectContractSummary {
+  contractId: string | null;
+  contractNumber: string | null;
+  contractType: ContractType | null;
+  contractValue: number | null;
+  revisedValue: number | null;
+  startDate: string | null;
+  completionDate: string | null;
+  dlpMonths: number | null;
+}
+
+export interface ContractSummaryInput {
+  contractNumber?: string | null;
+  contractType?: ContractType | null;
+  contractValue?: number | null;
+  revisedValue?: number | null;
+  startDate?: string | null;
+  completionDate?: string | null;
+  dlpMonths?: number | null;
+  contractorName?: string | null;
+}
+
+export type BoqStatus = "PENDING" | "ACTIVE" | "COMPLETED" | "ON_HOLD";
+
+export type ResourceOwnership = "OWNED" | "HIRED" | "SUB_CONTRACTOR_PROVIDED";
+
+export type UnitRateCategory = "EQUIPMENT" | "MANPOWER" | "MATERIAL" | "SUB_CONTRACT";
+
+export type Department =
+  | "CIVIL"
+  | "QUALITY"
+  | "SURVEY"
+  | "PLANT"
+  | "HSE"
+  | "STORES"
+  | "ADMIN"
+  | "FINANCE"
+  | "OTHER";
+
+export type PresenceStatus = "ON_SITE" | "ON_LEAVE" | "TRANSFERRED" | "RELEASED";
+
+export type StretchStatus = "NOT_STARTED" | "ACTIVE" | "COMPLETE" | "SNAGGING";
+
+export type MaterialSourceType =
+  | "BORROW_AREA"
+  | "QUARRY"
+  | "BITUMEN_DEPOT"
+  | "CEMENT_SOURCE";
+
+export type LabTestStatus = "ALL_PASS" | "TESTS_PENDING" | "ONE_OR_MORE_FAIL";
+
+export type MaterialCategory =
+  | "BITUMINOUS"
+  | "AGGREGATE"
+  | "CEMENT"
+  | "STEEL"
+  | "GRANULAR"
+  | "SAND"
+  | "PRECAST"
+  | "ROAD_MARKING";
+
+export type MaterialStatus = "ACTIVE" | "INACTIVE" | "DISCONTINUED";
+
+export type StockStatusTag = "OK" | "LOW" | "CRITICAL";
+
+export type ResourceUnit =
+  | "PER_DAY"
+  | "MT"
+  | "CU_M"
+  | "RMT"
+  | "NOS"
+  | "KG"
+  | "LITRE";
+
+export interface StretchResponse {
+  id: string;
+  projectId: string;
+  stretchCode: string;
+  name: string | null;
+  fromChainageM: number;
+  toChainageM: number;
+  lengthM: number | null;
+  assignedSupervisorId: string | null;
+  packageCode: string | null;
+  status: StretchStatus | null;
+  milestoneName: string | null;
+  targetDate: string | null;
+  boqItemIds: string[];
+}
+
+export interface CreateStretchRequest {
+  stretchCode?: string | null;
+  name?: string | null;
+  fromChainageM: number;
+  toChainageM: number;
+  assignedSupervisorId?: string | null;
+  packageCode?: string | null;
+  status?: StretchStatus | null;
+  milestoneName?: string | null;
+  targetDate?: string | null;
+  boqItemIds?: string[];
+}
+
+export interface MaterialSourceLabTestRow {
+  id: string;
+  testName: string | null;
+  standardReference: string | null;
+  resultValue: number | null;
+  resultUnit: string | null;
+  passed: boolean | null;
+  testDate: string | null;
+  remarks: string | null;
+}
+
+export interface MaterialSourceResponse {
+  id: string;
+  projectId: string;
+  sourceCode: string;
+  name: string | null;
+  sourceType: MaterialSourceType;
+  village: string | null;
+  taluk: string | null;
+  district: string | null;
+  state: string | null;
+  distanceKm: number | null;
+  approvedQuantity: number | null;
+  approvedQuantityUnit: ResourceUnit | null;
+  approvalReference: string | null;
+  approvalAuthority: string | null;
+  cbrAveragePercent: number | null;
+  mddGcc: number | null;
+  labTestStatus: LabTestStatus | null;
+  labTests: MaterialSourceLabTestRow[];
+}
+
+export interface CreateMaterialSourceRequest {
+  sourceCode?: string | null;
+  name?: string | null;
+  sourceType: MaterialSourceType;
+  village?: string | null;
+  taluk?: string | null;
+  district?: string | null;
+  state?: string | null;
+  distanceKm?: number | null;
+  approvedQuantity?: number | null;
+  approvedQuantityUnit?: ResourceUnit | null;
+  approvalReference?: string | null;
+  approvalAuthority?: string | null;
+  cbrAveragePercent?: number | null;
+  mddGcc?: number | null;
+  labTestStatus?: LabTestStatus | null;
+  labTests?: {
+    testName?: string | null;
+    standardReference?: string | null;
+    resultValue?: number | null;
+    resultUnit?: string | null;
+    passed?: boolean | null;
+    testDate?: string | null;
+    remarks?: string | null;
+  }[];
+}
+
+export interface MaterialResponse {
+  id: string;
+  projectId: string;
+  code: string;
+  name: string;
+  category: MaterialCategory | null;
+  unit: ResourceUnit | null;
+  specificationGrade: string | null;
+  minStockLevel: number | null;
+  reorderQuantity: number | null;
+  leadTimeDays: number | null;
+  storageLocation: string | null;
+  approvedSupplierId: string | null;
+  status: MaterialStatus | null;
+  applicableBoqItemIds: string[];
+}
+
+export interface CreateMaterialRequest {
+  code?: string | null;
+  name: string;
+  category: MaterialCategory;
+  unit?: ResourceUnit | null;
+  specificationGrade?: string | null;
+  minStockLevel?: number | null;
+  reorderQuantity?: number | null;
+  leadTimeDays?: number | null;
+  storageLocation?: string | null;
+  approvedSupplierId?: string | null;
+  status?: MaterialStatus | null;
+  applicableBoqItemIds?: string[];
+}
+
+export interface GoodsReceiptResponse {
+  id: string;
+  projectId: string;
+  grnNumber: string;
+  materialId: string;
+  receivedDate: string;
+  quantity: number;
+  unitRate: number | null;
+  amount: number | null;
+  supplierOrganisationId: string | null;
+  poNumber: string | null;
+  vehicleNumber: string | null;
+  receivedByUserId: string | null;
+  acceptedQuantity: number | null;
+  rejectedQuantity: number | null;
+  remarks: string | null;
+}
+
+export interface CreateGoodsReceiptRequest {
+  materialId: string;
+  receivedDate: string;
+  quantity: number;
+  unitRate?: number | null;
+  supplierOrganisationId?: string | null;
+  poNumber?: string | null;
+  vehicleNumber?: string | null;
+  receivedByUserId?: string | null;
+  acceptedQuantity?: number | null;
+  rejectedQuantity?: number | null;
+  remarks?: string | null;
+}
+
+export interface MaterialIssueResponse {
+  id: string;
+  projectId: string;
+  challanNumber: string;
+  materialId: string;
+  issueDate: string;
+  quantity: number;
+  issuedToUserId: string | null;
+  stretchId: string | null;
+  activityId: string | null;
+  wastageQuantity: number | null;
+  remarks: string | null;
+}
+
+export interface CreateMaterialIssueRequest {
+  materialId: string;
+  issueDate: string;
+  quantity: number;
+  issuedToUserId?: string | null;
+  stretchId?: string | null;
+  activityId?: string | null;
+  wastageQuantity?: number | null;
+  remarks?: string | null;
+}
+
+export interface MaterialStockRow {
+  id: string;
+  projectId: string;
+  materialId: string;
+  materialCode: string | null;
+  materialName: string | null;
+  openingStock: number | null;
+  receivedMonth: number | null;
+  issuedMonth: number | null;
+  currentStock: number;
+  minStockLevel: number | null;
+  reorderQuantity: number | null;
+  stockValue: number | null;
+  stockStatusTag: StockStatusTag | null;
+  lastGrnId: string | null;
+  lastIssueDate: string | null;
+  cumulativeConsumed: number | null;
+  wastagePercent: number | null;
 }
 
 export type AuthMethod = "AADHAAR_OTP" | "NIC_SSO" | "DSC_CLASS_3" | "USERNAME_PASSWORD";

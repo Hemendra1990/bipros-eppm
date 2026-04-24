@@ -16,9 +16,12 @@ import com.bipros.calendar.domain.model.DayType;
 import com.bipros.calendar.domain.repository.CalendarRepository;
 import com.bipros.calendar.domain.repository.CalendarWorkWeekRepository;
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.model.ActivityType;
 import com.bipros.activity.domain.model.DurationType;
+import com.bipros.activity.domain.model.RelationshipType;
+import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.project.application.service.BoqCalculator;
 import com.bipros.project.domain.model.BoqItem;
@@ -72,6 +75,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -135,6 +139,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   private final MaterialConsumptionLogRepository materialConsumptionLogRepository;
   private final NhaiRoadProjectWorkbookReader reader;
   private final ActivityRepository activityRepository;
+  private final ActivityRelationshipRepository activityRelationshipRepository;
 
   @Override
   @Transactional
@@ -268,6 +273,15 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
     p.setDataDate(p.getPlannedStartDate());
     p.setStatus(ProjectStatus.ACTIVE);
     p.setPriority(1);
+    // PMS MasterData Screen 01 enrichment — makes the Project Master UI render real data.
+    p.setCategory(com.bipros.project.domain.model.ProjectCategory.HIGHWAY);
+    p.setMorthCode("NH-48");
+    p.setFromChainageM(CHAINAGE_START_M);
+    p.setToChainageM(CHAINAGE_END_M);
+    p.setFromLocation("Km 145+000");
+    p.setToLocation("Km 165+000");
+    p.setTotalLengthKm(java.math.BigDecimal.valueOf(
+        (CHAINAGE_END_M - CHAINAGE_START_M) / 1000.0).setScale(3, java.math.RoundingMode.HALF_UP));
     return projectRepository.save(p);
   }
 
@@ -639,6 +653,84 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
       totalSeeded++;
     }
     log.info("[NH-48] seeded {} activities derived from BOQ items + productivity norms", totalSeeded);
+
+    seedActivityRelationships(projectId);
+  }
+
+  /**
+   * Chain NH-48 activities with FS(0) relationships. Within each BOQ prefix group (earthwork,
+   * sub-base, bituminous, etc.) successive itemNos depend on their predecessor; additionally each
+   * group's last activity feeds the next group (earthwork → sub-base → bituminous → road
+   * furniture → finishing) so the scheduler sees one connected network instead of 15 orphans.
+   */
+  private void seedActivityRelationships(UUID projectId) {
+    if (activityRelationshipRepository.findByProjectId(projectId).size() >= 2) {
+      return;
+    }
+    List<Activity> activities = activityRepository.findByProjectId(projectId).stream()
+        .filter(a -> a.getCode() != null && a.getCode().startsWith("ACT-"))
+        .sorted(Comparator.comparing(this::numericItemKey))
+        .toList();
+    if (activities.size() < 2) return;
+
+    // Group by BOQ prefix (first character of itemNo).
+    java.util.LinkedHashMap<String, List<Activity>> byPrefix = new java.util.LinkedHashMap<>();
+    for (Activity a : activities) {
+      String itemNo = a.getCode().substring("ACT-".length());
+      String prefix = itemNo.substring(0, 1);
+      byPrefix.computeIfAbsent(prefix, p -> new ArrayList<>()).add(a);
+    }
+
+    int created = 0;
+    // Intra-group FS chain
+    Activity prevGroupTail = null;
+    for (var entry : byPrefix.entrySet()) {
+      List<Activity> group = entry.getValue();
+      for (int i = 1; i < group.size(); i++) {
+        if (persistRelationship(projectId, group.get(i - 1), group.get(i), 0.0)) created++;
+      }
+      // Inter-group: last of previous group → first of this group
+      if (prevGroupTail != null && !group.isEmpty()) {
+        if (persistRelationship(projectId, prevGroupTail, group.get(0), 0.0)) created++;
+      }
+      if (!group.isEmpty()) prevGroupTail = group.get(group.size() - 1);
+    }
+    log.info("[NH-48] seeded {} activity relationships across {} BOQ groups",
+        created, byPrefix.size());
+  }
+
+  private boolean persistRelationship(UUID projectId, Activity pred, Activity succ, double lag) {
+    if (activityRelationshipRepository
+        .existsByPredecessorActivityIdAndSuccessorActivityId(pred.getId(), succ.getId())) {
+      return false;
+    }
+    ActivityRelationship rel = new ActivityRelationship();
+    rel.setProjectId(projectId);
+    rel.setPredecessorActivityId(pred.getId());
+    rel.setSuccessorActivityId(succ.getId());
+    rel.setRelationshipType(RelationshipType.FINISH_TO_START);
+    rel.setLag(lag);
+    rel.setIsExternal(false);
+    activityRelationshipRepository.save(rel);
+    return true;
+  }
+
+  /**
+   * Sort key that orders BOQ itemNos numerically segment-by-segment so 1.10 sorts after 1.9
+   * rather than before it.
+   */
+  private String numericItemKey(Activity a) {
+    String itemNo = a.getCode().substring("ACT-".length());
+    StringBuilder key = new StringBuilder();
+    for (String seg : itemNo.split("\\.")) {
+      try {
+        key.append(String.format("%08d", Integer.parseInt(seg)));
+      } catch (NumberFormatException e) {
+        key.append(seg);
+      }
+      key.append('.');
+    }
+    return key.toString();
   }
 
   /** Compute duration in days for a BOQ item using the matching productivity norm. */

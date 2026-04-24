@@ -1,14 +1,30 @@
 import { apiClient } from "./client";
 import type {
   ApiResponse,
+  Department,
   IcpmsModule,
   ModuleAccessLevel,
   PagedResponse,
+  PresenceStatus,
   UserResponse,
 } from "../types";
 
 export interface UpdateUserRolesRequest {
   roles: string[];
+}
+
+export interface UpdateUserProfileRequest {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  mobile?: string | null;
+  designation?: string | null;
+  department?: Department | null;
+  organisationId?: string | null;
+  joiningDate?: string | null;
+  contractEndDate?: string | null;
+  presenceStatus?: PresenceStatus | null;
+  enabled?: boolean | null;
 }
 
 export interface UserAccessApiResponse {
@@ -42,5 +58,10 @@ export const userApi = {
   toggleUserEnabled: (userId: string, enabled: boolean) =>
     apiClient
       .put<ApiResponse<UserResponse>>(`/v1/users/${userId}/status`, { enabled })
+      .then((r) => r.data),
+
+  updateProfile: (userId: string, body: UpdateUserProfileRequest) =>
+    apiClient
+      .put<ApiResponse<UserResponse>>(`/v1/users/${userId}`, body)
       .then((r) => r.data),
 };

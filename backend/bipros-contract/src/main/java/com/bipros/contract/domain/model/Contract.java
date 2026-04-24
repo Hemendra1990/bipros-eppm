@@ -44,6 +44,10 @@ public class Contract extends BaseEntity {
     @Column(name = "contract_value", precision = 15, scale = 2)
     private BigDecimal contractValue;
 
+    /** Revised contract value after approved change orders / variations. Must be >= contractValue. */
+    @Column(name = "revised_value", precision = 15, scale = 2)
+    private BigDecimal revisedValue;
+
     @Column(name = "loa_date")
     private LocalDate loaDate;
 

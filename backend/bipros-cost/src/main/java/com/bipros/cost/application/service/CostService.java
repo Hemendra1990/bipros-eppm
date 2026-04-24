@@ -7,6 +7,8 @@ import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.dto.*;
 import com.bipros.cost.domain.entity.*;
 import com.bipros.cost.domain.repository.*;
+import com.bipros.resource.domain.repository.GoodsReceiptNoteRepository;
+import com.bipros.resource.domain.repository.MaterialStockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,9 @@ public class CostService {
     private final CashFlowForecastEngine cashFlowForecastEngine;
     private final SatelliteGateService satelliteGateService;
     private final AuditService auditService;
+    // PMS MasterData wiring — material procurement + on-hand stock enrich the cost summary.
+    private final GoodsReceiptNoteRepository goodsReceiptNoteRepository;
+    private final MaterialStockRepository materialStockRepository;
 
     // Cost Account Operations
     @Transactional
@@ -551,7 +556,20 @@ public class CostService {
                 .map(e -> e.getAtCompletionCost() != null ? e.getAtCompletionCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return CostSummaryDto.of(totalBudget, totalActual, totalRemaining, atCompletion, expenses.size());
+        // PMS MasterData: pull material procurement + stock value so the summary reflects the
+        // procurement ledger even when it hasn't been copied into ActivityExpense rows.
+        BigDecimal materialProcurement = goodsReceiptNoteRepository
+                .findByProjectIdOrderByReceivedDateDesc(projectId).stream()
+                .map(g -> g.getAmount() != null ? g.getAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal openStock = materialStockRepository.findByProjectId(projectId).stream()
+                .map(s -> s.getStockValue() != null ? s.getStockValue() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal materialIssued = materialProcurement.subtract(openStock);
+        if (materialIssued.signum() < 0) materialIssued = BigDecimal.ZERO;
+
+        return CostSummaryDto.of(totalBudget, totalActual, totalRemaining, atCompletion,
+            expenses.size(), materialProcurement, openStock, materialIssued);
     }
 
     // Period Aggregation
