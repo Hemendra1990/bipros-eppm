@@ -30,6 +30,7 @@ const groups: NavGroup[] = [
     label: "Execute",
     items: [
       { name: "Resources", href: "/resources", icon: Users },
+      { name: "Calendars", href: "/admin/calendars", icon: Calendar },
     ],
   },
   {
@@ -42,23 +43,17 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    label: "Master data",
-    items: [
-      { name: "Organisations", href: "/admin/organisations", icon: Building2 },
-      { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge },
-      { name: "Resource Roles", href: "/admin/resource-roles", icon: Users },
-      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge },
-      { name: "Calendars", href: "/admin/calendars", icon: Calendar },
-      { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
-      { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal },
-    ],
-  },
-  {
     label: "Admin",
     items: [
       { name: "Users", href: "/admin/users", icon: Users },
+      { name: "Organisations", href: "/admin/organisations", icon: Building2 },
       { name: "User Access", href: "/admin/user-access", icon: UserCog },
+      { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
+      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge },
+      { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge },
+      { name: "Resource Roles", href: "/admin/resource-roles", icon: Users },
       { name: "Integrations", href: "/admin/integrations", icon: Plug },
+      { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal },
       { name: "Settings", href: "/admin/settings", icon: Settings },
     ],
   },
