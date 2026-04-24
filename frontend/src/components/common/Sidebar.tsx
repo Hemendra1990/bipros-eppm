@@ -1,145 +1,225 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3,
-  Briefcase,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  FolderTree,
-  LayoutDashboard,
-  Network,
-  Settings,
-  Shield,
-  Users,
-  Layers,
-  Sparkles,
-  FileText,
-  Plug,
-  SlidersHorizontal,
-  Building2,
-  UserCog,
-  Gauge,
+  BarChart3, Briefcase, Building2, Calendar, ChevronDown, ChevronLeft,
+  ChevronRight, FileText, FolderTree, Gauge, LayoutDashboard, Layers,
+  LogOut, Network, Plug, Settings, Shield, SlidersHorizontal, Sparkles,
+  UserCog, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { useAppStore } from "@/lib/state/store";
+import { useAppStore, useAuthStore } from "@/lib/state/store";
 
-const mainNavigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Projects", href: "/projects", icon: FolderTree },
-  { name: "Portfolios", href: "/portfolios", icon: Briefcase },
-  { name: "EPS", href: "/eps", icon: Layers },
-  { name: "Resources", href: "/resources", icon: Users },
-  { name: "Calendars", href: "/admin/calendars", icon: Calendar },
-  { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Risk", href: "/risk", icon: Shield },
-  { name: "OBS", href: "/obs", icon: Network },
-  { name: "Analytics", href: "/analytics", icon: Sparkles },
-  { name: "Dashboards", href: "/dashboards", icon: LayoutDashboard },
+type NavItem = { name: string; href: string; icon: LucideIcon };
+type NavGroup = { label: string; items: NavItem[] };
+
+const groups: NavGroup[] = [
+  {
+    label: "Plan",
+    items: [
+      { name: "Dashboard", href: "/", icon: LayoutDashboard },
+      { name: "Portfolios", href: "/portfolios", icon: Briefcase },
+      { name: "Projects", href: "/projects", icon: FolderTree },
+      { name: "EPS", href: "/eps", icon: Layers },
+      { name: "Dashboards", href: "/dashboards", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "Execute",
+    items: [
+      { name: "Resources", href: "/resources", icon: Users },
+      { name: "Calendars", href: "/admin/calendars", icon: Calendar },
+    ],
+  },
+  {
+    label: "Control",
+    items: [
+      { name: "Reports", href: "/reports", icon: BarChart3 },
+      { name: "Risk", href: "/risk", icon: Shield },
+      { name: "OBS", href: "/obs", icon: Network },
+      { name: "Analytics", href: "/analytics", icon: Sparkles },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { name: "Users", href: "/admin/users", icon: Users },
+      { name: "Organisations", href: "/admin/organisations", icon: Building2 },
+      { name: "User Access", href: "/admin/user-access", icon: UserCog },
+      { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
+      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge },
+      { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge },
+      { name: "Resource Roles", href: "/admin/resource-roles", icon: Users },
+      { name: "Integrations", href: "/admin/integrations", icon: Plug },
+      { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal },
+      { name: "Settings", href: "/admin/settings", icon: Settings },
+    ],
+  },
 ];
 
-const adminNavigation = [
-  { name: "Users", href: "/admin/users", icon: Users },
-  { name: "Settings", href: "/admin/settings", icon: Settings },
-  { name: "Organisations", href: "/admin/organisations", icon: Building2 },
-  { name: "User Access", href: "/admin/user-access", icon: UserCog },
-  { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
-  { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge },
-  { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge },
-  { name: "Resource Roles", href: "/admin/resource-roles", icon: Users },
-  { name: "Integrations", href: "/admin/integrations", icon: Plug },
-  { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal },
-];
+function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useAppStore();
+  const { user, clearAuth } = useAuthStore();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    document.cookie = "access_token=; path=/; max-age=0";
+    clearAuth();
+    router.push("/auth/login");
+  };
+
+  const displayName = user?.firstName ?? user?.username ?? "User";
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-border-subtle bg-surface shadow-lg transition-all duration-200",
-        "relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px before:bg-gradient-to-b before:from-accent-glow before:to-transparent before:opacity-50",
-        sidebarCollapsed ? "w-16" : "w-64"
+        "flex flex-col bg-paper border-r border-hairline transition-[width] duration-200",
+        sidebarCollapsed ? "w-16" : "w-[260px]"
       )}
     >
-      <div className="flex h-14 items-center justify-between border-b border-border-subtle px-4 relative z-10">
+      {/* Brand + collapse */}
+      <div className="flex items-center justify-between border-b border-[#F4EDD8] px-4 py-5">
         {!sidebarCollapsed && (
-          <span className="text-lg font-bold gradient-text">Bipros</span>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-paper font-display font-bold text-base"
+              style={{ background: "linear-gradient(135deg,#D4AF37,#B8962E 60%,#8C6F1E)" }}
+            >
+              B
+            </div>
+            <div className="flex flex-col leading-none">
+              <span className="font-display font-semibold text-lg text-charcoal tracking-tight">
+                Bipros
+              </span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-gold-deep mt-0.5">
+                EPPM
+              </span>
+            </div>
+          </div>
         )}
+        {sidebarCollapsed && (
+          <div
+            className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-paper font-display font-bold"
+            style={{ background: "linear-gradient(135deg,#D4AF37,#B8962E 60%,#8C6F1E)" }}
+          >
+            B
+          </div>
+        )}
+        {!sidebarCollapsed && (
+          <button
+            onClick={toggleSidebar}
+            aria-label="Collapse sidebar"
+            className="rounded-md p-1 text-slate hover:bg-ivory hover:text-gold-deep"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        )}
+      </div>
+
+      {sidebarCollapsed && (
         <button
           onClick={toggleSidebar}
-          className="rounded p-1 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          aria-label="Expand sidebar"
+          className="mx-auto my-2 rounded-md p-1 text-slate hover:bg-ivory hover:text-gold-deep"
         >
-          {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          <ChevronRight size={16} />
         </button>
-      </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
-        {/* Main Navigation */}
-        <div className="space-y-1">
-          {mainNavigation.map((item) => {
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors relative",
-                  isActive
-                    ? "text-accent hover:text-accent-hover border-l-2 border-accent"
-                    : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-                )}
-              >
-                {isActive && (
-                  <div className="absolute inset-0 rounded-md bg-accent-glow pointer-events-none -z-10"></div>
-                )}
-                <item.icon size={20} />
-                {!sidebarCollapsed && <span>{item.name}</span>}
-              </Link>
-            );
-          })}
-        </div>
+      )}
 
-        {/* Admin Section Divider */}
-        {!sidebarCollapsed && (
-          <div className="my-2 border-t border-border-subtle" />
-        )}
-
-        {/* Admin Navigation */}
-        <div className="space-y-1">
-          {adminNavigation.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors relative",
-                  isActive
-                    ? "text-accent hover:text-accent-hover border-l-2 border-accent"
-                    : "text-text-muted hover:text-text-secondary hover:bg-surface-hover"
-                )}
-              >
-                {isActive && (
-                  <div className="absolute inset-0 rounded-md bg-accent-glow pointer-events-none -z-10"></div>
-                )}
-                <item.icon size={20} />
-                {!sidebarCollapsed && <span>{item.name}</span>}
-              </Link>
-            );
-          })}
+      {/* Workspace picker */}
+      {!sidebarCollapsed && (
+        <div className="px-4 pt-4 pb-2">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
+            Workspace
+          </div>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-[10px] border border-hairline bg-ivory px-3 py-2.5 text-sm font-semibold text-charcoal hover:bg-paper"
+          >
+            <span className="truncate">Acme Infrastructure</span>
+            <ChevronDown size={14} className="text-ash" />
+          </button>
         </div>
+      )}
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2">
+        {groups.map((group) => (
+          <div key={group.label} className="mb-1">
+            {!sidebarCollapsed && (
+              <div className="px-2.5 pt-4 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-ash">
+                {group.label}
+              </div>
+            )}
+            {group.items.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={sidebarCollapsed ? item.name : undefined}
+                  className={cn(
+                    "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
+                    active
+                      ? "text-charcoal font-semibold bg-[linear-gradient(90deg,rgba(212,175,55,0.09),rgba(212,175,55,0)_90%)]"
+                      : "text-charcoal hover:bg-ivory",
+                    sidebarCollapsed && "justify-center"
+                  )}
+                >
+                  {active && (
+                    <span
+                      aria-hidden
+                      className="absolute left-[-13px] top-1.5 bottom-1.5 w-[3px] rounded-r-[3px] bg-gold"
+                    />
+                  )}
+                  <item.icon
+                    size={16}
+                    className={cn("shrink-0", active ? "text-gold-deep" : "text-slate")}
+                    strokeWidth={1.5}
+                  />
+                  {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
-      {/* Footer - Version */}
+      {/* User chip */}
       {!sidebarCollapsed && (
-        <div className="border-t border-border-subtle px-4 py-3">
-          <p className="text-xs text-text-muted">v1.0.0</p>
+        <div className="border-t border-[#F4EDD8] p-3">
+          <div className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 hover:bg-ivory">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-parchment text-gold-deep font-display font-semibold text-xs"
+              style={{ border: "2px solid #D4AF37" }}
+            >
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="truncate text-[13px] font-semibold text-charcoal">
+                {displayName}
+              </div>
+              <div className="truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-gold-deep">
+                Programme lead
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              aria-label="Sign out"
+              className="rounded-md p-1.5 text-slate hover:bg-paper hover:text-burgundy"
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
         </div>
       )}
     </aside>
