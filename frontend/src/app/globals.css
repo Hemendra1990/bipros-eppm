@@ -99,6 +99,54 @@
   --grid-color: rgba(28, 28, 28, 0.035);
 }
 
+/* Force a section or page to render in the light palette regardless of the
+   app-wide theme toggle. Used on the marketing landing (login) where the
+   intentional light/dark section rhythm would otherwise collapse. */
+.force-light {
+  --background: #FFFFFF;
+  --foreground: #1C1C1C;
+  --surface: #FFFFFF;
+  --surface-hover: #FAF9F6;
+  --surface-active: #F5F2E8;
+  --border: #EDE7D3;
+  --border-subtle: #E5E7EB;
+  --accent: #D4AF37;
+  --accent-hover: #B8962E;
+  --accent-glow: rgba(212, 175, 55, 0.12);
+  --text-primary: #1C1C1C;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+  --success: #2E7D5B;
+  --warning: #C7882E;
+  --danger: #9B2C2C;
+  --info: #475569;
+  --input: #E5E7EB;
+  --ring: #D4AF37;
+  --muted-foreground: #6B7280;
+
+  --paper: #FFFFFF;
+  --ivory: #FAF9F6;
+  --parchment: #F5F2E8;
+  --charcoal: #1C1C1C;
+  --slate: #6B7280;
+  --ash: #9CA3AF;
+  --hairline: #EDE7D3;
+  --divider: #E5E7EB;
+  --gold: #D4AF37;
+  --gold-deep: #B8962E;
+  --gold-ink: #8C6F1E;
+  --gold-tint: #F5E7B5;
+  --emerald: #2E7D5B;
+  --bronze-warn: #C7882E;
+  --burgundy: #9B2C2C;
+  --steel: #475569;
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(28, 28, 28, 0.06);
+  --selection-bg: rgba(212, 175, 55, 0.22);
+  --selection-color: #1C1C1C;
+}
+
 .dark {
   /* ---- Dark palette — White & Gold identity (obsidian + warm gold) ----
      Both the legacy aliases AND the new canonical tokens flip together so

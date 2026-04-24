@@ -11,7 +11,7 @@ import { LandingFooter } from "./_components/LandingFooter";
 
 export default function LoginLandingPage() {
   return (
-    <main className="min-h-screen bg-paper text-charcoal font-sans">
+    <main className="force-light min-h-screen bg-paper text-charcoal font-sans">
       <LandingNav />
       <LandingHero />
       <LandingPillars />
