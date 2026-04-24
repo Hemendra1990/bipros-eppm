@@ -1,45 +1,120 @@
 "use client";
 
-import { LogOut, User } from "lucide-react";
-import { useAuthStore } from "@/lib/state/store";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Bell, HelpCircle, Plus, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { cn } from "@/lib/utils/cn";
+
+function humanise(segment: string) {
+  const lookup: Record<string, string> = {
+    admin: "Admin",
+    udf: "User Defined Fields",
+    obs: "OBS",
+    eps: "EPS",
+  };
+  if (lookup[segment]) return lookup[segment];
+  return segment.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function useBreadcrumbs(pathname: string) {
+  if (pathname === "/") return [{ label: "Dashboard", href: "/" }];
+  const parts = pathname.split("/").filter(Boolean);
+  const crumbs = [{ label: "Dashboard", href: "/" }];
+  let href = "";
+  for (const part of parts) {
+    href += "/" + part;
+    crumbs.push({ label: humanise(part), href });
+  }
+  return crumbs;
+}
 
 export function Header() {
-  const { user, clearAuth } = useAuthStore();
-  const router = useRouter();
-
-  const handleLogout = () => {
-    document.cookie = 'access_token=; path=/; max-age=0';
-    clearAuth();
-    router.push("/auth/login");
-  };
+  const pathname = usePathname();
+  const crumbs = useBreadcrumbs(pathname);
 
   return (
-    <header className="relative flex h-14 items-center justify-between border-b border-border-subtle bg-surface/50 glass-subtle px-6">
-      {/* Top gradient accent line */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-accent via-accent/50 to-transparent opacity-30"></div>
+    <header className="relative flex h-16 items-center gap-5 border-b border-hairline bg-paper px-7">
+      {/* gold gradient hairline under header */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 -bottom-px h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, #D4AF37 20%, #D4AF37 80%, transparent)",
+          opacity: 0.4,
+        }}
+      />
 
-      <div className="flex items-center gap-4">
-        <h1 className="text-sm font-medium text-text-secondary">
-          Enterprise Project Portfolio Management
-        </h1>
-      </div>
-      <div className="flex items-center gap-4">
-        <ThemeToggle />
-        {user && (
-          <div className="flex items-center gap-2 text-sm text-text-secondary">
-            <User size={16} />
-            <span>{user.firstName ?? user.username}</span>
-          </div>
+      {/* Breadcrumbs */}
+      <nav aria-label="Breadcrumbs" className="flex items-center gap-2 text-[13px]">
+        {crumbs.map((c, i) => {
+          const last = i === crumbs.length - 1;
+          return (
+            <span key={c.href} className="flex items-center gap-2">
+              {last ? (
+                <span className="font-semibold text-charcoal truncate max-w-[280px]">
+                  {c.label}
+                </span>
+              ) : (
+                <Link
+                  href={c.href}
+                  className="text-slate hover:text-gold-deep transition-colors truncate max-w-[160px]"
+                >
+                  {c.label}
+                </Link>
+              )}
+              {!last && <span className="text-[#D1C7A0]" aria-hidden>›</span>}
+            </span>
+          );
+        })}
+      </nav>
+
+      {/* Command-palette search */}
+      <button
+        type="button"
+        className={cn(
+          "ml-4 flex h-10 max-w-[440px] flex-1 items-center gap-2.5 rounded-[10px] border border-hairline bg-ivory px-3.5",
+          "text-[13px] text-slate hover:border-[#D1C7A0] transition-colors"
         )}
+        title="Search (⌘K)"
+      >
+        <Search size={15} className="text-ash" strokeWidth={1.5} />
+        <span className="flex-1 text-left">Search projects, activities, resources…</span>
+        <kbd className="rounded border border-hairline bg-paper px-1.5 py-0.5 font-mono text-[10px] text-slate">
+          ⌘K
+        </kbd>
+      </button>
+
+      {/* Right cluster */}
+      <div className="flex items-center gap-2.5">
         <button
-          onClick={handleLogout}
-          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
+          type="button"
+          aria-label="Notifications"
+          className="relative flex h-10 w-10 items-center justify-center rounded-[10px] border border-transparent text-slate transition-colors hover:border-hairline hover:bg-ivory hover:text-gold-deep"
         >
-          <LogOut size={16} />
-          <span>Logout</span>
+          <Bell size={17} strokeWidth={1.5} />
+          <span
+            aria-hidden
+            className="absolute right-2 top-2 h-[7px] w-[7px] rounded-full bg-gold ring-2 ring-paper"
+          />
         </button>
+        <button
+          type="button"
+          aria-label="Help"
+          className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-transparent text-slate transition-colors hover:border-hairline hover:bg-ivory hover:text-gold-deep"
+        >
+          <HelpCircle size={17} strokeWidth={1.5} />
+        </button>
+        <div className="h-5 w-px bg-hairline" />
+        <ThemeToggle />
+        <Link
+          href="/projects/new"
+          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-gold px-3.5 text-[13px] font-semibold text-paper transition-all duration-200 hover:bg-gold-deep hover:shadow-[0_4px_14px_rgba(212,175,55,0.3)] hover:-translate-y-px"
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          New project
+        </Link>
       </div>
     </header>
   );
