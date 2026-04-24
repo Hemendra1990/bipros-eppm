@@ -3,6 +3,7 @@ package com.bipros.security.infrastructure.config;
 import com.bipros.security.infrastructure.jwt.JwtAuthenticationFilter;
 import com.bipros.security.infrastructure.jwt.JwtProperties;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -29,6 +31,9 @@ import java.util.Arrays;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${bipros.cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
+    private String allowedOriginsConfig;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -43,6 +48,21 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
+                )
+                .exceptionHandling(eh -> eh
+                        // 401 for anonymous users, 403 for authenticated-but-forbidden (RFC 7235)
+                        .authenticationEntryPoint((req, res, ex) -> {
+                            res.setStatus(org.springframework.http.HttpStatus.UNAUTHORIZED.value());
+                            res.setContentType("application/json");
+                            res.getWriter().write(
+                                "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}");
+                        })
+                        .accessDeniedHandler((req, res, ex) -> {
+                            res.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
+                            res.setContentType("application/json");
+                            res.getWriter().write(
+                                "{\"success\":false,\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\"}}");
+                        })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -62,7 +82,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:3001"));
+        // allowed-origins from application.yml / CORS_ALLOWED_ORIGINS env. Comma-delimited list.
+        List<String> origins = Arrays.stream(allowedOriginsConfig.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
         configuration.setAllowCredentials(true);

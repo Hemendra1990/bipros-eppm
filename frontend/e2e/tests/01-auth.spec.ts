@@ -5,7 +5,8 @@ test.describe('Authentication', () => {
   test('login with valid credentials redirects to dashboard', async ({ page }) => {
     await login(page);
     await expect(page).toHaveURL('/');
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    // Multiple "Dashboard" headings exist (h1 title + h4 sidebar link); match only the h1.
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
   });
 
   test('login with invalid credentials shows error', async ({ page }) => {
