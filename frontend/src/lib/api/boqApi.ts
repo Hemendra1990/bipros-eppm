@@ -46,6 +46,9 @@ export interface CreateBoqItemRequest {
   budgetedRate?: number;
   qtyExecutedToDate?: number;
   actualRate?: number;
+  // PMS MasterData Screen 03
+  chapter?: string | null;
+  status?: BoqStatus | null;
 }
 
 export interface UpdateBoqItemRequest {
@@ -57,6 +60,9 @@ export interface UpdateBoqItemRequest {
   budgetedRate?: number | null;
   qtyExecutedToDate?: number | null;
   actualRate?: number | null;
+  // PMS MasterData Screen 03
+  chapter?: string | null;
+  status?: BoqStatus | null;
 }
 
 export const boqApi = {
