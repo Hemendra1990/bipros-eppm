@@ -1,0 +1,213 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import {
+  projectInsightsApi,
+  type ActivityStatusRow,
+} from "@/lib/api/projectInsightsApi";
+import {
+  CHART_COLORS,
+  CHART_TOOLTIP_STYLE,
+  EmptyBlock,
+  LoadingBlock,
+  SectionCard,
+} from "@/components/common/dashboard/primitives";
+import { KpiTile } from "@/components/common/KpiTile";
+
+const STATUS_COLORS: Record<string, string> = {
+  NOT_STARTED: CHART_COLORS.muted,
+  IN_PROGRESS: CHART_COLORS.pv,
+  COMPLETED: CHART_COLORS.ev,
+};
+
+export function TasksSection({ projectId }: { projectId: string }) {
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [criticalOnly, setCriticalOnly] = useState(false);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["project-activity-status", projectId, statusFilter, criticalOnly],
+    queryFn: () =>
+      projectInsightsApi.getActivityStatus(projectId, {
+        status: statusFilter || undefined,
+        criticalOnly,
+        limit: 500,
+      }),
+    staleTime: 30_000,
+  });
+
+  const rows: ActivityStatusRow[] = useMemo(() => data ?? [], [data]);
+
+  const summary = useMemo(() => {
+    const byStatus = new Map<string, number>();
+    let critical = 0;
+    let overdue = 0;
+    let avgPct = 0;
+    rows.forEach((r) => {
+      byStatus.set(r.status, (byStatus.get(r.status) ?? 0) + 1);
+      if (r.isCritical) critical++;
+      if (r.daysDelay > 0 && r.pctComplete < 100) overdue++;
+      avgPct += r.pctComplete;
+    });
+    if (rows.length > 0) avgPct /= rows.length;
+    return {
+      total: rows.length,
+      byStatus,
+      critical,
+      overdue,
+      avgPct,
+    };
+  }, [rows]);
+
+  const statusChartData = Array.from(summary.byStatus.entries()).map(([name, value]) => ({
+    name,
+    value,
+  }));
+
+  if (isLoading)
+    return (
+      <SectionCard title="Tasks">
+        <LoadingBlock />
+      </SectionCard>
+    );
+  if (isError)
+    return (
+      <SectionCard title="Tasks">
+        <EmptyBlock label="Unavailable" />
+      </SectionCard>
+    );
+
+  return (
+    <SectionCard
+      title="Tasks"
+      subtitle="Task-wise dashboard: status, critical path, delays, progress"
+      actions={
+        <div className="flex items-center gap-2 text-xs">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-md border border-border bg-surface-hover/40 px-2 py-1 text-text-primary"
+          >
+            <option value="">All statuses</option>
+            <option value="NOT_STARTED">Not started</option>
+            <option value="IN_PROGRESS">In progress</option>
+            <option value="COMPLETED">Completed</option>
+          </select>
+          <label className="flex items-center gap-1 text-text-secondary">
+            <input
+              type="checkbox"
+              checked={criticalOnly}
+              onChange={(e) => setCriticalOnly(e.target.checked)}
+            />
+            Critical only
+          </label>
+        </div>
+      }
+    >
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <KpiTile label="Total" value={summary.total} />
+        <KpiTile label="Critical" value={summary.critical} tone={summary.critical > 0 ? "warning" : "default"} />
+        <KpiTile label="Overdue" value={summary.overdue} tone={summary.overdue > 0 ? "danger" : "success"} />
+        <KpiTile label="Avg % complete" value={`${summary.avgPct.toFixed(1)}%`} tone="accent" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
+        <div>
+          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+            Status mix
+          </div>
+          {statusChartData.length === 0 ? (
+            <EmptyBlock label="No tasks" />
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={statusChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={40}
+                  outerRadius={80}
+                >
+                  {statusChartData.map((s) => (
+                    <Cell key={s.name} fill={STATUS_COLORS[s.name] ?? CHART_COLORS.muted} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Legend wrapperStyle={{ fontSize: "11px" }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          {rows.length === 0 ? (
+            <EmptyBlock label="No tasks match the current filter" />
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border text-left uppercase tracking-wide text-text-muted">
+                  <th className="px-2 py-2">Code</th>
+                  <th className="px-2 py-2">Name</th>
+                  <th className="px-2 py-2">WBS</th>
+                  <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2 text-right">%</th>
+                  <th className="px-2 py-2">Planned Finish</th>
+                  <th className="px-2 py-2 text-right">Float</th>
+                  <th className="px-2 py-2 text-right">Delay</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 50).map((r) => (
+                  <tr
+                    key={r.activityId}
+                    className={`border-b border-border/50 ${r.isCritical ? "bg-danger/5" : ""}`}
+                  >
+                    <td className="px-2 py-2 font-mono text-[11px] text-text-muted">{r.code}</td>
+                    <td className="px-2 py-2 text-text-primary">{r.name}</td>
+                    <td className="px-2 py-2 font-mono text-[11px] text-text-muted">{r.wbsCode}</td>
+                    <td className="px-2 py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          r.status === "COMPLETED"
+                            ? "bg-success/15 text-success"
+                            : r.status === "IN_PROGRESS"
+                              ? "bg-accent/15 text-accent"
+                              : "bg-surface-hover text-text-secondary"
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono">{r.pctComplete.toFixed(0)}%</td>
+                    <td className="px-2 py-2">{r.plannedFinish ?? "—"}</td>
+                    <td className="px-2 py-2 text-right font-mono">
+                      {r.totalFloat != null ? r.totalFloat.toFixed(0) : "—"}
+                    </td>
+                    <td
+                      className={`px-2 py-2 text-right font-mono ${r.daysDelay > 0 ? "text-danger" : "text-text-muted"}`}
+                    >
+                      {r.daysDelay > 0 ? `+${r.daysDelay}d` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {rows.length > 50 && (
+            <p className="mt-2 text-[11px] text-text-muted">
+              Showing first 50 of {rows.length} rows.
+            </p>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}

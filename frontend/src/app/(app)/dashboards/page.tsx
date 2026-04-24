@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   BarChart3,
+  Briefcase,
   LineChart as LineChartIcon,
   TrendingUp,
   Zap,
@@ -46,6 +47,13 @@ const dashboardTiers: DashboardTier[] = [
     icon: <TrendingUp size={32} />,
     color: "from-orange-500 to-orange-600",
   },
+  {
+    id: "PORTFOLIO",
+    title: "Portfolio Dashboard",
+    description: "Cross-project scorecard, delays, costs, risks, funding and compliance",
+    icon: <Briefcase size={32} />,
+    color: "from-indigo-500 to-indigo-600",
+  },
 ];
 
 export default function DashboardsPage() {
@@ -64,7 +72,7 @@ export default function DashboardsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {dashboardTiers.map((tier) => (
           <div
             key={tier.id}

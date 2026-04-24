@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "@/lib/api/dashboardApi";
 import { raBillApi } from "@/lib/api/raBillApi";
 import { projectApi } from "@/lib/api/projectApi";
+import {
+  reportDataApi,
+  type ResourceUtilRow,
+  type WbsProgressRow,
+} from "@/lib/api/reportDataApi";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { ProjectResponse } from "@/lib/types";
@@ -19,19 +24,11 @@ interface RaBillRow {
   status: string;
 }
 
-interface ResourceUtilization {
+interface ResourceUtilizationGroup {
   resourceType: string;
   allocated: number;
   utilized: number;
   percentage: number;
-}
-
-interface ActivityProgress {
-  wbsCode: string;
-  description: string;
-  plannedProgress: number;
-  actualProgress: number;
-  status: string;
 }
 
 export default function OperationalDashboardPage() {
@@ -56,75 +53,46 @@ export default function OperationalDashboardPage() {
     enabled: !!selectedProjectId,
   });
 
+  const { data: resourceUtilizationRaw } = useQuery({
+    queryKey: ["report-resource-utilization", selectedProjectId],
+    queryFn: () =>
+      selectedProjectId ? reportDataApi.getResourceUtilization(selectedProjectId) : null,
+    enabled: !!selectedProjectId,
+    retry: false,
+  });
+
+  const { data: wbsProgress } = useQuery({
+    queryKey: ["project-wbs-progress", selectedProjectId],
+    queryFn: () =>
+      selectedProjectId ? reportDataApi.getWbsProgress(selectedProjectId) : null,
+    enabled: !!selectedProjectId,
+    retry: false,
+  });
+
   const projects = projectsData?.data?.content ?? [];
   const raBills = Array.isArray(raBillsData?.data) ? raBillsData.data : [];
 
-  // Mock resource utilization data
-  const mockResourceUtilization: ResourceUtilization[] = [
-    {
-      resourceType: "Labor",
-      allocated: 150,
-      utilized: 142,
-      percentage: 94.7,
-    },
-    {
-      resourceType: "Equipment",
-      allocated: 45,
-      utilized: 38,
-      percentage: 84.4,
-    },
-    {
-      resourceType: "Materials",
-      allocated: 200,
-      utilized: 175,
-      percentage: 87.5,
-    },
-    {
-      resourceType: "Subcontractors",
-      allocated: 12,
-      utilized: 10,
-      percentage: 83.3,
-    },
-  ];
+  // Aggregate per-resource rows into type-level totals — UI shows one bar per
+  // resource category (Labor / Equipment / Material / Subcontractor).
+  const resourceUtilization: ResourceUtilizationGroup[] = useMemo(() => {
+    const rows = (resourceUtilizationRaw?.resources ?? []) as ResourceUtilRow[];
+    const groups = new Map<string, { allocated: number; utilized: number }>();
+    rows.forEach((r) => {
+      const key = r.type || "Other";
+      const g = groups.get(key) ?? { allocated: 0, utilized: 0 };
+      g.allocated += r.plannedHours ?? 0;
+      g.utilized += r.actualHours ?? 0;
+      groups.set(key, g);
+    });
+    return Array.from(groups.entries()).map(([resourceType, g]) => ({
+      resourceType,
+      allocated: g.allocated,
+      utilized: g.utilized,
+      percentage: g.allocated > 0 ? (g.utilized / g.allocated) * 100 : 0,
+    }));
+  }, [resourceUtilizationRaw]);
 
-  // Mock activity progress by WBS
-  const mockActivityProgress: ActivityProgress[] = [
-    {
-      wbsCode: "1.1.1",
-      description: "Site Preparation",
-      plannedProgress: 100,
-      actualProgress: 100,
-      status: "COMPLETED",
-    },
-    {
-      wbsCode: "1.2.1",
-      description: "Foundation",
-      plannedProgress: 85,
-      actualProgress: 82,
-      status: "IN_PROGRESS",
-    },
-    {
-      wbsCode: "1.3.1",
-      description: "Structural Steel",
-      plannedProgress: 60,
-      actualProgress: 55,
-      status: "IN_PROGRESS",
-    },
-    {
-      wbsCode: "1.4.1",
-      description: "Concrete Work",
-      plannedProgress: 45,
-      actualProgress: 40,
-      status: "IN_PROGRESS",
-    },
-    {
-      wbsCode: "1.5.1",
-      description: "MEP Installation",
-      plannedProgress: 20,
-      actualProgress: 10,
-      status: "PENDING",
-    },
-  ];
+  const wbsRows: WbsProgressRow[] = wbsProgress ?? [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -282,29 +250,35 @@ export default function OperationalDashboardPage() {
             <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Resource Utilization
             </h2>
-            <div className="space-y-4">
-              {mockResourceUtilization.map((resource) => (
-                <div key={resource.resourceType}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-text-primary">
-                      {resource.resourceType}
-                    </span>
-                    <span className="text-sm text-text-secondary">
-                      {resource.utilized} / {resource.allocated} (
-                      {resource.percentage.toFixed(1)}%)
-                    </span>
+            {resourceUtilization.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border py-8 text-center">
+                <p className="text-text-muted">No resource data for this project</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {resourceUtilization.map((resource) => (
+                  <div key={resource.resourceType}>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-medium text-text-primary">
+                        {resource.resourceType}
+                      </span>
+                      <span className="text-sm text-text-secondary">
+                        {resource.utilized.toFixed(0)} / {resource.allocated.toFixed(0)} (
+                        {resource.percentage.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <div className="h-3 w-full rounded-full bg-surface-active/50">
+                      <div
+                        className={`h-3 rounded-full transition-all ${getResourceColor(
+                          resource.percentage
+                        )}`}
+                        style={{ width: `${Math.min(100, resource.percentage)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-3 w-full rounded-full bg-surface-active/50">
-                    <div
-                      className={`h-3 rounded-full transition-all ${getResourceColor(
-                        resource.percentage
-                      )}`}
-                      style={{ width: `${resource.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Activity Progress by WBS */}
@@ -312,72 +286,86 @@ export default function OperationalDashboardPage() {
             <h2 className="mb-4 text-lg font-semibold text-text-primary">
               Activity Progress by WBS
             </h2>
-            <div className="space-y-4">
-              {mockActivityProgress.map((activity) => (
-                <div
-                  key={activity.wbsCode}
-                  className="rounded-lg border border-border p-4"
-                >
-                  <div className="mb-3 flex items-start justify-between">
-                    <div>
-                      <h3 className="font-medium text-text-primary">
-                        {activity.wbsCode}
-                      </h3>
-                      <p className="text-sm text-text-secondary">
-                        {activity.description}
-                      </p>
-                    </div>
-                    <span
-                      className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getActivityStatusColor(
-                        activity.status
-                      )}`}
+            {wbsRows.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border py-8 text-center">
+                <p className="text-text-muted">No WBS nodes for this project</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {wbsRows.map((row) => {
+                  const status =
+                    row.actualPct >= 100
+                      ? "COMPLETED"
+                      : row.actualPct > 0
+                        ? "IN_PROGRESS"
+                        : "PENDING";
+                  return (
+                    <div
+                      key={row.wbsCode}
+                      className="rounded-lg border border-border p-4"
                     >
-                      {activity.status}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div>
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-text-secondary">
-                          Planned Progress
-                        </span>
-                        <span className="text-xs font-semibold text-text-primary">
-                          {activity.plannedProgress}%
+                      <div className="mb-3 flex items-start justify-between">
+                        <div>
+                          <h3 className="font-medium text-text-primary">
+                            {row.wbsCode}
+                          </h3>
+                          <p className="text-sm text-text-secondary">
+                            {row.wbsName}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getActivityStatusColor(
+                            status
+                          )}`}
+                        >
+                          {status}
                         </span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-surface-active/50">
-                        <div
-                          className="h-2 rounded-full bg-blue-500"
-                          style={{ width: `${activity.plannedProgress}%` }}
-                        />
+
+                      <div className="space-y-2">
+                        <div>
+                          <div className="mb-1 flex items-center justify-between">
+                            <span className="text-xs font-medium text-text-secondary">
+                              Planned Progress
+                            </span>
+                            <span className="text-xs font-semibold text-text-primary">
+                              {row.plannedPct.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-surface-active/50">
+                            <div
+                              className="h-2 rounded-full bg-blue-500"
+                              style={{ width: `${Math.min(100, row.plannedPct)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="mb-1 flex items-center justify-between">
+                            <span className="text-xs font-medium text-text-secondary">
+                              Actual Progress
+                            </span>
+                            <span className="text-xs font-semibold text-text-primary">
+                              {row.actualPct.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-surface-active/50">
+                            <div
+                              className={`h-2 rounded-full ${
+                                row.actualPct >= row.plannedPct
+                                  ? "bg-success"
+                                  : "bg-amber-500"
+                              }`}
+                              style={{ width: `${Math.min(100, row.actualPct)}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
-
-                    <div>
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-text-secondary">
-                          Actual Progress
-                        </span>
-                        <span className="text-xs font-semibold text-text-primary">
-                          {activity.actualProgress}%
-                        </span>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-surface-active/50">
-                        <div
-                          className={`h-2 rounded-full ${
-                            activity.actualProgress >= activity.plannedProgress
-                              ? "bg-success"
-                              : "bg-amber-500"
-                          }`}
-                          style={{ width: `${activity.actualProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </>
       )}
