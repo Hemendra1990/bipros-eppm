@@ -1,6 +1,7 @@
 package com.bipros.resource.application.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -11,7 +12,7 @@ import java.util.UUID;
 public record CreateGoodsReceiptRequest(
     @NotNull UUID materialId,
     @NotNull LocalDate receivedDate,
-    @NotNull @PositiveOrZero BigDecimal quantity,
+    @NotNull @Positive BigDecimal quantity,
     @PositiveOrZero BigDecimal unitRate,
     UUID supplierOrganisationId,
     @Size(max = 50) String poNumber,
