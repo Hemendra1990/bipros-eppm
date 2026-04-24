@@ -570,31 +570,54 @@ function calculateLayout(
   const colWidth = 250;
   const rowHeight = 120;
   const padding = 40;
+  const bandGap = 40; // vertical gap between wrapped row-bands
+  const MAX_COLS_PER_ROW = 6; // wrap long chains into multiple bands
+
+  // Group depth levels into horizontal bands of up to MAX_COLS_PER_ROW columns.
+  // Within each band, rows stack per-level (activities at the same depth sit
+  // one above the other); bands stack vertically, each sized by the widest
+  // level it contains. Net effect: a linear chain of N activities wraps into
+  // ceil(N / MAX_COLS_PER_ROW) readable bands instead of one ~(N × 250)px row.
+  const depthKeys = Object.keys(depthLevels)
+    .map((d) => parseInt(d, 10))
+    .sort((a, b) => a - b);
+
+  const bandHeightMap = new Map<number, number>(); // band index → max activities in any of its levels
+  depthKeys.forEach((d) => {
+    const band = Math.floor(d / MAX_COLS_PER_ROW);
+    const count = depthLevels[d].length;
+    bandHeightMap.set(band, Math.max(bandHeightMap.get(band) ?? 0, count));
+  });
+
+  const bandYStart = new Map<number, number>();
+  let cursorY = padding;
+  const bandIndices = [...bandHeightMap.keys()].sort((a, b) => a - b);
+  bandIndices.forEach((band) => {
+    bandYStart.set(band, cursorY);
+    cursorY += (bandHeightMap.get(band) ?? 1) * rowHeight + bandGap;
+  });
 
   const nodes: ActivityNode[] = [];
-  Object.entries(depthLevels).forEach(([d, activitiesInDepth]) => {
-    const depthNum = parseInt(d);
-    const x = padding + depthNum * colWidth;
+  depthKeys.forEach((depthNum) => {
+    const band = Math.floor(depthNum / MAX_COLS_PER_ROW);
+    const colInBand = depthNum % MAX_COLS_PER_ROW;
+    const xStart = padding + colInBand * colWidth;
+    const yStart = bandYStart.get(band) ?? padding;
 
-    activitiesInDepth.forEach((activity, index) => {
-      const y = padding + index * rowHeight;
+    depthLevels[depthNum].forEach((activity, index) => {
       nodes.push({
         activity,
         depth: depthNum,
-        x,
-        y,
+        x: xStart,
+        y: yStart + index * rowHeight,
       });
     });
   });
 
-  const maxDepth = Math.max(...nodes.map((n) => n.depth), 0);
-  const maxActivitiesInDepth = Math.max(
-    ...Object.values(depthLevels).map((activities) => activities.length),
-    1
-  );
-
-  const svgWidth = (maxDepth + 1) * colWidth + 2 * padding;
-  const svgHeight = maxActivitiesInDepth * rowHeight + 2 * padding;
+  const usedCols = Math.min(depthKeys.length, MAX_COLS_PER_ROW);
+  const svgWidth = usedCols * colWidth + 2 * padding;
+  // cursorY accumulated one trailing bandGap we don't actually need
+  const svgHeight = Math.max(cursorY + padding - bandGap, rowHeight + 2 * padding);
 
   return { nodes, depthLevels, svgWidth, svgHeight };
 }
