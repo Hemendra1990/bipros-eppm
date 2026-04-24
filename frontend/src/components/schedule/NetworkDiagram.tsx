@@ -272,6 +272,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
           style={{
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
             transformOrigin: "0 0",
+            overflow: "visible",
           }}
         >
           <defs>
