@@ -42,3 +42,6 @@ docker/data/
 
 # Superpowers brainstorming session artifacts
 .superpowers/
+
+# Git worktrees (isolated feature workspaces)
+.worktrees/
