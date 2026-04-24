@@ -3,6 +3,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
+  /* legacy aliases (kept during migration so inherited pages keep rendering) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
@@ -23,68 +24,182 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-muted-foreground: var(--muted-foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  /* new White & Gold tokens */
+  --color-paper: var(--paper);
+  --color-ivory: var(--ivory);
+  --color-parchment: var(--parchment);
+  --color-charcoal: var(--charcoal);
+  --color-slate: var(--slate);
+  --color-ash: var(--ash);
+  --color-hairline: var(--hairline);
+  --color-divider: var(--divider);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-ink: var(--gold-ink);
+  --color-gold-tint: var(--gold-tint);
+  --color-emerald: var(--emerald);
+  --color-bronze-warn: var(--bronze-warn);
+  --color-burgundy: var(--burgundy);
+  --color-steel: var(--steel);
+
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-fraunces);
+  --font-mono: var(--font-jetbrains);
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --surface: #f8fafc;
-  --surface-hover: #f1f5f9;
-  --surface-active: #e2e8f0;
-  --border: #e2e8f0;
-  --border-subtle: #f1f5f9;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-glow: rgba(37, 99, 235, 0.12);
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --info: #06b6d4;
-  --input: #e2e8f0;
-  --ring: #3b82f6;
-  --muted-foreground: #64748b;
+  /* ---- legacy token aliases, now pointing at the new palette ---- */
+  --background: #FFFFFF;          /* paper */
+  --foreground: #1C1C1C;          /* charcoal */
+  --surface: #FFFFFF;             /* paper */
+  --surface-hover: #FAF9F6;       /* ivory */
+  --surface-active: #F5F2E8;      /* parchment */
+  --border: #EDE7D3;              /* warm hairline */
+  --border-subtle: #E5E7EB;       /* cool divider */
+  --accent: #D4AF37;              /* gold */
+  --accent-hover: #B8962E;        /* gold-deep */
+  --accent-glow: rgba(212, 175, 55, 0.12);
+  --text-primary: #1C1C1C;        /* charcoal */
+  --text-secondary: #6B7280;      /* slate */
+  --text-muted: #9CA3AF;          /* ash */
+  --success: #2E7D5B;             /* emerald */
+  --warning: #C7882E;             /* bronze-warn */
+  --danger: #9B2C2C;              /* burgundy */
+  --info: #475569;                /* steel */
+  --input: #E5E7EB;
+  --ring: #D4AF37;
+  --muted-foreground: #6B7280;
+
+  /* ---- new canonical tokens (prefer these going forward) ---- */
+  --paper: #FFFFFF;
+  --ivory: #FAF9F6;
+  --parchment: #F5F2E8;
+  --charcoal: #1C1C1C;
+  --slate: #6B7280;
+  --ash: #9CA3AF;
+  --hairline: #EDE7D3;
+  --divider: #E5E7EB;
+  --gold: #D4AF37;
+  --gold-deep: #B8962E;
+  --gold-ink: #8C6F1E;
+  --gold-tint: #F5E7B5;
+  --emerald: #2E7D5B;
+  --bronze-warn: #C7882E;
+  --burgundy: #9B2C2C;
+  --steel: #475569;
+
+  /* glass / scrollbar / selection / grid — retune for ivory canvas */
   --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(0, 0, 0, 0.06);
-  --scrollbar-thumb: #cbd5e1;
-  --scrollbar-track: #f1f5f9;
-  --selection-bg: rgba(37, 99, 235, 0.2);
-  --selection-color: #0f172a;
-  --grid-color: rgba(0, 0, 0, 0.03);
+  --glass-border: rgba(28, 28, 28, 0.06);
+  --scrollbar-thumb: #D1C7A0;
+  --scrollbar-track: #FAF9F6;
+  --selection-bg: rgba(212, 175, 55, 0.22);
+  --selection-color: #1C1C1C;
+  --grid-color: rgba(28, 28, 28, 0.035);
+}
+
+/* Force a section or page to render in the light palette regardless of the
+   app-wide theme toggle. Used on the marketing landing (login) where the
+   intentional light/dark section rhythm would otherwise collapse. */
+.force-light {
+  --background: #FFFFFF;
+  --foreground: #1C1C1C;
+  --surface: #FFFFFF;
+  --surface-hover: #FAF9F6;
+  --surface-active: #F5F2E8;
+  --border: #EDE7D3;
+  --border-subtle: #E5E7EB;
+  --accent: #D4AF37;
+  --accent-hover: #B8962E;
+  --accent-glow: rgba(212, 175, 55, 0.12);
+  --text-primary: #1C1C1C;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+  --success: #2E7D5B;
+  --warning: #C7882E;
+  --danger: #9B2C2C;
+  --info: #475569;
+  --input: #E5E7EB;
+  --ring: #D4AF37;
+  --muted-foreground: #6B7280;
+
+  --paper: #FFFFFF;
+  --ivory: #FAF9F6;
+  --parchment: #F5F2E8;
+  --charcoal: #1C1C1C;
+  --slate: #6B7280;
+  --ash: #9CA3AF;
+  --hairline: #EDE7D3;
+  --divider: #E5E7EB;
+  --gold: #D4AF37;
+  --gold-deep: #B8962E;
+  --gold-ink: #8C6F1E;
+  --gold-tint: #F5E7B5;
+  --emerald: #2E7D5B;
+  --bronze-warn: #C7882E;
+  --burgundy: #9B2C2C;
+  --steel: #475569;
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(28, 28, 28, 0.06);
+  --selection-bg: rgba(212, 175, 55, 0.22);
+  --selection-color: #1C1C1C;
 }
 
 .dark {
-  --background: #0a0e1a;
-  --foreground: #e2e8f0;
-  --surface: #111827;
-  --surface-hover: #1e293b;
-  --surface-active: #253449;
-  --border: #1e293b;
-  --border-subtle: #162032;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --accent-glow: rgba(59, 130, 246, 0.15);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --info: #06b6d4;
-  --input: #1e293b;
-  --ring: #3b82f6;
-  --muted-foreground: #94a3b8;
-  --glass-bg: rgba(17, 24, 39, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --scrollbar-thumb: #1e293b;
-  --scrollbar-track: #0a0e1a;
-  --selection-bg: rgba(59, 130, 246, 0.3);
-  --selection-color: #f1f5f9;
-  --grid-color: rgba(255, 255, 255, 0.02);
+  /* ---- Dark palette — White & Gold identity (obsidian + warm gold) ----
+     Both the legacy aliases AND the new canonical tokens flip together so
+     inherited pages and rebuilt pages read as one product in dark mode. */
+
+  /* legacy aliases — repointed at the new dark palette (was slate/blue) */
+  --background: #0F0F0F;          /* paper */
+  --foreground: #F5F2E8;          /* warm off-white */
+  --surface: #0F0F0F;
+  --surface-hover: #161616;       /* ivory-dark */
+  --surface-active: #1E1E1E;      /* parchment-dark */
+  --border: #2A2520;              /* warm hairline */
+  --border-subtle: #2F2F32;       /* cool divider */
+  --accent: #D4AF37;              /* gold — same */
+  --accent-hover: #E5C458;        /* brighter gold for hover on dark */
+  --accent-glow: rgba(212, 175, 55, 0.20);
+  --text-primary: #F5F2E8;
+  --text-secondary: #A1A1A6;      /* slate-dark */
+  --text-muted: #6B6B6F;          /* ash-dark */
+  --success: #5BB088;             /* emerald-dark */
+  --warning: #E5A553;             /* bronze-warn-dark */
+  --danger: #D66060;              /* burgundy-dark */
+  --info: #94A3B8;                /* steel-dark */
+  --input: #2F2F32;
+  --ring: #D4AF37;
+  --muted-foreground: #A1A1A6;
+
+  /* canonical tokens — flipped for dark */
+  --paper: #0F0F0F;
+  --ivory: #161616;
+  --parchment: #1E1E1E;
+  --charcoal: #F5F2E8;
+  --slate: #A1A1A6;
+  --ash: #6B6B6F;
+  --hairline: #2A2520;
+  --divider: #2F2F32;
+  --gold: #D4AF37;
+  --gold-deep: #E5C458;            /* hover brighter in dark */
+  --gold-ink: #F5E7B5;             /* on-dark-gold text (inverted) */
+  --gold-tint: #3A2F10;            /* dark warm-gold subtle bg (inverted) */
+  --emerald: #5BB088;
+  --bronze-warn: #E5A553;
+  --burgundy: #D66060;
+  --steel: #94A3B8;
+
+  /* glass / scrollbar / selection / grid — dark tuning */
+  --glass-bg: rgba(15, 15, 15, 0.7);
+  --glass-border: rgba(245, 242, 232, 0.06);
+  --scrollbar-thumb: #2A2520;
+  --scrollbar-track: #0F0F0F;
+  --selection-bg: rgba(212, 175, 55, 0.30);
+  --selection-color: #F5F2E8;
+  --grid-color: rgba(245, 242, 232, 0.03);
 }
 
 * {
@@ -97,7 +212,6 @@ body {
   color: var(--foreground);
 }
 
-/* Glass effect utility */
 .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
@@ -112,24 +226,17 @@ body {
   border: 1px solid var(--glass-border);
 }
 
-/* Glow effects */
 .glow-accent {
-  box-shadow: 0 0 20px var(--accent-glow), 0 0 40px var(--accent-glow);
+  box-shadow: 0 4px 14px var(--accent-glow);
 }
 
-.glow-success {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
-}
-
-/* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #60a5fa, #34d399);
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-deep) 60%, var(--gold-ink) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Subtle grid background */
 .bg-grid {
   background-image:
     linear-gradient(var(--grid-color) 1px, transparent 1px),
@@ -137,20 +244,21 @@ body {
   background-size: 40px 40px;
 }
 
-/* Smooth transitions */
 * {
-  transition-property: background-color, border-color, color, opacity;
-  transition-duration: 150ms;
-  transition-timing-function: ease;
+  transition-property: background-color, border-color, color, opacity, box-shadow, transform;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(.2, .7, .2, 1);
 }
 
-/* Remove transition from layout elements to prevent flash */
 html, body, main, nav, aside {
   transition: none;
 }
 
-/* Selection color */
 ::selection {
   background: var(--selection-bg);
   color: var(--selection-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }

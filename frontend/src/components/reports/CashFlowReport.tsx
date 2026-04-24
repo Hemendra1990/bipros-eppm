@@ -58,7 +58,7 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
           </div>
           <div className="flex gap-2">
             <Button
-              variant={showCumulative ? "primary" : "outline"}
+              variant={showCumulative ? "primary" : "ghost"}
               size="sm"
               onClick={() => setShowCumulative(!showCumulative)}
             >

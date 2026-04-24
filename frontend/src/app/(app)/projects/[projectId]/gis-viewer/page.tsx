@@ -466,7 +466,7 @@ export default function GisViewerPage() {
                 {!canEdit && (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => createDefaultLayer.mutate()}
                     disabled={createDefaultLayer.isPending}
@@ -502,7 +502,7 @@ export default function GisViewerPage() {
                     </span>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => setShowAllScenes(true)}
                     >

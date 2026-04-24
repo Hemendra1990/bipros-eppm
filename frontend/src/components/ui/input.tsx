@@ -1,22 +1,62 @@
-import * as React from "react"
+import * as React from "react";
+import { cn } from "@/lib/utils/cn";
 
-import { cn } from "@/lib/utils/cn"
-
-export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+  invalid?: boolean;
+};
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => (
+  ({ className, type, invalid, ...props }, ref) => (
     <input
       type={type}
+      aria-invalid={invalid || undefined}
+      ref={ref}
       className={cn(
-        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full rounded-[10px] border bg-paper px-3.5 text-sm text-charcoal",
+        "placeholder:text-ash",
+        "transition-all duration-[120ms]",
+        "hover:border-gold-deep/50",
+        "focus-visible:outline-none focus-visible:border-gold focus-visible:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]",
+        "disabled:cursor-not-allowed disabled:bg-parchment disabled:text-ash",
+        invalid
+          ? "border-burgundy focus-visible:border-burgundy focus-visible:shadow-[0_0_0_3px_rgba(155,44,44,0.12)]"
+          : "border-divider",
         className
       )}
-      ref={ref}
       {...props}
     />
   )
-)
-Input.displayName = "Input"
+);
+Input.displayName = "Input";
 
-export { Input }
+export type FieldProps = React.HTMLAttributes<HTMLDivElement>;
+
+export function Field({ className, ...props }: FieldProps) {
+  return <div className={cn("flex flex-col gap-1.5", className)} {...props} />;
+}
+
+export type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>;
+
+export function Label({ className, ...props }: LabelProps) {
+  return (
+    <label
+      className={cn("text-xs font-semibold text-charcoal", className)}
+      {...props}
+    />
+  );
+}
+
+export function FieldHint({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
+  return <p className={cn("text-xs text-slate", className)} {...props} />;
+}
+
+export function FieldError({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p
+      className={cn("flex items-center gap-1 text-xs text-burgundy", className)}
+      {...props}
+    />
+  );
+}
+
+export { Input };

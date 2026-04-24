@@ -101,7 +101,7 @@ export function PolygonEditPanel({
       <section className="flex flex-col gap-2">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={onFetchImagery}
           disabled={isFetchingImagery}
