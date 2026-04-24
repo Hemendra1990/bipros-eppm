@@ -62,7 +62,7 @@ export function ScenePicker({
       </select>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="sm"
         disabled={idx >= sorted.length - 1}
         onClick={() => {
@@ -74,7 +74,7 @@ export function ScenePicker({
       </Button>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="sm"
         disabled={idx <= 0}
         onClick={() => {

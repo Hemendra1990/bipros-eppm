@@ -141,7 +141,7 @@ export function DrawReviewPanel({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="ghost"
           onClick={onDiscard}
           disabled={isSaving}
         >

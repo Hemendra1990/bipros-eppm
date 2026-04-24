@@ -247,7 +247,7 @@ export default function RisksPage() {
             <Button onClick={() => createMutation.mutate(formData)} disabled={createMutation.isPending}>
               {createMutation.isPending ? "Creating..." : "Create"}
             </Button>
-            <Button variant="outline" onClick={() => setShowCreateForm(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setShowCreateForm(false)}>Cancel</Button>
           </div>
         </div>
       )}

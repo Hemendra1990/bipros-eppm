@@ -227,7 +227,7 @@ export default function RiskAnalysisPage() {
               >
                 {runMutation.isPending ? "Running…" : "Start Simulation"}
               </Button>
-              <Button onClick={() => setShowRunDialog(false)} variant="outline">Cancel</Button>
+              <Button onClick={() => setShowRunDialog(false)} variant="ghost">Cancel</Button>
             </div>
             {runMutation.isError && (
               <div className="md:col-span-2 text-sm text-danger">

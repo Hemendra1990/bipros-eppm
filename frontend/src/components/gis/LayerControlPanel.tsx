@@ -180,7 +180,7 @@ export function LayerControlPanel({
       <section>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={onZoomToPolygons}
           disabled={!canZoomToPolygons}
