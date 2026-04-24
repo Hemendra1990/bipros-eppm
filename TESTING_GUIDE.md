@@ -132,6 +132,8 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/v1/auth/me
 
 You'll walk each PMS MasterData screen in document order. Every screen has **list, create, verify** phases. Sample inputs are given so re-running is deterministic.
 
+> **Navigation note (added 2026-04-24 in commit `1514fee`):** the five *project-scoped* master-data screens (BOQ & Budget, Stretches, Material Sources, Material Catalogue, Stock Register) no longer live in the project-detail **More ▾** dropdown. Each project now carries a dedicated **Master data ▾** dropdown in its header nav, next to **More ▾**, listing exactly those five screens. The routes (`/projects/{id}/boq`, `…/stretches`, `…/material-sources`, `…/materials`, `…/stock-register`) are unchanged, so API tests and deep-links keep working; only the UI access path is different. Global-scope master-data screens (Organisations, Unit Rate Master, Personnel/Users) remain on the app-level sidebar under **Admin** as before.
+
 ### Screen 01 · Project Master
 
 **UI:** Click **Projects** in the sidebar.
@@ -189,7 +191,7 @@ You'll walk each PMS MasterData screen in document order. Every screen has **lis
 
 ### Screen 03 · BOQ & Activity Master
 
-**UI:** open NH-48 project → tab **BOQ & Budget**.
+**UI:** open NH-48 project → **Master data ▾** → **BOQ & Budget**.
 
 **Expect 15 BOQ rows** seeded from workbook. Columns now include **Chapter** and **Status** (from defect-log extension).
 
@@ -248,7 +250,7 @@ Post a second rate with `STANDARD`/`EQUIPMENT`/same resource/effectiveDate `2026
 
 ### Screen 06 · Chainage & Stretch Master (NEW)
 
-**UI:** NH-48 project → **Stretches** tab.
+**UI:** NH-48 project → **Master data ▾** → **Stretches**.
 
 **Expect 5 stretches** with chainage math visible:
 - `STR-001` km 145..149, length 4000 m
@@ -303,7 +305,7 @@ curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/j
 
 ### Screen 08 · Borrow Area & Source Master (NEW)
 
-**UI:** NH-48 project → **Material Sources** tab.
+**UI:** NH-48 project → **Master data ▾** → **Material Sources**.
 
 **Expect 4 sources** (2 borrow areas + 1 quarry + 1 bitumen depot). Each has:
 - Auto-coded by type: `BA-NNN`, `QRY-NNN`, `BD-NNN`, `CEM-NNN`
@@ -330,7 +332,7 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
 
 ### Screen 09a · Material Catalogue (NEW)
 
-**UI:** NH-48 project → **Material Catalogue** tab.
+**UI:** NH-48 project → **Master data ▾** → **Material Catalogue**.
 
 **Create a material and exercise full procurement pipeline:**
 
@@ -344,7 +346,7 @@ MAT=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: applic
 
 ### Screen 09b · Stock & Inventory Register (NEW)
 
-**UI:** NH-48 project → **Stock Register** tab.
+**UI:** NH-48 project → **Master data ▾** → **Stock Register**.
 
 **Procurement cycle — step by step with expected outputs:**
 
@@ -389,7 +391,22 @@ Expected: `stockStatusTag = "CRITICAL"`
 **Step 6 — Insufficient stock guard**
 Try to issue **100 MT** → expected `422 INSUFFICIENT_STOCK "Cannot issue 100 MT — only 20.000 on hand"`.
 
-**Step 7 — DPR bridge (defect-log integration)**
+**Step 7 — Reject zero-quantity GRN** *(added 2026-04-24 in commit `6974c17`)*
+
+A purchase of zero units is semantically invalid; input validation must reject it before any GRN number is allocated.
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  http://localhost:8080/v1/projects/$PID/grns -d "{
+    \"materialId\":\"$MAT\",\"receivedDate\":\"2026-04-24\",
+    \"quantity\":0,\"unitRate\":100}" -w "\n%{http_code}\n"
+# Expected:
+#   HTTP 400
+#   {"error":{"code":"VALIDATION_ERROR",
+#     "details":[{"field":"quantity","reason":"must be greater than 0"}]}}
+```
+If this returns `201 Created` with a ghost GRN row, the backend is running a pre-fix build — rebuild `bipros-resource` and restart `bipros-api`.
+
+**Step 8 — DPR bridge (defect-log integration)**
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8080/v1/projects/$PID/material-consumption?fromDate=2026-04-01&toDate=2026-04-30" \
@@ -397,7 +414,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 # → one row per material issued today, aggregating all issues.
 ```
 
-**Step 8 — Cost summary reflects material procurement**
+**Step 9 — Cost summary reflects material procurement**
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/v1/projects/$PID/cost-summary | jq .data
@@ -709,3 +726,5 @@ pnpm test:e2e
 ---
 
 **Revision:** 2026-04-24 — covers all 46 original defects, 10 PMS MasterData screens, cost integration, stretch progress, and prod hardening.
+
+**Amendment (2026-04-24, commits `1514fee` / `6974c17`):** project-scoped master-data screens are now reached via a dedicated **Master data ▾** dropdown in the project-detail header (not the **More ▾** dropdown); see the navigation note at the top of §2. Screen 09b gained a new **Step 7** verifying that `POST /grns` rejects `quantity: 0` with HTTP 400 `VALIDATION_ERROR` at the bean-validation layer. Original Steps 7 and 8 are now renumbered 8 and 9.
