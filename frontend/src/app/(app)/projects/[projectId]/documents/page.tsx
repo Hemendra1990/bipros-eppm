@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { getErrorMessage } from "@/lib/utils/error";
 import { documentApi } from "@/lib/api/documentApi";
 import { TabTip } from "@/components/common/TabTip";
+import { NewFolderDialog, type NewFolderFormValues } from "@/components/document/NewFolderDialog";
 import type {
   Document,
   DocumentFolder,
@@ -98,6 +99,58 @@ export default function DocumentsPage() {
     },
   });
 
+  const [newFolderParent, setNewFolderParent] = useState<DocumentFolder | null>(null);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderError, setNewFolderError] = useState<string | null>(null);
+
+  const createFolderMutation = useMutation({
+    mutationFn: (values: NewFolderFormValues) =>
+      documentApi.createFolder(projectId, {
+        name: values.name,
+        code: values.code,
+        category: values.category,
+        parentId: newFolderParent?.id ?? null,
+      }),
+    onSuccess: (response) => {
+      const created = response.data;
+      toast.success("Folder created");
+      setNewFolderOpen(false);
+      setNewFolderError(null);
+      queryClient.invalidateQueries({ queryKey: ["folders", projectId, "root"] });
+      if (newFolderParent) {
+        queryClient.invalidateQueries({ queryKey: ["folders", projectId, "children"] });
+        // Make sure the parent is expanded so the new child is visible.
+        setExpandedFolders((prev) => {
+          if (prev.has(newFolderParent.id)) return prev;
+          const next = new Set(prev);
+          next.add(newFolderParent.id);
+          return next;
+        });
+      }
+      if (created?.id) {
+        setSelectedFolderId(created.id);
+      }
+      setNewFolderParent(null);
+    },
+    onError: (err: unknown) => {
+      const msg = getErrorMessage(err, "Failed to create folder");
+      setNewFolderError(msg);
+      toast.error(msg);
+    },
+  });
+
+  const openCreateRoot = () => {
+    setNewFolderParent(null);
+    setNewFolderError(null);
+    setNewFolderOpen(true);
+  };
+
+  const openCreateChild = (parent: DocumentFolder) => {
+    setNewFolderParent(parent);
+    setNewFolderError(null);
+    setNewFolderOpen(true);
+  };
+
   const handleFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -178,7 +231,7 @@ export default function DocumentsPage() {
 
           return (
             <li key={folder.id}>
-              <div className="flex items-center gap-2">
+              <div className="group flex items-center gap-2">
                 {hasChildren && (
                   <button
                     onClick={() => toggleFolderExpansion(folder.id)}
@@ -199,6 +252,16 @@ export default function DocumentsPage() {
                   }`}
                 >
                   <span className="text-sm">📁 {folder.name}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openCreateChild(folder)}
+                  title={`New sub-folder under ${folder.name}`}
+                  aria-label={`New sub-folder under ${folder.name}`}
+                  data-testid={`new-folder-child-${folder.id}`}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity rounded px-1.5 py-0.5 text-xs text-text-secondary hover:bg-surface-active hover:text-text-primary"
+                >
+                  +
                 </button>
               </div>
               {hasChildren && isExpanded && (
@@ -222,11 +285,23 @@ export default function DocumentsPage() {
       <div className="grid grid-cols-4 gap-6 h-full">
         {/* Folder Tree Sidebar */}
       <div className="col-span-1 bg-surface/50 rounded-xl border border-border p-4 overflow-y-auto shadow-xl">
-        <h2 className="text-sm font-semibold text-text-secondary mb-4">Folders</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-text-secondary">Folders</h2>
+          <button
+            onClick={openCreateRoot}
+            className="rounded-md border border-border bg-surface-hover px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-active hover:text-text-primary"
+            data-testid="new-folder-root"
+          >
+            + New folder
+          </button>
+        </div>
         {rootFolders.length > 0 ? (
           renderFolderTree(rootFolders)
         ) : (
-          <p className="text-sm text-text-muted">No folders</p>
+          <div className="text-sm text-text-muted">
+            <p>No folders yet.</p>
+            <p className="mt-1">Click &ldquo;+ New folder&rdquo; to create one.</p>
+          </div>
         )}
       </div>
 
@@ -428,6 +503,18 @@ export default function DocumentsPage() {
         )}
       </div>
       </div>
+      <NewFolderDialog
+        open={newFolderOpen}
+        parent={newFolderParent}
+        submitting={createFolderMutation.isPending}
+        errorMessage={newFolderError}
+        onSubmit={(values) => createFolderMutation.mutate(values)}
+        onCancel={() => {
+          setNewFolderOpen(false);
+          setNewFolderError(null);
+          setNewFolderParent(null);
+        }}
+      />
     </div>
   );
 }
