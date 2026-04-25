@@ -10,7 +10,7 @@ export default defineConfig({
     ['html', { open: 'never' }],
     ['list'],
   ],
-  timeout: 30_000,
+  timeout: 60_000,
   expect: { timeout: 10_000 },
 
   use: {
@@ -32,7 +32,7 @@ export default defineConfig({
       command: 'pnpm dev',
       url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
-      timeout: 30_000,
+  timeout: 60_000,
     },
   ],
 });

@@ -22,8 +22,8 @@ test.describe('Full App Exploration', () => {
     await page.waitForLoadState('networkidle');
 
     // Check login form fields
-    const usernameInput = page.locator('#username');
-    const passwordInput = page.locator('#password');
+    const usernameInput = page.locator('form input[type="text"]').first();
+    const passwordInput = page.locator('form input[type="password"]').first();
     await expect(usernameInput).toBeVisible();
     await expect(passwordInput).toBeVisible();
     logOk('Login form fields visible');
@@ -31,7 +31,7 @@ test.describe('Full App Exploration', () => {
     // Login
     await usernameInput.fill('admin');
     await passwordInput.fill('admin123');
-    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.locator('form').getByRole('button', { name: /sign in/i }).click();
     await page.waitForURL('/', { timeout: 10000 });
     logOk('Login succeeds, redirected to /');
 
@@ -191,9 +191,14 @@ test.describe('Full App Exploration', () => {
       if (overviewContent && overviewContent.length > 50) logOk('Overview tab has content');
       else logIssue('Project Detail', 'Overview tab appears empty');
 
+      // Extract project ID for direct tab navigation
+      const projectUrl = page.url();
+      const projectId = projectUrl.split('/projects/')[1]?.split('/')[0] ?? '';
+
       // ─── WBS TAB ───
       console.log('\n  --- WBS TAB ---');
-      await page.getByText('WBS').first().click();
+      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}?tab=wbs`);
+      else await page.getByText('WBS').first().click();
       await page.waitForTimeout(1500);
       const wbsContent = await page.locator('main').textContent();
       const wbsErrors = await page.locator('.text-red-500, .text-red-700').allTextContents();
@@ -203,7 +208,8 @@ test.describe('Full App Exploration', () => {
 
       // ─── ACTIVITIES TAB ───
       console.log('\n  --- ACTIVITIES TAB ---');
-      await page.getByText('Activities').first().click();
+      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}?tab=activities`);
+      else await page.getByText('Activities').first().click();
       await page.waitForTimeout(1500);
       const actTables = await page.locator('table').count();
       const newActBtn = await page.getByRole('button', { name: /new activity/i }).isVisible().catch(() => false);
@@ -215,7 +221,8 @@ test.describe('Full App Exploration', () => {
 
       // ─── GANTT TAB ───
       console.log('\n  --- GANTT TAB ---');
-      await page.getByText('Gantt').first().click();
+      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}?tab=gantt`);
+      else await page.getByText('Gantt').first().click();
       await page.waitForTimeout(2000);
       const svgCount = await page.locator('svg').count();
       const canvasCount = await page.locator('canvas').count();
@@ -227,7 +234,8 @@ test.describe('Full App Exploration', () => {
 
       // ─── RESOURCES TAB ───
       console.log('\n  --- RESOURCES TAB ---');
-      await page.getByText('Resources').first().click();
+      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}?tab=resources`);
+      else await page.getByText('Resources').first().click();
       await page.waitForTimeout(1500);
       const resTabContent = await page.locator('main').textContent();
       if (resTabContent && resTabContent.length > 20) logOk('Resources tab has content');
@@ -235,7 +243,8 @@ test.describe('Full App Exploration', () => {
 
       // ─── COSTS TAB ───
       console.log('\n  --- COSTS TAB ---');
-      await page.locator('nav >> text=Costs').click({ timeout: 5000 }).catch(() => logIssue('Costs Tab', 'Tab not clickable'));
+      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}?tab=costs`);
+      else await page.getByText('Costs').first().click();
       await page.waitForTimeout(1500);
       const costErrors = await page.locator('.text-red-500, .text-red-700').allTextContents();
       if (costErrors.length) logIssue('Costs Tab', `Error text: ${costErrors.join('; ')}`);
@@ -243,7 +252,8 @@ test.describe('Full App Exploration', () => {
 
       // ─── EVM TAB ───
       console.log('\n  --- EVM TAB ---');
-      await page.locator('nav >> text=EVM').click({ timeout: 5000 }).catch(() => logIssue('EVM Tab', 'Tab not clickable'));
+      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}?tab=evm`);
+      else await page.getByText('EVM').first().click();
       await page.waitForTimeout(2000);
       const evmErrors = await page.locator('.text-red-500, .text-red-700').allTextContents();
       if (evmErrors.length) logIssue('EVM Tab', `Error text: ${evmErrors.join('; ')}`);

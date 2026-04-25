@@ -1,15 +1,22 @@
 import { test as base, expect, Page } from '@playwright/test';
 
 /**
- * Shared login helper. The login form was redesigned as a marketing landing in commit
- * f0b5f09 and the #username / #password id attributes were removed in favour of name=…
- * only, so we target by input name to stay resilient across future CSS-only tweaks.
+ * Shared login helper. The login form is now a marketing landing page;
+ * inputs are controlled components without name attributes. We target by
+ * input type and placeholder to stay resilient across CSS tweaks.
  */
 export async function login(page: Page, username = 'admin', password = 'admin123') {
   await page.goto('/auth/login');
-  await page.locator('input[name="username"]').fill(username);
-  await page.locator('input[name="password"]').fill(password);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  // Username: first text input inside the sign-in card (placeholder "you@company.com")
+  const usernameInput = page.locator('form input[type="text"]').first();
+  await expect(usernameInput).toBeVisible({ timeout: 10_000 });
+  await usernameInput.fill(username);
+
+  // Password: the password input inside the sign-in card
+  const passwordInput = page.locator('form input[type="password"]').first();
+  await passwordInput.fill(password);
+
+  await page.locator('form').getByRole('button', { name: /sign in/i }).click();
   await page.waitForURL('/', { timeout: 15_000 });
   await expect(page).toHaveURL('/');
 }
