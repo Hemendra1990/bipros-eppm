@@ -3,10 +3,15 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { List, FolderTree } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
 import type { ActivityResponse } from "@/lib/api/activityApi";
+import { projectApi } from "@/lib/api/projectApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ActivityWbsTreeView } from "@/components/activity/ActivityWbsTreeView";
+import { getErrorMessage } from "@/lib/utils/error";
+import { notificationHelpers } from "@/lib/notificationHelpers";
 import Link from "next/link";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -18,18 +23,26 @@ export default function ActivitiesPage() {
   const qc = useQueryClient();
 
   const [lookAheadWeeks, setLookAheadWeeks] = useState<4 | 13 | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "tree">("list");
   // Row-specific inline editor state. Keyed by activity id; value = string
   // currently typed into the % input.
   const [progressEdit, setProgressEdit] = useState<Record<string, string>>({});
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const { data: activitiesData, isLoading } = useQuery({
+  const { data: activitiesData, isLoading: isLoadingActivities } = useQuery({
     queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 500),
     enabled: !!projectId,
   });
 
+  const { data: wbsData, isLoading: isLoadingWbs } = useQuery({
+    queryKey: ["wbs", projectId],
+    queryFn: () => projectApi.getWbsTree(projectId),
+    enabled: !!projectId,
+  });
+
   const activities = (activitiesData?.data?.content || []) as ActivityResponse[];
+  const wbsNodes = wbsData?.data ?? [];
 
   const progressMutation = useMutation({
     mutationFn: async (vars: {
@@ -49,6 +62,10 @@ export default function ActivitiesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["activities", projectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = getErrorMessage(err, "Failed to update progress");
+      notificationHelpers.handleApiError(err, msg);
     },
     onSettled: () => setPendingId(null),
   });
@@ -107,6 +124,8 @@ export default function ActivitiesPage() {
     });
   };
 
+  const isLoading = isLoadingActivities || (viewMode === "tree" && isLoadingWbs);
+
   return (
     <div>
       <PageHeader
@@ -122,38 +141,67 @@ export default function ActivitiesPage() {
         }
       />
 
-      {/* Look-Ahead Filter */}
-      <div className="mb-6 flex gap-2">
-        <button
-          onClick={() => setLookAheadWeeks(null)}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            lookAheadWeeks === null
-              ? "bg-accent text-text-primary"
-              : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
-          }`}
-        >
-          All Activities
-        </button>
-        <button
-          onClick={() => setLookAheadWeeks(4)}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            lookAheadWeeks === 4
-              ? "bg-accent text-text-primary"
-              : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
-          }`}
-        >
-          4-Week Look-Ahead
-        </button>
-        <button
-          onClick={() => setLookAheadWeeks(13)}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            lookAheadWeeks === 13
-              ? "bg-accent text-text-primary"
-              : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
-          }`}
-        >
-          13-Week Look-Ahead
-        </button>
+      {/* Controls */}
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        {/* Look-Ahead Filter */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setLookAheadWeeks(null)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              lookAheadWeeks === null
+                ? "bg-accent text-text-primary"
+                : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
+            }`}
+          >
+            All Activities
+          </button>
+          <button
+            onClick={() => setLookAheadWeeks(4)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              lookAheadWeeks === 4
+                ? "bg-accent text-text-primary"
+                : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
+            }`}
+          >
+            4-Week Look-Ahead
+          </button>
+          <button
+            onClick={() => setLookAheadWeeks(13)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              lookAheadWeeks === 13
+                ? "bg-accent text-text-primary"
+                : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
+            }`}
+          >
+            13-Week Look-Ahead
+          </button>
+        </div>
+
+        {/* View Mode Toggle */}
+        <div className="inline-flex rounded-lg border border-border bg-surface/60 p-0.5">
+          <button
+            onClick={() => setViewMode("list")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              viewMode === "list"
+                ? "bg-accent text-text-primary"
+                : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+            }`}
+          >
+            <List size={14} />
+            List
+          </button>
+          <button
+            onClick={() => setViewMode("tree")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              viewMode === "tree"
+                ? "bg-accent text-text-primary"
+                : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+            }`}
+          >
+            <FolderTree size={14} />
+            WBS Tree
+          </button>
+        </div>
       </div>
 
       {progressMutation.isError && (
@@ -163,7 +211,9 @@ export default function ActivitiesPage() {
       )}
 
       {isLoading ? (
-        <div className="text-center text-text-muted">Loading activities...</div>
+        <div className="text-center text-text-muted">
+          {viewMode === "tree" ? "Loading activities and WBS..." : "Loading activities..."}
+        </div>
       ) : filteredActivities.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface/80 p-8 text-center">
           <p className="text-text-muted">
@@ -172,6 +222,19 @@ export default function ActivitiesPage() {
               : "No activities found"}
           </p>
         </div>
+      ) : viewMode === "tree" ? (
+        <ActivityWbsTreeView
+          wbsNodes={wbsNodes}
+          activities={filteredActivities}
+          projectId={projectId}
+          progressEdit={progressEdit}
+          setProgressEdit={setProgressEdit}
+          pendingId={pendingId}
+          progressMutationIsPending={progressMutation.isPending}
+          onSaveProgress={saveProgress}
+          onStartActivity={start}
+          onCompleteActivity={complete}
+        />
       ) : (
         <div className="rounded-lg border border-border bg-surface/50 shadow-sm">
           <div className="overflow-x-auto">

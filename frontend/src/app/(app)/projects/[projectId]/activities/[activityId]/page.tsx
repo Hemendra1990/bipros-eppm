@@ -12,6 +12,11 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
 import { UdfSection } from "@/components/udf/UdfSection";
 
+type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplete"> & {
+  originalDuration?: number | "";
+  percentComplete?: number | "";
+};
+
 export default function ActivityDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -21,12 +26,6 @@ export default function ActivityDetailPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
-
-  type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplete" | "remainingDuration"> & {
-    originalDuration?: number | "";
-    percentComplete?: number | "";
-    remainingDuration?: number | "";
-  };
 
   const [editData, setEditData] = useState<EditData>({
     name: "",
@@ -112,7 +111,6 @@ export default function ActivityDetailPage() {
       ...editData,
       originalDuration: editData.originalDuration === "" ? 0 : editData.originalDuration,
       percentComplete: editData.percentComplete === "" ? 0 : editData.percentComplete,
-      remainingDuration: editData.remainingDuration === "" ? 0 : editData.remainingDuration,
     };
     updateMutation.mutate(sanitizedData);
   };
@@ -273,7 +271,7 @@ function ViewMode({ activity, projectId }: { activity: ActivityResponse; project
 }
 
 interface EditFormProps {
-  data: UpdateActivityRequest;
+  data: EditData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
@@ -281,9 +279,9 @@ interface EditFormProps {
   usePert: boolean;
   onTogglePert: () => void;
   pertData: {
-    optimisticDuration: number;
-    mostLikelyDuration: number;
-    pessimisticDuration: number;
+    optimisticDuration: number | "";
+    mostLikelyDuration: number | "";
+    pessimisticDuration: number | "";
     expectedDuration: number;
     standardDeviation: number;
   };
