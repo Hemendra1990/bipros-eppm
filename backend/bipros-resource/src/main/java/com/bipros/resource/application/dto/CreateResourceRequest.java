@@ -6,20 +6,24 @@ import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.model.ResourceUnit;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
  * Create / update payload for Resource Master. The original {@code code} is now optional — when
- * left blank and {@code resourceType = EQUIPMENT}, the service auto-generates {@code EQ-NNN}
- * per PMS MasterData Screen 04.
+ * left blank, the service auto-generates a code using the chosen Resource Type def's prefix
+ * (or the base category default LAB / EQ / MAT).
+ *
+ * <p>Either {@code resourceTypeDefId} (the new admin-managed lookup id) or the legacy
+ * {@code resourceType} enum must be supplied. When only the enum is provided the service
+ * resolves the seeded system-default def for that base category.
  */
 public record CreateResourceRequest(
     String code,
     @NotBlank(message = "Name is required") String name,
-    @NotNull(message = "Resource type is required") ResourceType resourceType,
+    UUID resourceTypeDefId,
+    ResourceType resourceType,
     UUID parentId,
     UUID calendarId,
     String email,

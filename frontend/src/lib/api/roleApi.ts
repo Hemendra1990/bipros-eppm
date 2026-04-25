@@ -8,7 +8,12 @@ export interface RoleResponse {
   code: string;
   name: string;
   description: string | null;
+  /** Base category derived from the chosen Resource Type def. */
   resourceType: RoleResourceType;
+  /** The admin-managed Resource Type def this role references. */
+  resourceTypeDefId?: string | null;
+  resourceTypeCode?: string | null;
+  resourceTypeName?: string | null;
   defaultRate: number | null;
   defaultUnitsPerTime: number | null;
   sortOrder: number;
@@ -28,7 +33,10 @@ export interface CreateRoleRequest {
   code: string;
   name: string;
   description?: string | null;
-  resourceType: RoleResourceType;
+  /** Preferred: id of the admin-managed Resource Type def. */
+  resourceTypeDefId?: string;
+  /** Legacy: base-category enum. Used when resourceTypeDefId is absent. */
+  resourceType?: RoleResourceType;
   defaultRate?: number | null;
   rateUnit?: string | null;
   budgetedRate?: number | null;

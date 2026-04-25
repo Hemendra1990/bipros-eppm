@@ -1,0 +1,146 @@
+databaseChangeLog:
+  - changeSet:
+      id: 016-create-resource-type-defs-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_type_defs
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: base_category
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code_prefix
+                  type: VARCHAR(10)
+              - column:
+                  name: sort_order
+                  type: INTEGER
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: true
+              - column:
+                  name: system_default
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: resource_type_defs
+            columnNames: code
+            constraintName: uk_resource_type_def_code
+        - createIndex:
+            schemaName: resource
+            tableName: resource_type_defs
+            indexName: idx_resource_type_def_active_sort
+            columns:
+              - column:
+                  name: active
+              - column:
+                  name: sort_order
+        - createIndex:
+            schemaName: resource
+            tableName: resource_type_defs
+            indexName: idx_resource_type_def_base_category
+            columns:
+              - column:
+                  name: base_category
+
+  - changeSet:
+      id: 016-seed-3m-resource-type-defs
+      author: bipros
+      changes:
+        - sql:
+            comment: Seed the three system-default Resource Type definitions (Manpower / Material / Machine)
+            sql: |
+              INSERT INTO resource.resource_type_defs
+                (id, code, name, base_category, code_prefix, sort_order, active, system_default,
+                 created_at, updated_at, version)
+              VALUES
+                (gen_random_uuid(), 'MANPOWER', 'Manpower', 'LABOR',    'LAB', 10, true, true, now(), now(), 0),
+                (gen_random_uuid(), 'MATERIAL', 'Material', 'MATERIAL', 'MAT', 20, true, true, now(), now(), 0),
+                (gen_random_uuid(), 'MACHINE',  'Machine',  'NONLABOR', 'EQ',  30, true, true, now(), now(), 0)
+              ON CONFLICT (code) DO NOTHING;
+
+  - changeSet:
+      id: 016-add-resource-type-def-id-to-resources
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: resource
+            tableName: resources
+            columns:
+              - column:
+                  name: resource_type_def_id
+                  type: UUID
+        - sql:
+            comment: Backfill resource_type_def_id by joining on the seeded base category
+            sql: |
+              UPDATE resource.resources r
+              SET resource_type_def_id = d.id
+              FROM resource.resource_type_defs d
+              WHERE d.base_category = r.resource_type
+                AND d.system_default = true
+                AND r.resource_type_def_id IS NULL;
+        - addForeignKeyConstraint:
+            baseSchemaName: resource
+            baseTableName: resources
+            baseColumnNames: resource_type_def_id
+            referencedSchemaName: resource
+            referencedTableName: resource_type_defs
+            referencedColumnNames: id
+            constraintName: fk_resources_resource_type_def
+        - createIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_type_def
+            columns:
+              - column:
+                  name: resource_type_def_id
+
+  # NOTE: `resource.resource_roles` is created by Hibernate (no pre-existing Liquibase changeset
+  # for that table). Adding the resource_type_def_id column there is therefore handled by the
+  # entity mapping under dev (`ddl-auto: create-drop`); prod deployments must add the table +
+  # column out-of-band until the role table itself is brought under Liquibase management.

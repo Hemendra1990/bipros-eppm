@@ -240,7 +240,12 @@ export interface ResourceResponse {
   id: string;
   code: string;
   name: string;
+  /** Base category derived from the chosen Resource Type def. */
   resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
+  /** The admin-managed Resource Type def this resource references. */
+  resourceTypeDefId?: string | null;
+  resourceTypeCode?: string | null;
+  resourceTypeName?: string | null;
   status: string;
   maxUnitsPerDay: number;
   hourlyRate: number;

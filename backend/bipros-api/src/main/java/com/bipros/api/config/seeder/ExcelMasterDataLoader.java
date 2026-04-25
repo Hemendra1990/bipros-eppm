@@ -46,6 +46,7 @@ import com.bipros.resource.domain.repository.LabourReturnRepository;
 import com.bipros.resource.domain.repository.MaterialReconciliationRepository;
 import com.bipros.resource.domain.repository.ResourceDailyLogRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
+import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import com.bipros.risk.domain.model.Risk;
 import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskProbability;
@@ -142,6 +143,7 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
     private final DrawingRegisterRepository drawingRegisterRepository;
     private final RfiRegisterRepository rfiRegisterRepository;
     private final ResourceRepository resourceRepository;
+    private final ResourceTypeDefRepository resourceTypeDefRepository;
     private final ResourceDailyLogRepository resourceDailyLogRepository;
     private final EquipmentLogRepository equipmentLogRepository;
     private final LabourReturnRepository labourReturnRepository;
@@ -935,6 +937,8 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
             res.setCode(code);
             res.setName(name != null ? name : code);
             res.setResourceType(rt);
+            resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(rt)
+                .ifPresent(res::setResourceTypeDef);
             res.setResourceCategory(mapResourceCategory(categoryText, rt));
             res.setUnit(mapResourceUnit(unitText));
             res.setMaxUnitsPerDay(poolMax != null ? poolMax : 8.0);

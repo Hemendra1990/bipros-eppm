@@ -15,4 +15,6 @@ public interface ResourceRoleRepository extends JpaRepository<Role, UUID> {
   List<Role> findByResourceType(ResourceType resourceType);
 
   Optional<Role> findByCode(String code);
+
+  long countByResourceTypeDefId(UUID resourceTypeDefId);
 }

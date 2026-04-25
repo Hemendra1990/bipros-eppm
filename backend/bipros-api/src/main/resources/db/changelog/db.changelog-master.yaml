@@ -30,4 +30,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/015-resource-logs-tables.yaml
   - include:
+      file: db/changelog/016-resource-type-defs.yaml
+  - include:
       file: db/changelog/030-gis-tables.yaml

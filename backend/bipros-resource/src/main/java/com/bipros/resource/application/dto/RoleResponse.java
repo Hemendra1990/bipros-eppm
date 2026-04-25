@@ -13,6 +13,9 @@ public record RoleResponse(
     String name,
     String description,
     ResourceType resourceType,
+    UUID resourceTypeDefId,
+    String resourceTypeCode,
+    String resourceTypeName,
     BigDecimal defaultRate,
     Double defaultUnitsPerTime,
     Integer sortOrder,
@@ -38,12 +41,16 @@ public record RoleResponse(
         variancePct = variance.divide(budgeted, 6, java.math.RoundingMode.HALF_UP);
       }
     }
+    var def = role.getResourceTypeDef();
     return new RoleResponse(
         role.getId(),
         role.getCode(),
         role.getName(),
         role.getDescription(),
         role.getResourceType(),
+        def == null ? null : def.getId(),
+        def == null ? null : def.getCode(),
+        def == null ? null : def.getName(),
         role.getDefaultRate(),
         role.getDefaultUnitsPerTime(),
         role.getSortOrder(),

@@ -21,6 +21,7 @@ import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
+import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -42,6 +43,7 @@ public class XerImportMapper {
   private final CalendarRepository calendarRepository;
   private final ResourceRepository resourceRepository;
   private final ResourceAssignmentRepository resourceAssignmentRepository;
+  private final ResourceTypeDefRepository resourceTypeDefRepository;
 
   private Map<String, UUID> xerIdToUuidMap;
   private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -53,7 +55,8 @@ public class XerImportMapper {
       ActivityRelationshipRepository activityRelationshipRepository,
       CalendarRepository calendarRepository,
       ResourceRepository resourceRepository,
-      ResourceAssignmentRepository resourceAssignmentRepository) {
+      ResourceAssignmentRepository resourceAssignmentRepository,
+      ResourceTypeDefRepository resourceTypeDefRepository) {
     this.projectRepository = projectRepository;
     this.wbsNodeRepository = wbsNodeRepository;
     this.activityRepository = activityRepository;
@@ -61,6 +64,7 @@ public class XerImportMapper {
     this.calendarRepository = calendarRepository;
     this.resourceRepository = resourceRepository;
     this.resourceAssignmentRepository = resourceAssignmentRepository;
+    this.resourceTypeDefRepository = resourceTypeDefRepository;
     this.xerIdToUuidMap = new HashMap<>();
   }
 
@@ -276,7 +280,10 @@ public class XerImportMapper {
       resource.setName(row.getOrDefault("rsrc_name", "Resource"));
 
       String rsrcType = row.get("rsrc_type");
-      resource.setResourceType(mapResourceType(rsrcType));
+      ResourceType baseCategory = mapResourceType(rsrcType);
+      resource.setResourceType(baseCategory);
+      resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(baseCategory)
+          .ifPresent(resource::setResourceTypeDef);
 
       Resource saved = resourceRepository.save(resource);
       xerIdToUuidMap.put("RSRC:" + rsrcId, saved.getId());

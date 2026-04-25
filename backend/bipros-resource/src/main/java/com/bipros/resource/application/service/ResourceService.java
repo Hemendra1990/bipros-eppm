@@ -8,7 +8,9 @@ import com.bipros.resource.application.dto.ResourceResponse;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
+import com.bipros.resource.domain.model.ResourceTypeDef;
 import com.bipros.resource.domain.repository.ResourceRepository;
+import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,13 +26,17 @@ import java.util.UUID;
 public class ResourceService {
 
   private final ResourceRepository resourceRepository;
+  private final ResourceTypeDefRepository resourceTypeDefRepository;
   private final AuditService auditService;
 
   public ResourceResponse createResource(CreateResourceRequest request) {
-    log.info("Creating resource: code={}, type={}", request.code(), request.resourceType());
+    log.info("Creating resource: code={}, defId={}, type={}", request.code(), request.resourceTypeDefId(), request.resourceType());
+
+    ResourceTypeDef def = resolveTypeDef(request.resourceTypeDefId(), request.resourceType());
+    ResourceType baseCategory = def.getBaseCategory();
 
     String code = request.code() != null && !request.code().isBlank()
-        ? request.code() : generateResourceCode(request.resourceType());
+        ? request.code() : generateResourceCode(def);
     if (resourceRepository.findByCode(code).isPresent()) {
       throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE", "Resource with code " + code + " already exists");
     }
@@ -38,7 +44,8 @@ public class ResourceService {
     Resource resource = Resource.builder()
         .code(code)
         .name(request.name())
-        .resourceType(request.resourceType())
+        .resourceType(baseCategory)
+        .resourceTypeDef(def)
         .parentId(request.parentId())
         .calendarId(request.calendarId())
         .email(request.email())
@@ -121,9 +128,12 @@ public class ResourceService {
       throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE", "Resource with code " + request.code() + " already exists");
     }
 
+    ResourceTypeDef def = resolveTypeDef(request.resourceTypeDefId(), request.resourceType());
+
     resource.setCode(request.code());
     resource.setName(request.name());
-    resource.setResourceType(request.resourceType());
+    resource.setResourceType(def.getBaseCategory());
+    resource.setResourceTypeDef(def);
     resource.setParentId(request.parentId());
     resource.setCalendarId(request.calendarId());
     resource.setEmail(request.email());
@@ -181,19 +191,14 @@ public class ResourceService {
   }
 
   /**
-   * Auto-generate a code per PMS MasterData Screen 04: {@code EQ-NNN} for equipment
-   * (ResourceType.NONLABOR maps to equipment in the MasterData taxonomy), {@code LAB-NNN} for
-   * labor, {@code MAT-NNN} for materials, {@code RES-NNN} for anything else. Walks the existing
+   * Auto-generate a code: prefer the def's {@code codePrefix} when set; otherwise fall back to
+   * the base category default ({@code LAB} / {@code EQ} / {@code MAT}). Walks the existing
    * {@code code} column to find the next available suffix so multi-process inserts don't collide.
    */
-  private String generateResourceCode(ResourceType type) {
-    String prefix = switch (type) {
-      case NONLABOR -> "EQ";
-      case LABOR -> "LAB";
-      case MATERIAL -> "MAT";
-    };
+  private String generateResourceCode(ResourceTypeDef def) {
+    String prefix = prefixFor(def);
     int next = 1;
-    java.util.regex.Pattern p = java.util.regex.Pattern.compile("^" + prefix + "-(\\d+)$");
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile("^" + java.util.regex.Pattern.quote(prefix) + "-(\\d+)$");
     for (Resource r : resourceRepository.findAll()) {
       if (r.getCode() == null) continue;
       java.util.regex.Matcher m = p.matcher(r.getCode());
@@ -203,6 +208,35 @@ public class ResourceService {
       }
     }
     return String.format("%s-%03d", prefix, next);
+  }
+
+  private static String prefixFor(ResourceTypeDef def) {
+    if (def.getCodePrefix() != null && !def.getCodePrefix().isBlank()) {
+      return def.getCodePrefix();
+    }
+    return switch (def.getBaseCategory()) {
+      case NONLABOR -> "EQ";
+      case LABOR -> "LAB";
+      case MATERIAL -> "MAT";
+    };
+  }
+
+  /**
+   * Resolve the def from the request: explicit id wins, otherwise look up the seeded system
+   * default for the supplied base-category enum (so legacy callers still work).
+   */
+  private ResourceTypeDef resolveTypeDef(UUID defId, ResourceType baseCategory) {
+    if (defId != null) {
+      return resourceTypeDefRepository.findById(defId)
+          .orElseThrow(() -> new ResourceNotFoundException("ResourceTypeDef", defId));
+    }
+    if (baseCategory == null) {
+      throw new BusinessRuleException("RESOURCE_TYPE_REQUIRED",
+          "Either resourceTypeDefId or resourceType must be provided");
+    }
+    return resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(baseCategory)
+        .orElseThrow(() -> new BusinessRuleException("RESOURCE_TYPE_NOT_SEEDED",
+            "No system-default Resource Type for base category " + baseCategory));
   }
 
   public void deleteResource(UUID id) {

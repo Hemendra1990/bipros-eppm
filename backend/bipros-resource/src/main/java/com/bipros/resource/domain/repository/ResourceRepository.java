@@ -22,4 +22,6 @@ public interface ResourceRepository extends JpaRepository<Resource, UUID> {
   List<Resource> findByStatus(ResourceStatus status);
 
   Optional<Resource> findByCode(String code);
+
+  long countByResourceTypeDefId(UUID resourceTypeDefId);
 }

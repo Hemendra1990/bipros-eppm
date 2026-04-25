@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   roleApi,
@@ -10,6 +10,7 @@ import {
   type UserResourceRoleResponse,
   type AssignUserToRoleRequest,
 } from "@/lib/api/roleApi";
+import { resourceTypeApi, BASE_CATEGORY_LABEL } from "@/lib/api/resourceTypeApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
 
@@ -19,7 +20,7 @@ interface RoleForm {
   code: string;
   name: string;
   description: string;
-  resourceType: RoleResourceType;
+  resourceTypeDefId: string;
   rateUnit: string;
   budgetedRate: string;
   actualRate: string;
@@ -37,7 +38,7 @@ const initialRoleForm = (): RoleForm => ({
   code: "",
   name: "",
   description: "",
-  resourceType: "LABOR",
+  resourceTypeDefId: "",
   rateUnit: "Day",
   budgetedRate: "",
   actualRate: "",
@@ -101,6 +102,21 @@ export default function ResourceRolesPage() {
   });
 
   const roles: RoleResponse[] = rolesData?.data ?? [];
+
+  const { data: typeDefsData } = useQuery({
+    queryKey: ["resource-types", "active"],
+    queryFn: () => resourceTypeApi.list({ active: true }),
+  });
+  const typeDefs = useMemo(() => typeDefsData?.data ?? [], [typeDefsData]);
+
+  // Derived default — first time the form opens with no selection, fall back to the seeded
+  // Manpower def (or the first available). Computed at render time so we don't need a setState
+  // effect.
+  const defaultTypeDefId = useMemo(() => {
+    if (typeDefs.length === 0) return "";
+    return (typeDefs.find((d) => d.code === "MANPOWER") ?? typeDefs[0]).id;
+  }, [typeDefs]);
+  const effectiveTypeDefId = roleForm.resourceTypeDefId || defaultTypeDefId;
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
 
   const {
@@ -124,7 +140,7 @@ export default function ResourceRolesPage() {
         code: roleForm.code.trim(),
         name: roleForm.name.trim(),
         description: roleForm.description.trim() || null,
-        resourceType: roleForm.resourceType,
+        resourceTypeDefId: effectiveTypeDefId || undefined,
         rateUnit: roleForm.rateUnit.trim() || null,
         budgetedRate: toNumberOrNull(roleForm.budgetedRate),
         actualRate: toNumberOrNull(roleForm.actualRate),
@@ -200,9 +216,9 @@ export default function ResourceRolesPage() {
             className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
           >
             <option value="ALL">All</option>
-            <option value="LABOR">LABOR</option>
-            <option value="NONLABOR">NONLABOR</option>
-            <option value="MATERIAL">MATERIAL</option>
+            <option value="LABOR">Manpower</option>
+            <option value="MATERIAL">Material</option>
+            <option value="NONLABOR">Machine</option>
           </select>
         </div>
       </div>
@@ -270,18 +286,19 @@ export default function ResourceRolesPage() {
                     Resource Type
                   </label>
                   <select
-                    value={roleForm.resourceType}
+                    value={effectiveTypeDefId}
                     onChange={(e) =>
-                      setRoleForm({
-                        ...roleForm,
-                        resourceType: e.target.value as RoleResourceType,
-                      })
+                      setRoleForm({ ...roleForm, resourceTypeDefId: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                    required
                   >
-                    <option value="LABOR">LABOR</option>
-                    <option value="NONLABOR">NONLABOR</option>
-                    <option value="MATERIAL">MATERIAL</option>
+                    {typeDefs.length === 0 && <option value="">Loading…</option>}
+                    {typeDefs.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({BASE_CATEGORY_LABEL[d.baseCategory]})
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -408,7 +425,9 @@ export default function ResourceRolesPage() {
                     >
                       <td className="border border-border px-4 py-2">{role.code}</td>
                       <td className="border border-border px-4 py-2">{role.name}</td>
-                      <td className="border border-border px-4 py-2">{role.resourceType}</td>
+                      <td className="border border-border px-4 py-2">
+                        {role.resourceTypeName ?? BASE_CATEGORY_LABEL[role.resourceType] ?? role.resourceType}
+                      </td>
                       <td className="border border-border px-4 py-2">{role.rateUnit ?? "—"}</td>
                       <td className="border border-border px-4 py-2 text-right">
                         {formatCurrency(role.budgetedRate)}

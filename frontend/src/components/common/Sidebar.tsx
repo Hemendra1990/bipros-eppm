@@ -6,8 +6,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3, Briefcase, Building2, Calendar, ChevronDown, ChevronLeft,
   ChevronRight, FileText, FolderTree, Gauge, LayoutDashboard, Layers,
-  LogOut, Network, Plug, Settings, Shield, SlidersHorizontal, Sparkles,
-  UserCog, Users,
+  ListChecks, LogOut, Network, Plug, Settings, Shield, SlidersHorizontal,
+  Sparkles, UserCog, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAppStore, useAuthStore } from "@/lib/state/store";
@@ -48,6 +48,7 @@ const groups: NavGroup[] = [
       { name: "Users", href: "/admin/users", icon: Users },
       { name: "Organisations", href: "/admin/organisations", icon: Building2 },
       { name: "User Access", href: "/admin/user-access", icon: UserCog },
+      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks },
       { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge },
       { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge },

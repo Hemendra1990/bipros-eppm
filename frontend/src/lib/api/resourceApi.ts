@@ -49,7 +49,12 @@ export interface ResourceResponse {
   id: string;
   code: string;
   name: string;
+  /** Base category derived from the chosen Resource Type def. */
   resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
+  /** The admin-managed Resource Type def this resource references. */
+  resourceTypeDefId?: string | null;
+  resourceTypeCode?: string | null;
+  resourceTypeName?: string | null;
   resourceCategory?: ResourceCategory | null;
   unit?: ResourceUnit | null;
   status: string;
@@ -75,7 +80,10 @@ export type ResourceOwnership = "OWNED" | "HIRED" | "SUB_CONTRACTOR_PROVIDED";
 export interface CreateResourceRequest {
   code?: string;
   name: string;
-  type: "LABOR" | "NONLABOR" | "MATERIAL";
+  /** Preferred: id of the admin-managed Resource Type def. */
+  resourceTypeDefId?: string;
+  /** Legacy: base-category enum. Used when resourceTypeDefId is absent. */
+  type?: "LABOR" | "NONLABOR" | "MATERIAL";
   maxUnits?: number;
   hourlyRate?: number;
   costPerUse?: number;
@@ -94,7 +102,10 @@ export interface CreateResourceRequest {
 export interface UpdateResourceRequest {
   code: string;
   name: string;
-  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
+  /** Preferred: id of the admin-managed Resource Type def. */
+  resourceTypeDefId?: string;
+  /** Legacy: base-category enum. Used when resourceTypeDefId is absent. */
+  resourceType?: "LABOR" | "NONLABOR" | "MATERIAL";
   maxUnitsPerDay?: number;
   status?: string;
   hourlyRate?: number;
@@ -174,12 +185,20 @@ export const resourceApi = {
     apiClient.post<ApiResponse<ResourceResponse>>("/v1/resources", {
       code: data.code,
       name: data.name,
+      resourceTypeDefId: data.resourceTypeDefId,
       resourceType: data.type,
       maxUnitsPerDay: data.maxUnits ?? 8,
       hourlyRate: data.hourlyRate ?? 0,
       costPerUse: data.costPerUse ?? 0,
       overtimeRate: data.overtimeRate ?? 0,
       calendarId: data.calendarId,
+      capacitySpec: data.capacitySpec,
+      makeModel: data.makeModel,
+      quantityAvailable: data.quantityAvailable,
+      ownershipType: data.ownershipType,
+      standardOutputPerDay: data.standardOutputPerDay,
+      standardOutputUnit: data.standardOutputUnit,
+      fuelLitresPerHour: data.fuelLitresPerHour,
     }).then((r) => r.data),
 
   updateResource: (id: string, data: UpdateResourceRequest) =>

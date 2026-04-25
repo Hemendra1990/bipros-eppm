@@ -17,6 +17,9 @@ public record ResourceResponse(
     String code,
     String name,
     ResourceType resourceType,
+    UUID resourceTypeDefId,
+    String resourceTypeCode,
+    String resourceTypeName,
     ResourceCategory resourceCategory,
     ResourceUnit unit,
     UUID parentId,
@@ -72,11 +75,15 @@ public record ResourceResponse(
         status = UtilisationStatus.ACTIVE;
       }
     }
+    var def = resource.getResourceTypeDef();
     return new ResourceResponse(
         resource.getId(),
         resource.getCode(),
         resource.getName(),
         resource.getResourceType(),
+        def == null ? null : def.getId(),
+        def == null ? null : def.getCode(),
+        def == null ? null : def.getName(),
         resource.getResourceCategory(),
         resource.getUnit(),
         resource.getParentId(),

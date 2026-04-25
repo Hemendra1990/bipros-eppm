@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { resourceApi, type ResourceResponse, type ResourceAssignmentResponse } from "@/lib/api/resourceApi";
@@ -12,6 +12,7 @@ import { Plus, SlidersHorizontal } from "lucide-react";
 import { ResourceLevelingDialog } from "./ResourceLevelingDialog";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import { UdfSection } from "@/components/udf/UdfSection";
+import { ResourceAssignmentTree, ViewModeToggle, type AssignmentRow } from "./ResourceAssignmentTree";
 
 interface ResourceAssignmentRow {
   id: string;
@@ -40,18 +41,19 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [showLeveling, setShowLeveling] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<{ id: string; resourceName: string; activityName: string } | null>(null);
+  const [viewMode, setViewMode] = useState<"flat" | "activity" | "resourceType">("activity");
 
   const { data: assignmentsData, isLoading: isLoadingAssignments } = useQuery({
     queryKey: ["resource-assignments", projectId],
     queryFn: () => resourceApi.getProjectResourceAssignments(projectId, 0, 100),
   });
 
-  const { data: resourcesData, isLoading: isLoadingResources } = useQuery({
+  const { data: resourcesData } = useQuery({
     queryKey: ["resources"],
     queryFn: () => resourceApi.listResources(0, 100),
   });
 
-  const { data: activitiesData, isLoading: isLoadingActivities } = useQuery({
+  const { data: activitiesData } = useQuery({
     queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 100),
   });
@@ -61,7 +63,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     queryFn: () =>
       selectedResourceId
         ? resourceHistogramApi.getHistogram(projectId, selectedResourceId)
-        : Promise.resolve({ data: [], success: true } as any),
+        : Promise.resolve({ data: [], success: true } as unknown as ReturnType<typeof resourceHistogramApi.getHistogram>),
     enabled: !!selectedResourceId,
   });
 
@@ -84,21 +86,54 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     },
   });
 
-  const rawAssignments = assignmentsData?.data as unknown;
-  const assignments: ResourceAssignmentResponse[] = Array.isArray(rawAssignments)
-    ? (rawAssignments as ResourceAssignmentResponse[])
-    : ((rawAssignments as { content?: ResourceAssignmentResponse[] } | undefined)?.content ?? []);
-  // resourceApi.listResources returns a flat array now; keep the branch for
-  // safety in case it ever wraps the payload again.
-  const rawResources = resourcesData?.data as unknown;
-  const resources: ResourceResponse[] = Array.isArray(rawResources)
-    ? (rawResources as ResourceResponse[])
-    : ((rawResources as { content?: ResourceResponse[] } | undefined)?.content ?? []);
-  const rawActivities = activitiesData?.data as unknown;
-  const activities: ActivityResponse[] = Array.isArray(rawActivities)
-    ? (rawActivities as ActivityResponse[])
-    : ((rawActivities as { content?: ActivityResponse[] } | undefined)?.content ?? []);
+  const assignments = useMemo<ResourceAssignmentResponse[]>(() => {
+    const raw = assignmentsData?.data as unknown;
+    return Array.isArray(raw)
+      ? (raw as ResourceAssignmentResponse[])
+      : ((raw as { content?: ResourceAssignmentResponse[] } | undefined)?.content ?? []);
+  }, [assignmentsData]);
+
+  const resources = useMemo<ResourceResponse[]>(() => {
+    const raw = resourcesData?.data as unknown;
+    return Array.isArray(raw)
+      ? (raw as ResourceResponse[])
+      : ((raw as { content?: ResourceResponse[] } | undefined)?.content ?? []);
+  }, [resourcesData]);
+
+  const activities = useMemo<ActivityResponse[]>(() => {
+    const raw = activitiesData?.data as unknown;
+    return Array.isArray(raw)
+      ? (raw as ActivityResponse[])
+      : ((raw as { content?: ActivityResponse[] } | undefined)?.content ?? []);
+  }, [activitiesData]);
+
   const histogramEntries = histogramData?.data ?? [];
+
+  // Build properly mapped assignment rows with resolved names
+  const assignmentRows: ResourceAssignmentRow[] = useMemo(() => {
+    const resourceMap = new Map(resources.map((r) => [r.id, r]));
+    const activityMap = new Map(activities.map((a) => [a.id, a]));
+
+    return assignments.map((a) => {
+      const resource = resourceMap.get(a.resourceId);
+      const activity = activityMap.get(a.activityId);
+      const anyA = a as unknown as Record<string, unknown>;
+      return {
+        id: a.id,
+        activityId: a.activityId,
+        resourceId: a.resourceId,
+        projectId: (anyA.projectId as string) ?? projectId,
+        resourceName: resource?.name ?? a.resourceId,
+        activityName: activity?.name ?? a.activityId,
+        plannedUnits: a.plannedUnits,
+        actualUnits: a.actualUnits,
+        remainingUnits: (anyA.remainingUnits as number) ?? 0,
+        rateType: (anyA.rateType as string) ?? "FIXED",
+        plannedCost: (anyA.plannedCost as number) ?? 0,
+        actualCost: (anyA.actualCost as number) ?? 0,
+      };
+    });
+  }, [assignments, resources, activities, projectId]);
 
   const columns: ColumnDef<ResourceAssignmentRow>[] = [
     { key: "resourceName", label: "Resource Name", sortable: true },
@@ -136,9 +171,27 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     },
   ];
 
+  const handleRowClick = (row: ResourceAssignmentRow | AssignmentRow) => {
+    const r = row as ResourceAssignmentRow;
+    setSelectedAssignment(
+      selectedAssignment?.id === r.id
+        ? null
+        : { id: r.id, resourceName: r.resourceName, activityName: r.activityName }
+    );
+  };
+
+  const resourceTypeInfos = useMemo(
+    () =>
+      resources.map((r) => ({
+        id: r.id,
+        resourceType: r.resourceType,
+      })),
+    [resources]
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => setShowForm(!showForm)}
           className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
@@ -153,6 +206,9 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
           <SlidersHorizontal size={16} />
           Level Resources
         </button>
+        <div className="ml-auto">
+          <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       {showForm && (
@@ -242,24 +298,32 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       )}
 
       <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-text-primary">Resource Assignments</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-text-primary">Resource Assignments</h3>
+        </div>
         {isLoadingAssignments ? (
           <div className="text-center text-text-secondary">Loading assignments...</div>
-        ) : assignments.length === 0 ? (
+        ) : assignmentRows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border py-12 text-center">
             <h3 className="text-lg font-medium text-text-primary">No Assignments</h3>
             <p className="mt-2 text-text-secondary">No resource assignments yet. Create one to get started.</p>
           </div>
-        ) : (
+        ) : viewMode === "flat" ? (
           <DataTable
             columns={columns}
-            data={assignments as unknown as ResourceAssignmentRow[]}
+            data={assignmentRows}
             rowKey="id"
             searchable
             searchPlaceholder="Search resources..."
-            onRowClick={(row) => setSelectedAssignment(
-              selectedAssignment?.id === row.id ? null : { id: row.id, resourceName: row.resourceName, activityName: row.activityName }
-            )}
+            onRowClick={handleRowClick}
+          />
+        ) : (
+          <ResourceAssignmentTree
+            assignments={assignmentRows}
+            viewMode={viewMode}
+            resources={resourceTypeInfos}
+            onRowClick={handleRowClick}
+            selectedId={selectedAssignment?.id ?? null}
           />
         )}
       </div>

@@ -18,10 +18,12 @@ import com.bipros.resource.domain.model.ResourceCategory;
 import com.bipros.resource.domain.model.ResourceRate;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
+import com.bipros.resource.domain.model.ResourceTypeDef;
 import com.bipros.resource.domain.model.ResourceUnit;
 import com.bipros.resource.domain.model.UtilisationStatus;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
+import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -56,6 +58,7 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
     private final DocumentFolderRepository folderRepository;
     private final DocumentRepository documentRepository;
     private final ResourceRepository resourceRepository;
+    private final ResourceTypeDefRepository resourceTypeDefRepository;
     private final ResourceRateRepository resourceRateRepository;
     private final ResourceUtilisationService utilisationService;
     private final OrganisationRepository organisationRepository;
@@ -374,6 +377,11 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
         r.setCode(code);
         r.setName(name);
         r.setResourceType(type);
+        ResourceTypeDef def = resourceTypeDefRepository
+            .findFirstByBaseCategoryAndSystemDefaultTrue(type).orElse(null);
+        if (def != null) {
+            r.setResourceTypeDef(def);
+        }
         r.setResourceCategory(category);
         r.setUnit(unit);
         r.setPoolMaxAvailable(poolMax);

@@ -7,6 +7,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { UpdateResourceRequest } from "@/lib/api/resourceApi";
+import { resourceTypeApi, BASE_CATEGORY_LABEL } from "@/lib/api/resourceTypeApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -18,12 +19,18 @@ import { notificationHelpers } from "@/lib/notificationHelpers";
 export default function ResourcesPage() {
   const queryClient = useQueryClient();
   const [editingResource, setEditingResource] = useState<ResourceResponse | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", resourceType: "LABOR" as string, maxUnitsPerDay: 0, status: "ACTIVE" as string, hourlyRate: 0, costPerUse: 0, overtimeRate: 0 });
+  const [editForm, setEditForm] = useState({ name: "", resourceTypeDefId: "", maxUnitsPerDay: 0, status: "ACTIVE" as string, hourlyRate: 0, costPerUse: 0, overtimeRate: 0 });
 
   const { data: resourcesData, isLoading, error } = useQuery({
     queryKey: ["resources"],
     queryFn: () => resourceApi.listResources(0, 50),
   });
+
+  const { data: resourceTypesData } = useQuery({
+    queryKey: ["resource-types", "active"],
+    queryFn: () => resourceTypeApi.list({ active: true }),
+  });
+  const allTypeDefs = resourceTypesData?.data ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: (resourceId: string) => resourceApi.deleteResource(resourceId),
@@ -48,7 +55,7 @@ export default function ResourcesPage() {
     setEditingResource(resource);
     setEditForm({
       name: resource.name,
-      resourceType: resource.resourceType ?? "LABOR",
+      resourceTypeDefId: resource.resourceTypeDefId ?? "",
       maxUnitsPerDay: resource.maxUnitsPerDay ?? 0,
       status: resource.status ?? "ACTIVE",
       hourlyRate: resource.hourlyRate ?? 0,
@@ -64,7 +71,7 @@ export default function ResourcesPage() {
       data: {
         code: editingResource.code,
         name: editForm.name,
-        resourceType: editForm.resourceType as "LABOR" | "NONLABOR" | "MATERIAL",
+        resourceTypeDefId: editForm.resourceTypeDefId || undefined,
         maxUnitsPerDay: editForm.maxUnitsPerDay,
         status: editForm.status,
         hourlyRate: editForm.hourlyRate,
@@ -81,10 +88,14 @@ export default function ResourcesPage() {
     { key: "code", label: "Code", sortable: true },
     { key: "name", label: "Name", sortable: true },
     {
-      key: "resourceType",
+      key: "resourceTypeName",
       label: "Type",
       sortable: true,
-      render: (value) => <span className="text-sm font-medium">{String(value)}</span>,
+      render: (_value, row) => (
+        <span className="text-sm font-medium">
+          {row.resourceTypeName ?? BASE_CATEGORY_LABEL[row.resourceType] ?? String(row.resourceType ?? "—")}
+        </span>
+      ),
     },
     {
       key: "status",
@@ -193,13 +204,16 @@ export default function ResourcesPage() {
                 <div>
                   <label className="block text-sm font-medium text-text-secondary">Resource Type</label>
                   <select
-                    value={editForm.resourceType}
-                    onChange={(e) => setEditForm({ ...editForm, resourceType: e.target.value })}
+                    value={editForm.resourceTypeDefId}
+                    onChange={(e) => setEditForm({ ...editForm, resourceTypeDefId: e.target.value })}
                     className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   >
-                    <option value="LABOR">Labor</option>
-                    <option value="NONLABOR">Nonlabor</option>
-                    <option value="MATERIAL">Material</option>
+                    {allTypeDefs.length === 0 && <option value="">Loading…</option>}
+                    {allTypeDefs.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({BASE_CATEGORY_LABEL[d.baseCategory]})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

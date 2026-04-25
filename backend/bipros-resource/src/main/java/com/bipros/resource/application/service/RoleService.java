@@ -9,8 +9,10 @@ import com.bipros.resource.application.dto.RoleResponse;
 import com.bipros.resource.application.dto.UserResourceRoleResponse;
 import com.bipros.resource.domain.model.Role;
 import com.bipros.resource.domain.model.ResourceType;
+import com.bipros.resource.domain.model.ResourceTypeDef;
 import com.bipros.resource.domain.model.UserResourceRole;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
+import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import com.bipros.resource.domain.repository.UserResourceRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,21 +29,25 @@ import java.util.UUID;
 public class RoleService {
 
   private final ResourceRoleRepository roleRepository;
+  private final ResourceTypeDefRepository resourceTypeDefRepository;
   private final UserResourceRoleRepository userResourceRoleRepository;
   private final AuditService auditService;
 
   public RoleResponse createRole(CreateRoleRequest request) {
-    log.info("Creating role: code={}, type={}", request.code(), request.resourceType());
+    log.info("Creating role: code={}, defId={}, type={}", request.code(), request.resourceTypeDefId(), request.resourceType());
 
     if (roleRepository.findByCode(request.code()).isPresent()) {
       throw new BusinessRuleException("DUPLICATE_ROLE_CODE", "Role with code " + request.code() + " already exists");
     }
 
+    ResourceTypeDef def = resolveTypeDef(request.resourceTypeDefId(), request.resourceType());
+
     Role role = Role.builder()
         .code(request.code())
         .name(request.name())
         .description(request.description())
-        .resourceType(request.resourceType())
+        .resourceType(def.getBaseCategory())
+        .resourceTypeDef(def)
         .defaultRate(request.defaultRate())
         .rateUnit(request.rateUnit())
         .budgetedRate(request.budgetedRate())
@@ -90,10 +96,13 @@ public class RoleService {
       throw new BusinessRuleException("DUPLICATE_ROLE_CODE", "Role with code " + request.code() + " already exists");
     }
 
+    ResourceTypeDef def = resolveTypeDef(request.resourceTypeDefId(), request.resourceType());
+
     role.setCode(request.code());
     role.setName(request.name());
     role.setDescription(request.description());
-    role.setResourceType(request.resourceType());
+    role.setResourceType(def.getBaseCategory());
+    role.setResourceTypeDef(def);
     role.setDefaultRate(request.defaultRate());
     role.setRateUnit(request.rateUnit());
     role.setBudgetedRate(request.budgetedRate());
@@ -169,5 +178,19 @@ public class RoleService {
     return userResourceRoleRepository.findByUserId(userId).stream()
         .map(UserResourceRoleResponse::from)
         .toList();
+  }
+
+  private ResourceTypeDef resolveTypeDef(UUID defId, ResourceType baseCategory) {
+    if (defId != null) {
+      return resourceTypeDefRepository.findById(defId)
+          .orElseThrow(() -> new com.bipros.common.exception.ResourceNotFoundException("ResourceTypeDef", defId));
+    }
+    if (baseCategory == null) {
+      throw new BusinessRuleException("RESOURCE_TYPE_REQUIRED",
+          "Either resourceTypeDefId or resourceType must be provided");
+    }
+    return resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(baseCategory)
+        .orElseThrow(() -> new BusinessRuleException("RESOURCE_TYPE_NOT_SEEDED",
+            "No system-default Resource Type for base category " + baseCategory));
   }
 }

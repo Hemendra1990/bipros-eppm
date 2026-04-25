@@ -136,6 +136,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository resourceRateRepository;
   private final ResourceRoleRepository resourceRoleRepository;
+  private final com.bipros.resource.domain.repository.ResourceTypeDefRepository resourceTypeDefRepository;
   private final MaterialConsumptionLogRepository materialConsumptionLogRepository;
   private final NhaiRoadProjectWorkbookReader reader;
   private final ActivityRepository activityRepository;
@@ -490,6 +491,8 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
           .code(code)
           .name(r.description())
           .resourceType(rt)
+          .resourceTypeDef(resourceTypeDefRepository
+              .findFirstByBaseCategoryAndSystemDefaultTrue(rt).orElse(null))
           .resourceCategory(resourceCategoryFor(category, r.description()))
           .costCategory(cc)
           .unit(resourceUnitFor(unitLabel))
@@ -535,6 +538,8 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
           .name(r.description())
           .description("Manpower role seeded from Daily Cost Report Section A")
           .resourceType(ResourceType.LABOR)
+          .resourceTypeDef(resourceTypeDefRepository
+              .findFirstByBaseCategoryAndSystemDefaultTrue(ResourceType.LABOR).orElse(null))
           .rateUnit(r.unit())
           .budgetedRate(r.budgetedRate())
           .actualRate(r.actualRate())

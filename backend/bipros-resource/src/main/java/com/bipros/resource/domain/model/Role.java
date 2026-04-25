@@ -5,7 +5,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -27,7 +30,8 @@ import java.math.BigDecimal;
             columnNames = {"code"})
     },
     indexes = {
-        @Index(name = "idx_role_resource_type", columnList = "resource_type")
+        @Index(name = "idx_role_resource_type", columnList = "resource_type"),
+        @Index(name = "idx_role_resource_type_def", columnList = "resource_type_def_id")
     })
 @Getter
 @Setter
@@ -45,9 +49,18 @@ public class Role extends BaseEntity {
   @Column(length = 500)
   private String description;
 
+  /**
+   * Denormalised base category, copied from {@link #resourceTypeDef}'s {@code baseCategory} on
+   * create/update so existing per-type role queries (e.g. Manpower-only role list) stay efficient.
+   */
   @Enumerated(EnumType.STRING)
   @Column(name = "resource_type", nullable = false, length = 20)
   private ResourceType resourceType;
+
+  /** The admin-managed Resource Type definition. Nullable for legacy rows; set on every write. */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "resource_type_def_id")
+  private ResourceTypeDef resourceTypeDef;
 
   @Column(name = "default_rate", precision = 19, scale = 4)
   private BigDecimal defaultRate;

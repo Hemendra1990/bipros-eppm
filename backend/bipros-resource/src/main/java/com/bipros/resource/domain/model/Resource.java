@@ -5,7 +5,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -34,7 +37,8 @@ import java.util.UUID;
         @Index(name = "idx_resource_calendar_id", columnList = "calendar_id"),
         @Index(name = "idx_resource_category", columnList = "resource_category"),
         @Index(name = "idx_resource_wbs_assignment", columnList = "wbs_assignment_id"),
-        @Index(name = "idx_resource_responsible_contractor", columnList = "responsible_contractor_id")
+        @Index(name = "idx_resource_responsible_contractor", columnList = "responsible_contractor_id"),
+        @Index(name = "idx_resource_type_def", columnList = "resource_type_def_id")
     })
 @Getter
 @Setter
@@ -49,9 +53,23 @@ public class Resource extends BaseEntity {
   @Column(nullable = false, length = 100)
   private String name;
 
+  /**
+   * Denormalised base category, copied from {@link #resourceTypeDef}'s {@code baseCategory} on
+   * create/update so existing per-type queries (cost reporting, equipment-only branching) keep
+   * working without a join.
+   */
   @Enumerated(EnumType.STRING)
   @Column(name = "resource_type", nullable = false, length = 20)
   private ResourceType resourceType;
+
+  /**
+   * The admin-managed Resource Type definition. Drives display name, optional code prefix and
+   * sort order. Nullable for backwards-compatibility with rows seeded before the def lookup
+   * existed; the service populates this on every new create/update.
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "resource_type_def_id")
+  private ResourceTypeDef resourceTypeDef;
 
   /** IC-PMS M8 detailed category (e.g. EARTH_MOVING, SKILLED_LABOUR, CEMENT). */
   @Enumerated(EnumType.STRING)

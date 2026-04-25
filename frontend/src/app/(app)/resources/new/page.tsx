@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/common/PageHeader";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { CreateResourceRequest } from "@/lib/api/resourceApi";
+import { resourceTypeApi, BASE_CATEGORY_LABEL } from "@/lib/api/resourceTypeApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import { useCurrency } from "@/lib/hooks/useCurrency";
@@ -14,15 +16,31 @@ export default function NewResourcePage() {
   const router = useRouter();
   const { baseCurrency } = useCurrency();
 
+  const { data: resourceTypesData, isLoading: typesLoading } = useQuery({
+    queryKey: ["resource-types", "active"],
+    queryFn: () => resourceTypeApi.list({ active: true }),
+  });
+  const typeDefs = useMemo(() => resourceTypesData?.data ?? [], [resourceTypesData]);
+
   const [formData, setFormData] = useState<CreateResourceRequest & { hourlyRate: number; costPerUse: number; overtimeRate: number }>({
     code: "",
     name: "",
-    type: "LABOR",
+    resourceTypeDefId: "",
     maxUnits: 1,
     hourlyRate: 0,
     costPerUse: 0,
     overtimeRate: 0,
   });
+
+  // Derived default — first time the form opens, fall back to the seeded Manpower def
+  // (or the first available). Computed at render time so we don't need a setState effect.
+  const defaultTypeDefId = useMemo(() => {
+    if (typeDefs.length === 0) return "";
+    return (typeDefs.find((d) => d.code === "MANPOWER") ?? typeDefs[0]).id;
+  }, [typeDefs]);
+  const effectiveTypeDefId = formData.resourceTypeDefId || defaultTypeDefId;
+  const selectedDef = typeDefs.find((d) => d.id === effectiveTypeDefId) ?? null;
+  const showEquipmentFields = selectedDef?.baseCategory === "NONLABOR";
 
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -44,8 +62,9 @@ export default function NewResourcePage() {
     setError("");
 
     const errors: Record<string, string> = {};
-    // Code is now optional — server auto-generates EQ-/LAB-/MAT-NNN when blank.
+    // Code is now optional — server auto-generates a code using the def's prefix when blank.
     if (!formData.name.trim()) errors.name = "Resource name is required";
+    if (!effectiveTypeDefId) errors.resourceTypeDefId = "Resource type is required";
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setError("Please fix the highlighted fields");
@@ -54,7 +73,10 @@ export default function NewResourcePage() {
 
     setIsSubmitting(true);
     try {
-      const result = await resourceApi.createResource(formData);
+      const result = await resourceApi.createResource({
+        ...formData,
+        resourceTypeDefId: effectiveTypeDefId,
+      });
       if (result.data) {
         toast.success("Resource created successfully");
         router.push("/resources");
@@ -120,14 +142,21 @@ export default function NewResourcePage() {
             <div>
               <label className="block text-sm font-medium text-text-secondary">Resource Type *</label>
               <select
-                name="type"
-                value={formData.type}
+                name="resourceTypeDefId"
+                value={effectiveTypeDefId}
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                disabled={typesLoading || typeDefs.length === 0}
               >
-                <option value="LABOR">Labor</option>
-                <option value="NONLABOR">Nonlabor</option>
-                <option value="MATERIAL">Material</option>
+                {typesLoading && <option value="">Loading…</option>}
+                {!typesLoading && typeDefs.length === 0 && (
+                  <option value="">No active resource types</option>
+                )}
+                {typeDefs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} ({BASE_CATEGORY_LABEL[d.baseCategory]})
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -192,7 +221,7 @@ export default function NewResourcePage() {
             </div>
           </div>
 
-          {formData.type === "NONLABOR" && (
+          {showEquipmentFields && (
             <div className="border-t border-border pt-6">
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-text-secondary">
                 Equipment Specifications
