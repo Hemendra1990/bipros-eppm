@@ -4,6 +4,8 @@ import com.bipros.activity.application.dto.ActivityResponse;
 import com.bipros.activity.application.dto.CreateActivityRequest;
 import com.bipros.activity.application.dto.UpdateActivityRequest;
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityRelationship;
+import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.dto.PagedResponse;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -212,6 +215,10 @@ public class ActivityService {
           "plannedFinishDate must be on or after plannedStartDate");
     }
 
+    if (progressChanged || statusExplicit) {
+      validatePredecessorConstraints(activity);
+    }
+
     Activity updated = activityRepository.save(activity);
     log.info("Activity updated successfully: id={}", id);
 
@@ -310,6 +317,7 @@ public class ActivityService {
     activity.setActualStartDate(actualStart);
     activity.setActualFinishDate(actualFinish);
     applyStatusFromProgress(activity);
+    validatePredecessorConstraints(activity);
 
     Activity updated = activityRepository.save(activity);
     log.info("Progress updated successfully: id={}", id);
@@ -391,14 +399,94 @@ public class ActivityService {
   private void applyStatusFromProgress(Activity activity) {
     Double pct = activity.getPercentComplete();
     boolean hasActualStart = activity.getActualStartDate() != null;
-    com.bipros.activity.domain.model.ActivityStatus derived;
+    ActivityStatus derived;
     if (pct != null && pct >= 100.0) {
-      derived = com.bipros.activity.domain.model.ActivityStatus.COMPLETED;
+      derived = ActivityStatus.COMPLETED;
     } else if ((pct != null && pct > 0.0) || hasActualStart) {
-      derived = com.bipros.activity.domain.model.ActivityStatus.IN_PROGRESS;
+      derived = ActivityStatus.IN_PROGRESS;
     } else {
-      derived = com.bipros.activity.domain.model.ActivityStatus.NOT_STARTED;
+      derived = ActivityStatus.NOT_STARTED;
     }
     activity.setStatus(derived);
+  }
+
+  /**
+   * Block out-of-sequence actuals. Each dependency type gates a different transition:
+   * <ul>
+   *   <li>FS — successor cannot start until predecessor finishes</li>
+   *   <li>SS — successor cannot start until predecessor starts</li>
+   *   <li>FF — successor cannot finish until predecessor finishes</li>
+   *   <li>SF — successor cannot finish until predecessor starts</li>
+   * </ul>
+   * Lag values aren't enforced here — only the gating-date existence check, since
+   * planners often need to log actuals that occurred earlier than the lag would allow.
+   * Cross-project (external) relationships are skipped because the predecessor
+   * activity isn't queryable from this service.
+   */
+  private void validatePredecessorConstraints(Activity activity) {
+    Double pct = activity.getPercentComplete();
+    boolean claimsStarted = activity.getActualStartDate() != null
+        || (pct != null && pct > 0.0)
+        || activity.getStatus() == ActivityStatus.IN_PROGRESS
+        || activity.getStatus() == ActivityStatus.COMPLETED;
+    boolean claimsFinished = activity.getActualFinishDate() != null
+        || (pct != null && pct >= 100.0)
+        || activity.getStatus() == ActivityStatus.COMPLETED;
+    if (!claimsStarted && !claimsFinished) {
+      return;
+    }
+
+    List<ActivityRelationship> predecessors =
+        relationshipRepository.findBySuccessorActivityId(activity.getId());
+    for (ActivityRelationship rel : predecessors) {
+      if (Boolean.TRUE.equals(rel.getIsExternal())) {
+        continue;
+      }
+      Activity pred = activityRepository.findById(rel.getPredecessorActivityId()).orElse(null);
+      if (pred == null) {
+        continue;
+      }
+      switch (rel.getRelationshipType()) {
+        case FINISH_TO_START -> {
+          if (claimsStarted && pred.getActualFinishDate() == null) {
+            throw predecessorViolation(activity, pred, "start", "finished", "FS", rel.getLag());
+          }
+        }
+        case START_TO_START -> {
+          if (claimsStarted && pred.getActualStartDate() == null) {
+            throw predecessorViolation(activity, pred, "start", "started", "SS", rel.getLag());
+          }
+        }
+        case FINISH_TO_FINISH -> {
+          if (claimsFinished && pred.getActualFinishDate() == null) {
+            throw predecessorViolation(activity, pred, "finish", "finished", "FF", rel.getLag());
+          }
+        }
+        case START_TO_FINISH -> {
+          if (claimsFinished && pred.getActualStartDate() == null) {
+            throw predecessorViolation(activity, pred, "finish", "started", "SF", rel.getLag());
+          }
+        }
+      }
+    }
+  }
+
+  private static BusinessRuleException predecessorViolation(
+      Activity activity, Activity pred, String successorVerb, String predecessorState,
+      String typeCode, Double lag) {
+    String lagSuffix = formatLag(lag);
+    String message = String.format(
+        "Cannot %s %s — predecessor %s (%s) has not %s. Dependency: %s%s.",
+        successorVerb, activity.getCode(), pred.getCode(), pred.getName(),
+        predecessorState, typeCode, lagSuffix);
+    return new BusinessRuleException("PREDECESSOR_NOT_SATISFIED", message);
+  }
+
+  private static String formatLag(Double lag) {
+    if (lag == null || lag == 0.0) {
+      return "";
+    }
+    long days = Math.round(Math.abs(lag));
+    return lag > 0 ? " + " + days + "d" : " - " + days + "d";
   }
 }
