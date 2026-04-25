@@ -2,8 +2,8 @@ import { pillars } from "./landing-data";
 
 export function LandingPillars() {
   return (
-    <section className="bg-ivory px-9 py-20">
-      <div className="mx-auto mb-10 max-w-[640px] text-center">
+    <section className="bg-ivory px-9 py-16">
+      <div className="mx-auto mb-9 max-w-[640px] text-center">
         <div className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-deep">
           The platform
         </div>
