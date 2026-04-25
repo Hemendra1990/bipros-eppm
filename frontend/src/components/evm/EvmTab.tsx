@@ -19,8 +19,21 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import { KpiTile } from "@/components/common/KpiTile";
+
+// EVM endpoints (and the seeded data) carry absolute INR values — e.g. BAC = 4,850,000,000.
+// Display in ₹cr to stay consistent with the Costs tab, which uses the same convention
+// (1 crore = 10,000,000 INR). Indices (SPI / CPI / TCPI) and the percent-complete remain
+// unitless and use their own formatters.
+const INR_PER_CRORE = 10_000_000;
+
+function formatInrAsCrores(inr: number | null | undefined): string {
+  const cr = (inr ?? 0) / INR_PER_CRORE;
+  return `₹${cr.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}cr`;
+}
 
 const TECHNIQUES: { value: EvmTechnique; label: string }[] = [
   { value: "ACTIVITY_PERCENT_COMPLETE", label: "Activity % Complete" },
@@ -38,7 +51,7 @@ const ETC_METHODS: { value: EtcMethod; label: string }[] = [
   { value: "MANAGEMENT_OVERRIDE", label: "Management Override" },
 ];
 
-const fmt = (v: number | null | undefined) => formatDefaultCurrency(v);
+const fmt = (v: number | null | undefined) => formatInrAsCrores(v);
 const fmtIdx = (v: number | null | undefined) => (v ?? 0).toFixed(2);
 const fmtPct = (v: number | null | undefined) => `${(v ?? 0).toFixed(1)}%`;
 
@@ -279,9 +292,13 @@ export function EvmTab({ projectId }: { projectId: string }) {
                     textAnchor="end"
                     height={100}
                   />
-                  <YAxis tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(v: number) => `₹${(v / INR_PER_CRORE).toFixed(0)}cr`}
+                    width={70}
+                  />
                   <Tooltip
-                    formatter={(value) => formatDefaultCurrency(Number(value))}
+                    formatter={(value) => formatInrAsCrores(Number(value))}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
                   <Legend />
