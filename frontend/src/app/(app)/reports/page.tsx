@@ -1,13 +1,25 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BarChart3, TrendingUp, DollarSign, GitCompare, Download, FolderKanban } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  BarChart3,
+  ChevronDown,
+  ClipboardList,
+  Download,
+  DollarSign,
+  FileText,
+  FolderKanban,
+  GitCompare,
+  Layers,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 import { ProjectReportsCanvas } from "@/components/reports/project-canvas/ProjectReportsCanvas";
 import { downloadCsv, toCsv } from "@/lib/utils/csvExport";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { PageHeader } from "@/components/common/PageHeader";
-import { TabTip } from "@/components/common/TabTip";
 import { reportApi } from "@/lib/api/reportApi";
 import { reportDataApi } from "@/lib/api/reportDataApi";
 import { projectApi } from "@/lib/api/projectApi";
@@ -96,13 +108,23 @@ interface ReportChartData {
   scheduleComparison?: ScheduleComparisonChartData[];
 }
 
+const TABS: { id: "project" | "standard" | "classic"; label: string; icon: React.ReactNode; hint: string }[] = [
+  { id: "project", label: "Project Reports", icon: <FolderKanban size={14} />, hint: "Single-canvas executive view" },
+  { id: "standard", label: "Standard Reports", icon: <FileText size={14} />, hint: "Monthly progress, EVM, cash-flow…" },
+  { id: "classic", label: "Classic Reports", icon: <Layers size={14} />, hint: "S-curve, histogram, comparison" },
+];
+
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<"classic" | "standard" | "project">("project");
   const [generatingReport, setGeneratingReport] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [reportData, setReportData] = useState<ReportChartData>({});
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [resourceMenuOpen, setResourceMenuOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const generatedReportRef = useRef<HTMLDivElement | null>(null);
+  const qc = useQueryClient();
 
   const { data: projectsData } = useQuery({
     queryKey: ["projects"],
@@ -323,104 +345,260 @@ export default function ReportsPage() {
     }
   };
 
+  const selectedResource = resources.find((r) => r.id === selectedResourceId);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await qc.invalidateQueries();
+    setTimeout(() => setRefreshing(false), 600);
+  };
+
   return (
     <div>
-      <PageHeader
-        title="Reports"
-        description="Generate and view project reports and analytics"
-      />
+      {/* HERO HEADER */}
+      {/* NOTE: outer wrapper deliberately does NOT use overflow-hidden so the project
+          picker dropdown can extend below the hero. Decorative gold blurs are clipped
+          by their own inner overflow-hidden layer instead. */}
+      <div className="relative mb-6 rounded-2xl border border-hairline bg-gradient-to-br from-paper via-ivory to-parchment/40 p-6 shadow-[0_2px_4px_rgba(28,28,28,0.04),0_20px_50px_-30px_rgba(28,28,28,0.18)]">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+          <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gold/10 blur-3xl" />
+          <div className="absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-gold-tint/40 blur-3xl" />
+        </div>
 
-      <TabTip
-        title="Reports"
-        description="Generate standard project reports including Monthly Progress, EVM Analysis, Cash Flow, Resource Utilization, Risk Register, and Contract Status reports."
-      />
-
-      <div className="mb-8 rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
-        <h2 className="mb-4 text-lg font-semibold text-text-primary">Report Filters</h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">Project</label>
-            <select
-              value={selectedProjectId || ""}
-              onChange={(e) => {
-                setSelectedProjectId(e.target.value || null);
-                setSelectedResourceId(null);
-              }}
-              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none"
-            >
-              <option value="">Select a project...</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {selectedProjectId && (
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Resource (Optional)</label>
-              <select
-                value={selectedResourceId || ""}
-                onChange={(e) => setSelectedResourceId(e.target.value || null)}
-                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none"
-              >
-                <option value="">All resources</option>
-                {resources.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.code} - {r.name}
-                  </option>
-                ))}
-              </select>
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex-1">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold-tint/40 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-ink">
+                <Sparkles size={11} />
+                Reports · project insights
+              </span>
             </div>
-          )}
+            <h1
+              className="font-display text-[36px] font-semibold leading-[1.05] tracking-tight text-charcoal"
+              style={{ fontVariationSettings: "'opsz' 144" }}
+            >
+              Project & programme reports
+            </h1>
+            <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-slate">
+              Single-canvas executive view, monthly progress packs, and classic
+              schedule/cost analytics — pick a project to begin.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Project picker */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProjectMenuOpen((v) => !v)}
+                onBlur={() => setTimeout(() => setProjectMenuOpen(false), 150)}
+                className={`inline-flex min-w-[260px] items-center justify-between gap-2 rounded-xl border bg-paper px-3.5 py-2 text-xs font-semibold text-charcoal shadow-sm transition-colors ${
+                  selectedProject
+                    ? "border-gold/40 hover:border-gold-deep"
+                    : "border-hairline hover:border-gold/40 hover:text-gold-deep"
+                }`}
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <ClipboardList size={14} strokeWidth={1.75} />
+                  {selectedProject ? (
+                    <>
+                      <span className="font-mono text-[10px] text-slate">
+                        {selectedProject.code}
+                      </span>
+                      <span className="truncate">{selectedProject.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-slate">Select a project…</span>
+                  )}
+                </span>
+                <ChevronDown
+                  size={12}
+                  className={`shrink-0 transition-transform ${projectMenuOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {projectMenuOpen && (
+                <div className="absolute right-0 top-full z-30 mt-1.5 flex w-[360px] flex-col rounded-xl border border-hairline bg-paper shadow-[0_12px_32px_-12px_rgba(28,28,28,0.18)]">
+                  <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
+                      {projects.length} project{projects.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="text-[10px] text-ash">Scroll for more</span>
+                  </div>
+                  <div className="max-h-[60vh] min-h-0 overflow-y-auto overscroll-contain p-1">
+                    {projects.length === 0 && (
+                      <div className="px-3 py-4 text-center text-xs text-slate">
+                        No projects available
+                      </div>
+                    )}
+                    {projects.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setSelectedProjectId(p.id);
+                          setSelectedResourceId(null);
+                          setProjectMenuOpen(false);
+                        }}
+                        className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left transition-colors ${
+                          p.id === selectedProjectId
+                            ? "bg-gold-tint/40 text-gold-ink"
+                            : "text-charcoal hover:bg-ivory"
+                        }`}
+                      >
+                        <span className="font-mono text-[10px] uppercase tracking-wide text-slate">
+                          {p.code}
+                        </span>
+                        <span className="text-xs font-medium">{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Resource picker (only shown after a project is chosen) */}
+            {selectedProjectId && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setResourceMenuOpen((v) => !v)}
+                  onBlur={() => setTimeout(() => setResourceMenuOpen(false), 150)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-3.5 py-2 text-xs font-semibold text-charcoal shadow-sm transition-colors hover:border-gold/40 hover:text-gold-deep"
+                >
+                  <BarChart3 size={14} strokeWidth={1.75} />
+                  {selectedResource ? selectedResource.name : "All resources"}
+                  <ChevronDown
+                    size={12}
+                    className={`transition-transform ${resourceMenuOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {resourceMenuOpen && (
+                  <div className="absolute right-0 top-full z-30 mt-1.5 flex w-64 flex-col rounded-xl border border-hairline bg-paper shadow-[0_12px_32px_-12px_rgba(28,28,28,0.18)]">
+                    <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
+                        {resources.length} resource{resources.length === 1 ? "" : "s"}
+                      </span>
+                      <span className="text-[10px] text-ash">Scroll for more</span>
+                    </div>
+                    <div className="max-h-[60vh] min-h-0 overflow-y-auto overscroll-contain p-1">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setSelectedResourceId(null);
+                          setResourceMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors ${
+                          !selectedResourceId
+                            ? "bg-gold-tint/40 text-gold-ink"
+                            : "text-charcoal hover:bg-ivory"
+                        }`}
+                      >
+                        All resources
+                      </button>
+                      {resources.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelectedResourceId(r.id);
+                            setResourceMenuOpen(false);
+                          }}
+                          className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left transition-colors ${
+                            r.id === selectedResourceId
+                              ? "bg-gold-tint/40 text-gold-ink"
+                              : "text-charcoal hover:bg-ivory"
+                          }`}
+                        >
+                          <span className="font-mono text-[10px] uppercase tracking-wide text-slate">
+                            {r.code}
+                          </span>
+                          <span className="text-xs">{r.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-3.5 py-2 text-xs font-semibold text-charcoal shadow-sm transition-colors hover:border-gold/40 hover:text-gold-deep"
+            >
+              <RefreshCw
+                size={14}
+                strokeWidth={1.75}
+                className={refreshing ? "animate-spin" : ""}
+              />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                activeTab === "classic" ? exportCurrentReportCsv : () => toast("Use a Classic report to export CSV")
+              }
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-gold to-gold-deep px-3.5 py-2 text-xs font-semibold text-paper shadow-[0_4px_12px_-2px_rgba(212,175,55,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_-4px_rgba(212,175,55,0.55)]"
+            >
+              <Download size={14} strokeWidth={1.75} />
+              Export
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Report Tabs */}
-      <div className="mb-8">
-        <div className="flex items-center gap-4 border-b border-border">
-          <button
-            onClick={() => setActiveTab("project")}
-            className={`inline-flex items-center gap-2 px-4 py-3 font-medium ${
-              activeTab === "project"
-                ? "border-b-2 border-accent text-accent"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            <FolderKanban size={16} />
-            Project Reports
-          </button>
-          <button
-            onClick={() => setActiveTab("standard")}
-            className={`px-4 py-3 font-medium ${
-              activeTab === "standard"
-                ? "border-b-2 border-accent text-accent"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Standard Reports
-          </button>
-          <button
-            onClick={() => setActiveTab("classic")}
-            className={`px-4 py-3 font-medium ${
-              activeTab === "classic"
-                ? "border-b-2 border-accent text-accent"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Classic Reports
-          </button>
+      {/* PREMIUM TAB STRIP */}
+      <div className="mb-6 rounded-2xl border border-hairline bg-paper p-1.5 shadow-[0_1px_2px_rgba(28,28,28,0.03)]">
+        <div className="grid grid-cols-1 gap-1 sm:grid-cols-3">
+          {TABS.map((t) => {
+            const isActive = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`group relative flex items-start gap-3 overflow-hidden rounded-xl px-4 py-3 text-left transition-all duration-200 ${
+                  isActive
+                    ? "bg-gradient-to-br from-gold-tint/60 via-paper to-paper ring-1 ring-gold/30 shadow-[0_4px_14px_-6px_rgba(212,175,55,0.35)]"
+                    : "hover:bg-ivory"
+                }`}
+              >
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                    isActive
+                      ? "border-gold/40 bg-gradient-to-br from-gold to-gold-deep text-paper shadow-[0_4px_10px_-4px_rgba(212,175,55,0.5)]"
+                      : "border-hairline bg-ivory text-slate group-hover:text-gold-deep"
+                  }`}
+                >
+                  {t.icon}
+                </span>
+                <span className="flex flex-col">
+                  <span
+                    className={`text-sm font-semibold leading-tight ${
+                      isActive ? "text-charcoal" : "text-charcoal"
+                    }`}
+                  >
+                    {t.label}
+                  </span>
+                  <span className="text-[11px] leading-snug text-slate">{t.hint}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
-
 
       {/* Project Reports Tab — single scrollable canvas */}
       {activeTab === "project" && (
         <>
           {!selectedProjectId ? (
-            <div className="rounded-lg border border-warning/30 bg-warning/10 p-6 text-center">
-              <p className="text-warning">Select a project above to view its report canvas</p>
-            </div>
+            <NoProjectSelected
+              title="Pick a project to load its report canvas"
+              hint="Use the project picker in the header. The canvas pulls Status, Tasks, Schedule, Cost, EVM, Resources, Risks, Milestones, Bills & Compliance into one scrollable view."
+            />
           ) : (
             <ProjectReportsCanvas projectId={selectedProjectId} />
           )}
@@ -429,69 +607,76 @@ export default function ReportsPage() {
 
       {/* Standard Reports Tab */}
       {activeTab === "standard" && (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {monthlyProgressData && !monthlyProgressLoading && (
-            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <div className="rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]">
               <MonthlyProgressReport data={monthlyProgressData as any} />
             </div>
           )}
 
           {evmReportData && !evmReportLoading && (
-            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <div className="rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]">
               <EvmReport data={evmReportData as any} />
             </div>
           )}
 
           {cashFlowData && !cashFlowLoading && (
-            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <div className="rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]">
               <CashFlowReport data={cashFlowData as any} />
             </div>
           )}
 
           {contractStatusData && !contractStatusLoading && (
-            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <div className="rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]">
               <ContractStatusReport data={contractStatusData as any} />
             </div>
           )}
 
           {riskRegisterData && !riskRegisterLoading && (
-            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <div className="rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]">
               <RiskRegisterReport data={riskRegisterData as any} />
             </div>
           )}
 
           {resourceUtilizationData && !resourceUtilizationLoading && (
-            <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+            <div className="rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]">
               <ResourceUtilizationReport data={resourceUtilizationData as any} />
             </div>
           )}
 
           {!selectedProjectId && (
-            <div className="rounded-lg border border-warning/30 bg-warning/10 p-6 text-center">
-              <p className="text-warning">Select a project to view standard reports</p>
-            </div>
+            <NoProjectSelected
+              title="Pick a project to view standard reports"
+              hint="Standard reports include Monthly Progress, EVM Analysis, Cash Flow, Contract Status, Risk Register and Resource Utilization."
+            />
           )}
 
           {selectedProjectId && (monthlyProgressLoading || evmReportLoading || cashFlowLoading || contractStatusLoading || riskRegisterLoading || resourceUtilizationLoading) && (
-            <div className="rounded-lg border border-accent/30 bg-accent/10 p-6 text-center">
-              <p className="text-accent">Loading reports...</p>
+            <div className="flex items-center justify-center rounded-2xl border border-dashed border-hairline bg-ivory/40 p-8 text-sm text-slate">
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-gold" />
+                Loading reports…
+              </span>
             </div>
           )}
 
           {standardReportsAllFailed && (
-            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-6 text-center">
-              <p className="mb-1 text-rose-300 font-medium">Standard reports are temporarily unavailable</p>
-              <p className="text-sm text-rose-200/70">
-                The reporting service returned errors for every report type. This usually means
-                the backend /v1/reports/* endpoints are offline or misconfigured. Check the
-                Classic Reports tab below, or retry once the service is back online.
+            <div className="rounded-2xl border border-burgundy/25 bg-burgundy/5 p-6">
+              <p className="mb-1 font-semibold text-burgundy">
+                Standard reports are temporarily unavailable
+              </p>
+              <p className="text-sm text-slate">
+                The reporting service returned errors for every report type. This usually
+                means the backend <code className="rounded bg-paper px-1 font-mono text-[11px]">/v1/reports/*</code>{" "}
+                endpoints are offline or misconfigured. Try the Classic Reports tab, or retry
+                once the service is back online.
               </p>
             </div>
           )}
 
           {standardReportsAllEmpty && !standardReportsAllFailed && (
-            <div className="rounded-lg border border-border bg-surface-hover/40 p-6 text-center">
-              <p className="text-text-secondary">No standard reports available for this project</p>
+            <div className="rounded-2xl border border-hairline bg-ivory/40 p-6 text-center text-sm text-slate">
+              No standard reports available for this project
             </div>
           )}
         </div>
@@ -499,50 +684,76 @@ export default function ReportsPage() {
 
       {/* Classic Reports Tab */}
       {activeTab === "classic" && (
-        <>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {reportCards.map((card) => (
-              <div
-                key={card.id}
-                className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg hover:shadow-xl transition-shadow"
-              >
-                <div className="mb-4 text-text-muted">{card.icon}</div>
-                <h3 className="mb-2 text-lg font-semibold text-text-primary">{card.title}</h3>
-                <p className="mb-6 text-sm text-text-secondary">{card.description}</p>
-                <button
-                  onClick={() => handleGenerateReport(card.id)}
-                  disabled={generatingReport === card.id || !selectedProjectId}
-                  className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50 transition-colors"
-                >
-                  {generatingReport === card.id ? "Generating..." : "Generate"}
-                </button>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {reportCards.map((card) => (
+            <div
+              key={card.id}
+              className="group relative overflow-hidden rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-gold/30 hover:shadow-[0_12px_32px_-14px_rgba(212,175,55,0.25)]"
+            >
+              <div className="pointer-events-none absolute -right-12 -top-12 h-28 w-28 rounded-full bg-gold/8 opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-gold/25 bg-gradient-to-br from-gold-tint/60 to-paper text-gold-deep shadow-sm">
+                {card.icon}
               </div>
-            ))}
-          </div>
-        </>
+              <h3
+                className="mb-1 font-display text-lg font-semibold leading-tight tracking-tight text-charcoal"
+                style={{ fontVariationSettings: "'opsz' 144" }}
+              >
+                {card.title}
+              </h3>
+              <p className="mb-5 text-sm leading-relaxed text-slate">{card.description}</p>
+              <button
+                onClick={() => handleGenerateReport(card.id)}
+                disabled={generatingReport === card.id || !selectedProjectId}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-gold to-gold-deep px-4 py-2 text-xs font-semibold text-paper shadow-[0_4px_12px_-2px_rgba(212,175,55,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_-4px_rgba(212,175,55,0.55)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-none disabled:bg-ivory disabled:text-slate disabled:shadow-none"
+              >
+                {generatingReport === card.id ? (
+                  <>
+                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp size={12} strokeWidth={2} />
+                    {selectedProjectId ? "Generate" : "Pick a project first"}
+                  </>
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Classic Report Output */}
       {activeTab === "classic" && (reportData.scurve || reportData.histogram || reportData.cashflow || reportData.scheduleComparison) && (
         <div
           ref={generatedReportRef}
-          className="mt-8 scroll-mt-4 rounded-lg border border-border bg-surface/50 p-6 shadow-sm"
+          className="mt-6 scroll-mt-4 rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_12px_32px_-14px_rgba(28,28,28,0.12)]"
         >
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-text-primary">Generated Report</h2>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                Output
+              </div>
+              <h2
+                className="font-display text-xl font-semibold leading-tight tracking-tight text-charcoal"
+                style={{ fontVariationSettings: "'opsz' 144" }}
+              >
+                Generated report
+              </h2>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={clearGeneratedReport}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-slate transition-colors hover:border-gold/40 hover:text-gold-deep"
               >
-                <ArrowLeft size={14} />
+                <ArrowLeft size={12} />
                 Back to reports
               </button>
               <button
                 onClick={exportCurrentReportCsv}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-gold to-gold-deep px-3 py-1.5 text-xs font-semibold text-paper shadow-[0_4px_12px_-2px_rgba(212,175,55,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_-4px_rgba(212,175,55,0.55)]"
               >
-                <Download size={14} />
+                <Download size={12} />
                 Download CSV
               </button>
             </div>
@@ -644,6 +855,27 @@ export default function ReportsPage() {
         </div>
       )}
 
+    </div>
+  );
+}
+
+function NoProjectSelected({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-hairline bg-gradient-to-br from-paper via-ivory to-parchment/40 p-10 text-center shadow-[0_1px_2px_rgba(28,28,28,0.04),0_12px_32px_-14px_rgba(28,28,28,0.12)]">
+      <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-gold/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-20 left-1/3 h-44 w-44 rounded-full bg-gold-tint/40 blur-3xl" />
+      <div className="relative mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-gold/30 bg-gold-tint/40 text-gold-deep">
+        <ClipboardList size={20} strokeWidth={1.75} />
+      </div>
+      <h3
+        className="relative mt-4 font-display text-xl font-semibold leading-tight tracking-tight text-charcoal"
+        style={{ fontVariationSettings: "'opsz' 144" }}
+      >
+        {title}
+      </h3>
+      <p className="relative mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate">
+        {hint}
+      </p>
     </div>
   );
 }

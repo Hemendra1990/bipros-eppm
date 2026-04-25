@@ -40,6 +40,7 @@
   --color-gold-tint: var(--gold-tint);
   --color-emerald: var(--emerald);
   --color-bronze-warn: var(--bronze-warn);
+  --color-amber-flame: var(--amber-flame);
   --color-burgundy: var(--burgundy);
   --color-steel: var(--steel);
 
@@ -86,6 +87,7 @@
   --gold-tint: #F5E7B5;
   --emerald: #2E7D5B;
   --bronze-warn: #C7882E;
+  --amber-flame: #E07A1F;
   --burgundy: #9B2C2C;
   --steel: #475569;
 
@@ -138,6 +140,7 @@
   --gold-tint: #F5E7B5;
   --emerald: #2E7D5B;
   --bronze-warn: #C7882E;
+  --amber-flame: #E07A1F;
   --burgundy: #9B2C2C;
   --steel: #475569;
 
@@ -189,6 +192,7 @@
   --gold-tint: #3A2F10;            /* dark warm-gold subtle bg (inverted) */
   --emerald: #5BB088;
   --bronze-warn: #E5A553;
+  --amber-flame: #F08A3A;
   --burgundy: #D66060;
   --steel: #94A3B8;
 

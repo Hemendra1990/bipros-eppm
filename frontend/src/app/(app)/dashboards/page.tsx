@@ -1,98 +1,144 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import {
+  ArrowUpRight,
   BarChart3,
   Briefcase,
+  HardHat,
   LineChart as LineChartIcon,
-  TrendingUp,
-  Zap,
+  Sparkles,
 } from "lucide-react";
 
 interface DashboardTier {
   id: string;
   title: string;
+  kicker: string;
   description: string;
-  icon: React.ReactNode;
-  color: string;
+  highlights: string[];
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  emphasis?: boolean;
 }
 
 const dashboardTiers: DashboardTier[] = [
   {
     id: "EXECUTIVE",
-    title: "Executive Dashboard",
-    description: "Corridor-level overview with key metrics and top risks",
-    icon: <Zap size={32} />,
-    color: "from-purple-500 to-purple-600",
+    title: "Executive",
+    kicker: "C-suite · corridor view",
+    description: "Strategic posture across the corridor — top risks, project health, and budget utilisation rolled up.",
+    highlights: ["Project portfolio", "Top 5 risks", "Budget utilisation"],
+    icon: Sparkles,
+    emphasis: true,
   },
   {
     id: "PROGRAMME",
-    title: "Programme Dashboard",
-    description: "EVM metrics, milestones, and contractor performance",
-    icon: <BarChart3 size={32} />,
-    color: "from-blue-500 to-blue-600",
+    title: "Programme",
+    kicker: "Programme office",
+    description: "Earned-value performance, milestone slippage and contractor scorecards across active programmes.",
+    highlights: ["EVM metrics", "Milestone tracker", "Contractor scorecards"],
+    icon: BarChart3,
   },
   {
     id: "OPERATIONAL",
-    title: "Operational Dashboard",
-    description: "RA bills, resources, and activity progress by WBS",
-    icon: <LineChartIcon size={32} />,
-    color: "from-green-500 to-green-600",
+    title: "Operational",
+    kicker: "Project controls",
+    description: "RA-bill flow, resource utilisation and WBS-level activity progress for one project at a time.",
+    highlights: ["RA bills", "Resource utilisation", "WBS progress"],
+    icon: LineChartIcon,
   },
   {
     id: "FIELD",
-    title: "Field Dashboard",
-    description: "Site-level activities and real-time work progress",
-    icon: <TrendingUp size={32} />,
-    color: "from-orange-500 to-orange-600",
+    title: "Field",
+    kicker: "Site command",
+    description: "Daily worklogs, headcount and equipment hours from the active sites, refreshed every shift.",
+    highlights: ["Daily worklogs", "Active sites", "Live activities"],
+    icon: HardHat,
   },
   {
     id: "PORTFOLIO",
-    title: "Portfolio Dashboard",
-    description: "Cross-project scorecard, delays, costs, risks, funding and compliance",
-    icon: <Briefcase size={32} />,
-    color: "from-indigo-500 to-indigo-600",
+    title: "Portfolio",
+    kicker: "Cross-project scorecard",
+    description: "Cross-project performance — schedule, cost, cash-flow, funding, risks and compliance — at a glance.",
+    highlights: ["EVM rollup", "Cost overruns", "Risk heatmap"],
+    icon: Briefcase,
   },
 ];
 
 export default function DashboardsPage() {
-  const router = useRouter();
-
-  const handleSelectTier = (tierId: string) => {
-    router.push(`/dashboards/${tierId.toLowerCase()}`);
-  };
-
   return (
-    <div className="space-y-8 p-6">
-      <div>
-        <h1 className="text-3xl font-bold text-text-primary">Dashboards</h1>
-        <p className="mt-2 text-text-secondary">
-          Select a dashboard tier to view project insights and KPIs
-        </p>
+    <div>
+      {/* Page head */}
+      <div className="mb-8 flex items-start justify-between gap-6">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-1.5">
+            Command centre
+          </div>
+          <h1
+            className="font-display text-[38px] font-semibold leading-[1.08] tracking-tight text-charcoal"
+            style={{ fontVariationSettings: "'opsz' 144" }}
+          >
+            Dashboards
+          </h1>
+          <p className="mt-2 max-w-[600px] text-sm leading-relaxed text-slate">
+            Five lenses on the same programme. Pick the altitude — strategic to site — and dive in.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {dashboardTiers.map((tier) => (
-          <div
-            key={tier.id}
-            className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm transition-all hover:shadow-md"
-          >
-            <div className={`bg-gradient-to-br ${tier.color} mb-4 inline-block rounded-lg p-3 text-text-primary`}>
-              {tier.icon}
-            </div>
-            <h3 className="mb-2 text-lg font-semibold text-text-primary">
-              {tier.title}
-            </h3>
-            <p className="mb-4 text-sm text-text-secondary">{tier.description}</p>
-            <button
-              onClick={() => handleSelectTier(tier.id)}
-              className="w-full rounded-md border border-border bg-surface/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface/80"
+      {/* Tier grid */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {dashboardTiers.map((tier) => {
+          const Icon = tier.icon;
+          const href = `/dashboards/${tier.id.toLowerCase()}`;
+          return (
+            <Link
+              key={tier.id}
+              href={href}
+              className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-paper p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(28,28,28,0.08)] ${
+                tier.emphasis
+                  ? "border-gold/45 ring-1 ring-gold/15"
+                  : "border-hairline hover:border-gold/40"
+              }`}
             >
-              View Dashboard
-            </button>
-          </div>
-        ))}
+              {/* Decorative gold sweep */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-gold-tint opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-70"
+              />
+
+              <div className="mb-4 flex items-start justify-between">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-tint text-gold-deep ring-1 ring-gold/30 transition-all duration-200 group-hover:bg-gold group-hover:text-paper group-hover:ring-gold">
+                  <Icon size={20} strokeWidth={1.75} />
+                </div>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-hairline text-slate transition-all duration-200 group-hover:border-gold group-hover:text-gold-deep group-hover:translate-x-0.5">
+                  <ArrowUpRight size={14} strokeWidth={2} />
+                </span>
+              </div>
+
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                {tier.kicker}
+              </div>
+              <h2
+                className="mt-1 font-display text-2xl font-semibold leading-tight tracking-tight text-charcoal"
+                style={{ fontVariationSettings: "'opsz' 144" }}
+              >
+                {tier.title} dashboard
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate">{tier.description}</p>
+
+              <div className="mt-5 flex flex-wrap gap-1.5">
+                {tier.highlights.map((h) => (
+                  <span
+                    key={h}
+                    className="inline-flex items-center rounded-md border border-hairline bg-ivory px-2 py-0.5 text-[11px] font-medium text-slate"
+                  >
+                    {h}
+                  </span>
+                ))}
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

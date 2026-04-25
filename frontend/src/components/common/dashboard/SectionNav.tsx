@@ -47,22 +47,25 @@ export function SectionNav({ sections }: SectionNavProps) {
   return (
     <nav
       aria-label="Page sections"
-      className="sticky top-0 z-10 -mx-6 mb-6 border-b border-border bg-surface/90 px-6 py-3 backdrop-blur"
+      className="sticky top-0 z-10 -mx-6 mb-6 border-b border-hairline bg-paper/85 px-6 py-3 backdrop-blur-md"
     >
-      <div className="flex flex-wrap gap-2">
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => jumpTo(s.id)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              active === s.id
-                ? "bg-accent text-white"
-                : "bg-surface-hover/40 text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-1.5">
+        {sections.map((s) => {
+          const isActive = active === s.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => jumpTo(s.id)}
+              className={`group relative rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] transition-all duration-200 ${
+                isActive
+                  ? "bg-gradient-to-br from-gold to-gold-deep text-paper shadow-[0_4px_12px_-4px_rgba(212,175,55,0.45)]"
+                  : "border border-transparent text-slate hover:border-hairline hover:bg-ivory hover:text-charcoal"
+              }`}
+            >
+              {s.label}
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

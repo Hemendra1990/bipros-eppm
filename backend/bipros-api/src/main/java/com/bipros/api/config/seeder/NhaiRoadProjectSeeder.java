@@ -67,7 +67,6 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -140,12 +139,19 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   private final NhaiRoadProjectWorkbookReader reader;
   private final ActivityRepository activityRepository;
   private final ActivityRelationshipRepository activityRelationshipRepository;
-  private final jakarta.persistence.EntityManager entityManager;
   private final javax.sql.DataSource dataSource;
 
   @Override
-  @Transactional
   public void run(String... args) {
+    // NOTE: deliberately no @Transactional on run(). Each Spring Data JPA save() runs in
+    // its own short transaction and commits row-by-row, which is fine because
+    // ddl-auto=create-drop starts from a clean DB on every boot. Without an outer
+    // transaction, by the time loadReportsDataSqlBundle() opens a fresh DataSource
+    // connection at the end, all of this seeder's project / WBS / activity / etc rows
+    // are already committed and visible to the bundle's natural-key subqueries
+    // (e.g. SELECT id FROM project.projects WHERE code = ?). Adding @Transactional here
+    // re-introduces the bug where every bundle INSERT silently no-ops because the
+    // SELECT subquery returns NULL.
     if (!reader.exists()) {
       log.warn("[NH-48] workbook not on classpath — skipping seeder");
       return;
@@ -192,9 +198,10 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
       log.info("[NH-48] done. WBS nodes={}, resources={}, manpower roles={}",
           wbs.size(), resources.size(), unitRates.stream().filter(u -> "Manpower".equalsIgnoreCase(u.category())).count());
 
-      // Flush JPA writes so the SQL bundle (run below) sees this project's rows via
-      // native subqueries like (SELECT id FROM project.projects WHERE code = ?).
-      entityManager.flush();
+      // All JPA writes above committed row-by-row in their own per-call transactions
+      // (no outer @Transactional on run()), so the SQL bundle below — which opens a
+      // fresh DataSource connection — will see this project's rows via its
+      // (SELECT id FROM project.projects WHERE code = ?) natural-key subqueries.
       loadReportsDataSqlBundle(projectCode);
       return null;
     });
@@ -214,28 +221,44 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
    * at boot.
    */
   private void loadReportsDataSqlBundle(String projectCode) {
-    try (var conn = dataSource.getConnection()) {
-      boolean wasAutoCommit = conn.getAutoCommit();
-      conn.setAutoCommit(true);
-      try {
-        var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver();
-        var files = resolver.getResources("classpath:seed-data/road-project/reports/*.sql");
-        if (files.length == 0) {
-          log.info("[NH-48 reports] no SQL bundle found — skipping");
-          return;
-        }
-        java.util.Arrays.sort(files, java.util.Comparator.comparing(org.springframework.core.io.Resource::getFilename));
-        log.info("[NH-48 reports] running {} demo-data SQL file(s) for '{}'", files.length, projectCode);
-        for (var f : files) {
+    org.springframework.core.io.Resource[] files;
+    try {
+      var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver();
+      files = resolver.getResources("classpath:seed-data/road-project/reports/*.sql");
+    } catch (Exception e) {
+      log.error("[NH-48 reports] could not enumerate SQL bundle: {}", e.getMessage(), e);
+      return;
+    }
+    if (files.length == 0) {
+      log.info("[NH-48 reports] no SQL bundle found — skipping");
+      return;
+    }
+    java.util.Arrays.sort(files, java.util.Comparator.comparing(org.springframework.core.io.Resource::getFilename));
+    log.info("[NH-48 reports] running {} demo-data SQL file(s) for '{}'", files.length, projectCode);
+
+    int ok = 0, failed = 0;
+    for (var f : files) {
+      // One JDBC connection per file with autoCommit=true so each file lands
+      // independently. A failure in one file (e.g. a unique-constraint hit on a
+      // re-run against partially-seeded data) is logged and the loader continues
+      // — otherwise a single bad statement would prevent the remaining files from
+      // populating the report panels at all.
+      try (var conn = dataSource.getConnection()) {
+        boolean wasAutoCommit = conn.getAutoCommit();
+        conn.setAutoCommit(true);
+        try {
           log.info("[NH-48 reports] executing {}", f.getFilename());
           org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(conn, f);
+          ok++;
+        } finally {
+          conn.setAutoCommit(wasAutoCommit);
         }
-      } finally {
-        conn.setAutoCommit(wasAutoCommit);
+      } catch (Exception e) {
+        failed++;
+        log.error("[NH-48 reports] {} failed: {}", f.getFilename(), e.getMessage());
       }
-    } catch (Exception e) {
-      log.error("[NH-48 reports] failed to load SQL bundle: {}", e.getMessage(), e);
     }
+    log.info("[NH-48 reports] bundle finished — {} succeeded, {} failed", ok, failed);
   }
 
   // ─────────────────────────── EPS ───────────────────────────
