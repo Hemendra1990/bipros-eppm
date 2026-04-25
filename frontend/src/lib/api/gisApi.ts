@@ -305,7 +305,8 @@ export const gisApi = {
     return apiClient
       .post<{ data: SatelliteImage }>(
         `/v1/projects/${projectId}/gis/satellite-images/upload`,
-        form
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
       )
       .then((r) => r.data);
   },
