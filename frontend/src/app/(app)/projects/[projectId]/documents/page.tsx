@@ -117,13 +117,14 @@ export default function DocumentsPage() {
       setNewFolderOpen(false);
       setNewFolderError(null);
       queryClient.invalidateQueries({ queryKey: ["folders", projectId, "root"] });
-      if (newFolderParent) {
+      const createdParentId = created?.parentId ?? null;
+      if (createdParentId) {
         queryClient.invalidateQueries({ queryKey: ["folders", projectId, "children"] });
         // Make sure the parent is expanded so the new child is visible.
         setExpandedFolders((prev) => {
-          if (prev.has(newFolderParent.id)) return prev;
+          if (prev.has(createdParentId)) return prev;
           const next = new Set(prev);
-          next.add(newFolderParent.id);
+          next.add(createdParentId);
           return next;
         });
       }
