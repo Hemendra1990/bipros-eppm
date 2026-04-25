@@ -198,6 +198,14 @@ export interface UpdateSatelliteImageRequest {
   status?: "UPLOADED" | "PROCESSING" | "READY" | "FAILED";
 }
 
+export interface UploadSatelliteImageRequest {
+  imageName: string;
+  captureDate: string;
+  description?: string;
+  resolution?: string;
+  boundingBoxGeoJson?: string;
+}
+
 export interface CreateProgressSnapshotRequest {
   wbsPolygonId: UUID;
   captureDate: string;
@@ -289,6 +297,19 @@ export const gisApi = {
 
   deleteSatelliteImage: (projectId: UUID, imageId: UUID) =>
     apiClient.delete(`/v1/projects/${projectId}/gis/satellite-images/${imageId}`),
+
+  uploadSatelliteImage: (projectId: UUID, metadata: UploadSatelliteImageRequest, file: File) => {
+    const form = new FormData();
+    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+    form.append("file", file);
+    return apiClient
+      .post<{ data: SatelliteImage }>(
+        `/v1/projects/${projectId}/gis/satellite-images/upload`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((r) => r.data);
+  },
 
   // Construction Progress
   getProgressSnapshots: (

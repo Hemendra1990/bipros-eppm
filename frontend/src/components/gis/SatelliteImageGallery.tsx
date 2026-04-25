@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { gisApi, SatelliteImage } from "@/lib/api/gisApi";
 import { formatDate } from "date-fns";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 /**
  * One thumbnail tile. Fetches the raster bytes via the authenticated apiClient,
@@ -77,6 +80,23 @@ export function SatelliteImageGallery({
   projectId,
   images,
 }: SatelliteImageGalleryProps) {
+  const qc = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: (imageId: string) =>
+      gisApi.deleteSatelliteImage(
+        projectId as `${string}-${string}-${string}-${string}-${string}`,
+        imageId as `${string}-${string}-${string}-${string}-${string}`
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "satellite-images"] });
+      toast.success("Image deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete image");
+    },
+  });
+
   const sortedImages = [...images].sort(
     (a, b) =>
       new Date(b.captureDate).getTime() - new Date(a.captureDate).getTime()
@@ -109,9 +129,25 @@ export function SatelliteImageGallery({
               />
 
               <div className="p-4">
-                <h4 className="font-medium text-text-primary text-sm mb-2 line-clamp-2">
-                  {image.imageName}
-                </h4>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h4 className="font-medium text-text-primary text-sm line-clamp-2">
+                    {image.imageName}
+                  </h4>
+                  {image.source === "MANUAL_UPLOAD" && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Delete this uploaded image?")) {
+                          deleteMutation.mutate(image.id);
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="text-text-muted hover:text-danger transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
 
                 <div className="space-y-1 text-xs text-text-secondary">
                   <p>

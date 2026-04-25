@@ -3,12 +3,15 @@ package com.bipros.gis.api;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.gis.application.dto.SatelliteImageRequest;
 import com.bipros.gis.application.dto.SatelliteImageResponse;
+import com.bipros.gis.application.dto.UploadSatelliteImageRequest;
 import com.bipros.gis.application.service.SatelliteImageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -74,5 +77,15 @@ public class SatelliteImageController {
     ) {
         imageService.delete(projectId, imageId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<SatelliteImageResponse>> upload(
+        @PathVariable UUID projectId,
+        @Valid @RequestPart("metadata") UploadSatelliteImageRequest metadata,
+        @RequestPart("file") MultipartFile file
+    ) {
+        SatelliteImageResponse response = imageService.uploadManualImage(projectId, metadata, file);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 }

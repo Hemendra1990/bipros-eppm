@@ -10,6 +10,7 @@ import { ScenePicker } from "@/components/gis/ScenePicker";
 import { LayerControlPanel } from "@/components/gis/LayerControlPanel";
 import { GisLayerList } from "@/components/gis/GisLayerList";
 import { SatelliteImageGallery } from "@/components/gis/SatelliteImageGallery";
+import { UploadSatelliteImageModal } from "@/components/gis/UploadSatelliteImageModal";
 import { ProgressVarianceTable } from "@/components/gis/ProgressVarianceTable";
 import { MapModeToolbar, type MapMode } from "@/components/gis/MapModeToolbar";
 import {
@@ -72,6 +73,7 @@ export default function GisViewerPage() {
   );
   const [ingestTo, setIngestTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [lastIngestResult, setLastIngestResult] = useState<IngestionResult | null>(null);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   const ingestMutation = useMutation({
     mutationFn: () => gisApi.ingestSatellite(projectId, ingestFrom, ingestTo),
@@ -410,7 +412,8 @@ export default function GisViewerPage() {
 
   const { url: sceneBlobUrl, error: sceneBlobError } = useSceneBlobUrl(
     projectId,
-    selectedSceneId
+    selectedSceneId,
+    selectedScene?.mimeType
   );
 
   const canEdit = !!wbsPolygonLayer;
@@ -637,6 +640,12 @@ export default function GisViewerPage() {
                 >
                   {ingestMutation.isPending ? "Running ingestion…" : "Run Ingestion"}
                 </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setUploadModalOpen(true)}
+                >
+                  Upload Image
+                </Button>
                 {ingestMutation.isError && (
                   <span className="text-sm text-danger">
                     {(ingestMutation.error as Error)?.message ?? "Ingestion failed"}
@@ -682,6 +691,12 @@ export default function GisViewerPage() {
           </div>
         )}
       </div>
+
+      <UploadSatelliteImageModal
+        projectId={projectId}
+        open={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+      />
     </div>
   );
 }

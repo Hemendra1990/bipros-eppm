@@ -22,6 +22,7 @@ type Cache = Map<string, { url: string; lastUsed: number }>;
 export function useSceneBlobUrl(
   projectId: string,
   sceneId: string | null,
+  mimeType?: string,
   cacheSize = 3
 ): {
   url: string | null;
@@ -77,7 +78,7 @@ export function useSceneBlobUrl(
       )
       .then((response) => {
         if (cancelled) return;
-        const blob = new Blob([response.data], { type: "image/png" });
+        const blob = new Blob([response.data], { type: mimeType || "image/png" });
         const newUrl = URL.createObjectURL(blob);
         cache.set(sceneId, { url: newUrl, lastUsed: Date.now() });
         // Evict least-recently-used entries past the cap.
@@ -110,7 +111,7 @@ export function useSceneBlobUrl(
     return () => {
       cancelled = true;
     };
-  }, [projectId, sceneId, cacheSize]);
+  }, [projectId, sceneId, mimeType, cacheSize]);
 
   return { url, loading, error };
 }
