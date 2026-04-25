@@ -78,13 +78,18 @@ public class MinioRasterStorage implements RasterStorage {
 
     @Override
     public URI put(String key, byte[] bytes, String contentType) {
-        s3.putObject(PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .contentType(contentType)
-                .contentLength((long) bytes.length)
-                .build(),
-            RequestBody.fromBytes(bytes));
+        try {
+            s3.putObject(PutObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .contentType(contentType)
+                    .contentLength((long) bytes.length)
+                    .build(),
+                RequestBody.fromBytes(bytes));
+        } catch (Exception e) {
+            throw new BusinessRuleException("STORAGE_WRITE",
+                "Failed to store raster object: " + e.getMessage());
+        }
         try {
             return new URI("s3", bucket, "/" + key, null);
         } catch (URISyntaxException e) {

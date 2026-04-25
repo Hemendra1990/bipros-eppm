@@ -71,6 +71,38 @@ public class Contract extends BaseEntity {
     @Column(name = "contract_type", nullable = false)
     private ContractType contractType;
 
+    // ── P6/PCM-inspired commercial fields ──
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "currency", length = 3, nullable = false)
+    private String currency = "INR";
+
+    /** Notice to Proceed date — when the contractor is formally instructed to begin work. */
+    @Column(name = "ntp_date")
+    private LocalDate ntpDate;
+
+    /** Revised completion date after approved EOTs / change orders. Must be >= completionDate. */
+    @Column(name = "revised_completion_date")
+    private LocalDate revisedCompletionDate;
+
+    @Column(name = "mobilisation_advance_pct", precision = 5, scale = 2)
+    private BigDecimal mobilisationAdvancePct;
+
+    @Column(name = "retention_pct", precision = 5, scale = 2)
+    private BigDecimal retentionPct;
+
+    @Column(name = "performance_bg_pct", precision = 5, scale = 2)
+    private BigDecimal performanceBgPct;
+
+    @Column(name = "payment_terms_days")
+    private Integer paymentTermsDays;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_cycle", length = 30)
+    private BillingCycle billingCycle;
+
     // ── IC-PMS M5 denormalised fields (refreshed by ContractKpiService) ──
 
     /** WBS package code this contract is awarded for (e.g. DMIC-N03-P01). Excel-fidelity string key. */

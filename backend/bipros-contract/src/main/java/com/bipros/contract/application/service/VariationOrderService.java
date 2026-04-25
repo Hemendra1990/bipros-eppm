@@ -4,8 +4,10 @@ import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.VariationOrderRequest;
 import com.bipros.contract.application.dto.VariationOrderResponse;
+import com.bipros.contract.domain.model.AttachmentEntityType;
 import com.bipros.contract.domain.model.VariationOrder;
 import com.bipros.contract.domain.model.VariationOrderStatus;
+import com.bipros.contract.domain.repository.ContractAttachmentRepository;
 import com.bipros.contract.domain.repository.VariationOrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -22,6 +25,8 @@ import java.util.UUID;
 public class VariationOrderService {
 
     private final VariationOrderRepository variationOrderRepository;
+    private final ContractAttachmentRepository attachmentRepository;
+    private final ContractAttachmentService attachmentService;
     private final AuditService auditService;
 
     public VariationOrderResponse create(VariationOrderRequest request) {
@@ -40,25 +45,29 @@ public class VariationOrderService {
 
         VariationOrder saved = variationOrderRepository.save(vo);
         log.info("Variation order created with ID: {}", saved.getId());
-        auditService.logCreate("VariationOrder", saved.getId(), toResponse(saved));
+        auditService.logCreate("VariationOrder", saved.getId(), toResponse(saved, 0L));
 
-        return toResponse(saved);
+        return toResponse(saved, 0L);
     }
 
+    @Transactional(readOnly = true)
     public VariationOrderResponse getById(UUID id) {
-        log.info("Fetching variation order with ID: {}", id);
-
         VariationOrder vo = variationOrderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("VariationOrder", id));
-
-        return toResponse(vo);
+        long count = attachmentRepository.countByContractIdAndEntityTypeAndEntityId(
+            vo.getContractId(), AttachmentEntityType.VARIATION_ORDER, id);
+        return toResponse(vo, count);
     }
 
+    @Transactional(readOnly = true)
     public List<VariationOrderResponse> listByContract(UUID contractId) {
-        log.info("Listing variation orders for contract: {}", contractId);
-
-        return variationOrderRepository.findByContractId(contractId).stream()
-            .map(this::toResponse)
+        List<VariationOrder> rows = variationOrderRepository.findByContractId(contractId);
+        if (rows.isEmpty()) return List.of();
+        Map<UUID, Long> counts = attachmentService.countsByEntities(
+            contractId, AttachmentEntityType.VARIATION_ORDER,
+            rows.stream().map(VariationOrder::getId).toList());
+        return rows.stream()
+            .map(vo -> toResponse(vo, counts.getOrDefault(vo.getId(), 0L)))
             .toList();
     }
 
@@ -76,17 +85,24 @@ public class VariationOrderService {
         vo.setApprovedBy(request.approvedBy());
 
         VariationOrder updated = variationOrderRepository.save(vo);
-        auditService.logUpdate("VariationOrder", id, "vo", null, toResponse(updated));
-        return toResponse(updated);
+        long count = attachmentRepository.countByContractIdAndEntityTypeAndEntityId(
+            updated.getContractId(), AttachmentEntityType.VARIATION_ORDER, id);
+        VariationOrderResponse response = toResponse(updated, count);
+        auditService.logUpdate("VariationOrder", id, "vo", null, response);
+        return response;
     }
 
     public void delete(UUID id) {
         log.info("Deleting variation order with ID: {}", id);
+        VariationOrder vo = variationOrderRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("VariationOrder", id));
+        attachmentService.deleteAllForEntity(
+            vo.getContractId(), AttachmentEntityType.VARIATION_ORDER, id);
         variationOrderRepository.deleteById(id);
         auditService.logDelete("VariationOrder", id);
     }
 
-    private VariationOrderResponse toResponse(VariationOrder vo) {
+    private VariationOrderResponse toResponse(VariationOrder vo, long attachmentCount) {
         return new VariationOrderResponse(
             vo.getId(),
             vo.getContractId(),
@@ -99,6 +115,7 @@ public class VariationOrderService {
             vo.getImpactOnScheduleDays(),
             vo.getApprovedBy(),
             vo.getApprovedAt(),
+            attachmentCount,
             vo.getCreatedAt(),
             vo.getUpdatedAt()
         );

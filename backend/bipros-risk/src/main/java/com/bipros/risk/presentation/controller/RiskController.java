@@ -1,11 +1,14 @@
 package com.bipros.risk.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.risk.application.dto.CopyTemplatesRequest;
 import com.bipros.risk.application.dto.CreateRiskRequest;
 import com.bipros.risk.application.dto.CreateRiskResponseRequest;
+import com.bipros.risk.application.dto.RiskAnalysisQuality;
 import com.bipros.risk.application.dto.RiskResponseDto;
 import com.bipros.risk.application.dto.RiskSummary;
 import com.bipros.risk.application.service.RiskService;
+import com.bipros.risk.application.service.RiskTemplateService;
 import com.bipros.risk.domain.model.RiskStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +37,7 @@ import java.util.UUID;
 public class RiskController {
 
     private final RiskService riskService;
+    private final RiskTemplateService riskTemplateService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<RiskSummary>> createRisk(
@@ -55,6 +59,10 @@ public class RiskController {
         List<RiskSummary> risks = riskService.listRisks(projectId, status);
         BigDecimal exposure = riskService.calculateRiskExposure(projectId);
         Map<String, List<RiskSummary>> matrix = riskService.getRiskMatrix(projectId);
+        long notAnalysed = risks.stream()
+            .filter(r -> r.getAnalysisQuality() != null
+                && r.getAnalysisQuality().level() != RiskAnalysisQuality.QualityLevel.WELL_ANALYSED)
+            .count();
         Map<String, Object> body = Map.of(
             "totalRisks", risks.size(),
             "exposure", exposure,
@@ -62,9 +70,21 @@ public class RiskController {
                 .collect(java.util.stream.Collectors.groupingBy(
                     r -> r.getStatus() != null ? r.getStatus().name() : "UNKNOWN",
                     java.util.stream.Collectors.counting())),
-            "matrix", matrix
+            "matrix", matrix,
+            "risksNotAnalysed", notAnalysed
         );
         return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    /**
+     * Standalone analysis-quality probe — same assessment that's attached to each row in
+     * the list/get responses, but cheaper to poll after a single edit.
+     */
+    @GetMapping("/{riskId}/analysis-quality")
+    public ResponseEntity<ApiResponse<RiskAnalysisQuality>> getAnalysisQuality(
+        @PathVariable UUID projectId,
+        @PathVariable UUID riskId) {
+        return ResponseEntity.ok(ApiResponse.ok(riskService.assessQuality(projectId, riskId)));
     }
 
     @GetMapping("/{riskId}")
@@ -130,6 +150,20 @@ public class RiskController {
         @PathVariable UUID riskId) {
         List<RiskResponseDto> responses = riskService.getResponses(projectId, riskId);
         return ResponseEntity.ok(ApiResponse.ok(responses));
+    }
+
+    /**
+     * Bulk-copy library templates into this project's risk register. Each copied risk
+     * starts in IDENTIFIED status with no owner — drives the analysis-quality flag
+     * (see slice 2) so PMs see which copies still need refinement.
+     */
+    @PostMapping("/copy-from-templates")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
+    public ResponseEntity<ApiResponse<List<RiskSummary>>> copyFromTemplates(
+        @PathVariable UUID projectId,
+        @Valid @RequestBody CopyTemplatesRequest request) {
+        List<RiskSummary> created = riskTemplateService.copyToProject(projectId, request.templateIds());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created));
     }
 
     @PutMapping("/{riskId}/responses/{responseId}")

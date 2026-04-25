@@ -4,6 +4,7 @@ import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.risk.application.dto.CreateRiskRequest;
 import com.bipros.risk.application.dto.CreateRiskResponseRequest;
+import com.bipros.risk.application.dto.RiskAnalysisQuality;
 import com.bipros.risk.application.dto.RiskResponseDto;
 import com.bipros.risk.application.dto.RiskSummary;
 import com.bipros.risk.domain.model.Risk;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +31,7 @@ public class RiskService {
 
     private final RiskRepository riskRepository;
     private final RiskResponseRepository riskResponseRepository;
+    private final RiskQualityService riskQualityService;
     private final AuditService auditService;
 
     public RiskSummary createRisk(UUID projectId, CreateRiskRequest request) {
@@ -39,12 +42,22 @@ public class RiskService {
         }
         Risk risk = new Risk();
         risk.setProjectId(projectId);
-        risk.setCode(request.getCode());
+        // Code is NOT NULL; auto-generate RISK-NNNN if the caller didn't supply one
+        // (mirrors the convention used by RiskTemplateService.copyToProject).
+        String code = request.getCode();
+        if (code == null || code.isBlank()) {
+            code = String.format("RISK-%04d", riskRepository.findByProjectId(projectId).size() + 1);
+        }
+        risk.setCode(code);
         risk.setTitle(title);
         risk.setDescription(request.getDescription());
         risk.setCategory(request.getCategory());
         risk.setProbability(request.getProbability());
         risk.setImpact(request.getImpact());
+        risk.setImpactCost(request.getImpactCost());
+        risk.setImpactSchedule(request.getImpactSchedule());
+        if (request.getStatus() != null) risk.setStatus(request.getStatus());
+        if (request.getIsOpportunity() != null) risk.setIsOpportunity(request.getIsOpportunity());
         risk.setOwnerId(request.getOwnerId());
         risk.setIdentifiedDate(request.getIdentifiedDate());
         risk.setDueDate(request.getDueDate());
@@ -56,38 +69,52 @@ public class RiskService {
 
         Risk saved = riskRepository.save(risk);
         auditService.logCreate("Risk", saved.getId(), saved);
-        return mapToSummary(saved);
+        // Re-compute analysis-quality so the caller can show the badge immediately.
+        RiskSummary summary = mapToSummary(saved);
+        summary.setAnalysisQuality(riskQualityService.assess(
+            saved, java.util.Collections.emptyList()));
+        return summary;
     }
 
     public RiskSummary updateRisk(UUID projectId, UUID riskId, CreateRiskRequest request) {
-        Risk risk = riskRepository.findById(riskId)
-            .orElseThrow(() -> new ResourceNotFoundException("Risk", riskId));
-
-        if (!risk.getProjectId().equals(projectId)) {
-            throw new ResourceNotFoundException("Risk", projectId);
-        }
+        Risk risk = loadProjectRisk(projectId, riskId);
 
         auditService.logUpdate("Risk", riskId, "title", risk.getTitle(), request.getTitle());
         auditService.logUpdate("Risk", riskId, "description", risk.getDescription(), request.getDescription());
         auditService.logUpdate("Risk", riskId, "category", risk.getCategory(), request.getCategory());
 
-        risk.setCode(request.getCode());
-        risk.setTitle(request.getTitle());
-        risk.setDescription(request.getDescription());
-        risk.setCategory(request.getCategory());
-        risk.setProbability(request.getProbability());
-        risk.setImpact(request.getImpact());
-        risk.setOwnerId(request.getOwnerId());
-        risk.setIdentifiedDate(request.getIdentifiedDate());
-        risk.setDueDate(request.getDueDate());
-        risk.setAffectedActivities(request.getAffectedActivities());
-        risk.setCostImpact(request.getCostImpact());
-        risk.setScheduleImpactDays(request.getScheduleImpactDays());
-        risk.setSortOrder(request.getSortOrder());
+        // PATCH-like semantics: only overwrite a field when the caller explicitly supplies
+        // a non-null value. This protects partial PUTs (e.g. "just assigning an owner")
+        // from wiping out the title/description/category that the frontend didn't re-send.
+        // Callers that genuinely want to clear a field send a sentinel (empty string) for
+        // strings or omit the field entirely to leave it untouched.
+        if (request.getCode() != null && !request.getCode().isBlank()) risk.setCode(request.getCode());
+        if (request.getTitle() != null && !request.getTitle().isBlank()) risk.setTitle(request.getTitle());
+        if (request.getStatus() != null) risk.setStatus(request.getStatus());
+        if (request.getIsOpportunity() != null) risk.setIsOpportunity(request.getIsOpportunity());
+        if (request.getDescription() != null) risk.setDescription(request.getDescription());
+        if (request.getCategory() != null) risk.setCategory(request.getCategory());
+        if (request.getProbability() != null) risk.setProbability(request.getProbability());
+        if (request.getImpact() != null) risk.setImpact(request.getImpact());
+        if (request.getImpactCost() != null) risk.setImpactCost(request.getImpactCost());
+        if (request.getImpactSchedule() != null) risk.setImpactSchedule(request.getImpactSchedule());
+        if (request.getOwnerId() != null) risk.setOwnerId(request.getOwnerId());
+        if (request.getIdentifiedDate() != null) risk.setIdentifiedDate(request.getIdentifiedDate());
+        if (request.getDueDate() != null) risk.setDueDate(request.getDueDate());
+        if (request.getAffectedActivities() != null) risk.setAffectedActivities(request.getAffectedActivities());
+        if (request.getCostImpact() != null) risk.setCostImpact(request.getCostImpact());
+        if (request.getScheduleImpactDays() != null) risk.setScheduleImpactDays(request.getScheduleImpactDays());
+        // sortOrder is a primitive int (defaults to 0 in the DTO), so we can't distinguish
+        // "absent" from "explicitly zero"; only overwrite when non-zero.
+        if (request.getSortOrder() != 0) risk.setSortOrder(request.getSortOrder());
         risk.calculateRiskScore();
 
         Risk updated = riskRepository.save(risk);
-        return mapToSummary(updated);
+        // Re-compute analysis-quality so the caller sees the fresh score in the same round-trip.
+        List<RiskResponse> responses = riskResponseRepository.findByRiskId(riskId);
+        RiskSummary summary = mapToSummary(updated);
+        summary.setAnalysisQuality(riskQualityService.assess(updated, responses));
+        return summary;
     }
 
     public void deleteRisk(UUID projectId, UUID riskId) {
@@ -103,15 +130,13 @@ public class RiskService {
         auditService.logDelete("Risk", riskId);
     }
 
+    @Transactional(readOnly = true)
     public RiskSummary getRisk(UUID projectId, UUID riskId) {
-        Risk risk = riskRepository.findById(riskId)
-            .orElseThrow(() -> new ResourceNotFoundException("Risk", riskId));
-
-        if (!risk.getProjectId().equals(projectId)) {
-            throw new ResourceNotFoundException("Risk", projectId);
-        }
-
-        return mapToSummary(risk);
+        Risk risk = loadProjectRisk(projectId, riskId);
+        List<RiskResponse> responses = riskResponseRepository.findByRiskId(riskId);
+        RiskSummary summary = mapToSummary(risk);
+        summary.setAnalysisQuality(riskQualityService.assess(risk, responses));
+        return summary;
     }
 
     @Transactional(readOnly = true)
@@ -122,7 +147,41 @@ public class RiskService {
         } else {
             risks = riskRepository.findByProjectId(projectId);
         }
-        return risks.stream().map(this::mapToSummary).collect(Collectors.toList());
+        if (risks.isEmpty()) return List.of();
+
+        // Batch fetch responses for all risks in this project; group by riskId so the
+        // quality assessment for each row sees its own response list without N+1 queries.
+        List<UUID> riskIds = risks.stream().map(Risk::getId).toList();
+        Map<UUID, List<RiskResponse>> responsesByRisk = riskResponseRepository
+            .findByRiskIdIn(riskIds).stream()
+            .collect(Collectors.groupingBy(RiskResponse::getRiskId));
+
+        return risks.stream().map(r -> {
+            RiskSummary summary = mapToSummary(r);
+            summary.setAnalysisQuality(riskQualityService.assess(
+                r, responsesByRisk.getOrDefault(r.getId(), Collections.emptyList())));
+            return summary;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * Standalone analysis-quality endpoint. Re-uses the same assessment that {@link
+     * #listRisks} attaches to each summary; exists so clients can poll quality after
+     * editing a risk without re-fetching the whole register.
+     */
+    @Transactional(readOnly = true)
+    public RiskAnalysisQuality assessQuality(UUID projectId, UUID riskId) {
+        Risk risk = loadProjectRisk(projectId, riskId);
+        return riskQualityService.assess(risk, riskResponseRepository.findByRiskId(riskId));
+    }
+
+    private Risk loadProjectRisk(UUID projectId, UUID riskId) {
+        Risk risk = riskRepository.findById(riskId)
+            .orElseThrow(() -> new ResourceNotFoundException("Risk", riskId));
+        if (!risk.getProjectId().equals(projectId)) {
+            throw new ResourceNotFoundException("Risk", projectId);
+        }
+        return risk;
     }
 
     public RiskResponseDto addResponse(UUID projectId, UUID riskId, CreateRiskResponseRequest request) {
@@ -215,6 +274,15 @@ public class RiskService {
             .map(r -> BigDecimal.valueOf(r.getProbability().getValue())
                 .multiply(r.getCostImpact()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Public summary mapper. Exposed so other services in this module (e.g. {@code
+     * RiskTemplateService.copyToProject}) can return the same shape the controllers do
+     * without duplicating the field list.
+     */
+    public RiskSummary toSummary(Risk risk) {
+        return mapToSummary(risk);
     }
 
     private RiskSummary mapToSummary(Risk risk) {

@@ -23,7 +23,7 @@ export default function ActivitiesPage() {
   const qc = useQueryClient();
 
   const [lookAheadWeeks, setLookAheadWeeks] = useState<4 | 13 | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "tree">("list");
+  const [viewMode, setViewMode] = useState<"list" | "tree">("tree");
   // Row-specific inline editor state. Keyed by activity id; value = string
   // currently typed into the % input.
   const [progressEdit, setProgressEdit] = useState<Record<string, string>>({});

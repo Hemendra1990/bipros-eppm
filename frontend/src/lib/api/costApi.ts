@@ -111,4 +111,14 @@ export const costApi = {
     apiClient
       .post<ApiResponse<ExpenseResponse>>(`/v1/projects/${projectId}/expenses`, data)
       .then((r) => r.data),
+
+  updateExpense: (projectId: string, expenseId: string, data: CreateExpenseRequest) =>
+    apiClient
+      .put<ApiResponse<ExpenseResponse>>(`/v1/projects/${projectId}/expenses/${expenseId}`, data)
+      .then((r) => r.data),
+
+  deleteExpense: (projectId: string, expenseId: string) =>
+    apiClient
+      .delete<ApiResponse<void>>(`/v1/projects/${projectId}/expenses/${expenseId}`)
+      .then((r) => r.data),
 };

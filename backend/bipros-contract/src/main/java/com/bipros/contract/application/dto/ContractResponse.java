@@ -1,5 +1,6 @@
 package com.bipros.contract.application.dto;
 
+import com.bipros.contract.domain.model.BillingCycle;
 import com.bipros.contract.domain.model.ContractStatus;
 import com.bipros.contract.domain.model.ContractType;
 
@@ -18,13 +19,23 @@ public record ContractResponse(
     String contractorName,
     String contractorCode,
     BigDecimal contractValue,
+    BigDecimal revisedValue,
     LocalDate loaDate,
     LocalDate startDate,
     LocalDate completionDate,
+    LocalDate revisedCompletionDate,
     Integer dlpMonths,
     Double ldRate,
     ContractStatus status,
     ContractType contractType,
+    String description,
+    String currency,
+    LocalDate ntpDate,
+    BigDecimal mobilisationAdvancePct,
+    BigDecimal retentionPct,
+    BigDecimal performanceBgPct,
+    Integer paymentTermsDays,
+    BillingCycle billingCycle,
     // IC-PMS denormalised KPI fields
     String wbsPackageCode,
     String packageDescription,

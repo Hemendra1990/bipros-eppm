@@ -258,6 +258,17 @@ export interface ResourceResponse {
 
 // === Risk ===
 
+export interface RiskAnalysisQuality {
+  score: number;
+  level: "NOT_ANALYSED" | "PARTIALLY_ANALYSED" | "WELL_ANALYSED";
+  criteria: {
+    hasOwner: boolean;
+    hasRating: boolean;
+    hasDescription: boolean;
+    hasResponse: boolean;
+  };
+}
+
 export interface RiskResponse {
   id: string;
   code: string;
@@ -271,6 +282,7 @@ export interface RiskResponse {
   owner: string;
   createdAt: string;
   updatedAt: string;
+  analysisQuality?: RiskAnalysisQuality;
 }
 
 export interface CreateRiskRequest {
@@ -647,6 +659,8 @@ export interface CreateBidSubmissionRequest {
   evaluationRemarks?: string;
 }
 
+export type BillingCycle = "MONTHLY" | "QUARTERLY" | "MILESTONE_BASED" | "ON_COMPLETION";
+
 export interface ContractResponse {
   id: string;
   projectId: string;
@@ -656,13 +670,24 @@ export interface ContractResponse {
   contractorName: string;
   contractorCode: string | null;
   contractValue: number;
+  revisedValue: number | null;
   loaDate: string;
   startDate: string;
   completionDate: string;
+  revisedCompletionDate: string | null;
   dlpMonths: number;
   ldRate: number;
   status: ContractStatus;
   contractType: ContractType;
+  // P6/PCM-inspired commercial fields
+  description: string | null;
+  currency: string;
+  ntpDate: string | null;
+  mobilisationAdvancePct: number | null;
+  retentionPct: number | null;
+  performanceBgPct: number | null;
+  paymentTermsDays: number | null;
+  billingCycle: BillingCycle | null;
   // IC-PMS denormalised KPI fields
   wbsPackageCode: string | null;
   packageDescription: string | null;
@@ -688,12 +713,22 @@ export interface CreateContractRequest {
   contractorName: string;
   contractorCode?: string;
   contractValue: number;
+  revisedValue?: number;
   loaDate: string;
   startDate: string;
   completionDate: string;
+  revisedCompletionDate?: string;
   dlpMonths?: number;
   ldRate: number;
   contractType: ContractType;
+  description?: string;
+  currency?: string;
+  ntpDate?: string;
+  mobilisationAdvancePct?: number;
+  retentionPct?: number;
+  performanceBgPct?: number;
+  paymentTermsDays?: number;
+  billingCycle?: BillingCycle;
 }
 
 export interface ContractMilestoneResponse {
@@ -706,6 +741,7 @@ export interface ContractMilestoneResponse {
   paymentPercentage: number;
   amount: number;
   status: MilestoneStatus;
+  attachmentCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -732,6 +768,7 @@ export interface VariationOrderResponse {
   impactOnScheduleDays: number;
   approvedBy: string | null;
   approvedAt: string | null;
+  attachmentCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -756,8 +793,51 @@ export interface PerformanceBondResponse {
   issueDate: string;
   expiryDate: string;
   status: BondStatus;
+  attachmentCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// === Contract Attachments ===
+
+export type AttachmentEntityType =
+  | "CONTRACT"
+  | "MILESTONE"
+  | "VARIATION_ORDER"
+  | "PERFORMANCE_BOND";
+
+export type ContractAttachmentType =
+  | "LOA"
+  | "AGREEMENT"
+  | "BOQ"
+  | "DRAWING"
+  | "BG_SCAN"
+  | "MOM"
+  | "MEASUREMENT_BOOK"
+  | "TEST_REPORT"
+  | "CERTIFICATE"
+  | "PHOTO"
+  | "OTHER";
+
+export interface ContractAttachment {
+  id: string;
+  projectId: string;
+  contractId: string;
+  entityType: AttachmentEntityType;
+  entityId: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  attachmentType: ContractAttachmentType;
+  description: string | null;
+  uploadedBy: string | null;
+  uploadedAt: string | null;
+  createdAt: string;
+}
+
+export interface UploadContractAttachmentMetadata {
+  attachmentType: ContractAttachmentType;
+  description?: string | null;
 }
 
 export interface CreatePerformanceBondRequest {

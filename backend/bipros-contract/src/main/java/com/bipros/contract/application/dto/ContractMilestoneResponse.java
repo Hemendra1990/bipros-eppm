@@ -17,6 +17,7 @@ public record ContractMilestoneResponse(
     Double paymentPercentage,
     BigDecimal amount,
     MilestoneStatus status,
+    long attachmentCount,
     Instant createdAt,
     Instant updatedAt
 ) {}

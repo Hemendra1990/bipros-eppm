@@ -71,6 +71,12 @@ bipros:
       path: ./storage/documents
       max-file-size: 52428800   # 50 MB in bytes; must match spring.servlet.multipart.max-file-size
 
+  # Contract attachment binary storage — same filesystem pattern as documents
+  contract:
+    storage:
+      path: ./storage/contracts
+      max-file-size: 52428800   # 50 MB in bytes; must match spring.servlet.multipart.max-file-size
+
   # Error responses — include exception class + message + top stack frame in 500 bodies.
   # Default is OFF so production never leaks internals; default profile (dev) turns it ON below.
   errors:

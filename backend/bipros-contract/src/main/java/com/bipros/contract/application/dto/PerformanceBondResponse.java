@@ -17,6 +17,7 @@ public record PerformanceBondResponse(
     LocalDate issueDate,
     LocalDate expiryDate,
     BondStatus status,
+    long attachmentCount,
     Instant createdAt,
     Instant updatedAt
 ) {}

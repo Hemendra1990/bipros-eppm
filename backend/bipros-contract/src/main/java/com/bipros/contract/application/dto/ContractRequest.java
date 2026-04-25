@@ -1,5 +1,6 @@
 package com.bipros.contract.application.dto;
 
+import com.bipros.contract.domain.model.BillingCycle;
 import com.bipros.contract.domain.model.ContractType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,10 +17,20 @@ public record ContractRequest(
     @NotBlank String contractorName,
     String contractorCode,
     BigDecimal contractValue,
+    BigDecimal revisedValue,
     LocalDate loaDate,
     LocalDate startDate,
     LocalDate completionDate,
+    LocalDate revisedCompletionDate,
     Integer dlpMonths,
     Double ldRate,
-    @NotNull ContractType contractType
+    @NotNull ContractType contractType,
+    String description,
+    String currency,
+    LocalDate ntpDate,
+    BigDecimal mobilisationAdvancePct,
+    BigDecimal retentionPct,
+    BigDecimal performanceBgPct,
+    Integer paymentTermsDays,
+    BillingCycle billingCycle
 ) {}

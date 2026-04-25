@@ -2,23 +2,34 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, X, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, X, Trash2, AlertTriangle, BookOpen } from "lucide-react";
 import { getErrorMessage } from "@/lib/utils/error";
-import { riskApi } from "@/lib/api/riskApi";
+import { riskApi, type RiskResponse } from "@/lib/api/riskApi";
 import { riskTriggerApi } from "@/lib/api/riskTriggerApi";
+import {
+  riskTemplateApi,
+  INDUSTRY_LABEL,
+  deriveIndustryFromProjectCategory,
+  type Industry,
+  type RiskTemplate,
+} from "@/lib/api/riskTemplateApi";
 import { apiClient } from "@/lib/api/client";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TabTip } from "@/components/common/TabTip";
-import type { RiskResponse, CreateRiskRequest, ProjectResponse, ApiResponse, PagedResponse } from "@/lib/types";
+import type { CreateRiskRequest, ProjectResponse, ApiResponse, PagedResponse } from "@/lib/types";
 
 export default function RiskPage() {
   const queryClient = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState("");
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [libraryRecommendedOnly, setLibraryRecommendedOnly] = useState(true);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<CreateRiskRequest>({
     code: "",
@@ -50,7 +61,44 @@ export default function RiskPage() {
   });
 
   const rawRisks = risksData?.data;
-  const risks: RiskResponse[] = Array.isArray(rawRisks) ? rawRisks : (rawRisks as any)?.content ?? [];
+  const risks: RiskResponse[] = Array.isArray(rawRisks)
+    ? rawRisks
+    : ((rawRisks as { content?: RiskResponse[] } | undefined)?.content ?? []);
+
+  const projects: ProjectResponse[] = Array.isArray(projectsData) ? projectsData : [];
+  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
+  const recommendedIndustry: Industry = deriveIndustryFromProjectCategory(selectedProject?.category);
+  const projectCategoryFilter = selectedProject?.category ?? null;
+
+  const { data: libraryData, isLoading: libraryLoading } = useQuery({
+    queryKey: ["risk-templates", "for-project", recommendedIndustry, projectCategoryFilter, libraryRecommendedOnly],
+    queryFn: () => riskTemplateApi.list(libraryRecommendedOnly
+      ? { industry: recommendedIndustry, projectCategory: projectCategoryFilter ?? undefined, active: true }
+      : { active: true }),
+    enabled: showLibrary,
+  });
+  const libraryTemplates: RiskTemplate[] = libraryData?.data ?? [];
+
+  const copyMutation = useMutation({
+    mutationFn: (templateIds: string[]) => {
+      if (!selectedProjectId) throw new Error("Please select a project first");
+      return riskTemplateApi.copyToProject(selectedProjectId, templateIds);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["risks", selectedProjectId] });
+      setShowLibrary(false);
+      setSelectedTemplateIds([]);
+      setLibraryError(null);
+    },
+    onError: (err: unknown) => {
+      setLibraryError(getErrorMessage(err, "Failed to copy templates"));
+    },
+  });
+
+  const toggleTemplateSelected = (id: string) => {
+    setSelectedTemplateIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
 
   const createMutation = useMutation({
     mutationFn: (data: CreateRiskRequest) => {
@@ -149,6 +197,11 @@ export default function RiskPage() {
     },
     { key: "owner", label: "Owner", sortable: true },
     {
+      key: "analysisQuality",
+      label: "Analysis",
+      render: (_value, row) => <AnalysisQualityBadge quality={row.analysisQuality} />,
+    },
+    {
       key: "id",
       label: "Actions",
       render: (value) => (
@@ -173,14 +226,28 @@ export default function RiskPage() {
         title="Risk Register"
         description="Manage project risks, probabilities, and mitigation strategies"
         actions={
-          <button
-            onClick={() => setShowForm(!showForm)}
-            disabled={!selectedProjectId}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
-          >
-            <Plus size={16} />
-            New Risk
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setSelectedTemplateIds([]);
+                setLibraryError(null);
+                setShowLibrary(true);
+              }}
+              disabled={!selectedProjectId}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface/50 px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-50"
+            >
+              <BookOpen size={16} />
+              Add from Library
+            </button>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              disabled={!selectedProjectId}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+            >
+              <Plus size={16} />
+              New Risk
+            </button>
+          </div>
         }
       />
 
@@ -420,6 +487,205 @@ export default function RiskPage() {
           {risks.length > 0 && <DataTable columns={columns} data={risks} rowKey="id" />}
         </>
       )}
+
+      {showLibrary && selectedProjectId && (
+        <LibraryModal
+          templates={libraryTemplates}
+          loading={libraryLoading}
+          recommendedIndustry={recommendedIndustry}
+          recommendedOnly={libraryRecommendedOnly}
+          onToggleRecommendedOnly={() => setLibraryRecommendedOnly((v) => !v)}
+          selectedIds={selectedTemplateIds}
+          onToggleId={toggleTemplateSelected}
+          onCopy={() => copyMutation.mutate(selectedTemplateIds)}
+          onClose={() => setShowLibrary(false)}
+          isCopying={copyMutation.isPending}
+          error={libraryError}
+        />
+      )}
+    </div>
+  );
+}
+
+function AnalysisQualityBadge({
+  quality,
+}: {
+  quality?: { level: "NOT_ANALYSED" | "PARTIALLY_ANALYSED" | "WELL_ANALYSED"; score: number; criteria: Record<string, boolean> };
+}) {
+  if (!quality) return <span className="text-text-muted">—</span>;
+  const styles: Record<string, string> = {
+    WELL_ANALYSED: "bg-green-500/20 text-green-400",
+    PARTIALLY_ANALYSED: "bg-amber-500/20 text-amber-400",
+    NOT_ANALYSED: "bg-red-500/20 text-red-400",
+  };
+  const labels: Record<string, string> = {
+    WELL_ANALYSED: "Well analysed",
+    PARTIALLY_ANALYSED: "Partially analysed",
+    NOT_ANALYSED: "Not analysed",
+  };
+  const missing = Object.entries(quality.criteria)
+    .filter(([, v]) => !v)
+    .map(([k]) => CRITERION_LABEL[k] ?? k);
+  const tooltip = missing.length > 0
+    ? `${quality.score}/4 — missing: ${missing.join(", ")}`
+    : `${quality.score}/4 — all criteria met`;
+  return (
+    <span
+      title={tooltip}
+      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${styles[quality.level]}`}
+    >
+      {labels[quality.level]} {quality.score}/4
+    </span>
+  );
+}
+
+const CRITERION_LABEL: Record<string, string> = {
+  hasOwner: "owner",
+  hasRating: "P/I rating",
+  hasDescription: "description ≥ 50 chars",
+  hasResponse: "response with type+responsible",
+};
+
+function LibraryModal({
+  templates,
+  loading,
+  recommendedIndustry,
+  recommendedOnly,
+  onToggleRecommendedOnly,
+  selectedIds,
+  onToggleId,
+  onCopy,
+  onClose,
+  isCopying,
+  error,
+}: {
+  templates: RiskTemplate[];
+  loading: boolean;
+  recommendedIndustry: Industry;
+  recommendedOnly: boolean;
+  onToggleRecommendedOnly: () => void;
+  selectedIds: string[];
+  onToggleId: (id: string) => void;
+  onCopy: () => void;
+  onClose: () => void;
+  isCopying: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-xl border border-border bg-surface shadow-xl flex flex-col">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary">Add Risks from Library</h2>
+            <p className="text-xs text-text-muted mt-0.5">
+              {recommendedOnly
+                ? `Showing risks recommended for ${INDUSTRY_LABEL[recommendedIndustry]} projects of this category.`
+                : "Showing all active risks across every industry."}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 border-b border-border bg-surface/40 px-4 py-2 text-sm">
+          <button
+            type="button"
+            onClick={onToggleRecommendedOnly}
+            className={`rounded px-3 py-1 ${
+              recommendedOnly ? "bg-accent text-text-primary" : "bg-surface-hover text-text-secondary"
+            }`}
+          >
+            Recommended
+          </button>
+          <button
+            type="button"
+            onClick={onToggleRecommendedOnly}
+            className={`rounded px-3 py-1 ${
+              !recommendedOnly ? "bg-accent text-text-primary" : "bg-surface-hover text-text-secondary"
+            }`}
+          >
+            All
+          </button>
+          <span className="ml-auto text-xs text-text-muted">{selectedIds.length} selected</span>
+        </div>
+
+        {error && <div className="px-4 py-2 text-sm text-danger">{error}</div>}
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {loading && <div className="text-text-muted py-6 text-center">Loading library…</div>}
+          {!loading && templates.length === 0 && (
+            <div className="text-text-muted py-6 text-center">
+              No matching templates. Try toggling &ldquo;All&rdquo; above.
+            </div>
+          )}
+          {!loading && templates.length > 0 && (
+            <ul className="space-y-2">
+              {templates.map((t) => {
+                const checked = selectedIds.includes(t.id);
+                return (
+                  <li
+                    key={t.id}
+                    className={`flex gap-3 rounded border p-3 cursor-pointer ${
+                      checked ? "border-accent bg-accent/10" : "border-border bg-surface/40 hover:bg-surface-hover/30"
+                    }`}
+                    onClick={() => onToggleId(t.id)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggleId(t.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-mono text-xs text-text-muted">{t.code}</span>
+                        <span className="font-medium text-text-primary">{t.title}</span>
+                        <span className="ml-auto text-xs text-text-muted">
+                          P{t.defaultProbability ?? "—"} / IC{t.defaultImpactCost ?? "—"} / IS{t.defaultImpactSchedule ?? "—"}
+                        </span>
+                      </div>
+                      {t.description && (
+                        <p className="mt-1 text-xs text-text-secondary">{t.description}</p>
+                      )}
+                      <div className="mt-1 flex flex-wrap gap-2 text-[10px] uppercase tracking-wide text-text-muted">
+                        <span>{INDUSTRY_LABEL[t.industry]}</span>
+                        {t.category && <span>· {t.category}</span>}
+                        {t.applicableProjectCategories.length > 0 && (
+                          <span>· {t.applicableProjectCategories.join(", ")}</span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-border p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-border bg-surface/50 px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0 || isCopying}
+            onClick={onCopy}
+            className="rounded bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+          >
+            {isCopying
+              ? "Copying…"
+              : selectedIds.length === 0
+                ? "Select risks to copy"
+                : `Copy ${selectedIds.length} selected`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

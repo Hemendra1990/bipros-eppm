@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
@@ -17,7 +17,7 @@ import { ResourcesTab } from "@/components/resource/ResourcesTab";
 import { CostsTab } from "@/components/cost/CostsTab";
 import { EvmTab } from "@/components/evm/EvmTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw } from "lucide-react";
+import { ListTodo, Plus, Play, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
@@ -76,7 +76,7 @@ export default function ProjectDetailPage() {
   const { data: wbsData, isLoading: isLoadingWbs } = useQuery({
     queryKey: ["wbs", projectId],
     queryFn: () => projectApi.getWbsTree(projectId),
-    enabled: tab === "wbs",
+    enabled: ["wbs", "activities"].includes(tab),
   });
 
   const { data: criticalPathData } = useQuery({
@@ -319,12 +319,15 @@ export default function ProjectDetailPage() {
           projectId={projectId}
           activities={activities}
           isLoading={isLoadingActivities}
+          isLoadingWbs={isLoadingWbs}
+          wbsTree={wbsTree}
           columns={activityColumns}
           criticalPathIds={criticalPathIds}
           onRunSchedule={() => scheduleMutation.mutate()}
           isScheduling={scheduleMutation.isPending}
           scheduleError={scheduleError}
           relationships={relationshipsData?.data ?? []}
+          onDeleteActivity={(id) => deleteActivityMutation.mutate(id)}
         />
       )}
       {tab === "wbs" && (
@@ -589,27 +592,37 @@ function DataDateCard({ project }: { project: ProjectResponse }) {
   );
 }
 
+type EnrichedActivity = ActivityResponse & { isCritical: boolean; predCount: number; succCount: number };
+
 function ActivitiesTab({
   projectId,
   activities,
   isLoading,
+  isLoadingWbs,
+  wbsTree,
   columns,
   criticalPathIds,
   onRunSchedule,
   isScheduling,
   scheduleError,
   relationships = [],
+  onDeleteActivity,
 }: {
   projectId: string;
   activities: ActivityResponse[];
   isLoading: boolean;
+  isLoadingWbs: boolean;
+  wbsTree: WbsNodeResponse[];
   columns: ColumnDef<ActivityResponse>[];
   criticalPathIds: Set<string>;
   onRunSchedule: () => void;
   isScheduling: boolean;
   scheduleError: string;
   relationships?: Array<{ id?: string; predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
+  onDeleteActivity?: (id: string) => void;
 }) {
+  const [viewMode, setViewMode] = useState<"list" | "tree">("tree");
+
   // Build dependency count map
   const predCountMap = new Map<string, number>();
   const succCountMap = new Map<string, number>();
@@ -624,8 +637,6 @@ function ActivitiesTab({
     predCount: predCountMap.get(a.id) ?? 0,
     succCount: succCountMap.get(a.id) ?? 0,
   }));
-
-  type EnrichedActivity = ActivityResponse & { isCritical: boolean; predCount: number; succCount: number };
 
   const enrichedColumns: ColumnDef<EnrichedActivity>[] = columns.map((col) => {
     if (col.key === "code") {
@@ -669,13 +680,19 @@ function ActivitiesTab({
     },
   });
 
-  if (isLoading) {
-    return <div className="text-center text-text-muted">Loading activities...</div>;
+  const isBusy = isLoading || (viewMode === "tree" && isLoadingWbs);
+
+  if (isBusy) {
+    return (
+      <div className="text-center text-text-muted">
+        {viewMode === "tree" ? "Loading activities and WBS..." : "Loading activities..."}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link
           href={`/projects/${projectId}/activities/new`}
           className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
@@ -691,6 +708,32 @@ function ActivitiesTab({
           <Play size={16} />
           {isScheduling ? "Running..." : "Run Schedule"}
         </button>
+
+        {/* View Mode Toggle */}
+        <div className="ml-auto inline-flex rounded-lg border border-border bg-surface/60 p-0.5">
+          <button
+            onClick={() => setViewMode("list")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              viewMode === "list"
+                ? "bg-accent text-text-primary"
+                : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+            }`}
+          >
+            <List size={14} />
+            List
+          </button>
+          <button
+            onClick={() => setViewMode("tree")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              viewMode === "tree"
+                ? "bg-accent text-text-primary"
+                : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+            }`}
+          >
+            <FolderTree size={14} />
+            WBS Tree
+          </button>
+        </div>
       </div>
 
       {scheduleError && (
@@ -710,10 +753,256 @@ function ActivitiesTab({
           title="No activities"
           description="This project has no activities yet. Create activities to start planning."
         />
+      ) : viewMode === "tree" ? (
+        <ActivitiesWbsTreeTable
+          wbsNodes={wbsTree}
+          activities={highlightedActivities}
+          enrichedColumns={enrichedColumns}
+          projectId={projectId}
+          onDeleteActivity={onDeleteActivity}
+        />
       ) : (
         <DataTable columns={enrichedColumns} data={highlightedActivities} rowKey="id" searchable searchPlaceholder="Search activities..." />
       )}
     </div>
+  );
+}
+
+interface TreeNodeData {
+  id: string;
+  code: string;
+  name: string;
+  type: "wbs" | "activity";
+  children?: TreeNodeData[];
+  activity?: ActivityResponse & { isCritical: boolean; predCount: number; succCount: number };
+}
+
+function buildActivityWbsTree(
+  wbsNodes: WbsNodeResponse[],
+  activities: Array<ActivityResponse & { isCritical: boolean; predCount: number; succCount: number }>
+): TreeNodeData[] {
+  const activityMap = new Map<string, Array<ActivityResponse & { isCritical: boolean; predCount: number; succCount: number }>>();
+  for (const a of activities) {
+    const list = activityMap.get(a.wbsNodeId) ?? [];
+    list.push(a);
+    activityMap.set(a.wbsNodeId, list);
+  }
+
+  function mapWbsNode(wbs: WbsNodeResponse): TreeNodeData {
+    const childWbsNodes = wbs.children?.map(mapWbsNode) ?? [];
+    const childActivities = (activityMap.get(wbs.id) ?? [])
+      .slice()
+      .sort((a, b) => a.code.localeCompare(b.code));
+
+    const activityNodes: TreeNodeData[] = childActivities.map((activity) => ({
+      id: `activity-${activity.id}`,
+      code: activity.code,
+      name: activity.name,
+      type: "activity",
+      activity,
+    }));
+
+    return {
+      id: `wbs-${wbs.id}`,
+      code: wbs.code,
+      name: wbs.name,
+      type: "wbs",
+      children: [...childWbsNodes, ...activityNodes],
+    };
+  }
+
+  return wbsNodes.map(mapWbsNode);
+}
+
+function hasVisibleContent(node: TreeNodeData): boolean {
+  if (node.type === "activity") return true;
+  if (!node.children || node.children.length === 0) return false;
+  return node.children.some(hasVisibleContent);
+}
+
+function filterEmptyNodes(nodes: TreeNodeData[]): TreeNodeData[] {
+  return nodes
+    .filter(hasVisibleContent)
+    .map((node) => {
+      if (node.type === "activity") return node;
+      return {
+        ...node,
+        children: node.children ? filterEmptyNodes(node.children) : undefined,
+      };
+    });
+}
+
+function ActivitiesWbsTreeTable({
+  wbsNodes,
+  activities,
+  enrichedColumns,
+  projectId,
+  onDeleteActivity,
+}: {
+  wbsNodes: WbsNodeResponse[];
+  activities: Array<ActivityResponse & { isCritical: boolean; predCount: number; succCount: number }>;
+  enrichedColumns: ColumnDef<EnrichedActivity>[];
+  projectId: string;
+  onDeleteActivity?: (id: string) => void;
+}) {
+  const tree = React.useMemo(() => {
+    const rawTree = buildActivityWbsTree(wbsNodes, activities);
+    return filterEmptyNodes(rawTree);
+  }, [wbsNodes, activities]);
+
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    const expandAll = (nodes: TreeNodeData[]) => {
+      for (const node of nodes) {
+        if (node.children && node.children.length > 0) {
+          initial[node.id] = true;
+          expandAll(node.children);
+        }
+      }
+    };
+    expandAll(tree);
+    return initial;
+  });
+
+  const toggle = (id: string) => {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  if (tree.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border py-12 text-center">
+        <h3 className="text-lg font-medium text-text-primary">No WBS Structure</h3>
+        <p className="mt-2 text-text-secondary">
+          No WBS nodes or activities found for this project.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-surface/50 shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="border-b border-border bg-surface/80">
+            <tr>
+              {enrichedColumns.map((col) => (
+                <th
+                  key={String(col.key)}
+                  className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap"
+                >
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            {tree.map((node) => (
+              <TreeRow
+                key={node.id}
+                node={node}
+                depth={0}
+                expanded={expanded}
+                toggle={toggle}
+                enrichedColumns={enrichedColumns}
+                projectId={projectId}
+                onDeleteActivity={onDeleteActivity}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function TreeRow({
+  node,
+  depth,
+  expanded,
+  toggle,
+  enrichedColumns,
+  projectId,
+  onDeleteActivity,
+}: {
+  node: TreeNodeData;
+  depth: number;
+  expanded: Record<string, boolean>;
+  toggle: (id: string) => void;
+  enrichedColumns: ColumnDef<EnrichedActivity>[];
+  projectId: string;
+  onDeleteActivity?: (id: string) => void;
+}) {
+  const isWbs = node.type === "wbs";
+  const hasChildren = node.children && node.children.length > 0;
+  const isExpanded = expanded[node.id] ?? false;
+
+  if (isWbs) {
+    return (
+      <React.Fragment key={node.id}>
+        <tr className="hover:bg-surface-hover/30">
+          <td className="px-4 py-3 text-sm" colSpan={enrichedColumns.length}>
+            <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 24}px` }}>
+              {hasChildren ? (
+                <button
+                  onClick={() => toggle(node.id)}
+                  className="p-0.5 hover:bg-surface-hover rounded shrink-0"
+                >
+                  {isExpanded ? (
+                    <ChevronDown size={16} className="text-text-muted" />
+                  ) : (
+                    <ChevronRight size={16} className="text-text-muted" />
+                  )}
+                </button>
+              ) : (
+                <div className="w-[22px] shrink-0" />
+              )}
+              <FolderOpen size={16} className="text-accent shrink-0" />
+              <span className="font-semibold text-text-primary">{node.code}</span>
+              <span className="text-text-secondary">{node.name}</span>
+              {hasChildren && (
+                <span className="ml-1 text-xs text-text-muted bg-surface-hover px-1.5 py-0.5 rounded-full">
+                  {node.children?.length ?? 0}
+                </span>
+              )}
+            </div>
+          </td>
+        </tr>
+        {isExpanded &&
+          hasChildren &&
+          node.children?.map((child) => (
+            <TreeRow
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              expanded={expanded}
+              toggle={toggle}
+              enrichedColumns={enrichedColumns}
+              projectId={projectId}
+              onDeleteActivity={onDeleteActivity}
+            />
+          ))}
+      </React.Fragment>
+    );
+  }
+
+  // Activity row
+  const activity = node.activity!;
+  return (
+    <tr key={node.id} className="hover:bg-surface/80">
+      {enrichedColumns.map((col) => {
+        const value = (activity as unknown as Record<string, unknown>)[col.key];
+        return (
+          <td
+            key={String(col.key)}
+            className="px-4 py-3 text-sm whitespace-nowrap"
+          >
+            <div style={{ paddingLeft: col.key === "code" ? `${depth * 24 + 24}px` : undefined }}>
+              {col.render ? col.render(value, activity) : String(value ?? "-")}
+            </div>
+          </td>
+        );
+      })}
+    </tr>
   );
 }
 

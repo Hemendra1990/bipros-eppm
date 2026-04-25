@@ -18,6 +18,7 @@ public record VariationOrderResponse(
     Integer impactOnScheduleDays,
     String approvedBy,
     Instant approvedAt,
+    long attachmentCount,
     Instant createdAt,
     Instant updatedAt
 ) {}

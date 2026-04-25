@@ -20,12 +20,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
-
-interface MetricCard {
-  label: string;
-  value: string;
-  color: string;
-}
+import { KpiTile } from "@/components/common/KpiTile";
 
 const TECHNIQUES: { value: EvmTechnique; label: string }[] = [
   { value: "ACTIVITY_PERCENT_COMPLETE", label: "Activity % Complete" },
@@ -69,8 +64,8 @@ function WbsEvmRow({ node, depth = 0 }: { node: WbsEvmNode; depth?: number }) {
           <span className="text-text-primary">{node.name}</span>
         </td>
         <td className="px-3 py-2 text-right text-sm">{fmt(node.budgetAtCompletion)}</td>
-        <td className="px-3 py-2 text-right text-sm text-blue-300">{fmt(node.plannedValue)}</td>
-        <td className="px-3 py-2 text-right text-sm text-green-300">{fmt(node.earnedValue)}</td>
+        <td className="px-3 py-2 text-right text-sm text-accent">{fmt(node.plannedValue)}</td>
+        <td className="px-3 py-2 text-right text-sm text-success">{fmt(node.earnedValue)}</td>
         <td className="px-3 py-2 text-right text-sm text-danger">{fmt(node.actualCost)}</td>
         <td className={`px-3 py-2 text-right text-sm ${svColor}`}>{fmt(node.scheduleVariance)}</td>
         <td className={`px-3 py-2 text-right text-sm ${cvColor}`}>{fmt(node.costVariance)}</td>
@@ -127,41 +122,6 @@ export function EvmTab({ projectId }: { projectId: string }) {
       ac: h.actualCost,
     })) ?? [];
 
-  const metricCards: MetricCard[] = [
-    { label: "PV (Planned Value)", value: fmt(metrics?.plannedValue), color: "blue" },
-    { label: "EV (Earned Value)", value: fmt(metrics?.earnedValue), color: "green" },
-    { label: "AC (Actual Cost)", value: fmt(metrics?.actualCost), color: "red" },
-  ];
-
-  const performanceCards: MetricCard[] = [
-    { label: "SV (Schedule Var.)", value: fmt(metrics?.scheduleVariance), color: "purple" },
-    { label: "CV (Cost Var.)", value: fmt(metrics?.costVariance), color: "indigo" },
-    { label: "SPI", value: fmtIdx(metrics?.schedulePerformanceIndex), color: "cyan" },
-    { label: "CPI", value: fmtIdx(metrics?.costPerformanceIndex), color: "pink" },
-  ];
-
-  const completionCards: MetricCard[] = [
-    { label: "EAC", value: fmt(metrics?.estimateAtCompletion), color: "orange" },
-    { label: "ETC", value: fmt(metrics?.estimateToComplete), color: "yellow" },
-    { label: "VAC", value: fmt(metrics?.varianceAtCompletion), color: "lime" },
-    { label: "TCPI", value: fmtIdx(metrics?.toCompletePerformanceIndex), color: "slate" },
-    { label: "Perf. %", value: fmtPct(metrics?.performancePercentComplete), color: "blue" },
-  ];
-
-  const colorMap: Record<string, string> = {
-    blue: "bg-blue-950 border-blue-700 text-blue-300",
-    green: "bg-green-950 border-green-700 text-green-300",
-    red: "bg-red-950 border-red-700 text-danger",
-    purple: "bg-purple-950 border-purple-700 text-purple-400",
-    indigo: "bg-indigo-950 border-indigo-700 text-indigo-300",
-    cyan: "bg-cyan-950 border-cyan-700 text-cyan-300",
-    pink: "bg-pink-950 border-pink-700 text-pink-300",
-    orange: "bg-orange-950 border-orange-700 text-orange-300",
-    yellow: "bg-yellow-950 border-yellow-700 text-yellow-300",
-    lime: "bg-lime-950 border-lime-700 text-lime-300",
-    slate: "bg-background border-border text-text-secondary",
-  };
-
   const wbsNodes = (wbsData?.data as WbsEvmNode[] | undefined) ?? [];
 
   return (
@@ -173,7 +133,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
           <select
             value={technique}
             onChange={(e) => setTechnique(e.target.value as EvmTechnique)}
-            className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
+            className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
           >
             {TECHNIQUES.map((t) => (
               <option key={t.value} value={t.value}>
@@ -187,7 +147,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
           <select
             value={etcMethod}
             onChange={(e) => setEtcMethod(e.target.value as EtcMethod)}
-            className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
+            className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
           >
             {ETC_METHODS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -237,46 +197,63 @@ export function EvmTab({ projectId }: { projectId: string }) {
             <>
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-text-secondary">Basic Values</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  {metricCards.map((card) => (
-                    <div
-                      key={card.label}
-                      className={`rounded-lg border p-4 ${colorMap[card.color]}`}
-                    >
-                      <p className="text-xs font-medium text-text-secondary">{card.label}</p>
-                      <p className="mt-2 text-xl font-bold">{card.value}</p>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <KpiTile label="PV (Planned Value)" value={fmt(metrics?.plannedValue)} />
+                  <KpiTile label="EV (Earned Value)" value={fmt(metrics?.earnedValue)} />
+                  <KpiTile label="AC (Actual Cost)" value={fmt(metrics?.actualCost)} />
                 </div>
               </div>
 
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-text-secondary">Performance Metrics</h3>
-                <div className="grid grid-cols-4 gap-4">
-                  {performanceCards.map((card) => (
-                    <div
-                      key={card.label}
-                      className={`rounded-lg border p-4 ${colorMap[card.color]}`}
-                    >
-                      <p className="text-xs font-medium text-text-secondary">{card.label}</p>
-                      <p className="mt-2 text-xl font-bold">{card.value}</p>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <KpiTile
+                    label="SV (Schedule Var.)"
+                    value={fmt(metrics?.scheduleVariance)}
+                    tone={metrics && metrics.scheduleVariance >= 0 ? "success" : "danger"}
+                  />
+                  <KpiTile
+                    label="CV (Cost Var.)"
+                    value={fmt(metrics?.costVariance)}
+                    tone={metrics && metrics.costVariance >= 0 ? "success" : "danger"}
+                  />
+                  <KpiTile
+                    label="SPI"
+                    value={fmtIdx(metrics?.schedulePerformanceIndex)}
+                    tone={metrics && metrics.schedulePerformanceIndex >= 1 ? "success" : "danger"}
+                  />
+                  <KpiTile
+                    label="CPI"
+                    value={fmtIdx(metrics?.costPerformanceIndex)}
+                    tone={metrics && metrics.costPerformanceIndex >= 1 ? "success" : "danger"}
+                  />
                 </div>
               </div>
 
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-text-secondary">Completion Metrics</h3>
-                <div className="grid grid-cols-5 gap-4">
-                  {completionCards.map((card) => (
-                    <div
-                      key={card.label}
-                      className={`rounded-lg border p-4 ${colorMap[card.color]}`}
-                    >
-                      <p className="text-xs font-medium text-text-secondary">{card.label}</p>
-                      <p className="mt-2 text-xl font-bold">{card.value}</p>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <KpiTile
+                    label="EAC"
+                    value={fmt(metrics?.estimateAtCompletion)}
+                    tone={
+                      metrics && metrics.estimateAtCompletion <= metrics.budgetAtCompletion
+                        ? "success"
+                        : "danger"
+                    }
+                  />
+                  <KpiTile label="ETC" value={fmt(metrics?.estimateToComplete)} />
+                  <KpiTile
+                    label="VAC"
+                    value={fmt(metrics?.varianceAtCompletion)}
+                    tone={metrics && metrics.varianceAtCompletion >= 0 ? "success" : "danger"}
+                  />
+                  <KpiTile
+                    label="TCPI"
+                    value={fmtIdx(metrics?.toCompletePerformanceIndex)}
+                    tone={metrics && metrics.toCompletePerformanceIndex <= 1 ? "success" : "danger"}
+                  />
+                  <KpiTile label="Perf. %" value={fmtPct(metrics?.performancePercentComplete)} tone="accent" />
                 </div>
               </div>
             </>
@@ -356,11 +333,11 @@ export function EvmTab({ projectId }: { projectId: string }) {
                     <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
                       BAC
                     </th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-blue-300">PV</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-green-300">
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">PV</th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
                       EV
                     </th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-danger">AC</th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">AC</th>
                     <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">SV</th>
                     <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">CV</th>
                     <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -25,6 +25,10 @@ function useDialog() {
 
 export function Dialog({ open = false, onOpenChange, children }: DialogProps) {
   const [isOpen, setIsOpen] = useState(open);
+
+  useEffect(() => {
+    setIsOpen(open);
+  }, [open]);
 
   const handleOpenChange = (next: boolean) => {
     setIsOpen(next);

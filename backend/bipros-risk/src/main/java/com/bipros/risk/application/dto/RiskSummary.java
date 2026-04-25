@@ -61,4 +61,11 @@ public class RiskSummary {
 
     /** Schedule-impact score 1-5 per IC-PMS M7 split-impact model. */
     private Integer impactSchedule;
+
+    /**
+     * Computed assessment of how completely this risk has been analysed (owner / rating /
+     * description / response). Populated by list/get endpoints; null on the create/update
+     * write paths where the caller already has the saved entity.
+     */
+    private RiskAnalysisQuality analysisQuality;
 }

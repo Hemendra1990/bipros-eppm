@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contractApi } from "@/lib/api/contractApi";
 import { TabTip } from "@/components/common/TabTip";
+import { ContractForm } from "@/components/contracts/ContractForm";
 import type { ContractResponse, CreateContractRequest } from "@/lib/types";
 
 /**
@@ -29,7 +30,11 @@ export default function ContractsPage() {
   const { data: contractsData, isLoading } = useQuery({
     queryKey: ["contracts", projectId, page],
     queryFn: () => contractApi.listContracts(projectId, page, size),
-    select: (response) => response.data || { content: [], pagination: { totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 0 } },
+    select: (response) =>
+      response.data || {
+        content: [],
+        pagination: { totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 0 },
+      },
   });
 
   const createMutation = useMutation({
@@ -46,28 +51,6 @@ export default function ContractsPage() {
       queryClient.invalidateQueries({ queryKey: ["contracts", projectId] });
     },
   });
-
-  const handleCreateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
-    const request: CreateContractRequest = {
-      projectId,
-      contractNumber: formData.get("contractNumber") as string,
-      contractorName: formData.get("contractorName") as string,
-      contractValue: parseFloat(formData.get("contractValue") as string),
-      loaDate: formData.get("loaDate") as string,
-      startDate: formData.get("startDate") as string,
-      completionDate: formData.get("completionDate") as string,
-      ldRate: parseFloat(formData.get("ldRate") as string),
-      contractType: formData.get("contractType") as any,
-      loaNumber: formData.get("loaNumber") as string || undefined,
-      contractorCode: formData.get("contractorCode") as string || undefined,
-      dlpMonths: formData.get("dlpMonths") ? parseInt(formData.get("dlpMonths") as string) : undefined,
-    };
-
-    createMutation.mutate(request);
-  };
 
   if (isLoading) {
     return <div className="p-6 text-center text-text-muted">Loading contracts...</div>;
@@ -96,139 +79,18 @@ export default function ContractsPage() {
       {showCreateForm && (
         <div className="bg-surface/50 border border-border rounded-xl p-6 shadow-xl">
           <h3 className="text-lg font-medium text-text-primary mb-4">New Contract</h3>
-          <form onSubmit={handleCreateSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Contract Number</label>
-                <input
-                  type="text"
-                  name="contractNumber"
-                  required
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                  placeholder="CON-2024-001"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">LOA Number</label>
-                <input
-                  type="text"
-                  name="loaNumber"
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                  placeholder="Optional"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Contractor Name</label>
-                <input
-                  type="text"
-                  name="contractorName"
-                  required
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                  placeholder="Company Name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Contractor Code</label>
-                <input
-                  type="text"
-                  name="contractorCode"
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                  placeholder="Optional"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Contract Value</label>
-                <input
-                  type="number"
-                  name="contractValue"
-                  required
-                  step="0.01"
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">LD Rate (%)</label>
-                <input
-                  type="number"
-                  name="ldRate"
-                  required
-                  step="0.01"
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">LOA Date</label>
-                <input
-                  type="date"
-                  name="loaDate"
-                  required
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Start Date</label>
-                <input
-                  type="date"
-                  name="startDate"
-                  required
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Completion Date</label>
-                <input
-                  type="date"
-                  name="completionDate"
-                  required
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">DLP Months</label>
-                <input
-                  type="number"
-                  name="dlpMonths"
-                  step="1"
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                  placeholder="12"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Contract Type</label>
-                <select
-                  name="contractType"
-                  required
-                  className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50"
-                >
-                  <option value="">Select Type</option>
-                  <option value="EPC_LUMP_SUM_FIDIC_YELLOW">EPC Lump-Sum (FIDIC Yellow)</option>
-                  <option value="EPC_LUMP_SUM_FIDIC_RED">EPC Lump-Sum (FIDIC Red)</option>
-                  <option value="EPC_LUMP_SUM_FIDIC_SILVER">EPC Lump-Sum (FIDIC Silver)</option>
-                  <option value="ITEM_RATE_FIDIC_RED">Item Rate (FIDIC Red)</option>
-                  <option value="PERCENTAGE_BASED_PMC">Percentage-Based PMC</option>
-                  <option value="LUMP_SUM_UNIT_RATE">Lump-Sum / Unit-Rate</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={createMutation.isPending}
-                className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600 disabled:bg-border transition-colors"
-              >
-                {createMutation.isPending ? "Creating..." : "Create"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCreateForm(false)}
-                className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded-lg hover:bg-border transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+          <ContractForm
+            projectId={projectId}
+            isPending={createMutation.isPending}
+            submitLabel="Create"
+            onSubmit={(data) => createMutation.mutate(data)}
+            onCancel={() => setShowCreateForm(false)}
+          />
+          {createMutation.isError ? (
+            <p className="text-sm text-danger mt-3">
+              {(createMutation.error as Error)?.message ?? "Failed to create contract"}
+            </p>
+          ) : null}
         </div>
       )}
 
@@ -271,75 +133,110 @@ export default function ContractsPage() {
                     ? "bg-warning/10 text-warning ring-1 ring-amber-500/20"
                     : "bg-success/10 text-success ring-1 ring-success/20";
             return (
-            <div key={contract.id} className="bg-surface/50 border border-border rounded-xl p-4 hover:bg-surface/70 transition-colors shadow-xl">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-text-primary">{contract.contractNumber}</h3>
-                  {contract.packageDescription && (
-                    <p className="text-sm text-text-secondary mt-0.5">{contract.packageDescription}</p>
-                  )}
-                  <p className="text-sm text-text-secondary mt-1">
-                    <span className="font-medium">Contractor:</span> {contract.contractorName}
-                    {contract.wbsPackageCode && (
-                      <> · <span className="font-medium">WBS:</span> {contract.wbsPackageCode}</>
+              <div
+                key={contract.id}
+                className="bg-surface/50 border border-border rounded-xl p-4 hover:bg-surface/70 transition-colors shadow-xl"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-text-primary">
+                      {contract.contractNumber}
+                    </h3>
+                    {contract.packageDescription && (
+                      <p className="text-sm text-text-secondary mt-0.5">
+                        {contract.packageDescription}
+                      </p>
                     )}
-                  </p>
-                  <p className="text-sm text-text-secondary">
-                    <span className="font-medium">Value:</span> {formatRupees(contract.contractValue)} | <span className="font-medium">Type:</span> {contract.contractType.replace(/_/g, " ")}
-                  </p>
-                  <p className="text-sm text-text-secondary">
-                    <span className="font-medium">Dates:</span> {new Date(contract.loaDate).toLocaleDateString()} - {new Date(contract.completionDate).toLocaleDateString()}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2 items-center">
-                    <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${statusBadge}`}>
-                      {contract.status}
-                    </span>
-                    {contract.spi != null && (
-                      <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${spiBadge(contract.spi)}`}>
-                        SPI {contract.spi.toFixed(2)}
+                    <p className="text-sm text-text-secondary mt-1">
+                      <span className="font-medium">Contractor:</span> {contract.contractorName}
+                      {contract.wbsPackageCode && (
+                        <>
+                          {" "}
+                          · <span className="font-medium">WBS:</span> {contract.wbsPackageCode}
+                        </>
+                      )}
+                    </p>
+                    <p className="text-sm text-text-secondary">
+                      <span className="font-medium">Value:</span> {formatRupees(contract.contractValue)}
+                      {contract.revisedValue != null && contract.revisedValue !== contract.contractValue && (
+                        <>
+                          {" "}
+                          · <span className="font-medium">Revised:</span>{" "}
+                          {formatRupees(contract.revisedValue)}
+                        </>
+                      )}{" "}
+                      | <span className="font-medium">Type:</span>{" "}
+                      {contract.contractType.replace(/_/g, " ")}
+                      {contract.currency && contract.currency !== "INR" && (
+                        <>
+                          {" "}
+                          · <span className="font-medium">Currency:</span> {contract.currency}
+                        </>
+                      )}
+                    </p>
+                    <p className="text-sm text-text-secondary">
+                      <span className="font-medium">Dates:</span>{" "}
+                      {new Date(contract.loaDate).toLocaleDateString()} -{" "}
+                      {new Date(contract.completionDate).toLocaleDateString()}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2 items-center">
+                      <span
+                        className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${statusBadge}`}
+                      >
+                        {contract.status}
                       </span>
-                    )}
-                    {contract.cpi != null && (
-                      <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${spiBadge(contract.cpi)}`}>
-                        CPI {contract.cpi.toFixed(2)}
-                      </span>
-                    )}
-                    {contract.physicalProgressAi != null && (
-                      <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20">
-                        Progress {contract.physicalProgressAi.toFixed(1)}%
-                      </span>
-                    )}
-                    {contract.voNumbersIssued != null && contract.voNumbersIssued > 0 && (
-                      <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-surface-active/50 text-text-secondary ring-1 ring-border/50">
-                        VOs {contract.voNumbersIssued}
-                        {contract.voValueCrores != null && ` · ₹${contract.voValueCrores.toFixed(1)}cr`}
-                      </span>
-                    )}
-                    {contract.bgExpiry && (
-                      <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${bgExpiryClass}`}>
-                        BG {new Date(contract.bgExpiry).toLocaleDateString()}
-                        {bgDays != null && bgDays < 90 && ` (${bgDays}d)`}
-                      </span>
-                    )}
+                      {contract.spi != null && (
+                        <span
+                          className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${spiBadge(contract.spi)}`}
+                        >
+                          SPI {contract.spi.toFixed(2)}
+                        </span>
+                      )}
+                      {contract.cpi != null && (
+                        <span
+                          className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${spiBadge(contract.cpi)}`}
+                        >
+                          CPI {contract.cpi.toFixed(2)}
+                        </span>
+                      )}
+                      {contract.physicalProgressAi != null && (
+                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20">
+                          Progress {contract.physicalProgressAi.toFixed(1)}%
+                        </span>
+                      )}
+                      {contract.voNumbersIssued != null && contract.voNumbersIssued > 0 && (
+                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-surface-active/50 text-text-secondary ring-1 ring-border/50">
+                          VOs {contract.voNumbersIssued}
+                          {contract.voValueCrores != null && ` · ₹${contract.voValueCrores.toFixed(1)}cr`}
+                        </span>
+                      )}
+                      {contract.bgExpiry && (
+                        <span
+                          className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${bgExpiryClass}`}
+                        >
+                          BG {new Date(contract.bgExpiry).toLocaleDateString()}
+                          {bgDays != null && bgDays < 90 && ` (${bgDays}d)`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href={`/projects/${projectId}/contracts/${contract.id}`}
+                      className="px-3 py-2 text-sm font-medium text-accent hover:text-blue-300"
+                    >
+                      View
+                    </a>
+                    <button
+                      onClick={() => deleteMutation.mutate(contract.id)}
+                      disabled={deleteMutation.isPending}
+                      className="px-3 py-2 text-sm font-medium text-danger hover:text-danger disabled:text-text-muted"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <a
-                    href={`/projects/${projectId}/contracts/${contract.id}`}
-                    className="px-3 py-2 text-sm font-medium text-accent hover:text-blue-300"
-                  >
-                    View
-                  </a>
-                  <button
-                    onClick={() => deleteMutation.mutate(contract.id)}
-                    disabled={deleteMutation.isPending}
-                    className="px-3 py-2 text-sm font-medium text-danger hover:text-danger disabled:text-text-muted"
-                  >
-                    Delete
-                  </button>
-                </div>
               </div>
-            </div>
             );
           })
         )}

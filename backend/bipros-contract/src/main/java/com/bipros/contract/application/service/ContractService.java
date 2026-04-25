@@ -11,6 +11,8 @@ import com.bipros.contract.domain.model.ContractStatus;
 import com.bipros.contract.domain.repository.ContractRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,11 +30,18 @@ public class ContractService {
     private final ContractRepository contractRepository;
     private final AuditService auditService;
 
+    /**
+     * Lazily injected to break the cycle: ContractAttachmentService needs
+     * ContractRepository (for ownership checks) which lives in the same module.
+     */
+    @Autowired(required = false)
+    @Lazy
+    private ContractAttachmentService contractAttachmentService;
+
     public ContractResponse create(ContractRequest request) {
         log.info("Creating contract with number: {}", request.contractNumber());
 
         try {
-            // Validate required fields
             if (request.projectId() == null) {
                 throw new BusinessRuleException("INVALID_PROJECT_ID",
                     "Project ID is required for contract creation");
@@ -53,6 +62,8 @@ public class ContractService {
                     "Contract type is required");
             }
 
+            validateValueAndDateInvariants(request);
+
             Contract contract = new Contract();
             contract.setProjectId(request.projectId());
             contract.setTenderId(request.tenderId());
@@ -61,13 +72,24 @@ public class ContractService {
             contract.setContractorName(request.contractorName());
             contract.setContractorCode(request.contractorCode());
             contract.setContractValue(request.contractValue());
+            contract.setRevisedValue(request.revisedValue());
             contract.setLoaDate(request.loaDate());
             contract.setStartDate(request.startDate());
             contract.setCompletionDate(request.completionDate());
+            contract.setRevisedCompletionDate(request.revisedCompletionDate());
             contract.setDlpMonths(request.dlpMonths() != null ? request.dlpMonths() : 12);
             contract.setLdRate(request.ldRate());
             contract.setStatus(ContractStatus.DRAFT);
             contract.setContractType(request.contractType());
+            contract.setDescription(request.description());
+            contract.setCurrency(request.currency() != null && !request.currency().isBlank()
+                ? request.currency() : "INR");
+            contract.setNtpDate(request.ntpDate());
+            contract.setMobilisationAdvancePct(request.mobilisationAdvancePct());
+            contract.setRetentionPct(request.retentionPct());
+            contract.setPerformanceBgPct(request.performanceBgPct());
+            contract.setPaymentTermsDays(request.paymentTermsDays());
+            contract.setBillingCycle(request.billingCycle());
 
             Contract saved = contractRepository.save(contract);
             log.info("Contract created with ID: {}", saved.getId());
@@ -121,13 +143,47 @@ public class ContractService {
         Contract contract = contractRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Contract", id));
 
+        validateValueAndDateInvariants(request);
+
+        if (request.contractNumber() != null && !request.contractNumber().isBlank()
+                && !request.contractNumber().equals(contract.getContractNumber())) {
+            contractRepository.findByContractNumber(request.contractNumber()).ifPresent(other -> {
+                if (!other.getId().equals(id)) {
+                    throw new BusinessRuleException("DUPLICATE_CONTRACT_NUMBER",
+                        "Another contract already uses contract number " + request.contractNumber());
+                }
+            });
+            contract.setContractNumber(request.contractNumber());
+        }
+
+        if (request.contractorName() != null && !request.contractorName().isBlank()) {
+            contract.setContractorName(request.contractorName());
+        }
+        if (request.contractType() != null) {
+            contract.setContractType(request.contractType());
+        }
+
+        contract.setTenderId(request.tenderId());
         contract.setLoaNumber(request.loaNumber());
+        contract.setContractorCode(request.contractorCode());
         contract.setContractValue(request.contractValue());
+        contract.setRevisedValue(request.revisedValue());
         contract.setLoaDate(request.loaDate());
         contract.setStartDate(request.startDate());
         contract.setCompletionDate(request.completionDate());
+        contract.setRevisedCompletionDate(request.revisedCompletionDate());
         contract.setDlpMonths(request.dlpMonths() != null ? request.dlpMonths() : contract.getDlpMonths());
         contract.setLdRate(request.ldRate());
+        contract.setDescription(request.description());
+        if (request.currency() != null && !request.currency().isBlank()) {
+            contract.setCurrency(request.currency());
+        }
+        contract.setNtpDate(request.ntpDate());
+        contract.setMobilisationAdvancePct(request.mobilisationAdvancePct());
+        contract.setRetentionPct(request.retentionPct());
+        contract.setPerformanceBgPct(request.performanceBgPct());
+        contract.setPaymentTermsDays(request.paymentTermsDays());
+        contract.setBillingCycle(request.billingCycle());
 
         Contract updated = contractRepository.save(contract);
         auditService.logUpdate("Contract", id, "contract", null, toResponse(updated));
@@ -136,11 +192,27 @@ public class ContractService {
 
     public void delete(UUID id) {
         log.info("Deleting contract with ID: {}", id);
+        if (contractAttachmentService != null) {
+            contractAttachmentService.deleteAllForContract(id);
+        }
         contractRepository.deleteById(id);
         auditService.logDelete("Contract", id);
     }
 
-    private ContractResponse toResponse(Contract contract) {
+    private void validateValueAndDateInvariants(ContractRequest request) {
+        if (request.revisedValue() != null && request.contractValue() != null
+                && request.revisedValue().compareTo(request.contractValue()) < 0) {
+            throw new BusinessRuleException("INVALID_REVISED_VALUE",
+                "Revised value cannot be lower than the original contract value");
+        }
+        if (request.revisedCompletionDate() != null && request.completionDate() != null
+                && request.revisedCompletionDate().isBefore(request.completionDate())) {
+            throw new BusinessRuleException("INVALID_REVISED_COMPLETION",
+                "Revised completion date cannot be earlier than the original completion date");
+        }
+    }
+
+    ContractResponse toResponse(Contract contract) {
         return new ContractResponse(
             contract.getId(),
             contract.getProjectId(),
@@ -150,13 +222,23 @@ public class ContractService {
             contract.getContractorName(),
             contract.getContractorCode(),
             contract.getContractValue(),
+            contract.getRevisedValue(),
             contract.getLoaDate(),
             contract.getStartDate(),
             contract.getCompletionDate(),
+            contract.getRevisedCompletionDate(),
             contract.getDlpMonths(),
             contract.getLdRate(),
             contract.getStatus(),
             contract.getContractType(),
+            contract.getDescription(),
+            contract.getCurrency(),
+            contract.getNtpDate(),
+            contract.getMobilisationAdvancePct(),
+            contract.getRetentionPct(),
+            contract.getPerformanceBgPct(),
+            contract.getPaymentTermsDays(),
+            contract.getBillingCycle(),
             contract.getWbsPackageCode(),
             contract.getPackageDescription(),
             contract.getActualCompletionDate(),

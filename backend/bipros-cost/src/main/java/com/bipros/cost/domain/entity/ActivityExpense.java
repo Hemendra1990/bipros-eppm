@@ -23,7 +23,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ActivityExpense extends BaseEntity {
 
-    @Column(name = "activity_id", nullable = false)
+    @Column(name = "activity_id")
     private UUID activityId;
 
     @Column(name = "project_id", nullable = false)
@@ -32,7 +32,7 @@ public class ActivityExpense extends BaseEntity {
     @Column(name = "cost_account_id")
     private UUID costAccountId;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "name")
     private String name;
 
     @Column(name = "description")
@@ -67,4 +67,7 @@ public class ActivityExpense extends BaseEntity {
 
     @Column(name = "actual_finish_date")
     private LocalDate actualFinishDate;
+
+    @Column(name = "currency")
+    private String currency;
 }

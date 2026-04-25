@@ -5,7 +5,7 @@ Enterprise Project Portfolio Management system. Full-stack monorepo with three s
 - **Frontend** — TypeScript / Next.js 16.2.2 / React 19.2.4 / Tailwind CSS 4 (pnpm)
 - **User Guide** — Docusaurus 3.9.2 (yarn, in `user-guide/`)
 
-PostgreSQL 17 + Redis 7 via Docker Compose.
+PostgreSQL 17 + Redis 7 + MinIO via Docker Compose.
 
 ---
 
@@ -13,7 +13,7 @@ PostgreSQL 17 + Redis 7 via Docker Compose.
 
 ### Prerequisites
 ```bash
-docker compose up -d          # PostgreSQL 17, pgAdmin, Redis 7
+docker compose up -d          # PostgreSQL 17, pgAdmin, Redis 7, MinIO
 ```
 
 ### Backend (from `backend/`)
@@ -157,12 +157,13 @@ Next.js 16 has significant breaking changes compared to earlier versions. Read t
 
 ## Docker
 ```bash
-docker compose up -d        # Start PostgreSQL, pgAdmin, Redis
+docker compose up -d        # Start PostgreSQL, pgAdmin, Redis, MinIO
 docker compose down          # Stop all
 ```
 - PostgreSQL: port 5432, database `bipros`, schemas initialized via `docker/init-schemas.sql`
 - pgAdmin: http://localhost:5050
 - Redis: port 6379
+- MinIO: port 9000 (S3 API), port 9001 (console)
 
 ---
 

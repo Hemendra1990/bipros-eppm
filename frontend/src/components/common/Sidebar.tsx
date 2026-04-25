@@ -49,6 +49,7 @@ const groups: NavGroup[] = [
       { name: "Organisations", href: "/admin/organisations", icon: Building2 },
       { name: "User Access", href: "/admin/user-access", icon: UserCog },
       { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks },
+      { name: "Risk Library", href: "/admin/risk-library", icon: Shield },
       { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText },
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge },
       { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge },

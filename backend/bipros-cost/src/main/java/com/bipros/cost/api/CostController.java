@@ -62,7 +62,7 @@ public class CostController {
     public ResponseEntity<ApiResponse<ActivityExpenseDto>> createActivityExpense(
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateActivityExpenseRequest request) {
-        ActivityExpenseDto response = costService.createExpense(request);
+        ActivityExpenseDto response = costService.createExpense(projectId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 

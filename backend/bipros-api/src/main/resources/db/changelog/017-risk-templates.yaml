@@ -1,0 +1,152 @@
+databaseChangeLog:
+  - changeSet:
+      id: 017-create-risk-templates-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risk_templates
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: industry
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(40)
+              - column:
+                  name: default_probability
+                  type: INTEGER
+              - column:
+                  name: default_impact_cost
+                  type: INTEGER
+              - column:
+                  name: default_impact_schedule
+                  type: INTEGER
+              - column:
+                  name: mitigation_guidance
+                  type: TEXT
+              - column:
+                  name: is_opportunity
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: sort_order
+                  type: INTEGER
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: true
+              - column:
+                  name: system_default
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: risk
+            tableName: risk_templates
+            columnNames: code
+            constraintName: uk_risk_template_code
+        - createIndex:
+            schemaName: risk
+            tableName: risk_templates
+            indexName: idx_risk_template_active_sort
+            columns:
+              - column:
+                  name: active
+              - column:
+                  name: sort_order
+        - createIndex:
+            schemaName: risk
+            tableName: risk_templates
+            indexName: idx_risk_template_industry
+            columns:
+              - column:
+                  name: industry
+        - createIndex:
+            schemaName: risk
+            tableName: risk_templates
+            indexName: idx_risk_template_category
+            columns:
+              - column:
+                  name: category
+
+  - changeSet:
+      id: 017-create-risk-template-project-categories
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risk_template_project_categories
+            columns:
+              - column:
+                  name: risk_template_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_category
+                  type: VARCHAR(40)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risk_template_project_categories
+            baseColumnNames: risk_template_id
+            referencedSchemaName: risk
+            referencedTableName: risk_templates
+            referencedColumnNames: id
+            constraintName: fk_risk_template_project_categories_template
+            onDelete: CASCADE
+        - createIndex:
+            schemaName: risk
+            tableName: risk_template_project_categories
+            indexName: idx_risk_template_project_categories_template
+            columns:
+              - column:
+                  name: risk_template_id

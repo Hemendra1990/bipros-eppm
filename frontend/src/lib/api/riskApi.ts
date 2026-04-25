@@ -38,6 +38,19 @@ export type RiskCategory =
 
 export type RiskResponseType = "AVOID" | "MITIGATE" | "TRANSFER" | "ACCEPT" | "EXPLOIT";
 
+export type RiskAnalysisLevel = "NOT_ANALYSED" | "PARTIALLY_ANALYSED" | "WELL_ANALYSED";
+
+export interface RiskAnalysisQuality {
+  score: number;
+  level: RiskAnalysisLevel;
+  criteria: {
+    hasOwner: boolean;
+    hasRating: boolean;
+    hasDescription: boolean;
+    hasResponse: boolean;
+  };
+}
+
 export interface RiskResponse {
   id: string;
   code: string;
@@ -57,6 +70,7 @@ export interface RiskResponse {
   owner: string;
   createdAt: string;
   updatedAt: string;
+  analysisQuality?: RiskAnalysisQuality;
 }
 
 export interface CreateRiskRequest {
@@ -102,5 +116,11 @@ export const riskApi = {
   getRisksByProject: (projectId: string) =>
     apiClient
       .get<ApiResponse<RiskResponse[]>>(`/v1/projects/${projectId}/risks`)
+      .then((r) => r.data),
+
+  getAnalysisQuality: (projectId: string, riskId: string) =>
+    apiClient
+      .get<ApiResponse<RiskAnalysisQuality>>(
+        `/v1/projects/${projectId}/risks/${riskId}/analysis-quality`)
       .then((r) => r.data),
 };

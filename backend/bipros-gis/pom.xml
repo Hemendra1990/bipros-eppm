@@ -67,16 +67,11 @@
             <version>1.19.0</version>
         </dependency>
 
-        <!-- GeoTools for GeoTIFF envelope extraction + PNG rendering -->
+        <!-- Pure Java TIFF reader + GeoTIFF tag parser (Maven Central, no custom repo) -->
         <dependency>
-            <groupId>org.geotools</groupId>
-            <artifactId>gt-geotiff</artifactId>
-            <version>30.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.geotools</groupId>
-            <artifactId>gt-epsg-hsql</artifactId>
-            <version>30.0</version>
+            <groupId>com.github.jai-imageio</groupId>
+            <artifactId>jai-imageio-core</artifactId>
+            <version>1.4.0</version>
         </dependency>
 
         <dependency>

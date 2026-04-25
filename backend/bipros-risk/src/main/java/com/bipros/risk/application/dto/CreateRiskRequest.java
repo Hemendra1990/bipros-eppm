@@ -3,6 +3,7 @@ package com.bipros.risk.application.dto;
 import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskImpact;
 import com.bipros.risk.domain.model.RiskProbability;
+import com.bipros.risk.domain.model.RiskStatus;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import lombok.AllArgsConstructor;
@@ -33,6 +34,19 @@ public class CreateRiskRequest {
 
     private RiskProbability probability;
     private RiskImpact impact;
+
+    /** IC-PMS M7 split-impact: cost-impact score 1-5. */
+    private Integer impactCost;
+
+    /** IC-PMS M7 split-impact: schedule-impact score 1-5. */
+    private Integer impactSchedule;
+
+    /** Lifecycle status. Defaults to IDENTIFIED on create; preserved if null on update. */
+    private RiskStatus status;
+
+    /** True for opportunities (positive risks). Preserved if null on update. */
+    private Boolean isOpportunity;
+
     private UUID ownerId;
     private LocalDate identifiedDate;
     private LocalDate dueDate;

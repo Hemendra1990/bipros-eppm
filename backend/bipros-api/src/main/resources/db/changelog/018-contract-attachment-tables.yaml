@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: 018-create-contract-attachments
+      author: bipros
+      changes:
+        - createTable:
+            tableName: contract_attachments
+            schemaName: contract
+            columns:
+              - column: { name: id,               type: UUID,         constraints: { primaryKey: true, nullable: false } }
+              - column: { name: project_id,       type: UUID,         constraints: { nullable: false } }
+              - column: { name: contract_id,      type: UUID,         constraints: { nullable: false, foreignKeyName: fk_attachment_contract, references: "contract.contracts(id)" } }
+              - column: { name: entity_type,      type: VARCHAR(40),  constraints: { nullable: false } }
+              # entity_id is intentionally NOT a DB-level FK; the polymorphic
+              # discriminator (entity_type) means it points at one of four
+              # parent tables. Validated at the application layer.
+              - column: { name: entity_id,        type: UUID,         constraints: { nullable: false } }
+              - column: { name: file_name,        type: VARCHAR(255), constraints: { nullable: false } }
+              - column: { name: file_size,        type: BIGINT,       constraints: { nullable: false } }
+              - column: { name: mime_type,        type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: file_path,        type: VARCHAR(500), constraints: { nullable: false } }
+              - column: { name: attachment_type,  type: VARCHAR(50),  constraints: { nullable: false } }
+              - column: { name: description,      type: TEXT }
+              - column: { name: uploaded_by,      type: VARCHAR(100) }
+              - column: { name: uploaded_at,      type: TIMESTAMP }
+              - column: { name: created_at,       type: TIMESTAMP,    constraints: { nullable: false } }
+              - column: { name: updated_at,       type: TIMESTAMP,    constraints: { nullable: false } }
+              - column: { name: created_by,       type: VARCHAR(100) }
+              - column: { name: updated_by,       type: VARCHAR(100) }
+              - column: { name: version,          type: BIGINT }
+
+        - createIndex:
+            tableName: contract_attachments
+            schemaName: contract
+            indexName: idx_attach_contract
+            columns:
+              - column: { name: contract_id }
+
+        - createIndex:
+            tableName: contract_attachments
+            schemaName: contract
+            indexName: idx_attach_entity
+            columns:
+              - column: { name: contract_id }
+              - column: { name: entity_type }
+              - column: { name: entity_id }

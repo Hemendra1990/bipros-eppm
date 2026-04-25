@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -106,23 +107,25 @@ public class CostService {
 
     // Activity Expense Operations
     @Transactional
-    public ActivityExpenseDto createExpense(CreateActivityExpenseRequest request) {
+    public ActivityExpenseDto createExpense(UUID projectId, CreateActivityExpenseRequest request) {
         var entity = new ActivityExpense();
+        entity.setProjectId(projectId);
         entity.setActivityId(request.activityId());
-        entity.setProjectId(request.projectId());
         entity.setCostAccountId(request.costAccountId());
-        entity.setName(request.name());
+        entity.setName(request.name() != null ? request.name() : request.description());
         entity.setDescription(request.description());
-        entity.setExpenseCategory(request.expenseCategory());
-        entity.setBudgetedCost(request.budgetedCost());
-        entity.setActualCost(request.actualCost());
-        entity.setRemainingCost(request.remainingCost());
-        entity.setAtCompletionCost(request.atCompletionCost());
-        entity.setPercentComplete(request.percentComplete());
+        entity.setExpenseCategory(request.category() != null ? request.category() : request.expenseCategory());
+        BigDecimal amount = request.amount() != null ? request.amount() : request.actualCost();
+        entity.setBudgetedCost(request.budgetedCost() != null ? request.budgetedCost() : amount);
+        entity.setActualCost(amount);
+        entity.setRemainingCost(request.remainingCost() != null ? request.remainingCost() : BigDecimal.ZERO);
+        entity.setAtCompletionCost(request.atCompletionCost() != null ? request.atCompletionCost() : amount);
+        entity.setPercentComplete(request.percentComplete() != null ? request.percentComplete() : 0.0);
         entity.setPlannedStartDate(request.plannedStartDate());
         entity.setPlannedFinishDate(request.plannedFinishDate());
-        entity.setActualStartDate(request.actualStartDate());
+        entity.setActualStartDate(request.expenseDate() != null ? request.expenseDate() : request.actualStartDate());
         entity.setActualFinishDate(request.actualFinishDate());
+        entity.setCurrency(request.currency());
 
         var saved = activityExpenseRepository.save(entity);
         auditService.logCreate("ActivityExpense", saved.getId(), ActivityExpenseDto.from(saved));
@@ -134,19 +137,25 @@ public class CostService {
         var entity = activityExpenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ActivityExpense", id));
 
-        entity.setCostAccountId(request.costAccountId());
-        entity.setName(request.name());
-        entity.setDescription(request.description());
-        entity.setExpenseCategory(request.expenseCategory());
-        entity.setBudgetedCost(request.budgetedCost());
-        entity.setActualCost(request.actualCost());
-        entity.setRemainingCost(request.remainingCost());
-        entity.setAtCompletionCost(request.atCompletionCost());
-        entity.setPercentComplete(request.percentComplete());
-        entity.setPlannedStartDate(request.plannedStartDate());
-        entity.setPlannedFinishDate(request.plannedFinishDate());
-        entity.setActualStartDate(request.actualStartDate());
-        entity.setActualFinishDate(request.actualFinishDate());
+        if (request.costAccountId() != null) entity.setCostAccountId(request.costAccountId());
+        if (request.name() != null) entity.setName(request.name());
+        if (request.description() != null) entity.setDescription(request.description());
+        String category = request.category() != null ? request.category() : request.expenseCategory();
+        if (category != null) entity.setExpenseCategory(category);
+        BigDecimal amount = request.amount() != null ? request.amount() : request.actualCost();
+        if (amount != null) {
+            entity.setActualCost(amount);
+            entity.setBudgetedCost(request.budgetedCost() != null ? request.budgetedCost() : amount);
+            entity.setRemainingCost(request.remainingCost() != null ? request.remainingCost() : BigDecimal.ZERO);
+            entity.setAtCompletionCost(request.atCompletionCost() != null ? request.atCompletionCost() : amount);
+        }
+        if (request.percentComplete() != null) entity.setPercentComplete(request.percentComplete());
+        if (request.plannedStartDate() != null) entity.setPlannedStartDate(request.plannedStartDate());
+        if (request.plannedFinishDate() != null) entity.setPlannedFinishDate(request.plannedFinishDate());
+        LocalDate expenseDate = request.expenseDate() != null ? request.expenseDate() : request.actualStartDate();
+        if (expenseDate != null) entity.setActualStartDate(expenseDate);
+        if (request.actualFinishDate() != null) entity.setActualFinishDate(request.actualFinishDate());
+        if (request.currency() != null) entity.setCurrency(request.currency());
 
         var saved = activityExpenseRepository.save(entity);
         auditService.logUpdate("ActivityExpense", id, "expense", null, ActivityExpenseDto.from(saved));

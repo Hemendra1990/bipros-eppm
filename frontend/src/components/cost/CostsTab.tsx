@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -45,6 +45,13 @@ function formatCrores(crores: number): string {
 
 function formatInrAsCrores(inr: number): string {
   return formatCrores((inr || 0) / INR_PER_CRORE);
+}
+
+function formatInr(inr: number): string {
+  return `₹${(inr || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function sumBudgetCrores(nodes: WbsNodeResponse[]): number {
@@ -113,6 +120,84 @@ export function CostsTab({ projectId }: { projectId: string }) {
       toast.error(getErrorMessage(err, "Failed to create expense"));
     },
   });
+
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: (data: CreateExpenseRequest) => costApi.updateExpense(projectId, editingExpenseId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["cost-summary", projectId] });
+      setShowExpenseForm(false);
+      setEditingExpenseId(null);
+      setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+      toast.success("Expense updated successfully");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to update expense"));
+    },
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (expenseId: string) => costApi.deleteExpense(projectId, expenseId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["cost-summary", projectId] });
+      toast.success("Expense deleted successfully");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to delete expense"));
+    },
+  });
+
+  const handleEdit = useCallback((expense: ExpenseRow) => {
+    setEditingExpenseId(expense.id);
+    setExpenseForm({
+      description: expense.description,
+      amount: expense.amount,
+      currency: baseCurrency.code,
+      expenseDate: expense.expenseDate,
+      category: expense.category,
+    });
+    setShowExpenseForm(true);
+  }, [baseCurrency.code]);
+
+  const expenseColumns = useMemo<ColumnDef<ExpenseRow>[]>(() => [
+    { key: "description", label: "Description", sortable: true },
+    { key: "category", label: "Category", sortable: true },
+    {
+      key: "amount",
+      label: "Amount (₹)",
+      sortable: true,
+      render: (value) => formatInr(Number(value)),
+    },
+    { key: "expenseDate", label: "Date", sortable: true },
+    {
+      key: "actions",
+      label: "Actions",
+      render: (_value, row) => (
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleEdit(row)}
+            className="rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm("Delete this expense?")) {
+                deleteExpenseMutation.mutate(row.id);
+              }
+            }}
+            disabled={deleteExpenseMutation.isPending}
+            className="rounded-md border border-border px-2 py-1 text-xs text-danger hover:bg-surface-hover disabled:opacity-50"
+          >
+            Delete
+          </button>
+        </div>
+      ),
+    },
+  ], [handleEdit, deleteExpenseMutation]);
 
   const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
     queryKey: ["cost-summary", projectId],
@@ -241,34 +326,22 @@ export function CostsTab({ projectId }: { projectId: string }) {
       ]
     : [];
 
-  const expenseColumns: ColumnDef<ExpenseRow>[] = [
-    { key: "description", label: "Description", sortable: true },
-    { key: "category", label: "Category", sortable: true },
-    {
-      key: "amount",
-      label: "Amount (₹cr)",
-      sortable: true,
-      render: (value) => formatInrAsCrores(Number(value)),
-    },
-    { key: "expenseDate", label: "Date", sortable: true },
-  ];
-
-  const colorMap: Record<string, string> = {
-    blue: "bg-blue-950 border-blue-700",
-    green: "bg-green-950 border-green-700",
-    yellow: "bg-yellow-950 border-yellow-700",
-    purple: "bg-purple-950 border-purple-700",
-    red: "bg-red-950 border-red-700",
-    slate: "bg-surface border-border",
+  const accentMap: Record<string, string> = {
+    blue: "border-l-4 border-l-accent",
+    green: "border-l-4 border-l-success",
+    yellow: "border-l-4 border-l-warning",
+    purple: "border-l-4 border-l-info",
+    red: "border-l-4 border-l-danger",
+    slate: "",
   };
 
   const textColorMap: Record<string, string> = {
-    blue: "text-blue-300",
-    green: "text-green-300",
-    yellow: "text-yellow-300",
-    purple: "text-purple-400",
+    blue: "text-accent",
+    green: "text-success",
+    yellow: "text-warning",
+    purple: "text-info",
     red: "text-danger",
-    slate: "text-text-secondary",
+    slate: "text-text-primary",
   };
 
   return (
@@ -281,9 +354,9 @@ export function CostsTab({ projectId }: { projectId: string }) {
             {summaryCards.map((card) => (
               <div
                 key={card.label}
-                className={`rounded-lg border p-4 ${colorMap[card.color]}`}
+                className={`rounded-lg border border-border bg-surface-hover/40 p-4 ${accentMap[card.color]}`}
               >
-                <h3 className="text-sm font-medium text-text-secondary">{card.label}</h3>
+                <h3 className="text-xs font-medium uppercase tracking-wide text-text-secondary">{card.label}</h3>
                 <p className={`mt-2 text-2xl font-bold ${textColorMap[card.color]}`}>
                   {card.value}
                 </p>
@@ -296,9 +369,9 @@ export function CostsTab({ projectId }: { projectId: string }) {
               {evmCards.map((card) => (
                 <div
                   key={card.label}
-                  className={`rounded-lg border p-4 ${colorMap[card.color]}`}
+                  className={`rounded-lg border border-border bg-surface-hover/40 p-4 ${accentMap[card.color]}`}
                 >
-                  <h3 className="text-sm font-medium text-text-secondary">{card.label}</h3>
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-text-secondary">{card.label}</h3>
                   <p className={`mt-2 text-xl font-bold ${textColorMap[card.color]}`}>
                     {card.value}
                   </p>
@@ -316,9 +389,9 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 {procurementCards.map((card) => (
                   <div
                     key={card.label}
-                    className={`rounded-lg border p-4 ${colorMap[card.color]}`}
+                    className={`rounded-lg border border-border bg-surface-hover/40 p-4 ${accentMap[card.color]}`}
                   >
-                    <h4 className="text-sm font-medium text-text-secondary">{card.label}</h4>
+                    <h4 className="text-xs font-medium uppercase tracking-wide text-text-secondary">{card.label}</h4>
                     <p className={`mt-2 text-xl font-bold ${textColorMap[card.color]}`}>
                       {card.value}
                     </p>
@@ -356,14 +429,14 @@ export function CostsTab({ projectId }: { projectId: string }) {
         ) : (
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid-color)" />
               <XAxis
                 dataKey="period"
-                stroke="#64748b"
+                stroke="var(--text-muted)"
                 style={{ fontSize: "12px" }}
               />
               <YAxis
-                stroke="#64748b"
+                stroke="var(--text-muted)"
                 style={{ fontSize: "12px" }}
                 label={{ value: "Amount (₹cr)", angle: -90, position: "insideLeft" }}
                 tickFormatter={(v) =>
@@ -372,9 +445,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "1px solid #334155",
+                  backgroundColor: "var(--surface)",
+                  border: "1px solid var(--border)",
                   borderRadius: "0.5rem",
+                  color: "var(--text-primary)",
                 }}
                 formatter={(value) =>
                   typeof value === "number"
@@ -387,7 +461,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 type="monotone"
                 dataKey="cumulativePlanned"
                 name="Planned"
-                stroke="#3b82f6"
+                stroke="var(--accent)"
                 strokeWidth={2}
                 dot={false}
               />
@@ -395,7 +469,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 type="monotone"
                 dataKey="cumulativeActual"
                 name="Actual"
-                stroke="#10b981"
+                stroke="var(--success)"
                 strokeWidth={2}
                 dot={false}
               />
@@ -403,7 +477,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 type="monotone"
                 dataKey="cumulativeForecast"
                 name="Forecast"
-                stroke="#f59e0b"
+                stroke="var(--warning)"
                 strokeWidth={2}
                 strokeDasharray="5 5"
                 dot={false}
@@ -438,23 +512,23 @@ export function CostsTab({ projectId }: { projectId: string }) {
                     className="border-b border-border hover:bg-surface-hover/50"
                   >
                     <td className="px-3 py-2 text-text-primary">{pa.periodName}</td>
-                    <td className="px-3 py-2 text-right text-blue-300">
+                    <td className="px-3 py-2 text-right text-accent">
                       {formatInrAsCrores(pa.budget)}
                     </td>
-                    <td className="px-3 py-2 text-right text-green-300">
+                    <td className="px-3 py-2 text-right text-success">
                       {formatInrAsCrores(pa.actual)}
                     </td>
                     <td
                       className={`px-3 py-2 text-right ${
-                        pa.variance >= 0 ? "text-green-300" : "text-danger"
+                        pa.variance >= 0 ? "text-success" : "text-danger"
                       }`}
                     >
                       {formatInrAsCrores(pa.variance)}
                     </td>
-                    <td className="px-3 py-2 text-right text-yellow-300">
+                    <td className="px-3 py-2 text-right text-warning">
                       {formatInrAsCrores(pa.earnedValue)}
                     </td>
-                    <td className="px-3 py-2 text-right text-purple-400">
+                    <td className="px-3 py-2 text-right text-info">
                       {formatInrAsCrores(pa.plannedValue)}
                     </td>
                   </tr>
@@ -469,7 +543,13 @@ export function CostsTab({ projectId }: { projectId: string }) {
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-text-primary">Expenses</h3>
           <button
-            onClick={() => setShowExpenseForm(!showExpenseForm)}
+            onClick={() => {
+              if (showExpenseForm) {
+                setEditingExpenseId(null);
+                setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+              }
+              setShowExpenseForm(!showExpenseForm);
+            }}
             className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
           >
             <Plus size={16} />
@@ -483,7 +563,11 @@ export function CostsTab({ projectId }: { projectId: string }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!expenseForm.description || !expenseForm.amount) return;
-                createExpenseMutation.mutate(expenseForm);
+                if (editingExpenseId) {
+                  updateExpenseMutation.mutate(expenseForm);
+                } else {
+                  createExpenseMutation.mutate(expenseForm);
+                }
               }}
               className="grid grid-cols-2 gap-4 lg:grid-cols-4"
             >
@@ -536,14 +620,20 @@ export function CostsTab({ projectId }: { projectId: string }) {
               <div className="col-span-full flex gap-2">
                 <button
                   type="submit"
-                  disabled={createExpenseMutation.isPending}
+                  disabled={createExpenseMutation.isPending || updateExpenseMutation.isPending}
                   className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
                 >
-                  {createExpenseMutation.isPending ? "Saving..." : "Save Expense"}
+                  {editingExpenseId
+                    ? (updateExpenseMutation.isPending ? "Updating..." : "Update Expense")
+                    : (createExpenseMutation.isPending ? "Saving..." : "Save Expense")}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowExpenseForm(false)}
+                  onClick={() => {
+                    setShowExpenseForm(false);
+                    setEditingExpenseId(null);
+                    setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+                  }}
                   className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
                 >
                   Cancel

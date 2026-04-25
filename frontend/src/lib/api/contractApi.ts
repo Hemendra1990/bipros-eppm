@@ -18,6 +18,8 @@ import type {
   CreatePerformanceBondRequest,
   ContractorScorecardResponse,
   CreateContractorScorecardRequest,
+  ContractAttachment,
+  UploadContractAttachmentMetadata,
 } from "../types";
 
 export const contractApi = {
@@ -275,4 +277,156 @@ export const contractApi = {
 
   deleteContractorScorecard: (contractId: string, id: string) =>
     apiClient.delete(`/v1/contracts/${contractId}/scorecards/${id}`),
+
+  // Contract Attachments — polymorphic, single backing table; the parent
+  // resource is encoded in the URL. Upload uses multipart/form-data with
+  // a `metadata` JSON part and a `file` binary part.
+  listContractAttachments: (projectId: string, contractId: string) =>
+    apiClient
+      .get<ApiResponse<ContractAttachment[]>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/attachments`,
+      )
+      .then((r) => r.data),
+
+  uploadContractAttachment: (
+    projectId: string,
+    contractId: string,
+    metadata: UploadContractAttachmentMetadata,
+    file: File,
+  ) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+    );
+    form.append("file", file);
+    return apiClient
+      .post<ApiResponse<ContractAttachment>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/attachments`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      )
+      .then((r) => r.data);
+  },
+
+  listMilestoneAttachments: (
+    projectId: string,
+    contractId: string,
+    milestoneId: string,
+  ) =>
+    apiClient
+      .get<ApiResponse<ContractAttachment[]>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/milestones/${milestoneId}/attachments`,
+      )
+      .then((r) => r.data),
+
+  uploadMilestoneAttachment: (
+    projectId: string,
+    contractId: string,
+    milestoneId: string,
+    metadata: UploadContractAttachmentMetadata,
+    file: File,
+  ) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+    );
+    form.append("file", file);
+    return apiClient
+      .post<ApiResponse<ContractAttachment>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/milestones/${milestoneId}/attachments`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      )
+      .then((r) => r.data);
+  },
+
+  listVariationOrderAttachments: (
+    projectId: string,
+    contractId: string,
+    voId: string,
+  ) =>
+    apiClient
+      .get<ApiResponse<ContractAttachment[]>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/variation-orders/${voId}/attachments`,
+      )
+      .then((r) => r.data),
+
+  uploadVariationOrderAttachment: (
+    projectId: string,
+    contractId: string,
+    voId: string,
+    metadata: UploadContractAttachmentMetadata,
+    file: File,
+  ) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+    );
+    form.append("file", file);
+    return apiClient
+      .post<ApiResponse<ContractAttachment>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/variation-orders/${voId}/attachments`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      )
+      .then((r) => r.data);
+  },
+
+  listPerformanceBondAttachments: (
+    projectId: string,
+    contractId: string,
+    bondId: string,
+  ) =>
+    apiClient
+      .get<ApiResponse<ContractAttachment[]>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/bonds/${bondId}/attachments`,
+      )
+      .then((r) => r.data),
+
+  uploadPerformanceBondAttachment: (
+    projectId: string,
+    contractId: string,
+    bondId: string,
+    metadata: UploadContractAttachmentMetadata,
+    file: File,
+  ) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+    );
+    form.append("file", file);
+    return apiClient
+      .post<ApiResponse<ContractAttachment>>(
+        `/v1/projects/${projectId}/contracts/${contractId}/bonds/${bondId}/attachments`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      )
+      .then((r) => r.data);
+  },
+
+  downloadContractAttachment: (
+    projectId: string,
+    contractId: string,
+    attachmentId: string,
+    disposition: "attachment" | "inline" = "attachment",
+  ) =>
+    apiClient
+      .get<Blob>(
+        `/v1/projects/${projectId}/contracts/${contractId}/attachments/${attachmentId}/download`,
+        { responseType: "blob", params: { disposition } },
+      )
+      .then((r) => r.data),
+
+  deleteContractAttachment: (
+    projectId: string,
+    contractId: string,
+    attachmentId: string,
+  ) =>
+    apiClient.delete(
+      `/v1/projects/${projectId}/contracts/${contractId}/attachments/${attachmentId}`,
+    ),
 };
