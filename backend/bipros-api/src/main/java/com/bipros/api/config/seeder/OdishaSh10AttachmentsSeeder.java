@@ -1,0 +1,634 @@
+package com.bipros.api.config.seeder;
+
+import com.bipros.api.config.seeder.util.CorridorGeometry;
+import com.bipros.api.config.seeder.util.MinimalPdfGenerator;
+import com.bipros.contract.domain.model.AttachmentEntityType;
+import com.bipros.contract.domain.model.Contract;
+import com.bipros.contract.domain.model.ContractAttachment;
+import com.bipros.contract.domain.model.ContractAttachmentType;
+import com.bipros.contract.domain.repository.ContractAttachmentRepository;
+import com.bipros.contract.domain.repository.ContractRepository;
+import com.bipros.document.domain.model.Document;
+import com.bipros.document.domain.model.DocumentCategory;
+import com.bipros.document.domain.model.DocumentFolder;
+import com.bipros.document.domain.model.DocumentStatus;
+import com.bipros.document.domain.model.DocumentType;
+import com.bipros.document.domain.model.DocumentVersion;
+import com.bipros.document.domain.model.DrawingDiscipline;
+import com.bipros.document.domain.repository.DocumentFolderRepository;
+import com.bipros.document.domain.repository.DocumentRepository;
+import com.bipros.document.domain.repository.DocumentVersionRepository;
+import com.bipros.gis.domain.model.ConstructionProgressSnapshot;
+import com.bipros.gis.domain.model.GisLayer;
+import com.bipros.gis.domain.model.GisLayerType;
+import com.bipros.gis.domain.model.ProgressAnalysisMethod;
+import com.bipros.gis.domain.model.SatelliteAlertFlag;
+import com.bipros.gis.domain.model.SatelliteImage;
+import com.bipros.gis.domain.model.SatelliteImageSource;
+import com.bipros.gis.domain.model.SatelliteImageStatus;
+import com.bipros.gis.domain.model.WbsPolygon;
+import com.bipros.gis.domain.repository.ConstructionProgressSnapshotRepository;
+import com.bipros.gis.domain.repository.GisLayerRepository;
+import com.bipros.gis.domain.repository.SatelliteImageRepository;
+import com.bipros.gis.domain.repository.WbsPolygonRepository;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.model.WbsNode;
+import com.bipros.project.domain.repository.ProjectRepository;
+import com.bipros.project.domain.repository.WbsNodeRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Odisha SH-10 Bhubaneswar–Cuttack project — fills the document register, contract
+ * attachments, GIS polygons, satellite imagery, and construction-progress snapshots that
+ * the main {@link OdishaSh10ProjectSeeder} (Order 160) leaves blank.
+ *
+ * <p>Sentinel: project lookup by code {@code OWD/SH10/OD/2025/001}. Whole seeder no-ops
+ * if any documents already exist for the project.
+ *
+ * <p>Source files (5 PDFs + 5 JPEGs + 1 DOCX) live on the classpath under
+ * {@code seed-data/odisha-sh10/documents/} and {@code seed-data/odisha-sh10/satellite/}.
+ * For the 24 register entries with no real PDF on disk, a stub PDF is generated at runtime
+ * via {@link MinimalPdfGenerator}.
+ */
+@Slf4j
+@Component
+@Profile("dev")
+@Order(165)
+@RequiredArgsConstructor
+public class OdishaSh10AttachmentsSeeder implements CommandLineRunner {
+
+    private static final String PROJECT_CODE = "OWD/SH10/OD/2025/001";
+    private static final String DOCS_RESOURCE_ROOT = "seed-data/odisha-sh10/documents/";
+    private static final String SATELLITE_RESOURCE_ROOT = "seed-data/odisha-sh10/satellite/";
+    private static final Path DOCUMENT_STORAGE_ROOT = Paths.get("./storage/documents").toAbsolutePath().normalize();
+    private static final Path CONTRACT_STORAGE_ROOT = Paths.get("./storage/contracts").toAbsolutePath().normalize();
+    private static final Path SATELLITE_STORAGE_ROOT = Paths.get("./storage/satellite").toAbsolutePath().normalize();
+
+    // SH-10 Bhubaneswar–Cuttack corridor — synthetic lat/lon endpoints for the GIS demo.
+    private static final double SH10_START_LAT = 20.2961; // Bhubaneswar
+    private static final double SH10_START_LON = 85.8245;
+    private static final double SH10_END_LAT   = 20.4625; // Cuttack
+    private static final double SH10_END_LON   = 85.8828;
+    private static final double CORRIDOR_HALF_WIDTH_M = 25.0;
+
+    private final ProjectRepository projectRepository;
+    private final WbsNodeRepository wbsNodeRepository;
+    private final DocumentRepository documentRepository;
+    private final DocumentFolderRepository documentFolderRepository;
+    private final DocumentVersionRepository documentVersionRepository;
+    private final ContractRepository contractRepository;
+    private final ContractAttachmentRepository contractAttachmentRepository;
+    private final GisLayerRepository gisLayerRepository;
+    private final WbsPolygonRepository wbsPolygonRepository;
+    private final SatelliteImageRepository satelliteImageRepository;
+    private final ConstructionProgressSnapshotRepository progressSnapshotRepository;
+
+    @Override
+    public void run(String... args) {
+        Optional<Project> opt = projectRepository.findByCode(PROJECT_CODE);
+        if (opt.isEmpty()) {
+            log.warn("[OD-SH10 attachments] project '{}' not found — skipping (run OdishaSh10ProjectSeeder first)", PROJECT_CODE);
+            return;
+        }
+        Project project = opt.get();
+        long existing = documentRepository.findByProjectId(project.getId()).size();
+        if (existing > 0) {
+            log.info("[OD-SH10 attachments] project '{}' already has {} documents — skipping", PROJECT_CODE, existing);
+            return;
+        }
+
+        log.info("[OD-SH10 attachments] seeding documents, contract attachments, GIS, and satellite imagery for '{}'", PROJECT_CODE);
+
+        var folders = ensureFolders(project.getId());
+        seedDocuments(project, folders);
+        seedContractAttachments(project);
+        var polygons = seedGisPolygons(project);
+        seedSatelliteAndProgress(project, polygons);
+
+        log.info("[OD-SH10 attachments] done.");
+    }
+
+    // ────────────────────────── Folders ──────────────────────────
+
+    private record Folders(UUID drawings, UUID specs, UUID methodStatements, UUID itps, UUID plans, UUID reference) {}
+
+    private Folders ensureFolders(UUID projectId) {
+        return new Folders(
+                ensureFolder(projectId, "DRAWINGS", "Drawings", DocumentCategory.DRAWING, 10),
+                ensureFolder(projectId, "SPECS", "Specifications", DocumentCategory.SPECIFICATION, 20),
+                ensureFolder(projectId, "MS", "Method Statements", DocumentCategory.GENERAL, 30),
+                ensureFolder(projectId, "ITPS", "Inspection & Test Plans", DocumentCategory.GENERAL, 40),
+                ensureFolder(projectId, "PLANS", "Plans & Programmes", DocumentCategory.GENERAL, 50),
+                ensureFolder(projectId, "REFERENCE", "Reference & Frameworks", DocumentCategory.GENERAL, 60));
+    }
+
+    private UUID ensureFolder(UUID projectId, String code, String name, DocumentCategory category, int sortOrder) {
+        return documentFolderRepository.findAll().stream()
+                .filter(f -> projectId.equals(f.getProjectId()) && code.equals(f.getCode()))
+                .map(DocumentFolder::getId)
+                .findFirst()
+                .orElseGet(() -> {
+                    DocumentFolder f = new DocumentFolder();
+                    f.setProjectId(projectId);
+                    f.setName(name);
+                    f.setCode(code);
+                    f.setCategory(category);
+                    f.setSortOrder(sortOrder);
+                    return documentFolderRepository.save(f).getId();
+                });
+    }
+
+    // ────────────────────────── Documents ──────────────────────────
+
+    /** Single register entry — drives both Document insertion and binary resolution. */
+    private record DocEntry(
+            String docNumber,
+            String title,
+            String category,
+            String specRef,
+            String issuedBy,
+            String approvedBy,
+            String classification,
+            String binaryClasspathName,
+            DocumentType type,
+            DrawingDiscipline discipline,
+            DocumentCategory folderCategory) {}
+
+    private void seedDocuments(Project project, Folders folders) {
+        List<DocEntry> entries = registerEntries();
+        int seeded = 0;
+        for (DocEntry e : entries) {
+            UUID folderId = switch (e.folderCategory()) {
+                case DRAWING -> folders.drawings();
+                case SPECIFICATION -> folders.specs();
+                default -> resolveOtherFolder(e, folders);
+            };
+
+            byte[] binary = loadBinary(DOCS_RESOURCE_ROOT + e.binaryClasspathName())
+                    .orElseGet(() -> MinimalPdfGenerator.render(
+                            e.docNumber(), e.title(), e.category(), e.specRef(),
+                            project.getName(), e.approvedBy(),
+                            e.classification()));
+            String mimeType = e.binaryClasspathName().toLowerCase().endsWith(".docx")
+                    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    : "application/pdf";
+
+            String fileName = sanitizeFileName(e.binaryClasspathName());
+            UUID contentId = UUID.randomUUID();
+            String relativePath = project.getId() + "/" + contentId + "/v1/" + fileName;
+            writeBinary(DOCUMENT_STORAGE_ROOT.resolve(relativePath), binary);
+
+            Document doc = new Document();
+            doc.setFolderId(folderId);
+            doc.setProjectId(project.getId());
+            doc.setDocumentNumber(e.docNumber());
+            doc.setTitle(e.title());
+            doc.setDescription(e.category() + " — " + e.specRef());
+            doc.setFileName(fileName);
+            doc.setFileSize((long) binary.length);
+            doc.setMimeType(mimeType);
+            doc.setFilePath(relativePath);
+            doc.setCurrentVersion(1);
+            doc.setStatus(DocumentStatus.APPROVED);
+            doc.setDocumentType(e.type());
+            doc.setDiscipline(e.discipline());
+            doc.setIssuedBy(e.issuedBy());
+            doc.setIssuedDate(LocalDate.of(2025, 2, 15));
+            doc.setApprovedBy(e.approvedBy());
+            doc.setApprovedDate(LocalDate.of(2025, 3, 1));
+            doc.setWbsPackageCode(deriveWbsPackageCode(e.docNumber()));
+            doc.setTags("od-sh10,odisha," + e.category().toLowerCase().replace(' ', '-'));
+            Document savedDoc = documentRepository.save(doc);
+
+            DocumentVersion version = new DocumentVersion();
+            version.setDocumentId(savedDoc.getId());
+            version.setVersionNumber(1);
+            version.setFileName(fileName);
+            version.setFilePath(relativePath);
+            version.setFileSize((long) binary.length);
+            version.setChangeDescription("Initial issue (seeded)");
+            version.setUploadedBy("seeder");
+            version.setUploadedAt(Instant.now());
+            documentVersionRepository.save(version);
+
+            seeded++;
+        }
+        log.info("[OD-SH10 attachments] seeded {} documents (folders: drawings/specs/MS/ITPs/plans/reference)", seeded);
+    }
+
+    private UUID resolveOtherFolder(DocEntry e, Folders folders) {
+        String prefix = e.docNumber().split("/")[0];
+        return switch (prefix) {
+            case "MS" -> folders.methodStatements();
+            case "ITP" -> folders.itps();
+            case "PLAN" -> folders.plans();
+            case "REF" -> folders.reference();
+            default -> folders.plans();
+        };
+    }
+
+    /**
+     * 28 register entries based on the Odisha SH-10 demo project's Approved Documents
+     * sheet, plus the Risk Master Metadata DOCX as REF/001.
+     */
+    private List<DocEntry> registerEntries() {
+        return List.of(
+                // Drawings (7)
+                new DocEntry("DRG/SH10/001", "General Alignment Plan — Bhubaneswar to Cuttack (Ch 0+000 to 28+000)", "Drawing", "IRC:73-2018",
+                        "Design Consultant", "PMC", "Approved", "DRG-OWD-SH10-001.pdf",
+                        DocumentType.DRAWING, DrawingDiscipline.CIVIL, DocumentCategory.DRAWING),
+                new DocEntry("DRG/SH10/002", "Pavement Cross-Section — Flexible Pavement (DBM/BC over GSB/WMM)", "Drawing", "IRC:37-2018",
+                        "Design Consultant", "PMC", "Approved", "drg-sh10-002-stub.pdf",
+                        DocumentType.DRAWING, DrawingDiscipline.CIVIL, DocumentCategory.DRAWING),
+                new DocEntry("DRG/SH10/003", "Box Culvert at Ch 12+200 — Cross-Drainage Structure", "Drawing", "IRC:78-2014",
+                        "Design Consultant", "PMC", "Approved", "drg-sh10-003-stub.pdf",
+                        DocumentType.DRAWING, DrawingDiscipline.CIVIL, DocumentCategory.DRAWING),
+                new DocEntry("DRG/SH10/004", "Bridge Substructure — Mahanadi Tributary Bridge Pier Details", "Drawing", "IRC:78-2014",
+                        "Bridge Design Cell", "PMC", "Approved", "drg-sh10-004-stub.pdf",
+                        DocumentType.DRAWING, DrawingDiscipline.STRUCTURAL, DocumentCategory.DRAWING),
+                new DocEntry("DRG/SH10/005", "Side Drains and Catch Water Drains Layout", "Drawing", "IRC:SP:50",
+                        "Design Consultant", "PMC", "Approved", "drg-sh10-005-stub.pdf",
+                        DocumentType.DRAWING, DrawingDiscipline.CIVIL, DocumentCategory.DRAWING),
+                new DocEntry("DRG/SH10/006", "Road Furniture, Signage and Markings Plan", "Drawing", "IRC:67-2012",
+                        "Design Consultant", "PMC", "Approved", "drg-sh10-006-stub.pdf",
+                        DocumentType.DRAWING, DrawingDiscipline.CIVIL, DocumentCategory.DRAWING),
+                new DocEntry("DRG/SH10/007", "Cuttack Approach ROB — General Arrangement (4-span PSC girder)", "Drawing", "IRC:78-2014",
+                        "Bridge Design Cell", "PMC", "Approved", "drg-sh10-007-stub.pdf",
+                        DocumentType.DRAWING, DrawingDiscipline.STRUCTURAL, DocumentCategory.DRAWING),
+
+                // Specifications (5)
+                new DocEntry("SPEC/SH10/001", "MoRTH Specifications for Roads & Bridge Works (5th Revision)", "Specification", "MoRTH 2013",
+                        "MoRTH", "OWD", "Adopted", "SPEC-OWD-SH10-001.pdf",
+                        DocumentType.SPECIFICATION, null, DocumentCategory.SPECIFICATION),
+                new DocEntry("SPEC/SH10/002", "GSB & WMM Material Specifications — Athgarh / Banki Sand Sources", "Specification", "MoRTH Sec 401 & 405",
+                        "Design Consultant", "PMC", "Approved", "spec-sh10-002-stub.pdf",
+                        DocumentType.SPECIFICATION, null, DocumentCategory.SPECIFICATION),
+                new DocEntry("SPEC/SH10/003", "Bituminous Mix Design — DBM and BC (VG-30 ex-Paradip)", "Specification", "MoRTH Sec 504 & 507",
+                        "Design Consultant", "PMC", "Approved", "spec-sh10-003-stub.pdf",
+                        DocumentType.SPECIFICATION, null, DocumentCategory.SPECIFICATION),
+                new DocEntry("SPEC/SH10/004", "Concrete M30 — Mix Design and Sampling (Marine Clay Zone)", "Specification", "IS 10262-2019",
+                        "QC Engineer", "PMC", "Approved", "spec-sh10-004-stub.pdf",
+                        DocumentType.SPECIFICATION, null, DocumentCategory.SPECIFICATION),
+                new DocEntry("SPEC/SH10/005", "Geotextile and Lime-FlyAsh Stabilisation Specs", "Specification", "IRC:SP:89",
+                        "Design Consultant", "PMC", "Approved", "spec-sh10-005-stub.pdf",
+                        DocumentType.SPECIFICATION, null, DocumentCategory.SPECIFICATION),
+
+                // Method Statements (5)
+                new DocEntry("MS/SH10/001", "Earthwork Method Statement (Mahanadi Flood Plain)", "Method Statement", "MoRTH Sec 301-305",
+                        "Site Engineer", "PMC", "Approved", "MS-OWD-SH10-001.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("MS/SH10/002", "GSB & WMM Laying Method Statement", "Method Statement", "MoRTH Sec 401 & 405",
+                        "Site Engineer", "PMC", "Approved", "ms-sh10-002-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("MS/SH10/003", "Bituminous Paving DBM/BC Method Statement (Coastal Humidity Adapted)", "Method Statement", "MoRTH Sec 504 & 507",
+                        "Site Engineer", "PMC", "Approved", "ms-sh10-003-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("MS/SH10/004", "Bridge Pier Casting — RCC M30 Method Statement", "Method Statement", "IRC:78-2014",
+                        "Bridge Site Engineer", "PMC", "Approved", "ms-sh10-004-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("MS/SH10/005", "ROB Substructure Construction Method Statement", "Method Statement", "IRC:78-2014",
+                        "Site Engineer", "PMC", "Approved", "ms-sh10-005-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+
+                // ITPs (5)
+                new DocEntry("ITP/SH10/001", "Earthwork ITP", "ITP", "MoRTH Sec 301-305",
+                        "QC Engineer", "PMC", "Approved", "ITP-OWD-SH10-001.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("ITP/SH10/002", "Sub-Base & Base Courses ITP", "ITP", "MoRTH Sec 401 & 405",
+                        "QC Engineer", "PMC", "Approved", "itp-sh10-002-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("ITP/SH10/003", "Bituminous Layers ITP", "ITP", "MoRTH Sec 504 & 507",
+                        "QC Engineer", "PMC", "Approved", "itp-sh10-003-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("ITP/SH10/004", "RCC Structures ITP", "ITP", "IS 456:2000",
+                        "QC Engineer", "PMC", "Approved", "itp-sh10-004-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("ITP/SH10/005", "Cross-Drainage Works ITP", "ITP", "IRC:SP:13",
+                        "QC Engineer", "PMC", "Approved", "itp-sh10-005-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+
+                // Plans (6)
+                new DocEntry("PLAN/SH10/001", "Project Quality Plan", "Plan", "ISO 9001:2015",
+                        "QC Manager", "PMC", "Approved", "PLAN-OWD-SH10-001.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("PLAN/SH10/002", "Project Execution Plan (PEP)", "Plan", "ISO 21500",
+                        "Project Manager", "PMC", "Approved", "plan-sh10-002-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("PLAN/SH10/003", "Project HSE Plan (Cyclone Preparedness)", "Plan", "IS 14489 / OHSAS 18001",
+                        "HSE Manager", "PMC", "Approved", "plan-sh10-003-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("PLAN/SH10/004", "Traffic Management Plan (NH-16 Tie-In)", "Plan", "IRC:SP:55",
+                        "Traffic Engineer", "PMC", "Approved", "plan-sh10-004-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("PLAN/SH10/005", "Environmental Management Plan (Chandaka WLS Buffer Compliance)", "Plan", "MoEFCC EIA Notification",
+                        "Environment Officer", "MoEFCC", "Approved", "plan-sh10-005-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+                new DocEntry("PLAN/SH10/006", "Procurement & Resource Plan", "Plan", "Project PEP Annex C",
+                        "Procurement Manager", "PMC", "Approved", "plan-sh10-006-stub.pdf",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL),
+
+                // Reference framework (1)
+                new DocEntry("REF/SH10/001", "Risk Master Metadata Framework v1.0", "Reference", "IS 15883",
+                        "PMC Risk Manager", "Project Director", "Project Confidential", "Risk-Master-Metadata.docx",
+                        DocumentType.REPORT, null, DocumentCategory.GENERAL)
+        );
+    }
+
+    private static String deriveWbsPackageCode(String docNumber) {
+        if (docNumber.startsWith("DRG/SH10/00")) {
+            int n = Integer.parseInt(docNumber.substring("DRG/SH10/00".length()));
+            return n <= 2 ? "WBS-3" : (n <= 4 ? "WBS-6" : (n == 5 ? "WBS-4" : "WBS-5"));
+        }
+        if (docNumber.startsWith("MS/SH10/")) {
+            int n = Integer.parseInt(docNumber.substring("MS/SH10/00".length()));
+            return n == 1 ? "WBS-1" : (n == 2 ? "WBS-2" : (n == 3 ? "WBS-3" : (n == 4 ? "WBS-6" : "WBS-4")));
+        }
+        return null;
+    }
+
+    // ────────────────────────── Contract attachments ──────────────────────────
+
+    private void seedContractAttachments(Project project) {
+        List<Contract> contracts = contractRepository.findByProjectId(project.getId());
+        if (contracts.isEmpty()) {
+            log.warn("[OD-SH10 attachments] no contracts for project — contract attachment seeding skipped");
+            return;
+        }
+        Contract main = contracts.stream()
+                .min(Comparator.comparing(Contract::getContractNumber))
+                .orElse(contracts.get(0));
+
+        int created = 0;
+        // Contract-level
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.CONTRACT, main.getId(),
+                "Letter-of-Award.pdf", ContractAttachmentType.LOA, "OWD Letter of Award — main EPC contract");
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.CONTRACT, main.getId(),
+                "Contract-Agreement.pdf", ContractAttachmentType.AGREEMENT, "Signed contract agreement (FIDIC Yellow)");
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.CONTRACT, main.getId(),
+                "BOQ-Volume-2.pdf", ContractAttachmentType.BOQ, "BOQ Volume 2 — Priced bill of quantities");
+        // Performance bond level (synthesised parent id — works for demo since FK is app-side)
+        UUID bondId = UUID.randomUUID();
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.PERFORMANCE_BOND, bondId,
+                "Performance-BG-Scan.pdf", ContractAttachmentType.BG_SCAN, "Performance Bank Guarantee 10% — SBI");
+        // Variation order level — synthesise UUID since VO rows live in SQL bundle (gen_random_uuid)
+        UUID voId = UUID.randomUUID();
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.VARIATION_ORDER, voId,
+                "VO-001-Soft-Clay-Peer-Review.pdf", ContractAttachmentType.TEST_REPORT, "VO-001 supporting peer-review report (soft clay treatment)");
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.VARIATION_ORDER, voId,
+                "VO-001-Approval-Note.pdf", ContractAttachmentType.CERTIFICATE, "VO-001 OWD approval note");
+        // Milestone level — synthesise milestone ids
+        UUID milestone1 = UUID.randomUUID();
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.MILESTONE, milestone1,
+                "MoM-Earthwork-Handover.pdf", ContractAttachmentType.MOM, "Earthwork milestone — handover MoM");
+        UUID milestone2 = UUID.randomUUID();
+        created += persistContractAttachment(project.getId(), main, AttachmentEntityType.MILESTONE, milestone2,
+                "MB-Bridge-Pier-P1.pdf", ContractAttachmentType.MEASUREMENT_BOOK, "Measurement Book — Bridge Pier P1 cast");
+
+        log.info("[OD-SH10 attachments] seeded {} contract attachments across CONTRACT/MILESTONE/VO/BOND levels", created);
+    }
+
+    private int persistContractAttachment(UUID projectId, Contract contract, AttachmentEntityType entityType, UUID entityId,
+                                          String fileName, ContractAttachmentType attachmentType, String description) {
+        byte[] bytes = MinimalPdfGenerator.render(
+                fileName.replace(".pdf", ""),
+                description,
+                attachmentType.name(),
+                contract.getContractNumber(),
+                "Odisha SH-10 Bhubaneswar–Cuttack",
+                contract.getContractorName(),
+                "Auto-generated contract attachment");
+        UUID contentId = UUID.randomUUID();
+        String relativePath = projectId + "/" + contract.getId() + "/" + contentId + "/" + fileName;
+        writeBinary(CONTRACT_STORAGE_ROOT.resolve(relativePath), bytes);
+
+        ContractAttachment att = new ContractAttachment();
+        att.setProjectId(projectId);
+        att.setContractId(contract.getId());
+        att.setEntityType(entityType);
+        att.setEntityId(entityId);
+        att.setFileName(fileName);
+        att.setFileSize((long) bytes.length);
+        att.setMimeType("application/pdf");
+        att.setFilePath(relativePath);
+        att.setAttachmentType(attachmentType);
+        att.setDescription(description);
+        att.setUploadedBy("seeder");
+        att.setUploadedAt(Instant.now());
+        contractAttachmentRepository.save(att);
+        return 1;
+    }
+
+    // ────────────────────────── GIS polygons ──────────────────────────
+
+    private record SeededPolygon(WbsPolygon polygon, WbsNode wbsNode) {}
+
+    private List<SeededPolygon> seedGisPolygons(Project project) {
+        // GIS layer (one per project)
+        GisLayer layer = new GisLayer();
+        layer.setProjectId(project.getId());
+        layer.setLayerName("SH-10 WBS Boundaries");
+        layer.setLayerType(GisLayerType.WBS_POLYGON);
+        layer.setDescription("Synthetic corridor polygons along Odisha SH-10 Bhubaneswar–Cuttack (Ch 0+000 to Ch 28+000) — demo data");
+        layer.setIsVisible(true);
+        layer.setOpacity(0.7);
+        layer.setSortOrder(10);
+        UUID layerId = gisLayerRepository.save(layer).getId();
+
+        // L2 WBS nodes (level 2 only; root is level 1)
+        List<WbsNode> l2Nodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(project.getId()).stream()
+                .filter(n -> Integer.valueOf(2).equals(n.getWbsLevel()))
+                .toList();
+        if (l2Nodes.isEmpty()) {
+            log.warn("[OD-SH10 attachments] no L2 WBS nodes — GIS polygon seeding skipped");
+            return List.of();
+        }
+
+        var segments = CorridorGeometry.buildSegments(
+                SH10_START_LAT, SH10_START_LON, SH10_END_LAT, SH10_END_LON,
+                l2Nodes.size(), CORRIDOR_HALF_WIDTH_M);
+
+        List<SeededPolygon> out = new java.util.ArrayList<>(l2Nodes.size());
+        for (int i = 0; i < l2Nodes.size(); i++) {
+            WbsNode node = l2Nodes.get(i);
+            CorridorGeometry.Segment seg = segments.get(i);
+            WbsPolygon p = new WbsPolygon();
+            p.setProjectId(project.getId());
+            p.setWbsNodeId(node.getId());
+            p.setLayerId(layerId);
+            p.setWbsCode(node.getCode());
+            p.setWbsName(node.getName());
+            p.setPolygon(seg.polygon());
+            p.setCenterLatitude(seg.centerLat());
+            p.setCenterLongitude(seg.centerLon());
+            p.setAreaInSqMeters(seg.areaSqMetres());
+            p.setFillColor(packageColor(i));
+            p.setStrokeColor("#000000");
+            WbsPolygon saved = wbsPolygonRepository.save(p);
+            out.add(new SeededPolygon(saved, node));
+        }
+        log.info("[OD-SH10 attachments] seeded {} WBS polygons along SH-10 corridor (layer={})", out.size(), layerId);
+        return out;
+    }
+
+    private String packageColor(int index) {
+        String[] palette = {"#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0"};
+        return palette[index % palette.length];
+    }
+
+    // ─────────────────────── Satellite + progress ──────────────────────
+
+    private void seedSatelliteAndProgress(Project project, List<SeededPolygon> polygons) {
+        if (polygons.isEmpty()) {
+            log.warn("[OD-SH10 attachments] no polygons — satellite seeding skipped");
+            return;
+        }
+        // Compute bbox directly from saved JTS polygons.
+        double bboxW = Double.POSITIVE_INFINITY, bboxS = Double.POSITIVE_INFINITY;
+        double bboxE = Double.NEGATIVE_INFINITY, bboxN = Double.NEGATIVE_INFINITY;
+        for (SeededPolygon sp : polygons) {
+            for (var c : sp.polygon().getPolygon().getExteriorRing().getCoordinates()) {
+                if (c.x < bboxW) bboxW = c.x;
+                if (c.x > bboxE) bboxE = c.x;
+                if (c.y < bboxS) bboxS = c.y;
+                if (c.y > bboxN) bboxN = c.y;
+            }
+        }
+        double[] bbox = new double[] {bboxW, bboxS, bboxE, bboxN};
+
+        record Scene(String code, LocalDate date, String filename, String label) {}
+        List<Scene> scenes = List.of(
+                new Scene("SH10-2024-Q4", LocalDate.of(2024, 11, 15), "sh10-q4-2024.jpeg", "Cyclone Dana post-impact survey"),
+                new Scene("SH10-2025-Q2", LocalDate.of(2025, 5, 15), "sh10-q2-2025.jpeg", "Earthwork peak — Ch 0-15 active"),
+                new Scene("SH10-2025-Q3", LocalDate.of(2025, 8, 15), "sh10-q3-2025.jpeg", "Sub-base + bridge pier P1"),
+                new Scene("SH10-2025-Q4", LocalDate.of(2025, 11, 15), "sh10-q4-2025.jpeg", "DBM paving + bridge superstructure"),
+                new Scene("SH10-2026-Q1", LocalDate.of(2026, 2, 15), "sh10-q1-2026.jpeg", "BC + ROB substructure progressing")
+        );
+
+        int sceneCount = 0;
+        int snapCount = 0;
+        for (int sIdx = 0; sIdx < scenes.size(); sIdx++) {
+            Scene s = scenes.get(sIdx);
+            byte[] imageBytes = loadBinary(SATELLITE_RESOURCE_ROOT + s.filename()).orElse(null);
+            if (imageBytes == null) {
+                log.warn("[OD-SH10 attachments] satellite image missing on classpath: {}", s.filename());
+                continue;
+            }
+            UUID contentId = UUID.randomUUID();
+            String relativePath = project.getId() + "/" + contentId + "/" + s.filename();
+            writeBinary(SATELLITE_STORAGE_ROOT.resolve(relativePath), imageBytes);
+
+            SatelliteImage img = new SatelliteImage();
+            img.setProjectId(project.getId());
+            img.setSceneId(s.code());
+            img.setImageName("SH-10 " + s.label() + " (" + s.code() + ")");
+            img.setDescription("Quarterly site survey — " + s.label() + ". Source: project field survey, treated as satellite imagery for the GIS demo.");
+            img.setCaptureDate(s.date());
+            img.setSource(SatelliteImageSource.MANUAL_UPLOAD);
+            img.setResolution("3840x2160 (UHD field photo)");
+            img.setBoundingBoxGeoJson(CorridorGeometry.bboxAsGeoJson(bbox));
+            img.setFilePath(relativePath);
+            img.setFileSize((long) imageBytes.length);
+            img.setMimeType("image/jpeg");
+            img.setNorthBound(bbox[3]);
+            img.setSouthBound(bbox[1]);
+            img.setEastBound(bbox[2]);
+            img.setWestBound(bbox[0]);
+            img.setStatus(SatelliteImageStatus.READY);
+            img.setCloudCoverPercent(deterministicCloud(s.code()));
+            SatelliteImage savedImg = satelliteImageRepository.save(img);
+            sceneCount++;
+
+            // One snapshot per L2 polygon for this scene — progress interpolates from 0 to a
+            // package-specific final %.
+            for (SeededPolygon p : polygons) {
+                ConstructionProgressSnapshot snap = new ConstructionProgressSnapshot();
+                snap.setProjectId(project.getId());
+                snap.setWbsPolygonId(p.polygon().getId());
+                snap.setCaptureDate(s.date());
+                snap.setSatelliteImageId(savedImg.getId());
+                double finalPct = packageFinalPercent(p.wbsNode().getCode());
+                double progress = finalPct * (sIdx + 1) / scenes.size();
+                snap.setDerivedProgressPercent(progress);
+                snap.setContractorClaimedPercent(progress + 1.5);
+                snap.setVariancePercent(-1.5);
+                snap.setAiProgressPercent(progress);
+                snap.setCvi((double) (40 + 10 * sIdx));
+                snap.setEdi((double) (30 + 12 * sIdx));
+                snap.setNdviChange(-0.05 - 0.01 * sIdx);
+                snap.setWbsPackageCode(p.wbsNode().getCode());
+                snap.setAlertFlag(sIdx == 0 ? SatelliteAlertFlag.GREEN : SatelliteAlertFlag.AMBER_VARIANCE_GT5);
+                snap.setAnalysisMethod(ProgressAnalysisMethod.MANUAL);
+                snap.setAnalyzerId("seeder:od-sh10-attachments-1.0");
+                snap.setAnalysisDurationMs(0);
+                snap.setAnalysisCostMicros(0L);
+                snap.setRemarks("Synthetic snapshot — interpolated from package final %.");
+                progressSnapshotRepository.save(snap);
+                snapCount++;
+            }
+        }
+        log.info("[OD-SH10 attachments] seeded {} satellite scenes + {} construction progress snapshots", sceneCount, snapCount);
+    }
+
+    /** Deterministic 0–15 % cloud cover from sceneId hash — keeps snapshots reproducible. */
+    private double deterministicCloud(String sceneId) {
+        return Math.abs(sceneId.hashCode() % 15);
+    }
+
+    /** Final percent-complete per WBS package as of today's data date — drives progress snapshot interpolation. */
+    private double packageFinalPercent(String wbsCode) {
+        return switch (wbsCode) {
+            case "WBS-1" -> 98.0;  // Earthwork
+            case "WBS-2" -> 92.0;  // Sub-base
+            case "WBS-3" -> 72.0;  // Bituminous
+            case "WBS-4" -> 80.0;  // Drainage
+            case "WBS-5" -> 30.0;  // Road furniture
+            case "WBS-6" -> 65.0;  // Structures
+            case "WBS-7" -> 10.0;  // Misc
+            default -> 50.0;
+        };
+    }
+
+    // ─────────────────────────── Helpers ──────────────────────────
+
+    private Optional<byte[]> loadBinary(String classpathPath) {
+        ClassPathResource res = new ClassPathResource(classpathPath);
+        if (!res.exists()) return Optional.empty();
+        try (InputStream in = res.getInputStream()) {
+            return Optional.of(in.readAllBytes());
+        } catch (IOException e) {
+            log.warn("[OD-SH10 attachments] failed to load {}: {}", classpathPath, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private void writeBinary(Path target, byte[] bytes) {
+        try {
+            Files.createDirectories(target.getParent());
+            Files.write(target, bytes);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to write binary to " + target, e);
+        }
+    }
+
+    private static String sanitizeFileName(String name) {
+        return name.replaceAll("[\\\\/\\x00]", "_");
+    }
+}

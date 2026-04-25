@@ -115,6 +115,170 @@ public class RiskTemplateSeeder implements CommandLineRunner {
             3, 2, 4, "Clearance tracker with pre-emptive follow-up; pre-construction clearances bundled.",
             110);
 
+        // ── ROAD — Risk Master DOCX framework (sections 4.1 - 4.11) ───────────
+        // Sourced from "Risk Master Metadata - Road Construction Project.docx" supplied 2026-04
+        // Land Acquisition (4.1)
+        inserted += upsert("ROAD-LA-12", "Delayed Right-of-Way handover (RK-LA-01)",
+            "Three private land parcels remain under acquisition dispute, blocking embankment start on the most heavily-loaded segment.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.LAND_ACQUISITION,
+            4, 5, 5, "Engage District Collector for expedited LA proceedings under RFCTLARR Act 2013 with Section 3A notifications. Re-sequence to cleared stretches first; invoke EOT.",
+            120);
+        inserted += upsert("ROAD-LA-13", "Encroachment by structures / Jhuggi settlements (RK-LA-02)",
+            "ROW encroachments by informal settlements blocking 30-60 day work fronts.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.LAND_ACQUISITION,
+            3, 4, 4, "RFCTLARR-compliant rehabilitation package; community engagement; Police-NHAI joint demolition orders for non-compliant structures.",
+            121);
+        inserted += upsert("ROAD-UTIL-14", "Underground utility conflict — OFC/Pipeline/HT cable (RK-LA-03)",
+            "Telecom OFC, gas pipeline, or HT power cable crossings discovered during excavation.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.UTILITY_SHIFTING,
+            4, 4, 4, "Drone-based ROW + utility survey pre-construction; advance shifting agreements with BSNL/PGCIL/GAIL; utility shifting as NHAI-borne contractual obligation.",
+            122);
+        // Geotechnical (4.2)
+        inserted += upsert("ROAD-GEO-15", "Unexpected rock formation in cut sections (RK-GEO-01)",
+            "Hard rock at less than 1.5m depth, requiring blasting permits and stockpiled lime/fly ash.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.TECHNICAL,
+            3, 4, 4, "GI boreholes at 500m intervals; seismic refraction surveys; advance blasting permits; price escalation provisions for excess rock.",
+            130);
+        inserted += upsert("ROAD-GEO-16", "Black cotton / expansive soil subgrade (RK-GEO-02)",
+            "CBR < 2% in subgrade zone necessitates lime/cement stabilisation or sub-grade replacement.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.TECHNICAL,
+            3, 3, 3, "Pre-construction CBR testing every 250m; lime/cement stabilisation provision in BOQ; geosynthetic separation layers.",
+            131);
+        inserted += upsert("ROAD-GEO-17", "Groundwater ingress in embankment / foundation zone (RK-GEO-03)",
+            "Groundwater above 2m below FGL in embankment zone; affects compaction and pier foundations.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.TECHNICAL,
+            2, 4, 4, "French drains; interceptor drains; blanket drainage layers; groundwater-level monitoring wells at 100m intervals.",
+            132);
+        // Monsoon / Weather (4.3)
+        inserted += upsert("ROAD-MW-18", "Monsoon flooding of work sites / embankments (RK-MW-01)",
+            "IMD orange/red rainfall alert; flash floods damaging in-progress embankments.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.MONSOON_IMPACT,
+            4, 4, 4, "Front-load earthwork to complete by end-June; pre-position dewatering pumps (2 per work front); berms + silt traps; IMD 5-day advisory subscription.",
+            140);
+        inserted += upsert("ROAD-MW-19", "Extreme heat (>45°C) suspending bituminous paving (RK-MW-02)",
+            "Mat temperature drops below acceptance window during peak summer.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.NATURAL_HAZARD,
+            3, 3, 3, "Shift bituminous paving to 4 AM-9 AM during summer; use VG-40 grade bitumen; pre-mobilise night-shift crews.",
+            141);
+        inserted += upsert("ROAD-MW-20", "Dust storms (Andhi) disrupting operations (RK-MW-03)",
+            "Visibility-related work suspension; dust contamination of bituminous mat.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.NATURAL_HAZARD,
+            3, 2, 2, "Daily IMD weather log; site dust-suppression water-tankers; tarp protection of paved sections.",
+            142);
+        // Materials / price (4.4)
+        inserted += upsert("ROAD-MAT-21", "Bitumen price escalation / shortage (RK-MAT-01)",
+            "Bitumen MoM variance > 8% on IOC schedule; refinery turnaround cycles.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.MARKET_PRICE,
+            3, 4, 3, "Quarterly forward contracts with IOC/HPCL with price-lock; 30-day buffer stock; MoRTH price-escalation formula > 5% variance.",
+            150);
+        inserted += upsert("ROAD-MAT-22", "Steel / reinforcement non-availability for bridges (RK-MAT-02)",
+            "Steel index > 10% above base month; bridge superstructure work stoppage risk.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.MARKET_PRICE,
+            2, 4, 3, "Pre-mobilisation order placement; 60-day stock at site; alternate sourcing approvals from PMC.",
+            151);
+        inserted += upsert("ROAD-MAT-23", "Quarry closure / aggregate shortage (RK-MAT-03)",
+            "Mining authority show-cause to permitted quarry; aggregate lead time spike.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.RESOURCE,
+            3, 3, 3, "Two approved quarry sources per category; advance PMC approval; RAP up to 20% in bituminous base course.",
+            152);
+        // Labour / equipment (4.5)
+        inserted += upsert("ROAD-LAB-24", "Labour shortage / seasonal migration (RK-LAB-01)",
+            "Daily labour attendance below 75% of planned for 3+ consecutive days; festival/harvest migration.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.RESOURCE,
+            3, 3, 3, "Two registered labour contractors from multiple states; dignified camp facilities; ESIC/PF coverage; transparent DBT wages.",
+            160);
+        inserted += upsert("ROAD-LAB-25", "Labour unrest / strike (RK-LAB-02)",
+            "Written complaint to Labour Commissioner; work stoppage; arbitration risk.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.EXTERNAL,
+            2, 4, 3, "Grievance Redressal Mechanism with 24-hour hotline; fortnightly labour welfare meetings; timely DBT wage disbursement.",
+            161);
+        inserted += upsert("ROAD-LAB-26", "Critical equipment breakdown — Grader/Paver/Roller (RK-LAB-03)",
+            "Equipment utilisation rate below 60% for critical plant; lost production days.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.RESOURCE,
+            3, 3, 3, "OEM AMC for critical equipment; 15% spare-parts pre-positioning; empanel 2 local hire agencies; CAR/Equipment Breakdown insurance.",
+            162);
+        // Environmental / forest (4.6)
+        inserted += upsert("ROAD-ENV-27", "Delay in forest / wildlife clearance (RK-ENV-01)",
+            "Stage-I/Stage-II forest clearance pending; NGT petition filed.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.FOREST_CLEARANCE,
+            3, 5, 5, "Forest diversion proposal 24 months before mobilisation; MoEFCC-empanelled EIA consultant; alternates avoiding sensitive zones.",
+            170);
+        inserted += upsert("ROAD-ENV-28", "Non-compliance with EMP / ESMP conditions (RK-ENV-02)",
+            "MoEFCC inspection notice; failed EMP audit triggering work stop.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.STATUTORY_CLEARANCE,
+            2, 4, 3, "On-site Environment & Social Management Unit with dedicated EO; monthly EMP audits; quarterly DEIAA reports.",
+            171);
+        inserted += upsert("ROAD-ENV-29", "Discovery of archaeological / heritage assets in excavation (RK-ENV-03)",
+            "ASI-protected artefacts found in excavation; alignment review and stop-work risk.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.TECHNICAL,
+            1, 5, 5, "Preliminary archaeological survey with ASI; contingency clause in schedule for heritage zones.",
+            172);
+        // Financial (4.7)
+        inserted += upsert("ROAD-FIN-30", "Contractor cash-flow stress / delayed Authority payments (RK-FIN-01)",
+            "IPC payment pending beyond 35 days; subcontractor payment claims piling up.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.CONTRACTOR_FINANCIAL,
+            3, 4, 3, "28-day IPC processing per contract; e-measurement and e-billing; 3-month working-capital reserve; invoke price-variation indices.",
+            180);
+        inserted += upsert("ROAD-FIN-31", "Contractor financial default / insolvency (RK-FIN-02)",
+            "Contractor MIS shows < 30-day working capital; PBG invocation imminent.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.CONTRACTOR_FINANCIAL,
+            2, 5, 5, "Performance Bank Guarantee 10% with step-in rights; quarterly bank-statement review; direct payment to critical subs; termination + retender.",
+            181);
+        inserted += upsert("ROAD-FIN-32", "Subcontractor payment default / walk-off (RK-FIN-03)",
+            "Specialist sub demobilises mid-execution; rework + replacement lead time.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.RESOURCE,
+            3, 3, 3, "DAB mechanism in subcontracts; 21-day formal-notice resolution window; alternate sub list pre-empanelled.",
+            182);
+        // Design change (4.8)
+        inserted += upsert("ROAD-DES-33", "Mid-project geometric design change (IRC update) (RK-DES-01)",
+            "IRC/MoRTH circular received during execution mandates design change.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.TECHNICAL,
+            2, 3, 3, "Freeze design at approved DPR with NHAI concurrence; Change Control Board; price all NHAI-directed scope additions as VOs.",
+            190);
+        inserted += upsert("ROAD-DES-34", "Mid-project grade-separator / flyover addition (RK-DES-02)",
+            "NHAI directs flyover or ROB addition mid-execution; major schedule + cost impact.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.SCHEDULE,
+            2, 4, 5, "VO process pre-approved; design contingency in baseline schedule (10% float for design activities); digital As-Built model updated monthly.",
+            191);
+        // HSE (4.9)
+        inserted += upsert("ROAD-HSE-35", "Fatal construction accident (RK-HSE-01)",
+            "Lost-time fatal incident triggering work stoppage, legal action, contractor compensation.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.HEALTH_SAFETY,
+            2, 5, 4, "ISO 45001 OHSMS; daily toolbox talks; PPE enforcement; HSE Officer per 5km active stretch; monthly third-party HSE audits.",
+            200);
+        inserted += upsert("ROAD-HSE-36", "Third-party road accident in work zone (RK-HSE-02)",
+            "Public-vehicle accident at work-zone diversion; police action and PIL risk.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.HEALTH_SAFETY,
+            3, 4, 3, "IRC:SP:55 traffic management plan at all work zones; solar VMS; trained traffic marshals; barricades + reflectors.",
+            201);
+        inserted += upsert("ROAD-HSE-37", "Hazardous material spill — bitumen / fuel (RK-HSE-03)",
+            "Hot bitumen / diesel spill on site; pollution control board notice risk.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.HEALTH_SAFETY,
+            2, 3, 2, "Bunded fuel storage; spill kits at every plant; bituminous-mat handling SOP; pollution-control board notification within 24 hrs.",
+            202);
+        // Law & Order (4.10)
+        inserted += upsert("ROAD-LO-38", "Community agitation / dharna against land acquisition (RK-LO-01)",
+            "Local newspaper reports of opposition; community dharna at site.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.EXTERNAL,
+            3, 4, 3, "Community Liaison Unit; village/panchayat engagement meetings pre-commencement; documented LA compliance.",
+            210);
+        inserted += upsert("ROAD-LO-39", "Court injunction / NGT stay order (RK-LO-02)",
+            "PIL filed; NGT stay or court injunction halts work for months.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.GEOPOLITICAL,
+            2, 5, 5, "Empanelled legal counsel for pre-emptive monitoring; RTI response within 30 days; LA compliance documentation; EOT claim.",
+            211);
+        // Force majeure (4.11)
+        inserted += upsert("ROAD-FM-40", "Earthquake / natural disaster (RK-FM-01)",
+            "Seismic event; cyclone landfall; flood damage to site infrastructure.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.NATURAL_HAZARD,
+            1, 5, 4, "Force Majeure notice within 14 days per Clause 19.2; CAR insurance claim; Clause 40 EOT; emergency response plan with NDRF/SDRF.",
+            220);
+        inserted += upsert("ROAD-FM-41", "Epidemic / pandemic (COVID-type) (RK-FM-02)",
+            "National health emergency requiring site demobilisation.",
+            Industry.ROAD, ROAD_CATEGORIES, RiskCategory.GEOPOLITICAL,
+            1, 5, 4, "BCP for critical supply chains; force-majeure clause coverage; minimum-staff site protocol; vaccinated workforce policy.",
+            221);
+
         // ── CONSTRUCTION (general / building / bridge) ─────────────────────────
         inserted += upsert("CON-SAFETY-001", "Site safety incident / lost-time injury",
             "Fall, struck-by, or hot-work injury triggers stop-work and authority scrutiny.",

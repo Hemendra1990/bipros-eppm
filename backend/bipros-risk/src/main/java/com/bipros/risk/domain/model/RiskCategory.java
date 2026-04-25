@@ -20,5 +20,6 @@ public enum RiskCategory {
     GEOPOLITICAL,
     NATURAL_HAZARD,
     MARKET_PRICE,
-    TECHNOLOGY
+    TECHNOLOGY,
+    HEALTH_SAFETY
 }
