@@ -14,5 +14,14 @@ public interface DocumentFolderRepository extends JpaRepository<DocumentFolder, 
 
     List<DocumentFolder> findByProjectIdAndParentIdOrderBySortOrder(UUID projectId, UUID parentId);
 
+    /**
+     * Returns the project's root folders (parentId IS NULL). Used both by the
+     * Documents UI sidebar and by DefaultFolderSeeder's idempotency check.
+     * Distinct from the {@code AndParentId} variant above because Spring Data
+     * derived queries bind a null parameter as SQL {@code = NULL}, which never
+     * matches; we need explicit {@code IS NULL}.
+     */
+    List<DocumentFolder> findByProjectIdAndParentIdIsNullOrderBySortOrder(UUID projectId);
+
     Optional<DocumentFolder> findByProjectIdAndId(UUID projectId, UUID id);
 }

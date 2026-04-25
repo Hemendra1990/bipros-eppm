@@ -45,7 +45,7 @@ public class DocumentFolderService {
 
     @Transactional(readOnly = true)
     public List<DocumentFolderResponse> listRootFolders(UUID projectId) {
-        return folderRepository.findByProjectIdAndParentIdOrderBySortOrder(projectId, null)
+        return folderRepository.findByProjectIdAndParentIdIsNullOrderBySortOrder(projectId)
             .stream()
             .map(DocumentFolderResponse::from)
             .toList();
