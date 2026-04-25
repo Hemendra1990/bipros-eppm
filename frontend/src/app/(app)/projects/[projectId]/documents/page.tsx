@@ -60,9 +60,11 @@ export default function DocumentsPage() {
     enabled: !!selectedFolderId,
   });
 
-  // Fetch child folders
+  // Fetch child folders — include expanded folder IDs in the key so React Query
+  // re-runs the fetch whenever the expanded set changes (avoids stale-closure bugs).
+  const expandedFolderIds = [...expandedFolders].sort();
   const { data: childFolders = {} } = useQuery({
-    queryKey: ["folders", projectId, "children"],
+    queryKey: ["folders", projectId, "children", expandedFolderIds],
     queryFn: async () => {
       const result: Record<string, DocumentFolder[]> = {};
       for (const folderId of expandedFolders) {
