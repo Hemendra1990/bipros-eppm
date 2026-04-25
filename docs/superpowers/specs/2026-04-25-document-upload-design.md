@@ -78,6 +78,22 @@ Two pieces of work, decoupled across the existing module boundaries:
 
 **Why `AFTER_COMMIT` and not the default `AFTER_COMPLETION` or synchronous?** We want the project row to be visible to the listener's transaction (the seeder opens a fresh `@Transactional` to write folders). If the project transaction rolls back, no folders are created — the project never existed.
 
+**Startup backfill — required because demo seeders bypass `ProjectService`:** `IcpmsPhaseASeeder`, `NhaiRoadProjectSeeder`, `IoclPanipatSeeder` and other demo seeders implement `CommandLineRunner` and construct `Project` directly via `projectRepository.save(project)`, never going through `ProjectService.createProject()`. The event therefore won't fire for demo projects on a `create-drop` boot, and the Documents tab would still show "No folders".
+
+To cover this without violating the "modules don't depend on each other" rule (CLAUDE.md), the backfill lives in **`bipros-api`** (which already depends on every module):
+
+- `DefaultFolderSeeder` (in `bipros-document`) exposes a public method `seedDefaultsIfMissing(UUID projectId)` containing the same idempotent logic the event listener uses. It depends only on `DocumentFolderRepository`.
+- New class `DefaultFolderStartupBackfill` (in `bipros-api/src/main/java/com/bipros/api/config/seeder/`) is a `@Component` with:
+
+  ```java
+  @EventListener(ApplicationReadyEvent.class)
+  public void onReady() {
+      projectRepository.findAll().forEach(p -> defaultFolderSeeder.seedDefaultsIfMissing(p.getId()));
+  }
+  ```
+
+  Spring Boot fires `ApplicationReadyEvent` *after* all `CommandLineRunner` beans (demo seeders) complete, so ordering is correct without explicit `@Order` annotations. Per-project failures are caught and logged at WARN; the loop continues.
+
 ### 2. Frontend — "New folder" button + modal
 
 **File changes:**
@@ -106,11 +122,12 @@ Two pieces of work, decoupled across the existing module boundaries:
 
 ### 3. Tests
 
-**Backend** (`backend/bipros-document/src/test/java/com/bipros/document/application/service/DefaultFolderSeederTest.java`):
+**Backend** (`backend/bipros-document/src/test/java/com/bipros/document/application/listener/DefaultFolderSeederTest.java`):
 
 - `onProjectCreated_createsSevenRootFolders_whenNoneExist` — publish event, assert 7 rows in repo with the right `(name, code, category, sortOrder)` tuples.
 - `onProjectCreated_isIdempotent_whenRootFoldersExist` — pre-seed one folder, publish event, assert count is still 1.
 - `onProjectCreated_doesNotPropagate_whenSeederFails` — mock repo to throw, assert no exception bubbles up.
+- `backfillExistingProjects_seedsEveryProjectThatHasNoRootFolders` — pre-create 2 projects, one with folders (idempotent skip) and one without (gets 7), invoke backfill, assert correct counts.
 
 **Frontend** (`frontend/e2e/tests/12-documents.spec.ts` — new):
 
@@ -159,6 +176,7 @@ User → "+ New folder" → <NewFolderDialog /> → documentApi.createFolder()
 - `backend/bipros-common/src/main/java/com/bipros/common/event/ProjectCreatedEvent.java`
 - `backend/bipros-document/src/main/java/com/bipros/document/application/listener/DefaultFolderSeeder.java`
 - `backend/bipros-document/src/test/java/com/bipros/document/application/listener/DefaultFolderSeederTest.java`
+- `backend/bipros-api/src/main/java/com/bipros/api/config/seeder/DefaultFolderStartupBackfill.java`
 - `frontend/src/components/document/NewFolderDialog.tsx`
 - `frontend/e2e/tests/12-documents.spec.ts`
 - `frontend/e2e/fixtures/sample.pdf` (small PDF for upload test)
