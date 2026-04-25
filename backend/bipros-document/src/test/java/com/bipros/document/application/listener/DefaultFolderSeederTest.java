@@ -87,4 +87,15 @@ class DefaultFolderSeederTest {
         verify(folderRepository, never()).saveAll(anyList());
         verify(folderRepository, never()).save(any(DocumentFolder.class));
     }
+
+    @Test
+    @DisplayName("does not propagate exceptions from the event listener")
+    void onProjectCreated_doesNotPropagate_whenSeederFails() {
+        when(folderRepository.findByProjectIdAndParentIdIsNullOrderBySortOrder(projectId))
+            .thenThrow(new RuntimeException("simulated DB failure"));
+
+        assertThatCode(() ->
+            seeder.onProjectCreated(new ProjectCreatedEvent(projectId, "P-001", "Test Project"))
+        ).doesNotThrowAnyException();
+    }
 }
