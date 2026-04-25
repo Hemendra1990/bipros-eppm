@@ -1,9 +1,11 @@
 package com.bipros.project.application.service;
 
 import com.bipros.common.dto.PagedResponse;
+import com.bipros.common.event.ProjectCreatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
+import org.springframework.context.ApplicationEventPublisher;
 import com.bipros.contract.domain.model.Contract;
 import com.bipros.contract.domain.model.ContractStatus;
 import com.bipros.contract.domain.repository.ContractRepository;
@@ -47,6 +49,7 @@ public class ProjectService {
     private final ProjectActivityCounter projectActivityCounter;
     private final AuditService auditService;
     private final ContractRepository contractRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProjectResponse createProject(CreateProjectRequest request) {
         log.info("Creating project with code: {}", request.code());
@@ -101,6 +104,10 @@ public class ProjectService {
 
         // Auto-create root WBS node
         createRootWbsNode(saved);
+
+        eventPublisher.publishEvent(
+            new ProjectCreatedEvent(saved.getId(), saved.getCode(), saved.getName())
+        );
 
         return buildProjectResponse(saved);
     }
