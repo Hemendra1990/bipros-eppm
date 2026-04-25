@@ -124,6 +124,7 @@ export interface ProjectResponse {
   fromLocation: string | null;
   toLocation: string | null;
   totalLengthKm: number | null;
+  activeBaselineId: string | null;
   contract: {
     contractId: string | null;
     contractNumber: string | null;

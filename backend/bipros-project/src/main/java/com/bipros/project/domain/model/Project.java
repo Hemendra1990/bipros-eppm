@@ -88,4 +88,13 @@ public class Project extends BaseEntity {
      */
     @Column(name = "total_length_km", precision = 10, scale = 3)
     private BigDecimal totalLengthKm;
+
+    /**
+     * Soft pointer to the project's currently-active baseline (P6's "Project Baseline").
+     * Variance reports default to this when no baselineId is supplied. Soft FK — it lives in
+     * the {@code baseline} schema, so we deliberately don't declare a JPA relationship to
+     * avoid coupling the {@code project} module to {@code bipros-baseline}.
+     */
+    @Column(name = "active_baseline_id")
+    private UUID activeBaselineId;
 }

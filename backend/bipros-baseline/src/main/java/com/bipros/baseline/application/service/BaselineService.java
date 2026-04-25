@@ -17,6 +17,8 @@ import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,7 @@ public class BaselineService {
   private final ActivityRepository activityRepository;
   private final ActivityExpenseRepository activityExpenseRepository;
   private final ResourceAssignmentRepository resourceAssignmentRepository;
+  private final ProjectRepository projectRepository;
   private final AuditService auditService;
 
   @Transactional
@@ -134,8 +137,40 @@ public class BaselineService {
       baselineActivityRepository.save(ba);
     }
 
+    // Auto-activate the first baseline a project gets — variance reports are useless
+    // until SOMETHING is the reference, and forcing the user to click "Activate" right
+    // after "Create" is friction. Subsequent baselines do not auto-replace the active
+    // one; the user has to explicitly switch via setActiveBaseline().
+    projectRepository.findById(projectId).ifPresent(p -> {
+      if (p.getActiveBaselineId() == null) {
+        p.setActiveBaselineId(saved.getId());
+        projectRepository.save(p);
+      }
+    });
+
     auditService.logCreate("Baseline", saved.getId(), BaselineResponse.from(saved));
     return BaselineResponse.from(saved);
+  }
+
+  /**
+   * Set the given baseline as the project's active reference. P6 calls this the
+   * "Project Baseline". Idempotent — calling it with the already-active baseline is fine.
+   * Returns the updated baseline.
+   */
+  @Transactional
+  public BaselineResponse setActiveBaseline(UUID projectId, UUID baselineId) {
+    Baseline baseline = baselineRepository.findById(baselineId)
+        .orElseThrow(() -> new ResourceNotFoundException("Baseline", baselineId));
+    if (!baseline.getProjectId().equals(projectId)) {
+      throw new ResourceNotFoundException("Baseline", baselineId);
+    }
+    Project project = projectRepository.findById(projectId)
+        .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
+    UUID previousBaselineId = project.getActiveBaselineId();
+    project.setActiveBaselineId(baselineId);
+    projectRepository.save(project);
+    auditService.logUpdate("Project", projectId, "activeBaselineId", previousBaselineId, baselineId);
+    return BaselineResponse.from(baseline);
   }
 
   public BaselineDetailResponse getBaseline(UUID baselineId) {

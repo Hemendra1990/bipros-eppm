@@ -63,14 +63,16 @@ public class IcpmsBaselineSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (baselineRepository.count() > 0) {
-            log.info("[IC-PMS M2 GAP] baselines already present, skipping");
-            return;
-        }
-
         Project project = projectRepository.findByCode("DMIC-PROG")
                 .orElseThrow(() -> new IllegalStateException("DMIC-PROG project not seeded — run Phase A first"));
         UUID projectId = project.getId();
+
+        // Per-project sentinel — global count is unsafe now that other seeders (NHAI Road)
+        // also create baselines.
+        if (baselineRepository.countByProjectId(projectId) > 0) {
+            log.info("[IC-PMS M2 GAP] baselines already present for DMIC-PROG, skipping");
+            return;
+        }
 
         List<Activity> activities = activityRepository.findByProjectId(projectId);
         if (activities.isEmpty()) {
@@ -130,6 +132,10 @@ public class IcpmsBaselineSeeder implements CommandLineRunner {
             count++;
         }
 
-        log.info("[IC-PMS M2 GAP] seeded BL1 Initial Baseline for DMIC-PROG with {} activity snapshots", count);
+        // Mark BL1 as DMIC-PROG's active baseline so the variance reports default to it.
+        project.setActiveBaselineId(bl1.getId());
+        projectRepository.save(project);
+
+        log.info("[IC-PMS M2 GAP] seeded BL1 Initial Baseline for DMIC-PROG with {} activity snapshots (active)", count);
     }
 }

@@ -324,6 +324,7 @@ public class ProjectService {
             project.getFromLocation(),
             project.getToLocation(),
             project.getTotalLengthKm(),
+            project.getActiveBaselineId(),
             primaryContractSummary(project.getId()),
             toLocalDateTime(project.getCreatedAt()),
             toLocalDateTime(project.getUpdatedAt())

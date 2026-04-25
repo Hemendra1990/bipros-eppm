@@ -35,6 +35,7 @@ public record ProjectResponse(
     String fromLocation,
     String toLocation,
     BigDecimal totalLengthKm,
+    UUID activeBaselineId,
     ContractSummary contract,
     LocalDateTime createdAt,
     LocalDateTime updatedAt

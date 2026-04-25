@@ -608,6 +608,37 @@ export default function ReportsPage() {
       {/* Standard Reports Tab */}
       {activeTab === "standard" && (
         <div className="space-y-6">
+          {/* Featured: Variance report (P6-style) */}
+          <a
+            href="/reports/variance"
+            className="group relative block overflow-hidden rounded-2xl border border-gold/40 bg-gradient-to-br from-paper via-ivory to-gold-tint/30 p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(28,28,28,0.08)]"
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gold/15 blur-3xl"
+            />
+            <div className="relative flex items-center gap-5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gold-tint text-gold-deep ring-1 ring-gold/30 transition-all duration-200 group-hover:bg-gold group-hover:text-paper group-hover:ring-gold">
+                <GitCompare size={22} strokeWidth={1.75} />
+              </div>
+              <div className="flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                  P6-style report
+                </div>
+                <div className="mt-0.5 font-display text-lg font-semibold tracking-tight text-charcoal">
+                  Variance report — schedule &amp; cost
+                </div>
+                <p className="mt-1 max-w-[640px] text-sm leading-relaxed text-slate">
+                  Compare the live programme against an assigned baseline. Slip / on-track / ahead
+                  by activity and milestone, plus EVM-driven cost variance. Filterable, sortable, CSV-exportable.
+                </p>
+              </div>
+              <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-hairline text-slate transition-all duration-200 group-hover:border-gold group-hover:text-gold-deep group-hover:translate-x-0.5 sm:inline-flex">
+                →
+              </span>
+            </div>
+          </a>
+
           {monthlyProgressData && !monthlyProgressLoading && (
             <div className="rounded-2xl border border-hairline bg-paper p-6 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]">
               <MonthlyProgressReport data={monthlyProgressData as any} />

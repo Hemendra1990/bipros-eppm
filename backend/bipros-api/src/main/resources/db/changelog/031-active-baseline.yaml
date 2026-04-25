@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 031-add-active-baseline-id-to-projects
+      author: bipros
+      comment: |
+        Soft pointer from project.projects to baseline.baselines (the "active" baseline,
+        P6's Project Baseline). Soft because the two tables live in different schemas and
+        we deliberately avoid a hard FK that would couple the bipros-project module to
+        bipros-baseline. The variance report endpoints fall back to this when no
+        baselineId is supplied.
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: projects
+            columns:
+              - column:
+                  name: active_baseline_id
+                  type: UUID

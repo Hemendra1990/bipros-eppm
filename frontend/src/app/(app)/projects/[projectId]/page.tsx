@@ -28,6 +28,8 @@ import { TabTip } from "@/components/common/TabTip";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import { ScheduleComparisonTable } from "@/components/baseline/ScheduleComparisonTable";
+import { ScheduleVarianceSection } from "@/components/reports/ScheduleVarianceSection";
+import { CostVarianceSection } from "@/components/reports/CostVarianceSection";
 import type { ProjectResponse, ActivityResponse, WbsNodeResponse, BaselineResponse, BaselineVarianceRow, ApiResponse } from "@/lib/types";
 import type { WbsTemplateResponse } from "@/lib/types";
 import type { AxiosResponse } from "axios";
@@ -143,6 +145,18 @@ export default function ProjectDetailPage() {
     },
     onError: (err: unknown) => {
       toast.error(getErrorMessage(err, "Failed to create baseline"));
+    },
+  });
+
+  const setActiveBaselineMutation = useMutation({
+    mutationFn: (baselineId: string) => baselineApi.setActiveBaseline(projectId, baselineId),
+    onSuccess: () => {
+      refetchBaselines();
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast.success("Baseline set as active");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to activate baseline"));
     },
   });
 
@@ -357,11 +371,15 @@ export default function ProjectDetailPage() {
         <BaselinesTab
           projectId={projectId}
           baselines={baselinesData?.data ?? []}
+          activeBaselineId={projectData?.data?.activeBaselineId ?? null}
           isLoading={isLoadingBaselines}
           onCreateBaseline={(data) => createBaselineMutation.mutate(data)}
           isCreating={createBaselineMutation.isPending}
           onDeleteBaseline={(baselineId) => deleteBaselineMutation.mutate(baselineId)}
           isDeleting={deleteBaselineMutation.isPending}
+          onSetActiveBaseline={(baselineId) => setActiveBaselineMutation.mutate(baselineId)}
+          isActivating={setActiveBaselineMutation.isPending}
+          activatingBaselineId={setActiveBaselineMutation.variables ?? null}
         />
       )}
       {tab === "resources" && <ResourcesTab projectId={projectId} />}
@@ -1456,20 +1474,29 @@ function NetworkTab({
 function BaselinesTab({
   projectId,
   baselines,
+  activeBaselineId,
   isLoading,
   onCreateBaseline,
   isCreating,
   onDeleteBaseline,
   isDeleting,
+  onSetActiveBaseline,
+  isActivating,
+  activatingBaselineId,
 }: {
   projectId: string;
   baselines: BaselineResponse[];
+  activeBaselineId: string | null;
   isLoading: boolean;
   onCreateBaseline: (data: { name: string; baselineType: string }) => void;
   isCreating: boolean;
   onDeleteBaseline: (baselineId: string) => void;
   isDeleting: boolean;
+  onSetActiveBaseline: (baselineId: string) => void;
+  isActivating: boolean;
+  activatingBaselineId: string | null;
 }) {
+  const [varianceTab, setVarianceTab] = useState<"schedule" | "cost">("schedule");
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: "", baselineType: "PROJECT" });
   const [expandedBaselineId, setExpandedBaselineId] = useState<string | null>(null);
@@ -1616,11 +1643,21 @@ function BaselinesTab({
         />
       ) : (
         <div className="space-y-4">
-          {baselines.map((baseline) => (
+          {baselines.map((baseline) => {
+            const isActive = activeBaselineId === baseline.id;
+            return (
             <div key={baseline.id} className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-text-primary">{baseline.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-text-primary">{baseline.name}</h3>
+                    {isActive && (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold-tint px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gold-ink">
+                        <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+                        Active
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-2 space-y-1 text-sm text-text-secondary">
                     <p>Type: {baseline.baselineType}</p>
                     <p>Date: {new Date(baseline.baselineDate).toLocaleDateString()}</p>
@@ -1628,7 +1665,16 @@ function BaselinesTab({
                     {baseline.totalCost > 0 && <p>Total Cost: {formatDefaultCurrency(baseline.totalCost)}</p>}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
+                  {!isActive && (
+                    <button
+                      onClick={() => onSetActiveBaseline(baseline.id)}
+                      disabled={isActivating && activatingBaselineId === baseline.id}
+                      className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20 disabled:opacity-50"
+                    >
+                      {isActivating && activatingBaselineId === baseline.id ? "Setting…" : "Set as active"}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleViewVariance(baseline.id)}
                     disabled={loadingVarianceId === baseline.id}
@@ -1674,7 +1720,52 @@ function BaselinesTab({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
+        </div>
+      )}
+
+      {activeBaselineId && (
+        <div className="mt-8 space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-t border-hairline pt-6">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-1">
+                Variance · vs active baseline
+              </div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight text-charcoal">
+                Schedule &amp; cost variance
+              </h2>
+            </div>
+            <div className="inline-flex rounded-lg border border-hairline bg-ivory p-0.5">
+              <button
+                type="button"
+                onClick={() => setVarianceTab("schedule")}
+                className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
+                  varianceTab === "schedule"
+                    ? "bg-paper text-charcoal shadow-sm"
+                    : "text-slate hover:text-charcoal"
+                }`}
+              >
+                Schedule
+              </button>
+              <button
+                type="button"
+                onClick={() => setVarianceTab("cost")}
+                className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
+                  varianceTab === "cost"
+                    ? "bg-paper text-charcoal shadow-sm"
+                    : "text-slate hover:text-charcoal"
+                }`}
+              >
+                Cost
+              </button>
+            </div>
+          </div>
+          {varianceTab === "schedule" ? (
+            <ScheduleVarianceSection projectId={projectId} baselineId={activeBaselineId} />
+          ) : (
+            <CostVarianceSection projectId={projectId} baselineId={activeBaselineId} />
+          )}
         </div>
       )}
     </div>

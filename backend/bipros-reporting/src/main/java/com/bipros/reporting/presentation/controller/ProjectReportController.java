@@ -8,8 +8,12 @@ import com.bipros.reporting.application.dto.CashFlowEntry;
 import com.bipros.reporting.application.dto.ReportDefinitionResponse;
 import com.bipros.reporting.application.dto.ResourceHistogramEntry;
 import com.bipros.reporting.application.dto.SCurveDataPoint;
+import com.bipros.reporting.application.dto.CostVarianceReport;
+import com.bipros.reporting.application.dto.ScheduleVarianceReport;
+import com.bipros.reporting.application.service.CostVarianceReportService;
 import com.bipros.reporting.application.service.ReportDataService;
 import com.bipros.reporting.application.service.ReportService;
+import com.bipros.reporting.application.service.ScheduleVarianceReportService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
@@ -48,6 +53,8 @@ public class ProjectReportController {
   private final ReportService reportService;
   private final ReportDataService reportDataService;
   private final BaselineService baselineService;
+  private final ScheduleVarianceReportService scheduleVarianceReportService;
+  private final CostVarianceReportService costVarianceReportService;
 
   @PersistenceContext private EntityManager em;
 
@@ -213,6 +220,27 @@ public class ProjectReportController {
   @GetMapping("/custom")
   public ApiResponse<List<ReportDefinitionResponse>> listCustom(@PathVariable UUID projectId) {
     return ApiResponse.ok(reportService.listReportDefinitions(null));
+  }
+
+  /**
+   * P6-style Schedule Variance Report. {@code baselineId} is optional — when omitted, falls
+   * back to {@code Project.activeBaselineId}. 404 if neither is set.
+   */
+  @GetMapping("/schedule-variance")
+  public ApiResponse<ScheduleVarianceReport> getScheduleVarianceReport(
+      @PathVariable UUID projectId,
+      @RequestParam(required = false) UUID baselineId) {
+    return ApiResponse.ok(scheduleVarianceReportService.getReport(projectId, baselineId));
+  }
+
+  /**
+   * P6-style Cost Variance Report. Same baseline-resolution rules as schedule-variance.
+   */
+  @GetMapping("/cost-variance")
+  public ApiResponse<CostVarianceReport> getCostVarianceReport(
+      @PathVariable UUID projectId,
+      @RequestParam(required = false) UUID baselineId) {
+    return ApiResponse.ok(costVarianceReportService.getReport(projectId, baselineId));
   }
 
   private LocalDate[] resolveProjectWindow(UUID projectId) {

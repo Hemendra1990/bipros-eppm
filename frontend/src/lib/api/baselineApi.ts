@@ -108,4 +108,11 @@ export const baselineApi = {
         `/v1/projects/${projectId}/baselines/${baselineId}/schedule-comparison`
       )
       .then((r) => r.data),
+
+  setActiveBaseline: (projectId: string, baselineId: string) =>
+    apiClient
+      .post<ApiResponse<BaselineResponse>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}/activate`
+      )
+      .then((r) => r.data),
 };

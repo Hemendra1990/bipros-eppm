@@ -74,4 +74,11 @@ public class BaselineController {
         baselineService.getScheduleComparison(projectId, baselineId);
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
+
+  @PostMapping("/{baselineId}/activate")
+  public ResponseEntity<ApiResponse<BaselineResponse>> activateBaseline(
+      @PathVariable UUID projectId, @PathVariable UUID baselineId) {
+    BaselineResponse response = baselineService.setActiveBaseline(projectId, baselineId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
 }
