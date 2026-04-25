@@ -1,0 +1,242 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e438]:
+    - complementary [ref=e439]:
+      - generic [ref=e440]:
+        - generic [ref=e441]:
+          - generic [ref=e442]: B
+          - generic [ref=e443]:
+            - generic [ref=e444]: Bipros
+            - generic [ref=e445]: EPPM
+        - button "Collapse sidebar" [ref=e446]:
+          - img [ref=e447]
+      - generic [ref=e449]:
+        - generic [ref=e450]: Workspace
+        - button "Acme Infrastructure" [ref=e451]:
+          - generic [ref=e452]: Acme Infrastructure
+          - img [ref=e453]
+      - navigation [ref=e455]:
+        - generic [ref=e456]:
+          - generic [ref=e457]: Plan
+          - link "Dashboard" [ref=e458] [cursor=pointer]:
+            - /url: /
+            - img [ref=e460]
+            - generic [ref=e465]: Dashboard
+          - link "Portfolios" [ref=e466] [cursor=pointer]:
+            - /url: /portfolios
+            - img [ref=e467]
+            - generic [ref=e470]: Portfolios
+          - link "Projects" [ref=e471] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e472]
+            - generic [ref=e477]: Projects
+          - link "EPS" [ref=e478] [cursor=pointer]:
+            - /url: /eps
+            - img [ref=e479]
+            - generic [ref=e483]: EPS
+          - link "Dashboards" [ref=e484] [cursor=pointer]:
+            - /url: /dashboards
+            - img [ref=e485]
+            - generic [ref=e490]: Dashboards
+        - generic [ref=e491]:
+          - generic [ref=e492]: Execute
+          - link "Resources" [ref=e493] [cursor=pointer]:
+            - /url: /resources
+            - img [ref=e494]
+            - generic [ref=e499]: Resources
+          - link "Calendars" [ref=e500] [cursor=pointer]:
+            - /url: /admin/calendars
+            - img [ref=e501]
+            - generic [ref=e503]: Calendars
+        - generic [ref=e504]:
+          - generic [ref=e505]: Control
+          - link "Reports" [ref=e506] [cursor=pointer]:
+            - /url: /reports
+            - img [ref=e507]
+            - generic [ref=e509]: Reports
+          - link "Risk" [ref=e510] [cursor=pointer]:
+            - /url: /risk
+            - img [ref=e511]
+            - generic [ref=e513]: Risk
+          - link "OBS" [ref=e514] [cursor=pointer]:
+            - /url: /obs
+            - img [ref=e515]
+            - generic [ref=e520]: OBS
+          - link "Analytics" [ref=e521] [cursor=pointer]:
+            - /url: /analytics
+            - img [ref=e522]
+            - generic [ref=e525]: Analytics
+        - generic [ref=e526]:
+          - generic [ref=e527]: Admin
+          - link "Users" [ref=e528] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e529]
+            - generic [ref=e534]: Users
+          - link "Organisations" [ref=e535] [cursor=pointer]:
+            - /url: /admin/organisations
+            - img [ref=e536]
+            - generic [ref=e540]: Organisations
+          - link "User Access" [ref=e541] [cursor=pointer]:
+            - /url: /admin/user-access
+            - img [ref=e542]
+            - generic [ref=e554]: User Access
+          - link "Resource Types" [ref=e555] [cursor=pointer]:
+            - /url: /admin/resource-types
+            - img [ref=e556]
+            - generic [ref=e559]: Resource Types
+          - link "WBS Templates" [ref=e560] [cursor=pointer]:
+            - /url: /admin/wbs-templates
+            - img [ref=e561]
+            - generic [ref=e564]: WBS Templates
+          - link "Productivity Norms" [ref=e565] [cursor=pointer]:
+            - /url: /admin/productivity-norms
+            - img [ref=e566]
+            - generic [ref=e569]: Productivity Norms
+          - link "Unit Rate Master" [ref=e570] [cursor=pointer]:
+            - /url: /admin/unit-rate-master
+            - img [ref=e571]
+            - generic [ref=e574]: Unit Rate Master
+          - link "Resource Roles" [ref=e575] [cursor=pointer]:
+            - /url: /admin/resource-roles
+            - img [ref=e576]
+            - generic [ref=e581]: Resource Roles
+          - link "Integrations" [ref=e582] [cursor=pointer]:
+            - /url: /admin/integrations
+            - img [ref=e583]
+            - generic [ref=e585]: Integrations
+          - link "User Defined Fields" [ref=e586] [cursor=pointer]:
+            - /url: /admin/udf
+            - img [ref=e587]
+            - generic [ref=e588]: User Defined Fields
+          - link "Settings" [ref=e589] [cursor=pointer]:
+            - /url: /admin/settings
+            - img [ref=e590]
+            - generic [ref=e593]: Settings
+      - generic [ref=e595]:
+        - generic [ref=e596]: SY
+        - generic [ref=e597]:
+          - generic [ref=e598]: System
+          - generic [ref=e599]: Programme lead
+        - button "Sign out" [ref=e600]:
+          - img [ref=e601]
+    - generic [ref=e604]:
+      - banner [ref=e605]:
+        - navigation "Breadcrumbs" [ref=e607]:
+          - generic [ref=e609]: Dashboard
+        - button "Search projects, activities, resources… ⌘K" [ref=e610]:
+          - img [ref=e611]
+          - generic [ref=e614]: Search projects, activities, resources…
+          - generic [ref=e615]: ⌘K
+        - generic [ref=e616]:
+          - button "Notifications" [ref=e617]:
+            - img [ref=e618]
+          - button "Help" [ref=e622]:
+            - img [ref=e623]
+          - button "Switch to dark mode" [ref=e627]:
+            - img [ref=e628]
+          - link "New project" [ref=e630] [cursor=pointer]:
+            - /url: /projects/new
+            - img [ref=e631]
+            - text: New project
+      - main [ref=e632]:
+        - generic [ref=e634]:
+          - generic [ref=e635]:
+            - generic [ref=e636]:
+              - generic [ref=e637]: Today · April 25, 2026
+              - heading "Portfolio dashboard" [level=1] [ref=e638]
+              - paragraph [ref=e639]: Programme health across your active portfolio.
+            - link "New project" [ref=e640] [cursor=pointer]:
+              - /url: /projects/new
+              - img [ref=e641]
+              - text: New project
+          - generic [ref=e643]:
+            - img [ref=e645]
+            - generic [ref=e647]:
+              - generic [ref=e648]: Tip · Dashboard
+              - paragraph [ref=e649]: Your command centre. See project counts by status, total activities, resource utilisation, and recent projects at a glance. Click any card to drill in.
+          - generic [ref=e650]:
+            - generic [ref=e651]:
+              - generic [ref=e652]: Planned
+              - generic [ref=e653]: "0"
+            - generic [ref=e654]:
+              - generic [ref=e655]: Active
+              - generic [ref=e656]: "3"
+            - generic [ref=e657]:
+              - generic [ref=e658]: Completed
+              - generic [ref=e659]: "0"
+            - generic [ref=e660]:
+              - generic [ref=e661]: Resources
+              - generic [ref=e662]: "51"
+          - generic [ref=e663]:
+            - generic [ref=e664]:
+              - generic [ref=e665]: Total activities
+              - generic [ref=e666]: "75"
+            - generic [ref=e667]:
+              - generic [ref=e668]: Critical path
+              - generic [ref=e669]: "29"
+            - generic [ref=e670]:
+              - generic [ref=e671]: Overdue
+              - generic [ref=e672]: "0"
+          - generic [ref=e673]:
+            - generic [ref=e674]:
+              - heading "Recent projects" [level=2] [ref=e675]
+              - link "View all projects →" [ref=e676] [cursor=pointer]:
+                - /url: /projects
+            - table [ref=e678]:
+              - rowgroup [ref=e679]:
+                - row "Project Status Created" [ref=e680]:
+                  - columnheader "Project" [ref=e681]
+                  - columnheader "Status" [ref=e682]
+                  - columnheader "Created" [ref=e683]
+              - rowgroup [ref=e684]:
+                - row "4-Lane Highway Construction – NH-48 (Rajasthan) ACTIVE 25/04/2026" [ref=e685]:
+                  - cell "4-Lane Highway Construction – NH-48 (Rajasthan)" [ref=e686]:
+                    - link "4-Lane Highway Construction – NH-48 (Rajasthan)" [ref=e687] [cursor=pointer]:
+                      - /url: /projects/925a495c-2ca9-4a46-95f2-a9b137837dd3
+                  - cell "ACTIVE" [ref=e688]:
+                    - generic [ref=e689]: ACTIVE
+                  - cell "25/04/2026" [ref=e691]
+                - row "IOCL Panipat — Bitumen Filling Plant Revamp (WO 70143247) ACTIVE 25/04/2026" [ref=e692]:
+                  - cell "IOCL Panipat — Bitumen Filling Plant Revamp (WO 70143247)" [ref=e693]:
+                    - link "IOCL Panipat — Bitumen Filling Plant Revamp (WO 70143247)" [ref=e694] [cursor=pointer]:
+                      - /url: /projects/9fb60953-de9c-4f82-90be-6f96b4a1063e
+                  - cell "ACTIVE" [ref=e695]:
+                    - generic [ref=e696]: ACTIVE
+                  - cell "25/04/2026" [ref=e698]
+                - row "DMIC Master Programme ACTIVE 25/04/2026" [ref=e699]:
+                  - cell "DMIC Master Programme" [ref=e700]:
+                    - link "DMIC Master Programme" [ref=e701] [cursor=pointer]:
+                      - /url: /projects/12460622-7a7c-46cb-80f3-d3e1605fb344
+                  - cell "ACTIVE" [ref=e702]:
+                    - generic [ref=e703]: ACTIVE
+                  - cell "25/04/2026" [ref=e705]
+          - generic [ref=e706]:
+            - heading "Jump back in" [level=2] [ref=e707]
+            - generic [ref=e708]:
+              - link "Projects Portfolio, baselines, programme hierarchy." [ref=e709] [cursor=pointer]:
+                - /url: /projects
+                - img [ref=e711]
+                - generic [ref=e716]: Projects
+                - paragraph [ref=e717]: Portfolio, baselines, programme hierarchy.
+                - generic [ref=e718]: →
+              - link "Resources People, equipment, rate cards, allocations." [ref=e719] [cursor=pointer]:
+                - /url: /resources
+                - img [ref=e721]
+                - generic [ref=e726]: Resources
+                - paragraph [ref=e727]: People, equipment, rate cards, allocations.
+                - generic [ref=e728]: →
+              - link "Calendars Working days, holidays, shift patterns." [ref=e729] [cursor=pointer]:
+                - /url: /admin/calendars
+                - img [ref=e731]
+                - generic [ref=e733]: Calendars
+                - paragraph [ref=e734]: Working days, holidays, shift patterns.
+                - generic [ref=e735]: →
+              - link "Reports Earned-value, variance, executive summaries." [ref=e736] [cursor=pointer]:
+                - /url: /reports
+                - img [ref=e738]
+                - generic [ref=e740]: Reports
+                - paragraph [ref=e741]: Earned-value, variance, executive summaries.
+                - generic [ref=e742]: →
+  - status [ref=e748]: Welcome back!
+  - button "Open Next.js Dev Tools" [ref=e433] [cursor=pointer]:
+    - img [ref=e434]
+  - alert [ref=e437]

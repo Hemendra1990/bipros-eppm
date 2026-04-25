@@ -1,0 +1,173 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e6]: B
+          - generic [ref=e7]:
+            - generic [ref=e8]: Bipros
+            - generic [ref=e9]: EPPM
+        - button "Collapse sidebar" [ref=e10]:
+          - img [ref=e11]
+      - generic [ref=e13]:
+        - generic [ref=e14]: Workspace
+        - button "Acme Infrastructure" [ref=e15]:
+          - generic [ref=e16]: Acme Infrastructure
+          - img [ref=e17]
+      - navigation [ref=e19]:
+        - generic [ref=e20]:
+          - generic [ref=e21]: Plan
+          - link "Dashboard" [ref=e22] [cursor=pointer]:
+            - /url: /
+            - img [ref=e23]
+            - generic [ref=e28]: Dashboard
+          - link "Portfolios" [ref=e29] [cursor=pointer]:
+            - /url: /portfolios
+            - img [ref=e30]
+            - generic [ref=e33]: Portfolios
+          - link "Projects" [ref=e34] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e35]
+            - generic [ref=e40]: Projects
+          - link "EPS" [ref=e41] [cursor=pointer]:
+            - /url: /eps
+            - img [ref=e42]
+            - generic [ref=e46]: EPS
+          - link "Dashboards" [ref=e47] [cursor=pointer]:
+            - /url: /dashboards
+            - img [ref=e48]
+            - generic [ref=e53]: Dashboards
+        - generic [ref=e54]:
+          - generic [ref=e55]: Execute
+          - link "Resources" [ref=e56] [cursor=pointer]:
+            - /url: /resources
+            - img [ref=e57]
+            - generic [ref=e62]: Resources
+          - link "Calendars" [ref=e63] [cursor=pointer]:
+            - /url: /admin/calendars
+            - img [ref=e64]
+            - generic [ref=e66]: Calendars
+        - generic [ref=e67]:
+          - generic [ref=e68]: Control
+          - link "Reports" [ref=e69] [cursor=pointer]:
+            - /url: /reports
+            - img [ref=e70]
+            - generic [ref=e72]: Reports
+          - link "Risk" [ref=e73] [cursor=pointer]:
+            - /url: /risk
+            - img [ref=e74]
+            - generic [ref=e76]: Risk
+          - link "OBS" [ref=e77] [cursor=pointer]:
+            - /url: /obs
+            - img [ref=e78]
+            - generic [ref=e83]: OBS
+          - link "Analytics" [ref=e84] [cursor=pointer]:
+            - /url: /analytics
+            - img [ref=e85]
+            - generic [ref=e88]: Analytics
+        - generic [ref=e89]:
+          - generic [ref=e90]: Admin
+          - link "Users" [ref=e91] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e92]
+            - generic [ref=e97]: Users
+          - link "Organisations" [ref=e98] [cursor=pointer]:
+            - /url: /admin/organisations
+            - img [ref=e99]
+            - generic [ref=e103]: Organisations
+          - link "User Access" [ref=e104] [cursor=pointer]:
+            - /url: /admin/user-access
+            - img [ref=e105]
+            - generic [ref=e117]: User Access
+          - link "Resource Types" [ref=e118] [cursor=pointer]:
+            - /url: /admin/resource-types
+            - img [ref=e120]
+            - generic [ref=e123]: Resource Types
+          - link "WBS Templates" [ref=e124] [cursor=pointer]:
+            - /url: /admin/wbs-templates
+            - img [ref=e125]
+            - generic [ref=e128]: WBS Templates
+          - link "Productivity Norms" [ref=e129] [cursor=pointer]:
+            - /url: /admin/productivity-norms
+            - img [ref=e130]
+            - generic [ref=e133]: Productivity Norms
+          - link "Unit Rate Master" [ref=e134] [cursor=pointer]:
+            - /url: /admin/unit-rate-master
+            - img [ref=e135]
+            - generic [ref=e138]: Unit Rate Master
+          - link "Resource Roles" [ref=e139] [cursor=pointer]:
+            - /url: /admin/resource-roles
+            - img [ref=e140]
+            - generic [ref=e145]: Resource Roles
+          - link "Integrations" [ref=e146] [cursor=pointer]:
+            - /url: /admin/integrations
+            - img [ref=e147]
+            - generic [ref=e149]: Integrations
+          - link "User Defined Fields" [ref=e150] [cursor=pointer]:
+            - /url: /admin/udf
+            - img [ref=e151]
+            - generic [ref=e152]: User Defined Fields
+          - link "Settings" [ref=e153] [cursor=pointer]:
+            - /url: /admin/settings
+            - img [ref=e154]
+            - generic [ref=e157]: Settings
+      - generic [ref=e159]:
+        - generic [ref=e160]: SY
+        - generic [ref=e161]:
+          - generic [ref=e162]: System
+          - generic [ref=e163]: Programme lead
+        - button "Sign out" [ref=e164]:
+          - img [ref=e165]
+    - generic [ref=e168]:
+      - banner [ref=e169]:
+        - navigation "Breadcrumbs" [ref=e171]:
+          - generic [ref=e172]:
+            - link "Dashboard" [ref=e173] [cursor=pointer]:
+              - /url: /
+            - generic [ref=e174]: ›
+          - generic [ref=e175]:
+            - link "Admin" [ref=e176] [cursor=pointer]:
+              - /url: /admin
+            - generic [ref=e177]: ›
+          - generic [ref=e179]: Resource Types
+        - button "Search projects, activities, resources… ⌘K" [ref=e180]:
+          - img [ref=e181]
+          - generic [ref=e184]: Search projects, activities, resources…
+          - generic [ref=e185]: ⌘K
+        - generic [ref=e186]:
+          - button "Notifications" [ref=e187]:
+            - img [ref=e188]
+          - button "Help" [ref=e192]:
+            - img [ref=e193]
+          - button "Switch to dark mode" [ref=e197]:
+            - img [ref=e198]
+          - link "New project" [ref=e200] [cursor=pointer]:
+            - /url: /projects/new
+            - img [ref=e201]
+            - text: New project
+      - main [ref=e202]:
+        - generic [ref=e204]:
+          - generic [ref=e206]:
+            - img [ref=e208]
+            - generic [ref=e210]:
+              - generic [ref=e211]: Tip · Resource Types
+              - paragraph [ref=e212]: Manage the list of Resource Type categories shown when creating resources. The 3M defaults — Manpower, Material and Machine — are locked; admins can add custom types tagged with one of those base categories.
+          - generic [ref=e213]:
+            - heading "Resource Types" [level=1] [ref=e214]
+            - button "+ New Resource Type" [ref=e216]
+          - table [ref=e218]:
+            - rowgroup [ref=e219]:
+              - row "Code Name Base Category Prefix Sort Order Status Actions" [ref=e220]:
+                - columnheader "Code" [ref=e221]
+                - columnheader "Name" [ref=e222]
+                - columnheader "Base Category" [ref=e223]
+                - columnheader "Prefix" [ref=e224]
+                - columnheader "Sort Order" [ref=e225]
+                - columnheader "Status" [ref=e226]
+                - columnheader "Actions" [ref=e227]
+            - rowgroup [ref=e228]:
+              - row "Loading…" [ref=e229]:
+                - cell "Loading…" [ref=e230]
+  - button "Open Next.js Dev Tools" [ref=e236] [cursor=pointer]:
+    - img [ref=e237]
+  - alert [ref=e240]
