@@ -96,6 +96,8 @@ export default function ResourceRolesPage() {
     isLoading: rolesLoading,
     isError: rolesError,
     error: rolesQueryError,
+    refetch: refetchRoles,
+    isFetching: rolesFetching,
   } = useQuery({
     queryKey: ["roles", typeFilter],
     queryFn: () => roleApi.list(typeFilter === "ALL" ? undefined : typeFilter),
@@ -375,11 +377,30 @@ export default function ResourceRolesPage() {
             </form>
           )}
 
-          {rolesError && (
-            <div className="text-danger mb-4">
-              {getErrorMessage(rolesQueryError, "Failed to load roles")}
-            </div>
-          )}
+          {rolesError && (() => {
+            const msg = getErrorMessage(rolesQueryError, "Failed to load roles");
+            const isNetwork = msg === "Network Error";
+            return (
+              <div className="mb-4 rounded-md bg-danger/10 border border-danger/30 p-3 text-sm">
+                <div className="text-danger font-medium">
+                  {isNetwork ? "Couldn't reach the API" : "Failed to load roles"}
+                </div>
+                <div className="text-text-secondary mt-1">
+                  {isNetwork
+                    ? "The browser couldn't reach the backend. The server may have been restarted while this tab was open. Click Retry, or refresh the page."
+                    : msg}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refetchRoles()}
+                  disabled={rolesFetching}
+                  className="mt-2 px-3 py-1 text-xs font-medium bg-accent text-text-primary rounded-md hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {rolesFetching ? "Retrying…" : "Retry"}
+                </button>
+              </div>
+            );
+          })()}
 
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-border">
