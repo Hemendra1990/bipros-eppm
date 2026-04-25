@@ -6,7 +6,6 @@ import com.bipros.document.domain.model.DocumentFolder;
 import com.bipros.document.domain.repository.DocumentFolderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
