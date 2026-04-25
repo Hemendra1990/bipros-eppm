@@ -567,10 +567,12 @@ function calculateLayout(
     level.sort((a, b) => a.code.localeCompare(b.code));
   });
 
-  const colWidth = 250;
-  const rowHeight = 120;
+  // Box is 240×100; leave generous gaps so dependency edges read clearly
+  // and the diagram resembles a tree rather than a tight grid.
+  const colWidth = 360; // 240 box + 120 horizontal gap
+  const rowHeight = 180; // 100 box + 80 vertical gap (within band)
   const padding = 40;
-  const bandGap = 40; // vertical gap between wrapped row-bands
+  const bandGap = 80; // vertical gap between wrapped row-bands
   const MAX_COLS_PER_ROW = 6; // wrap long chains into multiple bands
 
   // Group depth levels into horizontal bands of up to MAX_COLS_PER_ROW columns.

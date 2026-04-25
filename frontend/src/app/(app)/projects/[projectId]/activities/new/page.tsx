@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { projectApi } from "@/lib/api/projectApi";
@@ -15,6 +15,7 @@ import { Breadcrumb } from "@/components/common/Breadcrumb";
 
 export default function NewActivityPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useParams();
   const projectId = params.projectId as string;
 
@@ -51,7 +52,7 @@ export default function NewActivityPage() {
     if (fieldErrors[name]) setFieldErrors((prev) => { const next = { ...prev }; delete next[name]; return next; });
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "duration" ? parseInt(value, 10) : value,
+      [name]: name === "duration" ? (value === "" ? "" : parseInt(value, 10)) : value,
     }));
   };
 
@@ -92,6 +93,7 @@ export default function NewActivityPage() {
         notificationHelpers.handleApiError(result.error, "Failed to create activity");
       } else {
         activityNotifications.created();
+        queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
         router.push(`/projects/${projectId}?tab=activities`);
       }
     } catch (err: unknown) {

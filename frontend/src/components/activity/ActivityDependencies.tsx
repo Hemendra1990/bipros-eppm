@@ -7,6 +7,7 @@ import type { RelationshipResponse, RelationshipType, ActivityResponse } from "@
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Plus, Trash2, ArrowRight, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 const RELATIONSHIP_TYPE_LABELS: Record<RelationshipType, string> = {
@@ -67,8 +68,10 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
     },
   });
 
+  const getActivity = (id: string) => allActivities.find((a) => a.id === id);
+
   const getActivityName = (id: string) => {
-    const act = allActivities.find((a) => a.id === id);
+    const act = getActivity(id);
     return act ? `${act.code} - ${act.name}` : id;
   };
 
@@ -115,24 +118,50 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
             </thead>
             <tbody>
               {predecessors.map((rel) => (
-                <tr key={rel.id} className="border-b border-border/50">
-                  <td className="py-2 text-text-primary">{getActivityName(rel.predecessorActivityId)}</td>
-                  <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
-                  <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
-                  <td className="py-2">
-                    <button
-                      onClick={() => deleteMutation.mutate(rel.id)}
-                      disabled={deleteMutation.isPending}
-                      className="text-danger hover:text-danger"
-                      title="Remove dependency"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <tr key={rel.id} className="border-b border-border/50">
+                    <td className="py-2">
+                      <Link
+                        href={`/projects/${projectId}/activities/${rel.predecessorActivityId}`}
+                        className="text-text-primary hover:text-accent hover:underline"
+                      >
+                        {getActivityName(rel.predecessorActivityId)}
+                      </Link>
+                    </td>
+                    <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
+                    <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
+                    <td className="py-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(rel.id); }}
+                        disabled={deleteMutation.isPending}
+                        className="text-danger hover:text-danger"
+                        title="Remove dependency"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                   </tr>
+               ))}
+             </tbody>
+           </table>
+         )}
+ 
+         {showAddForm && addDirection === "predecessor" && (
+          <AddDependencyForm
+            projectId={projectId}
+            activityId={activityId}
+            activityName={activityName}
+            direction={addDirection}
+            allActivities={allActivities}
+            existingPredecessorIds={predecessors.map((r) => r.predecessorActivityId)}
+            existingSuccessorIds={successors.map((r) => r.successorActivityId)}
+            onClose={() => setShowAddForm(false)}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ["predecessors", projectId, activityId] });
+              queryClient.invalidateQueries({ queryKey: ["successors", projectId, activityId] });
+              queryClient.invalidateQueries({ queryKey: ["relationships", projectId] });
+              setShowAddForm(false);
+            }}
+          />
         )}
       </div>
 
@@ -170,46 +199,52 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
             </thead>
             <tbody>
               {successors.map((rel) => (
-                <tr key={rel.id} className="border-b border-border/50">
-                  <td className="py-2 text-text-primary">{getActivityName(rel.successorActivityId)}</td>
-                  <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
-                  <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
-                  <td className="py-2">
-                    <button
-                      onClick={() => deleteMutation.mutate(rel.id)}
-                      disabled={deleteMutation.isPending}
-                      className="text-danger hover:text-danger"
-                      title="Remove dependency"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
+                  <tr key={rel.id} className="border-b border-border/50">
+                    <td className="py-2">
+                      <Link
+                        href={`/projects/${projectId}/activities/${rel.successorActivityId}`}
+                        className="text-text-primary hover:text-accent hover:underline"
+                      >
+                        {getActivityName(rel.successorActivityId)}
+                      </Link>
+                    </td>
+                    <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
+                    <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
+                    <td className="py-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(rel.id); }}
+                        disabled={deleteMutation.isPending}
+                        className="text-danger hover:text-danger"
+                        title="Remove dependency"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
               ))}
             </tbody>
           </table>
         )}
-      </div>
 
-      {/* Add Dependency Form */}
-      {showAddForm && (
-        <AddDependencyForm
-          projectId={projectId}
-          activityId={activityId}
-          activityName={activityName}
-          direction={addDirection}
-          allActivities={allActivities}
-          existingPredecessorIds={predecessors.map((r) => r.predecessorActivityId)}
-          existingSuccessorIds={successors.map((r) => r.successorActivityId)}
-          onClose={() => setShowAddForm(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["predecessors", projectId, activityId] });
-            queryClient.invalidateQueries({ queryKey: ["successors", projectId, activityId] });
-            queryClient.invalidateQueries({ queryKey: ["relationships", projectId] });
-            setShowAddForm(false);
-          }}
-        />
-      )}
+        {showAddForm && addDirection === "successor" && (
+          <AddDependencyForm
+            projectId={projectId}
+            activityId={activityId}
+            activityName={activityName}
+            direction={addDirection}
+            allActivities={allActivities}
+            existingPredecessorIds={predecessors.map((r) => r.predecessorActivityId)}
+            existingSuccessorIds={successors.map((r) => r.successorActivityId)}
+            onClose={() => setShowAddForm(false)}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ["predecessors", projectId, activityId] });
+              queryClient.invalidateQueries({ queryKey: ["successors", projectId, activityId] });
+              queryClient.invalidateQueries({ queryKey: ["relationships", projectId] });
+              setShowAddForm(false);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -238,7 +273,7 @@ function AddDependencyForm({
 }: AddDependencyFormProps) {
   const [selectedActivityId, setSelectedActivityId] = useState("");
   const [relationshipType, setRelationshipType] = useState<RelationshipType>("FINISH_TO_START");
-  const [lag, setLag] = useState(0);
+  const [lag, setLag] = useState<number | "">(0);
   const [error, setError] = useState("");
 
   // Filter out current activity and already-linked activities
@@ -253,9 +288,10 @@ function AddDependencyForm({
 
   const createMutation = useMutation({
     mutationFn: () => {
+      const numericLag = lag === "" ? 0 : lag;
       const data = direction === "predecessor"
-        ? { predecessorActivityId: selectedActivityId, successorActivityId: activityId, relationshipType, lag }
-        : { predecessorActivityId: activityId, successorActivityId: selectedActivityId, relationshipType, lag };
+        ? { predecessorActivityId: selectedActivityId, successorActivityId: activityId, relationshipType, lag: numericLag }
+        : { predecessorActivityId: activityId, successorActivityId: selectedActivityId, relationshipType, lag: numericLag };
       return activityApi.createRelationship(projectId, data);
     },
     onSuccess: () => {
@@ -326,7 +362,7 @@ function AddDependencyForm({
             <input
               type="number"
               value={lag}
-              onChange={(e) => setLag(parseFloat(e.target.value) || 0)}
+              onChange={(e) => setLag(e.target.value === "" ? "" : parseFloat(e.target.value))}
               min="0"
               step="1"
               className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"

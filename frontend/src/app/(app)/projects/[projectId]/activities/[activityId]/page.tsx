@@ -22,7 +22,13 @@ export default function ActivityDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
 
-  const [editData, setEditData] = useState<UpdateActivityRequest>({
+  type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplete" | "remainingDuration"> & {
+    originalDuration?: number | "";
+    percentComplete?: number | "";
+    remainingDuration?: number | "";
+  };
+
+  const [editData, setEditData] = useState<EditData>({
     name: "",
     percentComplete: 0,
     actualStartDate: "",
@@ -31,9 +37,9 @@ export default function ActivityDetailPage() {
 
   const [usePert, setUsePert] = useState(false);
   const [pertData, setPertData] = useState({
-    optimisticDuration: 0,
-    mostLikelyDuration: 0,
-    pessimisticDuration: 0,
+    optimisticDuration: 0 as number | "",
+    mostLikelyDuration: 0 as number | "",
+    pessimisticDuration: 0 as number | "",
     expectedDuration: 0,
     standardDeviation: 0,
   });
@@ -69,25 +75,24 @@ export default function ActivityDetailPage() {
       ...prev,
       [name]:
         name === "percentComplete" || name === "originalDuration" || name === "remainingDuration"
-          ? parseFloat(value) || 0
+          ? (value === "" ? "" : parseFloat(value))
           : value,
     }));
   };
 
   const handlePertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const numValue = parseFloat(value) || 0;
+    const numValue = value === "" ? "" : parseFloat(value);
     const updated = {
       ...pertData,
       [name]: numValue,
     };
-    setPertData(updated);
 
     // Auto-calculate expected duration and std deviation
-    if (updated.optimisticDuration && updated.mostLikelyDuration && updated.pessimisticDuration) {
-      const o = updated.optimisticDuration;
-      const m = updated.mostLikelyDuration;
-      const p = updated.pessimisticDuration;
+    const o = updated.optimisticDuration === "" ? NaN : updated.optimisticDuration;
+    const m = updated.mostLikelyDuration === "" ? NaN : updated.mostLikelyDuration;
+    const p = updated.pessimisticDuration === "" ? NaN : updated.pessimisticDuration;
+    if (!Number.isNaN(o) && !Number.isNaN(m) && !Number.isNaN(p)) {
       updated.expectedDuration = (o + 4 * m + p) / 6;
       updated.standardDeviation = (p - o) / 6;
     }
@@ -103,7 +108,13 @@ export default function ActivityDetailPage() {
       return;
     }
 
-    updateMutation.mutate(editData);
+    const sanitizedData: UpdateActivityRequest = {
+      ...editData,
+      originalDuration: editData.originalDuration === "" ? 0 : editData.originalDuration,
+      percentComplete: editData.percentComplete === "" ? 0 : editData.percentComplete,
+      remainingDuration: editData.remainingDuration === "" ? 0 : editData.remainingDuration,
+    };
+    updateMutation.mutate(sanitizedData);
   };
 
   const handleStartEdit = () => {
@@ -169,87 +180,93 @@ export default function ActivityDetailPage() {
 }
 
 function ViewMode({ activity, projectId }: { activity: ActivityResponse; projectId: string }) {
+  const stat = (label: string, value: React.ReactNode, tone?: "neutral" | "accent" | "success" | "warning" | "danger") => {
+    const toneCls = {
+      neutral: "text-text-primary",
+      accent: "text-accent",
+      success: "text-success",
+      warning: "text-warning",
+      danger: "text-danger",
+    };
+    return (
+      <div className="rounded-lg border border-border bg-surface/50 p-3">
+        <p className="text-xs text-text-secondary">{label}</p>
+        <p className={`mt-0.5 text-base font-semibold ${tone ? toneCls[tone] : toneCls.neutral}`}>
+          {value}
+        </p>
+      </div>
+    );
+  };
+
+  const datePair = (label: string, value: string | null | undefined, fallback: string) => (
+    <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+      <span className="text-sm text-text-secondary">{label}</span>
+      <span className="text-sm font-medium text-text-primary">{value || fallback}</span>
+    </div>
+  );
+
+  function getStatusTone(status: string): "neutral" | "accent" | "success" | "warning" | "danger" {
+    switch (status) {
+      case "IN_PROGRESS":
+        return "accent";
+      case "ACTIVE":
+      case "COMPLETED":
+        return "success";
+      case "INACTIVE":
+      case "ON_HOLD":
+        return "warning";
+      case "SUSPENDED":
+      case "DELAYED":
+      case "CANCELLED":
+        return "danger";
+      case "NOT_STARTED":
+      case "PLANNED":
+      default:
+        return "neutral";
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Status</h3>
-          <div className="mt-2">
-            <StatusBadge status={activity.status} />
-          </div>
-        </div>
+    <div className="space-y-5">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {stat("Status", <StatusBadge status={activity.status} />, getStatusTone(activity.status))}
+        {stat("% Complete", `${activity.percentComplete}%`, activity.percentComplete === 100 ? "success" : "neutral")}
+        {stat("Duration", `${activity.duration ?? activity.originalDuration ?? 0} days`)}
+        {stat("Remaining", `${activity.remainingDuration ?? 0} days`)}
+      </div>
 
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">% Complete</h3>
-          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.percentComplete}%</p>
+      {/* Schedule Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {stat("Total Float", `${activity.totalFloat ?? 0} days`, (activity.totalFloat ?? 0) === 0 ? "danger" : "neutral")}
+        {stat("Slack", `${activity.slack ?? 0} days`)}
+        {stat("Free Float", `${activity.freeFloat ?? 0} days`)}
+        {stat("Critical", activity.isCritical ? "Yes" : "No", activity.isCritical ? "danger" : "success")}
+      </div>
+
+      {/* Dates Panel */}
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">Dates</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+          {datePair("Planned Start", activity.plannedStartDate, "Not set")}
+          {datePair("Planned Finish", activity.plannedFinishDate, "Not set")}
+          {datePair("Early Start", activity.earlyStartDate, "—")}
+          {datePair("Early Finish", activity.earlyFinishDate, "—")}
+          {datePair("Late Start", activity.lateStartDate, "—")}
+          {datePair("Late Finish", activity.lateFinishDate, "—")}
+          {datePair("Actual Start", activity.actualStartDate, "Not started")}
+          {datePair("Actual Finish", activity.actualFinishDate, "Not finished")}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Duration</h3>
-          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.duration} days</p>
-        </div>
-
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Remaining Duration</h3>
-          <p className="mt-2 text-2xl font-bold text-text-primary">
-            {activity.remainingDuration} days
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Total Float</h3>
-          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.totalFloat} days</p>
-        </div>
-
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Slack</h3>
-          <p className="mt-2 text-2xl font-bold text-text-primary">{activity.slack} days</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Planned Start Date</h3>
-          <p className="mt-2 text-lg text-text-primary">
-            {activity.plannedStartDate || "Not set"}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Planned Finish Date</h3>
-          <p className="mt-2 text-lg text-text-primary">
-            {activity.plannedFinishDate || "Not set"}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Actual Start Date</h3>
-          <p className="mt-2 text-lg text-text-primary">
-            {activity.actualStartDate || "Not started"}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h3 className="text-sm font-medium text-text-secondary">Actual Finish Date</h3>
-          <p className="mt-2 text-lg text-text-primary">
-            {activity.actualFinishDate || "Not finished"}
-          </p>
-        </div>
-      </div>
-
-      {/* Dependencies Section */}
+      {/* Dependencies */}
       <ActivityDependencies
         projectId={projectId}
         activityId={activity.id}
         activityName={activity.name}
       />
 
+      {/* Custom Fields */}
       <UdfSection entityId={activity.id} subject="ACTIVITY" projectId={projectId} />
     </div>
   );
@@ -305,7 +322,7 @@ function EditForm({
             <input
               type="number"
               name="originalDuration"
-              value={data.originalDuration || 0}
+              value={data.originalDuration ?? ""}
               onChange={onChange}
               min="0"
               className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
@@ -316,7 +333,7 @@ function EditForm({
             <input
               type="number"
               name="percentComplete"
-              value={data.percentComplete || 0}
+              value={data.percentComplete ?? ""}
               onChange={onChange}
               min="0"
               max="100"
@@ -399,7 +416,7 @@ function EditForm({
                 <input
                   type="number"
                   name="optimisticDuration"
-                  value={pertData.optimisticDuration || ""}
+                  value={pertData.optimisticDuration}
                   onChange={onPertChange}
                   min="0"
                   step="0.5"
@@ -415,7 +432,7 @@ function EditForm({
                 <input
                   type="number"
                   name="mostLikelyDuration"
-                  value={pertData.mostLikelyDuration || ""}
+                  value={pertData.mostLikelyDuration}
                   onChange={onPertChange}
                   min="0"
                   step="0.5"
@@ -431,7 +448,7 @@ function EditForm({
                 <input
                   type="number"
                   name="pessimisticDuration"
-                  value={pertData.pessimisticDuration || ""}
+                  value={pertData.pessimisticDuration}
                   onChange={onPertChange}
                   min="0"
                   step="0.5"

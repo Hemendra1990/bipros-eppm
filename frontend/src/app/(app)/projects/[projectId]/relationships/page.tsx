@@ -214,7 +214,7 @@ function RelationshipModal({
   const [predecessorId, setPredecessorId] = useState("");
   const [successorId, setSuccessorId] = useState("");
   const [relationshipType, setRelationshipType] = useState<RelationshipType>("FINISH_TO_START");
-  const [lag, setLag] = useState(0);
+  const [lag, setLag] = useState<number | "">(0);
   const [error, setError] = useState("");
 
   const activityOptions = activities.map((a) => ({
@@ -228,7 +228,7 @@ function RelationshipModal({
         predecessorActivityId: predecessorId,
         successorActivityId: successorId,
         relationshipType,
-        lag,
+        lag: lag === "" ? 0 : lag,
       }),
     onSuccess: () => {
       toast.success("Relationship created");
@@ -323,7 +323,7 @@ function RelationshipModal({
               <input
                 type="number"
                 value={lag}
-                onChange={(e) => setLag(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setLag(e.target.value === "" ? "" : parseFloat(e.target.value))}
                 min="0"
                 step="1"
                 className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
@@ -371,7 +371,7 @@ function EditRelationshipModal({
   onSuccess: () => void;
 }) {
   const [relationshipType, setRelationshipType] = useState<RelationshipType>(relationship.relationshipType);
-  const [lag, setLag] = useState(relationship.lag ?? 0);
+  const [lag, setLag] = useState<number | "">(relationship.lag ?? 0);
   const [error, setError] = useState("");
 
   const activityMap = new Map(activities.map((a) => [a.id, a]));
@@ -384,7 +384,7 @@ function EditRelationshipModal({
     mutationFn: () =>
       activityApi.updateRelationship(projectId, relationship.id, {
         relationshipType,
-        lag,
+        lag: lag === "" ? 0 : lag,
       }),
     onSuccess: () => {
       toast.success("Relationship updated");
@@ -446,7 +446,7 @@ function EditRelationshipModal({
             <input
               type="number"
               value={lag}
-              onChange={(e) => setLag(parseFloat(e.target.value) || 0)}
+              onChange={(e) => setLag(e.target.value === "" ? "" : parseFloat(e.target.value))}
               min="0"
               step="1"
               className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
