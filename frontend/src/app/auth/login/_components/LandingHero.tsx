@@ -11,13 +11,18 @@ type LiveStat = {
   label: string;
   value: string;
   delta: string;
-  trend: "up" | "flat";
+  trend: "up" | "flat" | "down";
 };
 
+// PMS-flavoured metrics — programme/project counts, activity volume, resource deployment,
+// schedule and risk performance. Deliberately no financial-portfolio framing.
 const liveStats: LiveStat[] = [
-  { label: "Programmes on track", value: "94.2%", delta: "+2.1 pts", trend: "up" },
-  { label: "Portfolio under mgmt", value: "$42.8B", delta: "+$1.2B QoQ", trend: "up" },
-  { label: "Mean schedule gain", value: "32%", delta: "vs. baseline", trend: "flat" },
+  { label: "Active programmes", value: "380", delta: "+12 QoQ", trend: "up" },
+  { label: "Projects under management", value: "1,240", delta: "+78 QoQ", trend: "up" },
+  { label: "Activities tracked", value: "184K", delta: "+9K MoM", trend: "up" },
+  { label: "Resources deployed", value: "12.4K", delta: "+0.6K MoM", trend: "up" },
+  { label: "Schedule adherence", value: "94.2%", delta: "+2.1 pts", trend: "up" },
+  { label: "Critical risks resolved", value: "87%", delta: "vs. last cycle", trend: "flat" },
 ];
 
 const trustedBy = ["Network Rail", "Ørsted", "Bechtel", "AECOM", "Skanska"];
@@ -114,7 +119,7 @@ export function LandingHero() {
         }}
       />
 
-      <div className="relative grid gap-10 px-9 pt-12 pb-14 lg:grid-cols-[1.25fr_1fr] lg:items-start lg:gap-14">
+      <div className="relative grid gap-10 px-9 pt-12 pb-8 lg:grid-cols-[1.25fr_1fr] lg:items-start lg:gap-14">
         {/* Left column */}
         <div className="relative">
           <div className="mb-4 flex flex-wrap items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-deep">
@@ -206,72 +211,6 @@ export function LandingHero() {
             </div>
           </div>
 
-          {/* Live stats strip — fills the column and mirrors the form height */}
-          <div className="mt-9 overflow-hidden rounded-2xl border border-hairline bg-paper/75 backdrop-blur-sm shadow-[0_4px_20px_rgba(28,28,28,0.04)]">
-            <div className="flex items-center justify-between border-b border-hairline bg-ivory/60 px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-slate">
-              <div className="flex items-center gap-2">
-                <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-emerald animate-pulse" />
-                <span className="text-charcoal font-semibold">Live · customer portfolios</span>
-              </div>
-              <span>Synced 00:14 ago</span>
-            </div>
-            <div className="grid grid-cols-3 divide-x divide-hairline">
-              {liveStats.map((s) => (
-                <div key={s.label} className="relative p-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
-                    {s.label}
-                  </div>
-                  <div
-                    className="mt-2 font-display text-[30px] font-semibold leading-none tracking-[-0.015em] text-charcoal"
-                    style={{ fontVariationSettings: "'opsz' 144" }}
-                  >
-                    {s.value}
-                  </div>
-                  <div
-                    className={`mt-1.5 flex items-center gap-1 text-[11px] font-medium ${
-                      s.trend === "up" ? "text-emerald" : "text-slate"
-                    }`}
-                  >
-                    {s.trend === "up" && <span aria-hidden>↑</span>}
-                    {s.delta}
-                  </div>
-                  {/* decorative sparkline */}
-                  <svg
-                    aria-hidden
-                    className="absolute bottom-3 right-3 opacity-60"
-                    width="46"
-                    height="16"
-                    viewBox="0 0 46 16"
-                    fill="none"
-                  >
-                    <path
-                      d="M1 12 L8 9 L15 11 L22 6 L29 8 L36 4 L44 5"
-                      stroke={s.trend === "up" ? "#2E7D5B" : "#B8962E"}
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      fill="none"
-                    />
-                  </svg>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Trusted-by wordmarks */}
-          <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-ash">
-              Trusted by
-            </div>
-            {trustedBy.map((c) => (
-              <div
-                key={c}
-                className="font-display text-[14px] font-semibold tracking-[0.04em] text-slate/75 transition-colors hover:text-charcoal"
-              >
-                {c}
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Sign-in card */}
@@ -388,6 +327,91 @@ export function LandingHero() {
             ))}
           </div>
         </form>
+      </div>
+
+      {/* Full-width live programme telemetry — fills the visual gap below the
+          sign-in card and removes the finance-flavoured 'Customer portfolios'
+          framing in favour of programme/project/activity volume metrics. */}
+      <div className="relative px-9 pb-14">
+        <div className="overflow-hidden rounded-2xl border border-hairline bg-paper/80 backdrop-blur-sm shadow-[0_4px_20px_rgba(28,28,28,0.05)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline bg-ivory/60 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-slate">
+            <div className="flex items-center gap-2">
+              <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-emerald animate-pulse" />
+              <span className="text-charcoal font-semibold">Live · programme intelligence</span>
+              <span className="text-ash">·</span>
+              <span>Across 400+ teams</span>
+            </div>
+            <span>Synced 00:14 ago</span>
+          </div>
+          {/* gap-px on the grid + bg-hairline on the wrapper gives a uniform 1px
+              divider grid that adapts cleanly across breakpoints. */}
+          <div className="grid grid-cols-2 gap-px bg-hairline sm:grid-cols-3 lg:grid-cols-6">
+            {liveStats.map((s) => (
+              <div
+                key={s.label}
+                className="relative bg-paper/80 p-5"
+              >
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
+                  {s.label}
+                </div>
+                <div
+                  className="mt-2.5 font-display text-[30px] font-semibold leading-none tracking-[-0.015em] text-charcoal"
+                  style={{ fontVariationSettings: "'opsz' 144" }}
+                >
+                  {s.value}
+                </div>
+                <div
+                  className={`mt-2 flex items-center gap-1 text-[11px] font-medium ${
+                    s.trend === "up"
+                      ? "text-emerald"
+                      : s.trend === "down"
+                        ? "text-burgundy"
+                        : "text-slate"
+                  }`}
+                >
+                  {s.trend === "up" && <span aria-hidden>↑</span>}
+                  {s.trend === "down" && <span aria-hidden>↓</span>}
+                  {s.delta}
+                </div>
+                {/* decorative sparkline */}
+                <svg
+                  aria-hidden
+                  className="absolute bottom-3 right-3 opacity-60"
+                  width="56"
+                  height="20"
+                  viewBox="0 0 56 20"
+                  fill="none"
+                >
+                  <path
+                    d="M1 15 L9 12 L17 14 L25 7 L33 9 L41 4 L48 6 L55 3"
+                    stroke={
+                      s.trend === "up" ? "#2E7D5B" : s.trend === "down" ? "#9B2C2C" : "#B8962E"
+                    }
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </svg>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Trusted-by wordmarks */}
+        <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-ash">
+            Trusted by
+          </div>
+          {trustedBy.map((c) => (
+            <div
+              key={c}
+              className="font-display text-[14px] font-semibold tracking-[0.04em] text-slate/75 transition-colors hover:text-charcoal"
+            >
+              {c}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

@@ -9,12 +9,13 @@ export function LandingNav() {
         style={{ background: "linear-gradient(90deg, transparent, #D4AF37 20%, #D4AF37 80%, transparent)", opacity: 0.4 }}
       />
       <div className="flex items-center gap-2.5">
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-[7px] text-paper font-display font-bold text-sm"
-          style={{ background: "linear-gradient(135deg,#D4AF37,#B8962E 60%,#8C6F1E)" }}
-        >
-          B
-        </div>
+        <img
+          src="/bipros-logo.png"
+          alt="Bipros"
+          width={28}
+          height={28}
+          className="h-7 w-7 rounded-[7px] object-contain"
+        />
         <span className="font-display font-semibold text-xl text-charcoal tracking-tight">Bipros</span>
       </div>
       <div className="mx-auto hidden md:flex items-center gap-7 text-[13px] text-slate">

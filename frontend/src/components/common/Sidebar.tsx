@@ -92,12 +92,13 @@ export function Sidebar() {
       <div className="flex items-center justify-between border-b border-hairline px-4 py-5">
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2.5">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-paper font-display font-bold text-base"
-              style={{ background: "linear-gradient(135deg,#D4AF37,#B8962E 60%,#8C6F1E)" }}
-            >
-              B
-            </div>
+            <img
+              src="/bipros-logo.png"
+              alt="Bipros"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-lg object-contain"
+            />
             <div className="flex flex-col leading-none">
               <span className="font-display font-semibold text-lg text-charcoal tracking-tight">
                 Bipros
@@ -109,12 +110,13 @@ export function Sidebar() {
           </div>
         )}
         {sidebarCollapsed && (
-          <div
-            className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-paper font-display font-bold"
-            style={{ background: "linear-gradient(135deg,#D4AF37,#B8962E 60%,#8C6F1E)" }}
-          >
-            B
-          </div>
+          <img
+            src="/bipros-logo.png"
+            alt="Bipros"
+            width={32}
+            height={32}
+            className="mx-auto h-8 w-8 rounded-lg object-contain"
+          />
         )}
         {!sidebarCollapsed && (
           <button
