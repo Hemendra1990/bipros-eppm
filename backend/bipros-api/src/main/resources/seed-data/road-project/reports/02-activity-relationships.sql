@@ -4,6 +4,11 @@
 -- identified".  Pavement chain (1→2→3→5→7) is critical; bridges and
 -- drainage run in parallel with positive float.
 
+-- Idempotent — the NhaiRoadProjectSeeder Java code already creates a base set of
+-- intra-group + inter-group FS relationships, so we skip any pair that already exists
+-- via NOT EXISTS rather than relying on ON CONFLICT (the unique constraint name varies
+-- across migrations).  This keeps the bundle re-runnable and lets boots that hit a
+-- partially-seeded DB succeed.
 INSERT INTO activity.activity_relationships (
     id, created_at, updated_at, version,
     project_id, predecessor_activity_id, successor_activity_id,
@@ -31,7 +36,12 @@ FROM (VALUES
 JOIN activity.activities p ON p.code = rel.pred
  AND p.project_id = (SELECT id FROM project.projects WHERE code = 'BIPROS/NHAI/RJ/2025/001')
 JOIN activity.activities s ON s.code = rel.succ
- AND s.project_id = p.project_id;
+ AND s.project_id = p.project_id
+WHERE NOT EXISTS (
+    SELECT 1 FROM activity.activity_relationships r
+    WHERE r.predecessor_activity_id = p.id
+      AND r.successor_activity_id   = s.id
+);
 
 -- Critical path: the pavement chain from Earthwork → Misc.
 UPDATE activity.activities SET

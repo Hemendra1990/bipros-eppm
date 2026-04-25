@@ -6,12 +6,12 @@ import { dashboardApi } from "@/lib/api/dashboardApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { riskApi } from "@/lib/api/riskApi";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronRight, ShieldAlert, Sparkles } from "lucide-react";
 import type { ProjectResponse, WbsNodeResponse } from "@/lib/types";
 import type { RiskRag, RiskResponse } from "@/lib/api/riskApi";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
 
-// IC-PMS budgets are in INR crores on WBS nodes. This dashboard only shows
-// crore values directly, so no INR→crore conversion helper is needed here.
+// IC-PMS budgets are in INR crores on WBS nodes.
 function formatCrores(crores: number): string {
   const rounded = Number.isFinite(crores) ? Math.round(crores * 100) / 100 : 0;
   return `₹${rounded.toLocaleString("en-IN", {
@@ -23,7 +23,6 @@ function formatCrores(crores: number): string {
 function pickTopLevelBudgetCrores(nodes: WbsNodeResponse[]): number {
   const roots = nodes.filter((n) => n.budgetCrores != null);
   if (roots.length > 0) return roots.reduce((s, n) => s + Number(n.budgetCrores ?? 0), 0);
-  // Walk full tree if roots have no budget.
   let total = 0;
   for (const n of nodes) {
     if (n.budgetCrores != null) total += Number(n.budgetCrores);
@@ -33,14 +32,12 @@ function pickTopLevelBudgetCrores(nodes: WbsNodeResponse[]): number {
 }
 
 function pickRootPercentComplete(nodes: WbsNodeResponse[]): number {
-  // Prefer the first root's summary percent complete — it's the whole-project roll-up.
   for (const n of nodes) {
     if (n.summaryPercentComplete != null) return Number(n.summaryPercentComplete);
   }
   return 0;
 }
 
-// Ordering of RAG severity — CRIMSON is most severe, OPPORTUNITY is positive.
 const RAG_SEVERITY: Record<RiskRag, number> = {
   CRIMSON: 5,
   RED: 4,
@@ -49,12 +46,48 @@ const RAG_SEVERITY: Record<RiskRag, number> = {
   OPPORTUNITY: 1,
 };
 
-export default function ExecutiveDashboardPage() {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null
-  );
+const RAG_BADGE: Record<RiskRag, BadgeVariant> = {
+  CRIMSON: "danger",
+  RED: "danger",
+  AMBER: "warning",
+  GREEN: "success",
+  OPPORTUNITY: "info",
+};
 
-  const { data: dashboardConfig, isLoading: isLoadingConfig } = useQuery({
+function statusBadge(status: string): BadgeVariant {
+  switch (status) {
+    case "ACTIVE":
+      return "success";
+    case "PLANNED":
+      return "gold";
+    case "COMPLETED":
+      return "info";
+    case "ON_HOLD":
+      return "warning";
+    case "CANCELLED":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
+function progressBarClass(percent: number, planned?: number): string {
+  if (planned != null && percent >= planned) return "bg-emerald";
+  if (percent >= 75) return "bg-emerald";
+  if (percent >= 40) return "bg-gold";
+  return "bg-bronze-warn";
+}
+
+function budgetBarClass(util: number): string {
+  if (util > 90) return "bg-burgundy";
+  if (util > 75) return "bg-bronze-warn";
+  return "bg-emerald";
+}
+
+export default function ExecutiveDashboardPage() {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const { isLoading: isLoadingConfig } = useQuery({
     queryKey: ["dashboard-config", "EXECUTIVE"],
     queryFn: () => dashboardApi.getDashboardByTier("EXECUTIVE"),
   });
@@ -75,7 +108,6 @@ export default function ExecutiveDashboardPage() {
 
   const projects = projectsData?.data?.content ?? [];
 
-  // Pull WBS trees per project so we can show real progress + budget utilisation.
   const wbsQueries = useQueries({
     queries: projects.map((p: ProjectResponse) => ({
       queryKey: ["wbs", p.id],
@@ -90,7 +122,6 @@ export default function ExecutiveDashboardPage() {
     if (resp?.data) wbsByProjectId.set(p.id, resp.data);
   });
 
-  // Aggregate risks across all projects: each project has its own /risks endpoint.
   const riskQueries = useQueries({
     queries: projects.map((p: ProjectResponse) => ({
       queryKey: ["risks", p.id],
@@ -102,7 +133,6 @@ export default function ExecutiveDashboardPage() {
   const isLoadingRisks = riskQueries.some((q) => q.isLoading);
   const allRisks: RiskResponse[] = riskQueries.flatMap((q) => q.data?.data ?? []);
 
-  // Top 5 risks: sort by RAG severity then by residual risk score descending.
   const topRisks = [...allRisks]
     .sort((a, b) => {
       const ragDiff = (RAG_SEVERITY[b.rag] ?? 0) - (RAG_SEVERITY[a.rag] ?? 0);
@@ -111,256 +141,367 @@ export default function ExecutiveDashboardPage() {
     })
     .slice(0, 5);
 
-  const getRagColor = (rag: RiskRag | undefined) => {
-    switch (rag) {
-      case "CRIMSON":
-        return "bg-rose-700/20 text-rose-200";
-      case "RED":
-        return "bg-danger/10 text-danger";
-      case "AMBER":
-        return "bg-warning/10 text-warning";
-      case "GREEN":
-        return "bg-success/10 text-success";
-      case "OPPORTUNITY":
-        return "bg-sky-500/10 text-sky-300";
-      default:
-        return "bg-surface-hover/50 text-text-primary";
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "GREEN":
-        return "text-success";
-      case "AMBER":
-        return "text-warning";
-      case "RED":
-        return "text-danger";
-      default:
-        return "text-text-secondary";
-    }
-  };
+  // Roll-ups for the KPI strip
+  const totalProjects = projects.length;
+  const activeCount = projects.filter((p: ProjectResponse) => p.status === "ACTIVE").length;
+  const totalBudget = projects.reduce((sum: number, p: ProjectResponse) => {
+    const wbs = wbsByProjectId.get(p.id) ?? [];
+    return sum + pickTopLevelBudgetCrores(wbs);
+  }, 0);
+  const criticalRiskCount = allRisks.filter(
+    (r) => r.rag === "CRIMSON" || r.rag === "RED"
+  ).length;
 
   if (isLoadingConfig) {
     return (
-      <div className="flex items-center justify-center p-6">
-        <div className="text-text-muted">Loading dashboard...</div>
+      <div className="flex items-center justify-center p-12">
+        <div className="text-sm text-slate">Loading dashboard…</div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-surface-hover">
-            <ArrowLeft size={20} />
-          </button>
+    <div>
+      {/* Page head */}
+      <div className="mb-7 flex items-start gap-4">
+        <Link
+          href="/dashboards"
+          aria-label="Back to dashboards"
+          className="mt-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hairline bg-paper text-slate transition-all duration-200 hover:border-gold/50 hover:text-gold-deep"
+        >
+          <ArrowLeft size={16} strokeWidth={1.75} />
         </Link>
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary">
-            Executive Dashboard
+        <div className="flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-1.5">
+            Executive · corridor view
+          </div>
+          <h1
+            className="font-display text-[34px] font-semibold leading-[1.08] tracking-tight text-charcoal"
+            style={{ fontVariationSettings: "'opsz' 144" }}
+          >
+            Executive dashboard
           </h1>
-          <p className="text-text-secondary">
-            Corridor-level overview and strategic metrics
+          <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-slate">
+            Strategic posture across the corridor — top risks, project health, and budget burn rolled up.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Projects Overview */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-lg border border-border bg-surface/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">
-              Project Portfolio
-            </h2>
+      {/* KPI strip */}
+      <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        <KpiCard label="Projects" value={totalProjects} />
+        <KpiCard label="Active" value={activeCount} accent="emerald" />
+        <KpiCard label="Portfolio budget" value={formatCrores(totalBudget)} accent="gold" />
+        <KpiCard
+          label="Critical risks"
+          value={criticalRiskCount}
+          accent={criticalRiskCount > 0 ? "burgundy" : "emerald"}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        {/* Project Portfolio */}
+        <section className="xl:col-span-2">
+          <SectionHeading
+            kicker="Portfolio"
+            title="Project portfolio"
+            subtitle="Click a project to inspect its KPIs below"
+          />
+          <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
             {isLoadingProjects ? (
-              <div className="text-center text-text-secondary">
-                Loading projects...
+              <div className="space-y-3 p-5">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-lg bg-parchment/60" />
+                ))}
               </div>
             ) : projects.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border py-8 text-center">
-                <p className="text-text-secondary">No projects available</p>
-              </div>
+              <EmptyState label="No projects available" />
             ) : (
-              <div className="space-y-4">
+              <ul className="divide-y divide-hairline">
                 {projects.map((project: ProjectResponse) => {
                   const wbs = wbsByProjectId.get(project.id) ?? [];
                   const budgetCrores = pickTopLevelBudgetCrores(wbs);
                   const progressPercent = Math.round(pickRootPercentComplete(wbs));
-                  // Spent = budget * percent complete, a planned-value approximation
-                  // when no expense ledger exists. Good enough for executive view.
                   const spentCrores = (budgetCrores * progressPercent) / 100;
-                  const budgetUtilization = budgetCrores > 0 ? (spentCrores / budgetCrores) * 100 : 0;
+                  const budgetUtilization =
+                    budgetCrores > 0 ? (spentCrores / budgetCrores) * 100 : 0;
+                  const isSelected = selectedProjectId === project.id;
 
                   return (
-                    <div
-                      key={project.id}
-                      className="rounded-lg border border-border bg-surface-hover/50 p-4 cursor-pointer hover:bg-surface-active/50 transition"
-                      onClick={() => setSelectedProjectId(project.id)}
-                    >
-                      <div className="mb-3 flex items-start justify-between">
-                        <div>
-                          <h3 className="font-medium text-text-primary">
-                            {project.name}
-                          </h3>
-                          <p className="text-sm text-text-secondary">
-                            {project.description}
-                          </p>
+                    <li key={project.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProjectId(project.id)}
+                        className={`group w-full p-5 text-left transition-colors duration-150 hover:bg-ivory ${
+                          isSelected ? "bg-gold-tint/30" : ""
+                        }`}
+                      >
+                        <div className="mb-3 flex items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="truncate font-display text-base font-semibold tracking-tight text-charcoal">
+                                {project.name}
+                              </h3>
+                              {isSelected && (
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                                  selected
+                                </span>
+                              )}
+                            </div>
+                            {project.description && (
+                              <p className="mt-0.5 truncate text-xs text-slate">
+                                {project.description}
+                              </p>
+                            )}
+                          </div>
+                          <Badge variant={statusBadge(project.status || "ACTIVE")} withDot>
+                            {project.status || "ACTIVE"}
+                          </Badge>
                         </div>
-                        <span
-                          className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(
-                            project.status
-                          )}`}
-                        >
-                          {project.status || "ACTIVE"}
+
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <ProgressRow
+                            label="Progress"
+                            value={`${progressPercent}%`}
+                            percent={progressPercent}
+                            barClass={progressBarClass(progressPercent)}
+                          />
+                          <ProgressRow
+                            label="Budget"
+                            value={`${formatCrores(spentCrores)} / ${formatCrores(budgetCrores)}`}
+                            percent={budgetUtilization}
+                            barClass={budgetBarClass(budgetUtilization)}
+                          />
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        {/* Top Risks */}
+        <section>
+          <SectionHeading
+            kicker="Risk register"
+            title="Top 5 risks"
+            icon={<ShieldAlert size={14} strokeWidth={1.75} />}
+          />
+          <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
+            {isLoadingRisks ? (
+              <div className="space-y-3 p-5">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-20 animate-pulse rounded-lg bg-parchment/60" />
+                ))}
+              </div>
+            ) : topRisks.length === 0 ? (
+              <EmptyState label="No risks logged" />
+            ) : (
+              <ul className="divide-y divide-hairline">
+                {topRisks.map((risk) => (
+                  <li key={risk.id} className="p-4">
+                    <div className="mb-1.5 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                          {risk.code}
+                        </div>
+                        <div className="mt-0.5 truncate text-sm font-semibold text-charcoal">
+                          {risk.title}
+                        </div>
+                      </div>
+                      <Badge variant={risk.rag ? RAG_BADGE[risk.rag] : "neutral"} withDot>
+                        {risk.rag || "—"}
+                      </Badge>
+                    </div>
+                    {risk.description && (
+                      <p className="line-clamp-2 text-xs leading-relaxed text-slate">
+                        {risk.description}
+                      </p>
+                    )}
+                    {risk.residualRiskScore != null && (
+                      <div className="mt-2 text-[11px] text-ash">
+                        Residual score:{" "}
+                        <span className="font-semibold text-charcoal">
+                          {Number(risk.residualRiskScore).toFixed(1)}
                         </span>
                       </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      </div>
 
-                      <div className="space-y-3">
-                        {/* Progress */}
-                        <div>
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-medium text-text-secondary">
-                              Progress
-                            </span>
-                            <span className="text-xs font-semibold text-text-primary">
-                              {progressPercent}%
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-surface-active">
-                            <div
-                              className="h-2 rounded-full bg-blue-500 transition-all"
-                              style={{ width: `${progressPercent}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Budget */}
-                        <div>
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-medium text-text-secondary">
-                              Budget Utilization
-                            </span>
-                            <span className="text-xs font-semibold text-text-primary">
-                              {formatCrores(spentCrores)} / {formatCrores(budgetCrores)}
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-surface-active">
-                            <div
-                              className={`h-2 rounded-full transition-all ${
-                                budgetUtilization > 90
-                                  ? "bg-red-500"
-                                  : budgetUtilization > 75
-                                    ? "bg-amber-500"
-                                    : "bg-success"
-                              }`}
-                              style={{ width: `${Math.min(budgetUtilization, 100)}%` }}
-                            />
-                          </div>
-                        </div>
+      {/* Project KPIs */}
+      {selectedProjectId && (
+        <section className="mt-7">
+          <SectionHeading
+            kicker="Project KPIs"
+            title={`Snapshots · ${
+              projects.find((p: ProjectResponse) => p.id === selectedProjectId)?.name ?? ""
+            }`}
+            icon={<Sparkles size={14} strokeWidth={1.75} />}
+          />
+          <div className="rounded-2xl border border-hairline bg-paper p-5">
+            {isLoadingKpis ? (
+              <div className="text-center text-sm text-slate">Loading KPIs…</div>
+            ) : projectKpis && projectKpis.data && projectKpis.data.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
+                {projectKpis.data.map((kpi) => {
+                  const tone =
+                    kpi.status === "GREEN"
+                      ? "emerald"
+                      : kpi.status === "AMBER"
+                        ? "bronze"
+                        : "burgundy";
+                  return (
+                    <div
+                      key={kpi.id}
+                      className="rounded-xl border border-hairline bg-ivory p-4"
+                    >
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                        KPI {kpi.kpiDefinitionId}
+                      </div>
+                      <div
+                        className={`mt-2 font-display text-3xl font-semibold leading-none tracking-tight ${
+                          tone === "emerald"
+                            ? "text-emerald"
+                            : tone === "bronze"
+                              ? "text-bronze-warn"
+                              : "text-burgundy"
+                        }`}
+                      >
+                        {kpi.value.toFixed(2)}
+                      </div>
+                      <div className="mt-2">
+                        <Badge
+                          variant={
+                            kpi.status === "GREEN"
+                              ? "success"
+                              : kpi.status === "AMBER"
+                                ? "warning"
+                                : "danger"
+                          }
+                          withDot
+                        >
+                          {kpi.status}
+                        </Badge>
                       </div>
                     </div>
                   );
                 })}
               </div>
+            ) : (
+              <EmptyState label="No KPIs available for this project" />
             )}
           </div>
-        </div>
-
-        {/* Top Risks */}
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-text-primary">
-            Top 5 Risks
-          </h2>
-          {isLoadingRisks ? (
-            <div className="text-center text-text-secondary">Loading risks...</div>
-          ) : !topRisks || topRisks.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border py-8 text-center">
-              <p className="text-text-secondary">No risks available</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {topRisks.map((risk: RiskResponse) => (
-                <div key={risk.id} className="rounded-lg border border-border bg-surface-hover/50 p-3">
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wide text-text-muted">
-                        {risk.code}
-                      </div>
-                      <span className="text-sm font-medium text-text-primary">
-                        {risk.title}
-                      </span>
-                    </div>
-                    <span
-                      className={`inline-block shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${getRagColor(
-                        risk.rag
-                      )}`}
-                    >
-                      {risk.rag || "—"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-text-secondary line-clamp-2">
-                    {risk.description || "No description"}
-                  </p>
-                  {risk.residualRiskScore != null && (
-                    <div className="mt-2 text-[11px] text-text-muted">
-                      Residual score: {Number(risk.residualRiskScore).toFixed(1)}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Project KPIs */}
-      {selectedProjectId && (
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-text-primary">
-            Project KPIs
-          </h2>
-          {isLoadingKpis ? (
-            <div className="text-center text-text-secondary">Loading KPIs...</div>
-          ) : projectKpis && projectKpis.data && projectKpis.data.length > 0 ? (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {projectKpis.data.map((kpi) => (
-                <div
-                  key={kpi.id}
-                  className="rounded-lg border border-border bg-surface-hover/50 p-4 text-center"
-                >
-                  <div className="mb-2 text-sm font-medium text-text-secondary">
-                    KPI {kpi.kpiDefinitionId}
-                  </div>
-                  <div
-                    className={`text-2xl font-bold ${getStatusColor(
-                      kpi.status
-                    )}`}
-                  >
-                    {kpi.value.toFixed(2)}
-                  </div>
-                  <div
-                    className={`mt-2 inline-block rounded-full px-2 py-1 text-xs font-semibold ${
-                      kpi.status === "GREEN"
-                        ? "bg-success/10 text-success"
-                        : kpi.status === "AMBER"
-                          ? "bg-warning/10 text-warning"
-                          : "bg-danger/10 text-danger"
-                    }`}
-                  >
-                    {kpi.status}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border py-8 text-center">
-              <p className="text-text-secondary">No KPIs available for this project</p>
-            </div>
-          )}
-        </div>
+        </section>
       )}
+    </div>
+  );
+}
+
+// ----------------------- shared local primitives -----------------------
+
+function KpiCard({
+  label,
+  value,
+  accent = "default",
+}: {
+  label: string;
+  value: number | string;
+  accent?: "default" | "emerald" | "burgundy" | "gold";
+}) {
+  const rail =
+    accent === "emerald"
+      ? "border-l-[3px] border-l-emerald"
+      : accent === "burgundy"
+        ? "border-l-[3px] border-l-burgundy"
+        : accent === "gold"
+          ? "border-l-[3px] border-l-gold"
+          : "";
+  return (
+    <div
+      className={`rounded-xl border border-hairline bg-paper p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] ${rail}`}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-2">
+        {label}
+      </div>
+      <div
+        className="font-display text-[32px] font-semibold leading-none tracking-tight text-charcoal"
+        style={{ fontVariationSettings: "'opsz' 144" }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({
+  kicker,
+  title,
+  subtitle,
+  icon,
+}: {
+  kicker: string;
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3.5 flex items-baseline justify-between gap-3">
+      <div>
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+          {icon && <span>{icon}</span>}
+          {kicker}
+        </div>
+        <h2 className="mt-0.5 font-display text-xl font-semibold tracking-tight text-charcoal">
+          {title}
+        </h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function ProgressRow({
+  label,
+  value,
+  percent,
+  barClass,
+}: {
+  label: string;
+  value: string;
+  percent: number;
+  barClass: string;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate">
+          {label}
+        </span>
+        <span className="text-xs font-semibold text-charcoal">{value}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-parchment">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barClass}`}
+          style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-hairline bg-ivory/50 p-8 text-sm text-slate">
+      <ChevronRight size={14} className="text-ash" />
+      {label}
     </div>
   );
 }

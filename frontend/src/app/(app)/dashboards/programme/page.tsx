@@ -9,8 +9,13 @@ import { organisationApi } from "@/lib/api/organisationApi";
 import { analyticsApi, type ContractorPerformance } from "@/lib/api/analyticsApi";
 import { portfolioReportApi, type PortfolioEvmRow } from "@/lib/api/portfolioReportApi";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import type { ProjectResponse, ActivityResponse, OrganisationResponse } from "@/lib/types";
+import { ArrowLeft, Calendar, Flag, Gauge, Users } from "lucide-react";
+import type {
+  ProjectResponse,
+  ActivityResponse,
+  OrganisationResponse,
+} from "@/lib/types";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
 
 interface Milestone {
   id: string;
@@ -23,19 +28,57 @@ interface Milestone {
 interface ContractorScorecard {
   id: string;
   name: string;
-  // Scores are `null` until contractor-scorecard ingestion is wired — the UI
-  // renders "n/a" badges in that case instead of fabricating numbers.
   performanceScore: number | null;
   safetyScore: number | null;
   complianceScore: number | null;
 }
 
-export default function ProgrammeDashboardPage() {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null
-  );
+function milestoneBadge(status: string): BadgeVariant {
+  switch (status) {
+    case "COMPLETED":
+      return "success";
+    case "IN_PROGRESS":
+      return "info";
+    case "PENDING":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
 
-  const { data: dashboardConfig, isLoading: isLoadingConfig } = useQuery({
+function scoreColor(score: number | null) {
+  if (score == null) return "text-ash";
+  if (score >= 90) return "text-emerald";
+  if (score >= 80) return "text-steel";
+  if (score >= 70) return "text-bronze-warn";
+  return "text-burgundy";
+}
+
+function scoreBarColor(score: number | null) {
+  if (score == null) return "bg-ash/40";
+  if (score >= 90) return "bg-emerald";
+  if (score >= 80) return "bg-steel";
+  if (score >= 70) return "bg-bronze-warn";
+  return "bg-burgundy";
+}
+
+function evmTone(value: number | undefined): {
+  text: string;
+  badge: BadgeVariant;
+} {
+  if (value == null) return { text: "text-ash", badge: "neutral" };
+  if (value >= 0.95) return { text: "text-emerald", badge: "success" };
+  if (value >= 0.9) return { text: "text-steel", badge: "info" };
+  return { text: "text-burgundy", badge: "danger" };
+}
+
+const formatScore = (score: number | null) =>
+  score == null ? "n/a" : `${score}%`;
+
+export default function ProgrammeDashboardPage() {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const { isLoading: isLoadingConfig } = useQuery({
     queryKey: ["dashboard-config", "PROGRAMME"],
     queryFn: () => dashboardApi.getDashboardByTier("PROGRAMME"),
   });
@@ -59,16 +102,12 @@ export default function ProgrammeDashboardPage() {
     staleTime: 5 * 60_000,
   });
 
-  // Real per-contractor performance/compliance from the new analytics endpoint.
-  // Derived server-side from RA-bill satellite-gate PASS % + BG-validity %.
   const { data: contractorPerfData } = useQuery({
     queryKey: ["analytics", "contractor-performance"],
     queryFn: () => analyticsApi.getContractorPerformance(),
     staleTime: 60_000,
   });
 
-  // Portfolio-level EVM rollup — one round-trip for every visible project, backed
-  // by the latest EvmCalculation per project.
   const { data: evmRollupResponse } = useQuery({
     queryKey: ["portfolio", "evm-rollup"],
     queryFn: () => portfolioReportApi.getEvmRollup(),
@@ -89,7 +128,6 @@ export default function ProgrammeDashboardPage() {
     return map;
   }, [contractorPerfData]);
 
-  // Convert activities to milestone format
   const mockMilestones: Milestone[] = activities
     .filter((a: ActivityResponse) => a.name?.toLowerCase()?.includes("milestone"))
     .slice(0, 4)
@@ -101,7 +139,6 @@ export default function ProgrammeDashboardPage() {
       status: a.status || "PENDING",
     }));
 
-  // Fallback to mock milestones if no activities match
   const milestonesToDisplay: Milestone[] =
     mockMilestones.length > 0
       ? mockMilestones
@@ -136,10 +173,6 @@ export default function ProgrammeDashboardPage() {
           },
         ];
 
-  // Real EPC contractors from /v1/organisations?type=EPC_CONTRACTOR, joined to
-  // /v1/analytics/contractor-performance for derived scores. Performance comes
-  // from satellite-gate PASS% on RA bills, compliance from BG validity%. Safety
-  // stays null because safety-incident ingestion is not yet wired.
   const contractors: ContractorScorecard[] = epcContractors.map((o) => {
     const perf = contractorPerfByCode.get(o.code);
     return {
@@ -151,223 +184,341 @@ export default function ProgrammeDashboardPage() {
     };
   });
 
-  const getMilestoneStatusColor = (status: string) => {
-    switch (status) {
-      case "COMPLETED":
-        return "bg-success/10 text-success";
-      case "IN_PROGRESS":
-        return "bg-accent/10 text-blue-300";
-      case "PENDING":
-        return "bg-surface-hover/50 text-text-primary";
-      default:
-        return "bg-surface-hover/50 text-text-primary";
-    }
-  };
-
-  const getScoreColor = (score: number | null) => {
-    if (score == null) return "text-text-muted";
-    if (score >= 90) return "text-success";
-    if (score >= 80) return "text-accent";
-    if (score >= 70) return "text-warning";
-    return "text-danger";
-  };
-
-  const formatScore = (score: number | null) =>
-    score == null ? "n/a" : `${score}%`;
+  // Aggregate KPI strip
+  const evmRows = Array.from(evmByProjectId.values());
+  const avgSpi = evmRows.length
+    ? evmRows.reduce((s, r) => s + (r.spi ?? 0), 0) / evmRows.length
+    : null;
+  const avgCpi = evmRows.length
+    ? evmRows.reduce((s, r) => s + (r.cpi ?? 0), 0) / evmRows.length
+    : null;
+  const milestoneCompleted = milestonesToDisplay.filter(
+    (m) => m.status === "COMPLETED"
+  ).length;
 
   if (isLoadingConfig) {
     return (
-      <div className="flex items-center justify-center p-6">
-        <div className="text-text-muted">Loading dashboard...</div>
+      <div className="flex items-center justify-center p-12">
+        <div className="text-sm text-slate">Loading dashboard…</div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-surface-hover">
-            <ArrowLeft size={20} />
-          </button>
+    <div>
+      {/* Page head */}
+      <div className="mb-7 flex items-start gap-4">
+        <Link
+          href="/dashboards"
+          aria-label="Back to dashboards"
+          className="mt-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hairline bg-paper text-slate transition-all duration-200 hover:border-gold/50 hover:text-gold-deep"
+        >
+          <ArrowLeft size={16} strokeWidth={1.75} />
         </Link>
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary">
-            Programme Dashboard
+        <div className="flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-1.5">
+            Programme · earned-value
+          </div>
+          <h1
+            className="font-display text-[34px] font-semibold leading-[1.08] tracking-tight text-charcoal"
+            style={{ fontVariationSettings: "'opsz' 144" }}
+          >
+            Programme dashboard
           </h1>
-          <p className="text-text-secondary">
-            Earned Value Management and contractor performance
+          <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-slate">
+            Earned-value performance, milestone slippage and contractor scorecards across active programmes.
           </p>
         </div>
       </div>
 
-      {/* EVM Metrics */}
-      <div className="rounded-lg border border-border bg-surface/50 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-text-primary">
-          Earned Value Metrics
-        </h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {projects.map((project: ProjectResponse) => {
-            const evm = evmByProjectId.get(project.id);
-            return (
-              <div
-                key={project.id}
-                className="rounded-lg border border-border bg-surface-hover/50 p-4 cursor-pointer hover:bg-surface-active/50 transition"
-                onClick={() => setSelectedProjectId(project.id)}
-              >
-                <h3 className="mb-4 font-medium text-text-primary">
-                  {project.name}
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-xs font-medium text-text-secondary">
-                      Schedule Performance Index (SPI)
-                    </div>
-                    <div
-                      className={`text-2xl font-bold ${
-                        evm && evm.spi >= 0.95
-                          ? "text-success"
-                          : evm && evm.spi >= 0.9
-                            ? "text-accent"
-                            : "text-danger"
-                      }`}
-                    >
-                      {evm ? evm.spi.toFixed(2) : "N/A"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium text-text-secondary">
-                      Cost Performance Index (CPI)
-                    </div>
-                    <div
-                      className={`text-2xl font-bold ${
-                        evm && evm.cpi >= 0.95
-                          ? "text-success"
-                          : evm && evm.cpi >= 0.9
-                            ? "text-accent"
-                            : "text-danger"
-                      }`}
-                    >
-                      {evm ? evm.cpi.toFixed(2) : "N/A"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* KPI strip */}
+      <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        <KpiCard label="Active programmes" value={projects.length} />
+        <KpiCard
+          label="Avg SPI"
+          value={avgSpi != null ? avgSpi.toFixed(2) : "—"}
+          accent={avgSpi != null && avgSpi < 0.95 ? "burgundy" : "emerald"}
+        />
+        <KpiCard
+          label="Avg CPI"
+          value={avgCpi != null ? avgCpi.toFixed(2) : "—"}
+          accent={avgCpi != null && avgCpi < 0.95 ? "burgundy" : "emerald"}
+        />
+        <KpiCard
+          label="Milestones met"
+          value={`${milestoneCompleted}/${milestonesToDisplay.length}`}
+          accent="gold"
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Milestones */}
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-text-primary">
-            Milestone Tracker
-          </h2>
-          <div className="space-y-3">
-            {milestonesToDisplay.map((milestone) => (
-              <div
-                key={milestone.id}
-                className="rounded-lg border border-border bg-surface-hover/50 p-4"
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <h3 className="font-medium text-text-primary">
-                    {milestone.name}
-                  </h3>
-                  <span
-                    className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${getMilestoneStatusColor(
-                      milestone.status
-                    )}`}
-                  >
-                    {milestone.status}
-                  </span>
-                </div>
-                <div className="text-sm text-text-secondary">
-                  Planned:{" "}
-                  {new Date(milestone.plannedDate).toLocaleDateString()}
-                  {milestone.actualDate &&
-                    ` | Actual: ${new Date(milestone.actualDate).toLocaleDateString()}`}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Contractor Scorecards */}
-        <div className="rounded-lg border border-border bg-surface/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-text-primary">
-            Contractor Performance
-          </h2>
-          {contractors.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border py-8 text-center">
-              <p className="text-text-secondary">No EPC contractors registered</p>
+      {/* EVM cards */}
+      <section className="mb-6">
+        <SectionHeading
+          kicker="Earned value"
+          title="EVM by project"
+          icon={<Gauge size={14} strokeWidth={1.75} />}
+        />
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 xl:grid-cols-4">
+          {projects.length === 0 ? (
+            <div className="md:col-span-2 xl:col-span-4">
+              <EmptyState label="No projects available" />
             </div>
           ) : (
-            <div className="space-y-4">
-              {contractors.map((contractor) => (
-                <div
-                  key={contractor.id}
-                  className="rounded-lg border border-border bg-surface-hover/50 p-4"
+            projects.map((project: ProjectResponse) => {
+              const evm = evmByProjectId.get(project.id);
+              const spiTone = evmTone(evm?.spi);
+              const cpiTone = evmTone(evm?.cpi);
+              const isSelected = selectedProjectId === project.id;
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => setSelectedProjectId(project.id)}
+                  className={`group rounded-2xl border bg-paper p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] ${
+                    isSelected
+                      ? "border-gold/50 ring-1 ring-gold/15"
+                      : "border-hairline hover:border-gold/40"
+                  }`}
                 >
-                  <h3 className="mb-3 font-medium text-text-primary">{contractor.name}</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-text-secondary">
-                        Performance
+                  <div className="mb-4 flex items-start justify-between gap-2">
+                    <h3 className="line-clamp-2 font-display text-base font-semibold leading-snug tracking-tight text-charcoal">
+                      {project.name}
+                    </h3>
+                    {isSelected && (
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                        ●
                       </span>
-                      <span
-                        className={`text-sm font-semibold ${getScoreColor(contractor.performanceScore)}`}
-                      >
-                        {formatScore(contractor.performanceScore)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-surface-active">
-                      <div
-                        className="h-1.5 rounded-full bg-blue-500"
-                        style={{ width: `${contractor.performanceScore ?? 0}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-text-secondary">
-                        Safety
-                      </span>
-                      <span
-                        className={`text-sm font-semibold ${getScoreColor(contractor.safetyScore)}`}
-                      >
-                        {formatScore(contractor.safetyScore)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-surface-active">
-                      <div
-                        className="h-1.5 rounded-full bg-success"
-                        style={{ width: `${contractor.safetyScore ?? 0}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-text-secondary">
-                        Compliance
-                      </span>
-                      <span
-                        className={`text-sm font-semibold ${getScoreColor(contractor.complianceScore)}`}
-                      >
-                        {formatScore(contractor.complianceScore)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-surface-active">
-                      <div
-                        className="h-1.5 rounded-full bg-purple-500"
-                        style={{ width: `${contractor.complianceScore ?? 0}%` }}
-                      />
-                    </div>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EvmStat
+                      label="SPI"
+                      value={evm ? evm.spi.toFixed(2) : "—"}
+                      tone={spiTone.text}
+                    />
+                    <EvmStat
+                      label="CPI"
+                      value={evm ? evm.cpi.toFixed(2) : "—"}
+                      tone={cpiTone.text}
+                    />
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        {/* Milestones */}
+        <section>
+          <SectionHeading
+            kicker="Schedule"
+            title="Milestone tracker"
+            icon={<Flag size={14} strokeWidth={1.75} />}
+          />
+          <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
+            <ol className="relative divide-y divide-hairline">
+              {milestonesToDisplay.map((milestone, i) => {
+                const planned = milestone.plannedDate
+                  ? new Date(milestone.plannedDate).toLocaleDateString()
+                  : "—";
+                const actual = milestone.actualDate
+                  ? new Date(milestone.actualDate).toLocaleDateString()
+                  : null;
+                return (
+                  <li key={milestone.id} className="relative p-5 pl-12">
+                    {/* Timeline dot + line */}
+                    <span
+                      aria-hidden
+                      className={`absolute left-5 top-6 h-2.5 w-2.5 rounded-full ring-4 ring-paper ${
+                        milestone.status === "COMPLETED"
+                          ? "bg-emerald"
+                          : milestone.status === "IN_PROGRESS"
+                            ? "bg-gold"
+                            : "bg-ash/60"
+                      }`}
+                    />
+                    {i < milestonesToDisplay.length - 1 && (
+                      <span
+                        aria-hidden
+                        className="absolute left-[24px] top-9 bottom-0 w-px bg-hairline"
+                      />
+                    )}
+                    <div className="mb-1.5 flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-charcoal">{milestone.name}</h3>
+                      <Badge variant={milestoneBadge(milestone.status)} withDot>
+                        {milestone.status.replace("_", " ")}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate">
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar size={12} className="text-ash" />
+                        Planned: <span className="font-medium text-charcoal">{planned}</span>
+                      </span>
+                      {actual && (
+                        <span className="inline-flex items-center gap-1">
+                          Actual: <span className="font-medium text-charcoal">{actual}</span>
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </section>
+
+        {/* Contractor Scorecards */}
+        <section>
+          <SectionHeading
+            kicker="Vendors"
+            title="Contractor performance"
+            icon={<Users size={14} strokeWidth={1.75} />}
+          />
+          <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
+            {contractors.length === 0 ? (
+              <EmptyState label="No EPC contractors registered" />
+            ) : (
+              <ul className="divide-y divide-hairline">
+                {contractors.map((contractor) => (
+                  <li key={contractor.id} className="p-5">
+                    <h3 className="mb-3 font-semibold text-charcoal">{contractor.name}</h3>
+                    <div className="space-y-2.5">
+                      <ScoreRow
+                        label="Performance"
+                        score={contractor.performanceScore}
+                      />
+                      <ScoreRow label="Safety" score={contractor.safetyScore} />
+                      <ScoreRow
+                        label="Compliance"
+                        score={contractor.complianceScore}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
       </div>
+    </div>
+  );
+}
+
+// ----------------------- shared local primitives -----------------------
+
+function KpiCard({
+  label,
+  value,
+  accent = "default",
+}: {
+  label: string;
+  value: number | string;
+  accent?: "default" | "emerald" | "burgundy" | "gold";
+}) {
+  const rail =
+    accent === "emerald"
+      ? "border-l-[3px] border-l-emerald"
+      : accent === "burgundy"
+        ? "border-l-[3px] border-l-burgundy"
+        : accent === "gold"
+          ? "border-l-[3px] border-l-gold"
+          : "";
+  return (
+    <div
+      className={`rounded-xl border border-hairline bg-paper p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] ${rail}`}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-2">
+        {label}
+      </div>
+      <div
+        className="font-display text-[32px] font-semibold leading-none tracking-tight text-charcoal"
+        style={{ fontVariationSettings: "'opsz' 144" }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({
+  kicker,
+  title,
+  subtitle,
+  icon,
+}: {
+  kicker: string;
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3.5 flex items-baseline justify-between gap-3">
+      <div>
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+          {icon && <span>{icon}</span>}
+          {kicker}
+        </div>
+        <h2 className="mt-0.5 font-display text-xl font-semibold tracking-tight text-charcoal">
+          {title}
+        </h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function EvmStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <div className="rounded-lg border border-hairline bg-ivory/60 p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate">
+        {label}
+      </div>
+      <div
+        className={`mt-1 font-display text-2xl font-semibold leading-none tracking-tight ${tone}`}
+        style={{ fontVariationSettings: "'opsz' 144" }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ScoreRow({ label, score }: { label: string; score: number | null }) {
+  const pct = score ?? 0;
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate">
+          {label}
+        </span>
+        <span className={`text-sm font-semibold ${scoreColor(score)}`}>
+          {formatScore(score)}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-parchment">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${scoreBarColor(score)}`}
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center rounded-xl border border-dashed border-hairline bg-ivory/50 p-8 text-sm text-slate">
+      {label}
     </div>
   );
 }

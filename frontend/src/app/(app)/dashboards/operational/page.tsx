@@ -11,9 +11,16 @@ import {
   type WbsProgressRow,
 } from "@/lib/api/reportDataApi";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  CircleDollarSign,
+  Layers,
+  PackageSearch,
+  Wrench,
+} from "lucide-react";
 import type { ProjectResponse } from "@/lib/types";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
 
 interface RaBillRow {
   id: string;
@@ -31,12 +38,46 @@ interface ResourceUtilizationGroup {
   percentage: number;
 }
 
-export default function OperationalDashboardPage() {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null
-  );
+function billStatusBadge(status: string): BadgeVariant {
+  switch (status) {
+    case "PAID":
+      return "success";
+    case "APPROVED":
+      return "info";
+    case "CERTIFIED":
+      return "gold";
+    case "SUBMITTED":
+      return "warning";
+    case "DRAFT":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
 
-  const { data: dashboardConfig, isLoading: isLoadingConfig } = useQuery({
+function activityStatusBadge(status: string): BadgeVariant {
+  switch (status) {
+    case "COMPLETED":
+      return "success";
+    case "IN_PROGRESS":
+      return "info";
+    case "PENDING":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
+
+function utilBarClass(percentage: number) {
+  if (percentage >= 90) return "bg-burgundy";
+  if (percentage >= 75) return "bg-bronze-warn";
+  return "bg-emerald";
+}
+
+export default function OperationalDashboardPage() {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const { isLoading: isLoadingConfig } = useQuery({
     queryKey: ["dashboard-config", "OPERATIONAL"],
     queryFn: () => dashboardApi.getDashboardByTier("OPERATIONAL"),
   });
@@ -56,7 +97,9 @@ export default function OperationalDashboardPage() {
   const { data: resourceUtilizationRaw } = useQuery({
     queryKey: ["report-resource-utilization", selectedProjectId],
     queryFn: () =>
-      selectedProjectId ? reportDataApi.getResourceUtilization(selectedProjectId) : null,
+      selectedProjectId
+        ? reportDataApi.getResourceUtilization(selectedProjectId)
+        : null,
     enabled: !!selectedProjectId,
     retry: false,
   });
@@ -72,8 +115,6 @@ export default function OperationalDashboardPage() {
   const projects = projectsData?.data?.content ?? [];
   const raBills = Array.isArray(raBillsData?.data) ? raBillsData.data : [];
 
-  // Aggregate per-resource rows into type-level totals — UI shows one bar per
-  // resource category (Labor / Equipment / Material / Subcontractor).
   const resourceUtilization: ResourceUtilizationGroup[] = useMemo(() => {
     const rows = (resourceUtilizationRaw?.resources ?? []) as ResourceUtilRow[];
     const groups = new Map<string, { allocated: number; utilized: number }>();
@@ -94,281 +135,407 @@ export default function OperationalDashboardPage() {
 
   const wbsRows: WbsProgressRow[] = wbsProgress ?? [];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "PAID":
-        return "bg-success/10 text-success";
-      case "APPROVED":
-        return "bg-accent/10 text-blue-300";
-      case "CERTIFIED":
-        return "bg-purple-500/10 text-purple-400";
-      case "SUBMITTED":
-        return "bg-warning/10 text-warning";
-      case "DRAFT":
-        return "bg-surface-hover/50 text-text-primary";
-      default:
-        return "bg-surface-hover/50 text-text-primary";
-    }
-  };
-
-  const getActivityStatusColor = (status: string) => {
-    switch (status) {
-      case "COMPLETED":
-        return "bg-success/10 text-success";
-      case "IN_PROGRESS":
-        return "bg-accent/10 text-blue-300";
-      case "PENDING":
-        return "bg-surface-hover/50 text-text-primary";
-      default:
-        return "bg-surface-hover/50 text-text-primary";
-    }
-  };
-
-  const getResourceColor = (percentage: number) => {
-    if (percentage >= 90) return "bg-red-500";
-    if (percentage >= 75) return "bg-amber-500";
-    return "bg-success";
-  };
+  // Aggregate KPI strip
+  const totalBillAmount = raBills.reduce(
+    (sum: number, b: RaBillRow) => sum + (b.netAmount ?? 0),
+    0
+  );
+  const paidBills = raBills.filter((b: RaBillRow) => b.status === "PAID").length;
+  const wbsAvgPlanned =
+    wbsRows.length > 0
+      ? wbsRows.reduce((s, r) => s + r.plannedPct, 0) / wbsRows.length
+      : 0;
+  const wbsAvgActual =
+    wbsRows.length > 0
+      ? wbsRows.reduce((s, r) => s + r.actualPct, 0) / wbsRows.length
+      : 0;
 
   if (isLoadingConfig) {
     return (
-      <div className="flex items-center justify-center p-6">
-        <div className="text-text-muted">Loading dashboard...</div>
+      <div className="flex items-center justify-center p-12">
+        <div className="text-sm text-slate">Loading dashboard…</div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboards">
-          <button className="rounded p-1 hover:bg-surface-hover/50">
-            <ArrowLeft size={20} />
-          </button>
+    <div>
+      {/* Page head */}
+      <div className="mb-7 flex items-start gap-4">
+        <Link
+          href="/dashboards"
+          aria-label="Back to dashboards"
+          className="mt-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hairline bg-paper text-slate transition-all duration-200 hover:border-gold/50 hover:text-gold-deep"
+        >
+          <ArrowLeft size={16} strokeWidth={1.75} />
         </Link>
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary">
-            Operational Dashboard
+        <div className="flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-1.5">
+            Operational · project controls
+          </div>
+          <h1
+            className="font-display text-[34px] font-semibold leading-[1.08] tracking-tight text-charcoal"
+            style={{ fontVariationSettings: "'opsz' 144" }}
+          >
+            Operational dashboard
           </h1>
-          <p className="text-text-secondary">
-            RA bills, resources, and WBS-level activity progress
+          <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-slate">
+            RA-bill flow, resource utilisation and WBS-level activity progress for one project at a time.
           </p>
         </div>
       </div>
 
-      {/* Project Selection */}
-      <div className="rounded-lg border border-border bg-surface/50 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-text-primary">
-          Select Project
-        </h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          {projects.map((project: ProjectResponse) => (
-            <button
-              key={project.id}
-              onClick={() => setSelectedProjectId(project.id)}
-              className={`rounded-lg border-2 p-3 text-left transition ${
-                selectedProjectId === project.id
-                  ? "border-accent bg-accent/10"
-                  : "border-border hover:border-blue-300"
-              }`}
-            >
-              <div className="font-medium text-text-primary">{project.name}</div>
-              <div className="text-xs text-text-muted">
-                {project.description}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Project picker */}
+      <section className="mb-7">
+        <SectionHeading kicker="Step 1" title="Select a project" />
+        {projects.length === 0 ? (
+          <EmptyState label="No projects available" />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {projects.map((project: ProjectResponse) => {
+              const isSelected = selectedProjectId === project.id;
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => setSelectedProjectId(project.id)}
+                  className={`group rounded-xl border bg-paper p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] ${
+                    isSelected
+                      ? "border-gold ring-1 ring-gold/20 bg-gold-tint/30"
+                      : "border-hairline hover:border-gold/40"
+                  }`}
+                >
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                      {isSelected ? "Selected" : "Project"}
+                    </div>
+                    <div
+                      className={`h-2 w-2 rounded-full transition-colors ${
+                        isSelected ? "bg-gold" : "bg-hairline group-hover:bg-gold/50"
+                      }`}
+                    />
+                  </div>
+                  <div className="font-display text-base font-semibold tracking-tight text-charcoal">
+                    {project.name}
+                  </div>
+                  {project.description && (
+                    <div className="mt-1 line-clamp-2 text-xs text-slate">
+                      {project.description}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {selectedProjectId && (
         <>
-          {/* RA Bills Status */}
-          <div className="rounded-lg border border-border bg-surface/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">
-              RA Bills Status
-            </h2>
-            {isLoadingRaBills ? (
-              <div className="text-center text-text-muted">
-                Loading RA bills...
-              </div>
-            ) : raBills.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border py-8 text-center">
-                <p className="text-text-muted">No RA bills available</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
-                        Bill Number
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
-                        Period
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
-                        Amount
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {raBills.map((bill: RaBillRow) => (
-                      <tr key={bill.id} className="border-b border-border/50">
-                        <td className="px-4 py-3 text-sm text-text-primary">
-                          {bill.billNumber}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">
-                          {new Date(bill.billPeriodFrom).toLocaleDateString()} -{" "}
-                          {new Date(bill.billPeriodTo).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-text-primary">
-                          {formatDefaultCurrency(bill.netAmount)}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span
-                            className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(
-                              bill.status
-                            )}`}
-                          >
-                            {bill.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          {/* KPI strip */}
+          <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+            <KpiCard
+              label="RA bills"
+              value={raBills.length}
+              accent="gold"
+            />
+            <KpiCard
+              label="Bill volume"
+              value={formatDefaultCurrency(totalBillAmount)}
+              accent="default"
+            />
+            <KpiCard
+              label="Paid"
+              value={paidBills}
+              accent="emerald"
+            />
+            <KpiCard
+              label="WBS progress"
+              value={`${wbsAvgActual.toFixed(0)}% / ${wbsAvgPlanned.toFixed(0)}%`}
+              accent={wbsAvgActual >= wbsAvgPlanned ? "emerald" : "burgundy"}
+            />
           </div>
+
+          {/* RA Bills */}
+          <section className="mb-6">
+            <SectionHeading
+              kicker="Cash flow"
+              title="RA bills status"
+              icon={<CircleDollarSign size={14} strokeWidth={1.75} />}
+            />
+            <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
+              {isLoadingRaBills ? (
+                <div className="space-y-2 p-5">
+                  {[...Array(3)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-12 animate-pulse rounded-md bg-parchment/60"
+                    />
+                  ))}
+                </div>
+              ) : raBills.length === 0 ? (
+                <EmptyState label="No RA bills available" />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead className="border-b border-hairline bg-ivory">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                          Bill number
+                        </th>
+                        <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                          Period
+                        </th>
+                        <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                          Amount
+                        </th>
+                        <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {raBills.map((bill: RaBillRow) => (
+                        <tr
+                          key={bill.id}
+                          className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory"
+                        >
+                          <td className="px-5 py-3.5 font-semibold text-charcoal">
+                            {bill.billNumber}
+                          </td>
+                          <td className="px-5 py-3.5 text-slate">
+                            {new Date(bill.billPeriodFrom).toLocaleDateString()} —{" "}
+                            {new Date(bill.billPeriodTo).toLocaleDateString()}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-medium text-charcoal tabular-nums">
+                            {formatDefaultCurrency(bill.netAmount)}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <Badge variant={billStatusBadge(bill.status)} withDot>
+                              {bill.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
 
           {/* Resource Utilization */}
-          <div className="rounded-lg border border-border bg-surface/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">
-              Resource Utilization
-            </h2>
-            {resourceUtilization.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border py-8 text-center">
-                <p className="text-text-muted">No resource data for this project</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {resourceUtilization.map((resource) => (
-                  <div key={resource.resourceType}>
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-medium text-text-primary">
-                        {resource.resourceType}
-                      </span>
-                      <span className="text-sm text-text-secondary">
-                        {resource.utilized.toFixed(0)} / {resource.allocated.toFixed(0)} (
-                        {resource.percentage.toFixed(1)}%)
-                      </span>
-                    </div>
-                    <div className="h-3 w-full rounded-full bg-surface-active/50">
-                      <div
-                        className={`h-3 rounded-full transition-all ${getResourceColor(
-                          resource.percentage
-                        )}`}
-                        style={{ width: `${Math.min(100, resource.percentage)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Activity Progress by WBS */}
-          <div className="rounded-lg border border-border bg-surface/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">
-              Activity Progress by WBS
-            </h2>
-            {wbsRows.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border py-8 text-center">
-                <p className="text-text-muted">No WBS nodes for this project</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {wbsRows.map((row) => {
-                  const status =
-                    row.actualPct >= 100
-                      ? "COMPLETED"
-                      : row.actualPct > 0
-                        ? "IN_PROGRESS"
-                        : "PENDING";
-                  return (
-                    <div
-                      key={row.wbsCode}
-                      className="rounded-lg border border-border p-4"
-                    >
-                      <div className="mb-3 flex items-start justify-between">
-                        <div>
-                          <h3 className="font-medium text-text-primary">
-                            {row.wbsCode}
-                          </h3>
-                          <p className="text-sm text-text-secondary">
-                            {row.wbsName}
-                          </p>
+          <section className="mb-6">
+            <SectionHeading
+              kicker="Capacity"
+              title="Resource utilisation"
+              subtitle="Actual vs planned hours rolled up by resource category"
+              icon={<Wrench size={14} strokeWidth={1.75} />}
+            />
+            <div className="rounded-2xl border border-hairline bg-paper p-5">
+              {resourceUtilization.length === 0 ? (
+                <EmptyState label="No resource data for this project" />
+              ) : (
+                <div className="space-y-5">
+                  {resourceUtilization.map((resource) => (
+                    <div key={resource.resourceType}>
+                      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <PackageSearch size={14} className="text-gold-deep" />
+                          <span className="font-semibold text-charcoal">
+                            {resource.resourceType}
+                          </span>
                         </div>
-                        <span
-                          className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getActivityStatusColor(
-                            status
-                          )}`}
-                        >
-                          {status}
+                        <span className="text-xs text-slate tabular-nums">
+                          <span className="font-semibold text-charcoal">
+                            {resource.utilized.toFixed(0)}
+                          </span>{" "}
+                          / {resource.allocated.toFixed(0)} hrs ·{" "}
+                          <span className="font-semibold text-charcoal">
+                            {resource.percentage.toFixed(1)}%
+                          </span>
                         </span>
                       </div>
-
-                      <div className="space-y-2">
-                        <div>
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-medium text-text-secondary">
-                              Planned Progress
-                            </span>
-                            <span className="text-xs font-semibold text-text-primary">
-                              {row.plannedPct.toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-surface-active/50">
-                            <div
-                              className="h-2 rounded-full bg-blue-500"
-                              style={{ width: `${Math.min(100, row.plannedPct)}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-medium text-text-secondary">
-                              Actual Progress
-                            </span>
-                            <span className="text-xs font-semibold text-text-primary">
-                              {row.actualPct.toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-surface-active/50">
-                            <div
-                              className={`h-2 rounded-full ${
-                                row.actualPct >= row.plannedPct
-                                  ? "bg-success"
-                                  : "bg-amber-500"
-                              }`}
-                              style={{ width: `${Math.min(100, row.actualPct)}%` }}
-                            />
-                          </div>
-                        </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-parchment">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${utilBarClass(
+                            resource.percentage
+                          )}`}
+                          style={{
+                            width: `${Math.min(100, resource.percentage)}%`,
+                          }}
+                        />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* WBS Progress */}
+          <section>
+            <SectionHeading
+              kicker="Schedule"
+              title="Activity progress by WBS"
+              subtitle="Planned vs actual percent complete per work-breakdown node"
+              icon={<Layers size={14} strokeWidth={1.75} />}
+            />
+            <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
+              {wbsRows.length === 0 ? (
+                <EmptyState label="No WBS nodes for this project" />
+              ) : (
+                <ul className="divide-y divide-hairline">
+                  {wbsRows.map((row) => {
+                    const status =
+                      row.actualPct >= 100
+                        ? "COMPLETED"
+                        : row.actualPct > 0
+                          ? "IN_PROGRESS"
+                          : "PENDING";
+                    return (
+                      <li key={row.wbsCode} className="p-5">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                              {row.wbsCode}
+                            </div>
+                            <h3 className="truncate font-semibold text-charcoal">
+                              {row.wbsName}
+                            </h3>
+                          </div>
+                          <Badge variant={activityStatusBadge(status)} withDot>
+                            {status.replace("_", " ")}
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <ProgressRow
+                            label="Planned"
+                            value={`${row.plannedPct.toFixed(1)}%`}
+                            percent={row.plannedPct}
+                            barClass="bg-steel"
+                          />
+                          <ProgressRow
+                            label="Actual"
+                            value={`${row.actualPct.toFixed(1)}%`}
+                            percent={row.actualPct}
+                            barClass={
+                              row.actualPct >= row.plannedPct
+                                ? "bg-emerald"
+                                : "bg-bronze-warn"
+                            }
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </section>
         </>
       )}
+    </div>
+  );
+}
+
+// ----------------------- shared local primitives -----------------------
+
+function KpiCard({
+  label,
+  value,
+  accent = "default",
+}: {
+  label: string;
+  value: number | string;
+  accent?: "default" | "emerald" | "burgundy" | "gold";
+}) {
+  const rail =
+    accent === "emerald"
+      ? "border-l-[3px] border-l-emerald"
+      : accent === "burgundy"
+        ? "border-l-[3px] border-l-burgundy"
+        : accent === "gold"
+          ? "border-l-[3px] border-l-gold"
+          : "";
+  return (
+    <div
+      className={`rounded-xl border border-hairline bg-paper p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(28,28,28,0.05)] ${rail}`}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-2">
+        {label}
+      </div>
+      <div
+        className="font-display text-[28px] font-semibold leading-none tracking-tight text-charcoal"
+        style={{ fontVariationSettings: "'opsz' 144" }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({
+  kicker,
+  title,
+  subtitle,
+  icon,
+}: {
+  kicker: string;
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3.5 flex items-baseline justify-between gap-3">
+      <div>
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+          {icon && <span>{icon}</span>}
+          {kicker}
+        </div>
+        <h2 className="mt-0.5 font-display text-xl font-semibold tracking-tight text-charcoal">
+          {title}
+        </h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function ProgressRow({
+  label,
+  value,
+  percent,
+  barClass,
+}: {
+  label: string;
+  value: string;
+  percent: number;
+  barClass: string;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate">
+          {label}
+        </span>
+        <span className="text-xs font-semibold text-charcoal">{value}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-parchment">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barClass}`}
+          style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center rounded-xl border border-dashed border-hairline bg-ivory/50 p-8 text-sm text-slate">
+      {label}
     </div>
   );
 }
