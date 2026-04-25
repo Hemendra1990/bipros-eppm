@@ -69,4 +69,22 @@ class DefaultFolderSeederTest {
         assertThat(created).allMatch(f -> f.getProjectId().equals(projectId));
         assertThat(created).allMatch(f -> f.getParentId() == null);
     }
+
+    @Test
+    @DisplayName("is idempotent — does not duplicate when root folders already exist")
+    void onProjectCreated_isIdempotent_whenRootFoldersExist() {
+        DocumentFolder existing = new DocumentFolder();
+        existing.setProjectId(projectId);
+        existing.setName("Drawings");
+        existing.setCode("DRW");
+        existing.setCategory(DocumentCategory.DRAWING);
+        existing.setSortOrder(0);
+        when(folderRepository.findByProjectIdAndParentIdIsNullOrderBySortOrder(projectId))
+            .thenReturn(List.of(existing));
+
+        seeder.onProjectCreated(new ProjectCreatedEvent(projectId, "P-001", "Test Project"));
+
+        verify(folderRepository, never()).saveAll(anyList());
+        verify(folderRepository, never()).save(any(DocumentFolder.class));
+    }
 }
