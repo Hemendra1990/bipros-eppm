@@ -22,4 +22,12 @@ public interface ProjectRepository extends JpaRepository<Project, UUID>, JpaSpec
     boolean existsByCode(String code);
 
     Optional<Project> findByCode(String code);
+
+    /**
+     * All non-archived projects. Use this from reporting / dashboard rollups so that archived
+     * (soft-deleted) projects don't leak into portfolio scorecards, EVM aggregates, RAG bands,
+     * etc. Plain {@link #findAll()} still returns archived rows too — leave it for code paths
+     * that legitimately need the full history (e.g. boot-time backfills).
+     */
+    List<Project> findAllByArchivedAtIsNull();
 }

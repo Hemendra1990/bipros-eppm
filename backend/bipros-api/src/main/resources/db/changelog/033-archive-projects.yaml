@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: 033-add-archive-columns-to-projects
+      author: bipros
+      comment: |
+        Soft-delete (archive) support on project.projects. archived_at is the source of
+        truth — non-null means the project is hidden from default listings. archived_by
+        is a soft FK to public.users.id for audit. Hard delete is not exposed by the
+        API; archive + restore is the only deletion workflow users can invoke.
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: projects
+            columns:
+              - column:
+                  name: archived_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: archived_by
+                  type: UUID
+        - createIndex:
+            schemaName: project
+            tableName: projects
+            indexName: idx_projects_archived_at
+            columns:
+              - column:
+                  name: archived_at

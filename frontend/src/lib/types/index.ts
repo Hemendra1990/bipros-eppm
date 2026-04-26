@@ -137,6 +137,7 @@ export interface ProjectResponse {
   } | null;
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
 }
 
 export type WbsType = "PROGRAMME" | "NODE" | "PACKAGE" | "WORK_PACKAGE";

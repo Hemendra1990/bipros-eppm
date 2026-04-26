@@ -41,7 +41,18 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/archived")
+    public ResponseEntity<ApiResponse<PagedResponse<ProjectResponse>>> listArchivedProjects(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size,
+        @RequestParam(defaultValue = "updatedAt") String sortBy,
+        @RequestParam(defaultValue = "DESC") Sort.Direction direction) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        PagedResponse<ProjectResponse> response = projectService.listArchivedProjects(pageable);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/{id:[0-9a-fA-F-]{36}}")
     public ResponseEntity<ApiResponse<ProjectResponse>> getProject(@PathVariable UUID id) {
         ProjectResponse response = projectService.getProject(id);
         return ResponseEntity.ok(ApiResponse.ok(response));
@@ -54,7 +65,7 @@ public class ProjectController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id:[0-9a-fA-F-]{36}}")
     @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER') and @projectAccess.canEdit(#id)")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
         @PathVariable UUID id, @Valid @RequestBody UpdateProjectRequest request) {
@@ -62,11 +73,22 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
-    @DeleteMapping("/{id}")
+    /**
+     * Soft archive — flips {@code archived_at}. There is no hard-delete endpoint; this is the
+     * only deletion verb the API exposes. Restore via {@code POST /v1/projects/{id}/restore}.
+     */
+    @DeleteMapping("/{id:[0-9a-fA-F-]{36}}")
     @PreAuthorize("hasRole('ADMIN') or @projectAccess.canDelete(#id)")
     public ResponseEntity<Void> deleteProject(@PathVariable UUID id) {
         projectService.deleteProject(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id:[0-9a-fA-F-]{36}}/restore")
+    @PreAuthorize("hasRole('ADMIN') or @projectAccess.canDelete(#id)")
+    public ResponseEntity<ApiResponse<ProjectResponse>> restoreProject(@PathVariable UUID id) {
+        ProjectResponse response = projectService.restoreProject(id);
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @GetMapping("/by-eps/{epsNodeId}")

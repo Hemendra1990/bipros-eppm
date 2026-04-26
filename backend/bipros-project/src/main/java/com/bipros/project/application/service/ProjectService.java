@@ -17,7 +17,6 @@ import com.bipros.project.application.dto.ProjectResponse.ContractSummary;
 import com.bipros.project.application.dto.UpdateProjectRequest;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
-import com.bipros.project.domain.repository.ProjectActivityCounter;
 import com.bipros.project.domain.repository.EpsNodeRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
@@ -49,7 +48,6 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final EpsNodeRepository epsNodeRepository;
     private final WbsNodeRepository wbsNodeRepository;
-    private final ProjectActivityCounter projectActivityCounter;
     private final AuditService auditService;
     private final ContractRepository contractRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -240,29 +238,58 @@ public class ProjectService {
         return buildProjectResponse(updated);
     }
 
+    /**
+     * Soft-archive a project. Idempotent: archiving an already-archived project is a no-op.
+     * Hard delete is intentionally not exposed — once a project has been created, the only
+     * removal path users can invoke is archive + restore. This preserves activities, baselines,
+     * costs, audit trail, etc., and lets clients recover from accidental archives.
+     */
     public void deleteProject(UUID id) {
-        log.info("Deleting project: {}", id);
+        log.info("Archiving project: {}", id);
 
         projectAccess.requireDelete(id);
 
         Project project = projectRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Project", id));
 
-        // Check if activities exist for this project
-        long activityCount = projectActivityCounter.countActivitiesByProjectId(id);
-        if (activityCount > 0) {
-            throw new BusinessRuleException("PROJECT_HAS_ACTIVITIES", "Cannot delete project with existing activities");
+        if (project.getArchivedAt() != null) {
+            log.info("Project already archived, skipping: {}", id);
+            return;
         }
 
-        // Delete associated WBS nodes
-        List<WbsNode> wbsNodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(id);
-        wbsNodeRepository.deleteAll(wbsNodes);
+        project.setArchivedAt(Instant.now());
+        project.setArchivedBy(projectAccess.currentUserId());
+        projectRepository.save(project);
 
-        projectRepository.delete(project);
-        log.info("Project deleted: {}", id);
-
-        // Audit log deletion
         auditService.logDelete("Project", id);
+        log.info("Project archived: {}", id);
+    }
+
+    /**
+     * Restore a previously-archived project. Status is preserved as-is (we don't force back to
+     * ACTIVE — a project archived in COMPLETED state should restore as COMPLETED). Idempotent:
+     * restoring a non-archived project is a no-op.
+     */
+    public ProjectResponse restoreProject(UUID id) {
+        log.info("Restoring project: {}", id);
+
+        projectAccess.requireDelete(id);
+
+        Project project = projectRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Project", id));
+
+        if (project.getArchivedAt() == null) {
+            return buildProjectResponse(project);
+        }
+
+        project.setArchivedAt(null);
+        project.setArchivedBy(null);
+        Project restored = projectRepository.save(project);
+
+        auditService.logUpdate("Project", id, "archivedAt", "archived", null);
+        log.info("Project restored: {}", id);
+
+        return buildProjectResponse(restored);
     }
 
     public ProjectResponse getProject(UUID id) {
@@ -278,10 +305,19 @@ public class ProjectService {
 
     public PagedResponse<ProjectResponse> listProjects(Pageable pageable) {
         log.info("Fetching projects page: {}", pageable);
+        return queryProjects(pageable, false);
+    }
 
+    public PagedResponse<ProjectResponse> listArchivedProjects(Pageable pageable) {
+        log.info("Fetching archived projects page: {}", pageable);
+        return queryProjects(pageable, true);
+    }
+
+    private PagedResponse<ProjectResponse> queryProjects(Pageable pageable, boolean archived) {
         // RLS: Project IS the row, so filter by Project.id IN allowedProjectIds.
-        Specification<Project> spec = AccessSpecifications.projectScopedTo(
-            "id", projectAccess.getAccessibleProjectIdsForCurrentUser());
+        Specification<Project> spec = AccessSpecifications.<Project>projectScopedTo(
+                "id", projectAccess.getAccessibleProjectIdsForCurrentUser())
+            .and(archivedAtFilter(archived));
         Page<Project> page = projectRepository.findAll(spec, pageable);
 
         List<ProjectResponse> content = page.getContent().stream()
@@ -297,6 +333,13 @@ public class ProjectService {
         );
     }
 
+    /** {@code archived=false} → only live rows; {@code archived=true} → only archived rows. */
+    private static Specification<Project> archivedAtFilter(boolean archived) {
+        return (root, query, cb) -> archived
+            ? cb.isNotNull(root.get("archivedAt"))
+            : cb.isNull(root.get("archivedAt"));
+    }
+
     public List<ProjectResponse> getProjectsByEps(UUID epsNodeId) {
         log.info("Fetching projects by EPS node: {}", epsNodeId);
 
@@ -304,9 +347,10 @@ public class ProjectService {
             throw new ResourceNotFoundException("EpsNode", epsNodeId);
         }
 
-        // Filter results to only projects the user may read.
+        // Filter results to only live projects the user may read.
         java.util.Set<UUID> allowed = projectAccess.getAccessibleProjectIdsForCurrentUser();
         return projectRepository.findByEpsNodeId(epsNodeId).stream()
+            .filter(p -> p.getArchivedAt() == null)
             .filter(p -> allowed == null || allowed.contains(p.getId()))
             .map(this::buildProjectResponse)
             .collect(Collectors.toList());
@@ -348,7 +392,8 @@ public class ProjectService {
             project.getActiveBaselineId(),
             primaryContractSummary(project.getId()),
             toLocalDateTime(project.getCreatedAt()),
-            toLocalDateTime(project.getUpdatedAt())
+            toLocalDateTime(project.getUpdatedAt()),
+            toLocalDateTime(project.getArchivedAt())
         );
     }
 

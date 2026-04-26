@@ -41,3 +41,5 @@ databaseChangeLog:
       file: db/changelog/031-active-baseline.yaml
   - include:
       file: db/changelog/032-rbac-rls.yaml
+  - include:
+      file: db/changelog/033-archive-projects.yaml

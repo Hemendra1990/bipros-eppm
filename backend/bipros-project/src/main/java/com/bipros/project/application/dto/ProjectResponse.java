@@ -40,7 +40,8 @@ public record ProjectResponse(
     UUID activeBaselineId,
     ContractSummary contract,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    LocalDateTime archivedAt
 ) {
 
     /** Flat view of the primary {@code Contract} for this project. {@code null} when no contract

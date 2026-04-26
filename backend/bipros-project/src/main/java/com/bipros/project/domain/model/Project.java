@@ -8,6 +8,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -105,4 +106,17 @@ public class Project extends BaseEntity {
      */
     @Column(name = "owner_id")
     private UUID ownerId;
+
+    /**
+     * Soft-delete timestamp. Non-null means the project is archived: hidden from default
+     * lists ({@code GET /v1/projects}) but visible at {@code GET /v1/projects/archived} and
+     * restorable via {@code POST /v1/projects/{id}/restore}. Hard delete is not exposed by
+     * the API — archive is the only deletion verb users can invoke.
+     */
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    /** Soft FK to {@code public.users.id} — who archived the project. */
+    @Column(name = "archived_by")
+    private UUID archivedBy;
 }

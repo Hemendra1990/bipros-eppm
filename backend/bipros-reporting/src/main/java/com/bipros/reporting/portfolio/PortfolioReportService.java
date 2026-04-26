@@ -51,7 +51,7 @@ public class PortfolioReportService {
 
   @Transactional(readOnly = true)
   public List<PortfolioEvmRow> getEvmRollup() {
-    List<Project> projects = projectRepository.findAll();
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<PortfolioEvmRow> rows = new ArrayList<>(projects.size());
     for (Project p : projects) {
       Optional<EvmCalculation> latestOpt =
@@ -85,7 +85,7 @@ public class PortfolioReportService {
 
   @Transactional(readOnly = true)
   public PortfolioScorecardDto getScorecard() {
-    List<Project> projects = projectRepository.findAll();
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     Map<String, Long> byStatus = new LinkedHashMap<>();
     byStatus.put("PLANNED", 0L);
     byStatus.put("ACTIVE", 0L);
@@ -101,13 +101,22 @@ public class PortfolioReportService {
     BigDecimal totalCommitted = BigDecimal.ZERO;
     BigDecimal totalSpent = BigDecimal.ZERO;
 
+    // All three totals join through project.projects so archived (soft-deleted) projects'
+    // satellite rows don't leak into portfolio rollups. Restoring a project re-includes them.
     totalBudget = queryScalarBigDecimal(
-        "SELECT COALESCE(SUM(budget_crores), 0) FROM project.wbs_nodes");
+        "SELECT COALESCE(SUM(wn.budget_crores), 0) FROM project.wbs_nodes wn "
+            + "JOIN project.projects p ON p.id = wn.project_id "
+            + "WHERE p.archived_at IS NULL");
     totalCommitted = queryScalarBigDecimal(
-        "SELECT COALESCE(SUM(contract_value), 0) / ?1 FROM contract.contracts", CRORE);
+        "SELECT COALESCE(SUM(c.contract_value), 0) / ?1 FROM contract.contracts c "
+            + "JOIN project.projects p ON p.id = c.project_id "
+            + "WHERE p.archived_at IS NULL",
+        CRORE);
     totalSpent = queryScalarBigDecimal(
-        "SELECT COALESCE(SUM(net_amount), 0) / ?1 FROM cost.ra_bills "
-            + "WHERE status IN ('APPROVED','PAID','CERTIFIED')",
+        "SELECT COALESCE(SUM(rb.net_amount), 0) / ?1 FROM cost.ra_bills rb "
+            + "JOIN project.projects p ON p.id = rb.project_id "
+            + "WHERE rb.status IN ('APPROVED','PAID','CERTIFIED') "
+            + "  AND p.archived_at IS NULL",
         CRORE);
 
     long green = 0, amber = 0, red = 0;
@@ -133,12 +142,15 @@ public class PortfolioReportService {
     activeWithCritical = queryScalarLong(
         "SELECT COUNT(DISTINCT p.id) FROM project.projects p "
             + "JOIN activity.activities a ON a.project_id = p.id "
-            + "WHERE p.status = 'ACTIVE' AND a.is_critical = TRUE");
+            + "WHERE p.status = 'ACTIVE' AND a.is_critical = TRUE "
+            + "  AND p.archived_at IS NULL");
 
     openCriticalRisks = queryScalarLong(
-        "SELECT COUNT(*) FROM risk.risks "
-            + "WHERE status NOT IN ('CLOSED','MITIGATED') "
-            + "  AND (rag = 'RED' OR risk_score >= 15)");
+        "SELECT COUNT(*) FROM risk.risks r "
+            + "JOIN project.projects p ON p.id = r.project_id "
+            + "WHERE r.status NOT IN ('CLOSED','MITIGATED') "
+            + "  AND (r.rag = 'RED' OR r.risk_score >= 15) "
+            + "  AND p.archived_at IS NULL");
 
     return new PortfolioScorecardDto(
         projects.size(),
@@ -156,7 +168,7 @@ public class PortfolioReportService {
   @Transactional(readOnly = true)
   @SuppressWarnings("unchecked")
   public List<DelayedProjectRow> getDelayedProjects(int limit) {
-    List<Project> projects = projectRepository.findAll();
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<DelayedProjectRow> rows = new ArrayList<>();
     for (Project p : projects) {
       LocalDate plannedFinish = p.getPlannedFinishDate();
@@ -209,7 +221,7 @@ public class PortfolioReportService {
 
   @Transactional(readOnly = true)
   public List<CostOverrunRow> getCostOverrunProjects(int limit) {
-    List<Project> projects = projectRepository.findAll();
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<CostOverrunRow> rows = new ArrayList<>();
     for (Project p : projects) {
       Optional<EvmCalculation> latest =
@@ -244,7 +256,7 @@ public class PortfolioReportService {
   @Transactional(readOnly = true)
   @SuppressWarnings("unchecked")
   public List<FundingUtilizationRow> getFundingUtilization() {
-    List<Project> projects = projectRepository.findAll();
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<FundingUtilizationRow> rows = new ArrayList<>();
     for (Project p : projects) {
       BigDecimal sanctioned = queryScalarBigDecimal(
@@ -294,7 +306,9 @@ public class PortfolioReportService {
                     + "       COALESCE(SUM(c.contract_value) / ?1, 0), "
                     + "       COALESCE(SUM(c.cumulative_ra_bills_crores), 0) "
                     + "FROM contract.contracts c "
+                    + "JOIN project.projects p ON p.id = c.project_id "
                     + "WHERE c.contractor_code IS NOT NULL "
+                    + "  AND p.archived_at IS NULL "
                     + "GROUP BY c.contractor_code "
                     + "ORDER BY 4 DESC")
             .setParameter(1, CRORE)
@@ -326,15 +340,17 @@ public class PortfolioReportService {
     List<Object> cellRows =
         em.createNativeQuery(
                 "SELECT "
-                    + "  CASE probability "
+                    + "  CASE r.probability "
                     + "    WHEN 'VERY_LOW' THEN 1 WHEN 'LOW' THEN 2 WHEN 'MEDIUM' THEN 3 "
                     + "    WHEN 'HIGH' THEN 4 WHEN 'VERY_HIGH' THEN 5 ELSE 3 END AS p, "
-                    + "  CASE impact "
+                    + "  CASE r.impact "
                     + "    WHEN 'VERY_LOW' THEN 1 WHEN 'LOW' THEN 2 WHEN 'MEDIUM' THEN 3 "
                     + "    WHEN 'HIGH' THEN 4 WHEN 'VERY_HIGH' THEN 5 ELSE 3 END AS i, "
                     + "  COUNT(*) "
-                    + "FROM risk.risks "
-                    + "WHERE status NOT IN ('CLOSED','MITIGATED') "
+                    + "FROM risk.risks r "
+                    + "JOIN project.projects pr ON pr.id = r.project_id "
+                    + "WHERE r.status NOT IN ('CLOSED','MITIGATED') "
+                    + "  AND pr.archived_at IS NULL "
                     + "GROUP BY p, i")
             .getResultList();
     List<RiskHeatmapDto.Cell> cells = new ArrayList<>();
@@ -351,8 +367,9 @@ public class PortfolioReportService {
                 "SELECT r.id, r.project_id, p.code, r.code, r.title, r.probability, r.impact, "
                     + "       COALESCE(r.risk_score, 0), COALESCE(r.rag, 'AMBER') "
                     + "FROM risk.risks r "
-                    + "LEFT JOIN project.projects p ON p.id = r.project_id "
+                    + "JOIN project.projects p ON p.id = r.project_id "
                     + "WHERE r.status NOT IN ('CLOSED','MITIGATED') "
+                    + "  AND p.archived_at IS NULL "
                     + "ORDER BY COALESCE(r.risk_score, 0) DESC "
                     + "LIMIT 5")
             .getResultList();
@@ -388,12 +405,14 @@ public class PortfolioReportService {
     try {
       rows =
           em.createNativeQuery(
-                  "SELECT period, "
-                      + "       COALESCE(SUM(planned_amount), 0) / ?1, "
-                      + "       COALESCE(SUM(actual_amount), 0) / ?1 "
-                      + "FROM cost.cash_flow_forecasts "
-                      + "WHERE period >= ?2 AND period < ?3 "
-                      + "GROUP BY period ORDER BY period")
+                  "SELECT cf.period, "
+                      + "       COALESCE(SUM(cf.planned_amount), 0) / ?1, "
+                      + "       COALESCE(SUM(cf.actual_amount), 0) / ?1 "
+                      + "FROM cost.cash_flow_forecasts cf "
+                      + "JOIN project.projects p ON p.id = cf.project_id "
+                      + "WHERE cf.period >= ?2 AND cf.period < ?3 "
+                      + "  AND p.archived_at IS NULL "
+                      + "GROUP BY cf.period ORDER BY cf.period")
               .setParameter(1, CRORE)
               .setParameter(2, start.toString())
               .setParameter(3, start.plusMonths(months).toString())
@@ -432,7 +451,7 @@ public class PortfolioReportService {
 
   @Transactional(readOnly = true)
   public List<ComplianceRow> getCompliance() {
-    List<Project> projects = projectRepository.findAll();
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<ComplianceRow> rows = new ArrayList<>();
     for (Project p : projects) {
       boolean pfms = queryScalarLong(
@@ -461,7 +480,7 @@ public class PortfolioReportService {
   @Transactional(readOnly = true)
   @SuppressWarnings("unchecked")
   public List<ScheduleHealthRow> getScheduleHealth() {
-    List<Project> projects = projectRepository.findAll();
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<ScheduleHealthRow> rows = new ArrayList<>();
     for (Project p : projects) {
       long missingLogic = queryScalarLong(

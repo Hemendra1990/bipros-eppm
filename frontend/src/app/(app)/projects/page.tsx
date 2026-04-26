@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Trash2, Edit2, Download } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Download, Archive } from "lucide-react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import { projectApi } from "@/lib/api/projectApi";
 import { formatDate, getPriorityInfo } from "@/lib/utils/format";
+import { getErrorMessage } from "@/lib/utils/error";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 const STATUS_OPTIONS = ["All", "PLANNED", "ACTIVE", "INACTIVE", "COMPLETED"] as const;
 const PRIORITY_OPTIONS = ["All", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
@@ -26,16 +29,39 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [priorityFilter, setPriorityFilter] = useState<string>("All");
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; projectId: string | null; projectName: string }>({
+    open: false,
+    projectId: null,
+    projectName: "",
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["projects"],
     queryFn: () => projectApi.listProjects(0, 50),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (projectId: string) => projectApi.deleteProject(projectId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+  const archiveMutation = useMutation({
+    mutationFn: (projectId: string) => projectApi.archiveProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", "archived"] });
+      toast.success("Project archived");
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, "Failed to archive project"));
+    },
   });
+
+  const confirmDelete = useCallback(() => {
+    if (deleteConfirm.projectId) {
+      archiveMutation.mutate(deleteConfirm.projectId);
+    }
+    setDeleteConfirm({ open: false, projectId: null, projectName: "" });
+  }, [deleteConfirm.projectId, archiveMutation]);
+
+  const cancelDelete = useCallback(() => {
+    setDeleteConfirm({ open: false, projectId: null, projectName: "" });
+  }, []);
 
   const allProjects = data?.data?.content ?? [];
 
@@ -80,6 +106,13 @@ export default function ProjectsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/projects/archived"
+            className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-hairline bg-paper px-4 text-sm font-semibold text-slate hover:border-gold hover:text-gold-deep"
+          >
+            <Archive size={14} strokeWidth={1.5} />
+            Archived
+          </Link>
           <button
             type="button"
             className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-gold bg-paper px-4 text-sm font-semibold text-gold-deep hover:bg-ivory"
@@ -238,14 +271,13 @@ export default function ProjectsPage() {
                             <Edit2 size={14} strokeWidth={1.5} />
                           </Link>
                           <button
-                            onClick={() => {
-                              if (window.confirm("Are you sure you want to delete this project?")) {
-                                deleteMutation.mutate(project.id);
-                              }
-                            }}
-                            disabled={deleteMutation.isPending}
+                            onClick={() =>
+                              setDeleteConfirm({ open: true, projectId: project.id, projectName: project.name })
+                            }
+                            disabled={archiveMutation.isPending}
                             className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label="Delete"
+                            aria-label="Archive"
+                            title="Archive"
                           >
                             <Trash2 size={14} strokeWidth={1.5} />
                           </button>
@@ -262,6 +294,20 @@ export default function ProjectsPage() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="Archive project?"
+        message={
+          deleteConfirm.projectName
+            ? `"${deleteConfirm.projectName}" will be hidden from this list. You can restore it later from the Archived view.`
+            : "This project will be hidden from this list. You can restore it later from the Archived view."
+        }
+        confirmLabel="Archive"
+        variant="warning"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 }

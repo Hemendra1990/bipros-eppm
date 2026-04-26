@@ -30,6 +30,11 @@ export const projectApi = {
       .get<ApiResponse<PagedResponse<ProjectResponse>>>("/v1/projects", { params: { page, size } })
       .then((r) => r.data),
 
+  listArchivedProjects: (page = 0, size = 20) =>
+    apiClient
+      .get<ApiResponse<PagedResponse<ProjectResponse>>>("/v1/projects/archived", { params: { page, size } })
+      .then((r) => r.data),
+
   getProject: (id: string) =>
     apiClient.get<ApiResponse<ProjectResponse>>(`/v1/projects/${id}`).then((r) => r.data),
 
@@ -39,8 +44,12 @@ export const projectApi = {
   updateProject: (id: string, data: UpdateProjectRequest) =>
     apiClient.put<ApiResponse<ProjectResponse>>(`/v1/projects/${id}`, data).then((r) => r.data),
 
-  deleteProject: (id: string) =>
+  /** Soft archive — backend stamps {@code archived_at}. Restorable via {@link restoreProject}. */
+  archiveProject: (id: string) =>
     apiClient.delete(`/v1/projects/${id}`),
+
+  restoreProject: (id: string) =>
+    apiClient.post<ApiResponse<ProjectResponse>>(`/v1/projects/${id}/restore`).then((r) => r.data),
 
   // WBS
   getWbsTree: (projectId: string) =>
