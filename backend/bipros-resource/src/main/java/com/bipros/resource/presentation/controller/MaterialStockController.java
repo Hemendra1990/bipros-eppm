@@ -26,12 +26,14 @@ public class MaterialStockController {
 
     private final MaterialStockService service;
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/stock-register")
     public ResponseEntity<ApiResponse<List<MaterialStockResponse>>> listByProject(
             @PathVariable UUID projectId) {
         return ResponseEntity.ok(ApiResponse.ok(service.listByProject(projectId)));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/materials/{materialId}/stock")
     public ResponseEntity<ApiResponse<MaterialStockResponse>> getForMaterial(
             @PathVariable UUID projectId,

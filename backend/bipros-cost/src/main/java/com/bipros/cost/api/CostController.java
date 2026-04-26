@@ -58,6 +58,7 @@ public class CostController {
     }
 
     // Activity Expense Endpoints
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @PostMapping("/projects/{projectId}/expenses")
     public ResponseEntity<ApiResponse<ActivityExpenseDto>> createActivityExpense(
             @PathVariable UUID projectId,
@@ -66,6 +67,7 @@ public class CostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @PutMapping("/projects/{projectId}/expenses/{expenseId}")
     public ResponseEntity<ApiResponse<ActivityExpenseDto>> updateActivityExpense(
             @PathVariable UUID projectId,
@@ -75,6 +77,7 @@ public class CostController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/expenses")
     public ResponseEntity<ApiResponse<PagedResponse<ActivityExpenseDto>>> getProjectExpenses(
             @PathVariable UUID projectId,
@@ -84,6 +87,7 @@ public class CostController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/activities/{activityId}/expenses")
     public ResponseEntity<ApiResponse<List<ActivityExpenseDto>>> getActivityExpenses(
             @PathVariable UUID projectId,
@@ -92,6 +96,7 @@ public class CostController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @DeleteMapping("/projects/{projectId}/expenses/{expenseId}")
     public ResponseEntity<ApiResponse<Void>> deleteActivityExpense(
             @PathVariable UUID projectId,
@@ -127,6 +132,7 @@ public class CostController {
     }
 
     // Project Funding Endpoints
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @PostMapping("/projects/{projectId}/funding")
     public ResponseEntity<ApiResponse<ProjectFundingDto>> assignFundingToProject(
             @PathVariable UUID projectId,
@@ -135,6 +141,7 @@ public class CostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/funding")
     public ResponseEntity<ApiResponse<List<ProjectFundingDto>>> getProjectFunding(
             @PathVariable UUID projectId) {
@@ -146,12 +153,14 @@ public class CostController {
      * Alias for {@code /projects/{projectId}/funding}. Dashboards and third-party consumers
      * reach for the longer "funding-sources" suffix; both forms resolve to the same allocations.
      */
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/funding-sources")
     public ResponseEntity<ApiResponse<List<ProjectFundingDto>>> getProjectFundingSources(
             @PathVariable UUID projectId) {
         return ResponseEntity.ok(ApiResponse.ok(costService.getProjectFunding(projectId)));
     }
 
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @DeleteMapping("/projects/{projectId}/funding/{fundingId}")
     public ResponseEntity<ApiResponse<Void>> deleteProjectFunding(
             @PathVariable UUID projectId,
@@ -199,6 +208,7 @@ public class CostController {
     }
 
     // Store Period Performance Endpoints
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @PostMapping("/projects/{projectId}/spp")
     public ResponseEntity<ApiResponse<StorePeriodPerformanceDto>> createStorePeriodPerformance(
             @PathVariable UUID projectId,
@@ -207,6 +217,7 @@ public class CostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/spp")
     public ResponseEntity<ApiResponse<List<StorePeriodPerformanceDto>>> getProjectPeriodPerformance(
             @PathVariable UUID projectId) {
@@ -214,6 +225,7 @@ public class CostController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/spp/{periodId}")
     public ResponseEntity<ApiResponse<StorePeriodPerformanceDto>> getProjectLevelPerformance(
             @PathVariable UUID projectId,
@@ -222,6 +234,7 @@ public class CostController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @DeleteMapping("/projects/{projectId}/spp/{sppId}")
     public ResponseEntity<ApiResponse<Void>> deleteStorePeriodPerformance(
             @PathVariable UUID projectId,
@@ -231,6 +244,7 @@ public class CostController {
     }
 
     // RA Bill Endpoints
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @PostMapping("/projects/{projectId}/ra-bills")
     public ResponseEntity<ApiResponse<RaBillDto>> createRaBill(
             @PathVariable UUID projectId,
@@ -239,6 +253,7 @@ public class CostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/ra-bills")
     public ResponseEntity<ApiResponse<List<RaBillDto>>> getRaBillsByProject(
             @PathVariable UUID projectId) {
@@ -277,6 +292,7 @@ public class CostController {
     }
 
     // DPR Estimate Endpoints
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @PostMapping("/projects/{projectId}/dpr-estimates")
     public ResponseEntity<ApiResponse<DprEstimateDto>> createDprEstimate(
             @PathVariable UUID projectId,
@@ -285,6 +301,7 @@ public class CostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/dpr-estimates")
     public ResponseEntity<ApiResponse<List<DprEstimateDto>>> getDprEstimatesByProject(
             @PathVariable UUID projectId) {
@@ -293,8 +310,10 @@ public class CostController {
     }
 
     // Cost Summary Endpoint
+    // Combined gate: caller must hold a cost-relevant role AND be authorised for the project.
+    // (Pre-existing role check kept; project-scope check added so a PM of P1 can't see P2's cost.)
     @GetMapping("/projects/{projectId}/cost-summary")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+    @PreAuthorize("(hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER', 'FINANCE')) and @projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<CostSummaryDto>> getCostSummary(
             @PathVariable UUID projectId) {
         CostSummaryDto response = costService.getCostSummary(projectId);
@@ -303,7 +322,7 @@ public class CostController {
 
     // Period Cost Aggregation
     @GetMapping("/projects/{projectId}/cost-periods")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+    @PreAuthorize("(hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER', 'FINANCE')) and @projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<List<PeriodCostAggregationDto>>> aggregateByPeriod(
             @PathVariable UUID projectId) {
         List<PeriodCostAggregationDto> response = costService.aggregateByPeriod(projectId);
@@ -312,7 +331,7 @@ public class CostController {
 
     // Forecast Generation
     @GetMapping("/projects/{projectId}/cost-forecast")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+    @PreAuthorize("(hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER', 'FINANCE')) and @projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<List<CashFlowForecastDto>>> generateForecast(
             @PathVariable UUID projectId,
             @RequestParam(defaultValue = "LINEAR") CashFlowForecastEngine.ForecastMethod method) {
@@ -321,6 +340,7 @@ public class CostController {
     }
 
     // Cash Flow Forecast Endpoints
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     @PostMapping("/projects/{projectId}/cash-flow")
     public ResponseEntity<ApiResponse<CashFlowForecastDto>> createCashFlowForecast(
             @PathVariable UUID projectId,
@@ -329,6 +349,7 @@ public class CostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/cash-flow")
     public ResponseEntity<ApiResponse<List<CashFlowForecastDto>>> getCashFlowForecastByProject(
             @PathVariable UUID projectId) {

@@ -33,6 +33,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/v1/unit-rate-master")
+@PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 @Slf4j
 public class UnitRateMasterController {

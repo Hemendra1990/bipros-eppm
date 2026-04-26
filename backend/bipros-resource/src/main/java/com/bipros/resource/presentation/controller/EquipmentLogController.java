@@ -35,6 +35,7 @@ public class EquipmentLogController {
 
   private final EquipmentLogService equipmentLogService;
 
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PostMapping
   public ResponseEntity<ApiResponse<EquipmentLogResponse>> createEquipmentLog(
       @PathVariable UUID projectId,
@@ -44,6 +45,7 @@ public class EquipmentLogController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping
   public ResponseEntity<ApiResponse<Page<EquipmentLogResponse>>> getEquipmentLogs(
       @PathVariable UUID projectId,
@@ -73,6 +75,7 @@ public class EquipmentLogController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/utilization")
   public ResponseEntity<ApiResponse<List<EquipmentUtilizationSummary>>> getUtilizationSummary(
       @PathVariable UUID projectId) {

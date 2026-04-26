@@ -384,6 +384,60 @@ class SecurityIT {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    //   Controller-boundary regression suite — proves the new @projectAccess
+    //   guards on Activity / Cost / ResourceAssignment fail-fast at the
+    //   controller, not just the service layer. These tests would have caught
+    //   the original "service-layer slips ⇒ data leaks" risk.
+    // ──────────────────────────────────────────────────────────────────────────
+    @Nested
+    @DisplayName("Controller-boundary @projectAccess gates")
+    class ControllerBoundary {
+
+        @Test
+        @WithUserDetails("it_pm_b")
+        @DisplayName("PM-of-Beta → GET /v1/projects/{Alpha}/activities → 403 (controller boundary)")
+        void pmBCannotListAlphaActivities() throws Exception {
+            mockMvc.perform(get("/v1/projects/" + fixture.getProjectAlphaId() + "/activities"))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @WithUserDetails("it_pm_b")
+        @DisplayName("PM-of-Beta → POST /v1/projects/{Alpha}/expenses → 403 (controller boundary)")
+        void pmBCannotCreateExpenseInAlpha() throws Exception {
+            // Body shape doesn't matter — guard fires before validation
+            mockMvc.perform(post("/v1/projects/" + fixture.getProjectAlphaId() + "/expenses")
+                            .contentType("application/json")
+                            .content("{}"))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @WithUserDetails("it_pm_b")
+        @DisplayName("PM-of-Beta → GET /v1/projects/{Alpha}/cost-summary → 403 (controller boundary)")
+        void pmBCannotReadAlphaCostSummary() throws Exception {
+            mockMvc.perform(get("/v1/projects/" + fixture.getProjectAlphaId() + "/cost-summary"))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @WithUserDetails("it_pm_a")
+        @DisplayName("PM-of-Alpha → GET /v1/projects/{Alpha}/activities → 200 (own project)")
+        void pmACanListAlphaActivities() throws Exception {
+            mockMvc.perform(get("/v1/projects/" + fixture.getProjectAlphaId() + "/activities"))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @WithUserDetails("it_admin")
+        @DisplayName("ADMIN → GET /v1/projects/{Alpha}/activities → 200 (admin short-circuits)")
+        void adminCanListAlphaActivities() throws Exception {
+            mockMvc.perform(get("/v1/projects/" + fixture.getProjectAlphaId() + "/activities"))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     //   Helpers
     // ──────────────────────────────────────────────────────────────────────────
     private JsonNode readContent(MvcResult res) throws Exception {

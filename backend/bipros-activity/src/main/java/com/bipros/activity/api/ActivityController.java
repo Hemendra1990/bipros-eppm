@@ -24,7 +24,10 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/activities")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+// Class-level guard is just authentication. Per-method @projectAccess.canRead/canEdit
+// enforces the project-scope ABAC. ActivityService also re-checks before any mutation
+// (defense in depth — controller boundary fails fast, service is the source of truth).
+@PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 public class ActivityController {
 
@@ -32,6 +35,7 @@ public class ActivityController {
   private final GlobalChangeService globalChangeService;
 
   @PostMapping
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   public ResponseEntity<ApiResponse<ActivityResponse>> createActivity(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateActivityRequest request) {
@@ -40,6 +44,7 @@ public class ActivityController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<PagedResponse<ActivityResponse>>> listActivities(
       @PathVariable UUID projectId,
       @RequestParam(defaultValue = "0") int page,
@@ -52,6 +57,7 @@ public class ActivityController {
   }
 
   @GetMapping("/{activityId}")
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<ActivityResponse>> getActivity(
       @PathVariable UUID projectId,
       @PathVariable UUID activityId) {
@@ -60,6 +66,10 @@ public class ActivityController {
   }
 
   @PutMapping("/{activityId}")
+  // Reach-the-endpoint gate is project-read; ActivityService.updateActivity is the
+  // source of truth: it allows the assignee to update their own activity even without
+  // project-edit rights, and otherwise calls projectAccess.requireEdit.
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<ActivityResponse>> updateActivity(
       @PathVariable UUID projectId,
       @PathVariable UUID activityId,
@@ -69,6 +79,7 @@ public class ActivityController {
   }
 
   @DeleteMapping("/{activityId}")
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   public ResponseEntity<Void> deleteActivity(
       @PathVariable UUID projectId,
       @PathVariable UUID activityId) {
@@ -77,6 +88,9 @@ public class ActivityController {
   }
 
   @PutMapping("/{activityId}/progress")
+  // Progress updates are allowed for assignees even without full project-edit rights;
+  // service performs the precise check.
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<ActivityResponse>> updateProgress(
       @PathVariable UUID projectId,
       @PathVariable UUID activityId,
@@ -89,6 +103,7 @@ public class ActivityController {
   }
 
   @PutMapping("/apply-actuals")
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   public ResponseEntity<ApiResponse<Void>> applyActuals(
       @PathVariable UUID projectId,
       @Valid @RequestBody ApplyActualsRequest request) {
@@ -97,6 +112,7 @@ public class ActivityController {
   }
 
   @PostMapping("/global-change")
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> applyGlobalChange(
       @PathVariable UUID projectId,
       @Valid @RequestBody GlobalChangeRequest request) {

@@ -27,6 +27,7 @@ public class MaterialIssueController {
 
     private final MaterialIssueService service;
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/issues")
     public ResponseEntity<ApiResponse<List<MaterialIssueResponse>>> listByProject(
             @PathVariable UUID projectId) {

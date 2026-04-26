@@ -26,6 +26,7 @@ public class ResourceHistogramController {
 
   private final ResourceHistogramService resourceHistogramService;
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping
   public ResponseEntity<ApiResponse<List<ResourceHistogramEntry>>> getHistogram(
       @PathVariable UUID projectId,

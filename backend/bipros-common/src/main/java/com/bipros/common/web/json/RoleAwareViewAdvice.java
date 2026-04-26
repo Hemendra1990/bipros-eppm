@@ -24,12 +24,15 @@ import java.util.stream.Collectors;
  *
  * <p>Behaviour:
  * <ol>
- *   <li>Determine the highest {@link Views} class the caller's roles entitle them to (see role
- *       table in {@link Views}).</li>
- *   <li>If the controller method (or class) already declares a more permissive {@code @JsonView},
- *       leave it alone — the explicit annotation wins.</li>
- *   <li>Otherwise wrap the response body in a {@link MappingJacksonValue} with the resolved view
- *       set.</li>
+ *   <li>Determine the widest {@link Views} class the caller's roles entitle them to (see role
+ *       table in {@link Views}). This is the <b>upper bound</b> on what may be serialised.</li>
+ *   <li>If the controller method (or class) declares an explicit {@code @JsonView}, intersect
+ *       it with the role-derived view: <b>pick the narrower of the two</b>. An explicit view
+ *       may only ever <i>narrow</i> the response — it can never widen past what the caller's
+ *       roles allow. Without this rule, a controller author who annotates a method with
+ *       {@code @JsonView(Views.Admin.class)} but forgets the matching {@code @PreAuthorize}
+ *       would leak admin-only fields to every authenticated user.</li>
+ *   <li>Wrap the response body in a {@link MappingJacksonValue} with the resolved view set.</li>
  * </ol>
  *
  * <p>Note: {@code @JsonView} only filters response serialisation. Write endpoints must still
@@ -61,28 +64,63 @@ public class RoleAwareViewAdvice implements ResponseBodyAdvice<Object> {
             return body;
         }
 
-        Class<?> resolvedView = pickViewForCurrentUser();
+        Class<?> roleView = pickViewForCurrentUser();
 
-        // Respect explicit @JsonView on the controller method or its declaring class — the
-        // explicit annotation is treated as authoritative when it picks a wider view than the
-        // role-derived one. A narrower explicit view is also honoured (controller knows best).
+        // Pick the narrower of the role-derived view and any explicit @JsonView. Explicit
+        // annotations may only restrict, never widen.
         JsonView explicit = returnType.getMethodAnnotation(JsonView.class);
         if (explicit == null && returnType.getDeclaringClass() != null) {
             explicit = returnType.getDeclaringClass().getAnnotation(JsonView.class);
         }
-        if (explicit != null && explicit.value().length > 0) {
-            resolvedView = explicit.value()[0];
-        }
+        Class<?> resolvedView = (explicit != null && explicit.value().length > 0)
+                ? narrower(roleView, explicit.value()[0])
+                : roleView;
 
         if (body instanceof MappingJacksonValue existing) {
-            if (existing.getSerializationView() == null) {
-                existing.setSerializationView(resolvedView);
-            }
+            // Even if the controller pre-set a view via MappingJacksonValue, intersect it with
+            // the role-derived ceiling. This closes the loophole where a service method returns
+            // a hand-built MappingJacksonValue carrying a wider-than-allowed view.
+            Class<?> existingView = existing.getSerializationView();
+            existing.setSerializationView(existingView == null ? resolvedView : narrower(roleView, existingView));
             return existing;
         }
         MappingJacksonValue wrapped = new MappingJacksonValue(body);
         wrapped.setSerializationView(resolvedView);
         return wrapped;
+    }
+
+    /**
+     * Returns the narrower of two view classes, where "narrower" = serialises fewer fields.
+     *
+     * <p>Within our hierarchy {@code Public ⊂ Internal ⊂ FinanceConfidential ⊂ Admin}, a view
+     * "extends" its parent, and a Jackson view filter includes a field whose tag is the active
+     * view OR any ancestor of it. So the WIDER view is the one further down the chain.
+     *
+     * <p>Java's {@code A.isAssignableFrom(B)} returns true when {@code B} extends/implements
+     * {@code A} — i.e. {@code A} is the parent. In our hierarchy that means {@code A} is the
+     * narrower view.
+     *
+     * <p>Edge cases:
+     * <ul>
+     *   <li>If the two views are identical, return either.</li>
+     *   <li>If neither is an ancestor of the other (unrelated marker classes from outside the
+     *       {@link Views} hierarchy), default to the role-derived view as the safe ceiling.</li>
+     * </ul>
+     */
+    static Class<?> narrower(Class<?> roleView, Class<?> explicit) {
+        if (roleView == explicit) {
+            return roleView;
+        }
+        // explicit IS-A roleView ⇒ explicit is wider (a sub-view) ⇒ pick roleView as narrower
+        if (roleView.isAssignableFrom(explicit)) {
+            return roleView;
+        }
+        // roleView IS-A explicit ⇒ roleView is wider ⇒ pick explicit as narrower
+        if (explicit.isAssignableFrom(roleView)) {
+            return explicit;
+        }
+        // Unrelated views — fall back to roleView (the ceiling we're sure the caller may see).
+        return roleView;
     }
 
     private Class<?> pickViewForCurrentUser() {

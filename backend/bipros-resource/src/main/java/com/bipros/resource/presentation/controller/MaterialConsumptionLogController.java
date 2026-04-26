@@ -53,6 +53,7 @@ public class MaterialConsumptionLogController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping
   public ResponseEntity<ApiResponse<List<MaterialConsumptionLogResponse>>> list(
       @PathVariable UUID projectId,
@@ -62,6 +63,7 @@ public class MaterialConsumptionLogController {
     return ResponseEntity.ok(ApiResponse.ok(service.list(projectId, from, to)));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<MaterialConsumptionLogResponse>> get(
       @PathVariable UUID projectId, @PathVariable UUID id) {

@@ -30,6 +30,7 @@ public class MaterialReconciliationController {
 
   private final MaterialReconciliationService materialReconciliationService;
 
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PostMapping
   public ResponseEntity<ApiResponse<MaterialReconciliationResponse>> createMaterialReconciliation(
       @PathVariable UUID projectId,
@@ -39,6 +40,7 @@ public class MaterialReconciliationController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping
   public ResponseEntity<ApiResponse<List<MaterialReconciliationResponse>>> getMaterialReconciliations(
       @PathVariable UUID projectId,
@@ -60,6 +62,7 @@ public class MaterialReconciliationController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/resource/{resourceId}")
   public ResponseEntity<ApiResponse<List<MaterialReconciliationResponse>>> getByResource(
       @PathVariable UUID projectId,
@@ -69,6 +72,7 @@ public class MaterialReconciliationController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<MaterialReconciliationResponse>> getById(
       @PathVariable UUID projectId,

@@ -35,6 +35,7 @@ public class LabourReturnController {
 
   private final LabourReturnService labourReturnService;
 
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PostMapping
   public ResponseEntity<ApiResponse<LabourReturnResponse>> createLabourReturn(
       @PathVariable UUID projectId,
@@ -44,6 +45,7 @@ public class LabourReturnController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping
   public ResponseEntity<ApiResponse<Page<LabourReturnResponse>>> getLabourReturns(
       @PathVariable UUID projectId,
@@ -65,6 +67,7 @@ public class LabourReturnController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/summary")
   public ResponseEntity<ApiResponse<List<DeploymentSummary>>> getDeploymentSummary(
       @PathVariable UUID projectId) {

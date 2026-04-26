@@ -42,6 +42,7 @@ public class ResourceAssignmentController {
   private final ResourceAssignmentService assignmentService;
   private final ResourceLevelingService levelingService;
 
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PostMapping
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> assignResource(
       @PathVariable UUID projectId,
@@ -52,6 +53,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> getAssignment(
       @PathVariable UUID projectId,
@@ -61,6 +63,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping
   public ResponseEntity<ApiResponse<List<ResourceAssignmentResponse>>> listAssignments(
       @PathVariable UUID projectId) {
@@ -69,6 +72,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/activity/{activityId}")
   public ResponseEntity<ApiResponse<List<ResourceAssignmentResponse>>> listAssignmentsByActivity(
       @PathVariable UUID projectId,
@@ -79,6 +83,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/resource/{resourceId}")
   public ResponseEntity<ApiResponse<List<ResourceAssignmentResponse>>> listAssignmentsByResource(
       @PathVariable UUID projectId,
@@ -89,6 +94,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   @GetMapping("/resource/{resourceId}/usage-profile")
   public ResponseEntity<ApiResponse<List<ResourceUsageEntry>>> getResourceUsageProfile(
       @PathVariable UUID projectId,
@@ -103,6 +109,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PutMapping("/{id}")
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> updateAssignment(
       @PathVariable UUID projectId,
@@ -113,6 +120,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @DeleteMapping("/{id}")
   public ResponseEntity<ApiResponse<Void>> removeAssignment(
       @PathVariable UUID projectId,
@@ -122,6 +130,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
 
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PostMapping("/level-resources")
   public ResponseEntity<ApiResponse<LevelingResult>> levelResources(
       @PathVariable UUID projectId) {

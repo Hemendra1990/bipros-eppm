@@ -27,6 +27,7 @@ public class GoodsReceiptController {
 
     private final GoodsReceiptService service;
 
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     @GetMapping("/projects/{projectId}/grns")
     public ResponseEntity<ApiResponse<List<GoodsReceiptResponse>>> listByProject(
             @PathVariable UUID projectId) {

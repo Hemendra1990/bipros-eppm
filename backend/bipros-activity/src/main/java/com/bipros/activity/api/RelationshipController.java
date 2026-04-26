@@ -17,13 +17,14 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/relationships")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+@PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 public class RelationshipController {
 
   private final RelationshipService relationshipService;
 
   @PostMapping
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   public ResponseEntity<ApiResponse<RelationshipResponse>> createRelationship(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateRelationshipRequest request) {
@@ -32,6 +33,7 @@ public class RelationshipController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<List<RelationshipResponse>>> getRelationships(
       @PathVariable UUID projectId) {
     List<RelationshipResponse> response = relationshipService.getRelationships(projectId);
@@ -40,6 +42,7 @@ public class RelationshipController {
 
   /** Fetch a single relationship by id for consistency with other resource-by-id endpoints. */
   @GetMapping("/{relationshipId}")
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<RelationshipResponse>> getRelationship(
       @PathVariable UUID projectId,
       @PathVariable UUID relationshipId) {
@@ -47,6 +50,7 @@ public class RelationshipController {
   }
 
   @PutMapping("/{relationshipId}")
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   public ResponseEntity<ApiResponse<RelationshipResponse>> updateRelationship(
       @PathVariable UUID projectId,
       @PathVariable UUID relationshipId,
@@ -56,6 +60,7 @@ public class RelationshipController {
   }
 
   @DeleteMapping("/{relationshipId}")
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   public ResponseEntity<Void> deleteRelationship(
       @PathVariable UUID projectId,
       @PathVariable UUID relationshipId) {
@@ -64,6 +69,7 @@ public class RelationshipController {
   }
 
   @GetMapping("/predecessors/{activityId}")
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<List<RelationshipResponse>>> getPredecessors(
       @PathVariable UUID projectId,
       @PathVariable UUID activityId) {
@@ -72,6 +78,7 @@ public class RelationshipController {
   }
 
   @GetMapping("/successors/{activityId}")
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
   public ResponseEntity<ApiResponse<List<RelationshipResponse>>> getSuccessors(
       @PathVariable UUID projectId,
       @PathVariable UUID activityId) {

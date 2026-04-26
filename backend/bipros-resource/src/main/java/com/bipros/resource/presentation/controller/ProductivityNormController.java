@@ -26,6 +26,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/productivity-norms")
+@PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 @Slf4j
 public class ProductivityNormController {
