@@ -3,6 +3,7 @@ package com.bipros.cost.application.service;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.dto.*;
 import com.bipros.cost.domain.entity.*;
@@ -41,6 +42,7 @@ public class CostService {
     // PMS MasterData wiring — material procurement + on-hand stock enrich the cost summary.
     private final GoodsReceiptNoteRepository goodsReceiptNoteRepository;
     private final MaterialStockRepository materialStockRepository;
+    private final ProjectAccessGuard projectAccess;
 
     // Cost Account Operations
     @Transactional
@@ -108,6 +110,7 @@ public class CostService {
     // Activity Expense Operations
     @Transactional
     public ActivityExpenseDto createExpense(UUID projectId, CreateActivityExpenseRequest request) {
+        projectAccess.requireEdit(projectId);
         var entity = new ActivityExpense();
         entity.setProjectId(projectId);
         entity.setActivityId(request.activityId());
@@ -136,6 +139,7 @@ public class CostService {
     public ActivityExpenseDto updateExpense(UUID id, UpdateActivityExpenseRequest request) {
         var entity = activityExpenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ActivityExpense", id));
+        projectAccess.requireEdit(entity.getProjectId());
 
         if (request.costAccountId() != null) entity.setCostAccountId(request.costAccountId());
         if (request.name() != null) entity.setName(request.name());
@@ -164,6 +168,7 @@ public class CostService {
 
     @Transactional(readOnly = true)
     public List<ActivityExpenseDto> getExpensesByProject(UUID projectId) {
+        projectAccess.requireRead(projectId);
         return activityExpenseRepository.findByProjectId(projectId)
                 .stream()
                 .map(ActivityExpenseDto::from)
@@ -172,6 +177,7 @@ public class CostService {
 
     @Transactional(readOnly = true)
     public PagedResponse<ActivityExpenseDto> getExpensesByProjectPaged(UUID projectId, int page, int size) {
+        projectAccess.requireRead(projectId);
         var pageResult = activityExpenseRepository.findByProjectId(projectId, PageRequest.of(page, size));
         var content = pageResult.getContent().stream()
                 .map(ActivityExpenseDto::from)
@@ -192,6 +198,7 @@ public class CostService {
     public void deleteExpense(UUID id) {
         var entity = activityExpenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ActivityExpense", id));
+        projectAccess.requireEdit(entity.getProjectId());
         activityExpenseRepository.delete(entity);
         auditService.logDelete("ActivityExpense", id);
     }

@@ -26,6 +26,14 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useCurrency } from "@/lib/hooks/useCurrency";
+import { SecretField } from "@/components/auth/SecretField";
+
+const FINANCE_ROLES = ["ROLE_FINANCE", "ROLE_PMO", "ROLE_ADMIN"] as const;
+const NO_FINANCE_PLACEHOLDER = (
+  <div className="rounded-lg border border-dashed border-border bg-surface-hover/40 px-4 py-6 text-center text-sm text-text-muted">
+    Cost figures are restricted to Finance / PMO roles.
+  </div>
+);
 
 /**
  * IC-PMS monetary values are budgeted in INR crores (1 crore = 10,000,000 INR).
@@ -349,7 +357,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
       {isLoadingSummary ? (
         <div className="text-center text-text-secondary">Loading cost summary...</div>
       ) : (
-        <>
+        // The whole financial roll-up (budget/actual/remaining/EVM/procurement) is FINANCE/PMO-only.
+        // Backend already strips the underlying fields via @JsonView; this just gives the UI a clean
+        // placeholder instead of empty cards full of zeros for users who aren't entitled to see them.
+        <SecretField visibleTo={FINANCE_ROLES} masked={NO_FINANCE_PLACEHOLDER}>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {summaryCards.map((card) => (
               <div
@@ -400,10 +411,11 @@ export function CostsTab({ projectId }: { projectId: string }) {
               </div>
             </div>
           )}
-        </>
+        </SecretField>
       )}
 
       {/* Cash Flow S-Curve with Forecast Method Selector */}
+      <SecretField visibleTo={FINANCE_ROLES} masked={null}>
       <div className="rounded-lg border border-border bg-surface/50 p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-text-primary">Cash Flow S-Curve</h3>
@@ -486,9 +498,11 @@ export function CostsTab({ projectId }: { projectId: string }) {
           </ResponsiveContainer>
         )}
       </div>
+      </SecretField>
 
       {/* Period-by-Period Cost Table */}
       {periodAggregations.length > 0 && (
+        <SecretField visibleTo={FINANCE_ROLES} masked={null}>
         <div className="rounded-lg border border-border bg-surface/50 p-6">
           <h3 className="mb-4 text-lg font-semibold text-text-primary">
             Period Cost Breakdown
@@ -537,8 +551,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
             </table>
           </div>
         </div>
+        </SecretField>
       )}
 
+      <SecretField visibleTo={FINANCE_ROLES} masked={null}>
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-text-primary">Expenses</h3>
@@ -654,6 +670,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
           <DataTable columns={expenseColumns} data={expenses} rowKey="id" />
         )}
       </div>
+      </SecretField>
     </div>
   );
 }

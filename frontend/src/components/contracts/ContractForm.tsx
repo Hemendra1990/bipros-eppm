@@ -10,6 +10,9 @@ import {
   BILLING_CYCLE_OPTIONS,
   CONTRACT_TYPE_OPTIONS,
 } from "@/lib/contracts/contractTypeOptions";
+import { SecretField } from "@/components/auth/SecretField";
+
+const FINANCE_ROLES = ["ROLE_FINANCE", "ROLE_ADMIN"] as const;
 
 const inputClass =
   "w-full px-3 py-2 bg-surface-hover border border-border rounded-lg text-text-primary placeholder-text-muted focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-50";
@@ -172,32 +175,48 @@ export function ContractForm({
         </div>
       </div>
 
-      <div className={sectionHeaderClass}>Value</div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Contract Value *</label>
-          <input
-            type="number"
-            name="contractValue"
-            required
-            step="0.01"
-            defaultValue={v.contractValue ?? ""}
-            placeholder="0.00"
-            className={inputClass}
-          />
+      {/* Money fields are FINANCE/ADMIN-only. Backend strips contractValue/revisedValue from
+          the response payload via @JsonView for non-finance callers; SecretField keeps the UI
+          tidy by replacing the inputs with a non-editable hint when those fields aren't
+          available. */}
+      <SecretField
+        visibleTo={FINANCE_ROLES}
+        masked={
+          <>
+            <div className={sectionHeaderClass}>Value</div>
+            <div className="rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-text-muted">
+              Contract value is restricted to Finance roles.
+            </div>
+          </>
+        }
+      >
+        <div className={sectionHeaderClass}>Value</div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Contract Value *</label>
+            <input
+              type="number"
+              name="contractValue"
+              required
+              step="0.01"
+              defaultValue={v.contractValue ?? ""}
+              placeholder="0.00"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Revised Value</label>
+            <input
+              type="number"
+              name="revisedValue"
+              step="0.01"
+              defaultValue={v.revisedValue ?? ""}
+              placeholder="Auto-updates as VOs are approved"
+              className={inputClass}
+            />
+          </div>
         </div>
-        <div>
-          <label className={labelClass}>Revised Value</label>
-          <input
-            type="number"
-            name="revisedValue"
-            step="0.01"
-            defaultValue={v.revisedValue ?? ""}
-            placeholder="Auto-updates as VOs are approved"
-            className={inputClass}
-          />
-        </div>
-      </div>
+      </SecretField>
 
       <div className={sectionHeaderClass}>Dates</div>
       <div className="grid grid-cols-3 gap-4">

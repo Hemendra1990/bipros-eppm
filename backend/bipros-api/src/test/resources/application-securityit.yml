@@ -1,0 +1,45 @@
+# Profile: securityit — runs SecurityIT against the locally running Postgres (the same DB the
+# dev backend boots against). Sidesteps Testcontainers, which can't find the Docker socket from
+# the forked surefire JVM on this workstation. The SecurityTestFixture seeds IT-prefixed users
+# and entities idempotently so re-runs are safe; tables come and go with `ddl-auto: create-drop`
+# in the dev profile, so the next backend restart wipes the IT residue.
+
+spring:
+  datasource:
+    url: ${TEST_DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/bipros}
+    username: ${TEST_DB_USERNAME:bipros}
+    password: ${TEST_DB_PASSWORD:bipros_dev}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  liquibase:
+    enabled: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+    mapper:
+      default-view-inclusion: true
+
+bipros:
+  security:
+    jwt:
+      secret: securityit-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256
+      access-token-expiration: 3600000
+      refresh-token-expiration: 86400000
+
+logging:
+  level:
+    root: WARN
+    com.bipros: INFO

@@ -141,4 +141,19 @@ public class Activity extends BaseEntity {
   /** Linear referencing: chainage end in metres (e.g. 145500 = km 145+500). */
   @Column(name = "chainage_to_m")
   private Long chainageToM;
+
+  /**
+   * Soft FK to {@code public.users.id}. The team member responsible for executing the activity.
+   * Drives ABAC: a TEAM_MEMBER user may only update activities where they appear here.
+   */
+  @Column(name = "assigned_to")
+  private UUID assignedTo;
+
+  /**
+   * Soft FK to {@code public.users.id}. Higher-tier accountability (PM/PMO who signs off the
+   * activity). Often populated from the project's {@code ownerId} but may differ for delegated
+   * supervision.
+   */
+  @Column(name = "responsible_user_id")
+  private UUID responsibleUserId;
 }

@@ -11,11 +11,15 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.AccessSpecifications;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,10 +36,13 @@ public class ActivityService {
   private final ActivityRepository activityRepository;
   private final ActivityRelationshipRepository relationshipRepository;
   private final AuditService auditService;
+  private final ProjectAccessGuard projectAccess;
 
   public ActivityResponse createActivity(CreateActivityRequest request) {
     log.info("Creating activity: code={}, name={}, projectId={}", request.code(), request.name(),
         request.projectId());
+
+    projectAccess.requireEdit(request.projectId());
 
     if (request.plannedStartDate() != null
         && request.plannedFinishDate() != null
@@ -114,6 +121,15 @@ public class ActivityService {
 
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
+
+    // Activity-level ABAC: TEAM_MEMBER assignees may update their own activities even
+    // without project-edit rights; everyone else must clear projectAccess.requireEdit.
+    UUID currentUserId = projectAccess.currentUserId();
+    boolean isAssignee = currentUserId != null
+        && currentUserId.equals(activity.getAssignedTo());
+    if (!isAssignee) {
+      projectAccess.requireEdit(activity.getProjectId());
+    }
 
     // Capture old values for audit BEFORE mutation
     String oldName = activity.getName();
@@ -254,6 +270,8 @@ public class ActivityService {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
 
+    projectAccess.requireEdit(activity.getProjectId());
+
     boolean hasRelationships = !relationshipRepository.findByPredecessorActivityId(id).isEmpty()
         || !relationshipRepository.findBySuccessorActivityId(id).isEmpty();
 
@@ -272,12 +290,15 @@ public class ActivityService {
   public ActivityResponse getActivity(UUID id) {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
+    projectAccess.requireRead(activity.getProjectId());
     return ActivityResponse.from(activity);
   }
 
   public PagedResponse<ActivityResponse> listActivities(UUID projectId, Pageable pageable) {
     log.info("Listing activities for project: projectId={}, page={}, size={}", projectId,
         pageable.getPageNumber(), pageable.getPageSize());
+
+    projectAccess.requireRead(projectId);
 
     Page<Activity> page = activityRepository.findByProjectIdOrderBySortOrder(projectId, pageable);
     return PagedResponse.of(
@@ -291,7 +312,10 @@ public class ActivityService {
 
   public java.util.List<ActivityResponse> getActivitiesByWbs(UUID wbsNodeId) {
     log.info("Getting activities for WBS node: wbsNodeId={}", wbsNodeId);
+    // Filter to activities the user may read (via the activity's projectId).
+    java.util.Set<UUID> allowed = projectAccess.getAccessibleProjectIdsForCurrentUser();
     return activityRepository.findByWbsNodeId(wbsNodeId).stream()
+        .filter(a -> allowed == null || allowed.contains(a.getProjectId()))
         .map(ActivityResponse::from)
         .toList();
   }

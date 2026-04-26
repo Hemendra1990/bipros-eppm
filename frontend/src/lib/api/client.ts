@@ -22,6 +22,22 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError & { config?: InternalAxiosRequestConfig & { _retry?: boolean } }) => {
+    // Route HARD 403s to the dedicated /forbidden page so users get a clear "you don't have
+    // permission" experience instead of a silent toast. Skip:
+    //   - already on /forbidden (don't loop)
+    //   - on /auth/* (the login flow handles its own errors)
+    //   - calls to /v1/auth/* (login/register/refresh — caller surfaces field-level errors)
+    // Always re-reject so the caller's promise chain still observes the failure.
+    if (error.response?.status === 403 && typeof window !== "undefined") {
+      const here = window.location.pathname;
+      const requestUrl = error.config?.url || "";
+      const isAuthEndpoint = requestUrl.includes("/v1/auth/");
+      if (!here.startsWith("/forbidden") && !here.startsWith("/auth") && !isAuthEndpoint) {
+        window.location.href = "/forbidden";
+      }
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !error.config?._retry) {
       error.config!._retry = true;
       // Skip redirect for login/refresh endpoints — let the caller handle the error

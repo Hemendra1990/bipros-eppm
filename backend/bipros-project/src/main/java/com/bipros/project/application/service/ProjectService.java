@@ -4,6 +4,8 @@ import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.event.ProjectCreatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.AccessSpecifications;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.contract.domain.model.Contract;
 import com.bipros.contract.domain.model.ContractStatus;
@@ -24,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,9 +53,14 @@ public class ProjectService {
     private final AuditService auditService;
     private final ContractRepository contractRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProjectAccessGuard projectAccess;
 
     public ProjectResponse createProject(CreateProjectRequest request) {
         log.info("Creating project with code: {}", request.code());
+
+        // Stamp the creator as owner so CLIENT-style users can read their own creations even
+        // before an OBS assignment / project_members row is added.
+        UUID creatorId = projectAccess.currentUserId();
 
         if (projectRepository.existsByCode(request.code())) {
             throw new BusinessRuleException("PROJECT_CODE_DUPLICATE", "Project with code '" + request.code() + "' already exists");
@@ -91,6 +99,7 @@ public class ProjectService {
         project.setToLocation(sanitizeText(request.toLocation()));
         project.setTotalLengthKm(deriveTotalLengthKm(
             request.fromChainageM(), request.toChainageM(), request.totalLengthKm()));
+        project.setOwnerId(creatorId);
 
         Project saved = projectRepository.save(project);
         log.info("Project created with ID: {}", saved.getId());
@@ -114,6 +123,8 @@ public class ProjectService {
 
     public ProjectResponse updateProject(UUID id, UpdateProjectRequest request) {
         log.info("Updating project: {}", id);
+
+        projectAccess.requireEdit(id);
 
         Project project = projectRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Project", id));
@@ -232,6 +243,8 @@ public class ProjectService {
     public void deleteProject(UUID id) {
         log.info("Deleting project: {}", id);
 
+        projectAccess.requireDelete(id);
+
         Project project = projectRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Project", id));
 
@@ -255,6 +268,8 @@ public class ProjectService {
     public ProjectResponse getProject(UUID id) {
         log.info("Fetching project: {}", id);
 
+        projectAccess.requireRead(id);
+
         Project project = projectRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Project", id));
 
@@ -264,7 +279,10 @@ public class ProjectService {
     public PagedResponse<ProjectResponse> listProjects(Pageable pageable) {
         log.info("Fetching projects page: {}", pageable);
 
-        Page<Project> page = projectRepository.findAll(pageable);
+        // RLS: Project IS the row, so filter by Project.id IN allowedProjectIds.
+        Specification<Project> spec = AccessSpecifications.projectScopedTo(
+            "id", projectAccess.getAccessibleProjectIdsForCurrentUser());
+        Page<Project> page = projectRepository.findAll(spec, pageable);
 
         List<ProjectResponse> content = page.getContent().stream()
             .map(this::buildProjectResponse)
@@ -286,7 +304,10 @@ public class ProjectService {
             throw new ResourceNotFoundException("EpsNode", epsNodeId);
         }
 
+        // Filter results to only projects the user may read.
+        java.util.Set<UUID> allowed = projectAccess.getAccessibleProjectIdsForCurrentUser();
         return projectRepository.findByEpsNodeId(epsNodeId).stream()
+            .filter(p -> allowed == null || allowed.contains(p.getId()))
             .map(this::buildProjectResponse)
             .collect(Collectors.toList());
     }

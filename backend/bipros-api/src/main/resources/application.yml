@@ -42,6 +42,11 @@ spring:
     serialization:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
+    # Required for RoleAwareViewAdvice — when a @JsonView is active, fields without an explicit
+    # view marker stay visible. Only fields explicitly annotated with @JsonView(FinanceConfidential)
+    # etc. get filtered. Without this, every existing DTO would lose its unannotated fields.
+    mapper:
+      default-view-inclusion: true
 
   servlet:
     multipart:

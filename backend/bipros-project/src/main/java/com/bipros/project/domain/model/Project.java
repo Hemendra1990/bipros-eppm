@@ -97,4 +97,12 @@ public class Project extends BaseEntity {
      */
     @Column(name = "active_baseline_id")
     private UUID activeBaselineId;
+
+    /**
+     * Optional project owner — soft FK to {@code public.users.id}. Used by ABAC ownership
+     * checks (e.g. CLIENT-role users see projects they own without needing OBS assignment).
+     * Nullable: legacy projects created before owner tracking will leave this empty.
+     */
+    @Column(name = "owner_id")
+    private UUID ownerId;
 }

@@ -20,9 +20,17 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TabTip } from "@/components/common/TabTip";
 import type { CreateRiskRequest, ProjectResponse, ApiResponse, PagedResponse } from "@/lib/types";
+import { useAuth } from "@/lib/auth/useAuth";
+
+const RISK_INTERNAL_ROLES = ["ROLE_PMO", "ROLE_PROJECT_MANAGER", "ROLE_ADMIN", "ROLE_FINANCE"] as const;
 
 export default function RiskPage() {
   const queryClient = useQueryClient();
+  const { hasAnyRole } = useAuth();
+  // Probability/impact/score reveal the analyst's risk-rating reasoning. Restrict to
+  // the same role set the backend uses for the Internal @JsonView (PM/PMO/FINANCE/ADMIN).
+  // Other roles still see the risk register; the rating columns just disappear.
+  const canSeeRiskInternals = hasAnyRole(RISK_INTERNAL_ROLES);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState("");
@@ -159,30 +167,35 @@ export default function RiskPage() {
     createMutation.mutate(formData);
   };
 
+  const internalColumns: ColumnDef<RiskResponse>[] = canSeeRiskInternals
+    ? [
+        { key: "probability", label: "Probability", sortable: true },
+        { key: "impact", label: "Impact", sortable: true },
+        {
+          key: "score",
+          label: "Score",
+          sortable: true,
+          render: (value) => {
+            if (value === null || value === undefined) {
+              return <span className="text-text-muted">-</span>;
+            }
+            const score = Number(String(value));
+            if (isNaN(score)) {
+              return <span className="text-text-muted">-</span>;
+            }
+            let color = "text-success";
+            if (score >= 15) color = "text-danger";
+            else if (score >= 8) color = "text-warning";
+            return <span className={`font-semibold ${color}`}>{score.toFixed(1)}</span>;
+          },
+        },
+      ]
+    : [];
   const columns: ColumnDef<RiskResponse>[] = [
     { key: "code", label: "Code", sortable: true },
     { key: "title", label: "Title", sortable: true },
     { key: "category", label: "Category", sortable: true },
-    { key: "probability", label: "Probability", sortable: true },
-    { key: "impact", label: "Impact", sortable: true },
-    {
-      key: "score",
-      label: "Score",
-      sortable: true,
-      render: (value) => {
-        if (value === null || value === undefined) {
-          return <span className="text-text-muted">-</span>;
-        }
-        const score = Number(String(value));
-        if (isNaN(score)) {
-          return <span className="text-text-muted">-</span>;
-        }
-        let color = "text-success";
-        if (score >= 15) color = "text-danger";
-        else if (score >= 8) color = "text-warning";
-        return <span className={`font-semibold ${color}`}>{score.toFixed(1)}</span>;
-      },
-    },
+    ...internalColumns,
     {
       key: "status",
       label: "Status",

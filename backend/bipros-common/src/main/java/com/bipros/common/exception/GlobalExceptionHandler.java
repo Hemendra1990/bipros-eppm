@@ -73,7 +73,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(RuntimeException ex) {
-        log.warn("Access denied: {}", ex.getMessage());
+        // Log with username + a request hint so the audit trail can correlate denials with the
+        // request URI (the request URI itself is captured by the access log; we keep this
+        // handler dependency-free of the AuditService to avoid a bipros-common → bipros-* cycle).
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String who = auth == null ? "anonymous" : auth.getName();
+        log.warn("ACCESS_DENIED user={} reason={}", who, ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("FORBIDDEN", "Access denied"));
     }

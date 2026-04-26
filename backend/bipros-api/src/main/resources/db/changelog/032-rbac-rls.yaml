@@ -1,0 +1,181 @@
+databaseChangeLog:
+
+  # ─── New global roles required by the multi-layered RBAC + ABAC + RLS + FLS rollout ───
+  - changeSet:
+      id: 032-seed-rbac-roles
+      author: bipros
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO public.roles (id, name, description, created_at, updated_at)
+              SELECT gen_random_uuid(), 'EXECUTIVE', 'Read-only access across portfolios; sees roll-ups and KPIs', now(), now()
+              WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'EXECUTIVE');
+
+              INSERT INTO public.roles (id, name, description, created_at, updated_at)
+              SELECT gen_random_uuid(), 'PMO', 'Project management office; configures methodology and governance', now(), now()
+              WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'PMO');
+
+              INSERT INTO public.roles (id, name, description, created_at, updated_at)
+              SELECT gen_random_uuid(), 'FINANCE', 'May view and edit cost / contract value / payment fields', now(), now()
+              WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'FINANCE');
+
+              INSERT INTO public.roles (id, name, description, created_at, updated_at)
+              SELECT gen_random_uuid(), 'TEAM_MEMBER', 'Activity-level executor; updates assigned activities only', now(), now()
+              WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'TEAM_MEMBER');
+
+              INSERT INTO public.roles (id, name, description, created_at, updated_at)
+              SELECT gen_random_uuid(), 'CLIENT', 'Read-only access scoped to projects they own', now(), now()
+              WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'CLIENT');
+
+              INSERT INTO public.roles (id, name, description, created_at, updated_at)
+              SELECT gen_random_uuid(), 'RESOURCE_MANAGER', 'Manages resource pool and assignments', now(), now()
+              WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'RESOURCE_MANAGER');
+
+              INSERT INTO public.roles (id, name, description, created_at, updated_at)
+              SELECT gen_random_uuid(), 'SCHEDULER', 'Owns activity / relationship / schedule editing', now(), now()
+              WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'SCHEDULER');
+
+  # ─── public.project_members — per-project role assignment ───
+  - changeSet:
+      id: 032-create-project-members-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: public
+            tableName: project_members
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_role
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: granted_by
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+
+        - addUniqueConstraint:
+            schemaName: public
+            tableName: project_members
+            constraintName: uk_project_members_user_project_role
+            columnNames: user_id, project_id, project_role
+
+        - createIndex:
+            schemaName: public
+            tableName: project_members
+            indexName: idx_project_members_user
+            columns:
+              - column:
+                  name: user_id
+
+        - createIndex:
+            schemaName: public
+            tableName: project_members
+            indexName: idx_project_members_project
+            columns:
+              - column:
+                  name: project_id
+
+        - addForeignKeyConstraint:
+            baseTableSchemaName: public
+            baseTableName: project_members
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_project_members_user
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableSchemaName: public
+            baseTableName: project_members
+            baseColumnNames: project_id
+            referencedTableSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_project_members_project
+            onDelete: CASCADE
+
+  # ─── projects.owner_id ───
+  - changeSet:
+      id: 032-add-project-owner-id
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: projects
+            columns:
+              - column:
+                  name: owner_id
+                  type: UUID
+        - createIndex:
+            schemaName: project
+            tableName: projects
+            indexName: idx_projects_owner_id
+            columns:
+              - column:
+                  name: owner_id
+
+  # ─── activities.assigned_to + responsible_user_id ───
+  - changeSet:
+      id: 032-add-activity-assignment-columns
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: activity
+            tableName: activities
+            columns:
+              - column:
+                  name: assigned_to
+                  type: UUID
+              - column:
+                  name: responsible_user_id
+                  type: UUID
+        - createIndex:
+            schemaName: activity
+            tableName: activities
+            indexName: idx_activities_assigned_to
+            columns:
+              - column:
+                  name: assigned_to
+        - createIndex:
+            schemaName: activity
+            tableName: activities
+            indexName: idx_activities_responsible_user_id
+            columns:
+              - column:
+                  name: responsible_user_id

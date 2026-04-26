@@ -1,11 +1,13 @@
 package com.bipros.risk.application.dto;
 
+import com.bipros.common.web.json.Views;
 import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskImpact;
 import com.bipros.risk.domain.model.RiskProbability;
 import com.bipros.risk.domain.model.RiskRag;
 import com.bipros.risk.domain.model.RiskStatus;
 import com.bipros.risk.domain.model.RiskTrend;
+import com.fasterxml.jackson.annotation.JsonView;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,15 +28,15 @@ public class RiskSummary {
     private String description;
     private RiskCategory category;
     private RiskStatus status;
-    private RiskProbability probability;
-    private RiskImpact impact;
-    private Double riskScore;
+    @JsonView(Views.Internal.class) private RiskProbability probability;
+    @JsonView(Views.Internal.class) private RiskImpact impact;
+    @JsonView(Views.Internal.class) private Double riskScore;
     private UUID ownerId;
     private LocalDate identifiedDate;
     private LocalDate dueDate;
-    private String affectedActivities;
-    private BigDecimal costImpact;
-    private Integer scheduleImpactDays;
+    @JsonView(Views.Internal.class) private String affectedActivities;
+    @JsonView(Views.FinanceConfidential.class) private BigDecimal costImpact;
+    @JsonView(Views.Internal.class) private Integer scheduleImpactDays;
     private int sortOrder;
 
     // ── IC-PMS M7 fields — surfaced so the Risks tab can render RAG / Trend /
@@ -50,17 +52,17 @@ public class RiskSummary {
     private Boolean isOpportunity;
 
     /** Residual risk score after mitigations applied. */
-    private Double residualRiskScore;
+    @JsonView(Views.Internal.class) private Double residualRiskScore;
 
     /**
      * Cost-impact score 1-5 per IC-PMS M7 split-impact model.
      * Note: Risk entity persists this as Integer (1-5 scale), distinct from
      * {@link #costImpact} which is the monetary exposure in BigDecimal.
      */
-    private Integer impactCost;
+    @JsonView(Views.Internal.class) private Integer impactCost;
 
     /** Schedule-impact score 1-5 per IC-PMS M7 split-impact model. */
-    private Integer impactSchedule;
+    @JsonView(Views.Internal.class) private Integer impactSchedule;
 
     /**
      * Computed assessment of how completely this risk has been analysed (owner / rating /

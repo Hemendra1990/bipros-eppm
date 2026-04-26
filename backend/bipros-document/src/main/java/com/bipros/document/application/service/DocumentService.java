@@ -1,6 +1,7 @@
 package com.bipros.document.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.document.application.dto.DocumentDownload;
 import com.bipros.document.application.dto.DocumentRequest;
@@ -32,8 +33,10 @@ public class DocumentService {
     private final DocumentVersionRepository versionRepository;
     private final AuditService auditService;
     private final DocumentStorageService storageService;
+    private final ProjectAccessGuard projectAccess;
 
     public DocumentResponse createDocument(UUID projectId, DocumentRequest request) {
+        projectAccess.requireEdit(projectId);
         validateDocumentNumberPrefix(request.documentType(), request.documentNumber());
 
         Document document = new Document();
@@ -77,6 +80,7 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public DocumentResponse getDocument(UUID projectId, UUID documentId) {
+        projectAccess.requireRead(projectId);
         Document document = documentRepository.findByProjectIdAndId(projectId, documentId)
             .orElseThrow(() -> new ResourceNotFoundException("Document", documentId));
         return DocumentResponse.from(document);
@@ -84,6 +88,7 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public List<DocumentResponse> listDocuments(UUID projectId) {
+        projectAccess.requireRead(projectId);
         return documentRepository.findByProjectId(projectId)
             .stream()
             .map(DocumentResponse::from)
@@ -92,13 +97,16 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public List<DocumentResponse> listDocumentsByFolder(UUID folderId) {
+        java.util.Set<UUID> allowed = projectAccess.getAccessibleProjectIdsForCurrentUser();
         return documentRepository.findByFolderId(folderId)
             .stream()
+            .filter(d -> allowed == null || allowed.contains(d.getProjectId()))
             .map(DocumentResponse::from)
             .toList();
     }
 
     public DocumentResponse updateDocument(UUID projectId, UUID documentId, DocumentRequest request) {
+        projectAccess.requireEdit(projectId);
         Document document = documentRepository.findByProjectIdAndId(projectId, documentId)
             .orElseThrow(() -> new ResourceNotFoundException("Document", documentId));
 
@@ -152,6 +160,7 @@ public class DocumentService {
     }
 
     public void deleteDocument(UUID projectId, UUID documentId) {
+        projectAccess.requireEdit(projectId);
         Document document = documentRepository.findByProjectIdAndId(projectId, documentId)
             .orElseThrow(() -> new ResourceNotFoundException("Document", documentId));
 

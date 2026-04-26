@@ -58,43 +58,55 @@ public class DataSeeder implements CommandLineRunner {
   @Override
   @Transactional
   public void run(String... args) throws Exception {
-    // Check if data already seeded by checking role count
-    if (roleRepository.count() > 0) {
-      log.info("Data already seeded, skipping bulk initialization");
-      // Still ensure admin has ADMIN role (idempotent self-heal for missing association)
+    // Roles are seeded idempotently every boot so newly-introduced roles (EXECUTIVE, PMO,
+    // FINANCE, TEAM_MEMBER, CLIENT) appear on existing dev databases without a wipe.
+    seedRoles();
+
+    if (roleRepository.count() > 0 && userRepository.findByUsername(adminUsername).isPresent()) {
+      log.info("Bulk data already seeded, skipping calendar/currency/settings");
       ensureAdminHasAdminRole();
       return;
     }
 
     log.info("Starting data seeding...");
-
-    seedRoles();
     seedAdminUser();
     seedGlobalCalendar();
     seedBaseCurrency();
     seedGlobalSettings();
-
     log.info("Data seeding completed successfully");
   }
 
+  /**
+   * Idempotent role catalogue. Each role is created only if absent. Includes:
+   * <ul>
+   *   <li>Original platform roles: ADMIN, PROJECT_MANAGER, SCHEDULER, RESOURCE_MANAGER, VIEWER</li>
+   *   <li>RBAC+ABAC rollout additions: EXECUTIVE, PMO, FINANCE, TEAM_MEMBER, CLIENT</li>
+   * </ul>
+   */
   private void seedRoles() {
-    log.debug("Seeding roles");
-
-    String[] roleNames = {"ADMIN", "PROJECT_MANAGER", "SCHEDULER", "RESOURCE_MANAGER", "VIEWER"};
-    String[] roleDescriptions = {
-      "Administrator with full system access",
-      "Project Manager with project control",
-      "Scheduler for task scheduling",
-      "Resource Manager for resource allocation",
-      "Viewer with read-only access"
+    String[][] roles = {
+      {"ADMIN", "Administrator with full system access"},
+      {"EXECUTIVE", "Read-only access across portfolios; sees roll-ups and KPIs"},
+      {"PMO", "Project management office; configures methodology and governance"},
+      {"FINANCE", "May view and edit cost / contract value / payment fields"},
+      {"PROJECT_MANAGER", "Project Manager with project control"},
+      {"SCHEDULER", "Owns activity / relationship / schedule editing"},
+      {"RESOURCE_MANAGER", "Manages resource pool and assignments"},
+      {"TEAM_MEMBER", "Activity-level executor; updates assigned activities only"},
+      {"CLIENT", "Read-only access scoped to projects they own"},
+      {"VIEWER", "Viewer with read-only access"}
     };
-
-    for (int i = 0; i < roleNames.length; i++) {
-      Role role = new Role(roleNames[i], roleDescriptions[i]);
-      roleRepository.save(role);
-      log.debug("Created role: {}", roleNames[i]);
+    int created = 0;
+    for (String[] r : roles) {
+      if (roleRepository.findByName(r[0]).isEmpty()) {
+        roleRepository.save(new Role(r[0], r[1]));
+        log.debug("Created role: {}", r[0]);
+        created++;
+      }
     }
-    log.info("Seeded {} roles", roleNames.length);
+    if (created > 0) {
+      log.info("Seeded {} new roles (existing roles untouched)", created);
+    }
   }
 
   private void seedAdminUser() {

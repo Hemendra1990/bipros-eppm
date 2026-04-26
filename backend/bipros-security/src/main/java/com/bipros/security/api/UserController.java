@@ -28,7 +28,10 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/v1/users")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
+// Class-level guard is just authentication; per-method @PreAuthorize narrows the privileged
+// endpoints (list, getById, updateProfile, access matrix) below. /me is open to every signed-in
+// user — they're allowed to see their own profile regardless of role.
+@PreAuthorize("isAuthenticated()")
 @Tag(name = "Users", description = "User management endpoints")
 @Slf4j
 @RequiredArgsConstructor
@@ -72,6 +75,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get user by ID", description = "Retrieve a specific user by their ID")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable UUID id) {
         try {
@@ -96,6 +100,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}/access")
+    @PreAuthorize("hasRole('ADMIN') or #id == @currentUserService.getCurrentUserId()")
     @Operation(summary = "Get IC-PMS module access & corridor scope for a user")
     public ResponseEntity<ApiResponse<UserAccessResponse>> getUserAccess(@PathVariable UUID id) {
         try {

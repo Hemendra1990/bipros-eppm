@@ -21,7 +21,10 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
+// Class-level RBAC is just an authentication gate: any signed-in user may HIT the endpoint.
+// What they actually see/edit is enforced by service-layer ProjectAccessGuard (RLS) and the
+// per-method @projectAccess.canEdit/canDelete checks (ABAC) further below.
+@PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 public class ProjectController {
 
@@ -52,7 +55,7 @@ public class ProjectController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER') and @projectAccess.canEdit(#id)")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
         @PathVariable UUID id, @Valid @RequestBody UpdateProjectRequest request) {
         ProjectResponse response = projectService.updateProject(id, request);
@@ -60,7 +63,7 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or @projectAccess.canDelete(#id)")
     public ResponseEntity<Void> deleteProject(@PathVariable UUID id) {
         projectService.deleteProject(id);
         return ResponseEntity.noContent().build();

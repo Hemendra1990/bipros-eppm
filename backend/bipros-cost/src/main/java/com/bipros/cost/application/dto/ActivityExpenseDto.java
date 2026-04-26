@@ -1,6 +1,8 @@
 package com.bipros.cost.application.dto;
 
+import com.bipros.common.web.json.Views;
 import com.bipros.cost.domain.entity.ActivityExpense;
+import com.fasterxml.jackson.annotation.JsonView;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -12,7 +14,7 @@ public record ActivityExpenseDto(
         UUID projectId,
         UUID activityId,
         String description,
-        BigDecimal amount,
+        @JsonView(Views.FinanceConfidential.class) BigDecimal amount,
         String currency,
         LocalDate expenseDate,
         String category,

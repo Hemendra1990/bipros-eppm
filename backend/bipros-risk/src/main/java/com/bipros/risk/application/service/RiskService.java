@@ -1,6 +1,7 @@
 package com.bipros.risk.application.service;
 
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.risk.application.dto.CreateRiskRequest;
 import com.bipros.risk.application.dto.CreateRiskResponseRequest;
@@ -33,8 +34,10 @@ public class RiskService {
     private final RiskResponseRepository riskResponseRepository;
     private final RiskQualityService riskQualityService;
     private final AuditService auditService;
+    private final ProjectAccessGuard projectAccess;
 
     public RiskSummary createRisk(UUID projectId, CreateRiskRequest request) {
+        projectAccess.requireEdit(projectId);
         String title = request.requiredTitle();
         if (title == null) {
             throw new com.bipros.common.exception.BusinessRuleException(
@@ -77,6 +80,7 @@ public class RiskService {
     }
 
     public RiskSummary updateRisk(UUID projectId, UUID riskId, CreateRiskRequest request) {
+        projectAccess.requireEdit(projectId);
         Risk risk = loadProjectRisk(projectId, riskId);
 
         auditService.logUpdate("Risk", riskId, "title", risk.getTitle(), request.getTitle());
@@ -118,6 +122,7 @@ public class RiskService {
     }
 
     public void deleteRisk(UUID projectId, UUID riskId) {
+        projectAccess.requireEdit(projectId);
         Risk risk = riskRepository.findById(riskId)
             .orElseThrow(() -> new ResourceNotFoundException("Risk", riskId));
 
@@ -132,6 +137,7 @@ public class RiskService {
 
     @Transactional(readOnly = true)
     public RiskSummary getRisk(UUID projectId, UUID riskId) {
+        projectAccess.requireRead(projectId);
         Risk risk = loadProjectRisk(projectId, riskId);
         List<RiskResponse> responses = riskResponseRepository.findByRiskId(riskId);
         RiskSummary summary = mapToSummary(risk);
@@ -141,6 +147,7 @@ public class RiskService {
 
     @Transactional(readOnly = true)
     public List<RiskSummary> listRisks(UUID projectId, RiskStatus status) {
+        projectAccess.requireRead(projectId);
         List<Risk> risks;
         if (status != null) {
             risks = riskRepository.findByProjectIdAndStatus(projectId, status);

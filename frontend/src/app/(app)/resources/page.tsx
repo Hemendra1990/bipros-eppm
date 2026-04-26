@@ -15,6 +15,9 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { TabTip } from "@/components/common/TabTip";
 import type { ResourceResponse } from "@/lib/types";
 import { notificationHelpers } from "@/lib/notificationHelpers";
+import { SecretField } from "@/components/auth/SecretField";
+
+const FINANCE_ROLES = ["ROLE_FINANCE", "ROLE_PMO", "ROLE_ADMIN"] as const;
 
 export default function ResourcesPage() {
   const queryClient = useQueryClient();
@@ -229,42 +232,56 @@ export default function ResourcesPage() {
                     className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary">Hourly Rate</label>
-                  <input
-                    type="number"
-                    value={editForm.hourlyRate}
-                    onChange={(e) => setEditForm({ ...editForm, hourlyRate: parseFloat(e.target.value) || 0 })}
-                    min="0"
-                    step="0.01"
-                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                </div>
+                <SecretField
+                  visibleTo={FINANCE_ROLES}
+                  masked={
+                    <div>
+                      <label className="block text-sm font-medium text-text-secondary">Hourly Rate</label>
+                      <div className="mt-1 rounded-md border border-dashed border-border bg-surface-hover/40 px-3 py-2 text-sm text-text-muted">
+                        Restricted (Finance / PMO only)
+                      </div>
+                    </div>
+                  }
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary">Hourly Rate</label>
+                    <input
+                      type="number"
+                      value={editForm.hourlyRate}
+                      onChange={(e) => setEditForm({ ...editForm, hourlyRate: parseFloat(e.target.value) || 0 })}
+                      min="0"
+                      step="0.01"
+                      className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </div>
+                </SecretField>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary">Cost Per Use</label>
-                  <input
-                    type="number"
-                    value={editForm.costPerUse}
-                    onChange={(e) => setEditForm({ ...editForm, costPerUse: parseFloat(e.target.value) || 0 })}
-                    min="0"
-                    step="0.01"
-                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
+              <SecretField visibleTo={FINANCE_ROLES} masked={null}>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary">Cost Per Use</label>
+                    <input
+                      type="number"
+                      value={editForm.costPerUse}
+                      onChange={(e) => setEditForm({ ...editForm, costPerUse: parseFloat(e.target.value) || 0 })}
+                      min="0"
+                      step="0.01"
+                      className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary">Overtime Rate</label>
+                    <input
+                      type="number"
+                      value={editForm.overtimeRate}
+                      onChange={(e) => setEditForm({ ...editForm, overtimeRate: parseFloat(e.target.value) || 0 })}
+                      min="0"
+                      step="0.01"
+                      className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary">Overtime Rate</label>
-                  <input
-                    type="number"
-                    value={editForm.overtimeRate}
-                    onChange={(e) => setEditForm({ ...editForm, overtimeRate: parseFloat(e.target.value) || 0 })}
-                    min="0"
-                    step="0.01"
-                    className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                </div>
-              </div>
+              </SecretField>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   onClick={() => setEditingResource(null)}

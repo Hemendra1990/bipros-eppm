@@ -39,3 +39,5 @@ databaseChangeLog:
       file: db/changelog/030-gis-tables.yaml
   - include:
       file: db/changelog/031-active-baseline.yaml
+  - include:
+      file: db/changelog/032-rbac-rls.yaml

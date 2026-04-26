@@ -3,6 +3,7 @@ package com.bipros.contract.application.service;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.ContractRequest;
 import com.bipros.contract.application.dto.ContractResponse;
@@ -18,6 +19,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +32,7 @@ public class ContractService {
 
     private final ContractRepository contractRepository;
     private final AuditService auditService;
+    private final ProjectAccessGuard projectAccess;
 
     /**
      * Lazily injected to break the cycle: ContractAttachmentService needs
@@ -46,6 +50,8 @@ public class ContractService {
                 throw new BusinessRuleException("INVALID_PROJECT_ID",
                     "Project ID is required for contract creation");
             }
+
+            projectAccess.requireEdit(request.projectId());
 
             if (request.contractNumber() == null || request.contractNumber().isBlank()) {
                 throw new BusinessRuleException("INVALID_CONTRACT_NUMBER",
@@ -112,11 +118,15 @@ public class ContractService {
         Contract contract = contractRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Contract", id));
 
+        projectAccess.requireRead(contract.getProjectId());
+
         return toResponse(contract);
     }
 
     public PagedResponse<ContractResponse> listByProject(UUID projectId, Pageable pageable) {
         log.info("Listing contracts for project: {}", projectId);
+
+        projectAccess.requireRead(projectId);
 
         Page<Contract> page = contractRepository.findByProjectId(projectId, pageable);
 
@@ -132,7 +142,9 @@ public class ContractService {
     public List<ContractResponse> listByTender(UUID tenderId) {
         log.info("Listing contracts for tender: {}", tenderId);
 
+        Set<UUID> allowed = projectAccess.getAccessibleProjectIdsForCurrentUser();
         return contractRepository.findByTenderId(tenderId).stream()
+            .filter(c -> allowed == null || allowed.contains(c.getProjectId()))
             .map(this::toResponse)
             .toList();
     }
@@ -142,6 +154,8 @@ public class ContractService {
 
         Contract contract = contractRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Contract", id));
+
+        projectAccess.requireEdit(contract.getProjectId());
 
         validateValueAndDateInvariants(request);
 
@@ -192,6 +206,10 @@ public class ContractService {
 
     public void delete(UUID id) {
         log.info("Deleting contract with ID: {}", id);
+        Contract contract = contractRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Contract", id));
+        projectAccess.requireDelete(contract.getProjectId());
+
         if (contractAttachmentService != null) {
             contractAttachmentService.deleteAllForContract(id);
         }

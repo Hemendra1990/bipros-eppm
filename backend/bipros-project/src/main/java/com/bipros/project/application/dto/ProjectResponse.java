@@ -1,8 +1,10 @@
 package com.bipros.project.application.dto;
 
+import com.bipros.common.web.json.Views;
 import com.bipros.contract.domain.model.ContractType;
 import com.bipros.project.domain.model.ProjectCategory;
 import com.bipros.project.domain.model.ProjectStatus;
+import com.fasterxml.jackson.annotation.JsonView;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -42,13 +44,14 @@ public record ProjectResponse(
 ) {
 
     /** Flat view of the primary {@code Contract} for this project. {@code null} when no contract
-     * has been registered yet. */
+     * has been registered yet. Money fields are FinanceConfidential — non-finance/non-admin
+     * callers see {@code null} for them via the role-aware {@code @JsonView} pipeline. */
     public record ContractSummary(
         UUID contractId,
         String contractNumber,
         ContractType contractType,
-        BigDecimal contractValue,
-        BigDecimal revisedValue,
+        @JsonView(Views.FinanceConfidential.class) BigDecimal contractValue,
+        @JsonView(Views.FinanceConfidential.class) BigDecimal revisedValue,
         LocalDate startDate,
         LocalDate completionDate,
         Integer dlpMonths
