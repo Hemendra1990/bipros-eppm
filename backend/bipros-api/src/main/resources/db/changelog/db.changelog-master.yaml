@@ -53,3 +53,5 @@ databaseChangeLog:
       file: db/changelog/037-risk-scoring-tables.yaml
   - include:
       file: db/changelog/038-risk-activity-assignments.yaml
+  - include:
+      file: db/changelog/039-contract-extensions.yaml

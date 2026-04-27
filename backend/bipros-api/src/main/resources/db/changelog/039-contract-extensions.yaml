@@ -1,0 +1,104 @@
+databaseChangeLog:
+  # 013-contract-tables.yaml was originally created with only the core
+  # LOA/value/dates columns. The Contract entity has since grown the
+  # P6/PCM-inspired commercial fields (currency, description, ntp_date, …) and
+  # the IC-PMS denormalised KPI fields (spi, cpi, physical_progress_ai, vo_*,
+  # bg_expiry, kpi_refreshed_at) — 013 was edited in place to add them, but
+  # Liquibase will not retrofit an already-applied changeset. Production that
+  # received the original 013 is therefore missing these columns and
+  # Hibernate fails with "column c1_0.currency does not exist" on first read.
+  #
+  # This forward migration brings such databases up to the entity's shape.
+  # The `not <columnExists … currency>` precondition makes the changesets
+  # MARK_RAN (skip) on databases where the modified 013 already created the
+  # columns, so this file is idempotent across both old and fresh deployments.
+  - changeSet:
+      id: 039-contracts-add-p6-and-kpi-columns
+      author: bipros
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                schemaName: contract
+                tableName: contracts
+                columnName: currency
+      changes:
+        - addColumn:
+            schemaName: contract
+            tableName: contracts
+            columns:
+              - column: { name: revised_value,                type: DECIMAL(15, 2) }
+              - column: { name: description,                  type: TEXT }
+              - column: { name: ntp_date,                     type: DATE }
+              - column: { name: revised_completion_date,      type: DATE }
+              - column: { name: mobilisation_advance_pct,     type: DECIMAL(5, 2) }
+              - column: { name: retention_pct,                type: DECIMAL(5, 2) }
+              - column: { name: performance_bg_pct,           type: DECIMAL(5, 2) }
+              - column: { name: payment_terms_days,           type: INT }
+              - column: { name: billing_cycle,                type: VARCHAR(30) }
+              - column: { name: wbs_package_code,             type: VARCHAR(60) }
+              - column: { name: package_description,          type: VARCHAR(300) }
+              - column: { name: actual_completion_date,       type: DATE }
+              - column: { name: spi,                          type: DECIMAL(6, 3) }
+              - column: { name: cpi,                          type: DECIMAL(6, 3) }
+              - column: { name: physical_progress_ai,         type: DECIMAL(5, 2) }
+              - column: { name: cumulative_ra_bills_crores,   type: DECIMAL(14, 2) }
+              - column: { name: vo_numbers_issued,            type: INT }
+              - column: { name: vo_value_crores,              type: DECIMAL(14, 2) }
+              - column: { name: performance_score,            type: DECIMAL(5, 2) }
+              - column: { name: bg_expiry,                    type: DATE }
+              - column: { name: kpi_refreshed_at,             type: TIMESTAMP WITH TIME ZONE }
+
+  # currency is NOT NULL on the entity. Add with default 'INR' first so existing
+  # rows pick up the default, then enforce NOT NULL.
+  - changeSet:
+      id: 039-contracts-add-currency
+      author: bipros
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                schemaName: contract
+                tableName: contracts
+                columnName: currency
+      changes:
+        - addColumn:
+            schemaName: contract
+            tableName: contracts
+            columns:
+              - column:
+                  name: currency
+                  type: VARCHAR(3)
+                  defaultValue: INR
+        - sql:
+            dbms: postgresql
+            sql: |
+              UPDATE contract.contracts SET currency = 'INR' WHERE currency IS NULL;
+            rollback: SELECT 1
+        - addNotNullConstraint:
+            schemaName: contract
+            tableName: contracts
+            columnName: currency
+            columnDataType: VARCHAR(3)
+            defaultNullValue: INR
+
+  # Hot-path indexes for IC-PMS reporting (BG-expiry alerts, WBS rollups).
+  # Idempotent on both old and fresh deployments — the indexes exist nowhere
+  # in 013 so they are safe to create unconditionally; ifNotExists is set
+  # purely to avoid failing on a re-run.
+  - changeSet:
+      id: 039-contracts-secondary-indexes
+      author: bipros
+      changes:
+        - createIndex:
+            schemaName: contract
+            tableName: contracts
+            indexName: idx_contracts_bg_expiry
+            columns:
+              - column: { name: bg_expiry }
+        - createIndex:
+            schemaName: contract
+            tableName: contracts
+            indexName: idx_contracts_wbs_package
+            columns:
+              - column: { name: wbs_package_code }
