@@ -165,7 +165,11 @@ export default function RiskDetailPage() {
           <RiskGeneralTab risk={risk} onUpdate={(data) => updateMutation.mutate(data)} />
         )}
         {activeTab === "impact" && (
-          <RiskImpactTab risk={risk} onUpdate={(data) => updateMutation.mutate(data)} />
+          <RiskImpactTab
+            risk={risk}
+            projectId={projectId}
+            onUpdate={(data) => updateMutation.mutate(data)}
+          />
         )}
         {activeTab === "activities" && (
           <RiskActivitiesTab risk={risk} projectId={projectId} riskId={riskId} />

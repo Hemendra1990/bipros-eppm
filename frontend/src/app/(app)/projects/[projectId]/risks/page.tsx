@@ -27,12 +27,13 @@ import { useAuth } from "@/lib/auth/useAuth";
 
 const RISK_INTERNAL_ROLES = ["ROLE_PMO", "ROLE_PROJECT_MANAGER", "ROLE_ADMIN", "ROLE_FINANCE"] as const;
 
+// Light mode = solid pastel bg + dark text. Dark mode = deep bg + pastel text.
 const ragColors: Record<RiskRag, string> = {
-  CRIMSON: "bg-fuchsia-900 text-fuchsia-200",
-  RED: "bg-red-900 text-red-200",
-  AMBER: "bg-amber-900 text-amber-200",
-  GREEN: "bg-emerald-900 text-emerald-200",
-  OPPORTUNITY: "bg-blue-900 text-blue-200",
+  CRIMSON: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900 dark:text-fuchsia-200",
+  RED: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-200",
+  AMBER: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-200",
+  GREEN: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200",
+  OPPORTUNITY: "bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-200",
 };
 
 const trendIcons = {
@@ -209,9 +210,13 @@ export default function ProjectRisksPage() {
       key: "riskType",
       label: "Type",
       render: (val) => (
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-          val === "OPPORTUNITY" ? "bg-blue-900/30 text-blue-300" : "bg-red-900/30 text-red-300"
-        }`}>
+        <span
+          className={`px-2 py-0.5 rounded text-xs font-medium ${
+            val === "OPPORTUNITY"
+              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+              : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+          }`}
+        >
           {val === "OPPORTUNITY" ? "Opportunity" : "Threat"}
         </span>
       ),
@@ -344,25 +349,25 @@ export default function ProjectRisksPage() {
 
       {/* RAG Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-fuchsia-900/20 rounded-lg border border-fuchsia-800 p-4">
+        <div className="rounded-lg border border-fuchsia-300 bg-fuchsia-50 p-4 dark:border-fuchsia-800 dark:bg-fuchsia-900/20">
           <p className="text-xs text-text-secondary uppercase">Crimson</p>
-          <p className="text-2xl font-bold text-fuchsia-300">{crimsonCount}</p>
+          <p className="text-2xl font-bold text-fuchsia-700 dark:text-fuchsia-300">{crimsonCount}</p>
         </div>
-        <div className="bg-danger/10 rounded-lg border border-red-800 p-4">
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-danger/10">
           <p className="text-xs text-text-secondary uppercase">Red</p>
-          <p className="text-2xl font-bold text-danger">{redCount}</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-danger">{redCount}</p>
         </div>
-        <div className="bg-warning/10 rounded-lg border border-amber-800 p-4">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-warning/10">
           <p className="text-xs text-text-secondary uppercase">Amber</p>
-          <p className="text-2xl font-bold text-warning">{amberCount}</p>
+          <p className="text-2xl font-bold text-amber-700 dark:text-warning">{amberCount}</p>
         </div>
-        <div className="bg-success/10 rounded-lg border border-emerald-800 p-4">
+        <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-success/10">
           <p className="text-xs text-text-secondary uppercase">Green</p>
-          <p className="text-2xl font-bold text-success">{greenCount}</p>
+          <p className="text-2xl font-bold text-emerald-700 dark:text-success">{greenCount}</p>
         </div>
-        <div className="bg-blue-900/20 rounded-lg border border-blue-800 p-4">
+        <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
           <p className="text-xs text-text-secondary uppercase">Opportunities</p>
-          <p className="text-2xl font-bold text-blue-300">{opportunityCount}</p>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{opportunityCount}</p>
         </div>
       </div>
 

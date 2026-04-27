@@ -151,11 +151,11 @@ export function RiskGeneralTab({ risk, onUpdate }: Props) {
             label="RAG"
             value={risk.rag || "—"}
             badge={risk.rag ? {
-              CRIMSON: "bg-fuchsia-900 text-fuchsia-200",
-              RED: "bg-red-900 text-red-200",
-              AMBER: "bg-amber-900 text-amber-200",
-              GREEN: "bg-emerald-900 text-emerald-200",
-              OPPORTUNITY: "bg-blue-900 text-blue-200",
+              CRIMSON: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900 dark:text-fuchsia-200",
+              RED: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-200",
+              AMBER: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-200",
+              GREEN: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200",
+              OPPORTUNITY: "bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-200",
             }[risk.rag] : undefined}
           />
           <FieldDisplay label="Trend" value={risk.trend || "—"} />
