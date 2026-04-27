@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { projectApi } from "@/lib/api/projectApi";
 import { obsApi } from "@/lib/api/obsApi";
+import { projectCategoryApi } from "@/lib/api/projectCategoryApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { getPriorityInfo } from "@/lib/utils/format";
 import { projectNotifications, notificationHelpers } from "@/lib/notificationHelpers";
@@ -39,8 +40,14 @@ export default function NewProjectPage() {
     queryFn: () => obsApi.getObsTree(),
   });
 
+  const { data: categoriesData, isLoading: isLoadingCategories } = useQuery({
+    queryKey: ["project-categories"],
+    queryFn: () => projectCategoryApi.listActive(),
+  });
+
   const epsNodes = epsData?.data ?? [];
   const obsNodes = obsData?.data ?? [];
+  const categories = categoriesData?.data ?? [];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -240,14 +247,15 @@ export default function NewProjectPage() {
                       category: (e.target.value || null) as CreateProjectRequest["category"],
                     }))
                   }
-                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  disabled={isLoadingCategories}
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                 >
                   <option value="">—</option>
-                  <option value="HIGHWAY">Highway</option>
-                  <option value="EXPRESSWAY">Expressway</option>
-                  <option value="RURAL_ROAD">Rural Road</option>
-                  <option value="STATE_HIGHWAY">State Highway</option>
-                  <option value="URBAN_ROAD">Urban Road</option>
+                  {categories.map((cat) => (
+                    <option key={cat.code} value={cat.code}>
+                      {cat.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

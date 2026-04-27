@@ -103,6 +103,15 @@ export interface ObsNodeResponse {
   children: ObsNodeResponse[];
 }
 
+export interface NodeSearchResult {
+  id: string;
+  code: string;
+  name: string;
+  parentId: string | null;
+  ancestorIds: string[];
+  pathLabel: string;
+}
+
 export interface ProjectResponse {
   id: string;
   code: string;
@@ -196,6 +205,14 @@ export interface UpdateProjectRequest {
   dataDate?: string;
   status?: string;
   priority?: number;
+  category?: ProjectCategory | null;
+  morthCode?: string | null;
+  fromChainageM?: number | null;
+  toChainageM?: number | null;
+  fromLocation?: string | null;
+  toLocation?: string | null;
+  totalLengthKm?: number | null;
+  contract?: ContractSummaryInput | null;
 }
 
 export interface CreateEpsNodeRequest {
@@ -291,9 +308,13 @@ export interface CreateRiskRequest {
   code: string;
   title: string;
   description: string;
-  category: string;
+  /** Preferred FK to risk_category_master.id. */
+  categoryId?: string;
+  /** Back-compat: legacy enum-string code (e.g. "LAND_ACQUISITION"); resolved server-side. */
+  legacyCategoryCode?: string;
   probability: number;
-  impact: number;
+  impactCost: number;
+  impactSchedule: number;
 }
 
 // === Calendar ===
@@ -991,13 +1012,7 @@ export interface CreateOrganisationRequest {
 
 // === PMS MasterData UI Screens ===
 
-export type ProjectCategory =
-  | "HIGHWAY"
-  | "EXPRESSWAY"
-  | "RURAL_ROAD"
-  | "STATE_HIGHWAY"
-  | "URBAN_ROAD"
-  | "OTHER";
+export type ProjectCategory = string;
 
 export type ContractType =
   | "EPC_LUMP_SUM_FIDIC_YELLOW"

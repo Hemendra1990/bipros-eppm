@@ -1,12 +1,17 @@
 package com.bipros.project.api;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.common.dto.PagedResponse;
 import com.bipros.project.application.dto.CreateEpsNodeRequest;
 import com.bipros.project.application.dto.EpsNodeResponse;
+import com.bipros.project.application.dto.NodeSearchResultResponse;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
 import com.bipros.project.application.service.EpsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +32,13 @@ public class EpsController {
     public ResponseEntity<ApiResponse<List<EpsNodeResponse>>> getTree() {
         List<EpsNodeResponse> tree = epsService.getTree();
         return ResponseEntity.ok(ApiResponse.ok(tree));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PagedResponse<NodeSearchResultResponse>>> search(
+        @RequestParam("q") String q,
+        @PageableDefault(size = 25, sort = "code", direction = Sort.Direction.ASC) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(epsService.search(q, pageable)));
     }
 
     @GetMapping("/{id}")

@@ -7,9 +7,9 @@
 INSERT INTO risk.risks (
     id, created_at, updated_at, version,
     project_id, code, title, description,
-    category, status, probability, impact,
+    status, probability, impact,
     impact_cost, impact_schedule, risk_score, residual_risk_score,
-    rag, trend, is_opportunity,
+    rag, trend, risk_type,
     identified_date, due_date,
     cost_impact, schedule_impact_days,
     affected_activities, sort_order
@@ -17,9 +17,9 @@ INSERT INTO risk.risks (
 SELECT
     gen_random_uuid(), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0,
     p.id, r.code, r.title, r.description,
-    r.category, r.status, r.probability, r.impact,
+    r.status, r.probability, r.impact,
     r.impact_cost, r.impact_schedule, r.risk_score, r.residual_risk_score,
-    r.rag, r.trend, FALSE,
+    r.rag, r.trend, 'THREAT',
     r.identified_date, r.due_date,
     r.cost_impact_rupees, r.schedule_impact_days,
     r.affected_activities, r.sort_order

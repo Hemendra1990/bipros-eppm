@@ -1,13 +1,13 @@
 package com.bipros.risk.application.dto;
 
 import com.bipros.risk.domain.model.Industry;
-import com.bipros.risk.domain.model.RiskCategory;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Update payload. {@code code} and {@code industry} are accepted from clients but the
@@ -28,7 +28,8 @@ public record UpdateRiskTemplateRequest(
 
     Set<String> applicableProjectCategories,
 
-    RiskCategory category,
+    /** FK to {@code risk_category_master.id}. Pass null to clear. */
+    UUID categoryId,
 
     @Min(value = 1, message = "defaultProbability must be 1-5")
     @Max(value = 5, message = "defaultProbability must be 1-5")

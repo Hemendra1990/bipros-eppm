@@ -343,7 +343,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
     p.setStatus(ProjectStatus.ACTIVE);
     p.setPriority(1);
     // PMS MasterData Screen 01 enrichment — makes the Project Master UI render real data.
-    p.setCategory(com.bipros.project.domain.model.ProjectCategory.HIGHWAY);
+    p.setCategory("HIGHWAY");
     p.setMorthCode("NH-48");
     p.setFromChainageM(CHAINAGE_START_M);
     p.setToChainageM(CHAINAGE_END_M);

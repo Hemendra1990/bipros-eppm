@@ -2,7 +2,6 @@ package com.bipros.project.application.dto;
 
 import com.bipros.common.web.json.Views;
 import com.bipros.contract.domain.model.ContractType;
-import com.bipros.project.domain.model.ProjectCategory;
 import com.bipros.project.domain.model.ProjectStatus;
 import com.fasterxml.jackson.annotation.JsonView;
 
@@ -30,7 +29,7 @@ public record ProjectResponse(
     ProjectStatus status,
     LocalDate mustFinishByDate,
     Integer priority,
-    ProjectCategory category,
+    String category,
     String morthCode,
     Long fromChainageM,
     Long toChainageM,

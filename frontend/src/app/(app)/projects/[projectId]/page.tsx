@@ -7,6 +7,7 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
 import { formatDate, getPriorityInfo } from "@/lib/utils/format";
 import { projectApi } from "@/lib/api/projectApi";
+import { projectCategoryApi } from "@/lib/api/projectCategoryApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { baselineApi, type BaselineActivityResponse, type BaselineDetailResponse } from "@/lib/api/baselineApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
@@ -27,6 +28,7 @@ import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
 import { TabTip } from "@/components/common/TabTip";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
+import type { ContractType } from "@/lib/types";
 import { ScheduleComparisonTable } from "@/components/baseline/ScheduleComparisonTable";
 import { ScheduleVarianceSection } from "@/components/reports/ScheduleVarianceSection";
 import { CostVarianceSection } from "@/components/reports/CostVarianceSection";
@@ -499,6 +501,8 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         <DataDateCard project={project} />
       </div>
 
+      <ProjectDetailsSection project={project} projectId={projectId} />
+
       {/* KPI Mini-Dashboard */}
       <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
         <div className="flex items-center justify-between mb-4">
@@ -606,6 +610,266 @@ function DataDateCard({ project }: { project: ProjectResponse }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function ProjectDetailsSection({ project }: { project: ProjectResponse; projectId: string }) {
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const { data: categoriesData } = useQuery({
+    queryKey: ["project-categories"],
+    queryFn: () => projectCategoryApi.listActive(),
+    enabled: isEditing,
+  });
+
+  const categories = categoriesData?.data ?? [];
+
+  const [form, setForm] = useState({
+    category: project.category ?? "",
+    morthCode: project.morthCode ?? "",
+    fromChainageM: project.fromChainageM ?? "",
+    toChainageM: project.toChainageM ?? "",
+    fromLocation: project.fromLocation ?? "",
+    toLocation: project.toLocation ?? "",
+    contractNumber: project.contract?.contractNumber ?? "",
+    contractType: project.contract?.contractType ?? "",
+    contractValue: project.contract?.contractValue ?? "",
+    revisedValue: project.contract?.revisedValue ?? "",
+    dlpMonths: project.contract?.dlpMonths ?? "",
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await projectApi.updateProject(project.id, {
+        category: form.category || null,
+        morthCode: form.morthCode || null,
+        fromChainageM: form.fromChainageM ? Number(form.fromChainageM) : null,
+        toChainageM: form.toChainageM ? Number(form.toChainageM) : null,
+        fromLocation: form.fromLocation || null,
+        toLocation: form.toLocation || null,
+        contract: {
+          contractNumber: form.contractNumber || null,
+          contractType: (form.contractType || null) as ContractType | null,
+          contractValue: form.contractValue ? Number(form.contractValue) : null,
+          revisedValue: form.revisedValue ? Number(form.revisedValue) : null,
+          dlpMonths: form.dlpMonths ? Number(form.dlpMonths) : null,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      toast.success("Project details updated");
+      setIsEditing(false);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update project details"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const inputClass =
+    "mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
+
+  const contractTypeOptions = [
+    "EPC_LUMP_SUM_FIDIC_YELLOW",
+    "EPC_LUMP_SUM_FIDIC_RED",
+    "EPC_LUMP_SUM_FIDIC_SILVER",
+    "ITEM_RATE_FIDIC_RED",
+    "PERCENTAGE_BASED_PMC",
+    "LUMP_SUM_UNIT_RATE",
+    "EPC",
+    "BOT",
+    "HAM",
+    "ITEM_RATE",
+    "LUMP_SUM",
+    "ANNUITY",
+  ];
+
+  if (isEditing) {
+    return (
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
+            Edit Project Details
+          </h3>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+            >
+              {isSaving ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-4">
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            Project Category & Corridor
+          </h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">Category</label>
+              <select name="category" value={form.category} onChange={handleChange} className={inputClass}>
+                <option value="">—</option>
+                {categories.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">MoRTH Code</label>
+              <input name="morthCode" value={form.morthCode} onChange={handleChange} placeholder="NH-48" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">From Chainage (m)</label>
+              <input name="fromChainageM" type="number" value={form.fromChainageM} onChange={handleChange} placeholder="145000" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">To Chainage (m)</label>
+              <input name="toChainageM" type="number" value={form.toChainageM} onChange={handleChange} placeholder="165000" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">From Location</label>
+              <input name="fromLocation" value={form.fromLocation} onChange={handleChange} placeholder="Km 145+000" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">To Location</label>
+              <input name="toLocation" value={form.toLocation} onChange={handleChange} placeholder="Km 165+000" className={inputClass} />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-4">
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            Primary Contract
+          </h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">Contract Number</label>
+              <input name="contractNumber" value={form.contractNumber} onChange={handleChange} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">Contract Type</label>
+              <select name="contractType" value={form.contractType} onChange={handleChange} className={inputClass}>
+                <option value="">—</option>
+                {contractTypeOptions.map((t) => (
+                  <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">Contract Value (₹)</label>
+              <input name="contractValue" type="number" step="0.01" value={form.contractValue} onChange={handleChange} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">Revised Value (₹)</label>
+              <input name="revisedValue" type="number" step="0.01" value={form.revisedValue} onChange={handleChange} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary">DLP Months</label>
+              <input name="dlpMonths" type="number" value={form.dlpMonths} onChange={handleChange} placeholder="60" className={inputClass} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
+            Project Category & Corridor
+          </h3>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+          >
+            Edit
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-text-secondary">Category</p>
+            <p className="text-sm font-medium text-text-primary">{project.category ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">MoRTH Code</p>
+            <p className="text-sm font-medium text-text-primary">{project.morthCode ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">From Chainage (m)</p>
+            <p className="text-sm font-medium text-text-primary">{project.fromChainageM ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">To Chainage (m)</p>
+            <p className="text-sm font-medium text-text-primary">{project.toChainageM ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">From Location</p>
+            <p className="text-sm font-medium text-text-primary">{project.fromLocation ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">To Location</p>
+            <p className="text-sm font-medium text-text-primary">{project.toLocation ?? "—"}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
+            Primary Contract
+          </h3>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+          >
+            Edit
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-text-secondary">Contract Number</p>
+            <p className="text-sm font-medium text-text-primary">{project.contract?.contractNumber ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">Contract Type</p>
+            <p className="text-sm font-medium text-text-primary">{project.contract?.contractType ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">Contract Value (₹)</p>
+            <p className="text-sm font-medium text-text-primary">
+              {project.contract?.contractValue != null ? `₹ ${project.contract.contractValue.toLocaleString("en-IN")}` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">Revised Value (₹)</p>
+            <p className="text-sm font-medium text-text-primary">
+              {project.contract?.revisedValue != null ? `₹ ${project.contract.revisedValue.toLocaleString("en-IN")}` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-text-secondary">DLP Months</p>
+            <p className="text-sm font-medium text-text-primary">{project.contract?.dlpMonths ?? "—"}</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

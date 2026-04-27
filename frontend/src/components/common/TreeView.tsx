@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, forwardRef, useImperativeHandle, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 
 export interface TreeNode {
@@ -7,6 +7,12 @@ export interface TreeNode {
   name: string;
   children?: TreeNode[];
   [key: string]: unknown;
+}
+
+export interface TreeViewHandle {
+  expandAll: () => void;
+  collapseAll: () => void;
+  revealNode: (ancestorIds: string[], targetId: string) => void;
 }
 
 interface TreeViewProps<T = TreeNode> {
@@ -72,6 +78,8 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
   expanded,
   toggleNode,
   draggable,
+  highlightId,
+  registerRow,
 }: {
   node: T;
   nodes: T[];
@@ -81,9 +89,19 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
   expanded: Record<string, boolean>;
   toggleNode: (id: string) => void;
   draggable?: boolean;
+  highlightId: string | null;
+  registerRow: (id: string, el: HTMLElement | null) => void;
 }) {
   const ctx = React.useContext(DragContext);
   const rowRef = useRef<HTMLDivElement>(null);
+
+  const setRowRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      rowRef.current = el;
+      registerRow(node.id, el);
+    },
+    [node.id, registerRow]
+  );
 
   const handleDragStart = useCallback(
     (e: React.DragEvent) => {
@@ -146,11 +164,13 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
 
   const isDragging = ctx?.dragState.draggedId === node.id;
   const isDropTarget = ctx?.dragState.dropTargetId === node.id && ctx?.dragState.dropPosition === "on";
+  const isHighlighted = highlightId === node.id;
 
   return (
     <li>
       <div
-        ref={rowRef}
+        ref={setRowRef}
+        data-node-id={node.id}
         className={`flex items-center gap-2 ${isDragging ? "opacity-40" : ""}`}
         draggable={draggable}
         onDragStart={draggable ? handleDragStart : undefined}
@@ -182,7 +202,9 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
           className={`flex-1 rounded-lg px-2 py-1 text-left text-sm transition-colors cursor-pointer ${
             isDropTarget
               ? "bg-blue-500/20 ring-2 ring-blue-500/50 ring-inset"
-              : "hover:bg-surface-hover/50"
+              : isHighlighted
+                ? "bg-blue-500/20 ring-2 ring-blue-500/50 ring-inset"
+                : "hover:bg-surface-hover/50"
           }`}
         >
           {renderNode ? (
@@ -210,6 +232,8 @@ function TreeNodeItem<T extends { id: string; code: string; name: string; childr
             expanded={expanded}
             toggleNode={toggleNode}
             draggable={draggable}
+            highlightId={highlightId}
+            registerRow={registerRow}
           />
         </div>
       )}
@@ -226,6 +250,8 @@ function TreeNodeList<T extends { id: string; code: string; name: string; childr
   expanded,
   toggleNode,
   draggable,
+  highlightId,
+  registerRow,
 }: {
   nodes: T[];
   allNodes: T[];
@@ -235,6 +261,8 @@ function TreeNodeList<T extends { id: string; code: string; name: string; childr
   expanded: Record<string, boolean>;
   toggleNode: (id: string) => void;
   draggable?: boolean;
+  highlightId: string | null;
+  registerRow: (id: string, el: HTMLElement | null) => void;
 }) {
   return (
     <ul className="space-y-1">
@@ -249,31 +277,37 @@ function TreeNodeList<T extends { id: string; code: string; name: string; childr
           expanded={expanded}
           toggleNode={toggleNode}
           draggable={draggable}
+          highlightId={highlightId}
+          registerRow={registerRow}
         />
       ))}
     </ul>
   );
 }
 
-export function TreeView<T extends { id: string; code: string; name: string; children?: T[] }>({
-  nodes,
-  onNodeClick,
-  renderNode,
-  level = 0,
-  draggable = false,
-  onMoveNode,
-}: TreeViewProps<T>) {
+function collectExpandableIds<T extends { id: string; children?: T[] }>(items: T[], target: Record<string, boolean>) {
+  for (const item of items) {
+    if (item.children && item.children.length > 0) {
+      target[item.id] = true;
+      collectExpandableIds(item.children, target);
+    }
+  }
+}
+
+function TreeViewInner<T extends { id: string; code: string; name: string; children?: T[] }>(
+  {
+    nodes,
+    onNodeClick,
+    renderNode,
+    level = 0,
+    draggable = false,
+    onMoveNode,
+  }: TreeViewProps<T>,
+  ref: React.Ref<TreeViewHandle>
+) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
-    const expandAll = (items: T[]) => {
-      for (const item of items) {
-        if (item.children && item.children.length > 0) {
-          initial[item.id] = true;
-          expandAll(item.children);
-        }
-      }
-    };
-    expandAll(nodes);
+    collectExpandableIds(nodes, initial);
     return initial;
   });
 
@@ -283,9 +317,55 @@ export function TreeView<T extends { id: string; code: string; name: string; chi
     dropPosition: null,
   });
 
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const nodeRefs = useRef(new Map<string, HTMLElement>());
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const registerRow = useCallback((id: string, el: HTMLElement | null) => {
+    if (el) {
+      nodeRefs.current.set(id, el);
+    } else {
+      nodeRefs.current.delete(id);
+    }
+  }, []);
+
   const toggleNode = useCallback((id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      expandAll: () => {
+        const all: Record<string, boolean> = {};
+        collectExpandableIds(nodes, all);
+        setExpanded(all);
+      },
+      collapseAll: () => setExpanded({}),
+      revealNode: (ancestorIds, targetId) => {
+        setExpanded((prev) => {
+          const next = { ...prev };
+          for (const id of ancestorIds) next[id] = true;
+          return next;
+        });
+        setHighlightId(targetId);
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        // Wait one frame for the expanded children to render, then scroll.
+        requestAnimationFrame(() => {
+          const el = nodeRefs.current.get(targetId);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        highlightTimerRef.current = setTimeout(() => setHighlightId(null), 1500);
+      },
+    }),
+    [nodes]
+  );
 
   const allNodeIds = React.useMemo(() => {
     const set = new Set<string>();
@@ -335,6 +415,8 @@ export function TreeView<T extends { id: string; code: string; name: string; chi
           expanded={expanded}
           toggleNode={toggleNode}
           draggable={draggable}
+          highlightId={highlightId}
+          registerRow={registerRow}
         />
         {draggable && dragState.draggedId && (
           <div
@@ -354,3 +436,9 @@ export function TreeView<T extends { id: string; code: string; name: string; chi
     </DragContext.Provider>
   );
 }
+
+export const TreeView = forwardRef(TreeViewInner) as <
+  T extends { id: string; code: string; name: string; children?: T[] }
+>(
+  props: TreeViewProps<T> & { ref?: React.Ref<TreeViewHandle> }
+) => React.ReactElement;

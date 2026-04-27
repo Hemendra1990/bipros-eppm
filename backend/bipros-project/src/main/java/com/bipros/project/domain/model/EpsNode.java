@@ -13,6 +13,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "eps_nodes", schema = "project", uniqueConstraints = {
     @UniqueConstraint(columnNames = "code")
+}, indexes = {
+    @Index(name = "idx_eps_nodes_parent_id", columnList = "parent_id")
 })
 @Data
 @NoArgsConstructor

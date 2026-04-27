@@ -286,7 +286,7 @@ public class IcpmsPhaseASeeder implements CommandLineRunner {
         project.setDataDate(LocalDate.of(2026, 4, 1));
         project.setStatus(ProjectStatus.ACTIVE);
         project.setPriority(100);
-        project.setCategory(com.bipros.project.domain.model.ProjectCategory.EXPRESSWAY);
+        project.setCategory("EXPRESSWAY");
         project.setMorthCode("DMIC-01");
         project.setFromChainageM(0L);
         project.setToChainageM(1504_000L);

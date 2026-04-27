@@ -48,11 +48,11 @@ import com.bipros.resource.domain.repository.ResourceDailyLogRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import com.bipros.risk.domain.model.Risk;
-import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskProbability;
 import com.bipros.risk.domain.model.RiskRag;
 import com.bipros.risk.domain.model.RiskStatus;
 import com.bipros.risk.domain.model.RiskTrend;
+import com.bipros.risk.domain.model.RiskType;
 import com.bipros.risk.domain.repository.RiskRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -151,6 +151,7 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
     private final SatelliteImageRepository satelliteImageRepository;
     private final ConstructionProgressSnapshotRepository progressSnapshotRepository;
     private final RiskRepository riskRepository;
+    private final LegacyRiskCategoryLookup legacyCategoryLookup;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -1077,7 +1078,7 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
             risk.setProjectId(projectId);
             risk.setCode(riskId);
             risk.setTitle(title != null ? title : riskId);
-            risk.setCategory(mapRiskCategory(categoryText));
+            risk.setCategory(legacyCategoryLookup.byCode(mapRiskCategory(categoryText)));
             if (probability != null && probability >= 1 && probability <= 5) {
                 risk.setProbability(RiskProbability.values()[probability - 1]);
             }
@@ -1087,18 +1088,17 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
             risk.setTrend(mapRiskTrend(trendText));
             risk.setDueDate(dueDate);
             risk.setResidualRiskScore(residualScore);
-            risk.setIsOpportunity(riskId.startsWith("OPP-"));
+            risk.setRiskType(riskId.startsWith("OPP-") ? RiskType.OPPORTUNITY : RiskType.THREAT);
             risk.setIdentifiedDate(LocalDate.of(2024, 9, 15));
-            risk.calculateRiskScore();
             // Honor Excel's explicit RAG column (not the auto-derived banding) so
             // the dashboard counts match the authoritative Excel scenario.
             RiskRag excelRag = mapRiskRag(ragText);
             if (excelRag != null) {
                 risk.setRag(excelRag);
             }
-            // Safety net: any OPP- code or OPPORTUNITY rag always sets both flags.
-            if (Boolean.TRUE.equals(risk.getIsOpportunity()) || risk.getRag() == RiskRag.OPPORTUNITY) {
-                risk.setIsOpportunity(true);
+            // Safety net: any OPP- code or OPPORTUNITY rag always marks the risk as an opportunity.
+            if (risk.isOpportunity() || risk.getRag() == RiskRag.OPPORTUNITY) {
+                risk.setRiskType(RiskType.OPPORTUNITY);
                 risk.setRag(RiskRag.OPPORTUNITY);
             }
             riskRepository.save(risk);
@@ -1119,29 +1119,33 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
         return null;
     }
 
-    private RiskCategory mapRiskCategory(String text) {
-        if (text == null) return RiskCategory.PROJECT_MANAGEMENT;
+    /**
+     * Map a free-text Excel category cell to the canonical {@code risk_category_master.code}.
+     * Codes here mirror the Liquibase 036 backfill table so re-imports stay consistent.
+     */
+    private String mapRiskCategory(String text) {
+        if (text == null) return "PMO-CHANGE-CONTROL";
         String t = text.toLowerCase(Locale.ROOT);
-        if (t.contains("land")) return RiskCategory.LAND_ACQUISITION;
-        if (t.contains("forest") || t.contains("ec") && t.contains("regul")) return RiskCategory.FOREST_CLEARANCE;
-        if (t.contains("utility")) return RiskCategory.UTILITY_SHIFTING;
+        if (t.contains("land")) return "LA-GENERIC";
+        if (t.contains("forest") || t.contains("ec") && t.contains("regul")) return "FE-STAGE-I-CLEARANCE";
+        if (t.contains("utility")) return "US-GENERIC";
         if (t.contains("regulatory") || t.contains("env") || t.contains("pollution") || t.contains("asi"))
-            return RiskCategory.STATUTORY_CLEARANCE;
-        if (t.contains("contractor") || t.contains("financial")) return RiskCategory.CONTRACTOR_FINANCIAL;
-        if (t.contains("monsoon")) return RiskCategory.MONSOON_IMPACT;
-        if (t.contains("natural hazard") || t.contains("geotech")) return RiskCategory.NATURAL_HAZARD;
+            return "SR-GENERIC";
+        if (t.contains("contractor") || t.contains("financial")) return "FIN-WORKING-CAPITAL-CRUNCH";
+        if (t.contains("monsoon")) return "MW-FLASH-FLOOD";
+        if (t.contains("natural hazard") || t.contains("geotech")) return "FM-EARTHQUAKE";
         if (t.contains("market") || t.contains("inflation") || t.contains("price") || t.contains("currency"))
-            return RiskCategory.MARKET_PRICE;
-        if (t.contains("tech") || t.contains("it") || t.contains("design")) return RiskCategory.TECHNOLOGY;
-        if (t.contains("supply chain")) return RiskCategory.EXTERNAL;
-        if (t.contains("political")) return RiskCategory.EXTERNAL;
-        if (t.contains("labour") || t.contains("hr") || t.contains("resource")) return RiskCategory.RESOURCE;
-        if (t.contains("quality")) return RiskCategory.QUALITY;
-        if (t.contains("scope") || t.contains("variation")) return RiskCategory.PROJECT_MANAGEMENT;
-        if (t.contains("schedule")) return RiskCategory.SCHEDULE;
-        if (t.contains("cost")) return RiskCategory.COST;
-        if (t.contains("opportunity")) return RiskCategory.PROJECT_MANAGEMENT;
-        return RiskCategory.PROJECT_MANAGEMENT;
+            return "MP-BITUMEN-ESCALATION";
+        if (t.contains("tech") || t.contains("it") || t.contains("design")) return "DT-BIM-CLASH-LATE";
+        if (t.contains("supply chain")) return "EG-GENERIC";
+        if (t.contains("political")) return "EG-GENERIC";
+        if (t.contains("labour") || t.contains("hr") || t.contains("resource")) return "RES-QUARRY-CLOSURE";
+        if (t.contains("quality")) return "CQ-GENERIC";
+        if (t.contains("scope") || t.contains("variation")) return "PMO-CHANGE-CONTROL";
+        if (t.contains("schedule")) return "SCH-CRITICAL-PATH";
+        if (t.contains("cost")) return "FIN-GENERIC";
+        if (t.contains("opportunity")) return "PMO-CHANGE-CONTROL";
+        return "PMO-CHANGE-CONTROL";
     }
 
     private RiskStatus mapRiskStatus(String text) {

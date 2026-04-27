@@ -1,0 +1,394 @@
+databaseChangeLog:
+  - changeSet:
+      id: 036-create-risk-category-type
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risk_category_type
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: true
+              - column:
+                  name: sort_order
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0
+              - column:
+                  name: system_default
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: risk
+            tableName: risk_category_type
+            columnNames: code
+            constraintName: uk_risk_category_type_code
+        - createIndex:
+            schemaName: risk
+            tableName: risk_category_type
+            indexName: idx_risk_category_type_active_sort
+            columns:
+              - column:
+                  name: active
+              - column:
+                  name: sort_order
+
+  - changeSet:
+      id: 036-create-risk-category-master
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risk_category_master
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(60)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: type_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: industry
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: true
+              - column:
+                  name: sort_order
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0
+              - column:
+                  name: system_default
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: risk
+            tableName: risk_category_master
+            columnNames: code
+            constraintName: uk_risk_category_master_code
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risk_category_master
+            baseColumnNames: type_id
+            referencedSchemaName: risk
+            referencedTableName: risk_category_type
+            referencedColumnNames: id
+            constraintName: fk_risk_category_master_type
+        - createIndex:
+            schemaName: risk
+            tableName: risk_category_master
+            indexName: idx_risk_category_master_type
+            columns:
+              - column:
+                  name: type_id
+        - createIndex:
+            schemaName: risk
+            tableName: risk_category_master
+            indexName: idx_risk_category_master_industry
+            columns:
+              - column:
+                  name: industry
+        - createIndex:
+            schemaName: risk
+            tableName: risk_category_master
+            indexName: idx_risk_category_master_active_sort
+            columns:
+              - column:
+                  name: active
+              - column:
+                  name: sort_order
+
+  - changeSet:
+      id: 036-add-category-id-to-risks
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: risk
+            tableName: risks
+            columns:
+              - column:
+                  name: category_id
+                  type: UUID
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risks
+            baseColumnNames: category_id
+            referencedSchemaName: risk
+            referencedTableName: risk_category_master
+            referencedColumnNames: id
+            constraintName: fk_risks_category
+        - createIndex:
+            schemaName: risk
+            tableName: risks
+            indexName: idx_risks_category
+            columns:
+              - column:
+                  name: category_id
+
+  - changeSet:
+      id: 036-add-category-id-to-risk-templates
+      author: bipros
+      changes:
+        - dropIndex:
+            schemaName: risk
+            tableName: risk_templates
+            indexName: idx_risk_template_category
+        - addColumn:
+            schemaName: risk
+            tableName: risk_templates
+            columns:
+              - column:
+                  name: category_id
+                  type: UUID
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risk_templates
+            baseColumnNames: category_id
+            referencedSchemaName: risk
+            referencedTableName: risk_category_master
+            referencedColumnNames: id
+            constraintName: fk_risk_templates_category
+        - createIndex:
+            schemaName: risk
+            tableName: risk_templates
+            indexName: idx_risk_template_category
+            columns:
+              - column:
+                  name: category_id
+
+  - changeSet:
+      id: 036-backfill-risk-category-types-and-masters
+      author: bipros
+      comment: |
+        Inserts the ~20 types plus the canonical category rows that the existing
+        enum-string data backfill in the next changeset depends on. The full ~700-row
+        catalog is loaded by RiskCategorySeeder on first boot — this changeset only
+        plants the rows the migration explicitly references.
+      changes:
+        - sql:
+            splitStatements: false
+            stripComments: true
+            sql: |
+              INSERT INTO risk.risk_category_type
+                (id, code, name, active, sort_order, system_default, created_at, updated_at, version)
+              SELECT gen_random_uuid(), code, name, true, sort_order, true, now(), now(), 0
+              FROM (VALUES
+                ('LAND_ACQUISITION',         'Land Acquisition',          10),
+                ('FOREST_ENVIRONMENTAL',     'Forest / Environmental',    20),
+                ('UTILITY_SHIFTING',         'Utility Shifting',          30),
+                ('GEOTECHNICAL',             'Geotechnical',              40),
+                ('MONSOON_WEATHER',          'Monsoon / Weather',         50),
+                ('MATERIAL_PRICE',           'Material / Price',          60),
+                ('LABOUR_EQUIPMENT',         'Labour / Equipment',        70),
+                ('DESIGN_TECHNICAL',         'Design / Technical',        80),
+                ('CONSTRUCTION_QUALITY',     'Construction Quality',      90),
+                ('HEALTH_SAFETY',            'Health & Safety',          100),
+                ('STAKEHOLDER_LAW_ORDER',    'Stakeholder / Law & Order',110),
+                ('STATUTORY_REGULATORY',     'Statutory / Regulatory',   120),
+                ('CONTRACTUAL',              'Contractual',              130),
+                ('SCHEDULE',                 'Schedule',                 140),
+                ('RESOURCE',                 'Resource',                 150),
+                ('FINANCIAL',                'Financial',                160),
+                ('COMMUNICATION_PMO',        'Communication / PMO',      170),
+                ('EXTERNAL_GEOPOLITICAL',    'External / Geopolitical',  180),
+                ('FORCE_MAJEURE',            'Force Majeure',            190)
+              ) AS seed(code, name, sort_order)
+              WHERE NOT EXISTS (
+                SELECT 1 FROM risk.risk_category_type t WHERE t.code = seed.code
+              );
+
+              INSERT INTO risk.risk_category_master
+                (id, code, name, type_id, industry, active, sort_order, system_default,
+                 created_at, updated_at, version)
+              SELECT gen_random_uuid(), seed.code, seed.name, t.id, seed.industry,
+                     true, seed.sort_order, true, now(), now(), 0
+              FROM (VALUES
+                ('LA-GENERIC',                  'Land acquisition (generic)',                   'LAND_ACQUISITION',     'ROAD',                 10),
+                ('FE-STAGE-I-CLEARANCE',        'Forest Stage-I clearance',                     'FOREST_ENVIRONMENTAL', 'ROAD',                 10),
+                ('FE-GENERIC',                  'Forest / environmental (generic)',             'FOREST_ENVIRONMENTAL', 'ROAD',                 20),
+                ('US-GENERIC',                  'Utility shifting (generic)',                   'UTILITY_SHIFTING',     'ROAD',                 10),
+                ('SR-GENERIC',                  'Statutory / regulatory clearance (generic)',   'STATUTORY_REGULATORY', 'GENERIC',              10),
+                ('FIN-WORKING-CAPITAL-CRUNCH',  'Working-capital crunch',                       'FINANCIAL',            'GENERIC',              10),
+                ('FIN-GENERIC',                 'Financial (generic)',                          'FINANCIAL',            'GENERIC',              20),
+                ('MW-FLASH-FLOOD',              'Flash flood / monsoon damage',                 'MONSOON_WEATHER',      'ROAD',                 10),
+                ('EG-GENERIC',                  'External / geopolitical (generic)',            'EXTERNAL_GEOPOLITICAL','GENERIC',              10),
+                ('FM-EARTHQUAKE',               'Earthquake / seismic event',                   'FORCE_MAJEURE',        'GENERIC',              10),
+                ('MP-BITUMEN-ESCALATION',       'Bitumen price escalation',                     'MATERIAL_PRICE',       'ROAD',                 10),
+                ('DT-BIM-CLASH-LATE',           'BIM clash detected late',                      'DESIGN_TECHNICAL',     'CONSTRUCTION_GENERAL', 10),
+                ('HSE-GENERIC',                 'Health & safety (generic)',                    'HEALTH_SAFETY',        'CONSTRUCTION_GENERAL', 10),
+                ('DT-IRC-REVISION',             'IRC / MoRTH spec revision mid-project',        'DESIGN_TECHNICAL',     'ROAD',                 20),
+                ('PMO-GENERIC',                 'PMO / governance (generic)',                   'COMMUNICATION_PMO',    'GENERIC',              10),
+                ('PMO-CHANGE-CONTROL',          'Change-control discipline weak',               'COMMUNICATION_PMO',    'GENERIC',              20),
+                ('SCH-CRITICAL-PATH',           'Critical-path slippage',                       'SCHEDULE',             'GENERIC',              10),
+                ('RES-QUARRY-CLOSURE',          'Quarry / aggregate source closure',            'RESOURCE',             'ROAD',                 10),
+                ('CQ-GENERIC',                  'Construction quality (generic)',               'CONSTRUCTION_QUALITY', 'CONSTRUCTION_GENERAL', 10)
+              ) AS seed(code, name, type_code, industry, sort_order)
+              JOIN risk.risk_category_type t ON t.code = seed.type_code
+              WHERE NOT EXISTS (
+                SELECT 1 FROM risk.risk_category_master m WHERE m.code = seed.code
+              );
+
+  - changeSet:
+      id: 036-backfill-risks-category-id
+      author: bipros
+      comment: Map existing enum-string `category` values to FK `category_id`.
+      changes:
+        - sql:
+            splitStatements: false
+            stripComments: true
+            sql: |
+              UPDATE risk.risks r
+              SET category_id = m.id
+              FROM risk.risk_category_master m
+              WHERE r.category_id IS NULL AND r.category IS NOT NULL AND m.code = CASE r.category
+                WHEN 'LAND_ACQUISITION'      THEN 'LA-GENERIC'
+                WHEN 'FOREST_CLEARANCE'      THEN 'FE-STAGE-I-CLEARANCE'
+                WHEN 'UTILITY_SHIFTING'      THEN 'US-GENERIC'
+                WHEN 'STATUTORY_CLEARANCE'   THEN 'SR-GENERIC'
+                WHEN 'CONTRACTOR_FINANCIAL'  THEN 'FIN-WORKING-CAPITAL-CRUNCH'
+                WHEN 'MONSOON_IMPACT'        THEN 'MW-FLASH-FLOOD'
+                WHEN 'GEOPOLITICAL'          THEN 'EG-GENERIC'
+                WHEN 'NATURAL_HAZARD'        THEN 'FM-EARTHQUAKE'
+                WHEN 'MARKET_PRICE'          THEN 'MP-BITUMEN-ESCALATION'
+                WHEN 'TECHNOLOGY'            THEN 'DT-BIM-CLASH-LATE'
+                WHEN 'HEALTH_SAFETY'         THEN 'HSE-GENERIC'
+                WHEN 'TECHNICAL'             THEN 'DT-IRC-REVISION'
+                WHEN 'EXTERNAL'              THEN 'EG-GENERIC'
+                WHEN 'ORGANIZATIONAL'        THEN 'PMO-GENERIC'
+                WHEN 'PROJECT_MANAGEMENT'    THEN 'PMO-CHANGE-CONTROL'
+                WHEN 'SCHEDULE'              THEN 'SCH-CRITICAL-PATH'
+                WHEN 'COST'                  THEN 'FIN-GENERIC'
+                WHEN 'RESOURCE'              THEN 'RES-QUARRY-CLOSURE'
+                WHEN 'QUALITY'               THEN 'CQ-GENERIC'
+              END;
+
+              UPDATE risk.risk_templates rt
+              SET category_id = m.id
+              FROM risk.risk_category_master m
+              WHERE rt.category_id IS NULL AND rt.category IS NOT NULL AND m.code = CASE rt.category
+                WHEN 'LAND_ACQUISITION'      THEN 'LA-GENERIC'
+                WHEN 'FOREST_CLEARANCE'      THEN 'FE-STAGE-I-CLEARANCE'
+                WHEN 'UTILITY_SHIFTING'      THEN 'US-GENERIC'
+                WHEN 'STATUTORY_CLEARANCE'   THEN 'SR-GENERIC'
+                WHEN 'CONTRACTOR_FINANCIAL'  THEN 'FIN-WORKING-CAPITAL-CRUNCH'
+                WHEN 'MONSOON_IMPACT'        THEN 'MW-FLASH-FLOOD'
+                WHEN 'GEOPOLITICAL'          THEN 'EG-GENERIC'
+                WHEN 'NATURAL_HAZARD'        THEN 'FM-EARTHQUAKE'
+                WHEN 'MARKET_PRICE'          THEN 'MP-BITUMEN-ESCALATION'
+                WHEN 'TECHNOLOGY'            THEN 'DT-BIM-CLASH-LATE'
+                WHEN 'HEALTH_SAFETY'         THEN 'HSE-GENERIC'
+                WHEN 'TECHNICAL'             THEN 'DT-IRC-REVISION'
+                WHEN 'EXTERNAL'              THEN 'EG-GENERIC'
+                WHEN 'ORGANIZATIONAL'        THEN 'PMO-GENERIC'
+                WHEN 'PROJECT_MANAGEMENT'    THEN 'PMO-CHANGE-CONTROL'
+                WHEN 'SCHEDULE'              THEN 'SCH-CRITICAL-PATH'
+                WHEN 'COST'                  THEN 'FIN-GENERIC'
+                WHEN 'RESOURCE'              THEN 'RES-QUARRY-CLOSURE'
+                WHEN 'QUALITY'               THEN 'CQ-GENERIC'
+              END;
+
+  - changeSet:
+      id: 036-drop-old-category-columns
+      author: bipros
+      changes:
+        - dropColumn:
+            schemaName: risk
+            tableName: risks
+            columnName: category
+        - dropColumn:
+            schemaName: risk
+            tableName: risk_templates
+            columnName: category

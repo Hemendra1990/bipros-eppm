@@ -37,7 +37,6 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.risk.application.dto.CreateRiskRequest;
 import com.bipros.risk.application.service.RiskService;
-import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskImpact;
 import com.bipros.risk.domain.model.RiskProbability;
 import lombok.RequiredArgsConstructor;
@@ -496,54 +495,54 @@ public class IoclPanipatSeeder implements CommandLineRunner {
     private void seedRisks(UUID projectId, Map<String, UUID> act) {
         risk(projectId, "R01", "Phased handover from IOCL ops",
             "Facilities cannot be handed over in one go; progressive handover needed per IOCL ops/maintenance/safety sign-off.",
-            RiskCategory.ORGANIZATIONAL, RiskProbability.HIGH, RiskImpact.HIGH,
+            "ORGANIZATIONAL", RiskProbability.HIGH, RiskImpact.HIGH,
             30, null, csv(act, "A50-01", "A50-02", "A10-01"));
         risk(projectId, "R02", "Dismantling wastage > 20% penalty",
             "Wastage > 20% on dismantled piping material is penalised per contract.",
-            RiskCategory.COST, RiskProbability.MEDIUM, RiskImpact.MEDIUM,
+            "COST", RiskProbability.MEDIUM, RiskImpact.MEDIUM,
             null, new BigDecimal("500000"), csv(act, "A50-01"));
         risk(projectId, "R03", "Insulation disposal compliance",
             "Old pipe insulation must go to recycling agency with certificate submitted to IOCL.",
-            RiskCategory.STATUTORY_CLEARANCE, RiskProbability.MEDIUM, RiskImpact.LOW,
+            "STATUTORY_CLEARANCE", RiskProbability.MEDIUM, RiskImpact.LOW,
             3, new BigDecimal("150000"), csv(act, "A50-01"));
         risk(projectId, "R04", "Free-issue CS pipe handling",
             "IOCL supplies CS pipes; vendor handles site-wide transport at no extra cost.",
-            RiskCategory.RESOURCE, RiskProbability.LOW, RiskImpact.LOW,
+            "RESOURCE", RiskProbability.LOW, RiskImpact.LOW,
             2, null, csv(act, "A30-02", "A30-03"));
         risk(projectId, "R05", "Hydrotest failure rework",
             "Hydrotest at 1.5×DP for 4 hrs + DP on all joints. Any joint failure redoes entire section.",
-            RiskCategory.QUALITY, RiskProbability.MEDIUM, RiskImpact.HIGH,
+            "QUALITY", RiskProbability.MEDIUM, RiskImpact.HIGH,
             14, new BigDecimal("1500000"), csv(act, "A20-03", "A20-04", "A20-01"));
         risk(projectId, "R06", "IOCL clearance bottleneck",
             "Every dismantling step needs clearance from IOCL ops/maint/safety (3 sign-offs).",
-            RiskCategory.PROJECT_MANAGEMENT, RiskProbability.HIGH, RiskImpact.MEDIUM,
+            "PROJECT_MANAGEMENT", RiskProbability.HIGH, RiskImpact.MEDIUM,
             10, null, csv(act, "A50-01", "A50-02"));
         risk(projectId, "R07", "Material ID damage on re-use",
             "Material ID marks must be retained on dismantled pipes/fittings; damaged marks mean re-procurement.",
-            RiskCategory.QUALITY, RiskProbability.LOW, RiskImpact.MEDIUM,
+            "QUALITY", RiskProbability.LOW, RiskImpact.MEDIUM,
             5, new BigDecimal("800000"), csv(act, "A50-01", "A20-01"));
         risk(projectId, "R08", "Scope exclusions — commissioning/training",
             "PDF does not list commissioning support, testing, or operator training. Confirm with EIC.",
-            RiskCategory.TECHNICAL, RiskProbability.MEDIUM, RiskImpact.MEDIUM,
+            "TECHNICAL", RiskProbability.MEDIUM, RiskImpact.MEDIUM,
             7, new BigDecimal("600000"), csv(act, "A40-04"));
         risk(projectId, "R09", "Monsoon impact on civil earthworks",
             "August start enters North-India monsoon season (Jul-Sep); civil earthwork productivity hit.",
-            RiskCategory.MONSOON_IMPACT, RiskProbability.HIGH, RiskImpact.MEDIUM,
+            "MONSOON_IMPACT", RiskProbability.HIGH, RiskImpact.MEDIUM,
             14, null, csv(act, "A10-02", "A10-01", "A10-03"));
         risk(projectId, "R10", "Live refinery concurrent ops",
             "ISO-accredited running plant; all welding under hot-work permit, safety constraints.",
-            RiskCategory.EXTERNAL, RiskProbability.HIGH, RiskImpact.HIGH,
+            "EXTERNAL", RiskProbability.HIGH, RiskImpact.HIGH,
             7, new BigDecimal("400000"), csv(act, "A20-01", "A20-03"));
     }
 
     private void risk(UUID projectId, String code, String title, String description,
-                      RiskCategory category, RiskProbability probability, RiskImpact impact,
+                      String legacyCategoryName, RiskProbability probability, RiskImpact impact,
                       Integer scheduleImpactDays, BigDecimal costImpact, String affected) {
         riskService.createRisk(projectId, CreateRiskRequest.builder()
             .code(code)
             .title(title)
             .description(description)
-            .category(category)
+            .legacyCategoryCode(LegacyRiskCategoryLookup.codeForLegacyEnum(legacyCategoryName))
             .probability(probability)
             .impact(impact)
             .identifiedDate(WO_DATE)

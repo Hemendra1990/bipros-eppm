@@ -2,6 +2,7 @@ package com.bipros.risk.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.risk.application.dto.CreateRiskTemplateRequest;
 import com.bipros.risk.application.dto.RiskSummary;
@@ -9,9 +10,12 @@ import com.bipros.risk.application.dto.RiskTemplateResponse;
 import com.bipros.risk.application.dto.UpdateRiskTemplateRequest;
 import com.bipros.risk.domain.model.Industry;
 import com.bipros.risk.domain.model.Risk;
+import com.bipros.risk.domain.model.RiskCategoryMaster;
 import com.bipros.risk.domain.model.RiskProbability;
 import com.bipros.risk.domain.model.RiskStatus;
 import com.bipros.risk.domain.model.RiskTemplate;
+import com.bipros.risk.domain.model.RiskType;
+import com.bipros.risk.domain.repository.RiskCategoryMasterRepository;
 import com.bipros.risk.domain.repository.RiskRepository;
 import com.bipros.risk.domain.repository.RiskTemplateRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +40,10 @@ public class RiskTemplateService {
     private final RiskTemplateRepository repository;
     private final RiskRepository riskRepository;
     private final RiskService riskService;
+    private final RiskScoringMatrixService matrixService;
     private final AuditService auditService;
+    private final RiskCategoryMasterRepository riskCategoryRepository;
+    private final ProjectAccessGuard projectAccess;
 
     public RiskTemplateResponse create(CreateRiskTemplateRequest request) {
         log.info("Creating risk template: code={}, industry={}", request.code(), request.industry());
@@ -51,7 +58,7 @@ public class RiskTemplateService {
             .description(request.description())
             .industry(request.industry())
             .applicableProjectCategories(normaliseCategories(request.applicableProjectCategories()))
-            .category(request.category())
+            .category(loadCategoryOrNull(request.categoryId()))
             .defaultProbability(request.defaultProbability())
             .defaultImpactCost(request.defaultImpactCost())
             .defaultImpactSchedule(request.defaultImpactSchedule())
@@ -95,7 +102,10 @@ public class RiskTemplateService {
         template.setTitle(request.title());
         template.setDescription(request.description());
         template.setApplicableProjectCategories(normaliseCategories(request.applicableProjectCategories()));
-        template.setCategory(request.category());
+        // Preserve the existing category when the caller omits categoryId (PATCH-like).
+        // Without this guard a partial PUT silently wipes the category — including on
+        // system-default rows where it would be unrecoverable from the UI.
+        if (request.categoryId() != null) template.setCategory(loadCategoryOrNull(request.categoryId()));
         template.setDefaultProbability(request.defaultProbability());
         template.setDefaultImpactCost(request.defaultImpactCost());
         template.setDefaultImpactSchedule(request.defaultImpactSchedule());
@@ -160,15 +170,19 @@ public class RiskTemplateService {
      * existing risk count.
      */
     public List<RiskSummary> copyToProject(UUID projectId, List<UUID> templateIds) {
+        projectAccess.requireEdit(projectId);
         log.info("Copying {} template(s) to project {}", templateIds.size(), projectId);
         List<RiskTemplate> templates = repository.findAllById(templateIds);
         if (templates.size() != new HashSet<>(templateIds).size()) {
             throw new ResourceNotFoundException("RiskTemplate",
                 "one or more template IDs not found");
         }
-        int existingCount = riskRepository.findByProjectId(projectId).size();
+
+        // Make sure the project has a scoring matrix before scoring copied risks.
+        matrixService.ensureMatrixExists(projectId);
+
+        int seq = riskRepository.maxRiskCodeNumber(projectId);
         List<RiskSummary> created = new ArrayList<>(templates.size());
-        int seq = existingCount;
         for (RiskTemplate t : templates) {
             seq++;
             Risk risk = new Risk();
@@ -181,14 +195,23 @@ public class RiskTemplateService {
             risk.setProbability(toProbability(t.getDefaultProbability()));
             risk.setImpactCost(t.getDefaultImpactCost());
             risk.setImpactSchedule(t.getDefaultImpactSchedule());
-            risk.setIsOpportunity(Boolean.TRUE.equals(t.getIsOpportunity()));
+            risk.setRiskType(Boolean.TRUE.equals(t.getIsOpportunity())
+                ? RiskType.OPPORTUNITY
+                : RiskType.THREAT);
             risk.setIdentifiedDate(LocalDate.now());
-            risk.calculateRiskScore();
+            riskService.calculateScores(risk, projectId);
             Risk saved = riskRepository.save(risk);
             auditService.logCreate("Risk", saved.getId(), saved);
             created.add(riskService.toSummary(saved));
         }
         return created;
+    }
+
+    /** Load the master row by id; returns null when id is null (for uncategorised templates). */
+    private RiskCategoryMaster loadCategoryOrNull(UUID categoryId) {
+        if (categoryId == null) return null;
+        return riskCategoryRepository.findById(categoryId)
+            .orElseThrow(() -> new ResourceNotFoundException("RiskCategoryMaster", categoryId));
     }
 
     private static RiskProbability toProbability(Integer level) {

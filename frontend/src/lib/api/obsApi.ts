@@ -1,10 +1,23 @@
 import { apiClient } from "./client";
-import type { ApiResponse, ObsNodeResponse, CreateObsNodeRequest } from "../types";
+import type {
+  ApiResponse,
+  CreateObsNodeRequest,
+  NodeSearchResult,
+  ObsNodeResponse,
+  PagedResponse,
+} from "../types";
 
 export const obsApi = {
   // OBS Tree
   getObsTree: () =>
     apiClient.get<ApiResponse<ObsNodeResponse[]>>("/v1/obs").then((r) => r.data),
+
+  searchObs: (q: string, page = 0, size = 25) =>
+    apiClient
+      .get<ApiResponse<PagedResponse<NodeSearchResult>>>("/v1/obs/search", {
+        params: { q, page, size },
+      })
+      .then((r) => r.data),
 
   createObsNode: (data: CreateObsNodeRequest) =>
     apiClient

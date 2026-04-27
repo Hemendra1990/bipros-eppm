@@ -129,8 +129,8 @@ export function PortfolioStatusMix() {
                     </Pie>
                     <Tooltip
                       contentStyle={CHART_TOOLTIP_STYLE}
-                      formatter={(v: number, n) => [
-                        `${v} (${formatPct((v / statusTotal) * 100, 0)})`,
+                      formatter={(v, n) => [
+                        `${v} (${formatPct((Number(v) / statusTotal) * 100, 0)})`,
                         STATUS_LABEL[String(n)] ?? n,
                       ]}
                     />

@@ -49,6 +49,7 @@ export default function ProjectDetailLayout({
     { id: "resources", label: "Resources", href: null },
     { id: "costs", label: "Costs", href: null },
     { id: "evm", label: "EVM", href: null },
+    { id: "risks", label: "Risks", href: `/projects/${projectId}/risks` },
     // These navigate to separate route pages:
     { id: "contracts", label: "Contracts", href: `/projects/${projectId}/contracts` },
     { id: "documents", label: "Documents", href: `/projects/${projectId}/documents` },

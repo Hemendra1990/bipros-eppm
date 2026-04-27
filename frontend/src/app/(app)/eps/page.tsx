@@ -1,15 +1,16 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, X, Trash2, Edit2, Check, FolderPlus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { ChevronsDownUp, ChevronsUpDown, Plus, X, Trash2, Edit2, Check, FolderPlus } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { projectApi } from "@/lib/api/projectApi";
-import { TreeView } from "@/components/common/TreeView";
+import { TreeView, type TreeViewHandle } from "@/components/common/TreeView";
+import { TreeSearchInput } from "@/components/common/TreeSearchInput";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { apiClient } from "@/lib/api/client";
-import type { EpsNodeResponse, ApiResponse } from "@/lib/types";
+import type { EpsNodeResponse, ApiResponse, NodeSearchResult } from "@/lib/types";
 
 interface EpsNodeCreateRequest {
   code: string;
@@ -25,6 +26,7 @@ export default function EpsPage() {
   const [formData, setFormData] = useState<EpsNodeCreateRequest>({ code: "", name: "", parentId: undefined });
   const [parentLabel, setParentLabel] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; nodeId: string | null }>({ open: false, nodeId: null });
+  const treeRef = useRef<TreeViewHandle>(null);
 
   const { data: epsData, isLoading, error } = useQuery({
     queryKey: ["eps"],
@@ -121,6 +123,15 @@ export default function EpsPage() {
     setDeleteConfirm({ open: false, nodeId: null });
   }, []);
 
+  const handleSearchSelect = useCallback((result: NodeSearchResult) => {
+    treeRef.current?.revealNode(result.ancestorIds, result.id);
+  }, []);
+
+  const searchEps = useCallback(
+    (q: string, page: number, size: number) => projectApi.searchEps(q, page, size),
+    []
+  );
+
   return (
     <div>
       <PageHeader
@@ -211,7 +222,36 @@ export default function EpsPage() {
 
       {epsNodes.length > 0 && (
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <TreeSearchInput
+              searchFn={searchEps}
+              onSelect={handleSearchSelect}
+              placeholder="Search EPS by code or name…"
+              className="w-full max-w-xs"
+            />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => treeRef.current?.expandAll()}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+                title="Expand all nodes"
+              >
+                <ChevronsUpDown size={14} />
+                Expand All
+              </button>
+              <button
+                type="button"
+                onClick={() => treeRef.current?.collapseAll()}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+                title="Collapse all nodes"
+              >
+                <ChevronsDownUp size={14} />
+                Collapse All
+              </button>
+            </div>
+          </div>
           <TreeView
+            ref={treeRef}
             nodes={epsNodes}
             draggable
             onMoveNode={(nodeId, newParentId) => moveMutation.mutate({ nodeId, newParentId })}

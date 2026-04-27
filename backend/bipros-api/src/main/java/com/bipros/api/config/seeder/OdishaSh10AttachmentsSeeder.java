@@ -31,6 +31,7 @@ import com.bipros.gis.domain.repository.ConstructionProgressSnapshotRepository;
 import com.bipros.gis.domain.repository.GisLayerRepository;
 import com.bipros.gis.domain.repository.SatelliteImageRepository;
 import com.bipros.gis.domain.repository.WbsPolygonRepository;
+import com.bipros.integration.storage.RasterStorage;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
@@ -45,6 +46,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -80,7 +82,6 @@ public class OdishaSh10AttachmentsSeeder implements CommandLineRunner {
     private static final String SATELLITE_RESOURCE_ROOT = "seed-data/odisha-sh10/satellite/";
     private static final Path DOCUMENT_STORAGE_ROOT = Paths.get("./storage/documents").toAbsolutePath().normalize();
     private static final Path CONTRACT_STORAGE_ROOT = Paths.get("./storage/contracts").toAbsolutePath().normalize();
-    private static final Path SATELLITE_STORAGE_ROOT = Paths.get("./storage/satellite").toAbsolutePath().normalize();
 
     // SH-10 Bhubaneswar–Cuttack corridor — synthetic lat/lon endpoints for the GIS demo.
     private static final double SH10_START_LAT = 20.2961; // Bhubaneswar
@@ -100,6 +101,7 @@ public class OdishaSh10AttachmentsSeeder implements CommandLineRunner {
     private final WbsPolygonRepository wbsPolygonRepository;
     private final SatelliteImageRepository satelliteImageRepository;
     private final ConstructionProgressSnapshotRepository progressSnapshotRepository;
+    private final RasterStorage rasterStorage;
 
     @Override
     public void run(String... args) {
@@ -532,8 +534,8 @@ public class OdishaSh10AttachmentsSeeder implements CommandLineRunner {
                 continue;
             }
             UUID contentId = UUID.randomUUID();
-            String relativePath = project.getId() + "/" + contentId + "/" + s.filename();
-            writeBinary(SATELLITE_STORAGE_ROOT.resolve(relativePath), imageBytes);
+            String storageKey = project.getId() + "/" + contentId + "/" + s.filename();
+            URI storedAt = rasterStorage.put(storageKey, imageBytes, "image/jpeg");
 
             SatelliteImage img = new SatelliteImage();
             img.setProjectId(project.getId());
@@ -544,7 +546,7 @@ public class OdishaSh10AttachmentsSeeder implements CommandLineRunner {
             img.setSource(SatelliteImageSource.MANUAL_UPLOAD);
             img.setResolution("3840x2160 (UHD field photo)");
             img.setBoundingBoxGeoJson(CorridorGeometry.bboxAsGeoJson(bbox));
-            img.setFilePath(relativePath);
+            img.setFilePath(storedAt.toString());
             img.setFileSize((long) imageBytes.length);
             img.setMimeType("image/jpeg");
             img.setNorthBound(bbox[3]);

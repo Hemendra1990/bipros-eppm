@@ -1,12 +1,13 @@
 package com.bipros.risk.application.dto;
 
 import com.bipros.common.web.json.Views;
-import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskImpact;
 import com.bipros.risk.domain.model.RiskProbability;
 import com.bipros.risk.domain.model.RiskRag;
+import com.bipros.risk.domain.model.RiskResponseType;
 import com.bipros.risk.domain.model.RiskStatus;
 import com.bipros.risk.domain.model.RiskTrend;
+import com.bipros.risk.domain.model.RiskType;
 import com.fasterxml.jackson.annotation.JsonView;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,6 +16,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -26,42 +28,32 @@ public class RiskSummary {
     private String code;
     private String title;
     private String description;
-    private RiskCategory category;
+    /** Embedded category summary with id/code/name/industry plus parent type. Null if uncategorised. */
+    private RiskCategorySummaryDto category;
     private RiskStatus status;
+
+    /** P6-style risk type: THREAT or OPPORTUNITY. */
+    private RiskType riskType;
+
     @JsonView(Views.Internal.class) private RiskProbability probability;
     @JsonView(Views.Internal.class) private RiskImpact impact;
     @JsonView(Views.Internal.class) private Double riskScore;
     private UUID ownerId;
     private LocalDate identifiedDate;
+    private UUID identifiedById;
     private LocalDate dueDate;
     @JsonView(Views.Internal.class) private String affectedActivities;
     @JsonView(Views.FinanceConfidential.class) private BigDecimal costImpact;
     @JsonView(Views.Internal.class) private Integer scheduleImpactDays;
     private int sortOrder;
 
-    // ── IC-PMS M7 fields — surfaced so the Risks tab can render RAG / Trend /
-    //    Residual / Cost / Schedule impact and tally OPPORTUNITIES tile. ──
+    // ── IC-PMS M7 fields ──────────────────────────────────────────────────
 
-    /** RAG band derived from score (CRIMSON/RED/AMBER/GREEN/OPPORTUNITY). */
     private RiskRag rag;
-
-    /** Exposure trend since last review (IMPROVING / STABLE / DEGRADING). */
     private RiskTrend trend;
-
-    /** True for upside risks (opportunities); flips GREEN → OPPORTUNITY tile. */
     private Boolean isOpportunity;
-
-    /** Residual risk score after mitigations applied. */
     @JsonView(Views.Internal.class) private Double residualRiskScore;
-
-    /**
-     * Cost-impact score 1-5 per IC-PMS M7 split-impact model.
-     * Note: Risk entity persists this as Integer (1-5 scale), distinct from
-     * {@link #costImpact} which is the monetary exposure in BigDecimal.
-     */
     @JsonView(Views.Internal.class) private Integer impactCost;
-
-    /** Schedule-impact score 1-5 per IC-PMS M7 split-impact model. */
     @JsonView(Views.Internal.class) private Integer impactSchedule;
 
     /**
@@ -70,4 +62,37 @@ public class RiskSummary {
      * write paths where the caller already has the saved entity.
      */
     private RiskAnalysisQuality analysisQuality;
+
+    // ── P6 Exposure dates (auto-derived from assigned activities) ──────────
+
+    private LocalDate exposureStartDate;
+    private LocalDate exposureFinishDate;
+
+    @JsonView(Views.FinanceConfidential.class)
+    private BigDecimal preResponseExposureCost;
+
+    @JsonView(Views.FinanceConfidential.class)
+    private BigDecimal postResponseExposureCost;
+
+    // ── P6 Response strategy ──────────────────────────────────────────────
+
+    private RiskResponseType responseType;
+    private String responseDescription;
+
+    // ── P6 Post-response impact (target state after mitigation) ────────────
+
+    @JsonView(Views.Internal.class) private RiskProbability postResponseProbability;
+    @JsonView(Views.Internal.class) private Integer postResponseImpactCost;
+    @JsonView(Views.Internal.class) private Integer postResponseImpactSchedule;
+    @JsonView(Views.Internal.class) private Double postResponseRiskScore;
+
+    // ── P6 Descriptive fields ─────────────────────────────────────────────
+
+    private String cause;
+    private String effect;
+    private String notes;
+
+    // ── Assigned activities ───────────────────────────────────────────────
+
+    private List<RiskActivityAssignmentDto> assignedActivities;
 }

@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3, Briefcase, Building2, Calendar, ChevronDown, ChevronLeft,
-  ChevronRight, FileText, FolderTree, Gauge, LayoutDashboard, Layers,
-  ListChecks, LogOut, Network, Plug, Settings, Shield, SlidersHorizontal,
-  Sparkles, UserCog, Users,
+  Banknote, BarChart3, Briefcase, Building2, Calendar, ChevronDown,
+  ChevronLeft, ChevronRight, Contact, FileText, FolderTree, Gauge,
+  Grid, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
+  Network, Plug, Settings, SlidersHorizontal, Sparkles, Tag,
+  UserCog, Users, UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAppStore, useAuthStore } from "@/lib/state/store";
@@ -41,7 +42,7 @@ const groups: NavGroup[] = [
       { name: "Portfolios", href: "/portfolios", icon: Briefcase },
       { name: "Projects", href: "/projects", icon: FolderTree, module: "M1_WBS_GIS" },
       { name: "EPS", href: "/eps", icon: Layers, module: "M1_WBS_GIS" },
-      { name: "Dashboards", href: "/dashboards", icon: LayoutDashboard, module: "M9_REPORTS" },
+      { name: "Dashboards", href: "/dashboards", icon: LayoutGrid, module: "M9_REPORTS" },
     ],
   },
   {
@@ -55,7 +56,6 @@ const groups: NavGroup[] = [
     label: "Control",
     items: [
       { name: "Reports", href: "/reports", icon: BarChart3, module: "M9_REPORTS" },
-      { name: "Risk", href: "/risk", icon: Shield, module: "M7_RISKS" },
       { name: "OBS", href: "/obs", icon: Network, module: "M1_WBS_GIS" },
       { name: "Analytics", href: "/analytics", icon: Sparkles, module: "M9_REPORTS" },
     ],
@@ -64,16 +64,19 @@ const groups: NavGroup[] = [
     label: "Admin",
     adminOnly: true,
     items: [
-      { name: "Users", href: "/admin/users", icon: Users, adminOnly: true },
+      { name: "Users", href: "/admin/users", icon: UsersRound, adminOnly: true },
       { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true },
       { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true },
       { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
-      { name: "Risk Library", href: "/admin/risk-library", icon: Shield, adminOnly: true },
+      { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },
+      { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
+      { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true },
       { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText, adminOnly: true },
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
-      { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Gauge, adminOnly: true },
-      { name: "Resource Roles", href: "/admin/resource-roles", icon: Users, adminOnly: true },
+      { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
+      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },
+      { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
       { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true },
       { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true },
     ],
@@ -234,7 +237,7 @@ export function Sidebar() {
                     />
                   )}
                   <item.icon
-                    size={16}
+                    size={sidebarCollapsed ? 20 : 16}
                     className={cn("shrink-0", active ? "text-gold-deep" : "text-slate")}
                     strokeWidth={1.5}
                   />
@@ -247,7 +250,7 @@ export function Sidebar() {
       </nav>
 
       {/* User chip */}
-      {!sidebarCollapsed && (
+      {!sidebarCollapsed ? (
         <div className="border-t border-hairline p-3">
           <div className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 hover:bg-ivory">
             <div
@@ -272,6 +275,24 @@ export function Sidebar() {
               <LogOut size={14} />
             </button>
           </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2 border-t border-hairline px-2 py-3">
+          <div
+            title={`${displayName} · ${roleLabel}`}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-parchment text-gold-deep font-display font-semibold text-xs"
+            style={{ border: "2px solid #D4AF37" }}
+          >
+            {initials}
+          </div>
+          <button
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-slate hover:bg-ivory hover:text-burgundy"
+          >
+            <LogOut size={18} strokeWidth={1.5} />
+          </button>
         </div>
       )}
     </aside>

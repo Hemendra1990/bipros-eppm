@@ -1,7 +1,6 @@
 package com.bipros.project.application.dto;
 
 import com.bipros.contract.domain.model.ContractType;
-import com.bipros.project.domain.model.ProjectCategory;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -40,8 +39,8 @@ public record CreateProjectRequest(
     @Max(value = 100, message = "Priority must be between 1 and 100")
     Integer priority,
 
-    /** Road-construction category (HIGHWAY/EXPRESSWAY/…) — Screen 01 Project Master field. */
-    ProjectCategory category,
+    /** Road-construction category code — references project_category_master. */
+    String category,
 
     /** MoRTH category code linked to {@link #category}. */
     @Size(max = 20)

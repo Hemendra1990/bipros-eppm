@@ -25,4 +25,6 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
   long countByCalendarId(UUID calendarId);
 
   Page<Activity> findByProjectIdOrderBySortOrder(UUID projectId, Pageable pageable);
+
+  List<Activity> findByIdIn(List<UUID> ids);
 }

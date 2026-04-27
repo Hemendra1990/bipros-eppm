@@ -1,0 +1,106 @@
+databaseChangeLog:
+  # Adds the P6-style risk fields to the existing risk.risks table.
+  # These columns were added at the entity level but never migrated; the dev
+  # profile (ddl-auto: create-drop) hides this, but the prod profile
+  # (ddl-auto: validate + Liquibase) would fail to start without this changeset.
+  - changeSet:
+      id: 035-risks-add-p6-columns
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: risk
+            tableName: risks
+            columns:
+              - column:
+                  name: risk_type
+                  type: VARCHAR(20)
+                  defaultValue: 'THREAT'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: impact_cost
+                  type: INTEGER
+              - column:
+                  name: impact_schedule
+                  type: INTEGER
+              - column:
+                  name: residual_risk_score
+                  type: DOUBLE
+              - column:
+                  name: rag
+                  type: VARCHAR(20)
+              - column:
+                  name: trend
+                  type: VARCHAR(20)
+              - column:
+                  name: identified_by_id
+                  type: UUID
+              - column:
+                  name: exposure_start_date
+                  type: DATE
+              - column:
+                  name: exposure_finish_date
+                  type: DATE
+              - column:
+                  name: pre_response_exposure_cost
+                  type: DECIMAL(19, 2)
+              - column:
+                  name: post_response_exposure_cost
+                  type: DECIMAL(19, 2)
+              - column:
+                  name: response_type
+                  type: VARCHAR(20)
+              - column:
+                  name: response_description
+                  type: TEXT
+              - column:
+                  name: post_response_probability
+                  type: VARCHAR(20)
+              - column:
+                  name: post_response_impact_cost
+                  type: INTEGER
+              - column:
+                  name: post_response_impact_schedule
+                  type: INTEGER
+              - column:
+                  name: post_response_risk_score
+                  type: DOUBLE
+              - column:
+                  name: cause
+                  type: TEXT
+              - column:
+                  name: effect
+                  type: TEXT
+              - column:
+                  name: notes
+                  type: TEXT
+
+  - changeSet:
+      id: 035-risks-p6-indexes
+      author: bipros
+      changes:
+        - createIndex:
+            schemaName: risk
+            tableName: risks
+            indexName: idx_risks_project_status
+            columns:
+              - column:
+                  name: project_id
+              - column:
+                  name: status
+        - createIndex:
+            schemaName: risk
+            tableName: risks
+            indexName: idx_risks_project_score
+            columns:
+              - column:
+                  name: project_id
+              - column:
+                  name: risk_score
+        - createIndex:
+            schemaName: risk
+            tableName: risks
+            indexName: idx_risks_risk_type
+            columns:
+              - column:
+                  name: risk_type

@@ -14,6 +14,7 @@ import {
   GitCompare,
   Layers,
   RefreshCw,
+  Shield,
   Sparkles,
   TrendingUp,
 } from "lucide-react";
@@ -634,6 +635,37 @@ export default function ReportsPage() {
                 </p>
               </div>
               <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-hairline text-slate transition-all duration-200 group-hover:border-gold group-hover:text-gold-deep group-hover:translate-x-0.5 sm:inline-flex">
+                →
+              </span>
+            </div>
+          </a>
+
+          {/* Featured: Cross-project Risk Register */}
+          <a
+            href="/reports/risk-register"
+            className="group relative block overflow-hidden rounded-2xl border border-hairline bg-gradient-to-br from-paper via-ivory to-burgundy/5 p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-burgundy/30 hover:shadow-[0_10px_30px_rgba(28,28,28,0.08)]"
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-burgundy/10 blur-3xl"
+            />
+            <div className="relative flex items-center gap-5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-burgundy/10 text-burgundy ring-1 ring-burgundy/20 transition-all duration-200 group-hover:bg-burgundy group-hover:text-paper group-hover:ring-burgundy">
+                <Shield size={22} strokeWidth={1.75} />
+              </div>
+              <div className="flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-burgundy">
+                  Portfolio view
+                </div>
+                <div className="mt-0.5 font-display text-lg font-semibold tracking-tight text-charcoal">
+                  Cross-project Risk Register
+                </div>
+                <p className="mt-1 max-w-[640px] text-sm leading-relaxed text-slate">
+                  View and manage risks across all projects from a single register. Includes 5×5 risk matrix,
+                  triggered risk alerts, and library imports.
+                </p>
+              </div>
+              <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-hairline text-slate transition-all duration-200 group-hover:border-burgundy group-hover:text-burgundy group-hover:translate-x-0.5 sm:inline-flex">
                 →
               </span>
             </div>

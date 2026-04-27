@@ -4,9 +4,11 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.risk.application.dto.CopyTemplatesRequest;
 import com.bipros.risk.application.dto.CreateRiskRequest;
 import com.bipros.risk.application.dto.CreateRiskResponseRequest;
+import com.bipros.risk.application.dto.RiskActivityAssignmentDto;
 import com.bipros.risk.application.dto.RiskAnalysisQuality;
 import com.bipros.risk.application.dto.RiskResponseDto;
 import com.bipros.risk.application.dto.RiskSummary;
+import com.bipros.risk.application.dto.UpdateRiskRequest;
 import com.bipros.risk.application.service.RiskService;
 import com.bipros.risk.application.service.RiskTemplateService;
 import com.bipros.risk.domain.model.RiskStatus;
@@ -32,7 +34,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/risks")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
 @RequiredArgsConstructor
 public class RiskController {
 
@@ -40,6 +41,7 @@ public class RiskController {
     private final RiskTemplateService riskTemplateService;
 
     @PostMapping
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     public ResponseEntity<ApiResponse<RiskSummary>> createRisk(
         @PathVariable UUID projectId,
         @Valid @RequestBody CreateRiskRequest request) {
@@ -48,11 +50,8 @@ public class RiskController {
             .body(ApiResponse.ok(risk));
     }
 
-    /**
-     * Aggregate risk summary. Mapped BEFORE {@link #getRisk} so Spring picks up the literal
-     * "summary" segment rather than trying to convert it to a UUID path variable.
-     */
     @GetMapping("/summary")
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getRisksSummary(
         @PathVariable UUID projectId,
         @RequestParam(required = false) RiskStatus status) {
@@ -76,11 +75,8 @@ public class RiskController {
         return ResponseEntity.ok(ApiResponse.ok(body));
     }
 
-    /**
-     * Standalone analysis-quality probe — same assessment that's attached to each row in
-     * the list/get responses, but cheaper to poll after a single edit.
-     */
     @GetMapping("/{riskId}/analysis-quality")
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<RiskAnalysisQuality>> getAnalysisQuality(
         @PathVariable UUID projectId,
         @PathVariable UUID riskId) {
@@ -88,6 +84,7 @@ public class RiskController {
     }
 
     @GetMapping("/{riskId}")
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<RiskSummary>> getRisk(
         @PathVariable UUID projectId,
         @PathVariable UUID riskId) {
@@ -96,6 +93,7 @@ public class RiskController {
     }
 
     @GetMapping
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<List<RiskSummary>>> listRisks(
         @PathVariable UUID projectId,
         @RequestParam(required = false) RiskStatus status) {
@@ -104,23 +102,26 @@ public class RiskController {
     }
 
     @PutMapping("/{riskId}")
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     public ResponseEntity<ApiResponse<RiskSummary>> updateRisk(
         @PathVariable UUID projectId,
         @PathVariable UUID riskId,
-        @Valid @RequestBody CreateRiskRequest request) {
+        @Valid @RequestBody UpdateRiskRequest request) {
         RiskSummary risk = riskService.updateRisk(projectId, riskId, request);
         return ResponseEntity.ok(ApiResponse.ok(risk));
     }
 
     @DeleteMapping("/{riskId}")
-    public ResponseEntity<ApiResponse<Void>> deleteRisk(
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
+    public ResponseEntity<Void> deleteRisk(
         @PathVariable UUID projectId,
         @PathVariable UUID riskId) {
         riskService.deleteRisk(projectId, riskId);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/matrix")
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<Map<String, List<RiskSummary>>>> getRiskMatrix(
         @PathVariable UUID projectId) {
         Map<String, List<RiskSummary>> matrix = riskService.getRiskMatrix(projectId);
@@ -128,13 +129,49 @@ public class RiskController {
     }
 
     @GetMapping("/exposure")
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<BigDecimal>> getRiskExposure(
         @PathVariable UUID projectId) {
         BigDecimal exposure = riskService.calculateRiskExposure(projectId);
         return ResponseEntity.ok(ApiResponse.ok(exposure));
     }
 
+    // ── Activity Assignment ───────────────────────────────────────────────
+
+    @PostMapping("/{riskId}/activities/{activityId}")
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
+    public ResponseEntity<ApiResponse<RiskActivityAssignmentDto>> addActivityToRisk(
+        @PathVariable UUID projectId,
+        @PathVariable UUID riskId,
+        @PathVariable UUID activityId) {
+        RiskActivityAssignmentDto assignment = riskService.addActivityToRisk(projectId, riskId, activityId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.ok(assignment));
+    }
+
+    @DeleteMapping("/{riskId}/activities/{activityId}")
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
+    public ResponseEntity<Void> removeActivityFromRisk(
+        @PathVariable UUID projectId,
+        @PathVariable UUID riskId,
+        @PathVariable UUID activityId) {
+        riskService.removeActivityFromRisk(projectId, riskId, activityId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{riskId}/activities")
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
+    public ResponseEntity<ApiResponse<List<RiskActivityAssignmentDto>>> getAssignedActivities(
+        @PathVariable UUID projectId,
+        @PathVariable UUID riskId) {
+        List<RiskActivityAssignmentDto> activities = riskService.getAssignedActivities(projectId, riskId);
+        return ResponseEntity.ok(ApiResponse.ok(activities));
+    }
+
+    // ── Risk Responses ────────────────────────────────────────────────────
+
     @PostMapping("/{riskId}/responses")
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     public ResponseEntity<ApiResponse<RiskResponseDto>> addResponse(
         @PathVariable UUID projectId,
         @PathVariable UUID riskId,
@@ -145,6 +182,7 @@ public class RiskController {
     }
 
     @GetMapping("/{riskId}/responses")
+    @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<List<RiskResponseDto>>> getResponses(
         @PathVariable UUID projectId,
         @PathVariable UUID riskId) {
@@ -152,21 +190,8 @@ public class RiskController {
         return ResponseEntity.ok(ApiResponse.ok(responses));
     }
 
-    /**
-     * Bulk-copy library templates into this project's risk register. Each copied risk
-     * starts in IDENTIFIED status with no owner — drives the analysis-quality flag
-     * (see slice 2) so PMs see which copies still need refinement.
-     */
-    @PostMapping("/copy-from-templates")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
-    public ResponseEntity<ApiResponse<List<RiskSummary>>> copyFromTemplates(
-        @PathVariable UUID projectId,
-        @Valid @RequestBody CopyTemplatesRequest request) {
-        List<RiskSummary> created = riskTemplateService.copyToProject(projectId, request.templateIds());
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created));
-    }
-
     @PutMapping("/{riskId}/responses/{responseId}")
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
     public ResponseEntity<ApiResponse<RiskResponseDto>> updateResponse(
         @PathVariable UUID projectId,
         @PathVariable UUID riskId,
@@ -174,5 +199,26 @@ public class RiskController {
         @Valid @RequestBody CreateRiskResponseRequest request) {
         RiskResponseDto response = riskService.updateResponse(projectId, riskId, responseId, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @DeleteMapping("/{riskId}/responses/{responseId}")
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
+    public ResponseEntity<Void> deleteResponse(
+        @PathVariable UUID projectId,
+        @PathVariable UUID riskId,
+        @PathVariable UUID responseId) {
+        riskService.deleteResponse(projectId, riskId, responseId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Template Copy ─────────────────────────────────────────────────────
+
+    @PostMapping("/copy-from-templates")
+    @PreAuthorize("@projectAccess.canEdit(#projectId)")
+    public ResponseEntity<ApiResponse<List<RiskSummary>>> copyFromTemplates(
+        @PathVariable UUID projectId,
+        @Valid @RequestBody CopyTemplatesRequest request) {
+        List<RiskSummary> created = riskTemplateService.copyToProject(projectId, request.templateIds());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created));
     }
 }

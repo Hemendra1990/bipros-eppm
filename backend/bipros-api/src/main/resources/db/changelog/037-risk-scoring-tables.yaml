@@ -1,0 +1,156 @@
+databaseChangeLog:
+  - changeSet:
+      id: 037-create-risk-scoring-config
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risk_scoring_config
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_risk_scoring_config_project
+              - column:
+                  name: scoring_method
+                  type: VARCHAR(40)
+                  defaultValue: 'HIGHEST_IMPACT'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risk_scoring_config
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_risk_scoring_config_project
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 037-create-risk-scoring-matrix
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: risk
+            tableName: risk_scoring_matrix
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: probability_value
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: impact_value
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: score
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: risk
+            tableName: risk_scoring_matrix
+            columnNames: project_id, probability_value, impact_value
+            constraintName: uk_risk_scoring_matrix_cell
+        - addForeignKeyConstraint:
+            baseSchemaName: risk
+            baseTableName: risk_scoring_matrix
+            baseColumnNames: project_id
+            referencedSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_risk_scoring_matrix_project
+            onDelete: CASCADE
+        - createIndex:
+            schemaName: risk
+            tableName: risk_scoring_matrix
+            indexName: idx_risk_scoring_matrix_project
+            columns:
+              - column:
+                  name: project_id
+
+  - changeSet:
+      id: 037-risk-scoring-range-checks
+      author: bipros
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE risk.risk_scoring_matrix
+                ADD CONSTRAINT chk_risk_scoring_matrix_probability_range
+                CHECK (probability_value BETWEEN 1 AND 5);
+              ALTER TABLE risk.risk_scoring_matrix
+                ADD CONSTRAINT chk_risk_scoring_matrix_impact_range
+                CHECK (impact_value BETWEEN 1 AND 5);
+            rollback: |
+              ALTER TABLE risk.risk_scoring_matrix
+                DROP CONSTRAINT IF EXISTS chk_risk_scoring_matrix_probability_range;
+              ALTER TABLE risk.risk_scoring_matrix
+                DROP CONSTRAINT IF EXISTS chk_risk_scoring_matrix_impact_range;

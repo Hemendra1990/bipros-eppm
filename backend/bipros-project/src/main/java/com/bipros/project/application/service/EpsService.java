@@ -1,22 +1,31 @@
 package com.bipros.project.application.service;
 
+import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateEpsNodeRequest;
 import com.bipros.project.application.dto.EpsNodeResponse;
+import com.bipros.project.application.dto.NodeSearchResultResponse;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
 import com.bipros.project.domain.model.EpsNode;
 import com.bipros.project.domain.repository.EpsNodeRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -157,6 +166,66 @@ public class EpsService {
             .collect(Collectors.toMap(EpsNode::getId, n -> n));
 
         return buildNodeResponse(node, nodeMap);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<NodeSearchResultResponse> search(String q, Pageable pageable) {
+        if (q == null || q.isBlank()) {
+            return PagedResponse.of(List.of(), 0L, 0,
+                pageable.getPageNumber(), pageable.getPageSize());
+        }
+        int cappedSize = Math.min(Math.max(pageable.getPageSize(), 1), 50);
+        Pageable capped = PageRequest.of(pageable.getPageNumber(), cappedSize, pageable.getSort());
+
+        Page<EpsNode> page = epsNodeRepository.searchByCodeOrName(q.trim(), capped);
+        List<EpsNode> matches = page.getContent();
+
+        Map<UUID, EpsNode> cache = new HashMap<>();
+        for (EpsNode m : matches) cache.put(m.getId(), m);
+
+        Set<UUID> toFetch = matches.stream()
+            .map(EpsNode::getParentId)
+            .filter(Objects::nonNull)
+            .filter(id -> !cache.containsKey(id))
+            .collect(Collectors.toCollection(HashSet::new));
+
+        while (!toFetch.isEmpty()) {
+            List<EpsNode> ancestors = epsNodeRepository.findAllById(toFetch);
+            for (EpsNode a : ancestors) cache.put(a.getId(), a);
+            toFetch = ancestors.stream()
+                .map(EpsNode::getParentId)
+                .filter(Objects::nonNull)
+                .filter(id -> !cache.containsKey(id))
+                .collect(Collectors.toCollection(HashSet::new));
+        }
+
+        List<NodeSearchResultResponse> content = matches.stream()
+            .map(n -> toSearchResult(n, cache))
+            .collect(Collectors.toList());
+
+        return PagedResponse.of(content, page.getTotalElements(), page.getTotalPages(),
+            page.getNumber(), page.getSize());
+    }
+
+    private NodeSearchResultResponse toSearchResult(EpsNode node, Map<UUID, EpsNode> cache) {
+        List<UUID> ancestorIds = new ArrayList<>();
+        List<String> pathParts = new ArrayList<>();
+        UUID parent = node.getParentId();
+        while (parent != null) {
+            EpsNode anc = cache.get(parent);
+            if (anc == null) break;
+            ancestorIds.add(0, anc.getId());
+            pathParts.add(0, anc.getCode());
+            parent = anc.getParentId();
+        }
+        return new NodeSearchResultResponse(
+            node.getId(),
+            node.getCode(),
+            node.getName(),
+            node.getParentId(),
+            ancestorIds,
+            String.join(" > ", pathParts)
+        );
     }
 
     private EpsNodeResponse buildNodeResponse(EpsNode node, Map<UUID, EpsNode> nodeMap) {

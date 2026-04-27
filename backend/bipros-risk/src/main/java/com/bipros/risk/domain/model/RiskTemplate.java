@@ -10,6 +10,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -45,7 +46,7 @@ import java.util.Set;
     indexes = {
         @Index(name = "idx_risk_template_active_sort", columnList = "active, sort_order"),
         @Index(name = "idx_risk_template_industry", columnList = "industry"),
-        @Index(name = "idx_risk_template_category", columnList = "category")
+        @Index(name = "idx_risk_template_category", columnList = "category_id")
     })
 @Getter
 @Setter
@@ -82,9 +83,9 @@ public class RiskTemplate extends BaseEntity {
     @Default
     private Set<String> applicableProjectCategories = new HashSet<>();
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 40)
-    private RiskCategory category;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private RiskCategoryMaster category;
 
     /** 1-5 default probability copied onto the new Risk when this template is applied. */
     @Column(name = "default_probability")

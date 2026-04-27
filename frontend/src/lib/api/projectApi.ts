@@ -5,6 +5,7 @@ import type {
   CreateProjectRequest,
   UpdateProjectRequest,
   EpsNodeResponse,
+  NodeSearchResult,
   PagedResponse,
   ProjectResponse,
   WbsNodeResponse,
@@ -14,6 +15,13 @@ export const projectApi = {
   // EPS
   getEpsTree: () =>
     apiClient.get<ApiResponse<EpsNodeResponse[]>>("/v1/eps").then((r) => r.data),
+
+  searchEps: (q: string, page = 0, size = 25) =>
+    apiClient
+      .get<ApiResponse<PagedResponse<NodeSearchResult>>>("/v1/eps/search", {
+        params: { q, page, size },
+      })
+      .then((r) => r.data),
 
   createEpsNode: (data: CreateEpsNodeRequest) =>
     apiClient.post<ApiResponse<EpsNodeResponse>>("/v1/eps", data).then((r) => r.data),

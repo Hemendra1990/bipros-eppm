@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: 034-enable-pg-trgm
+      author: bipros
+      comment: |
+        Enable pg_trgm so OBS/EPS code/name search can use GIN trigram indexes
+        for fast ILIKE '%q%' lookups at scale (1M+ rows).
+      changes:
+        - sql:
+            sql: CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+  - changeSet:
+      id: 034-obs-nodes-search-indexes
+      author: bipros
+      comment: |
+        Indexes that make OBS search fast at large row counts:
+          - parent_id b-tree speeds up ancestor walks for path-label building
+          - GIN trigram indexes on name/code support unanchored ILIKE in O(matches)
+            instead of full-table scans.
+      changes:
+        - createIndex:
+            schemaName: project
+            tableName: obs_nodes
+            indexName: idx_obs_nodes_parent_id
+            columns:
+              - column:
+                  name: parent_id
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_obs_nodes_name_trgm ON project.obs_nodes USING gin (lower(name) gin_trgm_ops);
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_obs_nodes_code_trgm ON project.obs_nodes USING gin (lower(code) gin_trgm_ops);
+
+  - changeSet:
+      id: 034-eps-nodes-search-indexes
+      author: bipros
+      comment: |
+        Same as OBS — parent_id b-tree + GIN trigram on name/code.
+      changes:
+        - createIndex:
+            schemaName: project
+            tableName: eps_nodes
+            indexName: idx_eps_nodes_parent_id
+            columns:
+              - column:
+                  name: parent_id
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_eps_nodes_name_trgm ON project.eps_nodes USING gin (lower(name) gin_trgm_ops);
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_eps_nodes_code_trgm ON project.eps_nodes USING gin (lower(code) gin_trgm_ops);

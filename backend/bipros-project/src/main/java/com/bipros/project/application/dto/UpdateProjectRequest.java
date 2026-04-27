@@ -1,6 +1,5 @@
 package com.bipros.project.application.dto;
 
-import com.bipros.project.domain.model.ProjectCategory;
 import com.bipros.project.domain.model.ProjectStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -33,7 +32,7 @@ public record UpdateProjectRequest(
 
     LocalDate dataDate,
 
-    ProjectCategory category,
+    String category,
     @Size(max = 20) String morthCode,
     @Min(0) Long fromChainageM,
     @Min(0) Long toChainageM,

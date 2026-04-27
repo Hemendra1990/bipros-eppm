@@ -9,11 +9,12 @@ import com.bipros.risk.application.service.RiskService;
 import com.bipros.risk.application.service.RiskTemplateService;
 import com.bipros.risk.domain.model.Industry;
 import com.bipros.risk.domain.model.Risk;
-import com.bipros.risk.domain.model.RiskCategory;
+import com.bipros.risk.domain.model.RiskCategoryMaster;
 import com.bipros.risk.domain.model.RiskResponse;
 import com.bipros.risk.domain.model.RiskResponseType;
 import com.bipros.risk.domain.model.RiskStatus;
 import com.bipros.risk.domain.model.RiskTemplate;
+import com.bipros.risk.domain.repository.RiskCategoryMasterRepository;
 import com.bipros.risk.domain.repository.RiskRepository;
 import com.bipros.risk.domain.repository.RiskResponseRepository;
 import com.bipros.risk.domain.repository.RiskTemplateRepository;
@@ -52,6 +53,14 @@ class RiskTemplateCopyDbTest {
     @Autowired private RiskService riskService;
     @Autowired private RiskRepository riskRepository;
     @Autowired private RiskResponseRepository responseRepository;
+    @Autowired private RiskCategoryMasterRepository categoryRepository;
+
+    private UUID categoryId(String code) {
+        return categoryRepository.findByCode(code)
+            .map(RiskCategoryMaster::getId)
+            .orElseThrow(() -> new IllegalStateException(
+                "RiskCategorySeeder didn't run — start the dev backend at least once first; missing code " + code));
+    }
 
     private UUID projectId;
     private RiskTemplate seededTemplate;
@@ -95,7 +104,8 @@ class RiskTemplateCopyDbTest {
     void systemDefaultProtection() {
         UpdateRiskTemplateRequest changeCode = new UpdateRiskTemplateRequest(
             "RENAMED", seededTemplate.getTitle(), seededTemplate.getDescription(),
-            seededTemplate.getIndustry(), Set.of(), seededTemplate.getCategory(),
+            seededTemplate.getIndustry(), Set.of(),
+            seededTemplate.getCategory() == null ? null : seededTemplate.getCategory().getId(),
             seededTemplate.getDefaultProbability(),
             seededTemplate.getDefaultImpactCost(),
             seededTemplate.getDefaultImpactSchedule(),
@@ -122,7 +132,7 @@ class RiskTemplateCopyDbTest {
             "An integration test created this template",
             Industry.GENERIC,
             Set.of(),
-            RiskCategory.PROJECT_MANAGEMENT,
+            categoryId("PMO-CHANGE-CONTROL"),
             2, 2, 2,
             null, false, 999, true)).id();
 
@@ -185,7 +195,7 @@ class RiskTemplateCopyDbTest {
             "Blank-description template",
             null, // <-- no description
             Industry.GENERIC, Set.of(),
-            RiskCategory.PROJECT_MANAGEMENT,
+            categoryId("PMO-CHANGE-CONTROL"),
             3, 3, 3, null, false, 999, true)).id();
 
         List<RiskSummary> copied = riskTemplateService.copyToProject(projectId, List.of(id));

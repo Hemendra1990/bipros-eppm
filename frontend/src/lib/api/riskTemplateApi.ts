@@ -1,19 +1,8 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
+import type { Industry, RiskCategoryMasterResponse } from "./riskCategoryApi";
 
-export type Industry =
-  | "ROAD"
-  | "BRIDGE"
-  | "BUILDING"
-  | "CONSTRUCTION_GENERAL"
-  | "REFINERY"
-  | "OIL_GAS"
-  | "RAILWAY"
-  | "METRO"
-  | "POWER"
-  | "WATER"
-  | "IT"
-  | "GENERIC";
+export type { Industry };
 
 export const INDUSTRY_LABEL: Record<Industry, string> = {
   ROAD: "Road",
@@ -26,16 +15,19 @@ export const INDUSTRY_LABEL: Record<Industry, string> = {
   METRO: "Metro",
   POWER: "Power",
   WATER: "Water",
+  MINING: "Mining",
+  MANUFACTURING: "Manufacturing",
+  PHARMA: "Pharma",
   IT: "Information Technology",
+  TELECOM: "Telecom",
+  BANKING_FINANCE: "Banking & Finance",
+  HEALTHCARE: "Healthcare",
+  AGRICULTURE: "Agriculture",
+  AEROSPACE_DEFENSE: "Aerospace & Defense",
+  MARITIME: "Maritime",
+  MASS_EVENT: "Mass Event",
   GENERIC: "Generic",
 };
-
-export type RiskCategoryName =
-  | "TECHNICAL" | "EXTERNAL" | "ORGANIZATIONAL" | "PROJECT_MANAGEMENT"
-  | "SCHEDULE" | "COST" | "RESOURCE" | "QUALITY"
-  | "LAND_ACQUISITION" | "FOREST_CLEARANCE" | "UTILITY_SHIFTING"
-  | "STATUTORY_CLEARANCE" | "CONTRACTOR_FINANCIAL" | "MONSOON_IMPACT"
-  | "GEOPOLITICAL" | "NATURAL_HAZARD" | "MARKET_PRICE" | "TECHNOLOGY";
 
 export interface RiskTemplate {
   id: string;
@@ -44,7 +36,8 @@ export interface RiskTemplate {
   description: string | null;
   industry: Industry;
   applicableProjectCategories: string[];
-  category: RiskCategoryName | null;
+  /** Embedded category summary; null if uncategorised. */
+  category: RiskCategoryMasterResponse | null;
   defaultProbability: number | null;
   defaultImpactCost: number | null;
   defaultImpactSchedule: number | null;
@@ -65,7 +58,8 @@ export interface CreateRiskTemplateRequest {
   description?: string | null;
   industry: Industry;
   applicableProjectCategories?: string[];
-  category?: RiskCategoryName | null;
+  /** FK to risk_category_master.id. Optional — admins may create uncategorised templates. */
+  categoryId?: string | null;
   defaultProbability?: number | null;
   defaultImpactCost?: number | null;
   defaultImpactSchedule?: number | null;

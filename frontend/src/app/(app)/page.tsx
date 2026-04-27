@@ -369,7 +369,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-ink">
-                      Portfolio value
+                      Total project value
                     </div>
                     <div className="text-xs text-slate">
                       Approved across {scorecard.totalProjects} project
@@ -738,7 +738,7 @@ export default function DashboardPage() {
           icon={<Flame size={16} />}
           actions={
             <Link
-              href="/risk"
+              href="/reports/risk-register"
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-gold-deep transition-colors hover:bg-gold-tint/40"
             >
               Risk register <span aria-hidden>→</span>

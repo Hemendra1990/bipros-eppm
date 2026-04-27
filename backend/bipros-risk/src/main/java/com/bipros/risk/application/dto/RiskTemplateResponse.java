@@ -1,7 +1,7 @@
 package com.bipros.risk.application.dto;
 
+import com.bipros.risk.application.service.RiskCategoryMasterService;
 import com.bipros.risk.domain.model.Industry;
-import com.bipros.risk.domain.model.RiskCategory;
 import com.bipros.risk.domain.model.RiskTemplate;
 
 import java.time.Instant;
@@ -15,7 +15,8 @@ public record RiskTemplateResponse(
     String description,
     Industry industry,
     Set<String> applicableProjectCategories,
-    RiskCategory category,
+    /** Embedded category summary (null if uncategorised). */
+    RiskCategorySummaryDto category,
     Integer defaultProbability,
     Integer defaultImpactCost,
     Integer defaultImpactSchedule,
@@ -37,7 +38,7 @@ public record RiskTemplateResponse(
             t.getDescription(),
             t.getIndustry(),
             t.getApplicableProjectCategories(),
-            t.getCategory(),
+            RiskCategoryMasterService.toSummary(t.getCategory()),
             t.getDefaultProbability(),
             t.getDefaultImpactCost(),
             t.getDefaultImpactSchedule(),

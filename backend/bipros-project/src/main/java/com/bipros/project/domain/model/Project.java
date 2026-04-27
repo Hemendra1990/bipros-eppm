@@ -58,9 +58,8 @@ public class Project extends BaseEntity {
 
     // ── Master Data Screen 01 fields (PMS MasterData UI Screens Final) ────────────
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "category", length = 30)
-    private ProjectCategory category;
+    private String category;
 
     /** MoRTH/NHAI category code linked to {@link #category}. Free text to allow sub-codes. */
     @Column(name = "morth_code", length = 20)

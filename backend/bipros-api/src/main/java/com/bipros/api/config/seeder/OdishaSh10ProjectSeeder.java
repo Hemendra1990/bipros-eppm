@@ -275,7 +275,7 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
         p.setDataDate(DATA_DATE);
         p.setStatus(ProjectStatus.ACTIVE);
         p.setPriority(1);
-        p.setCategory(com.bipros.project.domain.model.ProjectCategory.STATE_HIGHWAY);
+        p.setCategory("STATE_HIGHWAY");
         p.setMorthCode("SH-10");
         p.setFromChainageM(CHAINAGE_START_M);
         p.setToChainageM(CHAINAGE_END_M);

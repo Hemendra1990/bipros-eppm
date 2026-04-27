@@ -17,4 +17,6 @@ public interface ActivityExpenseRepository extends JpaRepository<ActivityExpense
     List<ActivityExpense> findByActivityId(UUID activityId);
     List<ActivityExpense> findByProjectIdAndActivityId(UUID projectId, UUID activityId);
     List<ActivityExpense> findByCostAccountId(UUID costAccountId);
+
+    List<ActivityExpense> findByProjectIdAndActivityIdIn(UUID projectId, List<UUID> activityIds);
 }

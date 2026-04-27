@@ -1,6 +1,7 @@
 package com.bipros.risk.application.service;
 
 import com.bipros.common.exception.BusinessRuleException;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.risk.application.dto.CreateRiskTemplateRequest;
 import com.bipros.risk.application.dto.RiskSummary;
@@ -8,8 +9,9 @@ import com.bipros.risk.application.dto.RiskTemplateResponse;
 import com.bipros.risk.application.dto.UpdateRiskTemplateRequest;
 import com.bipros.risk.domain.model.Industry;
 import com.bipros.risk.domain.model.Risk;
-import com.bipros.risk.domain.model.RiskCategory;
+import com.bipros.risk.domain.model.RiskCategoryMaster;
 import com.bipros.risk.domain.model.RiskTemplate;
+import com.bipros.risk.domain.repository.RiskCategoryMasterRepository;
 import com.bipros.risk.domain.repository.RiskRepository;
 import com.bipros.risk.domain.repository.RiskTemplateRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,13 +41,25 @@ class RiskTemplateServiceTest {
     @Mock private RiskTemplateRepository repository;
     @Mock private RiskRepository riskRepository;
     @Mock private RiskService riskService;
+    @Mock private RiskScoringMatrixService matrixService;
     @Mock private AuditService auditService;
+    @Mock private RiskCategoryMasterRepository categoryRepository;
+    @Mock private ProjectAccessGuard projectAccess;
 
     private RiskTemplateService service;
 
     @BeforeEach
     void setUp() {
-        service = new RiskTemplateService(repository, riskRepository, riskService, auditService);
+        service = new RiskTemplateService(repository, riskRepository, riskService, matrixService,
+            auditService, categoryRepository, projectAccess);
+    }
+
+    private static RiskCategoryMaster categoryRef(String code) {
+        RiskCategoryMaster cat = new RiskCategoryMaster();
+        cat.setId(UUID.randomUUID());
+        cat.setCode(code);
+        cat.setName(code);
+        return cat;
     }
 
     @Nested
@@ -62,9 +76,11 @@ class RiskTemplateServiceTest {
                 return t;
             });
 
+            UUID catId = UUID.randomUUID();
+            when(categoryRepository.findById(catId)).thenReturn(Optional.of(categoryRef("LA-GENERIC")));
             RiskTemplateResponse response = service.create(new CreateRiskTemplateRequest(
                 "road-custom-1", "Custom road risk", "desc", Industry.ROAD,
-                Set.of("HIGHWAY"), RiskCategory.LAND_ACQUISITION,
+                Set.of("HIGHWAY"), catId,
                 3, 4, 2, "guidance", false, 100, true));
 
             assertThat(response.code()).isEqualTo("ROAD-CUSTOM-1");
@@ -135,10 +151,12 @@ class RiskTemplateServiceTest {
             when(repository.findById(id)).thenReturn(Optional.of(def));
             when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
+            UUID catId = UUID.randomUUID();
+            when(categoryRepository.findById(catId)).thenReturn(Optional.of(categoryRef("LA-GENERIC")));
             RiskTemplateResponse response = service.update(id, new UpdateRiskTemplateRequest(
                 "ROAD-LAND-001", "Land acquisition (revised)", "new description",
                 Industry.ROAD, Set.of("HIGHWAY", "EXPRESSWAY"),
-                RiskCategory.LAND_ACQUISITION, 4, 3, 5,
+                catId, 4, 3, 5,
                 "improved guidance", false, 10, true));
 
             assertThat(response.title()).isEqualTo("Land acquisition (revised)");
@@ -194,16 +212,16 @@ class RiskTemplateServiceTest {
             UUID t1Id = UUID.randomUUID();
             UUID t2Id = UUID.randomUUID();
             RiskTemplate t1 = RiskTemplate.builder().code("ROAD-LAND-001")
-                .title("Land acq").industry(Industry.ROAD).category(RiskCategory.LAND_ACQUISITION)
+                .title("Land acq").industry(Industry.ROAD).category(categoryRef("LA-GENERIC"))
                 .defaultProbability(4).defaultImpactCost(3).defaultImpactSchedule(5).build();
             t1.setId(t1Id);
             RiskTemplate t2 = RiskTemplate.builder().code("ROAD-MONSOON-004")
-                .title("Monsoon").industry(Industry.ROAD).category(RiskCategory.MONSOON_IMPACT)
+                .title("Monsoon").industry(Industry.ROAD).category(categoryRef("MW-FLASH-FLOOD"))
                 .defaultProbability(5).defaultImpactCost(2).defaultImpactSchedule(4).build();
             t2.setId(t2Id);
 
             when(repository.findAllById(List.of(t1Id, t2Id))).thenReturn(List.of(t1, t2));
-            when(riskRepository.findByProjectId(projectId)).thenReturn(List.of()); // empty register
+            when(riskRepository.maxRiskCodeNumber(projectId)).thenReturn(0); // empty register
             when(riskRepository.save(any())).thenAnswer(inv -> {
                 Risk r = inv.getArgument(0);
                 r.setId(UUID.randomUUID());
@@ -233,8 +251,7 @@ class RiskTemplateServiceTest {
             t.setId(tId);
             // Pretend the project already has 5 risks
             when(repository.findAllById(List.of(tId))).thenReturn(List.of(t));
-            when(riskRepository.findByProjectId(projectId)).thenReturn(List.of(
-                new Risk(), new Risk(), new Risk(), new Risk(), new Risk()));
+            when(riskRepository.maxRiskCodeNumber(projectId)).thenReturn(5); // existing RISK-0001..RISK-0005
             when(riskRepository.save(any())).thenAnswer(inv -> {
                 Risk r = inv.getArgument(0);
                 r.setId(UUID.randomUUID());
