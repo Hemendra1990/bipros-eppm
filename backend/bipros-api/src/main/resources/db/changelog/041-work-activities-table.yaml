@@ -1,0 +1,75 @@
+databaseChangeLog:
+  - changeSet:
+      id: 041-create-work-activities-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: work_activities
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: VARCHAR(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: default_unit
+                  type: VARCHAR(20)
+              - column:
+                  name: discipline
+                  type: VARCHAR(50)
+              - column:
+                  name: description
+                  type: VARCHAR(500)
+              - column:
+                  name: sort_order
+                  type: INTEGER
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: work_activities
+            columnNames: code
+            constraintName: uk_work_activity_code
+        - createIndex:
+            schemaName: resource
+            tableName: work_activities
+            indexName: idx_work_activity_active
+            columns:
+              - column:
+                  name: active

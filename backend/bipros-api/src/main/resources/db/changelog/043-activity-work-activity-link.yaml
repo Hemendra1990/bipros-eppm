@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 043-add-work-activity-id-to-activities
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: activity
+            tableName: activities
+            columns:
+              - column:
+                  name: work_activity_id
+                  type: UUID
+        - createIndex:
+            schemaName: activity
+            tableName: activities
+            indexName: idx_activity_work_activity
+            columns:
+              - column:
+                  name: work_activity_id
+        # NOTE: no FK constraint — work_activities lives in the `resource` schema and is owned by
+        # bipros-resource. We deliberately leave this as a soft FK to honour the
+        # no-cross-module-deps rule documented in CLAUDE.md. The lookup service in bipros-api
+        # joins manually when reports need it.

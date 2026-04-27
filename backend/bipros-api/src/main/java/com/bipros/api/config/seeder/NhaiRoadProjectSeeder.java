@@ -48,6 +48,7 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.CostCategory;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
+import com.bipros.resource.application.service.WorkActivityService;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceCategory;
@@ -56,6 +57,7 @@ import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.model.ResourceUnit;
 import com.bipros.resource.domain.model.Role;
+import com.bipros.resource.domain.model.WorkActivity;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
@@ -132,6 +134,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   private final DailyWeatherRepository weatherRepository;
   private final NextDayPlanRepository nextDayPlanRepository;
   private final ProductivityNormRepository productivityNormRepository;
+  private final WorkActivityService workActivityService;
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository resourceRateRepository;
   private final ResourceRoleRepository resourceRoleRepository;
@@ -471,9 +474,12 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   private void seedProductivityNorms(List<ProductivityNormRow> rows) {
     List<ProductivityNorm> all = new ArrayList<>();
     for (ProductivityNormRow r : rows) {
+      // Each Excel row pins a WorkActivity by name; reuse if it already exists.
+      WorkActivity wa = workActivityService.findOrCreateByName(r.activityName(), r.unit());
       all.add(ProductivityNorm.builder()
           .normType(r.normType())
-          .activityName(r.activityName())
+          .workActivity(wa)
+          .activityName(wa.getName()) // legacy column kept in sync
           .unit(r.unit())
           .outputPerManPerDay(r.outputPerManPerDay())
           .crewSize(r.crewSize())

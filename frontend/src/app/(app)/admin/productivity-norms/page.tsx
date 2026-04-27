@@ -1,19 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
 import {
   productivityNormApi,
   type ProductivityNormResponse,
   type ProductivityNormType,
   type CreateProductivityNormRequest,
 } from "@/lib/api/productivityNormApi";
+import { workActivityApi } from "@/lib/api/workActivityApi";
+import { resourceTypeApi } from "@/lib/api/resourceTypeApi";
+import { resourceApi } from "@/lib/api/resourceApi";
+import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
 
+type Scope = "TYPE" | "RESOURCE";
+
 interface NormForm {
+  workActivityId: string;
+  scope: Scope;
+  resourceTypeDefId: string;
+  resourceId: string;
   equipmentSpec: string;
-  activityName: string;
   unit: string;
   outputPerManPerDay: string;
   outputPerHour: string;
@@ -25,8 +35,11 @@ interface NormForm {
 }
 
 const initialFormState: NormForm = {
+  workActivityId: "",
+  scope: "TYPE",
+  resourceTypeDefId: "",
+  resourceId: "",
   equipmentSpec: "",
-  activityName: "",
   unit: "",
   outputPerManPerDay: "",
   outputPerHour: "",
@@ -49,11 +62,70 @@ const toIntOrUndefined = (value: string): number | undefined => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+function formatNumber(value: number | null): string {
+  if (value === null || value === undefined) return "—";
+  return value.toLocaleString("en-IN");
+}
+
+/**
+ * Bucket norms by their scope label (Resource Type name when scoped to a type, or Resource code
+ * when overriding a specific resource). Lowest-priority bucket "(unscoped)" sweeps up any norm
+ * that's neither — e.g. legacy rows seeded before Phase 1.
+ */
+function groupNormsByScope(
+  norms: ProductivityNormResponse[],
+): Array<{ key: string; label: string; rows: ProductivityNormResponse[] }> {
+  const map = new Map<string, { label: string; rows: ProductivityNormResponse[] }>();
+  for (const n of norms) {
+    const label =
+      n.resourceTypeDefName ??
+      (n.resourceCode ? `${n.resourceCode}${n.resourceName ? " — " + n.resourceName : ""}` : "(unscoped)");
+    const key = n.resourceTypeDefId ?? n.resourceId ?? "_unscoped";
+    const bucket = map.get(key) ?? { label, rows: [] };
+    bucket.rows.push(n);
+    map.set(key, bucket);
+  }
+  return Array.from(map.entries())
+    .sort(([, a], [, b]) => a.label.localeCompare(b.label))
+    .map(([key, value]) => ({ key, ...value }));
+}
+
+function ScopeBadge({ norm }: { norm: ProductivityNormResponse }) {
+  if (norm.resourceId) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-accent/10 text-accent ring-1 ring-accent/20">
+        {norm.resourceCode ?? norm.resourceName}
+      </span>
+    );
+  }
+  if (norm.resourceTypeDefId) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-info/10 text-info ring-1 ring-info/20">
+        {norm.resourceTypeDefName}
+      </span>
+    );
+  }
+  return <span className="text-text-muted text-xs">—</span>;
+}
+
 export default function ProductivityNormsPage() {
   const [tab, setTab] = useState<ProductivityNormType>("MANPOWER");
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<NormForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = useCallback(
+    (field: string) => {
+      if (!fieldErrors[field]) return;
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    },
+    [fieldErrors],
+  );
 
   const queryClient = useQueryClient();
 
@@ -61,22 +133,70 @@ export default function ProductivityNormsPage() {
     queryKey: ["productivity-norms", tab],
     queryFn: () => productivityNormApi.list(tab),
   });
-
   const norms: ProductivityNormResponse[] = data?.data ?? [];
+
+  const { data: activitiesData } = useQuery({
+    queryKey: ["work-activities", "active"],
+    queryFn: () => workActivityApi.list(true),
+  });
+  const activities = activitiesData?.data ?? [];
+
+  // Manpower → LABOR; Equipment → NONLABOR. Filter the type-def list to match.
+  const baseCategory = tab === "MANPOWER" ? "LABOR" : "NONLABOR";
+
+  const { data: typeDefsData } = useQuery({
+    queryKey: ["resource-types", baseCategory],
+    queryFn: () => resourceTypeApi.list({ active: true, baseCategory }),
+  });
+  const typeDefs = typeDefsData?.data ?? [];
+
+  const { data: resourcesData } = useQuery({
+    queryKey: ["resources", "all"],
+    queryFn: () => resourceApi.listResources(),
+  });
+  const allResources = resourcesData?.data ?? [];
+  const filteredResources = allResources.filter(
+    (r) => r.resourceType === (tab === "MANPOWER" ? "LABOR" : "NONLABOR")
+  );
 
   const handleTabChange = (nextTab: ProductivityNormType) => {
     setTab(nextTab);
     setShowForm(false);
     setFormData(initialFormState);
     setError(null);
+    setFieldErrors({});
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    const errors: Record<string, string> = {};
+    if (!formData.workActivityId) {
+      errors.workActivityId = "Pick a master Work Activity";
+    }
+    if (!formData.unit.trim()) {
+      errors.unit = "Unit is required (e.g. Sqm, Cum, MT)";
+    }
+    if (formData.scope === "TYPE" && !formData.resourceTypeDefId) {
+      errors.resourceTypeDefId = "Pick a Resource Type for the default scope";
+    }
+    if (formData.scope === "RESOURCE" && !formData.resourceId) {
+      errors.resourceId = "Pick a specific Resource for the override scope";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Fix the highlighted fields and try again");
+      return;
+    }
+    setFieldErrors({});
+
     try {
       const base: CreateProductivityNormRequest = {
         normType: tab,
-        activityName: formData.activityName,
+        workActivityId: formData.workActivityId,
+        resourceTypeDefId: formData.scope === "TYPE" ? formData.resourceTypeDefId || null : null,
+        resourceId: formData.scope === "RESOURCE" ? formData.resourceId || null : null,
         unit: formData.unit,
         remarks: formData.remarks || undefined,
         outputPerDay: toNumberOrUndefined(formData.outputPerDay),
@@ -107,15 +227,164 @@ export default function ProductivityNormsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this productivity norm?")) return;
-    try {
-      await productivityNormApi.delete(id);
-      queryClient.invalidateQueries({ queryKey: ["productivity-norms", tab] });
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to delete productivity norm"));
-    }
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!window.confirm("Delete this productivity norm?")) return;
+      try {
+        await productivityNormApi.delete(id);
+        queryClient.invalidateQueries({ queryKey: ["productivity-norms", tab] });
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, "Failed to delete productivity norm"));
+      }
+    },
+    [tab, queryClient]
+  );
+
+  const handleActivityPick = (id: string) => {
+    const wa = activities.find((a) => a.id === id);
+    setFormData({
+      ...formData,
+      workActivityId: id,
+      unit: formData.unit || wa?.defaultUnit || "",
+    });
   };
+
+  const manpowerColumns: ColumnDef<ProductivityNormResponse>[] = useMemo(
+    () => [
+      {
+        key: "workActivityName",
+        label: "Activity",
+        sortable: true,
+        render: (_v, row) => (row.workActivityName ?? row.activityName ?? "—"),
+      },
+      {
+        key: "scope",
+        label: "Scope",
+        sortable: false,
+        render: (_v, row) => <ScopeBadge norm={row} />,
+      },
+      { key: "unit", label: "Unit", sortable: true },
+      {
+        key: "outputPerManPerDay",
+        label: "Output / Man / Day",
+        sortable: true,
+        className: "text-right",
+        render: (_v, row) => formatNumber(row.outputPerManPerDay),
+      },
+      {
+        key: "crewSize",
+        label: "Crew Size",
+        sortable: true,
+        className: "text-right",
+        render: (_v, row) => formatNumber(row.crewSize),
+      },
+      {
+        key: "outputPerDay",
+        label: "Gang Output / Day",
+        sortable: true,
+        className: "text-right",
+        render: (_v, row) => formatNumber(row.outputPerDay),
+      },
+      {
+        key: "remarks",
+        label: "Remarks",
+        sortable: false,
+        render: (_v, row) => row.remarks || "—",
+      },
+      {
+        key: "actions",
+        label: "Actions",
+        sortable: false,
+        className: "text-right",
+        render: (_v, row) => (
+          <button
+            onClick={() => handleDelete(row.id)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
+            title="Delete"
+          >
+            <Trash2 size={14} />
+            <span className="hidden sm:inline">Delete</span>
+          </button>
+        ),
+      },
+    ],
+    [handleDelete]
+  );
+
+  const equipmentColumns: ColumnDef<ProductivityNormResponse>[] = useMemo(
+    () => [
+      {
+        key: "equipmentSpec",
+        label: "Equipment Spec",
+        sortable: true,
+        render: (_v, row) => row.equipmentSpec || "—",
+      },
+      {
+        key: "workActivityName",
+        label: "Activity",
+        sortable: true,
+        render: (_v, row) => (row.workActivityName ?? row.activityName ?? "—"),
+      },
+      {
+        key: "scope",
+        label: "Scope",
+        sortable: false,
+        render: (_v, row) => <ScopeBadge norm={row} />,
+      },
+      { key: "unit", label: "Unit", sortable: true },
+      {
+        key: "outputPerHour",
+        label: "Output / Hour",
+        sortable: true,
+        className: "text-right",
+        render: (_v, row) => formatNumber(row.outputPerHour),
+      },
+      {
+        key: "workingHoursPerDay",
+        label: "Working Hrs / Day",
+        sortable: true,
+        className: "text-right",
+        render: (_v, row) => formatNumber(row.workingHoursPerDay),
+      },
+      {
+        key: "outputPerDay",
+        label: "Output / Day",
+        sortable: true,
+        className: "text-right",
+        render: (_v, row) => formatNumber(row.outputPerDay),
+      },
+      {
+        key: "fuelLitresPerHour",
+        label: "Fuel L/Hr",
+        sortable: true,
+        className: "text-right",
+        render: (_v, row) => formatNumber(row.fuelLitresPerHour),
+      },
+      {
+        key: "remarks",
+        label: "Remarks",
+        sortable: false,
+        render: (_v, row) => row.remarks || "—",
+      },
+      {
+        key: "actions",
+        label: "Actions",
+        sortable: false,
+        className: "text-right",
+        render: (_v, row) => (
+          <button
+            onClick={() => handleDelete(row.id)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
+            title="Delete"
+          >
+            <Trash2 size={14} />
+            <span className="hidden sm:inline">Delete</span>
+          </button>
+        ),
+      },
+    ],
+    [handleDelete]
+  );
 
   if (isLoading && norms.length === 0) {
     return <div className="p-6 text-text-muted">Loading norms...</div>;
@@ -127,14 +396,24 @@ export default function ProductivityNormsPage() {
         title="Productivity Norms"
         description="Activity-wise man-day and equipment-hour output rates; the seed for resource estimates and daily-report validation."
       />
+
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4 text-text-primary">Productivity Norms</h1>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h1 className="text-3xl font-bold text-text-primary">Productivity Norms</h1>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors font-medium"
+          >
+            {showForm ? "Cancel" : "Add Norm"}
+          </button>
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-border">
           <button
             onClick={() => handleTabChange("MANPOWER")}
-            className={`px-4 py-2 rounded-t-lg ${
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
               tab === "MANPOWER"
                 ? "bg-accent text-text-primary"
                 : "bg-surface-active/50 text-text-secondary hover:bg-border"
@@ -144,7 +423,7 @@ export default function ProductivityNormsPage() {
           </button>
           <button
             onClick={() => handleTabChange("EQUIPMENT")}
-            className={`px-4 py-2 rounded-t-lg ${
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
               tab === "EQUIPMENT"
                 ? "bg-accent text-text-primary"
                 : "bg-surface-active/50 text-text-secondary hover:bg-border"
@@ -154,21 +433,133 @@ export default function ProductivityNormsPage() {
           </button>
         </div>
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
-        >
-          {showForm ? "Cancel" : "Add Norm"}
-        </button>
-
-        {error && <div className="text-danger mb-4">{error}</div>}
+        {error && (
+          <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+            {error}
+          </div>
+        )}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl">
+          <form
+            onSubmit={handleSubmit}
+            className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1 text-text-secondary">
+                  Work Activity <span className="text-danger">*</span>
+                </label>
+                <select
+                  value={formData.workActivityId}
+                  onChange={(e) => {
+                    handleActivityPick(e.target.value);
+                    clearFieldError("workActivityId");
+                  }}
+                  className={`w-full px-3 py-2 border bg-surface-hover text-text-primary rounded-lg ${
+                    fieldErrors.workActivityId ? "border-danger" : "border-border"
+                  }`}
+                  aria-invalid={!!fieldErrors.workActivityId}
+                >
+                  <option value="">— select a master activity —</option>
+                  {activities.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                      {a.defaultUnit ? ` (${a.defaultUnit})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.workActivityId && (
+                  <p className="mt-1 text-xs text-danger">{fieldErrors.workActivityId}</p>
+                )}
+                {activities.length === 0 && (
+                  <p className="text-xs text-text-muted mt-1">
+                    No activities yet — create one in <em>Admin → Work Activities</em> first.
+                  </p>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1 text-text-secondary">
+                  Scope <span className="text-danger">*</span>
+                </label>
+                <div className="flex gap-4 mb-2">
+                  <label className="inline-flex items-center gap-2 text-text-secondary">
+                    <input
+                      type="radio"
+                      name="scope"
+                      checked={formData.scope === "TYPE"}
+                      onChange={() => setFormData({ ...formData, scope: "TYPE", resourceId: "" })}
+                    />
+                    All resources of type
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-text-secondary">
+                    <input
+                      type="radio"
+                      name="scope"
+                      checked={formData.scope === "RESOURCE"}
+                      onChange={() =>
+                        setFormData({ ...formData, scope: "RESOURCE", resourceTypeDefId: "" })
+                      }
+                    />
+                    Specific resource (override)
+                  </label>
+                </div>
+                {formData.scope === "TYPE" ? (
+                  <>
+                    <select
+                      value={formData.resourceTypeDefId}
+                      onChange={(e) => {
+                        setFormData({ ...formData, resourceTypeDefId: e.target.value });
+                        clearFieldError("resourceTypeDefId");
+                      }}
+                      className={`w-full px-3 py-2 border bg-surface-hover text-text-primary rounded-lg ${
+                        fieldErrors.resourceTypeDefId ? "border-danger" : "border-border"
+                      }`}
+                      aria-invalid={!!fieldErrors.resourceTypeDefId}
+                    >
+                      <option value="">— select a resource type —</option>
+                      {typeDefs.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.resourceTypeDefId && (
+                      <p className="mt-1 text-xs text-danger">{fieldErrors.resourceTypeDefId}</p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <select
+                      value={formData.resourceId}
+                      onChange={(e) => {
+                        setFormData({ ...formData, resourceId: e.target.value });
+                        clearFieldError("resourceId");
+                      }}
+                      className={`w-full px-3 py-2 border bg-surface-hover text-text-primary rounded-lg ${
+                        fieldErrors.resourceId ? "border-danger" : "border-border"
+                      }`}
+                      aria-invalid={!!fieldErrors.resourceId}
+                    >
+                      <option value="">— select a specific resource —</option>
+                      {filteredResources.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.code} — {r.name}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.resourceId && (
+                      <p className="mt-1 text-xs text-danger">{fieldErrors.resourceId}</p>
+                    )}
+                  </>
+                )}
+              </div>
+
               {tab === "EQUIPMENT" && (
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">Equipment Spec</label>
+                  <label className="block text-sm font-medium mb-1 text-text-secondary">
+                    Equipment Spec
+                  </label>
                   <input
                     type="text"
                     value={formData.equipmentSpec}
@@ -178,40 +569,46 @@ export default function ProductivityNormsPage() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium mb-1 text-text-secondary">Activity</label>
-                <input
-                  type="text"
-                  value={formData.activityName}
-                  onChange={(e) => setFormData({ ...formData, activityName: e.target.value })}
-                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-text-secondary">Unit</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">
+                  Unit <span className="text-danger">*</span>
+                </label>
                 <input
                   type="text"
                   value={formData.unit}
-                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  required
+                  onChange={(e) => {
+                    setFormData({ ...formData, unit: e.target.value });
+                    clearFieldError("unit");
+                  }}
+                  className={`w-full px-3 py-2 border bg-surface-hover text-text-primary rounded-lg ${
+                    fieldErrors.unit ? "border-danger" : "border-border"
+                  }`}
+                  aria-invalid={!!fieldErrors.unit}
                 />
+                {fieldErrors.unit && (
+                  <p className="mt-1 text-xs text-danger">{fieldErrors.unit}</p>
+                )}
               </div>
 
               {tab === "MANPOWER" ? (
                 <>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-text-secondary">Output per Man per Day</label>
+                    <label className="block text-sm font-medium mb-1 text-text-secondary">
+                      Output per Man per Day
+                    </label>
                     <input
                       type="number"
                       step="0.01"
                       value={formData.outputPerManPerDay}
-                      onChange={(e) => setFormData({ ...formData, outputPerManPerDay: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, outputPerManPerDay: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-text-secondary">Crew Size</label>
+                    <label className="block text-sm font-medium mb-1 text-text-secondary">
+                      Crew Size
+                    </label>
                     <input
                       type="number"
                       step="1"
@@ -221,7 +618,9 @@ export default function ProductivityNormsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-text-secondary">Output per Day (optional)</label>
+                    <label className="block text-sm font-medium mb-1 text-text-secondary">
+                      Output per Day (optional)
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -233,8 +632,29 @@ export default function ProductivityNormsPage() {
                 </>
               ) : (
                 <>
+                  <div className="md:col-span-2 p-3 rounded-lg bg-info/5 border border-info/20 text-xs text-text-muted">
+                    Enter the daily norm directly (e.g. 4 000 Sqm/Day for a Bull Dozer). The
+                    per-hour breakdown below is optional — the server uses{" "}
+                    <code className="px-1 bg-surface/50 rounded">outputPerDay</code> when
+                    supplied; otherwise it derives it from <em>per-hour × working hours</em>.
+                  </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-text-secondary">Output per Hour</label>
+                    <label className="block text-sm font-medium mb-1 text-text-secondary">
+                      Output per Day <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.outputPerDay}
+                      onChange={(e) => setFormData({ ...formData, outputPerDay: e.target.value })}
+                      className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                      placeholder="e.g. 4000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-text-secondary">
+                      Output per Hour <span className="text-text-muted">(optional)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -244,32 +664,31 @@ export default function ProductivityNormsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-text-secondary">Working Hours per Day</label>
+                    <label className="block text-sm font-medium mb-1 text-text-secondary">
+                      Working Hours per Day <span className="text-text-muted">(optional)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.1"
                       value={formData.workingHoursPerDay}
-                      onChange={(e) => setFormData({ ...formData, workingHoursPerDay: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, workingHoursPerDay: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                      placeholder="default 8"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-text-secondary">Output per Day (optional)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.outputPerDay}
-                      onChange={(e) => setFormData({ ...formData, outputPerDay: e.target.value })}
-                      className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-text-secondary">Fuel Litres per Hour</label>
+                    <label className="block text-sm font-medium mb-1 text-text-secondary">
+                      Fuel Litres per Hour
+                    </label>
                     <input
                       type="number"
                       step="0.01"
                       value={formData.fuelLitresPerHour}
-                      onChange={(e) => setFormData({ ...formData, fuelLitresPerHour: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, fuelLitresPerHour: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                     />
                   </div>
@@ -277,7 +696,9 @@ export default function ProductivityNormsPage() {
               )}
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-text-secondary">Remarks</label>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">
+                  Remarks
+                </label>
                 <textarea
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
@@ -287,7 +708,10 @@ export default function ProductivityNormsPage() {
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button type="submit" className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600"
+              >
                 Save Norm
               </button>
               <button
@@ -301,80 +725,33 @@ export default function ProductivityNormsPage() {
           </form>
         )}
 
-        {/* Norms Table */}
-        <div className="overflow-x-auto">
-          {tab === "MANPOWER" ? (
-            <table className="w-full border-collapse border border-border">
-              <thead>
-                <tr className="bg-surface/80">
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Activity</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Output / Man / Day</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Crew Size</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Gang Output / Day</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {norms.map((norm) => (
-                  <tr key={norm.id} className="hover:bg-surface-hover/30 text-text-primary">
-                    <td className="border border-border px-4 py-2">{norm.activityName}</td>
-                    <td className="border border-border px-4 py-2">{norm.unit}</td>
-                    <td className="border border-border px-4 py-2 text-right">{norm.outputPerManPerDay ?? "-"}</td>
-                    <td className="border border-border px-4 py-2 text-right">{norm.crewSize ?? "-"}</td>
-                    <td className="border border-border px-4 py-2 text-right">{norm.outputPerDay ?? "-"}</td>
-                    <td className="border border-border px-4 py-2">{norm.remarks || "-"}</td>
-                    <td className="border border-border px-4 py-2">
-                      <button
-                        onClick={() => handleDelete(norm.id)}
-                        className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full border-collapse border border-border">
-              <thead>
-                <tr className="bg-surface/80">
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Equipment Spec</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Activity</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Output / Hour</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Working Hrs / Day</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Output / Day</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Fuel L/Hr</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {norms.map((norm) => (
-                  <tr key={norm.id} className="hover:bg-surface-hover/30 text-text-primary">
-                    <td className="border border-border px-4 py-2">{norm.equipmentSpec || "-"}</td>
-                    <td className="border border-border px-4 py-2">{norm.activityName}</td>
-                    <td className="border border-border px-4 py-2">{norm.unit}</td>
-                    <td className="border border-border px-4 py-2 text-right">{norm.outputPerHour ?? "-"}</td>
-                    <td className="border border-border px-4 py-2 text-right">{norm.workingHoursPerDay ?? "-"}</td>
-                    <td className="border border-border px-4 py-2 text-right">{norm.outputPerDay ?? "-"}</td>
-                    <td className="border border-border px-4 py-2 text-right">{norm.fuelLitresPerHour ?? "-"}</td>
-                    <td className="border border-border px-4 py-2">{norm.remarks || "-"}</td>
-                    <td className="border border-border px-4 py-2">
-                      <button
-                        onClick={() => handleDelete(norm.id)}
-                        className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Norms — grouped by scope (Resource Type / Specific Resource) so the layout mirrors
+            the spreadsheet's S.No. → equipment-section → activities pattern. */}
+        <div className="space-y-6">
+          {groupNormsByScope(norms).map((group, gIdx) => (
+            <div key={group.key} className="border border-border rounded-lg overflow-hidden bg-surface/30">
+              <div className="bg-accent/10 text-text-primary px-4 py-2 flex items-center gap-3 font-semibold">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold">
+                  {gIdx + 1}
+                </span>
+                <span className="uppercase tracking-wide">{group.label}</span>
+                <span className="text-xs font-normal text-text-muted">
+                  · {group.rows.length} {group.rows.length === 1 ? "norm" : "norms"}
+                </span>
+              </div>
+              <DataTable
+                columns={tab === "MANPOWER" ? manpowerColumns : equipmentColumns}
+                data={group.rows}
+                rowKey="id"
+                searchable={false}
+                pageSize={50}
+              />
+            </div>
+          ))}
+          {norms.length === 0 && (
+            <div className="text-center text-text-muted py-12 border border-dashed border-border rounded-lg">
+              No {tab.toLowerCase()} norms yet — click <strong>Add Norm</strong> above to start.
+            </div>
           )}
         </div>
       </div>

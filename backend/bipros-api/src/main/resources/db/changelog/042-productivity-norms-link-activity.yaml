@@ -1,0 +1,136 @@
+databaseChangeLog:
+  - changeSet:
+      id: 042-add-norm-scope-columns
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: resource
+            tableName: productivity_norms
+            columns:
+              - column:
+                  name: work_activity_id
+                  type: UUID
+              - column:
+                  name: resource_type_def_id
+                  type: UUID
+              - column:
+                  name: resource_id
+                  type: UUID
+
+  - changeSet:
+      id: 042-backfill-work-activities-from-existing-norms
+      author: bipros
+      changes:
+        - sql:
+            comment: Create one WorkActivity per distinct legacy activity_name, then point each norm at it.
+            sql: |
+              INSERT INTO resource.work_activities
+                (id, code, name, default_unit, active, sort_order, created_at, updated_at, version)
+              SELECT
+                gen_random_uuid(),
+                substring(
+                  regexp_replace(upper(trim(activity_name)), '[^A-Z0-9]+', '_', 'g')
+                  FROM 1 FOR 50
+                ) AS code,
+                trim(activity_name)               AS name,
+                MIN(unit)                         AS default_unit,
+                true                              AS active,
+                row_number() OVER (ORDER BY trim(activity_name)) AS sort_order,
+                now(), now(), 0
+              FROM resource.productivity_norms
+              WHERE activity_name IS NOT NULL AND trim(activity_name) <> ''
+              GROUP BY trim(activity_name)
+              ON CONFLICT (code) DO NOTHING;
+
+              UPDATE resource.productivity_norms n
+              SET work_activity_id = wa.id
+              FROM resource.work_activities wa
+              WHERE n.work_activity_id IS NULL
+                AND n.activity_name IS NOT NULL
+                AND lower(trim(n.activity_name)) = lower(wa.name);
+
+  - changeSet:
+      id: 042-make-work-activity-id-not-null
+      author: bipros
+      preConditions:
+        - onFail: CONTINUE
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM resource.productivity_norms WHERE work_activity_id IS NULL
+      changes:
+        - addNotNullConstraint:
+            schemaName: resource
+            tableName: productivity_norms
+            columnName: work_activity_id
+            columnDataType: UUID
+
+  - changeSet:
+      id: 042-foreign-keys-and-indexes
+      author: bipros
+      changes:
+        - addForeignKeyConstraint:
+            baseSchemaName: resource
+            baseTableName: productivity_norms
+            baseColumnNames: work_activity_id
+            referencedSchemaName: resource
+            referencedTableName: work_activities
+            referencedColumnNames: id
+            constraintName: fk_prod_norm_work_activity
+        - addForeignKeyConstraint:
+            baseSchemaName: resource
+            baseTableName: productivity_norms
+            baseColumnNames: resource_type_def_id
+            referencedSchemaName: resource
+            referencedTableName: resource_type_defs
+            referencedColumnNames: id
+            constraintName: fk_prod_norm_resource_type_def
+        - addForeignKeyConstraint:
+            baseSchemaName: resource
+            baseTableName: productivity_norms
+            baseColumnNames: resource_id
+            referencedSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_prod_norm_resource
+        - createIndex:
+            schemaName: resource
+            tableName: productivity_norms
+            indexName: idx_prod_norm_work_activity
+            columns:
+              - column:
+                  name: work_activity_id
+        - createIndex:
+            schemaName: resource
+            tableName: productivity_norms
+            indexName: idx_prod_norm_resource_type_def
+            columns:
+              - column:
+                  name: resource_type_def_id
+        - createIndex:
+            schemaName: resource
+            tableName: productivity_norms
+            indexName: idx_prod_norm_resource
+            columns:
+              - column:
+                  name: resource_id
+        - dropIndex:
+            schemaName: resource
+            tableName: productivity_norms
+            indexName: idx_prod_norm_activity
+
+  - changeSet:
+      id: 042-partial-unique-indexes-for-scope
+      author: bipros
+      changes:
+        - sql:
+            comment: One specific-resource norm per (activity, resource); one type-level norm per (activity, resource_type_def).
+            sql: |
+              CREATE UNIQUE INDEX uk_norm_by_resource
+                ON resource.productivity_norms (work_activity_id, resource_id)
+                WHERE resource_id IS NOT NULL;
+              CREATE UNIQUE INDEX uk_norm_by_type
+                ON resource.productivity_norms (work_activity_id, resource_type_def_id)
+                WHERE resource_id IS NULL AND resource_type_def_id IS NOT NULL;
+            rollback: |
+              DROP INDEX IF EXISTS resource.uk_norm_by_resource;
+              DROP INDEX IF EXISTS resource.uk_norm_by_type;

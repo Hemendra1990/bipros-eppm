@@ -55,5 +55,8 @@ public record UpdateActivityRequest(
 
     Long chainageFromM,
 
-    Long chainageToM
+    Long chainageToM,
+
+    /** Soft FK to {@code resource.work_activities.id}; pass {@code null} to leave unchanged. */
+    UUID workActivityId
 ) {}

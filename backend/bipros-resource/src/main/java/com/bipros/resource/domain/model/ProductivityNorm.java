@@ -5,7 +5,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +24,9 @@ import java.math.BigDecimal;
     schema = "resource",
     indexes = {
         @Index(name = "idx_prod_norm_type", columnList = "norm_type"),
-        @Index(name = "idx_prod_norm_activity", columnList = "activity_name")
+        @Index(name = "idx_prod_norm_work_activity", columnList = "work_activity_id"),
+        @Index(name = "idx_prod_norm_resource_type_def", columnList = "resource_type_def_id"),
+        @Index(name = "idx_prod_norm_resource", columnList = "resource_id")
     })
 @Getter
 @Setter
@@ -34,7 +39,38 @@ public class ProductivityNorm extends BaseEntity {
   @Column(name = "norm_type", nullable = false, length = 20)
   private ProductivityNormType normType;
 
-  @Column(name = "activity_name", nullable = false, length = 150)
+  /**
+   * Master activity this norm applies to. Replaces the legacy free-text {@link #activityName}.
+   */
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "work_activity_id", nullable = false)
+  private WorkActivity workActivity;
+
+  /**
+   * Default scope: when set, this norm applies to every resource of the given type
+   * (e.g. all "Bull Dozer" instances). Mutually exclusive with {@link #resource}.
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "resource_type_def_id")
+  private ResourceTypeDef resourceTypeDef;
+
+  /**
+   * Override scope: when set, this norm applies only to one specific resource and overrides any
+   * type-level norm for the same activity. Mutually exclusive with {@link #resourceTypeDef}.
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "resource_id")
+  private Resource resource;
+
+  /**
+   * Legacy free-text activity label preserved for one release cycle so old API consumers and
+   * exports keep working. New code should rely on {@link #workActivity}; service layer keeps this
+   * synchronised with {@code workActivity.name} on save.
+   *
+   * @deprecated use {@link #workActivity}; this column will be dropped in a follow-up changelog.
+   */
+  @Deprecated
+  @Column(name = "activity_name", length = 150)
   private String activityName;
 
   @Column(name = "unit", nullable = false, length = 20)

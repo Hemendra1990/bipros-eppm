@@ -156,4 +156,15 @@ public class Activity extends BaseEntity {
    */
   @Column(name = "responsible_user_id")
   private UUID responsibleUserId;
+
+  /**
+   * Soft FK to {@code resource.work_activities.id} — the master / library activity this
+   * project-specific activity is an instance of. Used by the productivity-norm lookup chain to
+   * answer "for this project activity + this resource, what's the daily output norm?".
+   *
+   * <p>Stored as a plain UUID (no JPA {@code @ManyToOne}) to honour the no-cross-module-deps rule
+   * — {@code WorkActivity} lives in {@code bipros-resource}.
+   */
+  @Column(name = "work_activity_id")
+  private UUID workActivityId;
 }

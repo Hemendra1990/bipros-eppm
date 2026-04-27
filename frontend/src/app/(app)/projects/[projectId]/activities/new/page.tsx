@@ -8,6 +8,7 @@ import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import type { CreateActivityRequest } from "@/lib/api/activityApi";
+import { workActivityApi } from "@/lib/api/workActivityApi";
 import type { WbsNodeResponse } from "@/lib/types";
 import { getErrorMessage } from "@/lib/utils/error";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
@@ -28,6 +29,7 @@ export default function NewActivityPage() {
     wbsNodeId: "",
     plannedStartDate: "",
     plannedFinishDate: "",
+    workActivityId: "",
   });
 
   const [error, setError] = useState("");
@@ -40,6 +42,12 @@ export default function NewActivityPage() {
   });
 
   const wbsNodes = wbsData?.data ?? [];
+
+  const { data: workActivitiesData, isLoading: isLoadingWorkActivities } = useQuery({
+    queryKey: ["work-activities", "active"],
+    queryFn: () => workActivityApi.list(true),
+  });
+  const workActivities = workActivitiesData?.data ?? [];
 
   // Flatten WBS tree for dropdown
   const flattenedWbs = flattenWbsNodes(wbsNodes);
@@ -85,6 +93,7 @@ export default function NewActivityPage() {
         durationType: formData.durationType,
         plannedStartDate: formData.plannedStartDate || undefined,
         plannedFinishDate: formData.plannedFinishDate || undefined,
+        workActivityId: formData.workActivityId || undefined,
       };
 
       const result = await activityApi.createActivity(projectId, createRequest);
@@ -249,6 +258,34 @@ export default function NewActivityPage() {
               />
               {fieldErrors.plannedFinishDate && <p className="mt-1 text-xs text-danger">{fieldErrors.plannedFinishDate}</p>}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Work Activity (master)
+            </label>
+            <SearchableSelect
+              value={formData.workActivityId}
+              onChange={(val) => setFormData((prev) => ({ ...prev, workActivityId: val }))}
+              placeholder={
+                isLoadingWorkActivities
+                  ? "Loading work activities..."
+                  : "Search master library (optional)..."
+              }
+              options={[
+                { value: "", label: "— none —" },
+                ...workActivities.map((wa) => ({
+                  value: wa.id,
+                  label: wa.defaultUnit ? `${wa.name} (${wa.defaultUnit})` : wa.name,
+                })),
+              ]}
+              disabled={isLoadingWorkActivities}
+            />
+            <p className="mt-1 text-xs text-text-muted">
+              Optional: link this activity to a master entry from{" "}
+              <em>Admin → Work Activities</em>. Required to derive productivity-norm-driven
+              capacity utilisation downstream.
+            </p>
           </div>
 
           <div className="flex gap-3 pt-6">

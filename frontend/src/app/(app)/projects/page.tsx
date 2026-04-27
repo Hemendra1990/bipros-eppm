@@ -252,7 +252,14 @@ export default function ProjectsPage() {
                           {project.code}
                         </Link>
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-charcoal">{project.name}</td>
+                      <td className="px-4 py-3.5">
+                        <Link
+                          href={`/projects/${project.id}`}
+                          className="font-semibold text-charcoal hover:text-gold-ink hover:underline underline-offset-2"
+                        >
+                          {project.name}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3.5">
                         <Badge variant={statusVariant(project.status)} withDot>
                           {project.status}

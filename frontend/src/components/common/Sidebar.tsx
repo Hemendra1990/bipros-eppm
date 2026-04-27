@@ -72,6 +72,7 @@ const groups: NavGroup[] = [
       { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
       { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true },
       { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText, adminOnly: true },
+      { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
       { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
       { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },

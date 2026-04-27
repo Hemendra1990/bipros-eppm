@@ -49,6 +49,9 @@ export default function ProjectDetailLayout({
     { id: "resources", label: "Resources", href: null },
     { id: "costs", label: "Costs", href: null },
     { id: "evm", label: "EVM", href: null },
+    { id: "dpr", label: "DPR", href: `/projects/${projectId}/dpr` },
+    { id: "daily-outputs", label: "Daily Outputs", href: `/projects/${projectId}/daily-outputs` },
+    { id: "capacity", label: "Capacity Util.", href: `/projects/${projectId}/capacity-utilization` },
     { id: "risks", label: "Risks", href: `/projects/${projectId}/risks` },
     // These navigate to separate route pages:
     { id: "contracts", label: "Contracts", href: `/projects/${projectId}/contracts` },
@@ -67,7 +70,6 @@ export default function ProjectDetailLayout({
 
   const moreLinks = [
     { label: "Relationships", href: `/projects/${projectId}/relationships` },
-    { label: "DPR (Daily Report)", href: `/projects/${projectId}/dpr` },
     { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },
     { label: "Material Consumption", href: `/projects/${projectId}/material-consumption` },
     { label: "Material Reconciliation", href: `/projects/${projectId}/material-reconciliation` },
@@ -114,14 +116,14 @@ export default function ProjectDetailLayout({
   };
 
   return (
-    <div>
-      <div className="mb-6">
+    <div className="min-w-0">
+      <div className="mb-6 px-6 pt-6">
         <h1 className="text-2xl font-bold text-text-primary">{project.name}</h1>
         <p className="text-sm text-text-secondary">{project.code}</p>
       </div>
 
-      <div className="border-b border-border">
-        <nav className="flex items-center gap-8" aria-label="Tabs">
+      <div className="border-b border-border px-6">
+        <nav className="flex items-center gap-8 overflow-x-auto" aria-label="Tabs">
           {tabs.map((t) => {
             const isActive = isTabActive(t);
             return (
@@ -238,7 +240,7 @@ export default function ProjectDetailLayout({
         </nav>
       </div>
 
-      <div className="mt-6">{children}</div>
+      <div className="mt-6 min-w-0 overflow-x-auto">{children}</div>
     </div>
   );
 }

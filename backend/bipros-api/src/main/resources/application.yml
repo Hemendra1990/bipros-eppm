@@ -22,7 +22,12 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop   # dev profile rebuilds schema clean each boot; seeders are authoritative
+      # Dev default is `update` so test data (projects, norms, work-activities, daily outputs)
+      # survives backend restarts — otherwise every restart re-issues all UUIDs and breaks any
+      # bookmarks or in-flight test sessions.
+      # Override with -Dspring.jpa.hibernate.ddl-auto=create-drop when you genuinely want a clean
+      # slate, e.g. when iterating on seeder logic.
+      ddl-auto: ${DDL_AUTO:update}
     open-in-view: false
     properties:
       hibernate:

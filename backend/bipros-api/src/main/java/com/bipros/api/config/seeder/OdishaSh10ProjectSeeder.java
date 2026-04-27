@@ -48,6 +48,8 @@ import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.model.ResourceUnit;
 import com.bipros.resource.domain.model.Role;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
+import com.bipros.resource.application.service.WorkActivityService;
+import com.bipros.resource.domain.model.WorkActivity;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
@@ -114,6 +116,7 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
     private final DailyWeatherRepository weatherRepository;
     private final NextDayPlanRepository nextDayPlanRepository;
     private final ProductivityNormRepository productivityNormRepository;
+    private final WorkActivityService workActivityService;
     private final ResourceRepository resourceRepository;
     private final ResourceRateRepository resourceRateRepository;
     private final ResourceRoleRepository resourceRoleRepository;
@@ -419,9 +422,11 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
         );
         List<ProductivityNorm> all = new ArrayList<>();
         for (NormDef n : norms) {
+            WorkActivity wa = workActivityService.findOrCreateByName(n.name(), n.unit());
             all.add(ProductivityNorm.builder()
                     .normType(com.bipros.resource.domain.model.ProductivityNormType.valueOf(n.type()))
-                    .activityName(n.name())
+                    .workActivity(wa)
+                    .activityName(wa.getName())
                     .unit(n.unit())
                     .outputPerManPerDay(BigDecimal.valueOf(n.opmd()))
                     .crewSize(n.crew())

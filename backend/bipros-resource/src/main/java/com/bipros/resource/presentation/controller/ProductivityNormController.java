@@ -3,8 +3,10 @@ package com.bipros.resource.presentation.controller;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.resource.application.dto.CreateProductivityNormRequest;
 import com.bipros.resource.application.dto.ProductivityNormResponse;
+import com.bipros.resource.application.dto.ResolvedNormResponse;
 import com.bipros.resource.application.service.ProductivityNormService;
 import com.bipros.resource.domain.model.ProductivityNormType;
+import com.bipros.resource.domain.service.ProductivityNormLookupService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,12 +34,14 @@ import java.util.UUID;
 public class ProductivityNormController {
 
   private final ProductivityNormService service;
+  private final ProductivityNormLookupService lookupService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
   public ResponseEntity<ApiResponse<ProductivityNormResponse>> create(
       @Valid @RequestBody CreateProductivityNormRequest request) {
-    log.info("POST /v1/productivity-norms - type={}, activity={}", request.normType(), request.activityName());
+    log.info("POST /v1/productivity-norms - type={}, workActivityId={}",
+        request.normType(), request.workActivityId());
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.create(request)));
   }
 
@@ -51,9 +55,22 @@ public class ProductivityNormController {
 
   @GetMapping
   public ResponseEntity<ApiResponse<List<ProductivityNormResponse>>> list(
-      @RequestParam(required = false) ProductivityNormType normType) {
-    log.info("GET /v1/productivity-norms - normType={}", normType);
+      @RequestParam(required = false) ProductivityNormType normType,
+      @RequestParam(required = false) UUID workActivityId) {
+    log.info("GET /v1/productivity-norms - normType={}, workActivityId={}", normType, workActivityId);
+    if (workActivityId != null) {
+      return ResponseEntity.ok(ApiResponse.ok(service.listByWorkActivity(workActivityId)));
+    }
     return ResponseEntity.ok(ApiResponse.ok(service.list(normType)));
+  }
+
+  @GetMapping("/lookup")
+  public ResponseEntity<ApiResponse<ResolvedNormResponse>> lookup(
+      @RequestParam UUID workActivityId,
+      @RequestParam(required = false) UUID resourceId) {
+    log.info("GET /v1/productivity-norms/lookup - workActivityId={}, resourceId={}", workActivityId, resourceId);
+    return ResponseEntity.ok(ApiResponse.ok(
+        ResolvedNormResponse.from(lookupService.resolve(workActivityId, resourceId))));
   }
 
   @GetMapping("/{id}")

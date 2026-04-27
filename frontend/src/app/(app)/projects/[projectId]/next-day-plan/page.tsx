@@ -9,6 +9,8 @@ import {
   type CreateNextDayPlanRequest,
 } from "@/lib/api/nextDayPlanApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { dailyActivityResourceOutputApi } from "@/lib/api/dailyActivityResourceOutputApi";
+import { activityApi } from "@/lib/api/activityApi";
 import { TabTip } from "@/components/common/TabTip";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -87,6 +89,54 @@ export default function NextDayPlanPage() {
   });
 
   const plans: NextDayPlanResponse[] = data?.data ?? [];
+
+  // Pull yesterday's daily outputs + the project's activities (for code↔name resolution).
+  // This powers the "Carry forward from yesterday" button: clicking it pre-populates the form
+  // with the most recent daily output, so the planner doesn't re-key activity / unit / qty.
+  const { data: yesterdayOutputsData } = useQuery({
+    queryKey: ["daily-outputs", projectId, "carry-forward"],
+    queryFn: () => dailyActivityResourceOutputApi.list(projectId),
+    enabled: !!projectId,
+  });
+  const recentOutputs = yesterdayOutputsData?.data ?? [];
+
+  const { data: activitiesPageData } = useQuery({
+    queryKey: ["activities", projectId, "for-carry-forward"],
+    queryFn: () => activityApi.listActivities(projectId, 0, 500),
+    enabled: !!projectId,
+  });
+  const activitiesByIdLookup: Record<string, string> = (() => {
+    const map: Record<string, string> = {};
+    for (const a of activitiesPageData?.data?.content ?? []) {
+      map[a.id] = a.name;
+    }
+    return map;
+  })();
+
+  const handleCarryForward = () => {
+    if (recentOutputs.length === 0) {
+      setError("No prior daily outputs to carry forward from.");
+      return;
+    }
+    // Pick the most recent output strictly before today.
+    const today = todayIso();
+    const candidates = [...recentOutputs]
+      .filter((o) => o.outputDate < today)
+      .sort((a, b) => (a.outputDate > b.outputDate ? -1 : 1));
+    const source = candidates[0] ?? recentOutputs[0];
+    const activityName =
+      activitiesByIdLookup[source.activityId] ?? `Activity ${source.activityId.slice(0, 8)}`;
+    setFormData({
+      ...initialFormState(),
+      reportDate: today,
+      nextDayActivity: activityName,
+      targetQty: source.qtyExecuted.toString(),
+      unit: source.unit,
+      concerns: `Carried forward from ${source.outputDate} (qty ${source.qtyExecuted} ${source.unit})`,
+    });
+    setShowForm(true);
+    setError(null);
+  };
 
   const handleApply = () => {
     setAppliedFrom(fromDate);
@@ -178,11 +228,18 @@ export default function NextDayPlanPage() {
             Apply
           </button>
           <button
+            onClick={handleCarryForward}
+            className="px-4 py-2 bg-info/10 text-info ring-1 ring-info/30 rounded-lg hover:bg-info/20 ml-auto"
+            title="Pre-fill the form from the most recent Daily Output before today"
+          >
+            ↻ Carry forward from yesterday
+          </button>
+          <button
             onClick={() => {
               setShowForm(!showForm);
               setError(null);
             }}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover ml-auto"
+            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
           >
             {showForm ? "Cancel" : "Add Plan"}
           </button>

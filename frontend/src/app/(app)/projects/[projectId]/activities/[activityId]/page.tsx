@@ -8,6 +8,9 @@ import { activityNotifications, notificationHelpers } from "@/lib/notificationHe
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
 import type { ActivityResponse, UpdateActivityRequest } from "@/lib/api/activityApi";
+import { workActivityApi } from "@/lib/api/workActivityApi";
+import type { WorkActivityResponse } from "@/lib/api/workActivityApi";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
 import { UdfSection } from "@/components/udf/UdfSection";
@@ -32,6 +35,7 @@ export default function ActivityDetailPage() {
     percentComplete: 0,
     actualStartDate: "",
     actualFinishDate: "",
+    workActivityId: "",
   });
 
   const [usePert, setUsePert] = useState(false);
@@ -49,6 +53,15 @@ export default function ActivityDetailPage() {
   });
 
   const activity = activityData?.data;
+
+  const { data: workActivitiesData } = useQuery({
+    queryKey: ["work-activities", "active"],
+    queryFn: () => workActivityApi.list(true),
+  });
+  const workActivities: WorkActivityResponse[] = workActivitiesData?.data ?? [];
+  const linkedWorkActivity = activity?.workActivityId
+    ? workActivities.find((w) => w.id === activity.workActivityId) ?? null
+    : null;
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateActivityRequest) =>
@@ -125,9 +138,14 @@ export default function ActivityDetailPage() {
         plannedFinishDate: activity.plannedFinishDate || "",
         actualStartDate: activity.actualStartDate || "",
         actualFinishDate: activity.actualFinishDate || "",
+        workActivityId: activity.workActivityId || "",
       });
       setIsEditing(true);
     }
+  };
+
+  const handleWorkActivityChange = (value: string) => {
+    setEditData((prev) => ({ ...prev, workActivityId: value }));
   };
 
   if (isLoading) {
@@ -169,15 +187,25 @@ export default function ActivityDetailPage() {
           onTogglePert={() => setUsePert(!usePert)}
           pertData={pertData}
           onPertChange={handlePertChange}
+          workActivities={workActivities}
+          onWorkActivityChange={handleWorkActivityChange}
         />
       ) : (
-        <ViewMode activity={activity} projectId={projectId} />
+        <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} />
       )}
     </div>
   );
 }
 
-function ViewMode({ activity, projectId }: { activity: ActivityResponse; projectId: string }) {
+function ViewMode({
+  activity,
+  projectId,
+  workActivity,
+}: {
+  activity: ActivityResponse;
+  projectId: string;
+  workActivity: WorkActivityResponse | null;
+}) {
   const stat = (label: string, value: React.ReactNode, tone?: "neutral" | "accent" | "success" | "warning" | "danger") => {
     const toneCls = {
       neutral: "text-text-primary",
@@ -257,6 +285,30 @@ function ViewMode({ activity, projectId }: { activity: ActivityResponse; project
         </div>
       </div>
 
+      {/* Master Work Activity link */}
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">Work Activity (master)</h3>
+        {workActivity ? (
+          <div className="flex flex-wrap items-center gap-3 text-sm text-text-primary">
+            <span className="font-medium">{workActivity.name}</span>
+            <span className="font-mono text-xs text-text-muted">{workActivity.code}</span>
+            {workActivity.defaultUnit && (
+              <span className="px-2 py-0.5 rounded bg-info/10 text-info ring-1 ring-info/20 text-xs">
+                {workActivity.defaultUnit}
+              </span>
+            )}
+            {workActivity.discipline && (
+              <span className="text-xs text-text-secondary">· {workActivity.discipline}</span>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-text-muted">
+            Not linked. Edit the activity and pick a master entry to enable
+            productivity-norm-driven capacity utilisation reports.
+          </p>
+        )}
+      </div>
+
       {/* Dependencies */}
       <ActivityDependencies
         projectId={projectId}
@@ -286,6 +338,8 @@ interface EditFormProps {
     standardDeviation: number;
   };
   onPertChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  workActivities: WorkActivityResponse[];
+  onWorkActivityChange: (value: string) => void;
 }
 
 function EditForm({
@@ -298,6 +352,8 @@ function EditForm({
   onTogglePert,
   pertData,
   onPertChange,
+  workActivities,
+  onWorkActivityChange,
 }: EditFormProps) {
   return (
     <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
@@ -387,6 +443,28 @@ function EditForm({
               className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary">
+            Work Activity (master)
+          </label>
+          <SearchableSelect
+            value={data.workActivityId ?? ""}
+            onChange={onWorkActivityChange}
+            placeholder="Search master library (optional)..."
+            options={[
+              { value: "", label: "— none —" },
+              ...workActivities.map((wa) => ({
+                value: wa.id,
+                label: wa.defaultUnit ? `${wa.name} (${wa.defaultUnit})` : wa.name,
+              })),
+            ]}
+          />
+          <p className="mt-1 text-xs text-text-muted">
+            Links this project activity to its master library entry — required for productivity-norm
+            lookups when computing budgeted vs actual resource-days.
+          </p>
         </div>
 
         <div className="border-t border-border pt-6">

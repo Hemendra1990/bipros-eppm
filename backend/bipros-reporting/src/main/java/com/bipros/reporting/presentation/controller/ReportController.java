@@ -2,6 +2,7 @@ package com.bipros.reporting.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.reporting.application.dto.*;
+import com.bipros.reporting.application.service.CapacityUtilizationReportService;
 import com.bipros.reporting.application.service.ReportService;
 import com.bipros.reporting.domain.model.ReportFormat;
 import com.bipros.reporting.domain.model.ReportType;
@@ -26,6 +27,7 @@ import java.util.UUID;
 public class ReportController {
 
   private final ReportService reportService;
+  private final CapacityUtilizationReportService capacityUtilizationReportService;
 
   /** Alias for {@code /reports/definitions}. Dashboards and links that expect the bare
    * {@code /v1/reports} collection endpoint land here instead of receiving a 404. */
@@ -147,6 +149,17 @@ public class ReportController {
   public ApiResponse<ResourceUtilizationData> getResourceUtilization(
       @RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getResourceUtilization(projectId));
+  }
+
+  @GetMapping("/capacity-utilization")
+  public ApiResponse<CapacityUtilizationReport> getCapacityUtilization(
+      @RequestParam UUID projectId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+      @RequestParam(required = false, defaultValue = "RESOURCE_TYPE") String groupBy,
+      @RequestParam(required = false) String normType) {
+    return ApiResponse.ok(
+        capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType));
   }
 
   @GetMapping("/trend-analysis")

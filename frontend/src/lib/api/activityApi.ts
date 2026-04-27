@@ -27,6 +27,8 @@ export interface ActivityResponse {
   remainingDuration: number;
   isCritical?: boolean;
   notes?: string;
+  /** Soft FK to resource.work_activities.id — links this activity to its master library entry. */
+  workActivityId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +44,8 @@ export interface CreateActivityRequest {
   plannedStartDate?: string;
   plannedFinishDate?: string;
   calendarId?: string;
+  /** Optional link to the WorkActivity (master library) this activity is an instance of. */
+  workActivityId?: string | null;
 }
 
 export interface UpdateActivityRequest {
@@ -57,6 +61,8 @@ export interface UpdateActivityRequest {
   durationType?: string;
   plannedStartDate?: string;
   plannedFinishDate?: string;
+  /** Pass to attach/change the WorkActivity link; omit (or null) to leave unchanged. */
+  workActivityId?: string | null;
 }
 
 export const activityApi = {

@@ -92,6 +92,7 @@ public class ActivityService {
     activity.setCalendarId(request.calendarId());
     activity.setChainageFromM(request.chainageFromM());
     activity.setChainageToM(request.chainageToM());
+    activity.setWorkActivityId(request.workActivityId());
     activity.setPercentComplete(0.0);
 
     Double duration;
@@ -220,6 +221,9 @@ public class ActivityService {
     }
     if (request.chainageToM() != null) {
       activity.setChainageToM(request.chainageToM());
+    }
+    if (request.workActivityId() != null) {
+      activity.setWorkActivityId(request.workActivityId());
     }
 
     // Enforce date-order across the planned window after any updates

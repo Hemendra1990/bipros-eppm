@@ -333,6 +333,8 @@ export default function EquipmentLogsPage() {
                 <th className="border border-border px-4 py-2 text-right text-text-secondary">Operating Hrs</th>
                 <th className="border border-border px-4 py-2 text-right text-text-secondary">Idle Hrs</th>
                 <th className="border border-border px-4 py-2 text-right text-text-secondary">Breakdown Hrs</th>
+                <th className="border border-border px-4 py-2 text-right text-text-secondary" title="operatingHours / 8">Days</th>
+                <th className="border border-border px-4 py-2 text-right text-text-secondary" title="operating / (operating + idle + breakdown)">% Util</th>
                 <th className="border border-border px-4 py-2 text-left text-text-secondary">Status</th>
                 <th className="border border-border px-4 py-2 text-left text-text-secondary">Operator</th>
               </tr>
@@ -343,14 +345,34 @@ export default function EquipmentLogsPage() {
                 const resourceLabel = res
                   ? `${res.code} \u2014 ${res.name}`
                   : `${log.resourceId.substring(0, 8)}...`;
+                const op = log.operatingHours ?? 0;
+                const idle = log.idleHours ?? 0;
+                const bd = log.breakdownHours ?? 0;
+                const totalHours = op + idle + bd;
+                const days = op / 8;
+                const utilPct = totalHours > 0 ? (op / totalHours) * 100 : null;
+                const utilBand =
+                  utilPct === null
+                    ? "text-text-muted"
+                    : utilPct >= 80
+                      ? "text-success font-semibold"
+                      : utilPct >= 50
+                        ? "text-warning font-semibold"
+                        : "text-danger font-semibold";
                 return (
                 <tr key={log.id} className="hover:bg-surface-hover/30 text-text-primary">
                   <td className="border border-border px-4 py-2">{log.logDate}</td>
                   <td className="border border-border px-4 py-2">{resourceLabel}</td>
                   <td className="border border-border px-4 py-2">{log.deploymentSite || "-"}</td>
-                  <td className="border border-border px-4 py-2 text-right">{log.operatingHours || 0}</td>
-                  <td className="border border-border px-4 py-2 text-right">{log.idleHours || 0}</td>
-                  <td className="border border-border px-4 py-2 text-right">{log.breakdownHours || 0}</td>
+                  <td className="border border-border px-4 py-2 text-right">{op}</td>
+                  <td className="border border-border px-4 py-2 text-right">{idle}</td>
+                  <td className="border border-border px-4 py-2 text-right">{bd}</td>
+                  <td className="border border-border px-4 py-2 text-right">
+                    {days > 0 ? days.toFixed(2) : "\u2014"}
+                  </td>
+                  <td className={`border border-border px-4 py-2 text-right ${utilBand}`}>
+                    {utilPct === null ? "\u2014" : `${utilPct.toFixed(1)}%`}
+                  </td>
                   <td className="border border-border px-4 py-2">
                     <span
                       className={`px-2 py-1 rounded text-text-primary text-sm ${

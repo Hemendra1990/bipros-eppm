@@ -1,0 +1,82 @@
+databaseChangeLog:
+  # productivity_norms was previously created only by Hibernate ddl-auto in dev. This changeset
+  # brings the table under Liquibase management so prod (validate + Liquibase) can stand it up
+  # from scratch. Subsequent changesets in 042 add the WorkActivity / ResourceTypeDef / Resource
+  # FK columns and the partial unique indexes that enforce one norm per scope.
+  - changeSet:
+      id: 040-create-productivity-norms-table
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: productivity_norms
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: norm_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: activity_name
+                  type: VARCHAR(150)
+              - column:
+                  name: unit
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: output_per_man_per_day
+                  type: DECIMAL(12,4)
+              - column:
+                  name: output_per_hour
+                  type: DECIMAL(12,4)
+              - column:
+                  name: crew_size
+                  type: INTEGER
+              - column:
+                  name: output_per_day
+                  type: DECIMAL(12,4)
+              - column:
+                  name: working_hours_per_day
+                  type: DOUBLE
+              - column:
+                  name: fuel_litres_per_hour
+                  type: DECIMAL(10,2)
+              - column:
+                  name: equipment_spec
+                  type: VARCHAR(150)
+              - column:
+                  name: remarks
+                  type: VARCHAR(500)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - createIndex:
+            schemaName: resource
+            tableName: productivity_norms
+            indexName: idx_prod_norm_type
+            columns:
+              - column:
+                  name: norm_type

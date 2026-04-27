@@ -1,0 +1,103 @@
+databaseChangeLog:
+  - changeSet:
+      id: 044-create-daily-activity-resource-outputs
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: output_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              # Soft FKs to activity.activities and resource.resources — UUID columns only,
+              # no DB-level FK constraint (cross-module, see CLAUDE.md no-cross-module-deps rule).
+              - column:
+                  name: activity_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resource_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: qty_executed
+                  type: DECIMAL(18,3)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: unit
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hours_worked
+                  type: DOUBLE
+              - column:
+                  name: days_worked
+                  type: DOUBLE
+              - column:
+                  name: remarks
+                  type: VARCHAR(1000)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+        - addUniqueConstraint:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            constraintName: uk_dar_unique
+            columnNames: project_id, output_date, activity_id, resource_id
+        - createIndex:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            indexName: idx_dar_project_date
+            columns:
+              - column:
+                  name: project_id
+              - column:
+                  name: output_date
+        - createIndex:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            indexName: idx_dar_activity
+            columns:
+              - column:
+                  name: activity_id
+        - createIndex:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            indexName: idx_dar_resource
+            columns:
+              - column:
+                  name: resource_id

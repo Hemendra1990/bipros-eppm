@@ -55,3 +55,13 @@ databaseChangeLog:
       file: db/changelog/038-risk-activity-assignments.yaml
   - include:
       file: db/changelog/039-contract-extensions.yaml
+  - include:
+      file: db/changelog/040-productivity-norms-base.yaml
+  - include:
+      file: db/changelog/041-work-activities-table.yaml
+  - include:
+      file: db/changelog/042-productivity-norms-link-activity.yaml
+  - include:
+      file: db/changelog/043-activity-work-activity-link.yaml
+  - include:
+      file: db/changelog/044-daily-activity-resource-outputs.yaml
