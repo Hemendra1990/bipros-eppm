@@ -86,6 +86,24 @@ public class WorkActivityService {
     auditService.logDelete("WorkActivity", id);
   }
 
+  public void deleteAll() {
+    List<WorkActivity> all = repository.findAll();
+    int deletedCount = 0;
+    int skippedCount = 0;
+    for (WorkActivity wa : all) {
+      long norms = normRepository.countByWorkActivityId(wa.getId());
+      if (norms > 0) {
+        skippedCount++;
+        continue;
+      }
+      repository.delete(wa);
+      deletedCount++;
+    }
+    log.info("Deleted {} work activities, skipped {} (referenced by productivity norms)",
+        deletedCount, skippedCount);
+    auditService.logDelete("WorkActivity", null);
+  }
+
   @Transactional(readOnly = true)
   public WorkActivityResponse get(UUID id) {
     return WorkActivityResponse.from(require(id));

@@ -250,4 +250,11 @@ public class ResourceService {
     // Audit log deletion
     auditService.logDelete("Resource", id);
   }
+
+  public void deleteAllResources() {
+    log.info("Deleting all resources");
+    long count = resourceRepository.count();
+    resourceRepository.deleteAllInBatch();
+    log.info("Deleted {} resources", count);
+  }
 }

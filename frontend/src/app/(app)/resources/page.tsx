@@ -43,6 +43,15 @@ export default function ResourcesPage() {
     },
   });
 
+  const deleteAllMutation = useMutation({
+    mutationFn: () => resourceApi.deleteAllResources(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["resources"] });
+      toast.success("All resources deleted successfully");
+    },
+    onError: (err) => notificationHelpers.handleApiError(err, "Failed to delete all resources"),
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateResourceRequest }) =>
       resourceApi.updateResource(id, data),
@@ -141,13 +150,27 @@ export default function ResourcesPage() {
         title="Resources"
         description="Manage labor, nonlabor, and material resources"
         actions={
-          <Link
-            href="/resources/new"
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
-          >
-            <Plus size={16} />
-            New Resource
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to delete ALL resources? This action cannot be undone.")) {
+                  deleteAllMutation.mutate();
+                }
+              }}
+              disabled={deleteAllMutation.isPending || resources.length === 0}
+              className="inline-flex items-center gap-2 rounded-md bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 disabled:opacity-50"
+            >
+              <Trash2 size={16} />
+              {deleteAllMutation.isPending ? "Deleting..." : "Delete All"}
+            </button>
+            <Link
+              href="/resources/new"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            >
+              <Plus size={16} />
+              New Resource
+            </Link>
+          </div>
         }
       />
 

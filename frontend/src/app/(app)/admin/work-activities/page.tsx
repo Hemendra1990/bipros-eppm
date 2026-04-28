@@ -8,6 +8,7 @@ import {
   type WorkActivityResponse,
 } from "@/lib/api/workActivityApi";
 import { TabTip } from "@/components/common/TabTip";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { getErrorMessage } from "@/lib/utils/error";
 
 interface ActivityForm {
@@ -41,6 +42,12 @@ export default function WorkActivitiesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ActivityForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", message: "", onConfirm: () => {} });
 
   const queryClient = useQueryClient();
 
@@ -97,14 +104,39 @@ export default function WorkActivitiesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this work activity?")) return;
-    try {
-      await workActivityApi.delete(id);
-      queryClient.invalidateQueries({ queryKey: ["work-activities"] });
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to delete work activity"));
-    }
+  const handleDelete = (id: string) => {
+    setConfirmDialog({
+      open: true,
+      title: "Delete Work Activity",
+      message: "Are you sure you want to delete this work activity? This action cannot be undone.",
+      onConfirm: async () => {
+        setConfirmDialog((d) => ({ ...d, open: false }));
+        try {
+          await workActivityApi.delete(id);
+          queryClient.invalidateQueries({ queryKey: ["work-activities"] });
+        } catch (err: unknown) {
+          setError(getErrorMessage(err, "Failed to delete work activity"));
+        }
+      },
+    });
+  };
+
+  const handleDeleteAll = () => {
+    setConfirmDialog({
+      open: true,
+      title: "Delete All Work Activities",
+      message:
+        "This will permanently remove all work activities that are not referenced by productivity norms. Activities linked to norms will be skipped.",
+      onConfirm: async () => {
+        setConfirmDialog((d) => ({ ...d, open: false }));
+        try {
+          await workActivityApi.deleteAll();
+          queryClient.invalidateQueries({ queryKey: ["work-activities"] });
+        } catch (err: unknown) {
+          setError(getErrorMessage(err, "Failed to delete work activities"));
+        }
+      },
+    });
   };
 
   if (isLoading && activities.length === 0) {
@@ -127,6 +159,14 @@ export default function WorkActivitiesPage() {
           >
             {showForm ? "Cancel" : "Add Activity"}
           </button>
+          {activities.length > 0 && (
+            <button
+              onClick={handleDeleteAll}
+              className="px-4 py-2 bg-danger text-text-primary rounded-lg hover:bg-red-600"
+            >
+              Delete All
+            </button>
+          )}
         </div>
 
         {error && <div className="text-danger mb-4">{error}</div>}
@@ -295,6 +335,14 @@ export default function WorkActivitiesPage() {
           </table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((d) => ({ ...d, open: false }))}
+      />
     </div>
   );
 }

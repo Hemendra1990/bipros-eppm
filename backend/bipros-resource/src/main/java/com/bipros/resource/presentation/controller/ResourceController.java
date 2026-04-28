@@ -94,4 +94,12 @@ public class ResourceController {
     resourceService.deleteResource(id);
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
+
+  @DeleteMapping
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<ApiResponse<Void>> deleteAllResources() {
+    log.info("DELETE /v1/resources - Deleting all resources");
+    resourceService.deleteAllResources();
+    return ResponseEntity.ok(ApiResponse.ok(null));
+  }
 }

@@ -72,7 +72,9 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       resourceApi.createProjectResourceAssignment(projectId, {
         activityId: formData.activityId,
         resourceId: formData.resourceId,
+        projectId,
         plannedUnits: parseFloat(formData.plannedUnits),
+        rateType: formData.rateType,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });

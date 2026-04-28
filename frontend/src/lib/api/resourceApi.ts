@@ -162,9 +162,11 @@ export interface ResourceAssignmentResponse {
 export interface CreateProjectResourceAssignmentRequest {
   activityId: string;
   resourceId: string;
+  projectId: string;
   assignmentStartDate?: string;
   assignmentFinishDate?: string;
   plannedUnits: number;
+  rateType?: string;
 }
 
 export const resourceApi = {
@@ -205,6 +207,8 @@ export const resourceApi = {
     apiClient.put<ApiResponse<ResourceResponse>>(`/v1/resources/${id}`, data).then((r) => r.data),
 
   deleteResource: (id: string) => apiClient.delete(`/v1/resources/${id}`),
+
+  deleteAllResources: () => apiClient.delete("/v1/resources"),
 
   getResourceAssignments: (resourceId: string, page = 0, size = 20) =>
     apiClient

@@ -48,4 +48,6 @@ export const workActivityApi = {
       .then((r) => r.data),
 
   delete: (id: string) => apiClient.delete(`/v1/work-activities/${id}`),
+
+  deleteAll: () => apiClient.delete("/v1/work-activities"),
 };

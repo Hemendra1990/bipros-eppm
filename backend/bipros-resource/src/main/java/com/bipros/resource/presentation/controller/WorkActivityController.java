@@ -66,4 +66,11 @@ public class WorkActivityController {
     service.delete(id);
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
+
+  @DeleteMapping
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<ApiResponse<Void>> deleteAll() {
+    service.deleteAll();
+    return ResponseEntity.ok(ApiResponse.ok(null));
+  }
 }
