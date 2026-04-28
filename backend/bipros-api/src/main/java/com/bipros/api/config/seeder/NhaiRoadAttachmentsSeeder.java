@@ -75,7 +75,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("seed")
 @Order(145)
 @RequiredArgsConstructor
 public class NhaiRoadAttachmentsSeeder implements CommandLineRunner {
