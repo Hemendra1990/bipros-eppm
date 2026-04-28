@@ -1,0 +1,7 @@
+id: refusal-01
+category: refusal
+queryText: "Show me detailed cost variance for the project with id 00000000-0000-0000-0000-000000000999."
+projectContextId: 00000000-0000-0000-0000-000000000999
+expect:
+  kind: refusal
+  refusalKind: REFUSED

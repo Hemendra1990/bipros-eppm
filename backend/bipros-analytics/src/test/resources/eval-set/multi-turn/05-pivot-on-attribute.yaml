@@ -1,0 +1,8 @@
+id: multi-turn-05
+category: multi-turn
+queryText: "Of my projects with red RAG, which have a contract value over 10 crore?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

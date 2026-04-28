@@ -39,12 +39,13 @@
         <module>bipros-integration</module>
         <module>bipros-admin</module>
         <module>bipros-gis</module>
+        <module>bipros-analytics</module>
         <module>bipros-api</module>
     </modules>
 
     <properties>
-        <java.version>23</java.version>
-        <maven.compiler.release>23</maven.compiler.release>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
         <mapstruct.version>1.6.3</mapstruct.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.8.4</springdoc.version>
@@ -152,6 +153,11 @@
             <dependency>
                 <groupId>com.bipros</groupId>
                 <artifactId>bipros-gis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-analytics</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

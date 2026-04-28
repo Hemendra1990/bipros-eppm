@@ -1,0 +1,8 @@
+id: cost-03
+category: cost
+queryText: "What is the latest CPI and SPI summary across the portfolio?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: get_evm_snapshot
+  minRows: 0

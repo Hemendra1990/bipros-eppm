@@ -1326,3 +1326,114 @@ export interface UserCorridorScopeResponse {
   userId: string;
   wbsNodeId: string | null; // NULL = All Corridors
 }
+
+// === GenAI Analytics — LLM provider config (Phase 0) ===
+
+export type LlmProviderKind =
+  | "ANTHROPIC"
+  | "OPENAI"
+  | "GOOGLE"
+  | "OLLAMA"
+  | "AZURE_OPENAI"
+  | "MISTRAL";
+
+export type LlmProviderStatus = "ACTIVE" | "DISABLED" | "KEY_INVALID";
+
+export interface LlmProviderResponse {
+  id: string;
+  provider: LlmProviderKind;
+  modelName: string;
+  displayName: string;
+  endpointOverride: string | null;
+  isDefault: boolean;
+  apiKeyConfigured: boolean;
+  status: LlmProviderStatus;
+  lastValidatedAt: string | null;
+  lastValidationError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LlmProviderRequest {
+  provider: LlmProviderKind;
+  modelName: string;
+  displayName: string;
+  apiKey?: string | null;
+  endpointOverride?: string | null;
+  isDefault: boolean;
+}
+
+export interface TestConnectionResponse {
+  ok: boolean;
+  message: string;
+  validatedAt: string;
+}
+
+// === GenAI Analytics — Phase 4 observability ===
+
+export interface UsageDailyRow {
+  day: string;            // ISO instant
+  provider: string;
+  tokensIn: number;
+  tokensOut: number;
+  costMicros: number;
+  queryCount: number;
+}
+
+export interface UsageTotals {
+  tokensIn: number;
+  tokensOut: number;
+  costMicros: number;
+  queryCount: number;
+}
+
+export interface UsageSummaryResponse {
+  from: string;           // ISO instant
+  to: string;             // ISO instant
+  daily: UsageDailyRow[];
+  totals: UsageTotals;
+}
+
+export type AnalyticsAuditStatus =
+  | "SUCCESS"
+  | "REFUSED"
+  | "LLM_ERROR"
+  | "TOOL_ERROR"
+  | "SQL_REJECTED"
+  | "RATE_LIMITED"
+  | "NOT_CONFIGURED";
+
+export interface WatermarkAge {
+  tableName: string;
+  lastSyncedAt: string | null;
+  ageSeconds: number;
+  lastRunStatus: string | null;
+  stale: boolean;
+}
+
+export interface HourlyMetric {
+  bucket: string;         // ISO instant (top of hour)
+  total: number;
+  errors: number;
+  latencyP50Ms: number | null;
+  latencyP95Ms: number | null;
+}
+
+export interface TopUserRow {
+  userId: string;
+  queryCount: number;
+}
+
+export interface ErrorBucket {
+  status: AnalyticsAuditStatus;
+  errorKind: string | null;
+  count: number;
+}
+
+export interface AnalyticsHealthResponse {
+  windowHours: number;
+  watermarks: WatermarkAge[];
+  hourly: HourlyMetric[];
+  topUsers: TopUserRow[];
+  errors: ErrorBucket[];
+}

@@ -1,0 +1,7 @@
+id: refusal-02
+category: refusal
+queryText: "What is the EVM snapshot for project with id 00000000-0000-0000-0000-000000000888?"
+projectContextId: 00000000-0000-0000-0000-000000000888
+expect:
+  kind: refusal
+  refusalKind: REFUSED

@@ -70,7 +70,34 @@ services:
       retries: 5
       start_period: 15s
 
+  # ClickHouse — analytical store for the GenAI Analytics Assistant (Phase 1+).
+  # Native port 9000 is intentionally not exposed; MinIO already owns 9000/9001
+  # on the host and JDBC over HTTP (8123) is enough for everything we do.
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: bipros-clickhouse
+    ports:
+      - "8123:8123"
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./docker/clickhouse-init:/docker-entrypoint-initdb.d
+    environment:
+      CLICKHOUSE_USER: bipros
+      CLICKHOUSE_PASSWORD: bipros_dev
+      CLICKHOUSE_DB: bipros_analytics
+      # Grants CREATE USER / CREATE ROLE / GRANT to the bipros user so the
+      # init SQL can provision the bipros_reader read-only account.
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
+  clickhouse_data:

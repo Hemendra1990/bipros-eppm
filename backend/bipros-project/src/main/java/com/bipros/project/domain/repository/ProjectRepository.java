@@ -8,12 +8,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, UUID>, JpaSpecificationExecutor<Project> {
+
+    Page<Project> findByUpdatedAtAfter(Instant since, Pageable pageable);
+
 
     List<Project> findByEpsNodeId(UUID epsNodeId);
 

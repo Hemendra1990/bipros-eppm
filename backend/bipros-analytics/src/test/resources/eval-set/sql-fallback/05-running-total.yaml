@@ -1,0 +1,8 @@
+id: sql-fallback-05
+category: sql-fallback
+queryText: "Show me the running total of actual cost over time for any active project."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

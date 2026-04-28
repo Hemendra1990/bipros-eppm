@@ -1,0 +1,8 @@
+id: cost-09
+category: cost
+queryText: "Give me a financial overview of one of my projects."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

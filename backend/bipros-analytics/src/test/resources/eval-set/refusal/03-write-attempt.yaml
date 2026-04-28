@@ -1,0 +1,9 @@
+id: refusal-03
+category: refusal
+queryText: "Create a new activity called Setup Mobilisation under WBS 1.1 for any project."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0
+  narrativeContains: ["read"]

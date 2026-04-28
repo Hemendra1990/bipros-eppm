@@ -1,0 +1,8 @@
+id: sql-fallback-02
+category: sql-fallback
+queryText: "Group total earned value by calendar month for the year."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

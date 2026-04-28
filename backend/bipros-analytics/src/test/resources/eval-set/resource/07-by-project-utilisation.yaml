@@ -1,0 +1,8 @@
+id: resource-07
+category: resource
+queryText: "Which project consumed the most labour-hours last month?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

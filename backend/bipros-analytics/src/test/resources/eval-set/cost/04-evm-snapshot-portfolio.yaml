@@ -1,0 +1,8 @@
+id: cost-04
+category: cost
+queryText: "Give me an earned-value snapshot for the active portfolio."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: get_evm_snapshot
+  minRows: 0

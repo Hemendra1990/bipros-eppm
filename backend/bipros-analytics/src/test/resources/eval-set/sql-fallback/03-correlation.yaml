@@ -1,0 +1,8 @@
+id: sql-fallback-03
+category: sql-fallback
+queryText: "Run a SQL query that joins activities to their cost expenses for the largest project."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

@@ -96,6 +96,10 @@
             <groupId>com.bipros</groupId>
             <artifactId>bipros-contract</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-analytics</artifactId>
+        </dependency>
 
         <!-- Spring Boot Starters -->
         <dependency>

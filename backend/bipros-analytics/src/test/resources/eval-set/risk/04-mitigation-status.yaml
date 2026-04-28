@@ -1,0 +1,8 @@
+id: risk-04
+category: risk
+queryText: "How many open risks do not have a mitigation plan yet?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

@@ -1,0 +1,8 @@
+id: risk-03
+category: risk
+queryText: "List the 10 highest-scoring risks I have visibility into."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: get_top_risks
+  minRows: 0

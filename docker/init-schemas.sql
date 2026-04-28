@@ -10,6 +10,13 @@ $$;
 -- Create database owned by bipros (if not using POSTGRES_DB)
 GRANT ALL PRIVILEGES ON DATABASE bipros TO bipros;
 
+-- PostGIS extension — required by the gis module's wbs_polygons.polygon column.
+-- The postgis/postgis image ships the binaries but the extension still has to be
+-- enabled per database; without this Hibernate fails with "Unknown type geometry"
+-- when the seeder writes WBS polygons. Must run before schema creation so any
+-- future schema-scoped postgis usage resolves cleanly.
+CREATE EXTENSION IF NOT EXISTS postgis;
+
 -- Initialize PostgreSQL schemas per bounded context
 CREATE SCHEMA IF NOT EXISTS project AUTHORIZATION bipros;
 CREATE SCHEMA IF NOT EXISTS activity AUTHORIZATION bipros;
@@ -24,6 +31,8 @@ CREATE SCHEMA IF NOT EXISTS portfolio AUTHORIZATION bipros;
 CREATE SCHEMA IF NOT EXISTS contract AUTHORIZATION bipros;
 CREATE SCHEMA IF NOT EXISTS document AUTHORIZATION bipros;
 CREATE SCHEMA IF NOT EXISTS gis AUTHORIZATION bipros;
+-- analytics: BYOK LLM provider configs + assistant audit log (added Phase 0)
+CREATE SCHEMA IF NOT EXISTS analytics AUTHORIZATION bipros;
 
 -- Grant public schema access
 GRANT ALL ON SCHEMA public TO bipros;

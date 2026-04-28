@@ -1,0 +1,8 @@
+id: schedule-04
+category: schedule
+queryText: "List my active projects."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: list_projects
+  minRows: 1

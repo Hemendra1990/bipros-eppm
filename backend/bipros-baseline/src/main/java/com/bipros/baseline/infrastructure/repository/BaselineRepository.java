@@ -17,5 +17,8 @@ public interface BaselineRepository extends JpaRepository<Baseline, UUID> {
 
   List<Baseline> findByProjectIdAndIsActiveTrue(UUID projectId);
 
+  /** All active baselines across all projects — used by analytics ETL to snapshot variance daily. */
+  List<Baseline> findByIsActiveTrue();
+
   long countByProjectId(UUID projectId);
 }

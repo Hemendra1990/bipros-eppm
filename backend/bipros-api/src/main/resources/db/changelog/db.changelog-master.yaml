@@ -55,3 +55,7 @@ databaseChangeLog:
       file: db/changelog/038-risk-activity-assignments.yaml
   - include:
       file: db/changelog/039-contract-extensions.yaml
+  - include:
+      file: db/changelog/050-user-llm-providers.yaml
+  - include:
+      file: db/changelog/051-analytics-audit-log.yaml

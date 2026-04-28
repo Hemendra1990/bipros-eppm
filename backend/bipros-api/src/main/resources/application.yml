@@ -54,6 +54,23 @@ spring:
       max-file-size: 50MB
       max-request-size: 60MB
 
+  # Redis — used by the analytics assistant for per-user rate limiting (Phase 4).
+  # Brought up by docker-compose alongside Postgres.
+  #
+  # repositories.enabled=false is REQUIRED. We use Redis only as a fast
+  # key-value store via StringRedisTemplate + a Lua script (no @RedisHash
+  # entities). Without this, Spring Data sees both JPA and Redis modules and
+  # switches to "strict repository configuration mode" — which mis-classifies
+  # every JpaRepository as a candidate Redis repository and fails to wire
+  # EntityManagerFactory into UserRepository / CustomUserDetailsService at boot.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+      repositories:
+        enabled: false
+
 server:
   port: 8080
   servlet:
@@ -138,6 +155,48 @@ bipros:
       model: claude-sonnet-4-6
       max-tokens: 512
       request-timeout-seconds: 30
+
+  # GenAI Analytics Assistant — v1 GA (Phase 4 shipped). Defaults to on.
+  # The flag is retained as an emergency kill switch: set
+  # BIPROS_ANALYTICS_ASSISTANT_ENABLED=false to disable the assistant without a
+  # redeploy (also disables /v1/llm-providers and the LLM adapter beans).
+  analytics:
+    assistant:
+      enabled: ${BIPROS_ANALYTICS_ASSISTANT_ENABLED:true}
+      # Maximum number of tool-call rounds per user query before the orchestrator
+      # gives up. Bounds runaway loops where the LLM keeps invoking tools without
+      # converging on an answer.
+      max-tool-rounds: ${BIPROS_ANALYTICS_MAX_TOOL_ROUNDS:3}
+      max-output-tokens: ${BIPROS_ANALYTICS_MAX_OUTPUT_TOKENS:8000}
+      timeout-seconds: ${BIPROS_ANALYTICS_TIMEOUT_SECONDS:60}
+      history-turns: ${BIPROS_ANALYTICS_HISTORY_TURNS:5}
+    sql:
+      max-rows: ${BIPROS_ANALYTICS_SQL_MAX_ROWS:10000}
+      max-execution-time: ${BIPROS_ANALYTICS_SQL_MAX_EXEC_SECONDS:10}
+    llm:
+      # AES-256 KEK as 64 hex chars. In dev a deterministic fallback is used with
+      # a warning. In prod this MUST be set.
+      kek-hex: ${BIPROS_LLM_KEK_HEX:}
+    clickhouse:
+      url: ${BIPROS_CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/bipros_analytics}
+      username: ${BIPROS_CLICKHOUSE_USER:bipros}
+      password: ${BIPROS_CLICKHOUSE_PASSWORD:bipros_dev}
+      reader-username: ${BIPROS_CLICKHOUSE_READER_USER:bipros_reader}
+      reader-password: ${BIPROS_CLICKHOUSE_READER_PASSWORD:bipros_reader_dev}
+    # Phase 1 ETL — Postgres → ClickHouse incremental sync. Default-on so the local stack
+    # populates the analytical store automatically; flip to false if a deploy needs to skip it.
+    etl:
+      enabled: ${BIPROS_ETL_ENABLED:true}
+      page-size: ${BIPROS_ETL_PAGE_SIZE:5000}
+      schedule-cron: ${BIPROS_ETL_CRON:0 */10 * * * *}
+    # Phase 4 — per-user rate limit on POST /v1/analytics/query. Backed by Redis;
+    # rejected calls return HTTP 429 with a Retry-After header and write a
+    # RATE_LIMITED row to analytics_audit_log so the admin health page sees abuse.
+    # Set enabled=false to disable the limiter entirely (the bean is not created).
+    rate-limit:
+      enabled: ${BIPROS_ANALYTICS_RATE_LIMIT_ENABLED:true}
+      queries-per-hour: ${BIPROS_ANALYTICS_RATE_LIMIT_QPH:60}
+      redis-key-prefix: "analytics:rl"
 
 # OpenAPI
 springdoc:

@@ -1,0 +1,8 @@
+id: multi-turn-04
+category: multi-turn
+queryText: "Across the portfolio, then show the top 3 risks for the worst-performing project."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

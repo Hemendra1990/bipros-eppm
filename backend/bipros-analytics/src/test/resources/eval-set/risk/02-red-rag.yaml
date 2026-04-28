@@ -1,0 +1,8 @@
+id: risk-02
+category: risk
+queryText: "Show me all risks rated red right now."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: get_top_risks
+  minRows: 0

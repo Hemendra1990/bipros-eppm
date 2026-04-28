@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
-  Banknote, BarChart3, Briefcase, Building2, Calendar, ChevronDown,
+  Activity, Banknote, BarChart3, Bot, Briefcase, Building2, Calendar, ChevronDown,
   ChevronLeft, ChevronRight, Contact, FileText, FolderTree, Gauge,
   Grid, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
   Network, Plug, Settings, SlidersHorizontal, Sparkles, Tag,
@@ -61,6 +61,12 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    label: "Settings",
+    items: [
+      { name: "LLM Providers", href: "/settings/llm-providers", icon: Bot },
+    ],
+  },
+  {
     label: "Admin",
     adminOnly: true,
     items: [
@@ -78,6 +84,7 @@ const groups: NavGroup[] = [
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },
       { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
       { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true },
+      { name: "Analytics Health", href: "/admin/analytics-health", icon: Activity, adminOnly: true },
       { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true },
     ],
   },

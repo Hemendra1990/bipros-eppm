@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.bipros</groupId>
+        <artifactId>bipros-backend</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>bipros-analytics</artifactId>
+    <name>Bipros EPPM - Analytics</name>
+    <description>GenAI Analytics Assistant — BYOK LLM providers, ClickHouse query orchestration, ETL.</description>
+
+    <properties>
+        <clickhouse.jdbc.version>0.7.2</clickhouse.jdbc.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-security</artifactId>
+        </dependency>
+
+        <!-- Phase 1 ETL: read from each domain module's JPA repositories. The handlers under
+             etl/handler/* depend on these source entities. Declared explicitly (rather than
+             relying on transitive resolution via bipros-api) so the dependency graph stays honest. -->
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-project</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-activity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-evm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-cost</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-resource</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-baseline</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-risk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-contract</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Phase 4: Redis-backed sliding-window rate limiter for the analytics endpoint.
+             Lettuce client is pulled in transitively. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- ClickHouse JDBC driver. 0.7.x line is compatible with clickhouse-server 24.8 and
+             ships the cleaner JdbcUrl + parameter-validation surface that JdbcTemplate.batchUpdate
+             expects. Pulls com.zaxxer:HikariCP transitively via spring-boot-starter-jdbc. -->
+        <dependency>
+            <groupId>com.clickhouse</groupId>
+            <artifactId>clickhouse-jdbc</artifactId>
+            <version>${clickhouse.jdbc.version}</version>
+            <classifier>shaded-all</classifier>
+        </dependency>
+
+        <!-- Phase 2: SQL parser/rewriter for the execute_sql safety layer.
+             Used by SqlSafetyValidator (parse + allowlist) and SqlScopeRewriter
+             (inject project_id IN (...) predicates). -->
+        <dependency>
+            <groupId>org.apache.calcite</groupId>
+            <artifactId>calcite-core</artifactId>
+            <version>1.37.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Phase 4: YAML fixture loading for the evaluation suite. Test scope only. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Phase 4: Exclude the evaluation suite from default test runs. The suite
+                 hits a real LLM provider (real cost) and requires ClickHouse + seeded data.
+                 Run manually with: mvn test -pl bipros-analytics -Dgroups=eval -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>eval</excludedGroups>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

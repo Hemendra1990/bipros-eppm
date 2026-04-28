@@ -1,0 +1,42 @@
+databaseChangeLog:
+  - changeSet:
+      id: 050-create-user-llm-providers-table
+      author: bipros
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                schemaName: analytics
+                tableName: user_llm_providers
+      changes:
+        - createTable:
+            schemaName: analytics
+            tableName: user_llm_providers
+            columns:
+              - column: { name: id,                    type: UUID,         constraints: { primaryKey: true, nullable: false } }
+              - column: { name: user_id,               type: UUID,         constraints: { nullable: false } }
+              - column: { name: provider,              type: VARCHAR(32),  constraints: { nullable: false } }
+              - column: { name: model_name,            type: VARCHAR(128), constraints: { nullable: false } }
+              - column: { name: display_name,          type: VARCHAR(128), constraints: { nullable: false } }
+              - column: { name: encrypted_api_key,     type: BYTEA }
+              - column: { name: endpoint_override,     type: VARCHAR(512) }
+              - column: { name: is_default,            type: BOOLEAN,      constraints: { nullable: false }, defaultValueBoolean: false }
+              - column: { name: status,                type: VARCHAR(32),  constraints: { nullable: false }, defaultValue: ACTIVE }
+              - column: { name: last_validated_at,     type: TIMESTAMP }
+              - column: { name: last_validation_error, type: VARCHAR(512) }
+              - column: { name: created_at,            type: TIMESTAMP,    constraints: { nullable: false } }
+              - column: { name: updated_at,            type: TIMESTAMP,    constraints: { nullable: false } }
+              - column: { name: created_by,            type: VARCHAR(255) }
+              - column: { name: updated_by,            type: VARCHAR(255) }
+              - column: { name: version,               type: BIGINT,       constraints: { nullable: false }, defaultValueNumeric: 0 }
+        - createIndex:
+            schemaName: analytics
+            tableName: user_llm_providers
+            indexName: idx_user_llm_providers_user_id
+            columns:
+              - column: { name: user_id }
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_user_llm_providers_default_per_user
+              ON analytics.user_llm_providers (user_id)
+              WHERE is_default = true

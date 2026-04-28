@@ -1,0 +1,8 @@
+id: cost-02
+category: cost
+queryText: "Which projects are over budget right now?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

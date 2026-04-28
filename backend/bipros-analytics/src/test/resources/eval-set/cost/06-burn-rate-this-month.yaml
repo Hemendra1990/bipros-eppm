@@ -1,0 +1,8 @@
+id: cost-06
+category: cost
+queryText: "What was our actual cost burn this month?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

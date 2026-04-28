@@ -1,0 +1,8 @@
+id: risk-06
+category: risk
+queryText: "Which risks have actually been realised in the last quarter?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

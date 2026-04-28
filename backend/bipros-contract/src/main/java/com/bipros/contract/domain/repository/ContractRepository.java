@@ -7,11 +7,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 @Repository
 public interface ContractRepository extends JpaRepository<Contract, UUID>, JpaSpecificationExecutor<Contract> {
+
+    Page<Contract> findByUpdatedAtAfter(Instant since, Pageable pageable);
+
     Page<Contract> findByProjectId(UUID projectId, Pageable pageable);
     List<Contract> findByProjectId(UUID projectId);
     List<Contract> findByTenderId(UUID tenderId);

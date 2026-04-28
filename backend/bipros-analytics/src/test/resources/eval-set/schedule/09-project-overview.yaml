@@ -1,0 +1,8 @@
+id: schedule-09
+category: schedule
+queryText: "Give me a summary of one of my running projects."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

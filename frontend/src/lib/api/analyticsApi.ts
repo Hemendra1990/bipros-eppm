@@ -31,6 +31,31 @@ export interface AnalyticsQueryRequest {
 }
 
 /**
+ * Live response from POST /v1/analytics/query — backend record
+ * `AnalyticsAssistantResponse`. Tabular fields are null when the answer
+ * is purely narrative (e.g. polite refusals); SQL/tokens/cost are null
+ * when no provider call happened (e.g. local refusal before the LLM).
+ */
+export interface AnalyticsAssistantResponse {
+  narrative: string | null;
+  toolUsed: string | null;
+  columns: string[] | null;
+  rows: Array<Record<string, unknown>> | null;
+  sqlExecuted: string | null;
+  tokensInput: number | null;
+  tokensOutput: number | null;
+  costMicros: number | null;
+  status: string;
+}
+
+export function isLlmNotConfigured(err: unknown): boolean {
+  const code = (
+    err as { response?: { data?: { error?: { code?: string } } } }
+  )?.response?.data?.error?.code;
+  return code === "LLM_NOT_CONFIGURED";
+}
+
+/**
  * Per-contractor performance/compliance rollup.
  * Populated by `/v1/analytics/contractor-performance`.
  * `safetyScore` is `null` because safety incident ingestion isn't wired yet
@@ -71,7 +96,10 @@ export const analyticsApi = {
 
   submitQuery: (request: AnalyticsQueryRequest) =>
     apiClient
-      .post<ApiResponse<AnalyticsQueryDto>>(`/v1/analytics/query`, request)
+      .post<ApiResponse<AnalyticsAssistantResponse>>(
+        `/v1/analytics/query`,
+        request
+      )
       .then((r) => r.data.data!),
 
   getQueryHistory: (limit: number = 20) =>

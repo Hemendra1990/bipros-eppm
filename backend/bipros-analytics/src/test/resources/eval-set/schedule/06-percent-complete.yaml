@@ -1,0 +1,8 @@
+id: schedule-06
+category: schedule
+queryText: "What is the average percent complete across the portfolio?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

@@ -1,0 +1,8 @@
+id: cost-10
+category: cost
+queryText: "Show me monthly cost trend for the last 6 months."
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0

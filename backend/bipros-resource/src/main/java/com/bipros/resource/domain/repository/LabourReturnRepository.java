@@ -8,11 +8,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 public interface LabourReturnRepository extends JpaRepository<LabourReturn, UUID> {
+
+  Page<LabourReturn> findByUpdatedAtAfter(Instant since, Pageable pageable);
+
 
   Page<LabourReturn> findByProjectIdAndReturnDateBetween(
       UUID projectId,

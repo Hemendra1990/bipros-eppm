@@ -1,0 +1,8 @@
+id: schedule-08
+category: schedule
+queryText: "Which projects are within 30 days of finish?"
+projectContextId: null
+expect:
+  kind: success
+  toolCalled: any
+  minRows: 0
