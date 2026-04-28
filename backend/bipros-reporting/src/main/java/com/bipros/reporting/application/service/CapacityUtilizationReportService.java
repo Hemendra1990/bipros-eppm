@@ -49,8 +49,12 @@ public class CapacityUtilizationReportService {
   public CapacityUtilizationReport build(
       UUID projectId, LocalDate fromDate, LocalDate toDate, String groupBy, String normType) {
 
-    LocalDate effectiveTo = toDate == null ? LocalDate.now() : toDate;
+    LocalDate today = LocalDate.now();
+    LocalDate effectiveTo = toDate == null ? today : toDate;
     LocalDate effectiveFrom = fromDate == null ? effectiveTo.withDayOfYear(1) : fromDate;
+    // Day/Month buckets anchor on today when today falls inside the cumulative window;
+    // for purely-historical ranges (toDate < today) they fall back to the last day of the range.
+    LocalDate referenceDate = effectiveTo.isBefore(today) ? effectiveTo : today;
     String resolvedGroupBy = groupBy == null ? "RESOURCE_TYPE" : groupBy.toUpperCase();
     boolean groupByResource = "RESOURCE".equals(resolvedGroupBy);
 
@@ -125,10 +129,10 @@ public class CapacityUtilizationReportService {
           resourceId));
 
       agg.addCumulative(qty, effectiveDays);
-      if (isInMonth(outputDate, effectiveTo)) {
+      if (isInMonth(outputDate, referenceDate)) {
         agg.addMonth(qty, effectiveDays);
       }
-      if (outputDate.equals(effectiveTo)) {
+      if (outputDate.equals(referenceDate)) {
         agg.addDay(qty, effectiveDays);
       }
     }
