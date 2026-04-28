@@ -133,6 +133,7 @@ export interface ProjectResponse {
   fromLocation: string | null;
   toLocation: string | null;
   totalLengthKm: number | null;
+  calendarId: string | null;
   activeBaselineId: string | null;
   contract: {
     contractId: string | null;
@@ -192,6 +193,7 @@ export interface CreateProjectRequest {
   fromLocation?: string | null;
   toLocation?: string | null;
   totalLengthKm?: number | null;
+  calendarId?: string | null;
   contract?: ContractSummaryInput | null;
 }
 
@@ -212,6 +214,7 @@ export interface UpdateProjectRequest {
   fromLocation?: string | null;
   toLocation?: string | null;
   totalLengthKm?: number | null;
+  calendarId?: string | null;
   contract?: ContractSummaryInput | null;
 }
 
@@ -249,6 +252,7 @@ export interface ActivityResponse {
   freeFloat?: number;
   remainingDuration: number;
   isCritical?: boolean;
+  calendarId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

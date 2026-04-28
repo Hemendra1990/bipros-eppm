@@ -4,5 +4,6 @@ public enum UdfSubject {
     ACTIVITY,
     RESOURCE_ASSIGNMENT,
     WBS,
-    PROJECT
+    PROJECT,
+    PERMIT
 }

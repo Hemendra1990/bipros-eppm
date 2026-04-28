@@ -40,6 +40,8 @@ public record UpdateProjectRequest(
     @Size(max = 120) String toLocation,
     BigDecimal totalLengthKm,
 
+    UUID calendarId,
+
     @Valid CreateProjectRequest.ContractSummaryInput contract
 ) {
 }

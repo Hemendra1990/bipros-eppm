@@ -1,0 +1,59 @@
+package com.bipros.permit.application.dto;
+
+import com.bipros.permit.domain.model.PermitStatus;
+import com.bipros.permit.domain.model.RiskLevel;
+import com.bipros.permit.domain.model.WorkShift;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+public record PermitDetailResponse(
+        UUID id,
+        String permitCode,
+        UUID projectId,
+        UUID parentPermitId,
+        UUID permitTypeTemplateId,
+        String permitTypeCode,
+        String permitTypeName,
+        String permitTypeColorHex,
+        String permitTypeIconKey,
+        PermitStatus status,
+        RiskLevel riskLevel,
+        UUID contractorOrgId,
+        String supervisorName,
+        String locationZone,
+        String chainageMarker,
+        Instant startAt,
+        Instant endAt,
+        Instant validFrom,
+        Instant validTo,
+        WorkShift shift,
+        String taskDescription,
+        Instant declarationAcceptedAt,
+        UUID declarationAcceptedBy,
+        boolean qrAvailable,
+        Instant smsDispatchedAt,
+        int currentApprovalStep,
+        int approvalsCompleted,
+        int totalApprovalsRequired,
+        Instant closedAt,
+        UUID closedBy,
+        String closeRemarks,
+        Instant revokedAt,
+        UUID revokedBy,
+        String revokeReason,
+        Instant expiredAt,
+        Instant suspendedAt,
+        String suspendReason,
+        String customFieldsJson,
+        Instant createdAt,
+        Instant updatedAt,
+        UUID createdBy,
+        List<PermitWorkerDto> workers,
+        List<PermitApprovalDto> approvals,
+        List<PpeCheckDto> ppeChecks,
+        List<GasTestDto> gasTests,
+        List<IsolationPointDto> isolationPoints,
+        List<LifecycleEventDto> lifecycleEvents
+) {}

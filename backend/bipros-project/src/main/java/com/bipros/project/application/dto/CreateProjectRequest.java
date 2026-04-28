@@ -60,6 +60,9 @@ public record CreateProjectRequest(
     /** Optional override for the auto-derived corridor length in km. */
     BigDecimal totalLengthKm,
 
+    /** Default calendar for the project. Activities inherit this when no explicit calendar is set. */
+    UUID calendarId,
+
     /** Primary contract summary. When supplied the server upserts the project's primary
      *  Contract row with these values. */
     @Valid ContractSummaryInput contract

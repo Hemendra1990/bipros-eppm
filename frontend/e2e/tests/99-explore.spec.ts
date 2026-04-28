@@ -208,7 +208,7 @@ test.describe('Full App Exploration', () => {
 
       // ─── ACTIVITIES TAB ───
       console.log('\n  --- ACTIVITIES TAB ---');
-      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}?tab=activities`);
+      if (projectId) await page.goto(`http://localhost:3000/projects/${projectId}/activities`);
       else await page.getByText('Activities').first().click();
       await page.waitForTimeout(1500);
       const actTables = await page.locator('table').count();

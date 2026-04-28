@@ -10,6 +10,8 @@ import { activityApi } from "@/lib/api/activityApi";
 import type { ActivityResponse, UpdateActivityRequest } from "@/lib/api/activityApi";
 import { workActivityApi } from "@/lib/api/workActivityApi";
 import type { WorkActivityResponse } from "@/lib/api/workActivityApi";
+import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
+import { projectApi } from "@/lib/api/projectApi";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
@@ -18,6 +20,7 @@ import { UdfSection } from "@/components/udf/UdfSection";
 type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplete"> & {
   originalDuration?: number | "";
   percentComplete?: number | "";
+  calendarId?: string;
 };
 
 export default function ActivityDetailPage() {
@@ -36,6 +39,7 @@ export default function ActivityDetailPage() {
     actualStartDate: "",
     actualFinishDate: "",
     workActivityId: "",
+    calendarId: "",
   });
 
   const [usePert, setUsePert] = useState(false);
@@ -59,6 +63,18 @@ export default function ActivityDetailPage() {
     queryFn: () => workActivityApi.list(true),
   });
   const workActivities: WorkActivityResponse[] = workActivitiesData?.data ?? [];
+
+  const { data: calendarsData, isLoading: isLoadingCalendars } = useQuery({
+    queryKey: ["calendars", "all"],
+    queryFn: () => calendarApi.listCalendars(),
+  });
+  const projectCalendars = calendarsData?.data ?? [];
+
+  const { data: projectData } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => projectApi.getProject(projectId),
+  });
+  const projectCalendarId = projectData?.data?.calendarId;
   const linkedWorkActivity = activity?.workActivityId
     ? workActivities.find((w) => w.id === activity.workActivityId) ?? null
     : null;
@@ -139,6 +155,7 @@ export default function ActivityDetailPage() {
         actualStartDate: activity.actualStartDate || "",
         actualFinishDate: activity.actualFinishDate || "",
         workActivityId: activity.workActivityId || "",
+        calendarId: activity.calendarId || "",
       });
       setIsEditing(true);
     }
@@ -189,9 +206,12 @@ export default function ActivityDetailPage() {
           onPertChange={handlePertChange}
           workActivities={workActivities}
           onWorkActivityChange={handleWorkActivityChange}
+          projectCalendars={projectCalendars}
+          isLoadingCalendars={isLoadingCalendars}
+          projectCalendarId={projectCalendarId}
         />
       ) : (
-        <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} />
+        <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} projectCalendars={projectCalendars} projectCalendarId={projectCalendarId} />
       )}
     </div>
   );
@@ -201,10 +221,14 @@ function ViewMode({
   activity,
   projectId,
   workActivity,
+  projectCalendars,
+  projectCalendarId,
 }: {
   activity: ActivityResponse;
   projectId: string;
   workActivity: WorkActivityResponse | null;
+  projectCalendars: CalendarResponse[];
+  projectCalendarId: string | null | undefined;
 }) {
   const stat = (label: string, value: React.ReactNode, tone?: "neutral" | "accent" | "success" | "warning" | "danger") => {
     const toneCls = {
@@ -309,6 +333,50 @@ function ViewMode({
         )}
       </div>
 
+      {/* Calendar */}
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">Calendar</h3>
+        {activity.calendarId ? (
+          (() => {
+            const cal = projectCalendars.find((c) => c.id === activity.calendarId);
+            return cal ? (
+              <div className="flex flex-wrap items-center gap-3 text-sm text-text-primary">
+                <span className="font-medium">{cal.name}</span>
+                <span className="text-xs text-text-muted">
+                  {cal.standardWorkHoursPerDay}h / {cal.standardWorkDaysPerWeek}d · {cal.calendarType}
+                </span>
+                {activity.calendarId === projectCalendarId && (
+                  <span className="px-2 py-0.5 rounded bg-success/10 text-success ring-1 ring-success/20 text-xs">
+                    Inherited
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-text-muted">Linked calendar not found in list.</p>
+            );
+          })()
+        ) : (
+          (() => {
+            const inherited = projectCalendars.find((c) => c.id === projectCalendarId);
+            return inherited ? (
+              <div className="flex flex-wrap items-center gap-3 text-sm text-text-primary">
+                <span className="font-medium">{inherited.name}</span>
+                <span className="text-xs text-text-muted">
+                  {inherited.standardWorkHoursPerDay}h / {inherited.standardWorkDaysPerWeek}d · {inherited.calendarType}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-success/10 text-success ring-1 ring-success/20 text-xs">
+                  Inherited from project
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-text-muted">
+                No calendar assigned. Edit the activity to assign a work schedule.
+              </p>
+            );
+          })()
+        )}
+      </div>
+
       {/* Dependencies */}
       <ActivityDependencies
         projectId={projectId}
@@ -340,6 +408,9 @@ interface EditFormProps {
   onPertChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   workActivities: WorkActivityResponse[];
   onWorkActivityChange: (value: string) => void;
+  projectCalendars: CalendarResponse[];
+  isLoadingCalendars: boolean;
+  projectCalendarId: string | null | undefined;
 }
 
 function EditForm({
@@ -354,6 +425,9 @@ function EditForm({
   onPertChange,
   workActivities,
   onWorkActivityChange,
+  projectCalendars,
+  isLoadingCalendars,
+  projectCalendarId,
 }: EditFormProps) {
   return (
     <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
@@ -464,6 +538,37 @@ function EditForm({
           <p className="mt-1 text-xs text-text-muted">
             Links this project activity to its master library entry — required for productivity-norm
             lookups when computing budgeted vs actual resource-days.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary">
+            Calendar
+          </label>
+          <select
+            name="calendarId"
+            value={data.calendarId ?? ""}
+            onChange={onChange}
+            className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            disabled={isLoadingCalendars}
+          >
+            {isLoadingCalendars && <option value="">Loading…</option>}
+            <option value="">
+              {(() => {
+                const inherited = projectCalendars.find((c) => c.id === projectCalendarId);
+                return inherited
+                  ? `— Inherit from project: ${inherited.name} —`
+                  : "— Inherit from project —";
+              })()}
+            </option>
+            {projectCalendars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.standardWorkHoursPerDay}h / {c.standardWorkDaysPerWeek}d)
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-text-muted">
+            Leave empty to use the project’s default calendar. Select a different calendar to override.
           </p>
         </div>
 

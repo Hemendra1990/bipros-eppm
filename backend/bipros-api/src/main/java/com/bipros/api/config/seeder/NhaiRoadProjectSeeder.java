@@ -178,7 +178,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
       UUID epsLeaf = seedEps();
       UUID obsLeaf = seedObs(info);
       UUID calendarId = seedCalendar();
-      Project project = seedProject(epsLeaf, obsLeaf, info);
+      Project project = seedProject(epsLeaf, obsLeaf, info, calendarId);
 
       List<BoqRow> boqRows = reader.readBoqItems(wb);
       Map<String, UUID> wbs = seedWbs(project.getId(), boqRows);
@@ -333,7 +333,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   }
 
   // ────────────────────────── Project ────────────────────────
-  private Project seedProject(UUID epsLeafId, UUID obsLeafId, ProjectInfo info) {
+  private Project seedProject(UUID epsLeafId, UUID obsLeafId, ProjectInfo info, UUID calendarId) {
     Project p = new Project();
     p.setCode(info.projectCode());
     p.setName(nullSafe(info.projectName(), "NH-48 Widening"));
@@ -354,6 +354,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
     p.setToLocation("Km 165+000");
     p.setTotalLengthKm(java.math.BigDecimal.valueOf(
         (CHAINAGE_END_M - CHAINAGE_START_M) / 1000.0).setScale(3, java.math.RoundingMode.HALF_UP));
+    p.setCalendarId(calendarId);
     return projectRepository.save(p);
   }
 

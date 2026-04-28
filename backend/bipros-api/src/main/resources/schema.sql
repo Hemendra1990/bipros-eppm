@@ -12,6 +12,7 @@ CREATE SCHEMA IF NOT EXISTS portfolio;
 CREATE SCHEMA IF NOT EXISTS document;
 CREATE SCHEMA IF NOT EXISTS contract;
 CREATE SCHEMA IF NOT EXISTS gis;
+CREATE SCHEMA IF NOT EXISTS permit;
 -- PostGIS extension must exist before Hibernate creates the wbs_polygons
 -- geometry column. Works on the postgis/postgis:17-3.5 image; fails loudly if
 -- run against vanilla postgres:17 (image mismatch — fix docker-compose.yml).

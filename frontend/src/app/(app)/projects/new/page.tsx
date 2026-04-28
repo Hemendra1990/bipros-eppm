@@ -8,6 +8,7 @@ import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { projectApi } from "@/lib/api/projectApi";
 import { obsApi } from "@/lib/api/obsApi";
 import { projectCategoryApi } from "@/lib/api/projectCategoryApi";
+import { calendarApi } from "@/lib/api/calendarApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { getPriorityInfo } from "@/lib/utils/format";
 import { projectNotifications, notificationHelpers } from "@/lib/notificationHelpers";
@@ -24,6 +25,7 @@ export default function NewProjectPage() {
     plannedStartDate: "",
     plannedFinishDate: "",
     priority: 5,
+    calendarId: "",
   });
 
   const [error, setError] = useState("");
@@ -45,9 +47,15 @@ export default function NewProjectPage() {
     queryFn: () => projectCategoryApi.listActive(),
   });
 
+  const { data: calendarsData, isLoading: isLoadingCalendars } = useQuery({
+    queryKey: ["calendars", "all"],
+    queryFn: () => calendarApi.listCalendars(),
+  });
+
   const epsNodes = epsData?.data ?? [];
   const obsNodes = obsData?.data ?? [];
   const categories = categoriesData?.data ?? [];
+  const allCalendars = calendarsData?.data ?? [];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -202,6 +210,27 @@ export default function NewProjectPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Calendar</label>
+              <select
+                name="calendarId"
+                value={formData.calendarId || ""}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                disabled={isLoadingCalendars}
+              >
+                {isLoadingCalendars && <option value="">Loading…</option>}
+                <option value="">— none —</option>
+                {allCalendars.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.standardWorkHoursPerDay}h / {c.standardWorkDaysPerWeek}d)
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-text-muted">
+                Default calendar for all activities in this project.
+              </p>
             </div>
           </div>
 

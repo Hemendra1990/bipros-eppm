@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { CreateResourceRequest } from "@/lib/api/resourceApi";
 import { resourceTypeApi, BASE_CATEGORY_LABEL } from "@/lib/api/resourceTypeApi";
+import { calendarApi } from "@/lib/api/calendarApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import { useCurrency } from "@/lib/hooks/useCurrency";
@@ -22,6 +23,12 @@ export default function NewResourcePage() {
   });
   const typeDefs = useMemo(() => resourceTypesData?.data ?? [], [resourceTypesData]);
 
+  const { data: calendarsData, isLoading: calendarsLoading } = useQuery({
+    queryKey: ["calendars", "all"],
+    queryFn: () => calendarApi.listCalendars(),
+  });
+  const resourceCalendars = useMemo(() => calendarsData?.data ?? [], [calendarsData]);
+
   const [formData, setFormData] = useState<CreateResourceRequest & { hourlyRate: number; costPerUse: number; overtimeRate: number }>({
     code: "",
     name: "",
@@ -30,6 +37,7 @@ export default function NewResourcePage() {
     hourlyRate: 0,
     costPerUse: 0,
     overtimeRate: 0,
+    calendarId: "",
   });
 
   // Derived default — first time the form opens, fall back to the seeded Manpower def
@@ -160,6 +168,32 @@ export default function NewResourcePage() {
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">
+                Calendar
+              </label>
+              <select
+                name="calendarId"
+                value={formData.calendarId || ""}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                disabled={calendarsLoading}
+              >
+                {calendarsLoading && <option value="">Loading…</option>}
+                <option value="">— none —</option>
+                {resourceCalendars.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.standardWorkHoursPerDay}h / {c.standardWorkDaysPerWeek}d)
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-text-muted">
+                Defines work hours & holidays for this resource.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Max Units Per Day

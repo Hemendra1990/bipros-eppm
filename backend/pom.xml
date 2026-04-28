@@ -39,6 +39,7 @@
         <module>bipros-integration</module>
         <module>bipros-admin</module>
         <module>bipros-gis</module>
+        <module>bipros-permit</module>
         <module>bipros-api</module>
     </modules>
 
@@ -152,6 +153,11 @@
             <dependency>
                 <groupId>com.bipros</groupId>
                 <artifactId>bipros-gis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-permit</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

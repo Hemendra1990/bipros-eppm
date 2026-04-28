@@ -265,7 +265,7 @@ function TreeRow({
         {activity.remainingDuration || activity.duration || "-"} days
       </td>
       <td className="px-4 py-4 text-sm">
-        {activity.totalFloat !== undefined ? (
+        {activity.totalFloat != null ? (
           <span
             className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
               activity.totalFloat === 0

@@ -63,8 +63,11 @@ public class IcpmsBaselineSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        Project project = projectRepository.findByCode("DMIC-PROG")
-                .orElseThrow(() -> new IllegalStateException("DMIC-PROG project not seeded — run Phase A first"));
+        Project project = projectRepository.findByCode("DMIC-PROG").orElse(null);
+        if (project == null) {
+            log.warn("[IC-PMS M2 GAP] DMIC-PROG project not found — run Phase A first");
+            return;
+        }
         UUID projectId = project.getId();
 
         // Per-project sentinel — global count is unsafe now that other seeders (NHAI Road)

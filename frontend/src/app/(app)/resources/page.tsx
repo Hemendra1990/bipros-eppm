@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { UpdateResourceRequest } from "@/lib/api/resourceApi";
 import { resourceTypeApi, BASE_CATEGORY_LABEL } from "@/lib/api/resourceTypeApi";
+import { calendarApi } from "@/lib/api/calendarApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -22,7 +23,7 @@ const FINANCE_ROLES = ["ROLE_FINANCE", "ROLE_PMO", "ROLE_ADMIN"] as const;
 export default function ResourcesPage() {
   const queryClient = useQueryClient();
   const [editingResource, setEditingResource] = useState<ResourceResponse | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", resourceTypeDefId: "", maxUnitsPerDay: 0, status: "ACTIVE" as string, hourlyRate: 0, costPerUse: 0, overtimeRate: 0 });
+  const [editForm, setEditForm] = useState({ name: "", resourceTypeDefId: "", maxUnitsPerDay: 0, status: "ACTIVE" as string, hourlyRate: 0, costPerUse: 0, overtimeRate: 0, calendarId: "" });
 
   const { data: resourcesData, isLoading, error } = useQuery({
     queryKey: ["resources"],
@@ -34,6 +35,12 @@ export default function ResourcesPage() {
     queryFn: () => resourceTypeApi.list({ active: true }),
   });
   const allTypeDefs = resourceTypesData?.data ?? [];
+
+  const { data: calendarsData, isLoading: calendarsLoading } = useQuery({
+    queryKey: ["calendars", "all"],
+    queryFn: () => calendarApi.listCalendars(),
+  });
+  const resourceCalendars = calendarsData?.data ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: (resourceId: string) => resourceApi.deleteResource(resourceId),
@@ -73,6 +80,7 @@ export default function ResourcesPage() {
       hourlyRate: resource.hourlyRate ?? 0,
       costPerUse: resource.costPerUse ?? 0,
       overtimeRate: resource.overtimeRate ?? 0,
+      calendarId: resource.calendarId ?? "",
     });
   };
 
@@ -89,6 +97,7 @@ export default function ResourcesPage() {
         hourlyRate: editForm.hourlyRate,
         costPerUse: editForm.costPerUse,
         overtimeRate: editForm.overtimeRate,
+        calendarId: editForm.calendarId || undefined,
       },
     });
   };
@@ -242,6 +251,23 @@ export default function ResourcesPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Calendar</label>
+                <select
+                  value={editForm.calendarId}
+                  onChange={(e) => setEditForm({ ...editForm, calendarId: e.target.value })}
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  disabled={calendarsLoading}
+                >
+                  {calendarsLoading && <option value="">Loading…</option>}
+                  <option value="">— none —</option>
+                  {resourceCalendars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.standardWorkHoursPerDay}h / {c.standardWorkDaysPerWeek}d)
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

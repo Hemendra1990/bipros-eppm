@@ -63,8 +63,11 @@ public class IcpmsActivitiesSeeder implements CommandLineRunner {
         }
 
         // FK lookups
-        Project project = projectRepository.findByCode("DMIC-PROG")
-                .orElseThrow(() -> new IllegalStateException("DMIC-PROG project not seeded"));
+        Project project = projectRepository.findByCode("DMIC-PROG").orElse(null);
+        if (project == null) {
+            log.warn("[IC-PMS M2 GAP] DMIC-PROG project not found — run Phase A first");
+            return;
+        }
         UUID projectId = project.getId();
 
         Calendar cal6day = calendarRepository.findAll().stream()

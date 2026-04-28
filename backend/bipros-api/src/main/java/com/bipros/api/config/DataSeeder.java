@@ -94,7 +94,10 @@ public class DataSeeder implements CommandLineRunner {
       {"RESOURCE_MANAGER", "Manages resource pool and assignments"},
       {"TEAM_MEMBER", "Activity-level executor; updates assigned activities only"},
       {"CLIENT", "Read-only access scoped to projects they own"},
-      {"VIEWER", "Viewer with read-only access"}
+      {"VIEWER", "Viewer with read-only access"},
+      {"FOREMAN", "Foreman; raises Permit-to-Work applications"},
+      {"SITE_ENGINEER", "Site Engineer; reviews permits in their assigned zones"},
+      {"HSE_OFFICER", "HSE Officer; performs safety clearance and closes permits"}
     };
     int created = 0;
     for (String[] r : roles) {

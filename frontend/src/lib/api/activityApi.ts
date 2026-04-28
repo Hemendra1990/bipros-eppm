@@ -29,6 +29,7 @@ export interface ActivityResponse {
   notes?: string;
   /** Soft FK to resource.work_activities.id — links this activity to its master library entry. */
   workActivityId?: string | null;
+  calendarId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

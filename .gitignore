@@ -45,3 +45,11 @@ docker/data/
 
 # Git worktrees (isolated feature workspaces)
 .worktrees/
+
+# Generated knowledge graph
+graphify-out/
+
+# Demo deliverables (generated)
+Bipros_EPPM_Demo*.pptx
+Bipros_EPPM_Demo_Detailed.pdf
+generate_demo_ppt*.py

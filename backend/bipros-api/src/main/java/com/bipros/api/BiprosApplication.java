@@ -18,13 +18,6 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 @EnableMethodSecurity
 @EnableScheduling
 @EnableAsync
-@ComponentScan(
-        basePackages = "com.bipros",
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.REGEX,
-                pattern = "com\\.bipros\\.api\\.config\\.seeder\\..*"
-        )
-)
 public class BiprosApplication {
 
     public static void main(String[] args) {

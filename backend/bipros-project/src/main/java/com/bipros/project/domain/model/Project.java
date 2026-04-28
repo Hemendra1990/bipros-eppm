@@ -50,6 +50,10 @@ public class Project extends BaseEntity {
     @Column(nullable = false)
     private ProjectStatus status = ProjectStatus.PLANNED;
 
+    /** Industry pack key driving HSE/PTW templating (ROAD, OIL_GAS, BUILDING, ...). */
+    @Column(name = "industry_code", length = 30)
+    private String industryCode;
+
     @Column(name = "must_finish_by_date")
     private LocalDate mustFinishByDate;
 
@@ -105,6 +109,13 @@ public class Project extends BaseEntity {
      */
     @Column(name = "owner_id")
     private UUID ownerId;
+
+    /**
+     * Default calendar for this project. Activities created under this project inherit this
+     * calendar when no explicit override is supplied (P6-style project-calendar cascade).
+     */
+    @Column(name = "calendar_id")
+    private UUID calendarId;
 
     /**
      * Soft-delete timestamp. Non-null means the project is archived: hidden from default

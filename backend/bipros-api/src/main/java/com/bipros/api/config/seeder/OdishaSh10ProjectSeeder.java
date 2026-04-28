@@ -137,7 +137,7 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
         UUID epsLeaf = seedEps();
         UUID obsLeaf = seedObs();
         UUID calendarId = seedCalendar();
-        Project project = seedProject(epsLeaf, obsLeaf);
+        Project project = seedProject(epsLeaf, obsLeaf, calendarId);
 
         Map<String, UUID> wbs = seedWbs(project.getId());
         seedBoqItems(project.getId(), wbs);
@@ -263,7 +263,7 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
     }
 
     // ────────────────────────── Project ────────────────────────
-    private Project seedProject(UUID epsLeafId, UUID obsLeafId) {
+    private Project seedProject(UUID epsLeafId, UUID obsLeafId, UUID calendarId) {
         Project p = new Project();
         p.setCode(PROJECT_CODE);
         p.setName("SH-10 Bhubaneswar–Cuttack 4-laning & Strengthening");
@@ -285,6 +285,7 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
         p.setFromLocation("Bhubaneswar (Km 0+000)");
         p.setToLocation("Cuttack (Km 28+000)");
         p.setTotalLengthKm(BigDecimal.valueOf(28.000).setScale(3, RoundingMode.HALF_UP));
+        p.setCalendarId(calendarId);
         return projectRepository.save(p);
     }
 

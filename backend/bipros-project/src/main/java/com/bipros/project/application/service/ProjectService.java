@@ -97,6 +97,7 @@ public class ProjectService {
         project.setToLocation(sanitizeText(request.toLocation()));
         project.setTotalLengthKm(deriveTotalLengthKm(
             request.fromChainageM(), request.toChainageM(), request.totalLengthKm()));
+        project.setCalendarId(request.calendarId());
         project.setOwnerId(creatorId);
 
         Project saved = projectRepository.save(project);
@@ -190,6 +191,9 @@ public class ProjectService {
         }
         if (request.toLocation() != null) {
             project.setToLocation(sanitizeText(request.toLocation()));
+        }
+        if (request.calendarId() != null) {
+            project.setCalendarId(request.calendarId());
         }
         validateChainage(project.getFromChainageM(), project.getToChainageM());
         // Recompute derived length whenever chainages change (respecting an explicit override).
@@ -389,6 +393,7 @@ public class ProjectService {
             project.getFromLocation(),
             project.getToLocation(),
             project.getTotalLengthKm(),
+            project.getCalendarId(),
             project.getActiveBaselineId(),
             primaryContractSummary(project.getId()),
             toLocalDateTime(project.getCreatedAt()),

@@ -75,8 +75,11 @@ public class IcpmsFundingSeeder implements CommandLineRunner {
             return;
         }
 
-        Project project = projectRepository.findByCode("DMIC-PROG")
-                .orElseThrow(() -> new IllegalStateException("DMIC-PROG project not seeded — run Phase A first"));
+        Project project = projectRepository.findByCode("DMIC-PROG").orElse(null);
+        if (project == null) {
+            log.warn("[IC-PMS M2 GAP] DMIC-PROG project not found — run Phase A first");
+            return;
+        }
         UUID projectId = project.getId();
 
         // ---- sources ----

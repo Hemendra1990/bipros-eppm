@@ -7,8 +7,8 @@ import {
   Banknote, BarChart3, Briefcase, Building2, Calendar, ChevronDown,
   ChevronLeft, ChevronRight, Contact, FileText, FolderTree, Gauge,
   Grid, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
-  Network, Plug, Settings, SlidersHorizontal, Sparkles, Tag,
-  UserCog, Users, UsersRound,
+  Network, Plug, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Tag,
+  UserCog, Users, UsersRound, Workflow,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAppStore, useAuthStore } from "@/lib/state/store";
@@ -58,6 +58,14 @@ const groups: NavGroup[] = [
       { name: "Reports", href: "/reports", icon: BarChart3, module: "M9_REPORTS" },
       { name: "OBS", href: "/obs", icon: Network, module: "M1_WBS_GIS" },
       { name: "Analytics", href: "/analytics", icon: Sparkles, module: "M9_REPORTS" },
+    ],
+  },
+  {
+    label: "HSE & Permits",
+    items: [
+      { name: "Permits", href: "/permits", icon: ShieldCheck,
+        requireRoles: ["FOREMAN", "SITE_ENGINEER", "HSE_OFFICER", "PROJECT_MANAGER", "ADMIN"] },
+      { name: "Workflow Reference", href: "/permits/workflow", icon: Workflow },
     ],
   },
   {

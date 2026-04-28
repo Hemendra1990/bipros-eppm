@@ -10,6 +10,7 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
+import com.bipros.project.domain.repository.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -38,6 +39,7 @@ class ActivityServicePredecessorValidationTest {
   @Mock private ActivityRelationshipRepository relationshipRepository;
   @Mock private AuditService auditService;
   @Mock private ProjectAccessGuard projectAccess;
+  @Mock private ProjectRepository projectRepository;
 
   private ActivityService service;
 
@@ -48,7 +50,7 @@ class ActivityServicePredecessorValidationTest {
 
   @BeforeEach
   void setUp() {
-    service = new ActivityService(activityRepository, relationshipRepository, auditService, projectAccess);
+    service = new ActivityService(activityRepository, relationshipRepository, auditService, projectAccess, projectRepository);
 
     successorId = UUID.randomUUID();
     predecessorId = UUID.randomUUID();

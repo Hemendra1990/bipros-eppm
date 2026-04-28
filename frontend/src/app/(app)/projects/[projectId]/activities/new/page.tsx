@@ -9,6 +9,7 @@ import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import type { CreateActivityRequest } from "@/lib/api/activityApi";
 import { workActivityApi } from "@/lib/api/workActivityApi";
+import { calendarApi } from "@/lib/api/calendarApi";
 import type { WbsNodeResponse } from "@/lib/types";
 import { getErrorMessage } from "@/lib/utils/error";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
@@ -30,6 +31,7 @@ export default function NewActivityPage() {
     plannedStartDate: "",
     plannedFinishDate: "",
     workActivityId: "",
+    calendarId: "",
   });
 
   const [error, setError] = useState("");
@@ -48,6 +50,18 @@ export default function NewActivityPage() {
     queryFn: () => workActivityApi.list(true),
   });
   const workActivities = workActivitiesData?.data ?? [];
+
+  const { data: calendarsData, isLoading: isLoadingCalendars } = useQuery({
+    queryKey: ["calendars", "all"],
+    queryFn: () => calendarApi.listCalendars(),
+  });
+  const projectCalendars = calendarsData?.data ?? [];
+
+  const { data: projectData } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => projectApi.getProject(projectId),
+  });
+  const projectCalendarId = projectData?.data?.calendarId;
 
   // Flatten WBS tree for dropdown
   const flattenedWbs = flattenWbsNodes(wbsNodes);
@@ -94,6 +108,7 @@ export default function NewActivityPage() {
         plannedStartDate: formData.plannedStartDate || undefined,
         plannedFinishDate: formData.plannedFinishDate || undefined,
         workActivityId: formData.workActivityId || undefined,
+        calendarId: formData.calendarId || undefined,
       };
 
       const result = await activityApi.createActivity(projectId, createRequest);
@@ -103,7 +118,7 @@ export default function NewActivityPage() {
       } else {
         activityNotifications.created();
         queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
-        router.push(`/projects/${projectId}?tab=activities`);
+        router.push(`/projects/${projectId}/activities`);
       }
     } catch (err: unknown) {
       const msg = getErrorMessage(err, "Failed to create activity");
@@ -120,7 +135,7 @@ export default function NewActivityPage() {
         <Breadcrumb items={[
           { label: "Projects", href: "/projects" },
           { label: "Project", href: `/projects/${projectId}` },
-          { label: "Activities", href: `/projects/${projectId}?tab=activities` },
+          { label: "Activities", href: `/projects/${projectId}/activities` },
           { label: "New Activity", href: `/projects/${projectId}/activities/new`, active: true },
         ]} />
       </div>
@@ -288,6 +303,37 @@ export default function NewActivityPage() {
             </p>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Calendar
+            </label>
+            <select
+              name="calendarId"
+              value={formData.calendarId}
+              onChange={handleChange}
+              className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              disabled={isLoadingCalendars}
+            >
+              {isLoadingCalendars && <option value="">Loading…</option>}
+              <option value="">
+                {(() => {
+                  const inherited = projectCalendars.find((c) => c.id === projectCalendarId);
+                  return inherited
+                    ? `— Inherit from project: ${inherited.name} —`
+                    : "— Inherit from project —";
+                })()}
+              </option>
+              {projectCalendars.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.standardWorkHoursPerDay}h / {c.standardWorkDaysPerWeek}d)
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-text-muted">
+              Leave empty to use the project’s default calendar. Select a different calendar to override.
+            </p>
+          </div>
+
           <div className="flex gap-3 pt-6">
             <button
               type="submit"
@@ -298,7 +344,7 @@ export default function NewActivityPage() {
             </button>
             <button
               type="button"
-              onClick={() => router.push(`/projects/${projectId}?tab=activities`)}
+              onClick={() => router.push(`/projects/${projectId}/activities`)}
               className="rounded-md bg-surface-active/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active"
             >
               Cancel

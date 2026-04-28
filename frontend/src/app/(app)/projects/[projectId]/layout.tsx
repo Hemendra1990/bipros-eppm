@@ -42,7 +42,7 @@ export default function ProjectDetailLayout({
   const tabs = [
     { id: "overview", label: "Overview", href: null },
     { id: "wbs", label: "WBS", href: null },
-    { id: "activities", label: "Activities", href: null },
+    { id: "activities", label: "Activities", href: `/projects/${projectId}/activities` },
     { id: "gantt", label: "Gantt", href: null },
     { id: "network", label: "Network", href: null },
     { id: "baselines", label: "Baselines", href: null },
@@ -123,33 +123,35 @@ export default function ProjectDetailLayout({
       </div>
 
       <div className="border-b border-border px-6">
-        <nav className="flex items-center gap-8 overflow-x-auto" aria-label="Tabs">
-          {tabs.map((t) => {
-            const isActive = isTabActive(t);
-            return (
-              <button
-                key={t.id}
-                onClick={() => {
-                  if (t.href) {
-                    router.push(t.href);
-                  } else {
-                    router.push(`/projects/${projectId}?tab=${t.id}`);
-                  }
-                }}
-                className={cn(
-                  "px-1 py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer",
-                  isActive
-                    ? "border-accent text-accent"
-                    : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
-                )}
-              >
-                {t.label}
-              </button>
-            );
-          })}
+        <nav className="flex items-center gap-8" aria-label="Tabs">
+          <div className="flex items-center gap-8 overflow-x-auto">
+            {tabs.map((t) => {
+              const isActive = isTabActive(t);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    if (t.href) {
+                      router.push(t.href);
+                    } else {
+                      router.push(`/projects/${projectId}?tab=${t.id}`);
+                    }
+                  }}
+                  className={cn(
+                    "px-1 py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer shrink-0",
+                    isActive
+                      ? "border-accent text-accent"
+                      : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
+                  )}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Master Data Dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => {
                 setMasterDataOpen(!masterDataOpen);
@@ -197,7 +199,7 @@ export default function ProjectDetailLayout({
           </div>
 
           {/* More Dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => {
                 setMoreDropdownOpen(!moreDropdownOpen);

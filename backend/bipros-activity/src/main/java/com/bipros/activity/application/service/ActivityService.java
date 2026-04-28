@@ -14,6 +14,8 @@ import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.AccessSpecifications;
 import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -37,6 +39,7 @@ public class ActivityService {
   private final ActivityRelationshipRepository relationshipRepository;
   private final AuditService auditService;
   private final ProjectAccessGuard projectAccess;
+  private final ProjectRepository projectRepository;
 
   public ActivityResponse createActivity(CreateActivityRequest request) {
     log.info("Creating activity: code={}, name={}, projectId={}", request.code(), request.name(),
@@ -89,7 +92,8 @@ public class ActivityService {
     }
     activity.setPlannedStartDate(plannedStart);
     activity.setPlannedFinishDate(plannedFinish);
-    activity.setCalendarId(request.calendarId());
+    UUID calendarId = resolveCalendarId(request.projectId(), request.calendarId());
+    activity.setCalendarId(calendarId);
     activity.setChainageFromM(request.chainageFromM());
     activity.setChainageToM(request.chainageToM());
     activity.setWorkActivityId(request.workActivityId());
@@ -516,5 +520,17 @@ public class ActivityService {
     }
     long days = Math.round(Math.abs(lag));
     return lag > 0 ? " + " + days + "d" : " - " + days + "d";
+  }
+
+  /**
+   * Returns the explicit {@code calendarId} if supplied; otherwise falls back to the
+   * project's default calendar (P6-style project-calendar inheritance).
+   */
+  private UUID resolveCalendarId(UUID projectId, UUID explicitCalendarId) {
+    if (explicitCalendarId != null) {
+      return explicitCalendarId;
+    }
+    Project project = projectRepository.findById(projectId).orElse(null);
+    return project != null ? project.getCalendarId() : null;
   }
 }
