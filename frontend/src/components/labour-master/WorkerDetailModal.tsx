@@ -24,51 +24,83 @@ export function WorkerDetailModal({ designation, onClose }: Props) {
   const workerCount = designation.deployment?.workerCount ?? 0;
   const dailyRate = designation.deployment?.effectiveRate ?? designation.defaultDailyRate;
   const totalDailyCost = designation.deployment?.dailyCost ?? workerCount * dailyRate;
+
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-paper/80 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
-      <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <header className="flex items-start justify-between">
+      <div
+        className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-hairline bg-paper shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`pointer-events-none absolute inset-x-0 top-0 h-[3px] ${accent.stripe}`} />
+
+        <header className="flex items-start justify-between gap-3 px-6 pt-5 pb-4">
           <div>
-            <div className="text-xs font-mono text-muted-foreground">{designation.code}</div>
-            <h3 className="text-xl font-semibold">{designation.designation}</h3>
-            <p className="text-sm text-muted-foreground">
-              {designation.categoryDisplay} · {designation.trade}
-            </p>
+            <div className="font-mono text-[11px] tracking-[0.06em] text-gold-ink">{designation.code}</div>
+            <h3 className="mt-1 font-display text-[24px] font-semibold leading-tight text-charcoal">
+              {designation.designation}
+            </h3>
+            <div className="mt-1 flex items-center gap-2 text-[12px] text-slate">
+              <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${accent.chip}`}>
+                {designation.categoryDisplay}
+              </span>
+              <span>·</span>
+              <span>{designation.trade}</span>
+            </div>
           </div>
-          <button onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-slate-900">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1.5 text-slate hover:bg-ivory hover:text-charcoal"
+          >
             ✕
           </button>
         </header>
-        <div className={`mt-4 grid grid-cols-2 gap-3 rounded ${accent.bg} ring-1 ${accent.ring} p-4`}>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-y border-hairline bg-ivory/40 px-6 py-5">
           <Field label="Grade">
-            <span className={`px-2 py-0.5 rounded text-xs ${GRADE_BADGE[designation.grade]}`}>
+            <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-semibold ${GRADE_BADGE[designation.grade]}`}>
               Grade {designation.grade}
             </span>
           </Field>
-          <Field label="Nationality">{designation.nationality.replace("_", " / ")}</Field>
-          <Field label="Experience">{designation.experienceYearsMin}+ yrs</Field>
-          <Field label="Worker Count">{workerCount}</Field>
-          <Field label="Daily Rate">{formatOMR(dailyRate)}</Field>
-          <Field label="Total Daily Cost">{formatOMR(totalDailyCost)}</Field>
+          <Field label="Nationality">
+            <span className="text-[13px] text-charcoal">{designation.nationality.replace(/_/g, " / ")}</span>
+          </Field>
+          <Field label="Experience">
+            <span className="font-display text-[18px] font-semibold text-charcoal">{designation.experienceYearsMin}+ yrs</span>
+          </Field>
+          <Field label="Workers on this project">
+            <span className="font-display text-[18px] font-semibold text-charcoal">{workerCount}</span>
+          </Field>
+          <Field label="Daily rate">
+            <span className="font-display text-[18px] font-semibold text-gold-deep">{formatOMR(dailyRate)}</span>
+          </Field>
+          <Field label="Total daily cost">
+            <span className="font-display text-[18px] font-semibold text-gold-deep">{formatOMR(totalDailyCost)}</span>
+          </Field>
         </div>
+
         <Section title="Skills">
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             {designation.skills.map((s) => (
-              <span key={s} className={`text-xs px-2 py-0.5 rounded ${accent.chip}`}>
+              <span key={s} className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] ${accent.chip}`}>
                 {s}
               </span>
             ))}
           </div>
         </Section>
-        <Section title="Required Certifications">
-          <ul className="list-disc pl-5 text-sm">
+
+        <Section title="Required certifications">
+          <ul className="grid gap-1 sm:grid-cols-2">
             {designation.certifications.map((c) => (
-              <li key={c}>{c}</li>
+              <li key={c} className="flex items-start gap-2 text-[13px] text-charcoal">
+                <span className={`mt-1 h-1.5 w-1.5 rounded-full ${accent.stripe}`} />
+                {c}
+              </li>
             ))}
           </ul>
         </Section>
@@ -80,16 +112,16 @@ export function WorkerDetailModal({ designation, onClose }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-sm font-medium">{children}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">{label}</div>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mt-5">
-      <h4 className="text-sm font-semibold mb-2">{title}</h4>
+    <div className="px-6 py-4">
+      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">{title}</h4>
       {children}
     </div>
   );

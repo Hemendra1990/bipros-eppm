@@ -21,7 +21,7 @@ const GRADES: LabourGrade[] = ["A", "B", "C", "D", "E"];
 const NATIONALITIES: NationalityType[] = ["OMANI", "EXPAT", "OMANI_OR_EXPAT"];
 
 const inputCls =
-  "px-3 py-2 border rounded text-sm w-full bg-white";
+  "w-full rounded-md border border-hairline bg-ivory px-3 py-2 text-[13px] text-charcoal placeholder:text-ash focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/40";
 
 export function AddDesignationForm() {
   const router = useRouter();
@@ -74,24 +74,19 @@ export function AddDesignationForm() {
         setError(null);
         create.mutate();
       }}
-      className="grid gap-4 grid-cols-1 md:grid-cols-2 max-w-3xl"
+      className="grid max-w-3xl grid-cols-1 gap-5 rounded-xl border border-hairline bg-paper p-6 md:grid-cols-2"
     >
-      <Field label="Worker Code">
+      <Field label="Worker code">
         <input
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           pattern="^(SM|PO|SL|SS|GL)-\d{3}$"
           required
-          className={inputCls}
+          className={`${inputCls} font-mono`}
         />
       </Field>
       <Field label="Designation">
-        <input
-          value={designation}
-          onChange={(e) => setDesignation(e.target.value)}
-          required
-          className={inputCls}
-        />
+        <input value={designation} onChange={(e) => setDesignation(e.target.value)} required className={inputCls} />
       </Field>
       <Field label="Category">
         <select
@@ -100,30 +95,17 @@ export function AddDesignationForm() {
           className={inputCls}
         >
           {CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
+            <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
       </Field>
       <Field label="Trade">
-        <input
-          value={trade}
-          onChange={(e) => setTrade(e.target.value)}
-          required
-          className={inputCls}
-        />
+        <input value={trade} onChange={(e) => setTrade(e.target.value)} required className={inputCls} />
       </Field>
       <Field label="Grade">
-        <select
-          value={grade}
-          onChange={(e) => setGrade(e.target.value as LabourGrade)}
-          className={inputCls}
-        >
+        <select value={grade} onChange={(e) => setGrade(e.target.value as LabourGrade)} className={inputCls}>
           {GRADES.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
+            <option key={g} value={g}>{g}</option>
           ))}
         </select>
       </Field>
@@ -134,9 +116,7 @@ export function AddDesignationForm() {
           className={inputCls}
         >
           {NATIONALITIES.map((n) => (
-            <option key={n} value={n}>
-              {n.replace("_", " / ")}
-            </option>
+            <option key={n} value={n}>{n.replace(/_/g, " / ")}</option>
           ))}
         </select>
       </Field>
@@ -149,7 +129,7 @@ export function AddDesignationForm() {
           className={inputCls}
         />
       </Field>
-      <Field label="Daily Rate (OMR)">
+      <Field label="Daily rate (OMR)">
         <input
           type="number"
           min={0}
@@ -175,19 +155,23 @@ export function AddDesignationForm() {
           className={inputCls}
         />
       </Field>
-      {error && <div className="md:col-span-2 text-sm text-red-700">{error}</div>}
-      <div className="md:col-span-2 flex gap-2">
+      {error && (
+        <div className="md:col-span-2 rounded-md border border-burgundy/40 bg-burgundy/10 px-3 py-2 text-[12px] text-burgundy">
+          {error}
+        </div>
+      )}
+      <div className="md:col-span-2 flex items-center gap-2 border-t border-hairline pt-4">
         <button
           type="submit"
           disabled={create.isPending}
-          className="px-4 py-2 rounded bg-slate-900 text-white"
+          className="inline-flex items-center justify-center rounded-md bg-gold px-4 py-2 text-[13px] font-semibold text-charcoal transition hover:bg-gold-deep disabled:opacity-60"
         >
-          Save
+          {create.isPending ? "Saving…" : "Save designation"}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-4 py-2 rounded border"
+          className="inline-flex items-center justify-center rounded-md border border-hairline px-4 py-2 text-[13px] text-slate hover:bg-ivory hover:text-charcoal"
         >
           Cancel
         </button>
@@ -198,9 +182,9 @@ export function AddDesignationForm() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="space-y-1">
-      <span className="text-sm font-medium">{label}</span>
-      <div>{children}</div>
+    <label className="space-y-1.5">
+      <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">{label}</span>
+      {children}
     </label>
   );
 }
