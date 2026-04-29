@@ -65,3 +65,5 @@ databaseChangeLog:
       file: db/changelog/043-activity-work-activity-link.yaml
   - include:
       file: db/changelog/044-daily-activity-resource-outputs.yaml
+  - include:
+      file: db/changelog/045-labour-master-tables.yaml
