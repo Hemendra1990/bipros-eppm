@@ -82,9 +82,10 @@ public class LabourDesignation extends BaseEntity {
     @Column(name = "key_role_summary", length = 500)
     private String keyRoleSummary;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Default
-    private String status = "ACTIVE";
+    private LabourStatus status = LabourStatus.ACTIVE;
 
     @Column(name = "sort_order", nullable = false)
     @Default

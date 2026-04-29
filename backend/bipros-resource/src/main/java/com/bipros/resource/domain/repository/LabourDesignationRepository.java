@@ -3,6 +3,7 @@ package com.bipros.resource.domain.repository;
 import com.bipros.resource.domain.model.LabourCategory;
 import com.bipros.resource.domain.model.LabourDesignation;
 import com.bipros.resource.domain.model.LabourGrade;
+import com.bipros.resource.domain.model.LabourStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,7 +35,7 @@ public interface LabourDesignationRepository extends JpaRepository<LabourDesigna
         """)
     Page<LabourDesignation> search(@Param("category") LabourCategory category,
                                    @Param("grade")    LabourGrade grade,
-                                   @Param("status")   String status,
+                                   @Param("status")   LabourStatus status,
                                    @Param("q")        String q,
                                    Pageable pageable);
 }
