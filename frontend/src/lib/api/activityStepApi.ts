@@ -51,6 +51,13 @@ export const activityStepApi = {
       )
       .then((r) => r.data),
 
+  uncompleteStep: (activityId: string, stepId: string) =>
+    apiClient
+      .put<ApiResponse<ActivityStepResponse>>(
+        `/v1/activities/${activityId}/steps/${stepId}/uncomplete`
+      )
+      .then((r) => r.data),
+
   deleteStep: (activityId: string, stepId: string) =>
     apiClient.delete(`/v1/activities/${activityId}/steps/${stepId}`),
 };

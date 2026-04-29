@@ -340,7 +340,7 @@ function ViewMode({
 
   const totalPlannedCost = assignments.reduce((sum, a) => sum + (a.plannedCost ?? 0), 0);
   const totalActualCost = assignments.reduce((sum, a) => sum + (a.actualCost ?? 0), 0);
-  const totalExpenses = activityExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = activityExpenses.reduce((sum, e) => sum + (e.actualCost ?? 0), 0);
 
   const fmt = (n: number) =>
     n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
@@ -482,9 +482,9 @@ function ViewMode({
                   {activityExpenses.map((e) => (
                     <tr key={e.id} className="border-b border-border/40">
                       <td className="py-1.5 pr-3 text-text-primary">{e.description}</td>
-                      <td className="py-1.5 pr-3 text-text-secondary">{e.category}</td>
-                      <td className="py-1.5 pr-3 text-text-secondary">{e.expenseDate}</td>
-                      <td className="py-1.5 text-right text-text-primary">{fmt(e.amount)}</td>
+                      <td className="py-1.5 pr-3 text-text-secondary">{e.expenseCategory}</td>
+                      <td className="py-1.5 pr-3 text-text-secondary">{e.actualStartDate}</td>
+                      <td className="py-1.5 text-right text-text-primary">{fmt(e.actualCost ?? 0)}</td>
                     </tr>
                   ))}
                   <tr className="font-semibold bg-surface-hover/30">
@@ -553,7 +553,7 @@ function ViewMode({
       </div>
 
       {/* Activity Steps */}
-      <ActivityStepsPanel activityId={activity.id} percentCompleteType={activity.percentCompleteType as string | undefined} />
+      <ActivityStepsPanel activityId={activity.id} projectId={projectId} percentCompleteType={activity.percentCompleteType as string | undefined} />
 
       {/* Master Work Activity link */}
       <div className="rounded-lg border border-border bg-surface/50 p-4">
@@ -638,9 +638,11 @@ function ViewMode({
 
 function ActivityStepsPanel({
   activityId,
+  projectId,
   percentCompleteType,
 }: {
   activityId: string;
+  projectId: string;
   percentCompleteType?: string;
 }) {
   const queryClient = useQueryClient();
@@ -659,6 +661,7 @@ function ActivityStepsPanel({
     mutationFn: (req: CreateActivityStepRequest) => activityStepApi.createStep(activityId, req),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
       setShowAdd(false);
       setNewStep({ name: "", weight: undefined });
     },
@@ -669,6 +672,7 @@ function ActivityStepsPanel({
       activityStepApi.updateStep(activityId, stepId, name, weight, description),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
       setEditingId(null);
     },
   });
@@ -677,6 +681,15 @@ function ActivityStepsPanel({
     mutationFn: (stepId: string) => activityStepApi.completeStep(activityId, stepId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
+    },
+  });
+
+  const uncompleteMutation = useMutation({
+    mutationFn: (stepId: string) => activityStepApi.uncompleteStep(activityId, stepId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
     },
   });
 
@@ -684,10 +697,11 @@ function ActivityStepsPanel({
     mutationFn: (stepId: string) => activityStepApi.deleteStep(activityId, stepId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
     },
   });
 
-  const isWeightedSteps = percentCompleteType === "WEIGHTED_STEPS";
+  const isWeightedSteps = percentCompleteType === "PHYSICAL";
 
   return (
     <div className={`rounded-lg border p-4 ${isWeightedSteps ? "border-accent bg-accent/5" : "border-border bg-surface/50"}`}>
@@ -813,7 +827,16 @@ function ActivityStepsPanel({
                     <span className="text-xs text-text-secondary">{step.weightPercent.toFixed(1)}%</span>
                   )}
                   {step.isCompleted ? (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success">Done</span>
+                    <>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success">Done</span>
+                      <button
+                        onClick={() => uncompleteMutation.mutate(step.id)}
+                        disabled={uncompleteMutation.isPending}
+                        className="text-xs px-2 py-0.5 rounded border border-warning/40 text-warning hover:bg-warning/10 disabled:opacity-50"
+                      >
+                        Undo
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={() => completeMutation.mutate(step.id)}

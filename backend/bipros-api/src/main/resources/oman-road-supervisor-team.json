@@ -1,0 +1,7 @@
+[
+  { "name": "Mohsin Ahmad", "role": "PROJECT_MANAGER", "email": "mohsin.ahmad@bnk-contractor.om", "phone": "+968-9000-0001", "obsCode": "BNK-PM-TEAM" },
+  { "name": "T. Swamy",     "role": "SITE_SUPERVISOR", "email": "t.swamy@bnk-contractor.om",      "phone": "+968-9000-0002", "obsCode": "BNK-SUP-TSWAMY",     "section": "A" },
+  { "name": "Nagarajan",    "role": "SITE_SUPERVISOR", "email": "nagarajan@bnk-contractor.om",    "phone": "+968-9000-0003", "obsCode": "BNK-SUP-NAGARAJAN",  "section": "B" },
+  { "name": "A.K. Singh",   "role": "SITE_SUPERVISOR", "email": "ak.singh@bnk-contractor.om",     "phone": "+968-9000-0004", "obsCode": "BNK-SUP-AKSINGH",    "section": "C" },
+  { "name": "Anbazhagan",   "role": "SITE_SUPERVISOR", "email": "anbazhagan@bnk-contractor.om",   "phone": "+968-9000-0005", "obsCode": "BNK-SUP-ANBAZHAGAN", "section": "D" }
+]

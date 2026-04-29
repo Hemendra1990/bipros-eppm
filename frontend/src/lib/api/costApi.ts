@@ -29,10 +29,11 @@ export interface CostSummary {
   costVariance: number;
   costPerformanceIndex: number | null;
   expenseCount: number;
-  // PMS MasterData procurement roll-ups (nullable when the project has no material activity).
   materialProcurementCost: number | null;
   openStockValue: number | null;
   materialIssuedCost: number | null;
+  projectOriginalBudget: number | null;
+  projectCurrentBudget: number | null;
 }
 
 export interface CashFlowForecastItem {
@@ -64,10 +65,14 @@ export type ForecastMethod = "LINEAR" | "CPI_BASED" | "SPI_CPI_COMPOSITE";
 export interface CreateExpenseRequest {
   activityId?: string;
   description: string;
-  amount: number;
+  actualCost: number;
+  budgetedCost?: number;
+  remainingCost?: number;
+  atCompletionCost?: number;
+  percentComplete?: number;
   currency?: string;
-  expenseDate: string;
-  category: string;
+  actualStartDate: string | null;
+  expenseCategory: string;
 }
 
 export const costApi = {

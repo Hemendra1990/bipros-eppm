@@ -1,5 +1,6 @@
 package com.bipros.project.application.service;
 
+import com.bipros.common.event.DailyOutputChangedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
@@ -12,6 +13,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class DailyActivityResourceOutputService {
   private final DailyActivityResourceOutputRepository repository;
   private final ProjectRepository projectRepository;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
 
   /** Used to resolve the activity's {@code work_activity.default_unit} via a tiny native query —
    *  keeps {@code bipros-project} independent of {@code bipros-activity}/{@code bipros-resource}
@@ -69,6 +72,9 @@ public class DailyActivityResourceOutputService {
         .build();
 
     DailyActivityResourceOutput saved = repository.save(row);
+    recomputeAssignmentRollup(projectId, request.activityId(), request.resourceId());
+    eventPublisher.publishEvent(
+        new DailyOutputChangedEvent(projectId, request.activityId(), request.resourceId()));
     auditService.logCreate("DailyActivityResourceOutput", saved.getId(),
         DailyActivityResourceOutputResponse.from(saved));
     log.info("Created DailyActivityResourceOutput id={} project={} date={} activity={} resource={}",
@@ -105,7 +111,11 @@ public class DailyActivityResourceOutputService {
 
   public void delete(UUID projectId, UUID id) {
     DailyActivityResourceOutput row = find(projectId, id);
+    UUID activityId = row.getActivityId();
+    UUID resourceId = row.getResourceId();
     repository.delete(row);
+    recomputeAssignmentRollup(projectId, activityId, resourceId);
+    eventPublisher.publishEvent(new DailyOutputChangedEvent(projectId, activityId, resourceId));
     auditService.logDelete("DailyActivityResourceOutput", id);
   }
 
@@ -131,6 +141,44 @@ public class DailyActivityResourceOutputService {
   private void ensureProjectExists(UUID projectId) {
     if (!projectRepository.existsById(projectId)) {
       throw new ResourceNotFoundException("Project", projectId);
+    }
+  }
+
+  /**
+   * Re-aggregates this ledger into the matching {@code resource.resource_assignments} row.
+   *
+   * <p>{@code actual_units = SUM(qty_executed)}, {@code actual_start_date = MIN(output_date)},
+   * {@code remaining_units = MAX(planned_units - actual_units, 0)} for the
+   * {@code (project, activity, resource)} triple. Cross-schema native UPDATE — same precedent as
+   * {@link #resolveUnitFromActivity}; keeps {@code bipros-project} free of a Maven dep on
+   * {@code bipros-resource}. Cost rollup ({@code actual_cost}) is intentionally out of scope here:
+   * it needs effective-dated {@code ResourceRate} resolution and belongs in the resource module.
+   */
+  private void recomputeAssignmentRollup(UUID projectId, UUID activityId, UUID resourceId) {
+    // LEAST() ignores NULLs in Postgres, so an externally-set actual_start_date (P6 import, seed)
+    // is preserved when it predates the ledger. Only the ledger drives actual_units / remaining_units —
+    // those are fully derived here.
+    int updated = em.createNativeQuery(
+            "UPDATE resource.resource_assignments AS ra "
+                + "SET actual_units = COALESCE(agg.total_units, 0), "
+                + "    actual_start_date = LEAST(ra.actual_start_date, agg.min_date), "
+                + "    remaining_units = GREATEST(COALESCE(ra.planned_units, 0) - COALESCE(agg.total_units, 0), 0) "
+                + "FROM ( "
+                + "  SELECT SUM(qty_executed)::double precision AS total_units, MIN(output_date) AS min_date "
+                + "  FROM project.daily_activity_resource_outputs "
+                + "  WHERE project_id = :projectId AND activity_id = :activityId AND resource_id = :resourceId "
+                + ") AS agg "
+                + "WHERE ra.project_id = :projectId AND ra.activity_id = :activityId AND ra.resource_id = :resourceId")
+        .setParameter("projectId", projectId)
+        .setParameter("activityId", activityId)
+        .setParameter("resourceId", resourceId)
+        .executeUpdate();
+    if (updated == 0) {
+      log.debug("No ResourceAssignment matches project={} activity={} resource={} — rollup skipped",
+          projectId, activityId, resourceId);
+    } else {
+      log.debug("Rolled up daily outputs into {} ResourceAssignment row(s) for project={} activity={} resource={}",
+          updated, projectId, activityId, resourceId);
     }
   }
 

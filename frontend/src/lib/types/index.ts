@@ -451,11 +451,19 @@ export interface ExpenseResponse {
   id: string;
   projectId: string;
   activityId: string | null;
+  name: string | null;
   description: string;
-  amount: number;
+  expenseCategory: string;
+  budgetedCost: number | null;
+  actualCost: number;
+  remainingCost: number | null;
+  atCompletionCost: number | null;
+  percentComplete: number | null;
   currency: string;
-  expenseDate: string;
-  category: string;
+  plannedStartDate: string | null;
+  plannedFinishDate: string | null;
+  actualStartDate: string | null;
+  actualFinishDate: string | null;
   createdAt: string;
   updatedAt: string;
 }

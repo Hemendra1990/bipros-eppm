@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -19,4 +20,7 @@ public interface ResourceAssignmentRepository extends JpaRepository<ResourceAssi
 
   List<ResourceAssignment> findByResourceIdAndPlannedStartDateBetween(
       UUID resourceId, LocalDate startDate, LocalDate endDate);
+
+  Optional<ResourceAssignment> findByProjectIdAndActivityIdAndResourceId(
+      UUID projectId, UUID activityId, UUID resourceId);
 }

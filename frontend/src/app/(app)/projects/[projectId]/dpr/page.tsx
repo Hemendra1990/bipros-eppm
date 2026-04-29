@@ -5,8 +5,10 @@ import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { dprApi, type CreateDailyProgressReportRequest, type DailyProgressReportResponse } from "@/lib/api/dprApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { activityApi } from "@/lib/api/activityApi";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
 import { TabTip } from "@/components/common/TabTip";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
 
 type WeatherOption = "" | "Clear" | "Cloudy" | "Rain" | "Hot" | "Cold";
@@ -55,6 +57,14 @@ export default function DprPage() {
     enabled: !!projectId,
   });
   const project = projectData?.data;
+
+  const { data: activitiesData } = useQuery({
+    queryKey: ["activities", projectId],
+    queryFn: () => activityApi.listActivities(projectId, 0, 1000),
+    enabled: !!projectId,
+  });
+  const activityOptions =
+    activitiesData?.data?.content.map((a) => ({ value: a.name, label: a.name })) ?? [];
 
   const [fromInput, setFromInput] = useState<string>("");
   const [toInput, setToInput] = useState<string>("");
@@ -133,6 +143,10 @@ export default function DprPage() {
     e.preventDefault();
     setError(null);
 
+    if (!formData.activityName.trim()) {
+      setError("Activity Name is required.");
+      return;
+    }
     if (formData.chainageFromRaw && formData.chainageFromM === null) {
       setError("Chainage From is invalid.");
       return;
@@ -277,12 +291,12 @@ export default function DprPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">Activity Name</label>
-                <input
-                  type="text"
+                <SearchableSelect
+                  options={activityOptions}
                   value={formData.activityName}
-                  onChange={(e) => setFormData({ ...formData, activityName: e.target.value })}
-                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  required
+                  onChange={(value) => setFormData({ ...formData, activityName: value })}
+                  placeholder="Search activity..."
+                  className="w-full"
                 />
               </div>
               <div>

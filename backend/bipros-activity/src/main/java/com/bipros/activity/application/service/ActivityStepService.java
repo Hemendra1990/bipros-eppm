@@ -2,6 +2,8 @@ package com.bipros.activity.application.service;
 
 import com.bipros.activity.application.dto.ActivityStepResponse;
 import com.bipros.activity.application.dto.CreateActivityStepRequest;
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.model.ActivityStep;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivityStepRepository;
@@ -57,6 +59,7 @@ public class ActivityStepService {
 
     ActivityStep updated = stepRepository.save(step);
     recalculateWeightPercents(step.getActivityId());
+    rollupPercentComplete(step.getActivityId());
 
     log.info("Step updated successfully: stepId={}", stepId);
     return ActivityStepResponse.from(updated);
@@ -71,6 +74,7 @@ public class ActivityStepService {
     UUID activityId = step.getActivityId();
     stepRepository.deleteById(stepId);
     recalculateWeightPercents(activityId);
+    rollupPercentComplete(activityId);
 
     log.info("Step deleted successfully: stepId={}", stepId);
   }
@@ -84,8 +88,24 @@ public class ActivityStepService {
     step.setIsCompleted(true);
     ActivityStep updated = stepRepository.save(step);
     recalculateWeightPercents(step.getActivityId());
+    rollupPercentComplete(step.getActivityId());
 
     log.info("Step completed successfully: stepId={}", stepId);
+    return ActivityStepResponse.from(updated);
+  }
+
+  public ActivityStepResponse uncompleteStep(UUID stepId) {
+    log.info("Uncompleting step: stepId={}", stepId);
+
+    ActivityStep step = stepRepository.findById(stepId)
+        .orElseThrow(() -> new ResourceNotFoundException("ActivityStep", stepId));
+
+    step.setIsCompleted(false);
+    ActivityStep updated = stepRepository.save(step);
+    recalculateWeightPercents(step.getActivityId());
+    rollupPercentComplete(step.getActivityId());
+
+    log.info("Step uncompleted successfully: stepId={}", stepId);
     return ActivityStepResponse.from(updated);
   }
 
@@ -121,5 +141,53 @@ public class ActivityStepService {
 
     stepRepository.saveAll(steps);
     log.info("Weight percents recalculated successfully for activity: activityId={}", activityId);
+  }
+
+  /**
+   * Roll up completed step weights to the parent Activity's percentComplete.
+   * Uses the same weighted-step formula as EVM: sum of weightPercent for completed steps.
+   * Also derives the activity status from the new percentComplete.
+   */
+  private void rollupPercentComplete(UUID activityId) {
+    List<ActivityStep> steps = stepRepository.findByActivityIdOrderBySortOrder(activityId);
+    if (steps.isEmpty()) {
+      return;
+    }
+
+    double totalWeight = steps.stream().mapToDouble(ActivityStep::getWeight).sum();
+    if (totalWeight <= 0) {
+      return;
+    }
+
+    double completedWeight = steps.stream()
+        .filter(s -> Boolean.TRUE.equals(s.getIsCompleted()))
+        .mapToDouble(ActivityStep::getWeight)
+        .sum();
+
+    double percentComplete = (completedWeight / totalWeight) * 100.0;
+    percentComplete = Math.round(percentComplete * 100.0) / 100.0; // round to 2 decimal places
+
+    Activity activity = activityRepository.findById(activityId).orElse(null);
+    if (activity == null) {
+      return;
+    }
+
+    activity.setPercentComplete(percentComplete);
+
+    // Derive status from the new percentComplete
+    if (percentComplete >= 100.0) {
+      activity.setStatus(ActivityStatus.COMPLETED);
+      if (activity.getActualFinishDate() == null) {
+        activity.setActualFinishDate(java.time.LocalDate.now());
+      }
+    } else if (percentComplete > 0.0) {
+      activity.setStatus(ActivityStatus.IN_PROGRESS);
+      if (activity.getActualStartDate() == null) {
+        activity.setActualStartDate(java.time.LocalDate.now());
+      }
+    }
+
+    activityRepository.save(activity);
+    log.info("Rolled up percentComplete={} for activity: activityId={}", percentComplete, activityId);
   }
 }

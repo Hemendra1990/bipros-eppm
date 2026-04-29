@@ -71,6 +71,14 @@ export default function DailyOutputsPage() {
   });
   const allResources = resourcesData?.data ?? [];
 
+  const { data: activityResourcesData } = useQuery({
+    queryKey: ["resources", "by-activity", projectId, formData.activityId],
+    queryFn: () =>
+      resourceApi.getAssignmentsByActivity(projectId, formData.activityId),
+    enabled: !!formData.activityId,
+  });
+  const activityResources = activityResourcesData?.data ?? [];
+
   const activityById = useMemo(() => {
     const map: Record<string, { code: string; name: string }> = {};
     for (const a of activities) {
@@ -192,7 +200,9 @@ export default function DailyOutputsPage() {
                 </label>
                 <SearchableSelect
                   value={formData.activityId}
-                  onChange={(v) => setFormData({ ...formData, activityId: v })}
+                  onChange={(v) =>
+                    setFormData({ ...formData, activityId: v, resourceId: "" })
+                  }
                   placeholder="Search activities..."
                   options={activities.map((a) => ({
                     value: a.id,
@@ -207,11 +217,20 @@ export default function DailyOutputsPage() {
                 <SearchableSelect
                   value={formData.resourceId}
                   onChange={(v) => setFormData({ ...formData, resourceId: v })}
-                  placeholder="Search resources..."
-                  options={allResources.map((r) => ({
-                    value: r.id,
-                    label: `${r.code} — ${r.name}`,
-                  }))}
+                  placeholder={
+                    formData.activityId
+                      ? "Search resources..."
+                      : "Select an activity first"
+                  }
+                  options={activityResources.map((ra) => {
+                    const r = allResources.find((x) => x.id === ra.resourceId);
+                    return {
+                      value: ra.resourceId,
+                      label: r
+                        ? `${r.code} — ${r.name}`
+                        : ra.resourceName ?? ra.resourceId,
+                    };
+                  })}
                 />
               </div>
               <div>

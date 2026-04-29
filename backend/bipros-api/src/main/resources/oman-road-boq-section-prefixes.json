@@ -1,0 +1,11 @@
+[
+  { "prefix": "1", "wbsCode": "WBS-1", "name": "Preliminaries",            "phase": "MOBILIZATION" },
+  { "prefix": "2", "wbsCode": "WBS-2", "name": "Demolition & Earthworks",  "phase": "EARTHWORKS" },
+  { "prefix": "3", "wbsCode": "WBS-3", "name": "Earthworks",               "phase": "EARTHWORKS" },
+  { "prefix": "4", "wbsCode": "WBS-4", "name": "Pavement",                 "phase": "PAVEMENT" },
+  { "prefix": "5", "wbsCode": "WBS-5", "name": "Drainage & Culverts",      "phase": "DRAINAGE" },
+  { "prefix": "6", "wbsCode": "WBS-6", "name": "Bridges & Structures",    "phase": "STRUCTURES" },
+  { "prefix": "7", "wbsCode": "WBS-7", "name": "Utilities",                "phase": "UTILITIES" },
+  { "prefix": "8", "wbsCode": "WBS-8", "name": "Road Furniture & Markings","phase": "FURNITURE" },
+  { "prefix": "9", "wbsCode": "WBS-9", "name": "Site Facilities & Camp",   "phase": "MOBILIZATION" }
+]

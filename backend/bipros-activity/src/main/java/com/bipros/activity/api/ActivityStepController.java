@@ -56,6 +56,14 @@ public class ActivityStepController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  @PutMapping("/{stepId}/uncomplete")
+  public ResponseEntity<ApiResponse<ActivityStepResponse>> uncompleteStep(
+      @PathVariable UUID activityId,
+      @PathVariable UUID stepId) {
+    ActivityStepResponse response = stepService.uncompleteStep(stepId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
   @DeleteMapping("/{stepId}")
   public ResponseEntity<Void> deleteStep(
       @PathVariable UUID activityId,

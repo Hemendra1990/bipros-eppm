@@ -94,9 +94,9 @@ interface SummaryCard {
 interface ExpenseRow {
   id: string;
   description: string;
-  amount: number;
-  category: string;
-  expenseDate: string;
+  actualCost: number;
+  expenseCategory: string;
+  actualStartDate: string | null;
   activityId: string | null;
 }
 
@@ -113,10 +113,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [expenseForm, setExpenseForm] = useState<CreateExpenseRequest>({
     description: "",
-    amount: 0,
+    actualCost: 0,
     currency: "INR",
-    expenseDate: new Date().toISOString().split("T")[0],
-    category: "LABOR",
+    actualStartDate: new Date().toISOString().split("T")[0],
+    expenseCategory: "LABOR",
   });
 
   const createExpenseMutation = useMutation({
@@ -125,7 +125,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
       queryClient.invalidateQueries({ queryKey: ["expenses", projectId] });
       queryClient.invalidateQueries({ queryKey: ["cost-summary", projectId] });
       setShowExpenseForm(false);
-      setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+      setExpenseForm({ description: "", actualCost: 0, currency: baseCurrency.code, actualStartDate: new Date().toISOString().split("T")[0], expenseCategory: "LABOR" });
       toast.success("Expense recorded successfully");
     },
     onError: (err: unknown) => {
@@ -142,7 +142,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
       queryClient.invalidateQueries({ queryKey: ["cost-summary", projectId] });
       setShowExpenseForm(false);
       setEditingExpenseId(null);
-      setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+      setExpenseForm({ description: "", actualCost: 0, currency: baseCurrency.code, actualStartDate: new Date().toISOString().split("T")[0], expenseCategory: "LABOR" });
       toast.success("Expense updated successfully");
     },
     onError: (err: unknown) => {
@@ -173,10 +173,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
     setEditingExpenseId(expense.id);
     setExpenseForm({
       description: expense.description,
-      amount: expense.amount,
+      actualCost: expense.actualCost,
       currency: baseCurrency.code,
-      expenseDate: expense.expenseDate,
-      category: expense.category,
+      actualStartDate: expense.actualStartDate,
+      expenseCategory: expense.expenseCategory,
       activityId: expense.activityId ?? undefined,
     });
     setShowExpenseForm(true);
@@ -203,14 +203,14 @@ export function CostsTab({ projectId }: { projectId: string }) {
         );
       },
     },
-    { key: "category", label: "Category", sortable: true },
+    { key: "expenseCategory", label: "Category", sortable: true },
     {
-      key: "amount",
+      key: "actualCost",
       label: "Amount (₹)",
       sortable: true,
       render: (value) => formatInr(Number(value)),
     },
-    { key: "expenseDate", label: "Date", sortable: true },
+    { key: "actualStartDate", label: "Date", sortable: true },
     {
       key: "actions",
       label: "Actions",
@@ -608,7 +608,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
             onClick={() => {
               if (showExpenseForm) {
                 setEditingExpenseId(null);
-                setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+                    setExpenseForm({ description: "", actualCost: 0, currency: baseCurrency.code, actualStartDate: new Date().toISOString().split("T")[0], expenseCategory: "LABOR" });
               }
               setShowExpenseForm(!showExpenseForm);
             }}
@@ -624,7 +624,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!expenseForm.description || !expenseForm.amount) return;
+                if (!expenseForm.description || !expenseForm.actualCost) return;
                 if (editingExpenseId) {
                   updateExpenseMutation.mutate(expenseForm);
                 } else {
@@ -647,8 +647,8 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 <label className="block text-xs font-medium text-text-secondary">Amount ({baseCurrency.symbol}) *</label>
                 <input
                   type="number"
-                  value={expenseForm.amount || ""}
-                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                  value={expenseForm.actualCost || ""}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, actualCost: parseFloat(e.target.value) || 0 }))}
                   min="0"
                   step="0.01"
                   className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
@@ -658,8 +658,8 @@ export function CostsTab({ projectId }: { projectId: string }) {
               <div>
                 <label className="block text-xs font-medium text-text-secondary">Category</label>
                 <select
-                  value={expenseForm.category}
-                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, category: e.target.value }))}
+                  value={expenseForm.expenseCategory}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, expenseCategory: e.target.value }))}
                   className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 >
                   <option value="LABOR">Labor</option>
@@ -674,8 +674,8 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 <label className="block text-xs font-medium text-text-secondary">Date</label>
                 <input
                   type="date"
-                  value={expenseForm.expenseDate}
-                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, expenseDate: e.target.value }))}
+                  value={expenseForm.actualStartDate ?? ""}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, actualStartDate: e.target.value || null }))}
                   className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
@@ -714,7 +714,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                   onClick={() => {
                     setShowExpenseForm(false);
                     setEditingExpenseId(null);
-                    setExpenseForm({ description: "", amount: 0, currency: baseCurrency.code, expenseDate: new Date().toISOString().split("T")[0], category: "LABOR" });
+                setExpenseForm({ description: "", actualCost: 0, currency: baseCurrency.code, actualStartDate: new Date().toISOString().split("T")[0], expenseCategory: "LABOR" });
                   }}
                   className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
                 >

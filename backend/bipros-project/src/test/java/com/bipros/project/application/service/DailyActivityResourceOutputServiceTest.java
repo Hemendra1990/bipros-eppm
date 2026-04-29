@@ -9,12 +9,14 @@ import com.bipros.project.domain.model.DailyActivityResourceOutput;
 import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -25,7 +27,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +42,8 @@ class DailyActivityResourceOutputServiceTest {
   @Mock private ProjectRepository projectRepository;
   @Mock private AuditService auditService;
   @Mock private EntityManager entityManager;
+  @Mock private Query rollupQuery;
+  @Mock private ApplicationEventPublisher eventPublisher;
 
   private DailyActivityResourceOutputService service;
 
@@ -45,11 +53,18 @@ class DailyActivityResourceOutputServiceTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    service = new DailyActivityResourceOutputService(repository, projectRepository, auditService);
+    service = new DailyActivityResourceOutputService(
+        repository, projectRepository, auditService, eventPublisher);
     Field emField = DailyActivityResourceOutputService.class.getDeclaredField("em");
     emField.setAccessible(true);
     emField.set(service, entityManager);
     lenient().when(projectRepository.existsById(projectId)).thenReturn(true);
+    // Default: any native query returns the rollup-mock with a chain that yields executeUpdate=1.
+    // Tests that need the unit-fallback (resolveUnitFromActivity) override this.
+    lenient().when(entityManager.createNativeQuery(contains("UPDATE resource.resource_assignments")))
+        .thenReturn(rollupQuery);
+    lenient().when(rollupQuery.setParameter(any(String.class), any())).thenReturn(rollupQuery);
+    lenient().when(rollupQuery.executeUpdate()).thenReturn(1);
   }
 
   @Test
@@ -73,6 +88,33 @@ class DailyActivityResourceOutputServiceTest {
     assertThat(resp.daysWorked()).isEqualTo(1.0);
     assertThat(resp.hoursWorked()).isEqualTo(8.0);
     assertThat(resp.unit()).isEqualTo("Sqm");
+
+    // Save → rollup: native UPDATE fires once with the (project, activity, resource) triple.
+    verify(entityManager).createNativeQuery(contains("UPDATE resource.resource_assignments"));
+    verify(rollupQuery).setParameter(eq("projectId"), eq(projectId));
+    verify(rollupQuery).setParameter(eq("activityId"), eq(activityId));
+    verify(rollupQuery).setParameter(eq("resourceId"), eq(resourceId));
+    verify(rollupQuery, times(1)).executeUpdate();
+  }
+
+  @Test
+  @DisplayName("delete also recomputes the assignment rollup")
+  void deleteRecomputesRollup() {
+    UUID rowId = UUID.randomUUID();
+    DailyActivityResourceOutput existing = DailyActivityResourceOutput.builder()
+        .projectId(projectId).outputDate(LocalDate.of(2026, 5, 1))
+        .activityId(activityId).resourceId(resourceId)
+        .qtyExecuted(BigDecimal.TEN).unit("Sqm").build();
+    existing.setId(rowId);
+    when(repository.findById(rowId)).thenReturn(Optional.of(existing));
+
+    service.delete(projectId, rowId);
+
+    verify(repository).delete(existing);
+    verify(rollupQuery).setParameter(eq("projectId"), eq(projectId));
+    verify(rollupQuery).setParameter(eq("activityId"), eq(activityId));
+    verify(rollupQuery).setParameter(eq("resourceId"), eq(resourceId));
+    verify(rollupQuery, times(1)).executeUpdate();
   }
 
   @Test
