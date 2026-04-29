@@ -150,11 +150,24 @@ export interface UtilizationProfileEntry {
 export interface ResourceAssignmentResponse {
   id: string;
   activityId: string;
+  activityName: string | null;
   resourceId: string;
-  assignmentStartDate: string | null;
-  assignmentFinishDate: string | null;
+  resourceName: string | null;
+  roleId: string | null;
+  projectId: string | null;
   plannedUnits: number;
   actualUnits: number;
+  remainingUnits: number | null;
+  atCompletionUnits: number | null;
+  plannedCost: number | null;
+  actualCost: number | null;
+  remainingCost: number | null;
+  atCompletionCost: number | null;
+  rateType: string | null;
+  plannedStartDate: string | null;
+  plannedFinishDate: string | null;
+  actualStartDate: string | null;
+  actualFinishDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -223,6 +236,13 @@ export const resourceApi = {
       .post<ApiResponse<ResourceAssignmentResponse>>(
         `/v1/activities/${activityId}/assign-resource`,
         { resourceId, plannedUnits: units }
+      )
+      .then((r) => r.data),
+
+  getAssignmentsByActivity: (projectId: string, activityId: string) =>
+    apiClient
+      .get<ApiResponse<ResourceAssignmentResponse[]>>(
+        `/v1/projects/${projectId}/resource-assignments/activity/${activityId}`
       )
       .then((r) => r.data),
 

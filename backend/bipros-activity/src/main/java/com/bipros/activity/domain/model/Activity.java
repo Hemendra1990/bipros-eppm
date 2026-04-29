@@ -167,4 +167,14 @@ public class Activity extends BaseEntity {
    */
   @Column(name = "work_activity_id")
   private UUID workActivityId;
+
+  /**
+   * Soft FK to {@code cost.cost_accounts.id}. Optional — when set, overrides any cost account
+   * inherited from the activity's WBS node (P6-style soft inheritance).
+   *
+   * <p>Stored as a plain UUID (no JPA {@code @ManyToOne}) to honour the no-cross-module-deps rule
+   * — {@code CostAccount} lives in {@code bipros-cost}.
+   */
+  @Column(name = "cost_account_id")
+  private UUID costAccountId;
 }

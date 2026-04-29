@@ -1,21 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/utils/error";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
-import type { ActivityResponse, UpdateActivityRequest } from "@/lib/api/activityApi";
+import type { ActivityResponse, UpdateActivityRequest, ConstraintType } from "@/lib/api/activityApi";
 import { workActivityApi } from "@/lib/api/workActivityApi";
 import type { WorkActivityResponse } from "@/lib/api/workActivityApi";
 import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { resourceApi } from "@/lib/api/resourceApi";
+import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
+import { costApi } from "@/lib/api/costApi";
+import type { CostAccount } from "@/lib/api/costApi";
+import { evmApi } from "@/lib/api/evmApi";
+import type { ActivityEvmResponse } from "@/lib/api/evmApi";
+import { activityStepApi } from "@/lib/api/activityStepApi";
+import type { ActivityStepResponse, CreateActivityStepRequest } from "@/lib/api/activityStepApi";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
 import { UdfSection } from "@/components/udf/UdfSection";
+import type { ExpenseResponse } from "@/lib/types";
+
+const CONSTRAINT_TYPE_LABELS: Record<ConstraintType, string> = {
+  START_ON: "Start On",
+  START_ON_OR_AFTER: "Start On or After",
+  START_ON_OR_BEFORE: "Start On or Before",
+  FINISH_ON: "Finish On",
+  FINISH_ON_OR_AFTER: "Finish On or After",
+  FINISH_ON_OR_BEFORE: "Finish On or Before",
+  AS_LATE_AS_POSSIBLE: "As Late As Possible",
+};
+
+const CONSTRAINT_TYPES: ConstraintType[] = [
+  "START_ON",
+  "START_ON_OR_AFTER",
+  "START_ON_OR_BEFORE",
+  "FINISH_ON",
+  "FINISH_ON_OR_AFTER",
+  "FINISH_ON_OR_BEFORE",
+  "AS_LATE_AS_POSSIBLE",
+];
 
 type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplete"> & {
   originalDuration?: number | "";
@@ -24,7 +53,6 @@ type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplet
 };
 
 export default function ActivityDetailPage() {
-  const router = useRouter();
   const params = useParams();
   const queryClient = useQueryClient();
   const projectId = params.projectId as string;
@@ -40,6 +68,7 @@ export default function ActivityDetailPage() {
     actualFinishDate: "",
     workActivityId: "",
     calendarId: "",
+    costAccountId: null,
   });
 
   const [usePert, setUsePert] = useState(false);
@@ -63,6 +92,12 @@ export default function ActivityDetailPage() {
     queryFn: () => workActivityApi.list(true),
   });
   const workActivities: WorkActivityResponse[] = workActivitiesData?.data ?? [];
+
+  const { data: costAccountsData } = useQuery({
+    queryKey: ["cost-accounts"],
+    queryFn: () => costApi.listCostAccounts(),
+  });
+  const costAccounts = costAccountsData?.data ?? [];
 
   const { data: calendarsData, isLoading: isLoadingCalendars } = useQuery({
     queryKey: ["calendars", "all"],
@@ -104,7 +139,9 @@ export default function ActivityDetailPage() {
       [name]:
         name === "percentComplete" || name === "originalDuration" || name === "remainingDuration"
           ? (value === "" ? "" : parseFloat(value))
-          : value,
+          : name === "costAccountId"
+            ? (value === "" ? null : value)
+            : value,
     }));
   };
 
@@ -116,7 +153,6 @@ export default function ActivityDetailPage() {
       [name]: numValue,
     };
 
-    // Auto-calculate expected duration and std deviation
     const o = updated.optimisticDuration === "" ? NaN : updated.optimisticDuration;
     const m = updated.mostLikelyDuration === "" ? NaN : updated.mostLikelyDuration;
     const p = updated.pessimisticDuration === "" ? NaN : updated.pessimisticDuration;
@@ -156,6 +192,11 @@ export default function ActivityDetailPage() {
         actualFinishDate: activity.actualFinishDate || "",
         workActivityId: activity.workActivityId || "",
         calendarId: activity.calendarId || "",
+        costAccountId: activity.costAccountId ?? null,
+        primaryConstraintType: activity.primaryConstraintType ?? undefined,
+        primaryConstraintDate: activity.primaryConstraintDate || "",
+        secondaryConstraintType: activity.secondaryConstraintType ?? undefined,
+        secondaryConstraintDate: activity.secondaryConstraintDate || "",
       });
       setIsEditing(true);
     }
@@ -209,9 +250,10 @@ export default function ActivityDetailPage() {
           projectCalendars={projectCalendars}
           isLoadingCalendars={isLoadingCalendars}
           projectCalendarId={projectCalendarId}
+          costAccounts={costAccounts}
         />
       ) : (
-        <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} projectCalendars={projectCalendars} projectCalendarId={projectCalendarId} />
+        <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} projectCalendars={projectCalendars} projectCalendarId={projectCalendarId} costAccounts={costAccounts} />
       )}
     </div>
   );
@@ -223,12 +265,14 @@ function ViewMode({
   workActivity,
   projectCalendars,
   projectCalendarId,
+  costAccounts,
 }: {
   activity: ActivityResponse;
   projectId: string;
   workActivity: WorkActivityResponse | null;
   projectCalendars: CalendarResponse[];
   projectCalendarId: string | null | undefined;
+  costAccounts: CostAccount[];
 }) {
   const stat = (label: string, value: React.ReactNode, tone?: "neutral" | "accent" | "success" | "warning" | "danger") => {
     const toneCls = {
@@ -276,6 +320,31 @@ function ViewMode({
     }
   }
 
+  const { data: assignmentsData } = useQuery({
+    queryKey: ["resource-assignments", "activity", projectId, activity.id],
+    queryFn: () => resourceApi.getAssignmentsByActivity(projectId, activity.id),
+  });
+  const assignments: ResourceAssignmentResponse[] = assignmentsData?.data ?? [];
+
+  const { data: expensesData } = useQuery({
+    queryKey: ["expenses", "activity", projectId, activity.id],
+    queryFn: () => costApi.getActivityExpenses(projectId, activity.id),
+  });
+  const activityExpenses: ExpenseResponse[] = expensesData?.data ?? [];
+
+  const { data: evmData, isLoading: isEvmLoading } = useQuery({
+    queryKey: ["evm", "activity", projectId, activity.id],
+    queryFn: () => evmApi.getActivityEvm(projectId, activity.id),
+  });
+  const activityEvm: ActivityEvmResponse | undefined = evmData?.data ?? undefined;
+
+  const totalPlannedCost = assignments.reduce((sum, a) => sum + (a.plannedCost ?? 0), 0);
+  const totalActualCost = assignments.reduce((sum, a) => sum + (a.actualCost ?? 0), 0);
+  const totalExpenses = activityExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const fmt = (n: number) =>
+    n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+
   return (
     <div className="space-y-5">
       {/* Key Metrics */}
@@ -308,6 +377,183 @@ function ViewMode({
           {datePair("Actual Finish", activity.actualFinishDate, "Not finished")}
         </div>
       </div>
+
+      {/* Constraints */}
+      {(activity.primaryConstraintType || activity.secondaryConstraintType) && (
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-2">Constraints</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+            {activity.primaryConstraintType && (
+              <>
+                {datePair("Primary Constraint", CONSTRAINT_TYPE_LABELS[activity.primaryConstraintType], "—")}
+                {activity.primaryConstraintDate && datePair("Primary Constraint Date", activity.primaryConstraintDate, "—")}
+              </>
+            )}
+            {activity.secondaryConstraintType && (
+              <>
+                {datePair("Secondary Constraint", CONSTRAINT_TYPE_LABELS[activity.secondaryConstraintType], "—")}
+                {activity.secondaryConstraintDate && datePair("Secondary Constraint Date", activity.secondaryConstraintDate, "—")}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Cost Account */}
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">Cost Account</h3>
+        {(() => {
+          const assignedCa = activity.costAccountId
+            ? costAccounts.find((ca) => ca.id === activity.costAccountId)
+            : null;
+          if (assignedCa) {
+            return (
+              <div className="flex items-center gap-2 text-sm text-text-primary">
+                <span className="font-mono text-xs text-accent">{assignedCa.code}</span>
+                <span>{assignedCa.name}</span>
+              </div>
+            );
+          }
+          return (
+            <p className="text-sm text-text-muted italic">
+              None assigned — inherits from WBS node if set.
+            </p>
+          );
+        })()}
+      </div>
+
+      {/* Cost & Earned Value */}
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-3">Cost &amp; Earned Value</h3>
+
+        {assignments.length > 0 ? (
+          <div className="mb-4">
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Resource Assignments</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Resource</th>
+                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Planned Units</th>
+                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Actual Units</th>
+                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Planned Cost</th>
+                    <th className="text-right py-1.5 text-xs font-medium text-text-secondary">Actual Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assignments.map((a) => (
+                    <tr key={a.id} className="border-b border-border/40">
+                      <td className="py-1.5 pr-3 text-text-primary">{a.resourceName ?? a.resourceId}</td>
+                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.plannedUnits}</td>
+                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.actualUnits}</td>
+                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.plannedCost != null ? fmt(a.plannedCost) : "—"}</td>
+                      <td className="py-1.5 text-right text-text-primary">{a.actualCost != null ? fmt(a.actualCost) : "—"}</td>
+                    </tr>
+                  ))}
+                  <tr className="font-semibold bg-surface-hover/30">
+                    <td className="py-1.5 pr-3 text-text-secondary">Totals</td>
+                    <td className="py-1.5 pr-3 text-right text-text-primary">{assignments.reduce((s, a) => s + a.plannedUnits, 0)}</td>
+                    <td className="py-1.5 pr-3 text-right text-text-primary">{assignments.reduce((s, a) => s + a.actualUnits, 0)}</td>
+                    <td className="py-1.5 pr-3 text-right text-accent">{fmt(totalPlannedCost)}</td>
+                    <td className="py-1.5 text-right text-accent">{fmt(totalActualCost)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-text-muted mb-4">No resource assignments for this activity.</p>
+        )}
+
+        {activityExpenses.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Expenses</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Description</th>
+                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Category</th>
+                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Date</th>
+                    <th className="text-right py-1.5 text-xs font-medium text-text-secondary">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityExpenses.map((e) => (
+                    <tr key={e.id} className="border-b border-border/40">
+                      <td className="py-1.5 pr-3 text-text-primary">{e.description}</td>
+                      <td className="py-1.5 pr-3 text-text-secondary">{e.category}</td>
+                      <td className="py-1.5 pr-3 text-text-secondary">{e.expenseDate}</td>
+                      <td className="py-1.5 text-right text-text-primary">{fmt(e.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="font-semibold bg-surface-hover/30">
+                    <td colSpan={3} className="py-1.5 pr-3 text-text-secondary">Total Expenses</td>
+                    <td className="py-1.5 text-right text-accent">{fmt(totalExpenses)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {(assignments.length > 0 || activityExpenses.length > 0) && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Cost Rollup</p>
+            {isEvmLoading ? (
+              <p className="text-sm text-text-muted">Loading EVM data...</p>
+            ) : activityEvm ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {stat("BAC", fmt(activityEvm.bac))}
+                  {stat("AC", fmt(activityEvm.ac))}
+                  {stat("EV", fmt(activityEvm.ev), "accent")}
+                  {stat(
+                    "CV",
+                    fmt(activityEvm.cv),
+                    activityEvm.cv >= 0 ? "success" : "danger"
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                  {stat("PV", activityEvm.pv != null ? fmt(activityEvm.pv) : "—")}
+                  {stat(
+                    "SV",
+                    activityEvm.sv != null ? fmt(activityEvm.sv) : "—",
+                    activityEvm.sv != null ? (activityEvm.sv >= 0 ? "success" : "danger") : "neutral"
+                  )}
+                  {stat(
+                    "CPI",
+                    activityEvm.cpi != null ? activityEvm.cpi.toFixed(2) : "—",
+                    activityEvm.cpi != null ? (activityEvm.cpi >= 1 ? "success" : "danger") : "neutral"
+                  )}
+                  {stat(
+                    "SPI",
+                    activityEvm.spi != null ? activityEvm.spi.toFixed(2) : "—",
+                    activityEvm.spi != null ? (activityEvm.spi >= 1 ? "success" : "danger") : "neutral"
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-text-muted">
+                  Technique: {activityEvm.earnedValueTechnique.replace(/_/g, " ")}
+                </p>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {stat("Budgeted (BAC)", fmt(totalPlannedCost))}
+                {stat("Actual Cost (AC)", fmt(totalActualCost + totalExpenses))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {assignments.length === 0 && activityExpenses.length === 0 && (
+          <p className="text-xs text-text-muted mt-1">
+            Assign resources or tag expenses to this activity to see cost data here.
+          </p>
+        )}
+      </div>
+
+      {/* Activity Steps */}
+      <ActivityStepsPanel activityId={activity.id} percentCompleteType={activity.percentCompleteType as string | undefined} />
 
       {/* Master Work Activity link */}
       <div className="rounded-lg border border-border bg-surface/50 p-4">
@@ -390,6 +636,221 @@ function ViewMode({
   );
 }
 
+function ActivityStepsPanel({
+  activityId,
+  percentCompleteType,
+}: {
+  activityId: string;
+  percentCompleteType?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [newStep, setNewStep] = useState<CreateActivityStepRequest>({ name: "", weight: undefined });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingStep, setEditingStep] = useState<{ name: string; weight: number | ""; description?: string }>({ name: "", weight: "" });
+
+  const { data: stepsData } = useQuery({
+    queryKey: ["activity-steps", activityId],
+    queryFn: () => activityStepApi.listSteps(activityId),
+  });
+  const steps: ActivityStepResponse[] = stepsData?.data ?? [];
+
+  const createMutation = useMutation({
+    mutationFn: (req: CreateActivityStepRequest) => activityStepApi.createStep(activityId, req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+      setShowAdd(false);
+      setNewStep({ name: "", weight: undefined });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ stepId, name, weight, description }: { stepId: string; name: string; weight: number; description?: string }) =>
+      activityStepApi.updateStep(activityId, stepId, name, weight, description),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+      setEditingId(null);
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (stepId: string) => activityStepApi.completeStep(activityId, stepId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (stepId: string) => activityStepApi.deleteStep(activityId, stepId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity-steps", activityId] });
+    },
+  });
+
+  const isWeightedSteps = percentCompleteType === "WEIGHTED_STEPS";
+
+  return (
+    <div className={`rounded-lg border p-4 ${isWeightedSteps ? "border-accent bg-accent/5" : "border-border bg-surface/50"}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text-primary">Steps</h3>
+          {isWeightedSteps && (
+            <span className="px-2 py-0.5 rounded bg-accent/20 text-accent ring-1 ring-accent/30 text-xs font-medium">
+              Weighted Steps EVM
+            </span>
+          )}
+          {steps.length > 0 && (
+            <span className="text-xs text-text-muted">
+              {steps.filter((s) => s.isCompleted).length}/{steps.length} complete
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover"
+        >
+          + Add Step
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="mb-3 rounded-md border border-border bg-surface p-3 flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-text-secondary mb-1">Name *</label>
+            <input
+              type="text"
+              value={newStep.name}
+              onChange={(e) => setNewStep((p) => ({ ...p, name: e.target.value }))}
+              className="block w-full rounded border border-border px-2 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="Step name"
+            />
+          </div>
+          <div className="w-24">
+            <label className="block text-xs font-medium text-text-secondary mb-1">Weight</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={newStep.weight ?? ""}
+              onChange={(e) => setNewStep((p) => ({ ...p, weight: e.target.value === "" ? undefined : parseFloat(e.target.value) }))}
+              className="block w-full rounded border border-border px-2 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="1.0"
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!newStep.name) return;
+              createMutation.mutate(newStep);
+            }}
+            disabled={createMutation.isPending || !newStep.name}
+            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+          >
+            {createMutation.isPending ? "Adding..." : "Add"}
+          </button>
+          <button
+            onClick={() => { setShowAdd(false); setNewStep({ name: "", weight: undefined }); }}
+            className="rounded-md bg-surface-active/50 px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-active"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {steps.length === 0 && !showAdd ? (
+        <p className="text-sm text-text-muted">No steps defined. Add steps to track granular progress.</p>
+      ) : (
+        <div className="space-y-1">
+          {steps.map((step) => (
+            <div
+              key={step.id}
+              className={`rounded-md border px-3 py-2 flex items-center gap-3 ${step.isCompleted ? "border-success/30 bg-success/5" : "border-border bg-surface"}`}
+            >
+              {editingId === step.id ? (
+                <div className="flex-1 flex gap-2 items-end">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={editingStep.name}
+                      onChange={(e) => setEditingStep((p) => ({ ...p, name: e.target.value }))}
+                      className="block w-full rounded border border-border px-2 py-1 text-sm text-text-primary focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                  <div className="w-20">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={editingStep.weight}
+                      onChange={(e) => setEditingStep((p) => ({ ...p, weight: e.target.value === "" ? "" : parseFloat(e.target.value) }))}
+                      className="block w-full rounded border border-border px-2 py-1 text-sm text-text-primary focus:border-accent focus:outline-none"
+                      placeholder="Weight"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!editingStep.name || editingStep.weight === "") return;
+                      updateMutation.mutate({ stepId: step.id, name: editingStep.name, weight: editingStep.weight as number, description: editingStep.description });
+                    }}
+                    disabled={updateMutation.isPending}
+                    className="text-xs px-2 py-1 rounded bg-accent text-text-primary hover:bg-accent-hover disabled:bg-border"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="text-xs px-2 py-1 rounded bg-surface-active/50 text-text-secondary hover:bg-surface-active"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <span className={`flex-1 text-sm ${step.isCompleted ? "line-through text-text-muted" : "text-text-primary"}`}>
+                    {step.sortOrder != null && <span className="text-text-muted mr-1">{step.sortOrder}.</span>}
+                    {step.name}
+                  </span>
+                  {step.weightPercent != null && (
+                    <span className="text-xs text-text-secondary">{step.weightPercent.toFixed(1)}%</span>
+                  )}
+                  {step.isCompleted ? (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success">Done</span>
+                  ) : (
+                    <button
+                      onClick={() => completeMutation.mutate(step.id)}
+                      disabled={completeMutation.isPending}
+                      className="text-xs px-2 py-0.5 rounded border border-success/40 text-success hover:bg-success/10 disabled:opacity-50"
+                    >
+                      Complete
+                    </button>
+                  )}
+                  {!step.isCompleted && (
+                    <button
+                      onClick={() => {
+                        setEditingId(step.id);
+                        setEditingStep({ name: step.name, weight: step.weight ?? "", description: step.description ?? undefined });
+                      }}
+                      className="text-xs px-2 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-hover"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteMutation.mutate(step.id)}
+                    disabled={deleteMutation.isPending}
+                    className="text-xs px-2 py-0.5 rounded border border-danger/30 text-danger hover:bg-danger/10 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface EditFormProps {
   data: EditData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
@@ -411,6 +872,7 @@ interface EditFormProps {
   projectCalendars: CalendarResponse[];
   isLoadingCalendars: boolean;
   projectCalendarId: string | null | undefined;
+  costAccounts: CostAccount[];
 }
 
 function EditForm({
@@ -428,6 +890,7 @@ function EditForm({
   projectCalendars,
   isLoadingCalendars,
   projectCalendarId,
+  costAccounts,
 }: EditFormProps) {
   return (
     <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
@@ -519,6 +982,65 @@ function EditForm({
           </div>
         </div>
 
+        {/* Constraints Section */}
+        <div className="rounded-lg border border-border/60 bg-surface-hover/20 p-4 space-y-4">
+          <h4 className="text-sm font-semibold text-text-primary">Constraints</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Primary Constraint</label>
+              <select
+                name="primaryConstraintType"
+                value={data.primaryConstraintType ?? ""}
+                onChange={onChange}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="">— None —</option>
+                {CONSTRAINT_TYPES.map((ct) => (
+                  <option key={ct} value={ct}>{CONSTRAINT_TYPE_LABELS[ct]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Primary Constraint Date</label>
+              <input
+                type="date"
+                name="primaryConstraintDate"
+                value={data.primaryConstraintDate || ""}
+                onChange={onChange}
+                disabled={!data.primaryConstraintType || data.primaryConstraintType === "AS_LATE_AS_POSSIBLE"}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Secondary Constraint</label>
+              <select
+                name="secondaryConstraintType"
+                value={data.secondaryConstraintType ?? ""}
+                onChange={onChange}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="">— None —</option>
+                {CONSTRAINT_TYPES.map((ct) => (
+                  <option key={ct} value={ct}>{CONSTRAINT_TYPE_LABELS[ct]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Secondary Constraint Date</label>
+              <input
+                type="date"
+                name="secondaryConstraintDate"
+                value={data.secondaryConstraintDate || ""}
+                onChange={onChange}
+                disabled={!data.secondaryConstraintType || data.secondaryConstraintType === "AS_LATE_AS_POSSIBLE"}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              />
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-text-secondary">
             Work Activity (master)
@@ -568,7 +1090,29 @@ function EditForm({
             ))}
           </select>
           <p className="mt-1 text-xs text-text-muted">
-            Leave empty to use the project’s default calendar. Select a different calendar to override.
+            Leave empty to use the project&apos;s default calendar. Select a different calendar to override.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary">
+            Cost Account
+          </label>
+          <select
+            name="costAccountId"
+            value={data.costAccountId ?? ""}
+            onChange={onChange}
+            className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="">(Inherit from WBS)</option>
+            {costAccounts.map((ca) => (
+              <option key={ca.id} value={ca.id}>
+                {ca.code} - {ca.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-text-muted">
+            Leave empty to inherit the cost account from the WBS node.
           </p>
         </div>
 

@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 046-1-add-cost-account-id-to-wbs-nodes
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: wbs_nodes
+            columns:
+              - column:
+                  name: cost_account_id
+                  type: UUID
+                  constraints:
+                    nullable: true

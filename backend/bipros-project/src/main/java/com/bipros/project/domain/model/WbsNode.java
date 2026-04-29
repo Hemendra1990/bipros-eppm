@@ -92,6 +92,10 @@ public class WbsNode extends BaseEntity implements HierarchyNode {
     @Column(name = "chainage_to_m")
     private Long chainageToM;
 
+    /** FK to cost.cost_accounts.id — the cost account this WBS element rolls up to. */
+    @Column(name = "cost_account_id")
+    private UUID costAccountId;
+
     @Override
     public int getSortOrder() {
         return sortOrder != null ? sortOrder : 0;

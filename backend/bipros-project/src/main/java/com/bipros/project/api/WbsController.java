@@ -4,6 +4,7 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.project.application.dto.CreateWbsNodeRequest;
 import com.bipros.project.application.dto.UpdateEpsNodeRequest;
 import com.bipros.project.application.dto.WbsNodeResponse;
+import com.bipros.project.application.service.WbsBudgetService;
 import com.bipros.project.application.service.WbsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class WbsController {
 
     private final WbsService wbsService;
+    private final WbsBudgetService wbsBudgetService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<WbsNodeResponse>>> getTree(@PathVariable UUID projectId) {
@@ -43,7 +45,7 @@ public class WbsController {
         // to duplicate it (BUG-012).
         CreateWbsNodeRequest normalised = new CreateWbsNodeRequest(
             request.code(), request.name(), request.parentId(), projectId, request.obsNodeId(),
-            request.wbsType(), request.wbsStatus(), request.wbsLevel());
+            request.wbsType(), request.wbsStatus(), request.wbsLevel(), request.budgetCrores());
         WbsNodeResponse response = wbsService.createNode(normalised);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
@@ -61,5 +63,12 @@ public class WbsController {
     public ResponseEntity<Void> deleteNode(@PathVariable UUID projectId, @PathVariable UUID id) {
         wbsService.deleteNode(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/budget-summary")
+    public ResponseEntity<ApiResponse<WbsBudgetService.WbsBudgetSummary>> getBudgetSummary(
+            @PathVariable UUID projectId) {
+        WbsBudgetService.WbsBudgetSummary response = wbsBudgetService.getBudgetSummary(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }

@@ -49,6 +49,8 @@ export default function ProjectDetailLayout({
     { id: "resources", label: "Resources", href: null },
     { id: "costs", label: "Costs", href: null },
     { id: "evm", label: "EVM", href: null },
+    { id: "period-performance", label: "Period Performance", href: null },
+    { id: "cost-accounts", label: "Cost Accounts", href: null },
     { id: "dpr", label: "DPR", href: `/projects/${projectId}/dpr` },
     { id: "daily-outputs", label: "Daily Outputs", href: `/projects/${projectId}/daily-outputs` },
     { id: "capacity", label: "Capacity Util.", href: `/projects/${projectId}/capacity-utilization` },
@@ -69,6 +71,7 @@ export default function ProjectDetailLayout({
   ];
 
   const moreLinks = [
+    { label: "Budget Changes", href: `/projects/${projectId}/budget-changes` },
     { label: "Relationships", href: `/projects/${projectId}/relationships` },
     { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },
     { label: "Material Consumption", href: `/projects/${projectId}/material-consumption` },

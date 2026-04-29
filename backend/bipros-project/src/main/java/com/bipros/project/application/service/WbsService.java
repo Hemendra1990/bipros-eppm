@@ -68,6 +68,7 @@ public class WbsService {
         node.setWbsType(request.wbsType() != null ? request.wbsType()
             : (request.parentId() == null ? WbsType.NODE : WbsType.WORK_PACKAGE));
         node.setWbsStatus(request.wbsStatus() != null ? request.wbsStatus() : WbsStatus.NOT_STARTED);
+        node.setBudgetCrores(request.budgetCrores());
 
         WbsNode saved = wbsNodeRepository.save(node);
         log.info("WBS node created with ID: {}", saved.getId());
@@ -110,6 +111,12 @@ public class WbsService {
                 ancestor = next;
             }
             node.setParentId(request.parentId());
+        }
+
+        node.setCostAccountId(request.costAccountId());
+
+        if (request.budgetCrores() != null) {
+            node.setBudgetCrores(request.budgetCrores());
         }
 
         WbsNode updated = wbsNodeRepository.save(node);
@@ -195,6 +202,7 @@ public class WbsService {
             node.getGisPolygonId(),
             node.getChainageFromM(),
             node.getChainageToM(),
+            node.getCostAccountId(),
             childResponses
         );
     }

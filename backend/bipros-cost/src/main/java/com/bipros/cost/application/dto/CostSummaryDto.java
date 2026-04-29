@@ -24,14 +24,18 @@ public record CostSummaryDto(
         /** Running value of {@code MaterialStock.stockValue} still on the shelf. */
         BigDecimal openStockValue,
         /** Estimated cost of material issued to site (procurement − stock on hand). */
-        BigDecimal materialIssuedCost
+        BigDecimal materialIssuedCost,
+        /** P6-style project-level original budget (immutable). */
+        BigDecimal projectOriginalBudget,
+        /** P6-style project-level current budget (original + approved changes). */
+        BigDecimal projectCurrentBudget
 ) {
 
     public static CostSummaryDto of(BigDecimal totalBudget, BigDecimal totalActual,
                                      BigDecimal totalRemaining, BigDecimal atCompletion,
                                      int expenseCount) {
         return of(totalBudget, totalActual, totalRemaining, atCompletion, expenseCount,
-            null, null, null);
+            null, null, null, null, null);
     }
 
     public static CostSummaryDto of(BigDecimal totalBudget, BigDecimal totalActual,
@@ -40,6 +44,18 @@ public record CostSummaryDto(
                                      BigDecimal materialProcurementCost,
                                      BigDecimal openStockValue,
                                      BigDecimal materialIssuedCost) {
+        return of(totalBudget, totalActual, totalRemaining, atCompletion, expenseCount,
+            materialProcurementCost, openStockValue, materialIssuedCost, null, null);
+    }
+
+    public static CostSummaryDto of(BigDecimal totalBudget, BigDecimal totalActual,
+                                     BigDecimal totalRemaining, BigDecimal atCompletion,
+                                     int expenseCount,
+                                     BigDecimal materialProcurementCost,
+                                     BigDecimal openStockValue,
+                                     BigDecimal materialIssuedCost,
+                                     BigDecimal projectOriginalBudget,
+                                     BigDecimal projectCurrentBudget) {
         var cv = totalBudget.subtract(totalActual);
         // CPI = EV / AC. When there is no actual cost (AC = 0) CPI is undefined; returning 1.0
         // incorrectly reads as "on budget" on dashboards. Prefer null so consumers can render
@@ -49,6 +65,7 @@ public record CostSummaryDto(
                 : null;
         return new CostSummaryDto(totalBudget, totalActual, totalRemaining, atCompletion,
             cv, cpi, expenseCount,
-            materialProcurementCost, openStockValue, materialIssuedCost);
+            materialProcurementCost, openStockValue, materialIssuedCost,
+            projectOriginalBudget, projectCurrentBudget);
     }
 }

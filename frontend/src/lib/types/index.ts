@@ -148,6 +148,10 @@ export interface ProjectResponse {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  // P6-style budget fields
+  originalBudget: number | null;
+  currentBudget: number | null;
+  budgetCurrency: string | null;
 }
 
 export type WbsType = "PROGRAMME" | "NODE" | "PACKAGE" | "WORK_PACKAGE";
@@ -173,6 +177,7 @@ export interface WbsNodeResponse {
   plannedFinish: string | null;
   budgetCrores: number | null;
   gisPolygonId: string | null;
+  costAccountId: string | null;
   children: WbsNodeResponse[];
 }
 

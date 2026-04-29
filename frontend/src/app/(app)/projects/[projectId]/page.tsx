@@ -18,9 +18,12 @@ import { GanttChart } from "@/components/schedule/GanttChart";
 import { ResourcesTab } from "@/components/resource/ResourcesTab";
 import { CostsTab } from "@/components/cost/CostsTab";
 import { EvmTab } from "@/components/evm/EvmTab";
+import { PeriodPerformanceTab } from "@/components/cost/PeriodPerformanceTab";
+import { CostAccountRollupTab } from "@/components/cost/CostAccountRollupTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree } from "lucide-react";
+import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
+import { costApi } from "@/lib/api/costApi";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import toast from "react-hot-toast";
@@ -36,6 +39,7 @@ import { CostVarianceSection } from "@/components/reports/CostVarianceSection";
 import type { ProjectResponse, ActivityResponse, WbsNodeResponse, BaselineResponse, BaselineVarianceRow, ApiResponse } from "@/lib/types";
 import type { WbsTemplateResponse } from "@/lib/types";
 import type { AxiosResponse } from "axios";
+import { useScheduleStaleStore } from "@/lib/state/scheduleStaleStore";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -56,6 +60,9 @@ export default function ProjectDetailPage() {
   }, [tab, projectId, router]);
 
   const [scheduleError, setScheduleError] = useState("");
+
+  const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
+  const markScheduleFresh = useScheduleStaleStore((s) => s.markScheduleFresh);
 
   // If projectId is not a UUID, try to resolve it as a project code
   const { data: codeResolveData, isLoading: isResolvingCode } = useQuery({
@@ -126,6 +133,7 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       refetchActivities();
       queryClient.invalidateQueries({ queryKey: ["criticalPath", projectId] });
+      markScheduleFresh(projectId);
       setScheduleError("");
       toast.success("Schedule calculated successfully");
     },
@@ -140,6 +148,7 @@ export default function ProjectDetailPage() {
     mutationFn: (activityId: string) => activityApi.deleteActivity(projectId, activityId),
     onSuccess: () => {
       refetchActivities();
+      markScheduleStale(projectId);
       toast.success("Activity deleted");
     },
     onError: (err: unknown) => {
@@ -352,6 +361,9 @@ export default function ProjectDetailPage() {
             baselineStartDate: a.earlyStart,
             baselineFinishDate: a.earlyFinish,
           }))}
+          projectId={projectId}
+          onRunSchedule={() => scheduleMutation.mutate()}
+          isRunningSchedule={scheduleMutation.isPending}
         />
       )}
       {tab === "network" && (
@@ -380,6 +392,8 @@ export default function ProjectDetailPage() {
       {tab === "resources" && <ResourcesTab projectId={projectId} />}
       {tab === "costs" && <CostsTab projectId={projectId} />}
       {tab === "evm" && <EvmTab projectId={projectId} />}
+      {tab === "period-performance" && <PeriodPerformanceTab projectId={projectId} />}
+      {tab === "cost-accounts" && <CostAccountRollupTab projectId={projectId} />}
     </div>
   );
 }
@@ -901,12 +915,20 @@ function GanttTab({
   isLoading,
   relationships = [],
   baselineActivities = [],
+  projectId,
+  onRunSchedule,
+  isRunningSchedule = false,
 }: {
   activities: ActivityResponse[];
   isLoading: boolean;
   relationships?: Array<{ predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
   baselineActivities?: Array<{ activityId: string; baselineStartDate: string | null; baselineFinishDate: string | null }>;
+  projectId: string;
+  onRunSchedule?: () => void;
+  isRunningSchedule?: boolean;
 }) {
+  const isStale = useScheduleStaleStore((s) => s.isScheduleStale(projectId));
+
   if (isLoading) {
     return <div className="text-center text-text-muted">Loading activities...</div>;
   }
@@ -926,6 +948,9 @@ function GanttTab({
       activities={activities}
       relationships={relationships}
       baselineActivities={baselineActivities}
+      isStale={isStale}
+      onRunSchedule={onRunSchedule}
+      isRunningSchedule={isRunningSchedule}
     />
   );
 }
@@ -937,6 +962,14 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
   const [parentNode, setParentNode] = useState<{ id: string; code: string; name: string } | null>(null);
   const [formData, setFormData] = useState({ code: "", name: "" });
   const [selectedWbs, setSelectedWbs] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", costAccountId: "" });
+
+  const { data: costAccountsData } = useQuery({
+    queryKey: ["cost-accounts"],
+    queryFn: () => costApi.listCostAccounts(),
+  });
+  const costAccounts = costAccountsData?.data ?? [];
 
   const { data: templatesData } = useQuery({
     queryKey: ["wbs-templates"],
@@ -983,10 +1016,41 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ nodeId, name, costAccountId }: { nodeId: string; name: string; costAccountId?: string }) =>
+      apiClient
+        .put<AxiosResponse<ApiResponse<WbsNodeResponse>>>(
+          `/v1/projects/${projectId}/wbs/${nodeId}`,
+          { name, costAccountId: costAccountId || null }
+        )
+        .then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wbs", projectId] });
+      setEditingNodeId(null);
+      toast.success("WBS node updated");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to update WBS node"));
+    },
+  });
+
   const handleDelete = (node: WbsNodeResponse) => {
     if (confirm(`Delete "${node.code} — ${node.name}"${node.children?.length ? " and all its children" : ""}?`)) {
       deleteMutation.mutate(node.id);
     }
+  };
+
+  const handleEditOpen = (node: WbsNodeResponse) => {
+    setEditingNodeId(node.id);
+    setEditForm({ name: node.name, costAccountId: node.costAccountId ?? "" });
+    setShowForm(false);
+    setParentNode(null);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNodeId || !editForm.name.trim()) return;
+    updateMutation.mutate({ nodeId: editingNodeId, name: editForm.name.trim(), costAccountId: editForm.costAccountId });
   };
 
   const handleAddChild = (node: WbsNodeResponse) => {
@@ -1115,6 +1179,60 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
         </div>
       )}
 
+      {editingNodeId && (
+        <div className="rounded-xl border border-border bg-surface/50 p-4 shadow-lg">
+          <form onSubmit={handleEditSubmit} className="space-y-3">
+            <div className="text-sm font-medium text-text-primary">Edit WBS Node</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1 text-text-secondary">Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1 text-text-secondary">
+                  Cost Account
+                </label>
+                <select
+                  value={editForm.costAccountId}
+                  onChange={(e) => setEditForm({ ...editForm, costAccountId: e.target.value })}
+                  className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
+                >
+                  <option value="">— None —</option>
+                  {costAccounts.map((ca) => (
+                    <option key={ca.id} value={ca.id}>
+                      {ca.code} — {ca.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              >
+                {updateMutation.isPending ? "Saving..." : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingNodeId(null)}
+                className="rounded-md border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {wbsTree.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-12 text-center">
           <h3 className="text-lg font-medium text-text-primary">No WBS Structure</h3>
@@ -1127,6 +1245,7 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
             nodes={wbsTree}
             onAddChild={handleAddChild}
             onDelete={handleDelete}
+            onEdit={handleEditOpen}
             onSelect={(node) => setSelectedWbs(selectedWbs?.id === node.id ? null : { id: node.id, code: node.code, name: node.name })}
             selectedId={selectedWbs?.id ?? null}
           />
@@ -1150,6 +1269,7 @@ function WbsTree({
   level = 0,
   onAddChild,
   onDelete,
+  onEdit,
   onSelect,
   selectedId,
   isLast = [],
@@ -1158,6 +1278,7 @@ function WbsTree({
   level?: number;
   onAddChild: (node: WbsNodeResponse) => void;
   onDelete: (node: WbsNodeResponse) => void;
+  onEdit?: (node: WbsNodeResponse) => void;
   onSelect?: (node: WbsNodeResponse) => void;
   selectedId?: string | null;
   isLast?: boolean[];
@@ -1257,6 +1378,15 @@ function WbsTree({
 
               {/* Action buttons */}
               <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                {onEdit && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEdit(node); }}
+                    className="rounded p-1 text-text-muted hover:bg-accent/10 hover:text-accent"
+                    title="Edit node"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                )}
                 <button
                   onClick={() => onAddChild(node)}
                   className="rounded p-1 text-text-muted hover:bg-success/10 hover:text-success"
@@ -1281,6 +1411,7 @@ function WbsTree({
                 level={level + 1}
                 onAddChild={onAddChild}
                 onDelete={onDelete}
+                onEdit={onEdit}
                 onSelect={onSelect}
                 selectedId={selectedId}
                 isLast={[...isLast, isLastNode]}

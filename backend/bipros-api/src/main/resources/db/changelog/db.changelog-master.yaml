@@ -67,3 +67,11 @@ databaseChangeLog:
       file: db/changelog/044-daily-activity-resource-outputs.yaml
   - include:
       file: db/changelog/045-labour-master-tables.yaml
+  - include:
+      file: db/changelog/046-wbs-cost-account-link.yaml
+  - include:
+      file: db/changelog/047-activity-cost-account-link.yaml
+  - include:
+      file: db/changelog/048-project-budget-fields.yaml
+  - include:
+      file: db/changelog/049-budget-change-log.yaml

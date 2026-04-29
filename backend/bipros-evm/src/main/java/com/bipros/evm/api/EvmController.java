@@ -1,7 +1,9 @@
 package com.bipros.evm.api;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.evm.application.dto.ActivityEvmResponse;
 import com.bipros.evm.application.dto.CalculateEvmRequest;
+import com.bipros.evm.application.dto.CostAccountRollupResponse;
 import com.bipros.evm.application.dto.EvmCalculationResponse;
 import com.bipros.evm.application.dto.EvmSummaryResponse;
 import com.bipros.evm.application.dto.WbsEvmNode;
@@ -59,10 +61,25 @@ public class EvmController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @GetMapping("/activity/{activityId}")
+    public ResponseEntity<ApiResponse<ActivityEvmResponse>> getActivityEvm(
+            @PathVariable UUID projectId,
+            @PathVariable UUID activityId) {
+        ActivityEvmResponse response = evmService.getActivityEvm(projectId, activityId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<EvmSummaryResponse>> getSummary(
             @PathVariable UUID projectId) {
         EvmSummaryResponse response = evmService.getSummary(projectId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/cost-account-rollup")
+    public ResponseEntity<ApiResponse<List<CostAccountRollupResponse>>> getCostAccountRollup(
+            @PathVariable UUID projectId) {
+        List<CostAccountRollupResponse> response = evmService.getCostAccountRollup(projectId);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 

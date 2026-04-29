@@ -8,6 +8,8 @@ import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.dto.*;
 import com.bipros.cost.domain.entity.*;
 import com.bipros.cost.domain.repository.*;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.domain.repository.GoodsReceiptNoteRepository;
 import com.bipros.resource.domain.repository.MaterialStockRepository;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class CostService {
     private final GoodsReceiptNoteRepository goodsReceiptNoteRepository;
     private final MaterialStockRepository materialStockRepository;
     private final ProjectAccessGuard projectAccess;
+    private final ProjectRepository projectRepository;
 
     // Cost Account Operations
     @Transactional
@@ -584,8 +587,14 @@ public class CostService {
         BigDecimal materialIssued = materialProcurement.subtract(openStock);
         if (materialIssued.signum() < 0) materialIssued = BigDecimal.ZERO;
 
+        // P6-style project-level budget
+        Project project = projectRepository.findById(projectId).orElse(null);
+        BigDecimal projectOriginalBudget = project != null ? project.getOriginalBudget() : null;
+        BigDecimal projectCurrentBudget = project != null ? project.getCurrentBudget() : null;
+
         return CostSummaryDto.of(totalBudget, totalActual, totalRemaining, atCompletion,
-            expenses.size(), materialProcurement, openStock, materialIssued);
+            expenses.size(), materialProcurement, openStock, materialIssued,
+            projectOriginalBudget, projectCurrentBudget);
     }
 
     // Period Aggregation

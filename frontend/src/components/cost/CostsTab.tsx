@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Plus } from "lucide-react";
+import Link from "next/link";
 import {
   costApi,
   type ForecastMethod,
@@ -13,6 +14,8 @@ import {
   type CreateExpenseRequest,
 } from "@/lib/api/costApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { budgetApi } from "@/lib/api/budgetApi";
+import { activityApi } from "@/lib/api/activityApi";
 import type { WbsNodeResponse } from "@/lib/types";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import {
@@ -94,6 +97,7 @@ interface ExpenseRow {
   amount: number;
   category: string;
   expenseDate: string;
+  activityId: string | null;
 }
 
 const FORECAST_METHODS: { value: ForecastMethod; label: string }[] = [
@@ -158,6 +162,13 @@ export function CostsTab({ projectId }: { projectId: string }) {
     },
   });
 
+  const { data: activitiesData } = useQuery({
+    queryKey: ["activities", projectId],
+    queryFn: () => activityApi.listActivities(projectId, 0, 200),
+  });
+
+  const activities = useMemo(() => activitiesData?.data?.content ?? [], [activitiesData]);
+
   const handleEdit = useCallback((expense: ExpenseRow) => {
     setEditingExpenseId(expense.id);
     setExpenseForm({
@@ -166,12 +177,32 @@ export function CostsTab({ projectId }: { projectId: string }) {
       currency: baseCurrency.code,
       expenseDate: expense.expenseDate,
       category: expense.category,
+      activityId: expense.activityId ?? undefined,
     });
     setShowExpenseForm(true);
   }, [baseCurrency.code]);
 
   const expenseColumns = useMemo<ColumnDef<ExpenseRow>[]>(() => [
     { key: "description", label: "Description", sortable: true },
+    {
+      key: "activityId",
+      label: "Activity",
+      render: (_value, row) => {
+        if (!row.activityId) {
+          return <span className="text-text-muted">—</span>;
+        }
+        const activity = activities.find((a) => a.id === row.activityId);
+        const label = activity ? `${activity.code} - ${activity.name}` : row.activityId;
+        return (
+          <Link
+            href={`/projects/${projectId}/activities/${row.activityId}`}
+            className="text-accent hover:underline"
+          >
+            {label}
+          </Link>
+        );
+      },
+    },
     { key: "category", label: "Category", sortable: true },
     {
       key: "amount",
@@ -205,7 +236,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
         </div>
       ),
     },
-  ], [handleEdit, deleteExpenseMutation]);
+  ], [handleEdit, deleteExpenseMutation, activities, projectId]);
 
   const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
     queryKey: ["cost-summary", projectId],
@@ -233,6 +264,12 @@ export function CostsTab({ projectId }: { projectId: string }) {
   const { data: wbsData } = useQuery({
     queryKey: ["wbs", projectId],
     queryFn: () => projectApi.getWbsTree(projectId),
+  });
+
+  // P6-style project budget
+  const { data: projectBudgetData } = useQuery({
+    queryKey: ["project-budget", projectId],
+    queryFn: () => budgetApi.getBudgetSummary(projectId),
   });
 
   const summary = summaryData?.data;
@@ -266,7 +303,14 @@ export function CostsTab({ projectId }: { projectId: string }) {
 
   const summaryCards: SummaryCard[] = [
     {
-      label: "Total Budget",
+      label: "Project Budget (P6)",
+      value: projectBudgetData?.data?.currentBudget != null
+        ? formatCrores(projectBudgetData.data.currentBudget / INR_PER_CRORE)
+        : "Not set",
+      color: "indigo",
+    },
+    {
+      label: "Total Budget (Expenses)",
       value: formatCrores(budgetCrores),
       color: "blue",
     },
@@ -340,6 +384,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
     yellow: "border-l-4 border-l-warning",
     purple: "border-l-4 border-l-info",
     red: "border-l-4 border-l-danger",
+    indigo: "border-l-4 border-l-indigo-500",
     slate: "",
   };
 
@@ -349,6 +394,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
     yellow: "text-warning",
     purple: "text-info",
     red: "text-danger",
+    indigo: "text-indigo-600 dark:text-indigo-400",
     slate: "text-text-primary",
   };
 
@@ -632,6 +678,26 @@ export function CostsTab({ projectId }: { projectId: string }) {
                   onChange={(e) => setExpenseForm((prev) => ({ ...prev, expenseDate: e.target.value }))}
                   className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-text-secondary">Activity (optional)</label>
+                <select
+                  value={expenseForm.activityId ?? ""}
+                  onChange={(e) =>
+                    setExpenseForm((prev) => ({
+                      ...prev,
+                      activityId: e.target.value || undefined,
+                    }))
+                  }
+                  className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="">(Unassigned)</option>
+                  {activities.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.code} - {a.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="col-span-full flex gap-2">
                 <button

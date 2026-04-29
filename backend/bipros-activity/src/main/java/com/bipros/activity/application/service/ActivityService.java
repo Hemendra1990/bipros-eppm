@@ -97,6 +97,7 @@ public class ActivityService {
     activity.setChainageFromM(request.chainageFromM());
     activity.setChainageToM(request.chainageToM());
     activity.setWorkActivityId(request.workActivityId());
+    activity.setCostAccountId(request.costAccountId());
     activity.setPercentComplete(0.0);
 
     Double duration;
@@ -228,6 +229,10 @@ public class ActivityService {
     }
     if (request.workActivityId() != null) {
       activity.setWorkActivityId(request.workActivityId());
+    }
+    // costAccountId: explicit null clears the value; non-null sets it
+    if (request.costAccountId() != null) {
+      activity.setCostAccountId(request.costAccountId());
     }
 
     // Enforce date-order across the planned window after any updates

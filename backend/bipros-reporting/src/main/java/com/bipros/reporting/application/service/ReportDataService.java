@@ -527,8 +527,14 @@ public class ReportDataService {
   // Cost helpers
   // =========================================================================
   private BigDecimal getProjectBudget(UUID projectId) {
-    return scalarDecimal(
+    BigDecimal fromExpenses = scalarDecimal(
         "SELECT COALESCE(SUM(budgeted_cost), 0) FROM cost.activity_expenses WHERE project_id = ?1",
+        projectId);
+    if (fromExpenses.signum() > 0) return fromExpenses;
+
+    // Fallback: use the P6-style project-level current_budget when no activity expenses exist
+    return scalarDecimal(
+        "SELECT COALESCE(current_budget, 0) FROM project.projects WHERE id = ?1",
         projectId);
   }
 

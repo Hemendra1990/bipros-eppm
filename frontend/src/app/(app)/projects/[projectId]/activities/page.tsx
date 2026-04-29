@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { List, FolderTree, Play } from "lucide-react";
+import { List, FolderTree, Play, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
@@ -14,6 +14,7 @@ import { ActivityWbsTreeView } from "@/components/activity/ActivityWbsTreeView";
 import { getErrorMessage } from "@/lib/utils/error";
 import { notificationHelpers } from "@/lib/notificationHelpers";
 import Link from "next/link";
+import { useScheduleStaleStore } from "@/lib/state/scheduleStaleStore";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -30,6 +31,10 @@ export default function ActivitiesPage() {
   // currently typed into the % input.
   const [progressEdit, setProgressEdit] = useState<Record<string, string>>({});
   const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
+  const markScheduleFresh = useScheduleStaleStore((s) => s.markScheduleFresh);
+  const isStale = useScheduleStaleStore((s) => s.isScheduleStale(projectId));
 
   const { data: activitiesData, isLoading: isLoadingActivities } = useQuery({
     queryKey: ["activities", projectId],
@@ -58,6 +63,7 @@ export default function ActivitiesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["activities", projectId] });
       qc.invalidateQueries({ queryKey: ["critical-path", projectId] });
+      markScheduleFresh(projectId);
       setScheduleError("");
       toast.success("Schedule calculated successfully");
     },
@@ -86,6 +92,7 @@ export default function ActivitiesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["activities", projectId] });
+      markScheduleStale(projectId);
     },
     onError: (err: unknown) => {
       const msg = getErrorMessage(err, "Failed to update progress");
@@ -165,17 +172,43 @@ export default function ActivitiesPage() {
         }
       />
 
+      {isStale && (
+        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-warning">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span>Schedule is out of date — early/late dates and critical path may not reflect recent changes.</span>
+          </div>
+          <button
+            onClick={() => scheduleMutation.mutate()}
+            disabled={scheduleMutation.isPending}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-warning/80 disabled:opacity-50"
+          >
+            <Play size={12} />
+            Run now
+          </button>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="mb-6 flex flex-wrap items-center gap-4">
         {/* Run Schedule */}
-        <button
-          onClick={() => scheduleMutation.mutate()}
-          disabled={scheduleMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-success px-4 py-2 text-sm font-medium text-text-primary hover:bg-success/80 disabled:opacity-50"
-        >
-          <Play size={16} />
-          {scheduleMutation.isPending ? "Running..." : "Run Schedule"}
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => scheduleMutation.mutate()}
+            disabled={scheduleMutation.isPending}
+            className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-text-primary disabled:opacity-50 ${
+              isStale
+                ? "bg-warning hover:bg-warning/80"
+                : "bg-success hover:bg-success/80"
+            }`}
+          >
+            <Play size={16} />
+            {scheduleMutation.isPending ? "Running..." : "Run Schedule"}
+          </button>
+          {isStale && (
+            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-surface" />
+          )}
+        </div>
 
         {/* Look-Ahead Filter */}
         <div className="flex gap-2">

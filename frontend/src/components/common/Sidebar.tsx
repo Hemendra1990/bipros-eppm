@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Banknote, BarChart3, Briefcase, Building2, Calendar, ChevronDown,
-  ChevronLeft, ChevronRight, Contact, FileText, FolderTree, Gauge,
+  ChevronLeft, ChevronRight, CircleDollarSign, Contact, FileText, FolderTree, Gauge,
   Grid, HardHat, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
   Network, Plug, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Tag,
   UserCog, Users, UsersRound, Workflow,
@@ -84,6 +84,7 @@ const groups: NavGroup[] = [
       { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
       { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
+      { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true },
       { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },
       { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },

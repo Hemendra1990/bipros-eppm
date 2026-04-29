@@ -47,5 +47,11 @@ public record CreateActivityRequest(
      * project activity to its master/library entry so productivity norms can be resolved
      * per (activity, deployed resource).
      */
-    UUID workActivityId
+    UUID workActivityId,
+
+    /**
+     * Soft FK to {@code cost.cost_accounts.id}. Optional — when present, assigns the activity to
+     * a cost account directly, overriding any cost account inherited from the WBS node.
+     */
+    UUID costAccountId
 ) {}

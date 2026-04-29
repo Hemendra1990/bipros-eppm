@@ -396,6 +396,9 @@ public class ProjectService {
             project.getCalendarId(),
             project.getActiveBaselineId(),
             primaryContractSummary(project.getId()),
+            project.getOriginalBudget(),
+            project.getCurrentBudget(),
+            project.getBudgetCurrency(),
             toLocalDateTime(project.getCreatedAt()),
             toLocalDateTime(project.getUpdatedAt()),
             toLocalDateTime(project.getArchivedAt())

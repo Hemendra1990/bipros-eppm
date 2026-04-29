@@ -39,6 +39,9 @@ public record ProjectResponse(
     UUID calendarId,
     UUID activeBaselineId,
     ContractSummary contract,
+    BigDecimal originalBudget,
+    BigDecimal currentBudget,
+    String budgetCurrency,
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
     LocalDateTime archivedAt

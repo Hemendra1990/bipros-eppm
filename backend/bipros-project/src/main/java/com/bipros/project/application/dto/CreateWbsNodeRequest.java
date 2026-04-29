@@ -4,6 +4,7 @@ import com.bipros.project.domain.model.WbsStatus;
 import com.bipros.project.domain.model.WbsType;
 import jakarta.validation.constraints.NotBlank;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record CreateWbsNodeRequest(
@@ -27,10 +28,13 @@ public record CreateWbsNodeRequest(
     WbsStatus wbsStatus,
 
     /** Optional; when omitted the server derives it from the parent's level + 1 (1 for roots). */
-    Integer wbsLevel
+    Integer wbsLevel,
+
+    /** Optional; budget allocated to this WBS node in crores (INR). */
+    BigDecimal budgetCrores
 ) {
     /** Legacy constructor kept for callers that predate the taxonomy fields. */
     public CreateWbsNodeRequest(String code, String name, UUID parentId, UUID projectId, UUID obsNodeId) {
-        this(code, name, parentId, projectId, obsNodeId, null, null, null);
+        this(code, name, parentId, projectId, obsNodeId, null, null, null, null);
     }
 }

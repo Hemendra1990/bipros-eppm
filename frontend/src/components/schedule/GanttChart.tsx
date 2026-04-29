@@ -8,6 +8,7 @@ import {
   addDays,
   startOfDay,
 } from "date-fns";
+import { AlertTriangle, Play } from "lucide-react";
 import type { ActivityResponse } from "@/lib/types";
 import { GanttTimescale } from "./GanttTimescale";
 import { GanttSidebar } from "./GanttSidebar";
@@ -33,6 +34,9 @@ interface GanttChartProps {
   onActivityReschedule?: (id: string, newStart: string, newEnd: string) => void;
   spotlightStartDate?: string | null;
   spotlightEndDate?: string | null;
+  isStale?: boolean;
+  onRunSchedule?: () => void;
+  isRunningSchedule?: boolean;
 }
 
 interface DateRange {
@@ -49,6 +53,9 @@ export function GanttChart({
   onActivityReschedule,
   spotlightStartDate,
   spotlightEndDate,
+  isStale = false,
+  onRunSchedule,
+  isRunningSchedule = false,
 }: GanttChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -135,6 +142,25 @@ export function GanttChart({
 
   return (
     <div className="space-y-4">
+      {isStale && (
+        <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-warning">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span>Schedule is out of date — dates and critical path shown may not reflect recent changes.</span>
+          </div>
+          {onRunSchedule && (
+            <button
+              onClick={onRunSchedule}
+              disabled={isRunningSchedule}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-warning/80 disabled:opacity-50"
+            >
+              <Play size={12} />
+              {isRunningSchedule ? "Running..." : "Run now"}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-text-primary">Gantt Chart</h2>
         <div className="flex items-center gap-4">

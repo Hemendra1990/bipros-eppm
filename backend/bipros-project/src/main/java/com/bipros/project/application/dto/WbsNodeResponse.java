@@ -30,6 +30,7 @@ public record WbsNodeResponse(
     String gisPolygonId,
     Long chainageFromM,
     Long chainageToM,
+    UUID costAccountId,
     List<WbsNodeResponse> children
 ) {
 }

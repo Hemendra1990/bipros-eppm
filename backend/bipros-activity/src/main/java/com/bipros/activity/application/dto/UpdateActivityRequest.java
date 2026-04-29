@@ -58,5 +58,8 @@ public record UpdateActivityRequest(
     Long chainageToM,
 
     /** Soft FK to {@code resource.work_activities.id}; pass {@code null} to leave unchanged. */
-    UUID workActivityId
+    UUID workActivityId,
+
+    /** Soft FK to {@code cost.cost_accounts.id}; pass {@code null} to clear the assignment. */
+    UUID costAccountId
 ) {}

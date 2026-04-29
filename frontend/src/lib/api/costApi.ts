@@ -16,6 +16,11 @@ export interface CreateCostAccountRequest {
   parentId?: string | null;
 }
 
+export interface UpdateCostAccountRequest {
+  name: string;
+  description?: string;
+}
+
 export interface CostSummary {
   totalBudget: number;
   totalActual: number;
@@ -73,6 +78,11 @@ export const costApi = {
       })
       .then((r) => r.data),
 
+  getActivityExpenses: (projectId: string, activityId: string) =>
+    apiClient
+      .get<ApiResponse<ExpenseResponse[]>>(`/v1/projects/${projectId}/activities/${activityId}/expenses`)
+      .then((r) => r.data),
+
   getCostSummary: (projectId: string) =>
     apiClient
       .get<ApiResponse<CostSummary>>(`/v1/projects/${projectId}/cost-summary`)
@@ -103,6 +113,9 @@ export const costApi = {
 
   createCostAccount: (data: CreateCostAccountRequest) =>
     apiClient.post<ApiResponse<CostAccount>>("/v1/cost-accounts", data).then((r) => r.data),
+
+  updateCostAccount: (id: string, data: UpdateCostAccountRequest) =>
+    apiClient.put<ApiResponse<CostAccount>>(`/v1/cost-accounts/${id}`, data).then((r) => r.data),
 
   deleteCostAccount: (id: string) =>
     apiClient.delete(`/v1/cost-accounts/${id}`),

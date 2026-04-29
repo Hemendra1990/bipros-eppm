@@ -129,4 +129,22 @@ public class Project extends BaseEntity {
     /** Soft FK to {@code public.users.id} — who archived the project. */
     @Column(name = "archived_by")
     private UUID archivedBy;
+
+    // ── P6-style budget fields ────────────────────────────────────────────────
+
+    /** Immutable approved budget. Set once via {@code ProjectBudgetService.setInitialBudget()}. */
+    @Column(name = "original_budget", precision = 19, scale = 2)
+    private BigDecimal originalBudget;
+
+    /** Current budget = original + approved additions − approved reductions. Recomputed on every approved change. */
+    @Column(name = "current_budget", precision = 19, scale = 2)
+    private BigDecimal currentBudget;
+
+    /** ISO 4217 currency code for all budget values. Defaults to INR. */
+    @Column(name = "budget_currency", length = 3)
+    private String budgetCurrency = "INR";
+
+    /** Timestamp of the last approved budget change. */
+    @Column(name = "budget_updated_at")
+    private Instant budgetUpdatedAt;
 }

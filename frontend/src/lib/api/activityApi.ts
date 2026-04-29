@@ -1,6 +1,15 @@
 import { apiClient } from "./client";
 import type { ApiResponse, PagedResponse } from "../types";
 
+export type ConstraintType =
+  | "START_ON"
+  | "START_ON_OR_AFTER"
+  | "START_ON_OR_BEFORE"
+  | "FINISH_ON"
+  | "FINISH_ON_OR_AFTER"
+  | "FINISH_ON_OR_BEFORE"
+  | "AS_LATE_AS_POSSIBLE";
+
 export interface ActivityResponse {
   id: string;
   code: string;
@@ -29,7 +38,16 @@ export interface ActivityResponse {
   notes?: string;
   /** Soft FK to resource.work_activities.id — links this activity to its master library entry. */
   workActivityId?: string | null;
+  /** Soft FK to cost.cost_accounts.id — the cost account directly assigned to this activity. */
+  costAccountId?: string | null;
   calendarId?: string | null;
+  primaryConstraintType?: ConstraintType | null;
+  primaryConstraintDate?: string | null;
+  secondaryConstraintType?: ConstraintType | null;
+  secondaryConstraintDate?: string | null;
+  percentCompleteType?: string | null;
+  activityType?: string | null;
+  durationType?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -47,6 +65,12 @@ export interface CreateActivityRequest {
   calendarId?: string;
   /** Optional link to the WorkActivity (master library) this activity is an instance of. */
   workActivityId?: string | null;
+  /** Optional cost account assignment; overrides WBS-level inheritance. */
+  costAccountId?: string | null;
+  primaryConstraintType?: ConstraintType;
+  primaryConstraintDate?: string;
+  secondaryConstraintType?: ConstraintType;
+  secondaryConstraintDate?: string;
 }
 
 export interface UpdateActivityRequest {
@@ -64,6 +88,12 @@ export interface UpdateActivityRequest {
   plannedFinishDate?: string;
   /** Pass to attach/change the WorkActivity link; omit (or null) to leave unchanged. */
   workActivityId?: string | null;
+  /** Pass to set or clear the cost account assignment; omit to leave unchanged. */
+  costAccountId?: string | null;
+  primaryConstraintType?: ConstraintType | null;
+  primaryConstraintDate?: string | null;
+  secondaryConstraintType?: ConstraintType | null;
+  secondaryConstraintDate?: string | null;
 }
 
 export const activityApi = {
