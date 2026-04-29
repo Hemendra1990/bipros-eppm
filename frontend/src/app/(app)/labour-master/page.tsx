@@ -7,6 +7,7 @@ import {
   KpiTiles,
   WorkforceCategoryBarChart,
   WorkforceSummaryTable,
+  ProjectPickerEmpty,
 } from "@/components/labour-master";
 
 export default function LabourMasterDashboardPage() {
@@ -19,13 +20,7 @@ export default function LabourMasterDashboardPage() {
     enabled: !!projectId,
   });
 
-  if (!projectId) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Select a project to view the labour dashboard. Append <code>?projectId=...</code> to the URL.
-      </p>
-    );
-  }
+  if (!projectId) return <ProjectPickerEmpty title="Select a project for the Labour Dashboard" />;
   if (dashboardQuery.isLoading) return <p>Loading…</p>;
   if (dashboardQuery.isError) {
     return <p className="text-red-700">Failed to load dashboard.</p>;

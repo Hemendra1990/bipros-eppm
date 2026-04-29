@@ -13,6 +13,7 @@ import {
   CategoryFilterBar,
   CategoryCardsSection,
   WorkerDetailModal,
+  ProjectPickerEmpty,
 } from "@/components/labour-master";
 
 export default function CardsPage() {
@@ -65,9 +66,7 @@ export default function CardsPage() {
       });
   }, [deployments.data, selectedCategory, selectedGrade, query]);
 
-  if (!projectId) {
-    return <p className="text-sm text-muted-foreground">Select a project (append <code>?projectId=...</code>).</p>;
-  }
+  if (!projectId) return <ProjectPickerEmpty title="Select a project to browse Labour Cards" redirectBasePath="/labour-master/cards" />;
   if (deployments.isLoading || cats.isLoading || dashboard.isLoading) {
     return <p>Loading…</p>;
   }

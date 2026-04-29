@@ -7,7 +7,7 @@ import {
   labourMasterApi,
   type LabourDesignationResponse,
 } from "@/lib/api/labourMasterApi";
-import { WorkerTable, WorkerDetailModal } from "@/components/labour-master";
+import { WorkerTable, WorkerDetailModal, ProjectPickerEmpty } from "@/components/labour-master";
 
 export default function TablePage() {
   const search = useSearchParams();
@@ -36,9 +36,7 @@ export default function TablePage() {
     [deployments.data]
   );
 
-  if (!projectId) {
-    return <p className="text-sm text-muted-foreground">Select a project (append <code>?projectId=...</code>).</p>;
-  }
+  if (!projectId) return <ProjectPickerEmpty title="Select a project to view the Labour Table" redirectBasePath="/labour-master/table" />;
   if (deployments.isLoading) return <p>Loading…</p>;
   if (deployments.isError) return <p className="text-red-700">Failed to load labour deployments.</p>;
   return (
