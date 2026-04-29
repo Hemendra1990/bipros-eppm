@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   labourMasterApi,
@@ -14,11 +13,11 @@ import {
   CategoryCardsSection,
   WorkerDetailModal,
   ProjectPickerEmpty,
+  useLabourMasterProject,
 } from "@/components/labour-master";
 
 export default function CardsPage() {
-  const search = useSearchParams();
-  const projectId = search?.get("projectId") || undefined;
+  const { projectId } = useLabourMasterProject();
 
   const [selectedCategory, setCategory] = useState<LabourCategory | null>(null);
   const [selectedGrade, setGrade] = useState<LabourGrade | null>(null);

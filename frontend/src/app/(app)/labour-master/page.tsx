@@ -1,6 +1,5 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { labourMasterApi } from "@/lib/api/labourMasterApi";
 import {
@@ -8,11 +7,11 @@ import {
   WorkforceCategoryBarChart,
   WorkforceSummaryTable,
   ProjectPickerEmpty,
+  useLabourMasterProject,
 } from "@/components/labour-master";
 
 export default function LabourMasterDashboardPage() {
-  const search = useSearchParams();
-  const projectId = search?.get("projectId") || undefined;
+  const { projectId } = useLabourMasterProject();
 
   const dashboardQuery = useQuery({
     queryKey: ["labour-deployments-dashboard", projectId],

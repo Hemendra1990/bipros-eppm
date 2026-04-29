@@ -1,17 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   labourMasterApi,
   type LabourDesignationResponse,
 } from "@/lib/api/labourMasterApi";
-import { WorkerTable, WorkerDetailModal, ProjectPickerEmpty } from "@/components/labour-master";
+import { WorkerTable, WorkerDetailModal, ProjectPickerEmpty, useLabourMasterProject } from "@/components/labour-master";
 
 export default function TablePage() {
-  const search = useSearchParams();
-  const projectId = search?.get("projectId") || undefined;
+  const { projectId } = useLabourMasterProject();
   const [open, setOpen] = useState<LabourDesignationResponse | null>(null);
 
   const deployments = useQuery({

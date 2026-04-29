@@ -10,3 +10,4 @@ export { GradeReferenceTable } from "./GradeReferenceTable";
 export { AddDesignationForm } from "./AddDesignationForm";
 export { CATEGORY_ACCENT, GRADE_BADGE, formatOMR } from "./labourMasterTokens";
 export { ProjectPickerEmpty } from "./ProjectPickerEmpty";
+export { useLabourMasterProject } from "./useLabourMasterProject";
