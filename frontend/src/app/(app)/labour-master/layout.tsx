@@ -1,6 +1,7 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-export default function LabourMasterLayout({ children }: { children: React.ReactNode }) {
+export default function LabourMasterLayout({ children }: { children: ReactNode }) {
   return (
     <div className="space-y-4">
       <header className="flex items-center justify-between">

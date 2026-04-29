@@ -68,6 +68,12 @@ export default function CardsPage() {
   if (!projectId) {
     return <p className="text-sm text-muted-foreground">Select a project (append <code>?projectId=...</code>).</p>;
   }
+  if (deployments.isLoading || cats.isLoading || dashboard.isLoading) {
+    return <p>Loading…</p>;
+  }
+  if (deployments.isError || cats.isError || dashboard.isError) {
+    return <p className="text-red-700">Failed to load labour data.</p>;
+  }
 
   return (
     <div className="space-y-4">

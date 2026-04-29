@@ -39,6 +39,8 @@ export default function TablePage() {
   if (!projectId) {
     return <p className="text-sm text-muted-foreground">Select a project (append <code>?projectId=...</code>).</p>;
   }
+  if (deployments.isLoading) return <p>Loading…</p>;
+  if (deployments.isError) return <p className="text-red-700">Failed to load labour deployments.</p>;
   return (
     <>
       <WorkerTable rows={rows} onRowClick={setOpen} />
