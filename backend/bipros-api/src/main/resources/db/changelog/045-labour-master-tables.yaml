@@ -1,0 +1,214 @@
+databaseChangeLog:
+  - changeSet:
+      id: 045-1-create-labour-designations
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: labour_designations
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+              - column:
+                  name: code
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_labour_designation_code
+              - column:
+                  name: designation
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: trade
+                  type: VARCHAR(80)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: grade
+                  type: VARCHAR(2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: nationality
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: experience_years_min
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: default_daily_rate
+                  type: NUMERIC(10,2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency
+                  type: VARCHAR(3)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'OMR'
+              - column:
+                  name: skills
+                  type: JSONB
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: "'[]'::jsonb"
+              - column:
+                  name: certifications
+                  type: JSONB
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: "'[]'::jsonb"
+              - column:
+                  name: key_role_summary
+                  type: VARCHAR(500)
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: 'ACTIVE'
+              - column:
+                  name: sort_order
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0
+
+  - changeSet:
+      id: 045-2-create-labour-designations-indexes
+      author: bipros
+      changes:
+        - createIndex:
+            schemaName: resource
+            tableName: labour_designations
+            indexName: idx_labour_designation_category
+            columns:
+              - column:
+                  name: category
+        - createIndex:
+            schemaName: resource
+            tableName: labour_designations
+            indexName: idx_labour_designation_grade
+            columns:
+              - column:
+                  name: grade
+        - createIndex:
+            schemaName: resource
+            tableName: labour_designations
+            indexName: idx_labour_designation_status
+            columns:
+              - column:
+                  name: status
+
+  - changeSet:
+      id: 045-3-create-project-labour-deployments
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: project_labour_deployments
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: designation_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: worker_count
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actual_daily_rate
+                  type: NUMERIC(10,2)
+              - column:
+                  name: notes
+                  type: VARCHAR(500)
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: project_labour_deployments
+            constraintName: uk_project_labour_deployment_project_designation
+            columnNames: project_id, designation_id
+
+  - changeSet:
+      id: 045-4-create-project-labour-deployments-indexes
+      author: bipros
+      changes:
+        - createIndex:
+            schemaName: resource
+            tableName: project_labour_deployments
+            indexName: idx_project_labour_deployment_project
+            columns:
+              - column:
+                  name: project_id
+        - createIndex:
+            schemaName: resource
+            tableName: project_labour_deployments
+            indexName: idx_project_labour_deployment_designation
+            columns:
+              - column:
+                  name: designation_id
