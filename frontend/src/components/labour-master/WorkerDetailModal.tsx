@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import type { LabourDesignationResponse } from "@/lib/api/labourMasterApi";
 import { CATEGORY_ACCENT, GRADE_BADGE, formatOMR } from "./labourMasterTokens";
 
@@ -9,6 +10,15 @@ type Props = {
 };
 
 export function WorkerDetailModal({ designation, onClose }: Props) {
+  useEffect(() => {
+    if (!designation) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [designation, onClose]);
+
   if (!designation) return null;
   const accent = CATEGORY_ACCENT[designation.category];
   const workerCount = designation.deployment?.workerCount ?? 0;
@@ -19,8 +29,9 @@ export function WorkerDetailModal({ designation, onClose }: Props) {
       className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      onClick={onClose}
     >
-      <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl">
+      <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-start justify-between">
           <div>
             <div className="text-xs font-mono text-muted-foreground">{designation.code}</div>
