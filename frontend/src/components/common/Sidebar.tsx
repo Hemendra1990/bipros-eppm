@@ -6,7 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Banknote, BarChart3, Briefcase, Building2, Calendar, ChevronDown,
   ChevronLeft, ChevronRight, Contact, FileText, FolderTree, Gauge,
-  Grid, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
+  Grid, HardHat, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
   Network, Plug, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Tag,
   UserCog, Users, UsersRound, Workflow,
 } from "lucide-react";
@@ -49,6 +49,7 @@ const groups: NavGroup[] = [
     label: "Execute",
     items: [
       { name: "Resources", href: "/resources", icon: Users, module: "M8_RESOURCES" },
+      { name: "Labour Master", href: "/labour-master", icon: HardHat, module: "M8_RESOURCES" },
       { name: "Calendars", href: "/admin/calendars", icon: Calendar, module: "M2_SCHEDULE_EVM" },
     ],
   },
