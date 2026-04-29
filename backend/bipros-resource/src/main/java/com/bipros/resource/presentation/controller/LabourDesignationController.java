@@ -53,11 +53,13 @@ public class LabourDesignationController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<LabourDesignationResponse>> get(@PathVariable UUID id) {
+        log.info("GET /v1/labour-designations/{} - Fetching designation", id);
         return ResponseEntity.ok(ApiResponse.ok(service.get(id)));
     }
 
     @GetMapping("/by-code/{code}")
     public ResponseEntity<ApiResponse<LabourDesignationResponse>> getByCode(@PathVariable String code) {
+        log.info("GET /v1/labour-designations/by-code/{} - Fetching designation", code);
         return ResponseEntity.ok(ApiResponse.ok(service.getByCode(code)));
     }
 
@@ -71,11 +73,13 @@ public class LabourDesignationController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<LabourDesignationResponse>> update(
             @PathVariable UUID id, @Valid @RequestBody LabourDesignationRequest req) {
+        log.info("PUT /v1/labour-designations/{} - Updating designation", id);
         return ResponseEntity.ok(ApiResponse.ok(service.update(id, req)));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
+        log.info("DELETE /v1/labour-designations/{} - Deleting designation", id);
         service.delete(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }

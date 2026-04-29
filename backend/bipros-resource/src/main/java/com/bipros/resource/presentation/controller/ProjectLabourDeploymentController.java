@@ -43,12 +43,14 @@ public class ProjectLabourDeploymentController {
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<LabourMasterDashboardSummary>> dashboard(
             @PathVariable UUID projectId) {
+        log.info("GET /v1/projects/{}/labour-deployments/dashboard", projectId);
         return ResponseEntity.ok(ApiResponse.ok(service.dashboard(projectId)));
     }
 
     @GetMapping("/by-category")
     public ResponseEntity<ApiResponse<List<LabourCategorySummary>>> byCategory(
             @PathVariable UUID projectId) {
+        log.info("GET /v1/projects/{}/labour-deployments/by-category", projectId);
         return ResponseEntity.ok(ApiResponse.ok(service.byCategory(projectId)));
     }
 
@@ -66,6 +68,7 @@ public class ProjectLabourDeploymentController {
             @PathVariable UUID projectId,
             @PathVariable UUID deploymentId,
             @Valid @RequestBody ProjectLabourDeploymentRequest req) {
+        log.info("PUT /v1/projects/{}/labour-deployments/{} - Updating deployment", projectId, deploymentId);
         return ResponseEntity.ok(ApiResponse.ok(service.update(projectId, deploymentId, req)));
     }
 
@@ -73,6 +76,7 @@ public class ProjectLabourDeploymentController {
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID projectId,
             @PathVariable UUID deploymentId) {
+        log.info("DELETE /v1/projects/{}/labour-deployments/{} - Deleting deployment", projectId, deploymentId);
         service.delete(projectId, deploymentId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
