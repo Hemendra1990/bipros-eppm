@@ -40,14 +40,30 @@ docker/data/
 # LLM-maintained project wiki (auto-generated)
 .claude/wiki/
 
+# Claude Code internal state (per-machine)
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
 # Superpowers brainstorming session artifacts
 .superpowers/
 
 # Git worktrees (isolated feature workspaces)
 .worktrees/
 
+# Other local agent tooling
+.opencode/
+.playwright-mcp/
+
 # Generated knowledge graph
 graphify-out/
+
+# Playwright reports & test results (regenerated each run)
+frontend/playwright-report/
+frontend/test-results/
+
+# One-off design exploration screenshots
+/login-boutique-*.png
+/login-redesign-*.png
 
 # Demo deliverables (generated)
 Bipros_EPPM_Demo*.pptx
