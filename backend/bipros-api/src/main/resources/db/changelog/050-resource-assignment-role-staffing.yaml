@@ -1,0 +1,95 @@
+databaseChangeLog:
+  - changeSet:
+      id: 050-resource-assignment-role-staffing
+      author: bipros
+      # Dev users on ddl-auto: update can run the equivalent psql commands:
+      #   ALTER TABLE resource.resource_assignments ALTER COLUMN resource_id DROP NOT NULL;
+      #   ALTER TABLE resource.resource_assignments DROP CONSTRAINT IF EXISTS uk_assignment_activity_resource;
+      #   ALTER TABLE resource.resource_assignments ADD CONSTRAINT chk_assignment_resource_or_role CHECK (resource_id IS NOT NULL OR role_id IS NOT NULL);
+      #   CREATE UNIQUE INDEX uk_assignment_activity_resource_partial ON resource.resource_assignments (activity_id, resource_id) WHERE resource_id IS NOT NULL;
+      #   CREATE UNIQUE INDEX uk_assignment_activity_role_partial ON resource.resource_assignments (activity_id, role_id) WHERE resource_id IS NULL;
+      #   ALTER TABLE resource.user_resource_roles ADD COLUMN is_primary BOOLEAN NOT NULL DEFAULT FALSE;
+      #   CREATE UNIQUE INDEX uk_urr_one_primary_per_user ON resource.user_resource_roles (user_id) WHERE is_primary = true;
+      #   ALTER TABLE resource.resources ADD COLUMN user_id UUID;
+      #   CREATE INDEX idx_resource_user_id ON resource.resources (user_id);
+      changes:
+        - dropNotNullConstraint:
+            tableName: resource_assignments
+            schemaName: resource
+            columnName: resource_id
+            columnDataType: UUID
+
+        - dropUniqueConstraint:
+            tableName: resource_assignments
+            schemaName: resource
+            constraintName: uk_assignment_activity_resource
+
+        - addCheckConstraint:
+            tableName: resource_assignments
+            schemaName: resource
+            constraintName: chk_assignment_resource_or_role
+            validate: true
+            constraintBody: resource_id IS NOT NULL OR role_id IS NOT NULL
+
+        - createIndex:
+            tableName: resource_assignments
+            schemaName: resource
+            indexName: uk_assignment_activity_resource_partial
+            unique: true
+            columns:
+              - column:
+                  name: activity_id
+              - column:
+                  name: resource_id
+            where: resource_id IS NOT NULL
+
+        - createIndex:
+            tableName: resource_assignments
+            schemaName: resource
+            indexName: uk_assignment_activity_role_partial
+            unique: true
+            columns:
+              - column:
+                  name: activity_id
+              - column:
+                  name: role_id
+            where: resource_id IS NULL
+
+        - addColumn:
+            tableName: user_resource_roles
+            schemaName: resource
+            columns:
+              - column:
+                  name: is_primary
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+
+        - createIndex:
+            tableName: user_resource_roles
+            schemaName: resource
+            indexName: uk_urr_one_primary_per_user
+            unique: true
+            columns:
+              - column:
+                  name: user_id
+            where: is_primary = true
+
+        - addColumn:
+            tableName: resources
+            schemaName: resource
+            columns:
+              - column:
+                  name: user_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+
+        - createIndex:
+            tableName: resources
+            schemaName: resource
+            indexName: idx_resource_user_id
+            columns:
+              - column:
+                  name: user_id

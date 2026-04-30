@@ -48,6 +48,7 @@ export interface UserResourceRoleResponse {
   id: string;
   userId: string;
   resourceRoleId: string;
+  primary: boolean;
   assignedFrom: string | null;
   assignedTo: string | null;
   remarks: string | null;
@@ -55,6 +56,7 @@ export interface UserResourceRoleResponse {
 
 export interface AssignUserToRoleRequest {
   userId: string;
+  primary?: boolean;
   assignedFrom?: string | null;
   assignedTo?: string | null;
   remarks?: string | null;
@@ -89,4 +91,9 @@ export const roleApi = {
 
   unassignUser: (roleId: string, assignmentId: string) =>
     apiClient.delete(`/v1/roles/${roleId}/users/${assignmentId}`),
+
+  setPrimaryRole: (roleId: string, userId: string) =>
+    apiClient
+      .post<ApiResponse<UserResourceRoleResponse>>(`/v1/roles/${roleId}/users/${userId}/primary`)
+      .then((r) => r.data),
 };

@@ -7,7 +7,7 @@ import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 export interface AssignmentRow {
   id: string;
   activityId: string;
-  resourceId: string;
+  resourceId: string | null;
   projectId: string;
   resourceName: string;
   activityName: string;
@@ -92,7 +92,7 @@ function buildResourceTypeTree(
   const grouped = new Map<string, AssignmentRow[]>();
 
   for (const a of assignments) {
-    const type = resourceMap.get(a.resourceId) ?? "UNKNOWN";
+    const type = (a.resourceId ? resourceMap.get(a.resourceId) : null) ?? "UNKNOWN";
     const list = grouped.get(type) ?? [];
     list.push(a);
     grouped.set(type, list);

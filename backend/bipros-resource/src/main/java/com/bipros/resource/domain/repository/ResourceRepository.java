@@ -6,6 +6,7 @@ import com.bipros.resource.domain.model.ResourceType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,4 +25,6 @@ public interface ResourceRepository extends JpaRepository<Resource, UUID> {
   Optional<Resource> findByCode(String code);
 
   long countByResourceTypeDefId(UUID resourceTypeDefId);
+
+  List<Resource> findByUserIdIn(Collection<UUID> userIds);
 }

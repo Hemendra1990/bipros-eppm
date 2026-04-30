@@ -141,15 +141,53 @@ public class RoleService {
           throw new BusinessRuleException("USER_ROLE_ALREADY_ASSIGNED",
               "User " + request.userId() + " is already assigned to role " + roleId);
         });
+
+    // Atomically clear other primaries for the same user when requested
+    if (Boolean.TRUE.equals(request.primary())) {
+      userResourceRoleRepository.findByUserId(request.userId()).stream()
+          .filter(UserResourceRole::isPrimary)
+          .forEach(u -> {
+            u.setPrimary(false);
+            userResourceRoleRepository.save(u);
+          });
+    }
+
     UserResourceRole urr = UserResourceRole.builder()
         .userId(request.userId())
         .resourceRoleId(roleId)
+        .primary(Boolean.TRUE.equals(request.primary()))
         .assignedFrom(request.assignedFrom())
         .assignedTo(request.assignedTo())
         .remarks(request.remarks())
         .build();
     UserResourceRole saved = userResourceRoleRepository.save(urr);
     auditService.logCreate("UserResourceRole", saved.getId(), UserResourceRoleResponse.from(saved));
+    return UserResourceRoleResponse.from(saved);
+  }
+
+  public UserResourceRoleResponse setPrimaryRole(UUID userId, UUID roleId) {
+    log.info("Setting primary role: userId={}, roleId={}", userId, roleId);
+
+    // Find the specific mapping
+    UserResourceRole target = userResourceRoleRepository.findByUserIdAndResourceRoleId(userId, roleId)
+        .orElseThrow(() -> new ResourceNotFoundException("UserResourceRole",
+            "User " + userId + " is not assigned to role " + roleId));
+
+    if (target.isPrimary()) {
+      return UserResourceRoleResponse.from(target);
+    }
+
+    // Atomically clear other primaries for the same user
+    userResourceRoleRepository.findByUserId(userId).stream()
+        .filter(UserResourceRole::isPrimary)
+        .forEach(u -> {
+          u.setPrimary(false);
+          userResourceRoleRepository.save(u);
+        });
+
+    target.setPrimary(true);
+    UserResourceRole saved = userResourceRoleRepository.save(target);
+    auditService.logUpdate("UserResourceRole", saved.getId(), "primary", target, UserResourceRoleResponse.from(saved));
     return UserResourceRoleResponse.from(saved);
   }
 

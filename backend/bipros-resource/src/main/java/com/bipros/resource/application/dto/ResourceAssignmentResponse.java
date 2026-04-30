@@ -14,6 +14,7 @@ public record ResourceAssignmentResponse(
     UUID resourceId,
     String resourceName,
     UUID roleId,
+    String roleName,
     UUID projectId,
     Double plannedUnits,
     Double actualUnits,
@@ -29,18 +30,19 @@ public record ResourceAssignmentResponse(
     LocalDate plannedFinishDate,
     LocalDate actualStartDate,
     LocalDate actualFinishDate,
+    boolean staffed,
     Instant createdAt,
     Instant updatedAt,
     String createdBy,
     String updatedBy) {
 
-  /** Legacy constructor — names null; prefer {@link #from(ResourceAssignment, String, String)}. */
+  /** Legacy constructor — names null; prefer {@link #from(ResourceAssignment, String, String, String)}. */
   public static ResourceAssignmentResponse from(ResourceAssignment assignment) {
-    return from(assignment, null, null);
+    return from(assignment, null, null, null);
   }
 
   public static ResourceAssignmentResponse from(
-      ResourceAssignment assignment, String resourceName, String activityName) {
+      ResourceAssignment assignment, String resourceName, String activityName, String roleName) {
     return new ResourceAssignmentResponse(
         assignment.getId(),
         assignment.getActivityId(),
@@ -48,6 +50,7 @@ public record ResourceAssignmentResponse(
         assignment.getResourceId(),
         resourceName,
         assignment.getRoleId(),
+        roleName,
         assignment.getProjectId(),
         assignment.getPlannedUnits(),
         assignment.getActualUnits(),
@@ -63,6 +66,7 @@ public record ResourceAssignmentResponse(
         assignment.getPlannedFinishDate(),
         assignment.getActualStartDate(),
         assignment.getActualFinishDate(),
+        assignment.getResourceId() != null,
         assignment.getCreatedAt(),
         assignment.getUpdatedAt(),
         assignment.getCreatedBy(),

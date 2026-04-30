@@ -173,6 +173,9 @@ public class Resource extends BaseEntity {
   @Default
   private Integer sortOrder = 0;
 
+  @Column(name = "user_id")
+  private UUID userId;
+
   // ── PMS MasterData Screen 04 (Equipment Master) fields ───────────────────
 
   /** Technical specification: bucket size, tonnage, width, etc. E.g. "1.0 Cum", "60 TPH", "5.5 m". */

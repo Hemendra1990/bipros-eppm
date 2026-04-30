@@ -1,12 +1,15 @@
 package com.bipros.activity.application.service;
 
 import com.bipros.activity.application.dto.UpdateActivityRequest;
+import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.ActivityStatus;
+import com.bipros.activity.domain.model.PercentCompleteType;
 import com.bipros.activity.domain.model.RelationshipType;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.activity.domain.repository.ActivityStepRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
@@ -40,6 +43,8 @@ class ActivityServicePredecessorValidationTest {
   @Mock private AuditService auditService;
   @Mock private ProjectAccessGuard projectAccess;
   @Mock private ProjectRepository projectRepository;
+  @Mock private PercentCompleteCalculator percentCompleteCalculator;
+  @Mock private ActivityStepRepository stepRepository;
 
   private ActivityService service;
 
@@ -50,7 +55,7 @@ class ActivityServicePredecessorValidationTest {
 
   @BeforeEach
   void setUp() {
-    service = new ActivityService(activityRepository, relationshipRepository, auditService, projectAccess, projectRepository);
+    service = new ActivityService(activityRepository, relationshipRepository, auditService, projectAccess, projectRepository, percentCompleteCalculator, stepRepository);
 
     successorId = UUID.randomUUID();
     predecessorId = UUID.randomUUID();
@@ -63,6 +68,7 @@ class ActivityServicePredecessorValidationTest {
     successor.setWbsNodeId(UUID.randomUUID());
     successor.setPercentComplete(0.0);
     successor.setStatus(ActivityStatus.NOT_STARTED);
+    successor.setPercentCompleteType(PercentCompleteType.PHYSICAL);
 
     predecessor = new Activity();
     predecessor.setId(predecessorId);
@@ -73,6 +79,7 @@ class ActivityServicePredecessorValidationTest {
     lenient().when(activityRepository.findById(predecessorId)).thenReturn(Optional.of(predecessor));
     lenient().when(activityRepository.save(any(Activity.class)))
         .thenAnswer(inv -> inv.getArgument(0));
+    lenient().when(stepRepository.countByActivityId(any(UUID.class))).thenReturn(0L);
   }
 
   private ActivityRelationship rel(RelationshipType type, double lag) {

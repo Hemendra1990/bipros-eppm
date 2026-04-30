@@ -9,6 +9,7 @@ public record UserResourceRoleResponse(
     UUID id,
     UUID userId,
     UUID resourceRoleId,
+    boolean primary,
     LocalDate assignedFrom,
     LocalDate assignedTo,
     String remarks
@@ -18,6 +19,7 @@ public record UserResourceRoleResponse(
         u.getId(),
         u.getUserId(),
         u.getResourceRoleId(),
+        u.isPrimary(),
         u.getAssignedFrom(),
         u.getAssignedTo(),
         u.getRemarks()

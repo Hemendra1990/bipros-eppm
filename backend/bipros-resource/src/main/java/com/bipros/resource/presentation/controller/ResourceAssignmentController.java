@@ -6,6 +6,8 @@ import com.bipros.resource.application.dto.ResourceAssignmentResponse;
 import com.bipros.resource.application.dto.ResourceLevelingRequest;
 import com.bipros.resource.application.dto.ResourceLevelingResponse;
 import com.bipros.resource.application.dto.ResourceUsageEntry;
+import com.bipros.resource.application.dto.StaffAssignmentRequest;
+import com.bipros.resource.application.dto.SwapResourceRequest;
 import com.bipros.resource.application.dto.UtilizationProfileEntry;
 import com.bipros.resource.application.service.ResourceAssignmentService;
 import com.bipros.resource.application.service.ResourceLevelingService;
@@ -106,6 +108,32 @@ public class ResourceAssignmentController {
         projectId, resourceId, startDate, endDate);
     List<ResourceUsageEntry> response = assignmentService.getResourceUsageProfile(
         resourceId, startDate, endDate);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PostMapping("/{id}/staff")
+  public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> staffAssignment(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id,
+      @Valid @RequestBody StaffAssignmentRequest request) {
+    log.info("POST /v1/projects/{}/resource-assignments/{}/staff - Staffing assignment with resource: {}",
+        projectId, id, request.resourceId());
+    boolean override = request.override() != null && request.override();
+    ResourceAssignmentResponse response = assignmentService.staffAssignment(id, request.resourceId(), override);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PostMapping("/{id}/swap")
+  public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> swapResource(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id,
+      @Valid @RequestBody SwapResourceRequest request) {
+    log.info("POST /v1/projects/{}/resource-assignments/{}/swap - Swapping resource to: {}",
+        projectId, id, request.resourceId());
+    boolean override = request.override() != null && request.override();
+    ResourceAssignmentResponse response = assignmentService.swapResource(id, request.resourceId(), override);
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 

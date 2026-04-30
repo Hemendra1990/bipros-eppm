@@ -75,3 +75,5 @@ databaseChangeLog:
       file: db/changelog/048-project-budget-fields.yaml
   - include:
       file: db/changelog/049-budget-change-log.yaml
+  - include:
+      file: db/changelog/050-resource-assignment-role-staffing.yaml

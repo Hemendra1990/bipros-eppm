@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -14,6 +14,9 @@ import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
+import { roleApi } from "@/lib/api/roleApi";
+import type { RoleResponse } from "@/lib/api/roleApi";
+import type { ResourceResponse } from "@/lib/api/resourceApi";
 import { costApi } from "@/lib/api/costApi";
 import type { CostAccount } from "@/lib/api/costApi";
 import { evmApi } from "@/lib/api/evmApi";
@@ -251,6 +254,7 @@ export default function ActivityDetailPage() {
           isLoadingCalendars={isLoadingCalendars}
           projectCalendarId={projectCalendarId}
           costAccounts={costAccounts}
+          percentCompleteType={activity.percentCompleteType}
         />
       ) : (
         <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} projectCalendars={projectCalendars} projectCalendarId={projectCalendarId} costAccounts={costAccounts} />
@@ -326,6 +330,22 @@ function ViewMode({
   });
   const assignments: ResourceAssignmentResponse[] = assignmentsData?.data ?? [];
 
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogAssignment, setDialogAssignment] = useState<ResourceAssignmentResponse | null>(null);
+  const [dialogMode, setDialogMode] = useState<"staff" | "swap">("staff");
+
+  const openStaffDialog = (assignment: ResourceAssignmentResponse) => {
+    setDialogAssignment(assignment);
+    setDialogMode("staff");
+    setDialogOpen(true);
+  };
+
+  const openSwapDialog = (assignment: ResourceAssignmentResponse) => {
+    setDialogAssignment(assignment);
+    setDialogMode("swap");
+    setDialogOpen(true);
+  };
+
   const { data: expensesData } = useQuery({
     queryKey: ["expenses", "activity", projectId, activity.id],
     queryFn: () => costApi.getActivityExpenses(projectId, activity.id),
@@ -350,7 +370,24 @@ function ViewMode({
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {stat("Status", <StatusBadge status={activity.status} />, getStatusTone(activity.status))}
-        {stat("% Complete", `${activity.percentComplete}%`, activity.percentComplete === 100 ? "success" : "neutral")}
+        {(() => {
+          const pctType = activity.percentCompleteType || "DURATION";
+          return (
+            <div className="rounded-lg border border-border bg-surface/50 p-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-text-secondary">% Complete</p>
+                <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                  pctType === "PHYSICAL"
+                    ? "text-text-secondary bg-surface ring-border"
+                    : "text-accent bg-accent/10 ring-accent/20"
+                }`}>{pctType}</span>
+              </div>
+              <p className={`mt-0.5 text-base font-semibold ${activity.percentComplete === 100 ? "text-success" : "text-text-primary"}`}>
+                {activity.percentComplete}%
+              </p>
+            </div>
+          );
+        })()}
         {stat("Duration", `${activity.duration ?? activity.originalDuration ?? 0} days`)}
         {stat("Remaining", `${activity.remainingDuration ?? 0} days`)}
       </div>
@@ -434,28 +471,63 @@ function ViewMode({
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Resource</th>
+                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Role</th>
+                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Status</th>
                     <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Planned Units</th>
                     <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Actual Units</th>
                     <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Planned Cost</th>
-                    <th className="text-right py-1.5 text-xs font-medium text-text-secondary">Actual Cost</th>
+                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Actual Cost</th>
+                    <th className="text-left py-1.5 text-xs font-medium text-text-secondary">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {assignments.map((a) => (
                     <tr key={a.id} className="border-b border-border/40">
-                      <td className="py-1.5 pr-3 text-text-primary">{a.resourceName ?? a.resourceId}</td>
+                      <td className="py-1.5 pr-3 text-text-primary">{a.resourceName ?? a.resourceId ?? "—"}</td>
+                      <td className="py-1.5 pr-3 text-text-secondary">{a.roleName ?? a.roleId ?? "—"}</td>
+                      <td className="py-1.5 pr-3">
+                        {a.staffed ? (
+                          <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                            Staffed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                            Role-only
+                          </span>
+                        )}
+                      </td>
                       <td className="py-1.5 pr-3 text-right text-text-primary">{a.plannedUnits}</td>
                       <td className="py-1.5 pr-3 text-right text-text-primary">{a.actualUnits}</td>
                       <td className="py-1.5 pr-3 text-right text-text-primary">{a.plannedCost != null ? fmt(a.plannedCost) : "—"}</td>
-                      <td className="py-1.5 text-right text-text-primary">{a.actualCost != null ? fmt(a.actualCost) : "—"}</td>
+                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.actualCost != null ? fmt(a.actualCost) : "—"}</td>
+                      <td className="py-1.5 text-text-primary">
+                        {!a.staffed && a.roleId && (
+                          <button
+                            onClick={() => openStaffDialog(a)}
+                            className="text-xs px-2 py-0.5 rounded bg-accent text-text-primary hover:bg-accent-hover"
+                          >
+                            Staff role
+                          </button>
+                        )}
+                        {a.staffed && a.roleId && (
+                          <button
+                            onClick={() => openSwapDialog(a)}
+                            className="text-xs px-2 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-hover"
+                          >
+                            Swap
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   <tr className="font-semibold bg-surface-hover/30">
                     <td className="py-1.5 pr-3 text-text-secondary">Totals</td>
+                    <td colSpan={2} />
                     <td className="py-1.5 pr-3 text-right text-text-primary">{assignments.reduce((s, a) => s + a.plannedUnits, 0)}</td>
                     <td className="py-1.5 pr-3 text-right text-text-primary">{assignments.reduce((s, a) => s + a.actualUnits, 0)}</td>
                     <td className="py-1.5 pr-3 text-right text-accent">{fmt(totalPlannedCost)}</td>
-                    <td className="py-1.5 text-right text-accent">{fmt(totalActualCost)}</td>
+                    <td className="py-1.5 pr-3 text-right text-accent">{fmt(totalActualCost)}</td>
+                    <td />
                   </tr>
                 </tbody>
               </table>
@@ -464,6 +536,15 @@ function ViewMode({
         ) : (
           <p className="text-sm text-text-muted mb-4">No resource assignments for this activity.</p>
         )}
+
+        <StaffSwapDialog
+          projectId={projectId}
+          activityId={activity.id}
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          assignment={dialogAssignment}
+          mode={dialogMode}
+        />
 
         {activityExpenses.length > 0 && (
           <div className="mb-4">
@@ -896,6 +977,7 @@ interface EditFormProps {
   isLoadingCalendars: boolean;
   projectCalendarId: string | null | undefined;
   costAccounts: CostAccount[];
+  percentCompleteType?: string | null;
 }
 
 function EditForm({
@@ -914,6 +996,7 @@ function EditForm({
   isLoadingCalendars,
   projectCalendarId,
   costAccounts,
+  percentCompleteType,
 }: EditFormProps) {
   return (
     <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
@@ -942,18 +1025,33 @@ function EditForm({
               className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">% Complete</label>
-            <input
-              type="number"
-              name="percentComplete"
-              value={data.percentComplete ?? ""}
-              onChange={onChange}
-              min="0"
-              max="100"
-              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            />
-          </div>
+          {(() => {
+            const pctType = percentCompleteType || "DURATION";
+            const isManual = pctType === "PHYSICAL";
+            const helperText = isManual
+              ? null
+              : pctType === "UNITS"
+                ? "Derived from resource actuals — edit Daily Outputs to change."
+                : "Derived from data date and original duration — edit Actual Start/Finish or the project's data date.";
+            return (
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">% Complete</label>
+                <input
+                  type="number"
+                  name="percentComplete"
+                  value={data.percentComplete ?? ""}
+                  onChange={onChange}
+                  min="0"
+                  max="100"
+                  disabled={!isManual}
+                  className={`mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent ${!isManual ? "opacity-50 cursor-not-allowed" : ""}`}
+                />
+                {helperText && (
+                  <p className="mt-1 text-xs text-text-muted">{helperText}</p>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="grid grid-cols-2 gap-6">
@@ -1243,6 +1341,161 @@ function EditForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function StaffSwapDialog({
+  projectId,
+  activityId,
+  open,
+  onClose,
+  assignment,
+  mode,
+}: {
+  projectId: string;
+  activityId: string;
+  open: boolean;
+  onClose: () => void;
+  assignment: ResourceAssignmentResponse | null;
+  mode: "staff" | "swap";
+}) {
+  const queryClient = useQueryClient();
+  const [selectedResourceId, setSelectedResourceId] = useState("");
+  const [override, setOverride] = useState(false);
+
+  const roleId = assignment?.roleId ?? null;
+
+  const { data: roleUsersData } = useQuery({
+    queryKey: ["role-users", roleId],
+    queryFn: () => roleApi.listUsers(roleId!),
+    enabled: !!roleId && open,
+  });
+
+  const roleUsers = roleUsersData?.data ?? [];
+  const userIds = roleUsers.map((u) => u.userId);
+
+  const { data: resourcesData } = useQuery({
+    queryKey: ["resources-by-users", userIds],
+    queryFn: () => resourceApi.listResources(0, 100),
+    enabled: open,
+  });
+
+  const allResources: ResourceResponse[] = useMemo(() => {
+    const raw = resourcesData?.data as unknown;
+    return Array.isArray(raw)
+      ? (raw as ResourceResponse[])
+      : ((raw as { content?: ResourceResponse[] } | undefined)?.content ?? []);
+  }, [resourcesData]);
+
+  // Filter resources that have a userId matching one of the role-qualified users
+  const qualifiedResources = useMemo(() => {
+    const qualifiedUserIds = new Set(userIds);
+    return allResources.filter((r: ResourceResponse) => r.userId && qualifiedUserIds.has(r.userId));
+  }, [allResources, userIds]);
+
+  const staffMutation = useMutation({
+    mutationFn: () =>
+      resourceApi.staffAssignment(projectId, assignment!.id, {
+        resourceId: selectedResourceId,
+        override,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["resource-assignments", "activity", projectId, activityId] });
+      queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });
+      onClose();
+      setSelectedResourceId("");
+      setOverride(false);
+    },
+  });
+
+  const swapMutation = useMutation({
+    mutationFn: () =>
+      resourceApi.swapResource(projectId, assignment!.id, {
+        resourceId: selectedResourceId,
+        override,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["resource-assignments", "activity", projectId, activityId] });
+      queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });
+      onClose();
+      setSelectedResourceId("");
+      setOverride(false);
+    },
+  });
+
+  if (!open || !assignment) return null;
+
+  const isPending = staffMutation.isPending || swapMutation.isPending;
+  const canSubmit = selectedResourceId !== "";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-lg">
+        <h3 className="text-lg font-semibold text-text-primary mb-4">
+          {mode === "staff" ? "Staff Role" : "Swap Resource"}
+        </h3>
+        <p className="text-sm text-text-secondary mb-4">
+          {mode === "staff"
+            ? `Select a qualified resource to staff the "${assignment.roleName ?? assignment.roleId}" role.`
+            : `Select a different qualified resource to replace "${assignment.resourceName ?? assignment.resourceId}".`}
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Qualified Resource</label>
+            <SearchableSelect
+              value={selectedResourceId}
+              onChange={(val) => setSelectedResourceId(val)}
+              placeholder="Search qualified resources..."
+              options={qualifiedResources.map((r) => ({
+                value: r.id,
+                label: `${r.code} - ${r.name}`,
+              }))}
+            />
+            {qualifiedResources.length === 0 && (
+              <p className="text-xs text-text-muted mt-1">
+                No resources linked to users with this role. You may still override below.
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="override"
+              checked={override}
+              onChange={(e) => setOverride(e.target.checked)}
+              className="rounded border-border"
+            />
+            <label htmlFor="override" className="text-sm text-text-secondary">
+              Override qualification check (admin only)
+            </label>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() =>
+                mode === "staff" ? staffMutation.mutate() : swapMutation.mutate()
+              }
+              disabled={isPending || !canSubmit}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
+            >
+              {isPending ? "Saving..." : mode === "staff" ? "Staff" : "Swap"}
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                setSelectedResourceId("");
+                setOverride(false);
+              }}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

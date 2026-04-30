@@ -71,6 +71,7 @@ export interface ResourceResponse {
   cumulativeCostCrores?: number | null;
   wbsAssignmentId?: string | null;
   calendarId: string | null;
+  userId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -151,9 +152,10 @@ export interface ResourceAssignmentResponse {
   id: string;
   activityId: string;
   activityName: string | null;
-  resourceId: string;
+  resourceId: string | null;
   resourceName: string | null;
   roleId: string | null;
+  roleName: string | null;
   projectId: string | null;
   plannedUnits: number;
   actualUnits: number;
@@ -168,18 +170,30 @@ export interface ResourceAssignmentResponse {
   plannedFinishDate: string | null;
   actualStartDate: string | null;
   actualFinishDate: string | null;
+  staffed: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateProjectResourceAssignmentRequest {
   activityId: string;
-  resourceId: string;
+  resourceId?: string;
+  roleId?: string;
   projectId: string;
   assignmentStartDate?: string;
   assignmentFinishDate?: string;
   plannedUnits: number;
   rateType?: string;
+}
+
+export interface StaffAssignmentRequest {
+  resourceId: string;
+  override?: boolean;
+}
+
+export interface SwapResourceRequest {
+  resourceId: string;
+  override?: boolean;
 }
 
 export const resourceApi = {
@@ -258,6 +272,22 @@ export const resourceApi = {
     apiClient
       .post<ApiResponse<ResourceAssignmentResponse>>(
         `/v1/projects/${projectId}/resource-assignments`,
+        data
+      )
+      .then((r) => r.data),
+
+  staffAssignment: (projectId: string, id: string, data: StaffAssignmentRequest) =>
+    apiClient
+      .post<ApiResponse<ResourceAssignmentResponse>>(
+        `/v1/projects/${projectId}/resource-assignments/${id}/staff`,
+        data
+      )
+      .then((r) => r.data),
+
+  swapResource: (projectId: string, id: string, data: SwapResourceRequest) =>
+    apiClient
+      .post<ApiResponse<ResourceAssignmentResponse>>(
+        `/v1/projects/${projectId}/resource-assignments/${id}/swap`,
         data
       )
       .then((r) => r.data),

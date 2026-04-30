@@ -1,6 +1,5 @@
-package com.bipros.permit.domain.repository;
+package com.bipros.common.scheduling;
 
-import com.bipros.permit.domain.model.ScheduledJobLease;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,9 +16,9 @@ public interface ScheduledJobLeaseRepository extends JpaRepository<ScheduledJobL
     @Modifying
     @Transactional
     @Query(value = """
-            INSERT INTO permit.scheduled_job_lease (name, until, owner) VALUES (:name, :until, :owner)
+            INSERT INTO public.scheduled_job_lease (name, until, owner) VALUES (:name, :until, :owner)
             ON CONFLICT (name) DO UPDATE SET until = EXCLUDED.until, owner = EXCLUDED.owner
-                WHERE permit.scheduled_job_lease.until < :now
+                WHERE public.scheduled_job_lease.until < :now
             """, nativeQuery = true)
     int tryAcquire(@Param("name") String name,
                    @Param("until") Instant until,

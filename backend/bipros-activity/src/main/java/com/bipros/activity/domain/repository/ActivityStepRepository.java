@@ -10,4 +10,6 @@ import java.util.UUID;
 @Repository
 public interface ActivityStepRepository extends JpaRepository<ActivityStep, UUID> {
   List<ActivityStep> findByActivityIdOrderBySortOrder(UUID activityId);
+
+  long countByActivityId(UUID activityId);
 }

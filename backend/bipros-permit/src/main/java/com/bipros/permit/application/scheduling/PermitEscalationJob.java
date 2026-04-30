@@ -7,7 +7,7 @@ import com.bipros.permit.domain.model.PermitLifecycleEvent;
 import com.bipros.permit.domain.model.PermitStatus;
 import com.bipros.permit.domain.repository.PermitLifecycleEventRepository;
 import com.bipros.permit.domain.repository.PermitRepository;
-import com.bipros.permit.domain.repository.ScheduledJobLeaseRepository;
+import com.bipros.common.scheduling.ScheduledJobLeaseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -425,7 +425,10 @@ export interface RfiRegisterResponse {
 export interface ResourceAssignmentResponse {
   id: string;
   activityId: string;
-  resourceId: string;
+  resourceId: string | null;
+  resourceName: string | null;
+  roleId: string | null;
+  roleName: string | null;
   projectId: string;
   plannedUnits: number;
   actualUnits: number;
@@ -434,13 +437,15 @@ export interface ResourceAssignmentResponse {
   plannedCost: number;
   actualCost: number;
   remainingCost: number;
+  staffed: boolean;
   plannedStartDate: string | null;
   plannedFinishDate: string | null;
 }
 
 export interface CreateResourceAssignmentRequest {
   activityId: string;
-  resourceId: string;
+  resourceId?: string;
+  roleId?: string;
   plannedUnits: number;
   rateType: string;
 }

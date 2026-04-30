@@ -1,12 +1,14 @@
 package com.bipros.resource.application.listener;
 
 import com.bipros.common.event.DailyOutputChangedEvent;
+import com.bipros.common.event.ResourceAssignmentActualsRolledUpEvent;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.ResourceRate;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,10 +37,15 @@ public class ResourceAssignmentCostRollupListener {
 
   private final ResourceAssignmentRepository assignmentRepository;
   private final ResourceRateRepository rateRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void onDailyOutputChanged(DailyOutputChangedEvent event) {
+    if (event.resourceId() == null) {
+      log.debug("ResourceId is null (role-only assignment) — cost rollup skipped");
+      return;
+    }
     ResourceAssignment assignment = assignmentRepository
         .findByProjectIdAndActivityIdAndResourceId(
             event.projectId(), event.activityId(), event.resourceId())
@@ -67,6 +74,11 @@ public class ResourceAssignmentCostRollupListener {
     assignment.setRemainingCost(remainingCost);
     assignment.setAtCompletionCost(atCompletionCost);
     assignmentRepository.save(assignment);
+
+    Double plannedSum = assignmentRepository.sumPlannedUnitsByActivityId(event.activityId());
+    Double actualSum = assignmentRepository.sumActualUnitsByActivityId(event.activityId());
+    eventPublisher.publishEvent(new ResourceAssignmentActualsRolledUpEvent(
+        event.projectId(), event.activityId(), plannedSum, actualSum));
 
     log.debug("Cost rollup: assignment={} actualUnits={} rate={} -> actualCost={} remainingCost={} eac={}",
         assignment.getId(), actualUnits, rate, actualCost, remainingCost, atCompletionCost);

@@ -1,4 +1,4 @@
-package com.bipros.permit.domain.model;
+package com.bipros.common.scheduling;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,7 +17,7 @@ import java.time.Instant;
  * so only one instance fires the job within the lease window.
  */
 @Entity
-@Table(name = "scheduled_job_lease", schema = "permit")
+@Table(name = "scheduled_job_lease", schema = "public")
 @Getter
 @Setter
 @NoArgsConstructor

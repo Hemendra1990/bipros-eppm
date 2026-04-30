@@ -6,8 +6,12 @@ import com.bipros.activity.application.dto.UpdateActivityRequest;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.ActivityStatus;
+import com.bipros.activity.application.percent.ActivityStatusDerivation;
+import com.bipros.activity.application.percent.PercentCompleteCalculator;
+import com.bipros.activity.domain.model.PercentCompleteType;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.activity.domain.repository.ActivityStepRepository;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
@@ -40,6 +44,8 @@ public class ActivityService {
   private final AuditService auditService;
   private final ProjectAccessGuard projectAccess;
   private final ProjectRepository projectRepository;
+  private final PercentCompleteCalculator percentCompleteCalculator;
+  private final ActivityStepRepository stepRepository;
 
   public ActivityResponse createActivity(CreateActivityRequest request) {
     log.info("Creating activity: code={}, name={}, projectId={}", request.code(), request.name(),
@@ -180,6 +186,27 @@ public class ActivityService {
         || request.actualStartDate() != null
         || request.actualFinishDate() != null;
     if (request.percentComplete() != null) {
+      // Determine effective percentCompleteType: if the request is also changing the type,
+      // evaluate against the post-update type so the user can't sneak a manual write past it.
+      PercentCompleteType effectiveType = request.percentCompleteType() != null
+          ? request.percentCompleteType()
+          : activity.getPercentCompleteType();
+      if (effectiveType == null) {
+        effectiveType = PercentCompleteType.DURATION;
+      }
+      if (effectiveType != PercentCompleteType.PHYSICAL) {
+        throw new BusinessRuleException(
+            "PERCENT_COMPLETE_NOT_MANUAL",
+            "percentComplete is derived for type=" + effectiveType
+                + "; for UNITS edit Daily Outputs, for DURATION edit actual dates / data date.");
+      }
+      // For PHYSICAL with steps, manual entry is also rejected
+      if (effectiveType == PercentCompleteType.PHYSICAL
+          && stepRepository.countByActivityId(id) > 0) {
+        throw new BusinessRuleException(
+            "PERCENT_COMPLETE_OWNED_BY_STEPS",
+            "percentComplete is derived from activity steps for this activity. Edit step completion instead.");
+      }
       activity.setPercentComplete(request.percentComplete());
     }
     if (request.physicalPercentComplete() != null) {
@@ -304,7 +331,11 @@ public class ActivityService {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
     projectAccess.requireRead(activity.getProjectId());
-    return ActivityResponse.from(activity);
+    // Resolve status date: project.dataDate if set, else today
+    java.time.LocalDate statusDate = projectRepository.findById(activity.getProjectId())
+        .map(Project::getDataDate)
+        .orElse(java.time.LocalDate.now());
+    return ActivityResponse.from(activity, percentCompleteCalculator, statusDate);
   }
 
   public PagedResponse<ActivityResponse> listActivities(UUID projectId, Pageable pageable) {
@@ -343,6 +374,23 @@ public class ActivityService {
     if (percentComplete < 0 || percentComplete > 100) {
       throw new BusinessRuleException("INVALID_PERCENT_COMPLETE",
           "Percent complete must be between 0 and 100");
+    }
+
+    // Guard: reject manual % edits for non-PHYSICAL types
+    PercentCompleteType pctType = activity.getPercentCompleteType();
+    if (pctType == null) {
+      pctType = PercentCompleteType.DURATION;
+    }
+    if (pctType != PercentCompleteType.PHYSICAL) {
+      throw new BusinessRuleException(
+          "PERCENT_COMPLETE_NOT_MANUAL",
+          "percentComplete is derived for type=" + pctType
+              + "; for UNITS edit Daily Outputs, for DURATION edit actual dates / data date.");
+    }
+    if (stepRepository.countByActivityId(id) > 0) {
+      throw new BusinessRuleException(
+          "PERCENT_COMPLETE_OWNED_BY_STEPS",
+          "percentComplete is derived from activity steps for this activity. Edit step completion instead.");
     }
 
     Double oldPercent = activity.getPercentComplete();
@@ -434,16 +482,7 @@ public class ActivityService {
    * </ul>
    */
   private void applyStatusFromProgress(Activity activity) {
-    Double pct = activity.getPercentComplete();
-    boolean hasActualStart = activity.getActualStartDate() != null;
-    ActivityStatus derived;
-    if (pct != null && pct >= 100.0) {
-      derived = ActivityStatus.COMPLETED;
-    } else if ((pct != null && pct > 0.0) || hasActualStart) {
-      derived = ActivityStatus.IN_PROGRESS;
-    } else {
-      derived = ActivityStatus.NOT_STARTED;
-    }
+    ActivityStatus derived = ActivityStatusDerivation.derive(activity);
     activity.setStatus(derived);
   }
 

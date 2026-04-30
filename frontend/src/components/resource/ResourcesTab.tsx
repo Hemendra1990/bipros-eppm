@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { resourceApi, type ResourceResponse, type ResourceAssignmentResponse } from "@/lib/api/resourceApi";
+import { roleApi, type RoleResponse } from "@/lib/api/roleApi";
 import { resourceHistogramApi } from "@/lib/api/resourceHistogramApi";
 import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
@@ -17,9 +18,11 @@ import { ResourceAssignmentTree, ViewModeToggle, type AssignmentRow } from "./Re
 interface ResourceAssignmentRow {
   id: string;
   activityId: string;
-  resourceId: string;
+  resourceId: string | null;
+  roleId: string | null;
   projectId: string;
   resourceName: string;
+  roleName: string | null;
   activityName: string;
   plannedUnits: number;
   actualUnits: number;
@@ -27,14 +30,17 @@ interface ResourceAssignmentRow {
   rateType: string;
   plannedCost: number;
   actualCost: number;
+  staffed: boolean;
 }
 
 export function ResourcesTab({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [assignMode, setAssignMode] = useState<"ROLE" | "RESOURCE">("RESOURCE");
   const [formData, setFormData] = useState({
     activityId: "",
     resourceId: "",
+    roleId: "",
     plannedUnits: "",
     rateType: "FIXED",
   });
@@ -51,6 +57,11 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
   const { data: resourcesData } = useQuery({
     queryKey: ["resources"],
     queryFn: () => resourceApi.listResources(0, 100),
+  });
+
+  const { data: rolesData } = useQuery({
+    queryKey: ["roles", "LABOR"],
+    queryFn: () => roleApi.list("LABOR"),
   });
 
   const { data: activitiesData } = useQuery({
@@ -71,7 +82,8 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     mutationFn: () =>
       resourceApi.createProjectResourceAssignment(projectId, {
         activityId: formData.activityId,
-        resourceId: formData.resourceId,
+        resourceId: formData.resourceId || undefined,
+        roleId: formData.roleId || undefined,
         projectId,
         plannedUnits: parseFloat(formData.plannedUnits),
         rateType: formData.rateType,
@@ -82,6 +94,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       setFormData({
         activityId: "",
         resourceId: "",
+        roleId: "",
         plannedUnits: "",
         rateType: "FIXED",
       });
@@ -102,6 +115,13 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       : ((raw as { content?: ResourceResponse[] } | undefined)?.content ?? []);
   }, [resourcesData]);
 
+  const roles = useMemo<RoleResponse[]>(() => {
+    const raw = rolesData?.data as unknown;
+    return Array.isArray(raw)
+      ? (raw as RoleResponse[])
+      : ((raw as { content?: RoleResponse[] } | undefined)?.content ?? []);
+  }, [rolesData]);
+
   const activities = useMemo<ActivityResponse[]>(() => {
     const raw = activitiesData?.data as unknown;
     return Array.isArray(raw)
@@ -117,29 +137,48 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     const activityMap = new Map(activities.map((a) => [a.id, a]));
 
     return assignments.map((a) => {
-      const resource = resourceMap.get(a.resourceId);
+      const resource = a.resourceId ? resourceMap.get(a.resourceId) : undefined;
       const activity = activityMap.get(a.activityId);
       const anyA = a as unknown as Record<string, unknown>;
       return {
         id: a.id,
         activityId: a.activityId,
-        resourceId: a.resourceId,
+        resourceId: a.resourceId ?? null,
+        roleId: a.roleId ?? null,
         projectId: (anyA.projectId as string) ?? projectId,
-        resourceName: resource?.name ?? a.resourceId,
-        activityName: activity?.name ?? a.activityId,
+        resourceName: resource?.name ?? a.resourceName ?? a.resourceId ?? "—",
+        roleName: a.roleName ?? null,
+        activityName: activity?.name ?? a.activityName ?? a.activityId,
         plannedUnits: a.plannedUnits,
         actualUnits: a.actualUnits,
         remainingUnits: (anyA.remainingUnits as number) ?? 0,
         rateType: (anyA.rateType as string) ?? "FIXED",
         plannedCost: (anyA.plannedCost as number) ?? 0,
         actualCost: (anyA.actualCost as number) ?? 0,
+        staffed: a.staffed ?? a.resourceId != null,
       };
     });
   }, [assignments, resources, activities, projectId]);
 
   const columns: ColumnDef<ResourceAssignmentRow>[] = [
     { key: "resourceName", label: "Resource Name", sortable: true },
+    { key: "roleName", label: "Role", sortable: true, render: (value: unknown) => (value as string | null) ?? "—" },
     { key: "activityName", label: "Activity Name", sortable: true },
+    {
+      key: "staffed",
+      label: "Status",
+      sortable: true,
+      render: (value) =>
+        value ? (
+          <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+            Staffed
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+            Role-only
+          </span>
+        ),
+    },
     {
       key: "plannedUnits",
       label: "Planned Units",
@@ -191,6 +230,11 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     [resources]
   );
 
+  const canSubmit =
+    formData.activityId &&
+    formData.plannedUnits &&
+    (assignMode === "RESOURCE" ? formData.resourceId : formData.roleId);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
@@ -216,6 +260,33 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       {showForm && (
         <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
           <h3 className="mb-4 text-lg font-semibold text-text-primary">Assign Resource to Activity</h3>
+
+          {/* Mode toggle */}
+          <div className="mb-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAssignMode("RESOURCE")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                assignMode === "RESOURCE"
+                  ? "bg-accent text-text-primary"
+                  : "border border-border text-text-secondary hover:bg-surface-hover"
+              }`}
+            >
+              Resource
+            </button>
+            <button
+              type="button"
+              onClick={() => setAssignMode("ROLE")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                assignMode === "ROLE"
+                  ? "bg-accent text-text-primary"
+                  : "border border-border text-text-secondary hover:bg-surface-hover"
+              }`}
+            >
+              Plan with Role
+            </button>
+          </div>
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-text-secondary">Activity</label>
@@ -232,20 +303,37 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Resource</label>
-              <SearchableSelect
-                value={formData.resourceId}
-                onChange={(val) =>
-                  setFormData({ ...formData, resourceId: val })
-                }
-                placeholder="Search resources..."
-                options={resources.map((resource) => ({
-                  value: resource.id,
-                  label: `${resource.code} - ${resource.name}`,
-                }))}
-              />
-            </div>
+            {assignMode === "RESOURCE" ? (
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Resource</label>
+                <SearchableSelect
+                  value={formData.resourceId}
+                  onChange={(val) =>
+                    setFormData({ ...formData, resourceId: val })
+                  }
+                  placeholder="Search resources..."
+                  options={resources.map((resource) => ({
+                    value: resource.id,
+                    label: `${resource.code} - ${resource.name}`,
+                  }))}
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">Role</label>
+                <SearchableSelect
+                  value={formData.roleId}
+                  onChange={(val) =>
+                    setFormData({ ...formData, roleId: val })
+                  }
+                  placeholder="Search roles..."
+                  options={roles.map((role) => ({
+                    value: role.id,
+                    label: `${role.code} - ${role.name}`,
+                  }))}
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-text-secondary">Planned Units</label>
@@ -278,12 +366,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
             <div className="flex gap-3">
               <button
                 onClick={() => assignMutation.mutate()}
-                disabled={
-                  assignMutation.isPending ||
-                  !formData.activityId ||
-                  !formData.resourceId ||
-                  !formData.plannedUnits
-                }
+                disabled={assignMutation.isPending || !canSubmit}
                 className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
               >
                 {assignMutation.isPending ? "Assigning..." : "Assign"}
@@ -333,7 +416,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       {selectedAssignment && (
         <div className="space-y-2">
           <div className="text-sm text-text-secondary">
-            Custom fields for: <span className="font-medium text-accent">{selectedAssignment.resourceName} → {selectedAssignment.activityName}</span>
+            Custom fields for: <span className="font-medium text-accent">{selectedAssignment.resourceName} &rarr; {selectedAssignment.activityName}</span>
           </div>
           <UdfSection entityId={selectedAssignment.id} subject="RESOURCE_ASSIGNMENT" projectId={projectId} />
         </div>

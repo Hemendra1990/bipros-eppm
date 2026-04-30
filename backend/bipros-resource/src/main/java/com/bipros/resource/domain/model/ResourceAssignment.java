@@ -20,11 +20,6 @@ import java.util.UUID;
 @Table(
     name = "resource_assignments",
     schema = "resource",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_assignment_activity_resource",
-            columnNames = {"activity_id", "resource_id"})
-    },
     indexes = {
         @Index(name = "idx_assignment_activity_id", columnList = "activity_id"),
         @Index(name = "idx_assignment_resource_id", columnList = "resource_id"),
@@ -42,7 +37,7 @@ public class ResourceAssignment extends BaseEntity {
   @Column(name = "activity_id", nullable = false)
   private UUID activityId;
 
-  @Column(name = "resource_id", nullable = false)
+  @Column(name = "resource_id")
   private UUID resourceId;
 
   @Column(name = "role_id")

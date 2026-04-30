@@ -1,6 +1,8 @@
 package com.bipros.activity.domain.repository;
 
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityStatus;
+import com.bipros.activity.domain.model.PercentCompleteType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -27,4 +29,6 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
   Page<Activity> findByProjectIdOrderBySortOrder(UUID projectId, Pageable pageable);
 
   List<Activity> findByIdIn(List<UUID> ids);
+
+  List<Activity> findByPercentCompleteTypeAndStatusIn(PercentCompleteType percentCompleteType, List<ActivityStatus> statuses);
 }

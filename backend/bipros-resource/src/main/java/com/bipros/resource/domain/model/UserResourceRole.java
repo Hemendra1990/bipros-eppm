@@ -49,6 +49,10 @@ public class UserResourceRole extends BaseEntity {
   @Column(name = "resource_role_id", nullable = false)
   private UUID resourceRoleId;
 
+  @Column(name = "is_primary", nullable = false)
+  @Builder.Default
+  private boolean primary = false;
+
   @Column(name = "assigned_from")
   private LocalDate assignedFrom;
 

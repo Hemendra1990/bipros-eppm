@@ -92,6 +92,12 @@ bipros:
   errors:
     include-detail: true
 
+  # Activity configuration
+  activity:
+    # Cron expression for the nightly DURATION percent-complete sweep.
+    # Default: every day at 2:05 AM local time.
+    duration-percent-cron: "0 5 2 * * *"
+
   # Satellite raster storage. MinIO in dev (docker-compose.yml), AWS S3 in prod
   # via the same config keys (change endpoint + credentials).
   storage:

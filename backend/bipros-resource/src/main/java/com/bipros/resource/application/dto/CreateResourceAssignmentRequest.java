@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public record CreateResourceAssignmentRequest(
     @NotNull(message = "Activity ID is required") UUID activityId,
-    @NotNull(message = "Resource ID is required") UUID resourceId,
+    UUID resourceId,
     UUID roleId,
     @NotNull(message = "Project ID is required") UUID projectId,
     Double plannedUnits,

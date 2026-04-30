@@ -100,4 +100,13 @@ public class RoleController {
     roleService.unassignUser(roleId, assignmentId);
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
+
+  @PostMapping("/{roleId}/users/{userId}/primary")
+  public ResponseEntity<ApiResponse<UserResourceRoleResponse>> setPrimaryRole(
+      @PathVariable UUID roleId,
+      @PathVariable UUID userId) {
+    log.info("POST /v1/roles/{}/users/{}/primary - Setting primary role", roleId, userId);
+    UserResourceRoleResponse response = roleService.setPrimaryRole(userId, roleId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
 }

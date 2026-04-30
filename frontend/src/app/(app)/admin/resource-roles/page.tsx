@@ -29,6 +29,7 @@ interface RoleForm {
 
 interface AssignForm {
   userId: string;
+  primary: boolean;
   assignedFrom: string;
   assignedTo: string;
   remarks: string;
@@ -47,6 +48,7 @@ const initialRoleForm = (): RoleForm => ({
 
 const initialAssignForm = (): AssignForm => ({
   userId: "",
+  primary: false,
   assignedFrom: new Date().toISOString().split("T")[0],
   assignedTo: "",
   remarks: "",
@@ -175,6 +177,7 @@ export default function ResourceRolesPage() {
     try {
       const payload: AssignUserToRoleRequest = {
         userId: assignForm.userId.trim(),
+        primary: assignForm.primary,
         assignedFrom: assignForm.assignedFrom || null,
         assignedTo: assignForm.assignedTo || null,
         remarks: assignForm.remarks.trim() || null,
@@ -528,6 +531,20 @@ export default function ResourceRolesPage() {
                     required
                   />
                 </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="primary"
+                    checked={assignForm.primary}
+                    onChange={(e) =>
+                      setAssignForm({ ...assignForm, primary: e.target.checked })
+                    }
+                    className="rounded border-border"
+                  />
+                  <label htmlFor="primary" className="text-sm text-text-secondary">
+                    Primary role for this user
+                  </label>
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1 text-text-secondary">
                     Assigned From
@@ -604,8 +621,15 @@ export default function ResourceRolesPage() {
                     key={u.id}
                     className="p-3 rounded-lg border border-border bg-surface-hover/30"
                   >
-                    <div className="text-sm font-mono text-text-primary break-all">
-                      {u.userId}
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-mono text-text-primary break-all">
+                        {u.userId}
+                      </div>
+                      {u.primary && (
+                        <span className="inline-flex items-center rounded-md bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent ring-1 ring-inset ring-accent/20">
+                          Primary
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-text-muted mt-1">
                       {(u.assignedFrom ?? "—")} → {(u.assignedTo ?? "—")}
@@ -613,12 +637,29 @@ export default function ResourceRolesPage() {
                     {u.remarks && (
                       <div className="text-xs text-text-secondary mt-1">{u.remarks}</div>
                     )}
-                    <button
-                      onClick={() => handleUnassign(u.id)}
-                      className="mt-2 text-danger hover:underline text-xs"
-                    >
-                      Unassign
-                    </button>
+                    <div className="flex items-center gap-3 mt-2">
+                      {!u.primary && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await roleApi.setPrimaryRole(selectedRole.id, u.userId);
+                              queryClient.invalidateQueries({ queryKey: ["role-users", selectedRoleId] });
+                            } catch (err: unknown) {
+                              setError(getErrorMessage(err, "Failed to set primary role"));
+                            }
+                          }}
+                          className="text-xs text-accent hover:underline"
+                        >
+                          Set Primary
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleUnassign(u.id)}
+                        className="text-danger hover:underline text-xs"
+                      >
+                        Unassign
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

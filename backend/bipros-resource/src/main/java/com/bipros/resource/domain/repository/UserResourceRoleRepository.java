@@ -17,5 +17,7 @@ public interface UserResourceRoleRepository extends JpaRepository<UserResourceRo
 
   Optional<UserResourceRole> findByUserIdAndResourceRoleId(UUID userId, UUID resourceRoleId);
 
+  boolean existsByUserIdAndResourceRoleId(UUID userId, UUID resourceRoleId);
+
   long countByResourceRoleId(UUID resourceRoleId);
 }
