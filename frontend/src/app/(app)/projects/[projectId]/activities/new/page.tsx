@@ -21,11 +21,24 @@ export default function NewActivityPage() {
   const params = useParams();
   const projectId = params.projectId as string;
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    code: string;
+    name: string;
+    activityType: string;
+    durationType: string;
+    percentCompleteType: "DURATION" | "UNITS" | "PHYSICAL";
+    duration: number;
+    wbsNodeId: string;
+    plannedStartDate: string;
+    plannedFinishDate: string;
+    workActivityId: string;
+    calendarId: string;
+  }>({
     code: "",
     name: "",
     activityType: "TASK_DEPENDENT",
     durationType: "FIXED_DURATION_AND_UNITS",
+    percentCompleteType: "DURATION",
     duration: 0,
     wbsNodeId: "",
     plannedStartDate: "",
@@ -105,6 +118,7 @@ export default function NewActivityPage() {
         originalDuration: formData.duration || undefined,
         activityType: formData.activityType,
         durationType: formData.durationType,
+        percentCompleteType: formData.percentCompleteType,
         plannedStartDate: formData.plannedStartDate || undefined,
         plannedFinishDate: formData.plannedFinishDate || undefined,
         workActivityId: formData.workActivityId || undefined,
@@ -211,6 +225,25 @@ export default function NewActivityPage() {
                 <option value="FIXED_UNITS">Fixed Units</option>
                 <option value="FIXED_UNITS_PER_TIME">Fixed Units/Time</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">% Complete Type</label>
+              <select
+                name="percentCompleteType"
+                value={formData.percentCompleteType}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="DURATION">Duration — auto from elapsed days</option>
+                <option value="UNITS">Units — auto from Daily Output</option>
+                <option value="PHYSICAL">Physical — manual / step-driven</option>
+              </select>
+              <p className="mt-1 text-xs text-text-muted">
+                Drives how % Complete is calculated. Duration & Units update automatically; Physical is manually entered.
+              </p>
             </div>
           </div>
 

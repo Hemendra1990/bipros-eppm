@@ -52,6 +52,8 @@ export interface ActivityResponse {
   updatedAt: string;
 }
 
+export type PercentCompleteType = "DURATION" | "UNITS" | "PHYSICAL";
+
 export interface CreateActivityRequest {
   code: string;
   name: string;
@@ -60,6 +62,7 @@ export interface CreateActivityRequest {
   originalDuration?: number;
   activityType?: string;
   durationType?: string;
+  percentCompleteType?: PercentCompleteType;
   plannedStartDate?: string;
   plannedFinishDate?: string;
   calendarId?: string;
@@ -78,6 +81,7 @@ export interface UpdateActivityRequest {
   duration?: number;
   originalDuration?: number;
   percentComplete?: number;
+  percentCompleteType?: PercentCompleteType;
   actualStartDate?: string;
   actualFinishDate?: string;
   notes?: string;
