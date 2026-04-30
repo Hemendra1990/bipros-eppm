@@ -44,6 +44,18 @@ jwt:
   expiration: 86400000
   refresh-expiration: 604800000
 
+bipros:
+  analytics:
+    clickhouse:
+      url: jdbc:clickhouse://127.0.0.1:8123/bipros_analytics_test
+      username: default
+      password: ""
+    sql-debug: true
+  ai-orchestrator:
+    enabled: true
+    kek: dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=
+    max-tool-rounds: 3
+
 logging:
   level:
     root: WARN

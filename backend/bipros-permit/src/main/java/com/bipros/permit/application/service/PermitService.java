@@ -1,5 +1,6 @@
 package com.bipros.permit.application.service;
 
+import com.bipros.common.event.PermitLifecycleRecordedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.ProjectAccessGuard;
@@ -46,6 +47,7 @@ import com.bipros.permit.domain.repository.PpeItemTemplateRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -87,6 +89,7 @@ public class PermitService {
     private final ProjectAccessGuard projectAccess;
     private final AuditService auditService;
     private final EntityManager entityManager;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ──────────────────────────────────────────────────────────────────────
     // Create / Update / Submit
@@ -250,6 +253,20 @@ public class PermitService {
         e.setPayloadJson(payloadJson);
         e.setActorUserId(projectAccess.currentUserId());
         lifecycleRepository.save(e);
+
+        Permit permit = permitRepository.findById(permitId).orElse(null);
+        if (permit != null) {
+            eventPublisher.publishEvent(new PermitLifecycleRecordedEvent(
+                    permit.getProjectId(),
+                    permit.getId(),
+                    permit.getPermitTypeTemplateId(),
+                    type.name(),
+                    e.getOccurredAt(),
+                    e.getActorUserId(),
+                    permit.getRiskLevel() != null ? permit.getRiskLevel().name() : null,
+                    permit.getStatus() != null ? permit.getStatus().name() : null,
+                    payloadJson));
+        }
     }
 
     private void replaceWorkers(UUID permitId, List<PermitWorkerDto> workers) {

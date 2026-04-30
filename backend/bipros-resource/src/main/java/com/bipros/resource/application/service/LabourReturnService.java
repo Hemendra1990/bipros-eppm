@@ -1,5 +1,6 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.common.event.LabourReturnSubmittedEvent;
 import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateLabourReturnRequest;
 import com.bipros.resource.application.dto.DeploymentSummary;
@@ -9,6 +10,7 @@ import com.bipros.resource.domain.model.SkillCategory;
 import com.bipros.resource.domain.repository.LabourReturnRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class LabourReturnService {
 
   private final LabourReturnRepository labourReturnRepository;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
 
   public LabourReturnResponse createReturn(CreateLabourReturnRequest request) {
     log.info(
@@ -54,6 +57,8 @@ public class LabourReturnService {
     log.info("Labour return created: id={}", saved.getId());
 
     auditService.logCreate("LabourReturn", saved.getId(), LabourReturnResponse.from(saved));
+    eventPublisher.publishEvent(new LabourReturnSubmittedEvent(
+        saved.getProjectId(), saved.getId(), saved.getReturnDate()));
 
     return LabourReturnResponse.from(saved);
   }

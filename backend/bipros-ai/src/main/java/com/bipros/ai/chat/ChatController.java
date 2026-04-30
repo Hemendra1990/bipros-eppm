@@ -1,0 +1,124 @@
+package com.bipros.ai.chat;
+
+import com.bipros.ai.context.AiContext;
+import com.bipros.ai.provider.LlmProvider;
+import com.bipros.ai.provider.LlmProviderConfigRepository;
+import com.bipros.ai.provider.OpenAiCompatibleLlmProvider;
+import com.bipros.common.dto.ApiResponse;
+import com.bipros.common.exception.ResourceNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+
+import java.time.Instant;
+import java.util.*;
+
+@RestController
+@RequestMapping("/v1/ai")
+@RequiredArgsConstructor
+@Slf4j
+public class ChatController {
+
+    private final ConversationService conversationService;
+    private final OpenAiCompatibleLlmProvider llmProvider;
+    private final com.bipros.ai.orchestrator.AiOrchestrator orchestrator;
+    private final com.bipros.ai.context.AiContextResolver contextResolver;
+    private final com.bipros.ai.provider.LlmProviderConfigRepository llmProviderConfigRepository;
+
+    @PostMapping("/chat")
+    @PreAuthorize("@projectAccess.canRead(#request.projectId)")
+    public ResponseEntity<ApiResponse<ChatResponse>> chat(@RequestBody ChatRequest request) {
+        AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
+        var conv = conversationService.getOrCreate(request.conversationId(), ctx);
+        List<LlmProvider.Message> history = conversationService.getMessages(conv.getId());
+
+        var flux = orchestrator.handle(request.message(), request.imageUrl(), history, ctx, llmProvider,
+                resolveConfig());
+        List<com.bipros.ai.orchestrator.AiOrchestrator.ChatEvent> events = flux.collectList().block();
+
+        StringBuilder text = new StringBuilder();
+        if (events != null) {
+            for (var e : events) {
+                if ("token".equals(e.event()) && e.data().get("delta") != null) {
+                    text.append(e.data().get("delta"));
+                }
+                if ("done".equals(e.event()) && e.data().get("text") != null) {
+                    text.append(e.data().get("text"));
+                }
+            }
+        }
+
+        conversationService.appendUserMessage(conv.getId(), request.message());
+        conversationService.appendAssistantMessage(conv.getId(), text.toString());
+
+        return ResponseEntity.ok(ApiResponse.ok(new ChatResponse(conv.getId(), text.toString())));
+    }
+
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("@projectAccess.canRead(#request.projectId)")
+    public Flux<org.springframework.http.codec.ServerSentEvent<String>> chatStream(@RequestBody ChatRequest request) {
+        AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
+        var conv = conversationService.getOrCreate(request.conversationId(), ctx);
+        List<LlmProvider.Message> history = conversationService.getMessages(conv.getId());
+
+        conversationService.appendUserMessage(conv.getId(), request.message());
+
+        return orchestrator.handle(request.message(), request.imageUrl(), history, ctx, llmProvider, resolveConfig())
+                .map(event -> {
+                    String json;
+                    try {
+                        json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(event.data());
+                    } catch (Exception e) {
+                        json = "{}";
+                    }
+                    return org.springframework.http.codec.ServerSentEvent.<String>builder()
+                            .event(event.event())
+                            .data(json)
+                            .build();
+                })
+                .doOnComplete(() -> conversationService.appendAssistantMessage(conv.getId(), "(streamed)"));
+    }
+
+    @GetMapping("/conversations")
+    public ResponseEntity<ApiResponse<List<ConversationDto>>> listConversations(
+            @RequestParam(required = false) UUID projectId,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(ApiResponse.ok(conversationService.list(projectId, limit)));
+    }
+
+    @GetMapping("/conversations/{id}")
+    public ResponseEntity<ApiResponse<ConversationDetailDto>> getConversation(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(conversationService.getDetail(id)));
+    }
+
+    @DeleteMapping("/conversations/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteConversation(@PathVariable UUID id) {
+        conversationService.softDelete(id);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    private com.bipros.ai.provider.LlmProviderConfig resolveConfig() {
+        return llmProviderConfigRepository.findByIsDefaultTrueAndIsActiveTrue()
+                .or(llmProviderConfigRepository::findFirstByIsActiveTrueOrderByIsDefaultDescCreatedAtAsc)
+                .orElseThrow(() -> new IllegalStateException("No active LLM provider configured. Add one via /v1/admin/llm-providers."));
+    }
+
+    public record ChatRequest(UUID conversationId, UUID projectId, String module, String message, String imageUrl) {
+    }
+
+    public record ChatResponse(UUID conversationId, String text) {
+    }
+
+    public record ConversationDto(UUID id, String title, String module, Instant lastMessageAt) {
+    }
+
+    public record ConversationDetailDto(UUID id, String title, List<MessageDto> messages) {
+    }
+
+    public record MessageDto(String role, String content, Instant createdAt) {
+    }
+}

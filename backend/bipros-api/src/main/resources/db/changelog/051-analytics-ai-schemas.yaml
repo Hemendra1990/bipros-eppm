@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 051-analytics-ai-schemas
+      author: bipros
+      changes:
+        - sql:
+            sql: |
+              CREATE SCHEMA IF NOT EXISTS analytics;
+              CREATE SCHEMA IF NOT EXISTS ai;

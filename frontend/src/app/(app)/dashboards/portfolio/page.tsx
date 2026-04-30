@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
+import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
 import { CashFlowOutlookChart } from "@/components/dashboards/portfolio/CashFlowOutlookChart";
 import { CompliancePanel } from "@/components/dashboards/portfolio/CompliancePanel";
 import { ContractorLeagueChart } from "@/components/dashboards/portfolio/ContractorLeagueChart";
@@ -49,10 +50,51 @@ export default function PortfolioDashboardPage() {
   const [rangeOpen, setRangeOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const { data: evmData } = useQuery({
+    queryKey: ["portfolio-evm-rollup"],
+    queryFn: () => portfolioReportApi.getEvmRollup(),
+    staleTime: 60_000,
+  });
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await qc.invalidateQueries();
     setTimeout(() => setRefreshing(false), 600);
+  };
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const id = setInterval(() => {
+      qc.invalidateQueries({ queryKey: ["portfolio-scorecard"] });
+      qc.invalidateQueries({ queryKey: ["portfolio-evm-rollup"] });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [qc]);
+
+  const handleExport = () => {
+    if (!evmData?.data) return;
+    const headers = ["Project Code", "Project Name", "PV", "EV", "AC", "CPI", "SPI", "CV", "SV", "EAC", "BAC"];
+    const rows = evmData.data.map((r) => [
+      r.projectCode,
+      r.projectName,
+      r.pv,
+      r.ev,
+      r.ac,
+      r.cpi,
+      r.spi,
+      r.cv,
+      r.sv,
+      r.eac,
+      r.bac,
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `portfolio-evm-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const activeRange = RANGE_OPTIONS.find((o) => o.id === range) ?? RANGE_OPTIONS[1];
@@ -148,6 +190,7 @@ export default function PortfolioDashboardPage() {
 
             <button
               type="button"
+              onClick={handleExport}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-gold to-gold-deep px-3.5 py-2 text-xs font-semibold text-paper shadow-[0_4px_12px_-2px_rgba(212,175,55,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_-4px_rgba(212,175,55,0.55)]"
             >
               <Download size={14} strokeWidth={1.75} />

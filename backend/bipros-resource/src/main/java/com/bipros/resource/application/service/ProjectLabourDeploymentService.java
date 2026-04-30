@@ -1,5 +1,6 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.common.event.LabourDeploymentChangedEvent;
 import com.bipros.resource.application.dto.LabourCategorySummary;
 import com.bipros.resource.application.dto.LabourDesignationResponse;
 import com.bipros.resource.application.dto.LabourMasterDashboardSummary;
@@ -12,6 +13,7 @@ import com.bipros.resource.domain.repository.LabourDesignationRepository;
 import com.bipros.resource.domain.repository.ProjectLabourDeploymentRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class ProjectLabourDeploymentService {
     private final ProjectLabourDeploymentRepository deploymentRepo;
     private final LabourDesignationRepository designationRepo;
     private final LabourDesignationService designationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ProjectLabourDeploymentResponse create(UUID projectId, ProjectLabourDeploymentRequest req) {
@@ -48,7 +51,11 @@ public class ProjectLabourDeploymentService {
             .actualDailyRate(req.actualDailyRate())
             .notes(req.notes())
             .build();
-        return toResponse(deploymentRepo.save(dep), designation);
+        ProjectLabourDeployment saved = deploymentRepo.save(dep);
+        eventPublisher.publishEvent(new LabourDeploymentChangedEvent(
+            projectId, saved.getId(), saved.getDesignationId(),
+            LabourDeploymentChangedEvent.ChangeType.CREATED));
+        return toResponse(saved, designation);
     }
 
     @Transactional
@@ -65,7 +72,11 @@ public class ProjectLabourDeploymentService {
         LabourDesignation d = designationRepo.findById(existing.getDesignationId())
             .orElseThrow(() -> new EntityNotFoundException(
                 "LabourDesignation not found: " + existing.getDesignationId()));
-        return toResponse(deploymentRepo.save(existing), d);
+        ProjectLabourDeployment saved = deploymentRepo.save(existing);
+        eventPublisher.publishEvent(new LabourDeploymentChangedEvent(
+            projectId, saved.getId(), saved.getDesignationId(),
+            LabourDeploymentChangedEvent.ChangeType.UPDATED));
+        return toResponse(saved, d);
     }
 
     @Transactional
@@ -76,6 +87,9 @@ public class ProjectLabourDeploymentService {
             throw new EntityNotFoundException("Deployment not found in project: " + deploymentId);
         }
         deploymentRepo.delete(existing);
+        eventPublisher.publishEvent(new LabourDeploymentChangedEvent(
+            projectId, existing.getId(), existing.getDesignationId(),
+            LabourDeploymentChangedEvent.ChangeType.DELETED));
     }
 
     @Transactional(readOnly = true)

@@ -14,7 +14,7 @@ import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
-@RequestMapping("/v1/analytics")
+@RequestMapping("/v1/reporting/analytics")
 @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
 @RequiredArgsConstructor
 public class AnalyticsController {

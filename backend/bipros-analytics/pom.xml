@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.bipros</groupId>
+        <artifactId>bipros-backend</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>bipros-analytics</artifactId>
+    <name>Bipros EPPM - Analytics</name>
+    <description>ClickHouse OLAP store, ETL pipeline, and analytics query layer</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-project</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-activity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-resource</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-cost</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-evm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-risk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-permit</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- ClickHouse JDBC driver -->
+        <dependency>
+            <groupId>com.clickhouse</groupId>
+            <artifactId>clickhouse-jdbc</artifactId>
+            <version>0.7.1</version>
+            <classifier>http</classifier>
+        </dependency>
+
+        <!-- JSqlParser for SqlGuard -->
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>5.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+    </dependencies>
+</project>

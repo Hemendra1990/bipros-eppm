@@ -1,5 +1,7 @@
 package com.bipros.common.event;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -11,5 +13,6 @@ import java.util.UUID;
  * lives in {@code bipros-resource} because it owns {@code ResourceRate}; this event is the
  * decoupling seam.
  */
-public record DailyOutputChangedEvent(UUID projectId, UUID activityId, UUID resourceId) {
+public record DailyOutputChangedEvent(UUID projectId, UUID activityId, UUID resourceId,
+                                      LocalDate outputDate, BigDecimal qtyExecuted) {
 }

@@ -51,3 +51,28 @@ export const useAppStore = create<AppState>()(
     { name: "bipros-app" }
   )
 );
+
+interface AiState {
+  open: boolean;
+  currentConversationId: string | null;
+  draft: string;
+  toggle: () => void;
+  setOpen: (v: boolean) => void;
+  setConversationId: (id: string | null) => void;
+  setDraft: (text: string) => void;
+}
+
+export const useAiStore = create<AiState>()(
+  persist(
+    (set) => ({
+      open: false,
+      currentConversationId: null,
+      draft: "",
+      toggle: () => set((s) => ({ open: !s.open })),
+      setOpen: (v) => set({ open: v }),
+      setConversationId: (id) => set({ currentConversationId: id }),
+      setDraft: (text) => set({ draft: text }),
+    }),
+    { name: "bipros-ai" }
+  )
+);
