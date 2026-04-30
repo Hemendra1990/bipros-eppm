@@ -433,6 +433,8 @@ public class ActivityService {
     for (Activity activity : activities) {
       boolean updated = false;
 
+      // Auto-stamp actuals from the data date — this is what `applyActuals` adds
+      // on top of the calculator. The calculator itself does not write actual dates.
       if (activity.getPlannedStartDate() != null &&
           activity.getPlannedStartDate().compareTo(dataDate) <= 0 &&
           activity.getActualStartDate() == null) {
@@ -444,19 +446,26 @@ public class ActivityService {
           activity.getPlannedFinishDate().compareTo(dataDate) <= 0 &&
           activity.getActualFinishDate() == null) {
         activity.setActualFinishDate(activity.getPlannedFinishDate());
-        activity.setPercentComplete(100.0);
         updated = true;
-      } else if (activity.getActualStartDate() != null &&
-          activity.getActualFinishDate() == null &&
-          activity.getPlannedFinishDate() != null) {
-        long totalDays = java.time.temporal.ChronoUnit.DAYS.between(
-            activity.getActualStartDate(), activity.getPlannedFinishDate());
-        long elapsedDays = java.time.temporal.ChronoUnit.DAYS.between(
-            activity.getActualStartDate(), dataDate);
+      }
 
-        if (totalDays > 0 && elapsedDays >= 0) {
-          double durationPercentComplete = Math.min((double) elapsedDays / totalDays * 100, 100.0);
-          activity.setDurationPercentComplete(durationPercentComplete);
+      // Delegate % / status / forced-finish to the single source of truth so
+      // /apply-actuals matches the nightly DurationPercentCompleteJob and the
+      // on-read recompute. UNITS rollups are event-driven elsewhere — pass null
+      // sums and let calculateUnits return KEEP_PRIOR for those.
+      var result = percentCompleteCalculator.calculate(activity, null, null, dataDate);
+      if (!result.isKeepPrior()) {
+        if (result.percent() != null
+            && !java.util.Objects.equals(result.percent(), activity.getPercentComplete())) {
+          activity.setPercentComplete(result.percent());
+          updated = true;
+        }
+        if (result.status() != null && result.status() != activity.getStatus()) {
+          activity.setStatus(result.status());
+          updated = true;
+        }
+        if (result.forcedActualFinish() != null && activity.getActualFinishDate() == null) {
+          activity.setActualFinishDate(result.forcedActualFinish());
           updated = true;
         }
       }

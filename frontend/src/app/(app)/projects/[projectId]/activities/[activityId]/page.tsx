@@ -67,6 +67,7 @@ export default function ActivityDetailPage() {
   const [editData, setEditData] = useState<EditData>({
     name: "",
     percentComplete: 0,
+    percentCompleteType: "DURATION",
     actualStartDate: "",
     actualFinishDate: "",
     workActivityId: "",
@@ -175,10 +176,17 @@ export default function ActivityDetailPage() {
       return;
     }
 
+    // Effective type is what the user is *submitting* (editData), not what's on the server,
+    // so flipping DURATION→PHYSICAL in the same save call lets us include percentComplete.
+    const effectiveType = editData.percentCompleteType ?? activity?.percentCompleteType ?? "DURATION";
+    const isManualPercent = effectiveType === "PHYSICAL";
+    const { percentComplete: _editPct, ...rest } = editData;
     const sanitizedData: UpdateActivityRequest = {
-      ...editData,
+      ...rest,
       originalDuration: editData.originalDuration === "" ? 0 : editData.originalDuration,
-      percentComplete: editData.percentComplete === "" ? 0 : editData.percentComplete,
+      ...(isManualPercent
+        ? { percentComplete: editData.percentComplete === "" ? 0 : editData.percentComplete }
+        : {}),
     };
     updateMutation.mutate(sanitizedData);
   };
@@ -188,6 +196,9 @@ export default function ActivityDetailPage() {
       setEditData({
         name: activity.name,
         percentComplete: activity.percentComplete,
+        percentCompleteType:
+          (activity.percentCompleteType as "DURATION" | "UNITS" | "PHYSICAL" | null | undefined) ??
+          "DURATION",
         originalDuration: activity.duration,
         plannedStartDate: activity.plannedStartDate || "",
         plannedFinishDate: activity.plannedFinishDate || "",
@@ -1026,7 +1037,9 @@ function EditForm({
             />
           </div>
           {(() => {
-            const pctType = percentCompleteType || "DURATION";
+            // Live-bound to the dropdown below so the % Complete input flips
+            // editable/read-only the moment the user changes mode.
+            const pctType = (data.percentCompleteType as string | undefined) || percentCompleteType || "DURATION";
             const isManual = pctType === "PHYSICAL";
             const helperText = isManual
               ? null
@@ -1052,6 +1065,27 @@ function EditForm({
               </div>
             );
           })()}
+        </div>
+
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">% Complete Type</label>
+            <select
+              name="percentCompleteType"
+              value={(data.percentCompleteType as string | undefined) ?? "DURATION"}
+              onChange={onChange}
+              className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              <option value="DURATION">Duration — auto from elapsed days</option>
+              <option value="UNITS">Units — auto from Daily Output</option>
+              <option value="PHYSICAL">Physical — manual / step-driven</option>
+            </select>
+            {percentCompleteType && data.percentCompleteType && data.percentCompleteType !== percentCompleteType && (
+              <p className="mt-1 text-xs text-warning">
+                Switching mode will recalculate % on next read.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-6">

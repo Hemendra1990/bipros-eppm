@@ -159,6 +159,15 @@ public class ResourceAssignmentController {
   }
 
   @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PostMapping("/recompute-costs")
+  public ResponseEntity<ApiResponse<java.util.Map<String, Integer>>> recomputeCosts(
+      @PathVariable UUID projectId) {
+    log.info("POST /v1/projects/{}/resource-assignments/recompute-costs", projectId);
+    int updated = assignmentService.recomputeProjectCosts(projectId);
+    return ResponseEntity.ok(ApiResponse.ok(java.util.Map.of("updated", updated)));
+  }
+
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PostMapping("/level-resources")
   public ResponseEntity<ApiResponse<LevelingResult>> levelResources(
       @PathVariable UUID projectId) {

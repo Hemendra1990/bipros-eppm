@@ -86,9 +86,17 @@ public class ResourceAssignmentService {
    * that want the current market rate should use {@link #computeActualCost} instead.
    */
   private BigDecimal computePlannedCost(UUID resourceId, String rateType, Double plannedUnits) {
-    if (plannedUnits == null || rateType == null) return null;
-    List<ResourceRate> rates = rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
-        resourceId, rateType);
+    if (plannedUnits == null) return null;
+    List<ResourceRate> rates = rateType != null
+        ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
+        : List.of();
+    // Fallback: if no rate exists for the requested rateType (or none was supplied),
+    // use the most recent rate of any type so cost is non-null whenever the resource
+    // has any rate row at all. The frontend rateType taxonomy and the seeded
+    // ResourceRate taxonomy don't always line up.
+    if (rates.isEmpty()) {
+      rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(resourceId);
+    }
     if (rates.isEmpty()) return null;
     ResourceRate latest = rates.get(0);
     BigDecimal baseRate = latest.getBudgetedRate() != null
@@ -114,9 +122,13 @@ public class ResourceAssignmentService {
    */
   @SuppressWarnings("unused")
   private BigDecimal computeActualCost(UUID resourceId, String rateType, Double actualUnits) {
-    if (actualUnits == null || rateType == null) return null;
-    List<ResourceRate> rates = rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
-        resourceId, rateType);
+    if (actualUnits == null) return null;
+    List<ResourceRate> rates = rateType != null
+        ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
+        : List.of();
+    if (rates.isEmpty()) {
+      rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(resourceId);
+    }
     if (rates.isEmpty()) return null;
     ResourceRate latest = rates.get(0);
     BigDecimal rate = latest.getActualRate() != null
@@ -446,6 +458,72 @@ public class ResourceAssignmentService {
     ResourceAssignmentResponse response = hydrate(updated);
     auditService.logUpdate("ResourceAssignment", id, "assignment", assignment, response);
     return response;
+  }
+
+  /**
+   * Recompute and persist all cost fields ({@code plannedCost}, {@code actualCost},
+   * {@code remainingCost}, {@code atCompletionCost}) for every assignment in the project.
+   * Used to backfill rows that were created before a rate existed (or with a rateType
+   * that didn't match any rate row), and to fill in {@code actualCost} for assignments
+   * whose units were written outside the daily-output rollup path.
+   * Cheap — O(N) over the project's assignments.
+   */
+  public int recomputeProjectCosts(UUID projectId) {
+    log.info("Recomputing costs for project: projectId={}", projectId);
+    List<ResourceAssignment> assignments = assignmentRepository.findByProjectId(projectId);
+    int updated = 0;
+    for (ResourceAssignment a : assignments) {
+      BigDecimal newPlanned = a.getResourceId() != null
+          ? computePlannedCost(a.getResourceId(), a.getRateType(), a.getPlannedUnits())
+          : computePlannedCostFromRole(a.getRoleId(), a.getRateType(), a.getPlannedUnits());
+      BigDecimal actualRate = a.getResourceId() != null
+          ? resolveActualRate(a.getResourceId(), a.getRateType())
+          : null;
+      BigDecimal newActual = (actualRate != null && a.getActualUnits() != null)
+          ? actualRate.multiply(BigDecimal.valueOf(a.getActualUnits()))
+          : null;
+      BigDecimal newRemaining = (actualRate != null && a.getRemainingUnits() != null)
+          ? actualRate.multiply(BigDecimal.valueOf(a.getRemainingUnits()))
+          : null;
+      BigDecimal newEac = (newActual != null && newRemaining != null)
+          ? newActual.add(newRemaining)
+          : newActual != null ? newActual : newRemaining;
+
+      boolean changed = !Objects.equals(newPlanned, a.getPlannedCost())
+          || !Objects.equals(newActual, a.getActualCost())
+          || !Objects.equals(newRemaining, a.getRemainingCost())
+          || !Objects.equals(newEac, a.getAtCompletionCost());
+      if (changed) {
+        a.setPlannedCost(newPlanned);
+        a.setActualCost(newActual);
+        a.setRemainingCost(newRemaining);
+        a.setAtCompletionCost(newEac);
+        assignmentRepository.save(a);
+        updated++;
+      }
+    }
+    log.info("Project cost recompute complete: projectId={}, updated={}", projectId, updated);
+    return updated;
+  }
+
+  /**
+   * Resolve the rate for actual-cost computation: latest {@code actualRate} →
+   * {@code budgetedRate} → {@code pricePerUnit}, with a fallback to the most recent
+   * rate of any type when no rate matches the requested {@code rateType}. Mirrors
+   * {@link com.bipros.resource.application.listener.ResourceAssignmentCostRollupListener}.
+   */
+  private BigDecimal resolveActualRate(UUID resourceId, String rateType) {
+    List<ResourceRate> rates = rateType != null
+        ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
+        : List.of();
+    if (rates.isEmpty()) {
+      rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(resourceId);
+    }
+    if (rates.isEmpty()) return null;
+    ResourceRate latest = rates.get(0);
+    if (latest.getActualRate() != null) return latest.getActualRate();
+    if (latest.getBudgetedRate() != null) return latest.getBudgetedRate();
+    return latest.getPricePerUnit();
   }
 
   public void removeAssignment(UUID assignmentId) {

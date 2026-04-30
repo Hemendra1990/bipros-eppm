@@ -85,9 +85,16 @@ public class ResourceAssignmentCostRollupListener {
   }
 
   private BigDecimal resolveRate(ResourceAssignment assignment) {
-    if (assignment.getRateType() == null) return null;
-    List<ResourceRate> rates = rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
-        assignment.getResourceId(), assignment.getRateType());
+    List<ResourceRate> rates = assignment.getRateType() != null
+        ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
+            assignment.getResourceId(), assignment.getRateType())
+        : List.of();
+    // Fallback: when no rate matches the assignment's rateType (or none was set),
+    // pick the most recent rate of any type for the resource. Mirrors the same
+    // tolerance that ResourceAssignmentService uses for plannedCost.
+    if (rates.isEmpty()) {
+      rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(assignment.getResourceId());
+    }
     if (rates.isEmpty()) return null;
     ResourceRate latest = rates.get(0);
     if (latest.getActualRate() != null) return latest.getActualRate();

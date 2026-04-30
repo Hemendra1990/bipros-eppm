@@ -207,6 +207,52 @@ class ActivityIntegrationTest {
                     HttpMethod.PUT, updateE, ApiResponse.class);
             assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         }
+
+        @Test
+        @DisplayName("should change percentCompleteType from DURATION to PHYSICAL and back")
+        void updatePercentCompleteType_roundTrips() {
+            String suffix = "PCT" + System.currentTimeMillis();
+            HttpHeaders h = authJsonHeaders();
+            // Create as default (DURATION).
+            CreateActivityRequest req = new CreateActivityRequest(
+                    "ACT-PCT-" + suffix, "PercentCompleteType " + suffix, null,
+                    projectId, wbsNodeId, null, null, null,
+                    10.0, LocalDate.now(), LocalDate.now().plusDays(10),
+                    null, null, null, null, null);
+            HttpEntity<CreateActivityRequest> createE = new HttpEntity<>(req, h);
+            ResponseEntity<ApiResponse> createR = restTemplate.exchange(
+                    "/v1/projects/" + projectId + "/activities",
+                    HttpMethod.POST, createE, ApiResponse.class);
+            assertThat(createR.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            Map<String, Object> created = (Map<String, Object>) createR.getBody().data();
+            String id = (String) created.get("id");
+            assertThat(created.get("percentCompleteType")).isEqualTo("DURATION");
+
+            // PUT to flip to PHYSICAL.
+            HttpEntity<Map<String, Object>> physE = new HttpEntity<>(
+                    Map.of("percentCompleteType", "PHYSICAL"), h);
+            ResponseEntity<ApiResponse> physR = restTemplate.exchange(
+                    "/v1/projects/" + projectId + "/activities/" + id,
+                    HttpMethod.PUT, physE, ApiResponse.class);
+            assertThat(physR.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+            // GET — confirm persisted.
+            ResponseEntity<ApiResponse> getR = restTemplate.exchange(
+                    "/v1/projects/" + projectId + "/activities/" + id,
+                    HttpMethod.GET, new HttpEntity<>(h), ApiResponse.class);
+            Map<String, Object> got = (Map<String, Object>) getR.getBody().data();
+            assertThat(got.get("percentCompleteType")).isEqualTo("PHYSICAL");
+
+            // PUT back to UNITS — confirm any → any transition is allowed.
+            HttpEntity<Map<String, Object>> unitsE = new HttpEntity<>(
+                    Map.of("percentCompleteType", "UNITS"), h);
+            ResponseEntity<ApiResponse> unitsR = restTemplate.exchange(
+                    "/v1/projects/" + projectId + "/activities/" + id,
+                    HttpMethod.PUT, unitsE, ApiResponse.class);
+            assertThat(unitsR.getStatusCode()).isEqualTo(HttpStatus.OK);
+            Map<String, Object> unitsData = (Map<String, Object>) unitsR.getBody().data();
+            assertThat(unitsData.get("percentCompleteType")).isEqualTo("UNITS");
+        }
     }
 
     @Nested
