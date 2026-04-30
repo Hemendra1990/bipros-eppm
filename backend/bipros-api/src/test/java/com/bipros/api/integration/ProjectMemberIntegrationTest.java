@@ -74,7 +74,7 @@ class ProjectMemberIntegrationTest {
         CreateProjectRequest projRequest = new CreateProjectRequest(
                 "PROJ-PM-" + epsSuffix, "Project PM " + epsSuffix, "Test project",
                 epsId, null, LocalDate.now(), LocalDate.now().plusMonths(12), 5,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
         HttpEntity<CreateProjectRequest> projEntity = new HttpEntity<>(projRequest, headers);
         ResponseEntity<ApiResponse> projResponse = restTemplate.exchange(
                 "/v1/projects", HttpMethod.POST, projEntity, ApiResponse.class);

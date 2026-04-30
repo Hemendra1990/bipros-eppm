@@ -1,6 +1,7 @@
 package com.bipros.cost.application.service;
 
 import com.bipros.common.dto.PagedResponse;
+import com.bipros.common.event.ActivityExpenseRecordedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.ProjectAccessGuard;
@@ -13,6 +14,7 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.domain.repository.GoodsReceiptNoteRepository;
 import com.bipros.resource.domain.repository.MaterialStockRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,7 @@ public class CostService {
     private final MaterialStockRepository materialStockRepository;
     private final ProjectAccessGuard projectAccess;
     private final ProjectRepository projectRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // Cost Account Operations
     @Transactional
@@ -135,6 +138,8 @@ public class CostService {
 
         var saved = activityExpenseRepository.save(entity);
         auditService.logCreate("ActivityExpense", saved.getId(), ActivityExpenseDto.from(saved));
+        eventPublisher.publishEvent(new ActivityExpenseRecordedEvent(
+            saved.getProjectId(), saved.getId(), saved.getActivityId()));
         return ActivityExpenseDto.from(saved);
     }
 
@@ -166,6 +171,8 @@ public class CostService {
 
         var saved = activityExpenseRepository.save(entity);
         auditService.logUpdate("ActivityExpense", id, "expense", null, ActivityExpenseDto.from(saved));
+        eventPublisher.publishEvent(new ActivityExpenseRecordedEvent(
+            saved.getProjectId(), saved.getId(), saved.getActivityId()));
         return ActivityExpenseDto.from(saved);
     }
 

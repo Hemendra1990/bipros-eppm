@@ -150,6 +150,28 @@ bipros:
       max-tokens: 512
       request-timeout-seconds: 30
 
+  # Analytics OLAP store (ClickHouse)
+  analytics:
+    clickhouse:
+      url: ${CLICKHOUSE_URL:jdbc:clickhouse://127.0.0.1:8123/bipros_analytics}
+      username: ${CLICKHOUSE_USER:bipros}
+      password: ${CLICKHOUSE_PASSWORD:bipros_dev}
+      pool:
+        max-size: ${CLICKHOUSE_POOL_MAX:8}
+        min-idle: 2
+        connection-timeout: 30000
+    sql-debug: ${ANALYTICS_SQL_DEBUG:false}
+
+  # AI orchestration and chat
+  ai-orchestrator:
+    enabled: ${BIPROS_AI_ENABLED:false}
+    kek: ${BIPROS_AI_KEK:}
+    max-tool-rounds: 3
+    conversation:
+      max-messages: 32
+      max-input-tokens: 200000
+      ttl-days: 90
+
 # OpenAPI
 springdoc:
   api-docs:

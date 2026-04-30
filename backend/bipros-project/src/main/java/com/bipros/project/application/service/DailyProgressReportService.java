@@ -1,5 +1,6 @@
 package com.bipros.project.application.service;
 
+import com.bipros.common.event.DprSubmittedEvent;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateDailyProgressReportRequest;
@@ -9,6 +10,7 @@ import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class DailyProgressReportService {
   private final ProjectRepository projectRepository;
   private final BoqService boqService;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
 
   public DailyProgressReportResponse create(UUID projectId, CreateDailyProgressReportRequest request) {
     ensureProjectExists(projectId);
@@ -56,6 +59,9 @@ public class DailyProgressReportService {
     }
 
     auditService.logCreate("DailyProgressReport", saved.getId(), DailyProgressReportResponse.from(saved));
+    eventPublisher.publishEvent(new DprSubmittedEvent(
+        saved.getProjectId(), saved.getId(), saved.getReportDate(),
+        saved.getActivityName(), saved.getQtyExecuted(), saved.getCumulativeQty()));
     return DailyProgressReportResponse.from(saved);
   }
 

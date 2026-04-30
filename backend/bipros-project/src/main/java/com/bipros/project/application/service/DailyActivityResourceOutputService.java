@@ -74,7 +74,8 @@ public class DailyActivityResourceOutputService {
     DailyActivityResourceOutput saved = repository.save(row);
     recomputeAssignmentRollup(projectId, request.activityId(), request.resourceId());
     eventPublisher.publishEvent(
-        new DailyOutputChangedEvent(projectId, request.activityId(), request.resourceId()));
+        new DailyOutputChangedEvent(projectId, request.activityId(), request.resourceId(),
+            request.outputDate(), request.qtyExecuted()));
     auditService.logCreate("DailyActivityResourceOutput", saved.getId(),
         DailyActivityResourceOutputResponse.from(saved));
     log.info("Created DailyActivityResourceOutput id={} project={} date={} activity={} resource={}",
@@ -115,7 +116,7 @@ public class DailyActivityResourceOutputService {
     UUID resourceId = row.getResourceId();
     repository.delete(row);
     recomputeAssignmentRollup(projectId, activityId, resourceId);
-    eventPublisher.publishEvent(new DailyOutputChangedEvent(projectId, activityId, resourceId));
+    eventPublisher.publishEvent(new DailyOutputChangedEvent(projectId, activityId, resourceId, row.getOutputDate(), row.getQtyExecuted()));
     auditService.logDelete("DailyActivityResourceOutput", id);
   }
 

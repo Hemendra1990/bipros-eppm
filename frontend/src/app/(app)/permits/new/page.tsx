@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,6 +39,14 @@ const EMPTY_WORKER: WorkerDraft = {
 };
 
 export default function NewPermitPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate">Loading…</div>}>
+      <NewPermitPageInner />
+    </Suspense>
+  );
+}
+
+function NewPermitPageInner() {
   const router = useRouter();
   const search = useSearchParams();
   const projectIdParam = search.get("projectId") || "";

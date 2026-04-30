@@ -222,15 +222,17 @@ export default function DailyOutputsPage() {
                       ? "Search resources..."
                       : "Select an activity first"
                   }
-                  options={activityResources.map((ra) => {
-                    const r = allResources.find((x) => x.id === ra.resourceId);
-                    return {
-                      value: ra.resourceId,
-                      label: r
-                        ? `${r.code} — ${r.name}`
-                        : ra.resourceName ?? ra.resourceId,
-                    };
-                  })}
+                  options={activityResources
+                    .filter((ra) => !!ra.resourceId)
+                    .map((ra) => {
+                      const r = allResources.find((x) => x.id === ra.resourceId);
+                      return {
+                        value: ra.resourceId!,
+                        label: r
+                          ? `${r.code} — ${r.name}`
+                          : ra.resourceName ?? ra.resourceId!,
+                      };
+                    })}
                 />
               </div>
               <div>

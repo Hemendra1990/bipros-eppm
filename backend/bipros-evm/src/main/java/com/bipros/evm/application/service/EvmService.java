@@ -3,6 +3,7 @@ package com.bipros.evm.application.service;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.model.PercentCompleteType;
+import com.bipros.common.event.EvmRecalculatedEvent;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.cost.domain.entity.ActivityExpense;
@@ -25,6 +26,7 @@ import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +49,7 @@ public class EvmService {
     private final CostAccountRepository costAccountRepository;
     private final WbsNodeRepository wbsNodeRepository;
     private final AuditService auditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public EvmCalculationResponse calculateEvm(UUID projectId, CalculateEvmRequest request) {
@@ -96,6 +99,8 @@ public class EvmService {
 
         var saved = evmCalculationRepository.save(calculation);
         auditService.logCreate("EvmCalculation", saved.getId(), EvmCalculationResponse.from(saved));
+        eventPublisher.publishEvent(new EvmRecalculatedEvent(
+            saved.getProjectId(), saved.getId(), saved.getDataDate()));
         return EvmCalculationResponse.from(saved);
     }
 

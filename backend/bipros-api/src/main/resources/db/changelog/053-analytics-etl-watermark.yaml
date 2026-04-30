@@ -1,0 +1,73 @@
+databaseChangeLog:
+  - changeSet:
+      id: 053-analytics-etl-watermark
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: analytics
+            tableName: etl_watermark
+            columns:
+              - column:
+                  name: source_table
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target_table
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_synced_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: last_synced_id
+                  type: UUID
+              - column:
+                  name: rows_processed
+                  type: BIGINT
+                  defaultValueNumeric: 0
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+        - addPrimaryKey:
+            schemaName: analytics
+            tableName: etl_watermark
+            columnNames: source_table, target_table
+            constraintName: pk_etl_watermark
+        - createTable:
+            schemaName: analytics
+            tableName: etl_dead_letter
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: payload
+                  type: JSONB
+              - column:
+                  name: error
+                  type: TEXT
+              - column:
+                  name: attempts
+                  type: INT
+                  defaultValueNumeric: 0
+              - column:
+                  name: next_retry_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()

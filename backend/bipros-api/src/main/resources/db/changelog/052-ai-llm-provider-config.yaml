@@ -1,0 +1,114 @@
+databaseChangeLog:
+  - changeSet:
+      id: 052-ai-llm-provider-config
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: llm_provider_config
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: base_url
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: api_key_ciphertext
+                  type: BYTEA
+                  constraints:
+                    nullable: false
+              - column:
+                  name: api_key_iv
+                  type: BYTEA
+                  constraints:
+                    nullable: false
+              - column:
+                  name: api_key_version
+                  type: INT
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: model
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: max_tokens
+                  type: INT
+                  defaultValueNumeric: 4096
+                  constraints:
+                    nullable: false
+              - column:
+                  name: temperature
+                  type: NUMERIC(3,2)
+                  defaultValueNumeric: 0.2
+                  constraints:
+                    nullable: false
+              - column:
+                  name: timeout_ms
+                  type: INT
+                  defaultValueNumeric: 60000
+                  constraints:
+                    nullable: false
+              - column:
+                  name: extra_headers
+                  type: JSONB
+              - column:
+                  name: auth_scheme
+                  type: VARCHAR(20)
+                  defaultValue: 'BEARER'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: supports_native_tools
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_default
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - createIndex:
+            schemaName: ai
+            tableName: llm_provider_config
+            indexName: idx_llm_provider_default
+            columns:
+              - column:
+                  name: is_default

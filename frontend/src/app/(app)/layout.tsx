@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/common/Sidebar";
 import { Header } from "@/components/common/Header";
 import { AccessProvider } from "@/lib/auth/AccessProvider";
+import { AiChatPanel } from "@/components/ai/AiChatPanel";
 
 export default function AppLayout({
   children,
@@ -19,6 +20,7 @@ export default function AppLayout({
             </div>
           </main>
         </div>
+        <AiChatPanel />
       </div>
     </AccessProvider>
   );

@@ -2,6 +2,8 @@ package com.bipros.risk.application.service;
 
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.common.event.RiskAssessedEvent;
+import com.bipros.common.event.RiskClosedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.ProjectAccessGuard;
@@ -25,10 +27,12 @@ import com.bipros.risk.domain.repository.RiskRepository;
 import com.bipros.risk.domain.repository.RiskResponseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,6 +52,7 @@ public class RiskService {
     private final RiskQualityService riskQualityService;
     private final AuditService auditService;
     private final ProjectAccessGuard projectAccess;
+    private final ApplicationEventPublisher eventPublisher;
     private final RiskCategoryMasterRepository riskCategoryRepository;
     private final RiskActivityAssignmentRepository assignmentRepository;
     private final ActivityRepository activityRepository;
@@ -115,6 +120,7 @@ public class RiskService {
 
         Risk saved = riskRepository.save(risk);
         auditService.logCreate("Risk", saved.getId(), saved);
+        eventPublisher.publishEvent(new RiskAssessedEvent(saved.getProjectId(), saved.getId()));
 
         RiskSummary summary = mapToSummary(saved);
         summary.setAnalysisQuality(riskQualityService.assess(saved, Collections.emptyList()));
@@ -124,6 +130,7 @@ public class RiskService {
     public RiskSummary updateRisk(UUID projectId, UUID riskId, UpdateRiskRequest request) {
         projectAccess.requireEdit(projectId);
         Risk risk = loadProjectRisk(projectId, riskId);
+        RiskStatus previousStatus = risk.getStatus();
 
         auditService.logUpdate("Risk", riskId, "title", risk.getTitle(), request.getTitle());
 
@@ -166,6 +173,11 @@ public class RiskService {
         calculateScores(risk, projectId);
 
         Risk updated = riskRepository.save(risk);
+        eventPublisher.publishEvent(new RiskAssessedEvent(updated.getProjectId(), updated.getId()));
+        if (isTerminal(updated.getStatus()) && !isTerminal(previousStatus)) {
+            eventPublisher.publishEvent(new RiskClosedEvent(
+                    updated.getProjectId(), updated.getId(), Instant.now(), null));
+        }
         List<RiskResponse> responses = riskResponseRepository.findByRiskId(riskId);
         RiskSummary summary = mapToSummary(updated);
         summary.setAnalysisQuality(riskQualityService.assess(updated, responses));
@@ -186,6 +198,11 @@ public class RiskService {
         riskResponseRepository.deleteAll(riskResponseRepository.findByRiskId(riskId));
         riskRepository.delete(risk);
         auditService.logDelete("Risk", riskId);
+        eventPublisher.publishEvent(new RiskClosedEvent(projectId, riskId, Instant.now(), null));
+    }
+
+    private static boolean isTerminal(RiskStatus status) {
+        return status == RiskStatus.CLOSED || status == RiskStatus.RESOLVED;
     }
 
     @Transactional(readOnly = true)
@@ -390,6 +407,7 @@ public class RiskService {
 
         RiskResponse saved = riskResponseRepository.save(response);
         auditService.logCreate("RiskResponse", saved.getId(), saved);
+        eventPublisher.publishEvent(new RiskAssessedEvent(projectId, riskId));
         return mapToResponseDto(saved);
     }
 
@@ -414,6 +432,7 @@ public class RiskService {
 
         RiskResponse updated = riskResponseRepository.save(response);
         auditService.logUpdate("RiskResponse", responseId, "riskResponse", null, updated);
+        eventPublisher.publishEvent(new RiskAssessedEvent(projectId, riskId));
         return mapToResponseDto(updated);
     }
 
@@ -427,6 +446,7 @@ public class RiskService {
         }
         riskResponseRepository.delete(response);
         auditService.logDelete("RiskResponse", responseId);
+        eventPublisher.publishEvent(new RiskAssessedEvent(projectId, riskId));
     }
 
     @Transactional(readOnly = true)

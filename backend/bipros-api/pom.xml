@@ -100,6 +100,14 @@
             <groupId>com.bipros</groupId>
             <artifactId>bipros-permit</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-analytics</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-ai</artifactId>
+        </dependency>
 
         <!-- Spring Boot Starters -->
         <dependency>
