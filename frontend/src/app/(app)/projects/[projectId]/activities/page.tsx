@@ -77,11 +77,22 @@ export default function ActivitiesPage() {
   const progressMutation = useMutation({
     mutationFn: async (vars: {
       id: string;
+      percentCompleteType?: string | null;
       percentComplete: number;
       actualStartDate?: string;
       actualFinishDate?: string;
     }) => {
       setPendingId(vars.id);
+      const isManualPercent = (vars.percentCompleteType ?? "DURATION") === "PHYSICAL";
+      // For DURATION/UNITS the backend rejects manual percentComplete writes —
+      // status is derived from actual dates. Use the regular update endpoint
+      // and pass only the dates; the calculator + status derivation handle the rest.
+      if (!isManualPercent) {
+        return activityApi.updateActivity(projectId, vars.id, {
+          actualStartDate: vars.actualStartDate,
+          actualFinishDate: vars.actualFinishDate,
+        });
+      }
       return activityApi.updateProgress(
         projectId,
         vars.id,
@@ -123,6 +134,7 @@ export default function ActivitiesPage() {
   const start = (a: ActivityResponse) =>
     progressMutation.mutate({
       id: a.id,
+      percentCompleteType: a.percentCompleteType,
       percentComplete: Math.max(a.percentComplete ?? 0, 1),
       actualStartDate: a.actualStartDate || todayIso(),
       actualFinishDate: a.actualFinishDate ?? undefined,
@@ -131,6 +143,7 @@ export default function ActivitiesPage() {
   const complete = (a: ActivityResponse) =>
     progressMutation.mutate({
       id: a.id,
+      percentCompleteType: a.percentCompleteType,
       percentComplete: 100,
       actualStartDate: a.actualStartDate || a.plannedStartDate || todayIso(),
       actualFinishDate: todayIso(),
@@ -144,6 +157,7 @@ export default function ActivitiesPage() {
     const actualFinish = pct >= 100 ? todayIso() : (a.actualFinishDate ?? undefined);
     progressMutation.mutate({
       id: a.id,
+      percentCompleteType: a.percentCompleteType,
       percentComplete: pct,
       actualStartDate: actualStart,
       actualFinishDate: actualFinish,

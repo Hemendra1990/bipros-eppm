@@ -12,6 +12,8 @@ public interface ResourceRateRepository extends JpaRepository<ResourceRate, UUID
 
   List<ResourceRate> findByResourceId(UUID resourceId);
 
+  List<ResourceRate> findByResourceIdOrderByEffectiveDateDesc(UUID resourceId);
+
   List<ResourceRate> findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
       UUID resourceId, String rateType);
 }

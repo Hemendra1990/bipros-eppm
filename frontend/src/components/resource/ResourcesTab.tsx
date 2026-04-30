@@ -42,7 +42,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     resourceId: "",
     roleId: "",
     plannedUnits: "",
-    rateType: "FIXED",
+    rateType: "STANDARD",
   });
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [showLeveling, setShowLeveling] = useState(false);
@@ -96,8 +96,15 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
         resourceId: "",
         roleId: "",
         plannedUnits: "",
-        rateType: "FIXED",
+        rateType: "STANDARD",
       });
+    },
+  });
+
+  const recomputeCostsMutation = useMutation({
+    mutationFn: () => resourceApi.recomputeProjectAssignmentCosts(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });
     },
   });
 
@@ -152,7 +159,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
         plannedUnits: a.plannedUnits,
         actualUnits: a.actualUnits,
         remainingUnits: (anyA.remainingUnits as number) ?? 0,
-        rateType: (anyA.rateType as string) ?? "FIXED",
+        rateType: (anyA.rateType as string) ?? "STANDARD",
         plannedCost: (anyA.plannedCost as number) ?? 0,
         actualCost: (anyA.actualCost as number) ?? 0,
         staffed: a.staffed ?? a.resourceId != null,
@@ -251,6 +258,14 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
         >
           <SlidersHorizontal size={16} />
           Level Resources
+        </button>
+        <button
+          onClick={() => recomputeCostsMutation.mutate()}
+          disabled={recomputeCostsMutation.isPending}
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-active disabled:opacity-50"
+          title="Recalculate planned cost for every assignment in this project from current resource rates"
+        >
+          {recomputeCostsMutation.isPending ? "Recomputing…" : "Recompute Costs"}
         </button>
         <div className="ml-auto">
           <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
@@ -357,9 +372,9 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
                 }
                 className="mt-1 block w-full rounded-md border-border px-3 py-2 border bg-surface/50 text-text-primary shadow-sm focus:border-accent focus:outline-none"
               >
-                <option value="FIXED">Fixed</option>
-                <option value="HOURLY">Hourly</option>
-                <option value="DAILY">Daily</option>
+                <option value="STANDARD">Standard</option>
+                <option value="OVERTIME">Overtime</option>
+                <option value="CPWD_SOR">CPWD SOR</option>
               </select>
             </div>
 

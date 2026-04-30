@@ -175,10 +175,14 @@ export default function ActivityDetailPage() {
       return;
     }
 
+    const isManualPercent = activity?.percentCompleteType === "PHYSICAL";
+    const { percentComplete: _editPct, ...rest } = editData;
     const sanitizedData: UpdateActivityRequest = {
-      ...editData,
+      ...rest,
       originalDuration: editData.originalDuration === "" ? 0 : editData.originalDuration,
-      percentComplete: editData.percentComplete === "" ? 0 : editData.percentComplete,
+      ...(isManualPercent
+        ? { percentComplete: editData.percentComplete === "" ? 0 : editData.percentComplete }
+        : {}),
     };
     updateMutation.mutate(sanitizedData);
   };

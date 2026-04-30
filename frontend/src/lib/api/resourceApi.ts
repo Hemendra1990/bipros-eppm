@@ -292,6 +292,13 @@ export const resourceApi = {
       )
       .then((r) => r.data),
 
+  recomputeProjectAssignmentCosts: (projectId: string) =>
+    apiClient
+      .post<ApiResponse<{ updated: number }>>(
+        `/v1/projects/${projectId}/resource-assignments/recompute-costs`
+      )
+      .then((r) => r.data),
+
   levelResources: (projectId: string, request: ResourceLevelingRequest) =>
     apiClient
       .post<ApiResponse<ResourceLevelingResponse>>(
