@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { ApiResponse } from "../types";
+import type { ApiResponse, WbsAiGenerateRequest, WbsAiApplyRequest, WbsAiGenerationResponse } from "../types";
 
 export interface LlmProviderResponse {
   id: string;
@@ -114,6 +114,12 @@ export const aiApi = {
       return data.data as { fileName: string; url: string; mimeType: string };
     });
   },
+
+  generateWbs: (projectId: string, body: WbsAiGenerateRequest) =>
+    apiClient.post<ApiResponse<WbsAiGenerationResponse>>(`/v1/projects/${projectId}/wbs/ai/generate`, body).then((r) => r.data),
+
+  applyGeneratedWbs: (projectId: string, body: WbsAiApplyRequest) =>
+    apiClient.post<ApiResponse<string[]>>(`/v1/projects/${projectId}/wbs/ai/apply`, body).then((r) => r.data),
 
   streamChat: async function* (req: ChatRequest, signal: AbortSignal): AsyncGenerator<SseEvent> {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";

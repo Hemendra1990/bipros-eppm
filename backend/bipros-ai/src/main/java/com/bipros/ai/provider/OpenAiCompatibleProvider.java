@@ -137,6 +137,9 @@ public class OpenAiCompatibleProvider {
         if (req.tools() != null && !req.tools().isEmpty()) {
             r.tools = req.tools().stream().map(t -> new OpenAiTool(t.name(), t.description(), t.parameters())).toList();
         }
+        if (req.responseFormat() != null) {
+            r.responseFormat = req.responseFormat();
+        }
         return r;
     }
 
@@ -238,6 +241,8 @@ public class OpenAiCompatibleProvider {
         public Integer maxTokens;
         public Double temperature;
         public boolean stream = false;
+        @com.fasterxml.jackson.annotation.JsonProperty("response_format")
+        public Object responseFormat;
     }
 
     private record OpenAiMessage(String role, String content, List<OpenAiContent> contentArray) {

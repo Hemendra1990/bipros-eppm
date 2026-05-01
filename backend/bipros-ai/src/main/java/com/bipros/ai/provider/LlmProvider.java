@@ -19,7 +19,11 @@ public interface LlmProvider {
     String providerKey();
 
     record ChatRequest(java.util.List<Message> messages, java.util.List<ToolSpec> tools, Integer maxTokens,
-                       Double temperature, Long timeoutMs) {
+                       Double temperature, Long timeoutMs, JsonNode responseFormat) {
+        public ChatRequest(java.util.List<Message> messages, java.util.List<ToolSpec> tools, Integer maxTokens,
+                           Double temperature, Long timeoutMs) {
+            this(messages, tools, maxTokens, temperature, timeoutMs, null);
+        }
     }
 
     record Message(String role, String content, String imageUrl) {

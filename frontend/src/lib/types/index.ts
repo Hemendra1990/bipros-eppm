@@ -123,6 +123,7 @@ export interface ProjectResponse {
   plannedFinishDate: string;
   dataDate: string | null;
   status: ProjectStatus;
+  industryCode: string | null;
   mustFinishByDate: string | null;
   priority: number;
   // PMS MasterData Screen 01 fields
@@ -939,6 +940,34 @@ export interface CreateWbsTemplateRequest {
   description?: string;
   defaultStructure: string;
   isActive?: boolean;
+}
+
+// === AI WBS Generation ===
+
+export interface WbsAiNode {
+  code: string;
+  name: string;
+  description?: string;
+  children?: WbsAiNode[];
+}
+
+export interface WbsAiGenerateRequest {
+  assetClass?: AssetClass | null;
+  projectTypeHint?: string;
+  additionalContext?: string;
+  targetDepth?: number;
+}
+
+export interface WbsAiApplyRequest {
+  parentId?: string | null;
+  nodes: WbsAiNode[];
+}
+
+export interface WbsAiGenerationResponse {
+  resolvedAssetClass: AssetClass | null;
+  assetClassNeedsConfirmation: boolean;
+  rationale: string;
+  nodes: WbsAiNode[];
 }
 
 export interface CorridorCodeResponse {

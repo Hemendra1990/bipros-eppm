@@ -21,7 +21,7 @@ import { EvmTab } from "@/components/evm/EvmTab";
 import { PeriodPerformanceTab } from "@/components/cost/PeriodPerformanceTab";
 import { CostAccountRollupTab } from "@/components/cost/CostAccountRollupTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree } from "lucide-react";
+import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree, Sparkles } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { costApi } from "@/lib/api/costApi";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
@@ -31,6 +31,7 @@ import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
 import { TabTip } from "@/components/common/TabTip";
+import { WbsAiGenerateDialog } from "@/components/wbs/WbsAiGenerateDialog";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import type { ContractType } from "@/lib/types";
@@ -350,7 +351,7 @@ export default function ProjectDetailPage() {
       {currentTip && <TabTip title={currentTip.title} description={currentTip.description} steps={currentTip.steps} />}
       {tab === "overview" && <OverviewTab project={project} projectId={projectId} />}
       {tab === "wbs" && (
-        <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} />
+        <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} project={project} />
       )}
       {tab === "gantt" && (
         <GanttTab
@@ -988,10 +989,11 @@ function GanttTab({
   );
 }
 
-function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[]; isLoading: boolean; projectId: string }) {
+function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeResponse[]; isLoading: boolean; projectId: string; project: ProjectResponse }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showAiDialog, setShowAiDialog] = useState(false);
   const [parentNode, setParentNode] = useState<{ id: string; code: string; name: string } | null>(null);
   const [formData, setFormData] = useState({ code: "", name: "" });
   const [selectedWbs, setSelectedWbs] = useState<{ id: string; code: string; name: string } | null>(null);
@@ -1122,6 +1124,13 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
         >
           <FileText size={16} />
           Apply Template
+        </button>
+        <button
+          onClick={() => setShowAiDialog(true)}
+          className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
+        >
+          <Sparkles size={16} />
+          Generate with AI
         </button>
         <button
           onClick={handleAddRoot}
@@ -1269,7 +1278,7 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
       {wbsTree.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-12 text-center">
           <h3 className="text-lg font-medium text-text-primary">No WBS Structure</h3>
-          <p className="mt-2 text-text-muted">Click &quot;Add WBS Node&quot; above to create your first work package.</p>
+          <p className="mt-2 text-text-muted">Click &quot;Add WBS Node&quot; above to create your first work package, or use &quot;Generate with AI&quot; for a quick start.</p>
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
@@ -1293,6 +1302,12 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
           <UdfSection entityId={selectedWbs.id} subject="WBS" projectId={projectId} />
         </div>
       )}
+
+      <WbsAiGenerateDialog
+        open={showAiDialog}
+        onOpenChange={setShowAiDialog}
+        project={project}
+      />
     </div>
   );
 }
