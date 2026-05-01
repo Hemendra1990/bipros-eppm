@@ -33,6 +33,10 @@
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
+            <artifactId>bipros-activity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
             <artifactId>bipros-integration</artifactId>
         </dependency>
         <dependency>

@@ -31,4 +31,6 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
   List<Activity> findByIdIn(List<UUID> ids);
 
   List<Activity> findByPercentCompleteTypeAndStatusIn(PercentCompleteType percentCompleteType, List<ActivityStatus> statuses);
+
+  boolean existsByProjectIdAndCode(UUID projectId, String code);
 }

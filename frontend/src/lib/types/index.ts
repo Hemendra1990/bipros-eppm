@@ -970,6 +970,41 @@ export interface WbsAiGenerationResponse {
   nodes: WbsAiNode[];
 }
 
+// === AI Activity Generation ===
+
+export interface ActivityAiNode {
+  code: string;
+  name: string;
+  description?: string | null;
+  wbsNodeCode: string;
+  originalDurationDays: number;
+  predecessorCodes: string[];
+}
+
+export interface ActivityAiGenerateRequest {
+  projectTypeHint?: string;
+  additionalContext?: string;
+  targetActivityCount?: number;
+  defaultDurationDays?: number;
+}
+
+export interface ActivityAiGenerationResponse {
+  rationale: string;
+  activities: ActivityAiNode[];
+}
+
+export interface ActivityAiApplyRequest {
+  activities: ActivityAiNode[];
+}
+
+export interface ActivityAiApplyResponse {
+  codeCollisions: string[];
+  wbsResolutionFailures: string[];
+  relationshipResolutionFailures: string[];
+  createdActivityIds: string[];
+  createdRelationshipIds: string[];
+}
+
 export interface CorridorCodeResponse {
   id: string;
   projectId: string;

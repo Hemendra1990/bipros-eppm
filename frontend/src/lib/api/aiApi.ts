@@ -1,5 +1,14 @@
 import { apiClient } from "./client";
-import type { ApiResponse, WbsAiGenerateRequest, WbsAiApplyRequest, WbsAiGenerationResponse } from "../types";
+import type {
+  ApiResponse,
+  WbsAiGenerateRequest,
+  WbsAiApplyRequest,
+  WbsAiGenerationResponse,
+  ActivityAiGenerateRequest,
+  ActivityAiGenerationResponse,
+  ActivityAiApplyRequest,
+  ActivityAiApplyResponse,
+} from "../types";
 
 export interface LlmProviderResponse {
   id: string;
@@ -120,6 +129,16 @@ export const aiApi = {
 
   applyGeneratedWbs: (projectId: string, body: WbsAiApplyRequest) =>
     apiClient.post<ApiResponse<string[]>>(`/v1/projects/${projectId}/wbs/ai/apply`, body).then((r) => r.data),
+
+  generateActivities: (projectId: string, body: ActivityAiGenerateRequest) =>
+    apiClient.post<ApiResponse<ActivityAiGenerationResponse>>(
+      `/v1/projects/${projectId}/activities/ai/generate`, body
+    ).then((r) => r.data),
+
+  applyGeneratedActivities: (projectId: string, body: ActivityAiApplyRequest) =>
+    apiClient.post<ApiResponse<ActivityAiApplyResponse>>(
+      `/v1/projects/${projectId}/activities/ai/apply`, body
+    ).then((r) => r.data),
 
   streamChat: async function* (req: ChatRequest, signal: AbortSignal): AsyncGenerator<SseEvent> {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
