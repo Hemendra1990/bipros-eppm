@@ -21,7 +21,8 @@ export interface AssignmentRow {
 
 export interface ResourceTypeInfo {
   id: string;
-  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
+  /** Type code from the new model (MANPOWER / EQUIPMENT / MATERIAL or custom). */
+  resourceTypeCode: string;
 }
 
 interface TreeNode {
@@ -41,14 +42,14 @@ interface Props {
 }
 
 function formatResourceType(type: string): string {
-  // Default labels for the seeded 3M base categories. Custom types come pre-formatted from the
-  // backend (the def's name) — those bypass this helper because the resource carries
-  // resourceTypeName directly.
+  // Friendly labels for the seeded 3M codes. Custom types fall through.
   switch (type) {
+    case "MANPOWER":
     case "LABOR":
       return "Manpower";
+    case "EQUIPMENT":
     case "NONLABOR":
-      return "Machine";
+      return "Equipment";
     case "MATERIAL":
       return "Material";
     default:
@@ -88,7 +89,7 @@ function buildResourceTypeTree(
   assignments: AssignmentRow[],
   resources: ResourceTypeInfo[]
 ): TreeNode[] {
-  const resourceMap = new Map(resources.map((r) => [r.id, r.resourceType]));
+  const resourceMap = new Map(resources.map((r) => [r.id, r.resourceTypeCode]));
   const grouped = new Map<string, AssignmentRow[]>();
 
   for (const a of assignments) {
@@ -98,8 +99,8 @@ function buildResourceTypeTree(
     grouped.set(type, list);
   }
 
-  // 3M display order: Manpower (LABOR) → Material → Machine (NONLABOR)
-  const typeOrder = ["LABOR", "MATERIAL", "NONLABOR"];
+  // 3M display order: Manpower → Material → Equipment (with legacy aliases tolerated)
+  const typeOrder = ["MANPOWER", "LABOR", "MATERIAL", "EQUIPMENT", "NONLABOR"];
   const sorted = Array.from(grouped.entries()).sort((a, b) => {
     const idxA = typeOrder.indexOf(a[0]);
     const idxB = typeOrder.indexOf(b[0]);

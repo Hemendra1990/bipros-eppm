@@ -4,13 +4,17 @@ import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateResourceRequest;
+import com.bipros.resource.application.dto.EquipmentDetailsDto;
+import com.bipros.resource.application.dto.ManpowerDto;
+import com.bipros.resource.application.dto.MaterialDetailsDto;
 import com.bipros.resource.application.dto.ResourceResponse;
 import com.bipros.resource.domain.model.Resource;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceTypeDef;
 import com.bipros.resource.domain.repository.ResourceRepository;
-import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
+import com.bipros.resource.domain.repository.ResourceRoleRepository;
+import com.bipros.resource.domain.repository.ResourceTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,179 +30,233 @@ import java.util.UUID;
 public class ResourceService {
 
   private final ResourceRepository resourceRepository;
-  private final ResourceTypeDefRepository resourceTypeDefRepository;
+  private final ResourceRoleRepository roleRepository;
+  private final ResourceTypeRepository typeRepository;
+  private final EquipmentDetailsService equipmentDetailsService;
+  private final MaterialDetailsService materialDetailsService;
+  private final ManpowerService manpowerService;
   private final AuditService auditService;
 
+  // ─── Code constants ───
+  private static final String TYPE_LABOR = "LABOR";
+  private static final String TYPE_EQUIPMENT = "EQUIPMENT";
+  private static final String TYPE_MATERIAL = "MATERIAL";
+
   public ResourceResponse createResource(CreateResourceRequest request) {
-    log.info("Creating resource: code={}, defId={}, type={}", request.code(), request.resourceTypeDefId(), request.resourceType());
+    log.info("Creating resource: code={}, roleId={}, typeId={}",
+        request.code(), request.roleId(), request.resourceTypeId());
 
-    ResourceTypeDef def = resolveTypeDef(request.resourceTypeDefId(), request.resourceType());
-    ResourceType baseCategory = def.getBaseCategory();
+    ResourceType type = typeRepository.findById(request.resourceTypeId())
+        .orElseThrow(() -> new ResourceNotFoundException("ResourceType", request.resourceTypeId()));
+    ResourceRole role = roleRepository.findById(request.roleId())
+        .orElseThrow(() -> new ResourceNotFoundException("ResourceRole", request.roleId()));
 
-    String code = request.code() != null && !request.code().isBlank()
-        ? request.code() : generateResourceCode(def);
+    if (role.getResourceType() != null && !role.getResourceType().getId().equals(type.getId())) {
+      throw new BusinessRuleException("ROLE_TYPE_MISMATCH",
+          "ResourceRole '" + role.getCode() + "' belongs to type '"
+              + (role.getResourceType().getCode()) + "' but the request specifies type '"
+              + type.getCode() + "'");
+    }
+
+    validateDetailExclusivity(type.getCode(), request);
+
+    String code = (request.code() != null && !request.code().isBlank())
+        ? request.code() : generateResourceCode(type);
     if (resourceRepository.findByCode(code).isPresent()) {
-      throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE", "Resource with code " + code + " already exists");
+      throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE",
+          "Resource with code " + code + " already exists");
     }
 
     Resource resource = Resource.builder()
         .code(code)
         .name(request.name())
-        .resourceType(baseCategory)
-        .resourceTypeDef(def)
-        .parentId(request.parentId())
-        .calendarId(request.calendarId())
-        .email(request.email())
-        .phone(request.phone())
-        .title(request.title())
-        .maxUnitsPerDay(request.maxUnitsPerDay() != null ? request.maxUnitsPerDay() : 8.0)
-        .status(ResourceStatus.ACTIVE)
-        .hourlyRate(request.hourlyRate() != null ? request.hourlyRate() : 0.0)
-        .costPerUse(request.costPerUse() != null ? request.costPerUse() : 0.0)
-        .overtimeRate(request.overtimeRate() != null ? request.overtimeRate() : 0.0)
+        .description(request.description())
+        .role(role)
+        .resourceType(type)
+        .availability(request.availability())
+        .costPerUnit(request.costPerUnit())
         .unit(request.unit())
-        .capacitySpec(request.capacitySpec())
-        .makeModel(request.makeModel())
-        .quantityAvailable(request.quantityAvailable())
-        .ownershipType(request.ownershipType())
-        .standardOutputPerDay(request.standardOutputPerDay())
-        .standardOutputUnit(request.standardOutputUnit())
-        .fuelLitresPerHour(request.fuelLitresPerHour())
-        .sortOrder(0)
+        .status(request.status() == null ? ResourceStatus.ACTIVE : request.status())
+        .calendarId(request.calendarId())
+        .parentId(request.parentId())
+        .userId(request.userId())
+        .sortOrder(request.sortOrder() == null ? 0 : request.sortOrder())
         .build();
 
     Resource saved = resourceRepository.save(resource);
     log.info("Resource created: id={}", saved.getId());
 
-    // Audit log creation
-    auditService.logCreate("Resource", saved.getId(), ResourceResponse.from(saved));
+    persistDetailSection(saved.getId(), type.getCode(), request);
 
-    return ResourceResponse.from(saved);
+    auditService.logCreate("Resource", saved.getId(), ResourceResponse.from(saved));
+    return loadFull(saved);
   }
 
+  @Transactional(readOnly = true)
   public ResourceResponse getResource(UUID id) {
-    log.info("Fetching resource: id={}", id);
     Resource resource = resourceRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Resource", id));
-    return ResourceResponse.from(resource);
+    return loadFull(resource);
   }
 
+  @Transactional(readOnly = true)
   public List<ResourceResponse> listResources() {
-    log.info("Listing all resources");
     return resourceRepository.findAll().stream()
         .map(ResourceResponse::from)
         .toList();
   }
 
-  public List<ResourceResponse> listResourcesByType(ResourceType type) {
-    log.info("Listing resources by type: {}", type);
-    return resourceRepository.findByResourceType(type).stream()
+  @Transactional(readOnly = true)
+  public List<ResourceResponse> listResourcesByType(String typeCode) {
+    return resourceRepository.findByResourceType_Code(typeCode).stream()
         .map(ResourceResponse::from)
         .toList();
   }
 
+  @Transactional(readOnly = true)
+  public List<ResourceResponse> listResourcesByRole(UUID roleId) {
+    return resourceRepository.findByRole_Id(roleId).stream()
+        .map(ResourceResponse::from)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
   public List<ResourceResponse> listResourceHierarchyRoots() {
-    log.info("Listing resource hierarchy roots");
     return resourceRepository.findByParentIdIsNull().stream()
         .map(ResourceResponse::from)
         .toList();
   }
 
+  @Transactional(readOnly = true)
   public List<ResourceResponse> listResourcesByParent(UUID parentId) {
-    log.info("Listing resources by parent: {}", parentId);
     return resourceRepository.findByParentId(parentId).stream()
         .map(ResourceResponse::from)
         .toList();
   }
 
+  @Transactional(readOnly = true)
   public List<ResourceResponse> listResourcesByStatus(ResourceStatus status) {
-    log.info("Listing resources by status: {}", status);
     return resourceRepository.findByStatus(status).stream()
         .map(ResourceResponse::from)
         .toList();
   }
 
   public ResourceResponse updateResource(UUID id, CreateResourceRequest request) {
-    log.info("Updating resource: id={}", id);
     Resource resource = resourceRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Resource", id));
 
-    if (!resource.getCode().equals(request.code()) &&
-        resourceRepository.findByCode(request.code()).isPresent()) {
-      throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE", "Resource with code " + request.code() + " already exists");
+    ResourceType type = typeRepository.findById(request.resourceTypeId())
+        .orElseThrow(() -> new ResourceNotFoundException("ResourceType", request.resourceTypeId()));
+    ResourceRole role = roleRepository.findById(request.roleId())
+        .orElseThrow(() -> new ResourceNotFoundException("ResourceRole", request.roleId()));
+
+    if (role.getResourceType() != null && !role.getResourceType().getId().equals(type.getId())) {
+      throw new BusinessRuleException("ROLE_TYPE_MISMATCH",
+          "ResourceRole '" + role.getCode() + "' belongs to type '"
+              + (role.getResourceType().getCode()) + "' but the request specifies type '"
+              + type.getCode() + "'");
     }
 
-    ResourceTypeDef def = resolveTypeDef(request.resourceTypeDefId(), request.resourceType());
+    validateDetailExclusivity(type.getCode(), request);
 
-    resource.setCode(request.code());
+    String code = (request.code() != null && !request.code().isBlank())
+        ? request.code() : resource.getCode();
+    if (!resource.getCode().equals(code) && resourceRepository.findByCode(code).isPresent()) {
+      throw new BusinessRuleException("DUPLICATE_RESOURCE_CODE",
+          "Resource with code " + code + " already exists");
+    }
+
+    resource.setCode(code);
     resource.setName(request.name());
-    resource.setResourceType(def.getBaseCategory());
-    resource.setResourceTypeDef(def);
-    resource.setParentId(request.parentId());
+    resource.setDescription(request.description());
+    resource.setRole(role);
+    resource.setResourceType(type);
+    if (request.availability() != null) resource.setAvailability(request.availability());
+    if (request.costPerUnit() != null) resource.setCostPerUnit(request.costPerUnit());
+    if (request.unit() != null) resource.setUnit(request.unit());
+    if (request.status() != null) resource.setStatus(request.status());
     resource.setCalendarId(request.calendarId());
-    resource.setEmail(request.email());
-    resource.setPhone(request.phone());
-    resource.setTitle(request.title());
-    if (request.maxUnitsPerDay() != null) {
-      resource.setMaxUnitsPerDay(request.maxUnitsPerDay());
-    }
-    if (request.status() != null) {
-      resource.setStatus(request.status());
-    }
-    if (request.hourlyRate() != null) {
-      resource.setHourlyRate(request.hourlyRate());
-    }
-    if (request.costPerUse() != null) {
-      resource.setCostPerUse(request.costPerUse());
-    }
-    if (request.overtimeRate() != null) {
-      resource.setOvertimeRate(request.overtimeRate());
-    }
-    if (request.unit() != null) {
-      resource.setUnit(request.unit());
-    }
-    if (request.capacitySpec() != null) {
-      resource.setCapacitySpec(request.capacitySpec());
-    }
-    if (request.makeModel() != null) {
-      resource.setMakeModel(request.makeModel());
-    }
-    if (request.quantityAvailable() != null) {
-      resource.setQuantityAvailable(request.quantityAvailable());
-    }
-    if (request.ownershipType() != null) {
-      resource.setOwnershipType(request.ownershipType());
-    }
-    if (request.standardOutputPerDay() != null) {
-      resource.setStandardOutputPerDay(request.standardOutputPerDay());
-    }
-    if (request.standardOutputUnit() != null) {
-      resource.setStandardOutputUnit(request.standardOutputUnit());
-    }
-    if (request.fuelLitresPerHour() != null) {
-      resource.setFuelLitresPerHour(request.fuelLitresPerHour());
-    }
+    resource.setParentId(request.parentId());
+    resource.setUserId(request.userId());
+    if (request.sortOrder() != null) resource.setSortOrder(request.sortOrder());
 
     Resource updated = resourceRepository.save(resource);
-    log.info("Resource updated: id={}", id);
 
-    // Audit log update
-    if (!resource.getName().equals(request.name())) {
-      auditService.logUpdate("Resource", id, "name", resource.getName(), request.name());
-    }
+    persistDetailSection(updated.getId(), type.getCode(), request);
 
-    return ResourceResponse.from(updated);
+    auditService.logUpdate("Resource", id, "resource", null, ResourceResponse.from(updated));
+    return loadFull(updated);
   }
 
+  public void deleteResource(UUID id) {
+    if (!resourceRepository.existsById(id)) {
+      throw new ResourceNotFoundException("Resource", id);
+    }
+    // DB-level ON DELETE CASCADE handles the per-type detail rows.
+    resourceRepository.deleteById(id);
+    auditService.logDelete("Resource", id);
+  }
+
+  public void deleteAllResources() {
+    long count = resourceRepository.count();
+    resourceRepository.deleteAllInBatch();
+    log.info("Deleted {} resources", count);
+  }
+
+  // ─── helpers ───
+
   /**
-   * Auto-generate a code: prefer the def's {@code codePrefix} when set; otherwise fall back to
-   * the base category default ({@code LAB} / {@code EQ} / {@code MAT}). Walks the existing
-   * {@code code} column to find the next available suffix so multi-process inserts don't collide.
+   * Reject mismatched detail sections: equipment fields only on EQUIPMENT-typed resources, etc.
+   * This prevents accidentally writing material data onto a labor row in cross-type clients.
    */
-  private String generateResourceCode(ResourceTypeDef def) {
-    String prefix = prefixFor(def);
+  private void validateDetailExclusivity(String typeCode, CreateResourceRequest req) {
+    String code = typeCode == null ? null : typeCode.toUpperCase();
+    if (req.equipment() != null && !TYPE_EQUIPMENT.equals(code)) {
+      throw new BusinessRuleException("EQUIPMENT_DETAILS_NOT_ALLOWED",
+          "Equipment details are only allowed on EQUIPMENT-typed resources");
+    }
+    if (req.material() != null && !TYPE_MATERIAL.equals(code)) {
+      throw new BusinessRuleException("MATERIAL_DETAILS_NOT_ALLOWED",
+          "Material details are only allowed on MATERIAL-typed resources");
+    }
+    if (req.manpower() != null && !TYPE_LABOR.equals(code)) {
+      throw new BusinessRuleException("MANPOWER_DETAILS_NOT_ALLOWED",
+          "Manpower details are only allowed on LABOR-typed resources");
+    }
+  }
+
+  private void persistDetailSection(UUID resourceId, String typeCode, CreateResourceRequest req) {
+    String code = typeCode == null ? null : typeCode.toUpperCase();
+    if (TYPE_EQUIPMENT.equals(code) && req.equipment() != null) {
+      equipmentDetailsService.upsert(resourceId, req.equipment());
+    } else if (TYPE_MATERIAL.equals(code) && req.material() != null) {
+      materialDetailsService.upsert(resourceId, req.material());
+    } else if (TYPE_LABOR.equals(code) && req.manpower() != null) {
+      manpowerService.upsertAll(resourceId, req.manpower());
+    }
+  }
+
+  private ResourceResponse loadFull(Resource r) {
+    String code = r.getResourceType() == null ? null : r.getResourceType().getCode();
+    EquipmentDetailsDto equipment = null;
+    MaterialDetailsDto material = null;
+    ManpowerDto manpower = null;
+    if (TYPE_EQUIPMENT.equalsIgnoreCase(code)) {
+      equipment = equipmentDetailsService.get(r.getId());
+    } else if (TYPE_MATERIAL.equalsIgnoreCase(code)) {
+      material = materialDetailsService.get(r.getId());
+    } else if (TYPE_LABOR.equalsIgnoreCase(code)) {
+      manpower = manpowerService.get(r.getId());
+    }
+    return ResourceResponse.from(r, equipment, material, manpower);
+  }
+
+  /** Auto-generated code "LAB-001" / "EQ-001" / "MAT-001" depending on type code. */
+  private String generateResourceCode(ResourceType type) {
+    String prefix = prefixFor(type);
     int next = 1;
-    java.util.regex.Pattern p = java.util.regex.Pattern.compile("^" + java.util.regex.Pattern.quote(prefix) + "-(\\d+)$");
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+        "^" + java.util.regex.Pattern.quote(prefix) + "-(\\d+)$");
     for (Resource r : resourceRepository.findAll()) {
       if (r.getCode() == null) continue;
       java.util.regex.Matcher m = p.matcher(r.getCode());
@@ -210,51 +268,13 @@ public class ResourceService {
     return String.format("%s-%03d", prefix, next);
   }
 
-  private static String prefixFor(ResourceTypeDef def) {
-    if (def.getCodePrefix() != null && !def.getCodePrefix().isBlank()) {
-      return def.getCodePrefix();
-    }
-    return switch (def.getBaseCategory()) {
-      case NONLABOR -> "EQ";
-      case LABOR -> "LAB";
-      case MATERIAL -> "MAT";
+  private static String prefixFor(ResourceType type) {
+    if (type == null || type.getCode() == null) return "RES";
+    return switch (type.getCode().toUpperCase()) {
+      case TYPE_LABOR -> "LAB";
+      case TYPE_EQUIPMENT -> "EQ";
+      case TYPE_MATERIAL -> "MAT";
+      default -> type.getCode().toUpperCase();
     };
-  }
-
-  /**
-   * Resolve the def from the request: explicit id wins, otherwise look up the seeded system
-   * default for the supplied base-category enum (so legacy callers still work).
-   */
-  private ResourceTypeDef resolveTypeDef(UUID defId, ResourceType baseCategory) {
-    if (defId != null) {
-      return resourceTypeDefRepository.findById(defId)
-          .orElseThrow(() -> new ResourceNotFoundException("ResourceTypeDef", defId));
-    }
-    if (baseCategory == null) {
-      throw new BusinessRuleException("RESOURCE_TYPE_REQUIRED",
-          "Either resourceTypeDefId or resourceType must be provided");
-    }
-    return resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(baseCategory)
-        .orElseThrow(() -> new BusinessRuleException("RESOURCE_TYPE_NOT_SEEDED",
-            "No system-default Resource Type for base category " + baseCategory));
-  }
-
-  public void deleteResource(UUID id) {
-    log.info("Deleting resource: id={}", id);
-    if (!resourceRepository.existsById(id)) {
-      throw new ResourceNotFoundException("Resource", id);
-    }
-    resourceRepository.deleteById(id);
-    log.info("Resource deleted: id={}", id);
-
-    // Audit log deletion
-    auditService.logDelete("Resource", id);
-  }
-
-  public void deleteAllResources() {
-    log.info("Deleting all resources");
-    long count = resourceRepository.count();
-    resourceRepository.deleteAllInBatch();
-    log.info("Deleted {} resources", count);
   }
 }

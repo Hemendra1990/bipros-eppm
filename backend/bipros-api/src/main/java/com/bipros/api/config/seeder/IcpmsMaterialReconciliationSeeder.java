@@ -4,8 +4,6 @@ import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.domain.model.MaterialReconciliation;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
 import com.bipros.resource.domain.repository.MaterialReconciliationRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,7 +52,7 @@ public class IcpmsMaterialReconciliationSeeder implements CommandLineRunner {
             return;
         }
 
-        List<Resource> materials = resourceRepository.findByResourceType(ResourceType.MATERIAL);
+        List<Resource> materials = resourceRepository.findByResourceType_Code("MATERIAL");
         if (materials.isEmpty()) {
             log.warn("[IC-PMS Material Reconciliations] no MATERIAL resources found — run Phase D first");
             return;
@@ -64,7 +62,11 @@ public class IcpmsMaterialReconciliationSeeder implements CommandLineRunner {
         int mIdx = 0;
         for (Resource mat : materials) {
             // Base monthly flow sized off the pool — ~20% of pool moves per month.
-            double poolMax = mat.getPoolMaxAvailable() != null ? mat.getPoolMaxAvailable() : 1000.0;
+            // Pool sizing now uses availability (% allocation) as a proxy since the
+            // legacy pool_max_available column is gone; fall back to a sensible default.
+            double poolMax = mat.getAvailability() != null
+                ? Math.max(1.0, mat.getAvailability().doubleValue() * 10.0)
+                : 1000.0;
             double monthlyReceived = Math.max(10.0, poolMax * 0.25);
             double monthlyConsumed = Math.max(8.0,  poolMax * 0.22);
             double opening = Math.max(5.0, poolMax * 0.15);
@@ -110,8 +112,8 @@ public class IcpmsMaterialReconciliationSeeder implements CommandLineRunner {
     }
 
     private static String resolveUnitLabel(Resource mat) {
-        ResourceUnit unit = mat.getUnit();
-        return unit != null ? unit.name() : "MT";
+        String unit = mat.getUnit();
+        return unit != null && !unit.isBlank() ? unit : "MT";
     }
 
     private static double round(double v) {

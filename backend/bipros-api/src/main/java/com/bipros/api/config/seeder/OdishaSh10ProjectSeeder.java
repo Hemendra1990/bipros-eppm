@@ -37,24 +37,25 @@ import com.bipros.project.domain.repository.NextDayPlanRepository;
 import com.bipros.project.domain.repository.ObsNodeRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
-import com.bipros.resource.domain.model.CostCategory;
+import com.bipros.api.config.seeder.util.SeederResourceFactory;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceCategory;
+import com.bipros.resource.domain.model.ResourceEquipmentDetails;
+import com.bipros.resource.domain.model.ResourceMaterialDetails;
 import com.bipros.resource.domain.model.ResourceRate;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
-import com.bipros.resource.domain.model.Role;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
 import com.bipros.resource.application.service.WorkActivityService;
 import com.bipros.resource.domain.model.WorkActivity;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
+import com.bipros.resource.domain.repository.ResourceEquipmentDetailsRepository;
+import com.bipros.resource.domain.repository.ResourceMaterialDetailsRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
-import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -120,7 +121,9 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
     private final ResourceRepository resourceRepository;
     private final ResourceRateRepository resourceRateRepository;
     private final ResourceRoleRepository resourceRoleRepository;
-    private final ResourceTypeDefRepository resourceTypeDefRepository;
+    private final ResourceEquipmentDetailsRepository resourceEquipmentDetailsRepository;
+    private final ResourceMaterialDetailsRepository resourceMaterialDetailsRepository;
+    private final SeederResourceFactory resourceFactory;
     private final MaterialConsumptionLogRepository materialConsumptionLogRepository;
     private final ActivityRepository activityRepository;
     private final ActivityRelationshipRepository activityRelationshipRepository;
@@ -495,26 +498,34 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
         int count = 0;
         for (ResourceDef r : RESOURCES) {
             String code = "OD-" + codePrefix(r.category()) + "-" + slug(r.description());
-            ResourceType rt = resourceTypeFor(r.category());
-            CostCategory cc = costCategoryFor(r.category());
-            double hourly = ratePerHourFrom(r.budgetedRate(), r.unit());
+            String typeCode = resourceTypeCodeFor(r.category());
+            ResourceType rt = resourceFactory.requireType(typeCode);
+            ResourceRole role = resourceFactory.ensureRole(
+                resourceRoleCodeFor(r.category(), r.description()), typeCode);
+            BigDecimal costPerUnit = BigDecimal.valueOf(r.budgetedRate());
             Resource res = Resource.builder()
                     .code(code)
                     .name(r.description())
                     .resourceType(rt)
-                    .resourceTypeDef(resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(rt).orElse(null))
-                    .resourceCategory(resourceCategoryFor(r.category(), r.description()))
-                    .costCategory(cc)
-                    .unit(resourceUnitFor(r.unit()))
+                    .role(role)
+                    .unit(resourceUnitCodeFor(r.unit()))
                     .calendarId(calendarId)
                     .status(ResourceStatus.ACTIVE)
-                    .maxUnitsPerDay(8.0)
-                    .hourlyRate(hourly)
-                    .costPerUse(0.0)
-                    .overtimeRate(hourly * 1.5)
+                    .availability(BigDecimal.valueOf(100))
+                    .costPerUnit(costPerUnit)
                     .build();
             Resource saved = resourceRepository.save(res);
             byCode.put(code, saved.getId());
+            if ("EQUIPMENT".equals(typeCode)) {
+                resourceEquipmentDetailsRepository.save(ResourceEquipmentDetails.builder()
+                    .resourceId(saved.getId())
+                    .build());
+            } else if ("MATERIAL".equals(typeCode)) {
+                resourceMaterialDetailsRepository.save(ResourceMaterialDetails.builder()
+                    .resourceId(saved.getId())
+                    .baseUnit(resourceUnitCodeFor(r.unit()))
+                    .build());
+            }
             resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", BigDecimal.valueOf(r.budgetedRate())));
             resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL", BigDecimal.valueOf(r.actualRate())));
             count++;
@@ -534,20 +545,19 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
 
     private void seedManpowerResourceRoles() {
         int count = 0;
+        ResourceType laborType = resourceFactory.requireType("LABOR");
         for (ResourceDef r : MANPOWER) {
             String code = "OD-ROLE-" + slug(r.description());
-            Role role = Role.builder()
+            if (resourceRoleRepository.findByCode(code).isPresent()) continue;
+            ResourceRole role = ResourceRole.builder()
                     .code(code)
                     .name(r.description())
                     .description("Manpower role for OWD SH-10 — " + r.description())
-                    .resourceType(ResourceType.LABOR)
-                    .resourceTypeDef(resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(ResourceType.LABOR).orElse(null))
-                    .rateUnit(r.unit())
-                    .budgetedRate(BigDecimal.valueOf(r.budgetedRate()))
-                    .actualRate(BigDecimal.valueOf(r.actualRate()))
+                    .resourceType(laborType)
+                    .productivityUnit(r.unit())
                     .defaultRate(BigDecimal.valueOf(r.budgetedRate()))
-                    .rateRemarks("OWD wage schedule 2024-25")
                     .sortOrder(0)
+                    .active(true)
                     .build();
             resourceRoleRepository.save(role);
             count++;
@@ -931,54 +941,46 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
     }
 
     // ─────────────────────────── Helpers ──────────────────────
-    private ResourceType resourceTypeFor(String category) {
+    private String resourceTypeCodeFor(String category) {
         return switch (category) {
-            case "Manpower" -> ResourceType.LABOR;
-            case "Material" -> ResourceType.MATERIAL;
-            default -> ResourceType.NONLABOR;
+            case "Manpower" -> "LABOR";
+            case "Material" -> "MATERIAL";
+            default -> "EQUIPMENT";
         };
     }
 
-    private CostCategory costCategoryFor(String category) {
-        return switch (category) {
-            case "Equipment" -> CostCategory.EQUIPMENT;
-            case "Material" -> CostCategory.MATERIAL;
-            case "Sub-Contract" -> CostCategory.SUB_CONTRACT;
-            default -> null;
-        };
-    }
-
-    private ResourceCategory resourceCategoryFor(String category, String name) {
-        if (name == null) return ResourceCategory.OTHER;
+    /** Map legacy {@code ResourceCategory} enum names to role codes (1:1 same identifiers). */
+    private String resourceRoleCodeFor(String category, String name) {
+        if (name == null) return "OTHER";
         return switch (category) {
             case "Manpower" -> name.contains("Engineer") || name.contains("Surveyor")
-                    ? ResourceCategory.SITE_ENGINEER
-                    : (name.contains("Mason") ? ResourceCategory.SKILLED_LABOUR
-                    : (name.contains("Operator") ? ResourceCategory.OPERATOR : ResourceCategory.UNSKILLED_LABOUR));
-            case "Material" -> name.contains("Bitumen") ? ResourceCategory.BITUMEN
-                    : (name.contains("Cement") ? ResourceCategory.CEMENT
+                    ? "SITE_ENGINEER"
+                    : (name.contains("Mason") ? "SKILLED_LABOUR"
+                    : (name.contains("Operator") ? "OPERATOR" : "UNSKILLED_LABOUR"));
+            case "Material" -> name.contains("Bitumen") ? "BITUMEN"
+                    : (name.contains("Cement") ? "CEMENT"
                     : (name.contains("aggregate") || name.contains("Sand") || name.contains("WMM") || name.contains("GSB")
-                    ? ResourceCategory.AGGREGATE : ResourceCategory.OTHER));
+                    ? "AGGREGATE" : "OTHER"));
             case "Equipment" -> name.contains("Excavator") || name.contains("Tipper") || name.contains("Grader")
-                    ? ResourceCategory.EARTH_MOVING
+                    ? "EARTH_MOVING"
                     : (name.contains("Paver") || name.contains("Hot Mix") || name.contains("Roller")
-                    ? ResourceCategory.PAVING_EQUIPMENT : ResourceCategory.OTHER);
-            default -> ResourceCategory.OTHER;
+                    ? "PAVING_EQUIPMENT" : "OTHER");
+            default -> "OTHER";
         };
     }
 
-    private ResourceUnit resourceUnitFor(String label) {
-        if (label == null) return ResourceUnit.PER_DAY;
+    private String resourceUnitCodeFor(String label) {
+        if (label == null) return "PER_DAY";
         return switch (label.toLowerCase()) {
-            case "cum" -> ResourceUnit.CU_M;
-            case "mt", "bag" -> ResourceUnit.MT;
-            case "rm" -> ResourceUnit.RMT;
-            case "each" -> ResourceUnit.NOS;
-            case "lump" -> ResourceUnit.NOS;
-            case "l" -> ResourceUnit.LITRE;
-            case "kg" -> ResourceUnit.KG;
-            case "sqm" -> ResourceUnit.NOS;
-            default -> ResourceUnit.PER_DAY;
+            case "cum" -> "CU_M";
+            case "mt", "bag" -> "MT";
+            case "rm" -> "RMT";
+            case "each" -> "NOS";
+            case "lump" -> "NOS";
+            case "l" -> "LITRE";
+            case "kg" -> "KG";
+            case "sqm" -> "NOS";
+            default -> "PER_DAY";
         };
     }
 

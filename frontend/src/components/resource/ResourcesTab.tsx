@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { resourceApi, type ResourceResponse, type ResourceAssignmentResponse } from "@/lib/api/resourceApi";
-import { roleApi, type RoleResponse } from "@/lib/api/roleApi";
+import { resourceRoleApi, type ResourceRole } from "@/lib/api/resourceRoleApi";
 import { resourceHistogramApi } from "@/lib/api/resourceHistogramApi";
 import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
@@ -59,9 +59,11 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     queryFn: () => resourceApi.listResources(0, 100),
   });
 
+  // Resource Roles list — used as the demand picker when planning with role-only
+  // assignments. The new backend exposes a flat list; the page filters by type.
   const { data: rolesData } = useQuery({
-    queryKey: ["roles", "LABOR"],
-    queryFn: () => roleApi.list("LABOR"),
+    queryKey: ["resource-roles"],
+    queryFn: () => resourceRoleApi.list(),
   });
 
   const { data: activitiesData } = useQuery({
@@ -122,11 +124,11 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
       : ((raw as { content?: ResourceResponse[] } | undefined)?.content ?? []);
   }, [resourcesData]);
 
-  const roles = useMemo<RoleResponse[]>(() => {
+  const roles = useMemo<ResourceRole[]>(() => {
     const raw = rolesData?.data as unknown;
     return Array.isArray(raw)
-      ? (raw as RoleResponse[])
-      : ((raw as { content?: RoleResponse[] } | undefined)?.content ?? []);
+      ? (raw as ResourceRole[])
+      : ((raw as { content?: ResourceRole[] } | undefined)?.content ?? []);
   }, [rolesData]);
 
   const activities = useMemo<ActivityResponse[]>(() => {
@@ -232,7 +234,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
     () =>
       resources.map((r) => ({
         id: r.id,
-        resourceType: r.resourceType,
+        resourceTypeCode: r.resourceTypeCode,
       })),
     [resources]
   );

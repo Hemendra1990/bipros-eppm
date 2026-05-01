@@ -1,0 +1,155 @@
+databaseChangeLog:
+  # Promotes the previously-planned single resource_role_id FK on resources into a proper
+  # many-to-many bridge (P6 model — one person, many roles) and adds a description column.
+  # This migration was rewritten in-flight before being deployed to any environment, so it owns
+  # the full transition from "no role link" to the bridge-table model in one shot.
+  #
+  # Dev users on ddl-auto: update should run the equivalent psql commands manually:
+  #   ALTER TABLE resource.resources DROP COLUMN IF EXISTS resource_role_id;
+  #   ALTER TABLE resource.resources ADD COLUMN IF NOT EXISTS description VARCHAR(1000);
+  #   CREATE TABLE IF NOT EXISTS resource.resource_role_assignments (...);
+
+  - changeSet:
+      id: 055-resource-role-link-drop-old-column
+      author: bipros
+      preConditions:
+        - onFail: MARK_RAN
+        - columnExists:
+            schemaName: resource
+            tableName: resources
+            columnName: resource_role_id
+      changes:
+        - dropForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resources
+            constraintName: fk_resource_role
+        - dropIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_role_id
+        - dropColumn:
+            schemaName: resource
+            tableName: resources
+            columnName: resource_role_id
+
+  - changeSet:
+      id: 055-resource-add-description
+      author: bipros
+      changes:
+        - addColumn:
+            tableName: resources
+            schemaName: resource
+            columns:
+              - column:
+                  name: description
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 055-resource-role-assignments-table
+      author: bipros
+      changes:
+        - createTable:
+            tableName: resource_role_assignments
+            schemaName: resource
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: resource_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: role_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_primary
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sort_order
+                  type: INT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: version
+                  type: BIGINT
+
+        - addUniqueConstraint:
+            constraintName: uk_resource_role_assignment_resource_role
+            tableName: resource_role_assignments
+            schemaName: resource
+            columnNames: resource_id, role_id
+
+        - createIndex:
+            tableName: resource_role_assignments
+            schemaName: resource
+            indexName: idx_resource_role_assignment_resource
+            columns:
+              - column:
+                  name: resource_id
+
+        - createIndex:
+            tableName: resource_role_assignments
+            schemaName: resource
+            indexName: idx_resource_role_assignment_role
+            columns:
+              - column:
+                  name: role_id
+
+        # Postgres partial unique index — at most one primary role per resource.
+        - createIndex:
+            tableName: resource_role_assignments
+            schemaName: resource
+            indexName: uk_resource_role_assignment_one_primary
+            unique: true
+            columns:
+              - column:
+                  name: resource_id
+            where: is_primary = true
+
+        - addForeignKeyConstraint:
+            constraintName: fk_resource_role_assignment_resource
+            baseTableSchemaName: resource
+            baseTableName: resource_role_assignments
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            constraintName: fk_resource_role_assignment_role
+            baseTableSchemaName: resource
+            baseTableName: resource_role_assignments
+            baseColumnNames: role_id
+            referencedTableSchemaName: resource
+            referencedTableName: resource_roles
+            referencedColumnNames: id

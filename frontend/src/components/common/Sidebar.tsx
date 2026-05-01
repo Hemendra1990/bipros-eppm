@@ -48,8 +48,6 @@ const groups: NavGroup[] = [
   {
     label: "Execute",
     items: [
-      { name: "Resources", href: "/resources", icon: Users, module: "M8_RESOURCES" },
-      { name: "Labour Master", href: "/labour-master", icon: HardHat, module: "M8_RESOURCES" },
       { name: "Calendars", href: "/admin/calendars", icon: Calendar, module: "M2_SCHEDULE_EVM" },
     ],
   },
@@ -70,13 +68,22 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    label: "Resources",
+    adminOnly: true,
+    items: [
+      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
+      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
+      { name: "Resources", href: "/resources", icon: Users, adminOnly: true },
+      { name: "Labour Master", href: "/labour-master", icon: HardHat, adminOnly: true },
+    ],
+  },
+  {
     label: "Admin",
     adminOnly: true,
     items: [
       { name: "Users", href: "/admin/users", icon: UsersRound, adminOnly: true },
       { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true },
       { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true },
-      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
       { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },
       { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
       { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true },
@@ -85,7 +92,6 @@ const groups: NavGroup[] = [
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
       { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
       { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true },
-      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },
       { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
       { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true },

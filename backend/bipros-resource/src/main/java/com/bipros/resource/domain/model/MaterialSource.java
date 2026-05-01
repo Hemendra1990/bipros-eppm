@@ -75,10 +75,9 @@ public class MaterialSource extends BaseEntity {
     @Column(name = "approved_quantity", precision = 18, scale = 3)
     private BigDecimal approvedQuantity;
 
-    /** Unit of the approved quantity. Reuses {@link ResourceUnit}. */
-    @Enumerated(EnumType.STRING)
+    /** Free-text unit of the approved quantity (e.g. "MT", "CU_M"). */
     @Column(name = "approved_quantity_unit", length = 20)
-    private ResourceUnit approvedQuantityUnit;
+    private String approvedQuantityUnit;
 
     /** Environmental / revenue clearance reference number. */
     @Column(name = "approval_reference", length = 200)

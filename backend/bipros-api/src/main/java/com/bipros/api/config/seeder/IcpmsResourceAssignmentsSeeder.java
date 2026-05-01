@@ -135,11 +135,11 @@ public class IcpmsResourceAssignmentsSeeder implements CommandLineRunner {
                 .multiply(BigDecimal.valueOf(plannedUnits))
                 .setScale(2, RoundingMode.HALF_UP);
         }
-        // Fallback: use the resource's hourlyRate field.
+        // Fallback: use the resource's costPerUnit field (replaces the deleted hourlyRate field).
         return resourceRepository.findById(resourceId)
-            .map(Resource::getHourlyRate)
-            .filter(h -> h != null && h > 0)
-            .map(h -> BigDecimal.valueOf(h * plannedUnits).setScale(2, RoundingMode.HALF_UP))
+            .map(Resource::getCostPerUnit)
+            .filter(p -> p != null && p.signum() > 0)
+            .map(p -> p.multiply(BigDecimal.valueOf(plannedUnits)).setScale(2, RoundingMode.HALF_UP))
             .orElse(null);
     }
 

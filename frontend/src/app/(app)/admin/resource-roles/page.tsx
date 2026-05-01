@@ -2,61 +2,61 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import {
-  roleApi,
-  type RoleResponse,
-  type CreateRoleRequest,
-  type RoleResourceType,
-  type UserResourceRoleResponse,
-  type AssignUserToRoleRequest,
-} from "@/lib/api/roleApi";
-import { resourceTypeApi, BASE_CATEGORY_LABEL } from "@/lib/api/resourceTypeApi";
+  resourceRoleApi,
+  type ResourceRole,
+  type ResourceRoleRequest,
+} from "@/lib/api/resourceRoleApi";
+import { resourceTypeApi } from "@/lib/api/resourceTypeApi";
 import { TabTip } from "@/components/common/TabTip";
+import { Badge } from "@/components/ui/badge";
 import { getErrorMessage } from "@/lib/utils/error";
 
-type TypeFilter = "ALL" | RoleResourceType;
+type TypeFilter = "ALL" | "MANPOWER" | "EQUIPMENT" | "MATERIAL";
 
 interface RoleForm {
   code: string;
   name: string;
   description: string;
-  resourceTypeDefId: string;
-  rateUnit: string;
-  budgetedRate: string;
-  actualRate: string;
-  rateRemarks: string;
-}
-
-interface AssignForm {
-  userId: string;
-  primary: boolean;
-  assignedFrom: string;
-  assignedTo: string;
-  remarks: string;
+  resourceTypeId: string;
+  productivityUnit: string;
+  defaultRate: string;
+  sortOrder: string;
+  active: boolean;
 }
 
 const initialRoleForm = (): RoleForm => ({
   code: "",
   name: "",
   description: "",
-  resourceTypeDefId: "",
-  rateUnit: "Day",
-  budgetedRate: "",
-  actualRate: "",
-  rateRemarks: "",
+  resourceTypeId: "",
+  productivityUnit: "",
+  defaultRate: "",
+  sortOrder: "",
+  active: true,
 });
 
-const initialAssignForm = (): AssignForm => ({
-  userId: "",
-  primary: false,
-  assignedFrom: new Date().toISOString().split("T")[0],
-  assignedTo: "",
-  remarks: "",
+const formFromRole = (r: ResourceRole): RoleForm => ({
+  code: r.code,
+  name: r.name,
+  description: r.description ?? "",
+  resourceTypeId: r.resourceTypeId,
+  productivityUnit: r.productivityUnit ?? "",
+  defaultRate: r.defaultRate == null ? "" : String(r.defaultRate),
+  sortOrder: r.sortOrder == null ? "" : String(r.sortOrder),
+  active: r.active,
 });
 
 const toNumberOrNull = (value: string): number | null => {
-  if (value === "") return null;
+  if (value.trim() === "") return null;
   const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toIntOrNull = (value: string): number | null => {
+  if (value.trim() === "") return null;
+  const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
@@ -65,33 +65,44 @@ const formatCurrency = (value: number | null | undefined): string => {
   return value.toLocaleString("en-IN");
 };
 
-const formatPercent = (value: number | null | undefined): string => {
-  if (value == null) return "—";
-  return `${(value * 100).toFixed(2)}%`;
-};
-
-function UsersCountCell({ roleId }: { roleId: string }) {
-  const { data } = useQuery({
-    queryKey: ["role-users", roleId],
-    queryFn: () => roleApi.listUsers(roleId),
-  });
-  const users = data?.data ?? [];
-  return <>{users.length}</>;
+function typeBadgeVariant(typeCode: string): import("@/components/ui/badge").BadgeVariant {
+  switch (typeCode) {
+    case "MANPOWER":
+    case "LABOR":
+      return "gold";
+    case "MATERIAL":
+      return "info";
+    case "EQUIPMENT":
+    case "NONLABOR":
+      return "success";
+    default:
+      return "neutral";
+  }
 }
 
 export default function ResourceRolesPage() {
   const queryClient = useQueryClient();
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const [showRoleForm, setShowRoleForm] = useState(false);
-  const [roleForm, setRoleForm] = useState<RoleForm>(initialRoleForm());
-
-  const [showAssignForm, setShowAssignForm] = useState(false);
-  const [assignForm, setAssignForm] = useState<AssignForm>(initialAssignForm());
-
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<RoleForm>(initialRoleForm());
   const [error, setError] = useState<string | null>(null);
+
+  const { data: typesData } = useQuery({
+    queryKey: ["resource-types"],
+    queryFn: () => resourceTypeApi.list(),
+  });
+  const types = useMemo(() => typesData?.data ?? [], [typesData]);
+
+  // Build a quick lookup of code → id for the tab filter
+  const typeIdByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of types) m.set(t.code, t.id);
+    return m;
+  }, [types]);
 
   const {
     data: rolesData,
@@ -101,572 +112,433 @@ export default function ResourceRolesPage() {
     refetch: refetchRoles,
     isFetching: rolesFetching,
   } = useQuery({
-    queryKey: ["roles", typeFilter],
-    queryFn: () => roleApi.list(typeFilter === "ALL" ? undefined : typeFilter),
+    queryKey: ["resource-roles"],
+    queryFn: () => resourceRoleApi.list(),
   });
 
-  const roles: RoleResponse[] = rolesData?.data ?? [];
+  const roles = useMemo(() => rolesData?.data ?? [], [rolesData]);
 
-  const { data: typeDefsData } = useQuery({
-    queryKey: ["resource-types", "active"],
-    queryFn: () => resourceTypeApi.list({ active: true }),
-  });
-  const typeDefs = useMemo(() => typeDefsData?.data ?? [], [typeDefsData]);
+  const filteredRoles = useMemo(() => {
+    let list = roles;
+    if (typeFilter !== "ALL") {
+      const targetId = typeIdByCode.get(typeFilter);
+      list = list.filter((r) =>
+        targetId ? r.resourceTypeId === targetId : r.resourceTypeCode === typeFilter
+      );
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.code.toLowerCase().includes(q) ||
+          r.name.toLowerCase().includes(q) ||
+          (r.resourceTypeName ?? "").toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [roles, typeFilter, typeIdByCode, searchQuery]);
 
-  // Derived default — first time the form opens with no selection, fall back to the seeded
-  // Manpower def (or the first available). Computed at render time so we don't need a setState
-  // effect.
-  const defaultTypeDefId = useMemo(() => {
-    if (typeDefs.length === 0) return "";
-    return (typeDefs.find((d) => d.code === "MANPOWER") ?? typeDefs[0]).id;
-  }, [typeDefs]);
-  const effectiveTypeDefId = roleForm.resourceTypeDefId || defaultTypeDefId;
-  const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
+  const defaultTypeId = useMemo(() => {
+    if (types.length === 0) return "";
+    return (types.find((t) => t.code === "MANPOWER") ?? types[0]).id;
+  }, [types]);
 
-  const {
-    data: usersData,
-    isLoading: usersLoading,
-    isError: usersError,
-    error: usersQueryError,
-  } = useQuery({
-    queryKey: ["role-users", selectedRoleId],
-    queryFn: () => roleApi.listUsers(selectedRoleId!),
-    enabled: !!selectedRoleId,
-  });
+  const openCreate = () => {
+    setEditingId(null);
+    const init = initialRoleForm();
+    init.resourceTypeId = defaultTypeId;
+    setForm(init);
+    setError(null);
+    setShowForm(true);
+  };
 
-  const users: UserResourceRoleResponse[] = usersData?.data ?? [];
+  const openEdit = (role: ResourceRole) => {
+    setEditingId(role.id);
+    setForm(formFromRole(role));
+    setError(null);
+    setShowForm(true);
+  };
 
-  const handleCreateRole = async (e: React.FormEvent) => {
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(initialRoleForm());
+    setError(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!form.resourceTypeId) {
+      setError("Pick a Resource Type");
+      return;
+    }
     try {
-      const payload: CreateRoleRequest = {
-        code: roleForm.code.trim(),
-        name: roleForm.name.trim(),
-        description: roleForm.description.trim() || null,
-        resourceTypeDefId: effectiveTypeDefId || undefined,
-        rateUnit: roleForm.rateUnit.trim() || null,
-        budgetedRate: toNumberOrNull(roleForm.budgetedRate),
-        actualRate: toNumberOrNull(roleForm.actualRate),
-        rateRemarks: roleForm.rateRemarks.trim() || null,
+      const payload: ResourceRoleRequest = {
+        code: form.code.trim(),
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        resourceTypeId: form.resourceTypeId,
+        productivityUnit: form.productivityUnit.trim() || null,
+        defaultRate: toNumberOrNull(form.defaultRate),
+        sortOrder: toIntOrNull(form.sortOrder),
+        active: form.active,
       };
-      await roleApi.create(payload);
-      setRoleForm(initialRoleForm());
-      setShowRoleForm(false);
-      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      if (editingId) {
+        await resourceRoleApi.update(editingId, payload);
+      } else {
+        await resourceRoleApi.create(payload);
+      }
+      closeForm();
+      queryClient.invalidateQueries({ queryKey: ["resource-roles"] });
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to create role"));
+      setError(getErrorMessage(err, "Failed to save role"));
     }
   };
 
-  const handleDeleteRole = async (id: string) => {
-    if (!window.confirm("Delete this role? Users assigned will lose their role mapping.")) return;
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this role? Resources assigned to it must be reassigned first.")) return;
     try {
-      await roleApi.delete(id);
-      if (selectedRoleId === id) setSelectedRoleId(null);
-      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      await resourceRoleApi.delete(id);
+      if (editingId === id) closeForm();
+      queryClient.invalidateQueries({ queryKey: ["resource-roles"] });
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to delete role"));
     }
   };
 
-  const handleAssignUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedRoleId) return;
-    setError(null);
-    try {
-      const payload: AssignUserToRoleRequest = {
-        userId: assignForm.userId.trim(),
-        primary: assignForm.primary,
-        assignedFrom: assignForm.assignedFrom || null,
-        assignedTo: assignForm.assignedTo || null,
-        remarks: assignForm.remarks.trim() || null,
-      };
-      await roleApi.assignUser(selectedRoleId, payload);
-      setAssignForm(initialAssignForm());
-      setShowAssignForm(false);
-      queryClient.invalidateQueries({ queryKey: ["role-users", selectedRoleId] });
-      queryClient.invalidateQueries({ queryKey: ["role-users"] });
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to assign user"));
-    }
-  };
-
-  const handleUnassign = async (assignmentId: string) => {
-    if (!selectedRoleId) return;
-    if (!window.confirm("Unassign this user from the role?")) return;
-    try {
-      await roleApi.unassignUser(selectedRoleId, assignmentId);
-      queryClient.invalidateQueries({ queryKey: ["role-users", selectedRoleId] });
-      queryClient.invalidateQueries({ queryKey: ["role-users"] });
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to unassign user"));
-    }
-  };
+  const tabs: { key: TypeFilter; label: string }[] = [
+    { key: "ALL", label: "All" },
+    { key: "MANPOWER", label: "Manpower" },
+    { key: "EQUIPMENT", label: "Equipment" },
+    { key: "MATERIAL", label: "Material" },
+  ];
 
   return (
-    <div className="p-6">
+    <div>
       <TabTip
         title="Resource Roles"
-        description="Manpower roles with budgeted & actual day-rates. Each role can have many users assigned."
+        description="Roles within each Resource Type. Used as the unit of demand on activities (e.g. Carpenter, Excavator-Op, Cement)."
       />
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-bold text-text-primary">Resource Roles</h1>
-        <div className="ml-auto flex items-center gap-3">
-          <label className="text-sm text-text-secondary">Type</label>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+      {/* Page header */}
+      <div className="mb-8 flex items-start justify-between gap-6">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-1.5">
+            {roles.length} role{roles.length !== 1 ? "s" : ""}
+          </div>
+          <h1
+            className="font-display text-[38px] font-semibold leading-[1.08] tracking-tight text-charcoal"
+            style={{ fontVariationSettings: "'opsz' 144" }}
           >
-            <option value="ALL">All</option>
-            <option value="LABOR">Manpower</option>
-            <option value="MATERIAL">Material</option>
-            <option value="NONLABOR">Machine</option>
-          </select>
+            Resource Roles
+          </h1>
+          <p className="mt-2 max-w-[560px] text-sm text-slate leading-relaxed">
+            Define manpower, equipment and material roles. Set default rate and productivity unit
+            once per role; resources inherit them.
+          </p>
+        </div>
+        <button
+          onClick={() => (showForm ? closeForm() : openCreate())}
+          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-gold px-4 text-sm font-semibold text-paper transition-all duration-200 hover:bg-gold-deep hover:shadow-[0_4px_14px_rgba(212,175,55,0.3)] hover:-translate-y-px"
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          {showForm ? "Cancel" : "Add Role"}
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTypeFilter(t.key)}
+            className={`rounded-[10px] px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              typeFilter === t.key
+                ? "bg-gold text-paper shadow-[0_4px_14px_rgba(212,175,55,0.3)]"
+                : "border border-hairline bg-paper text-charcoal hover:bg-ivory"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+        <div className="ml-auto flex h-10 max-w-[340px] flex-1 items-center gap-2 rounded-[10px] border border-hairline bg-paper px-3">
+          <Search size={15} className="text-ash" strokeWidth={1.5} />
+          <input
+            type="text"
+            placeholder="Search by code or name…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 border-none bg-transparent text-sm text-charcoal placeholder:text-ash outline-none"
+          />
         </div>
       </div>
 
-      {error && <div className="text-danger mb-4">{error}</div>}
-
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left column — roles table */}
-        <div className="lg:w-2/3">
-          <button
-            onClick={() => {
-              setShowRoleForm(!showRoleForm);
-              setError(null);
-            }}
-            className="mb-4 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
-          >
-            {showRoleForm ? "Cancel" : "Add Role"}
-          </button>
-
-          {showRoleForm && (
-            <form
-              onSubmit={handleCreateRole}
-              className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Code
-                  </label>
-                  <input
-                    type="text"
-                    value={roleForm.code}
-                    onChange={(e) => setRoleForm({ ...roleForm, code: e.target.value })}
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={roleForm.name}
-                    onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    value={roleForm.description}
-                    onChange={(e) =>
-                      setRoleForm({ ...roleForm, description: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Resource Type
-                  </label>
-                  <select
-                    value={effectiveTypeDefId}
-                    onChange={(e) =>
-                      setRoleForm({ ...roleForm, resourceTypeDefId: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                    required
-                  >
-                    {typeDefs.length === 0 && <option value="">Loading…</option>}
-                    {typeDefs.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name} ({BASE_CATEGORY_LABEL[d.baseCategory]})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Rate Unit
-                  </label>
-                  <input
-                    type="text"
-                    value={roleForm.rateUnit}
-                    onChange={(e) =>
-                      setRoleForm({ ...roleForm, rateUnit: e.target.value })
-                    }
-                    placeholder="Day / Hour"
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Budgeted Rate
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={roleForm.budgetedRate}
-                    onChange={(e) =>
-                      setRoleForm({ ...roleForm, budgetedRate: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Actual Rate
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={roleForm.actualRate}
-                    onChange={(e) =>
-                      setRoleForm({ ...roleForm, actualRate: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Rate Remarks
-                  </label>
-                  <input
-                    type="text"
-                    value={roleForm.rateRemarks}
-                    onChange={(e) =>
-                      setRoleForm({ ...roleForm, rateRemarks: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600"
-                >
-                  Save Role
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowRoleForm(false)}
-                  className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded-lg hover:bg-border"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-
-          {rolesError && (() => {
-            const msg = getErrorMessage(rolesQueryError, "Failed to load roles");
-            const isNetwork = msg === "Network Error";
-            return (
-              <div className="mb-4 rounded-md bg-danger/10 border border-danger/30 p-3 text-sm">
-                <div className="text-danger font-medium">
-                  {isNetwork ? "Couldn't reach the API" : "Failed to load roles"}
-                </div>
-                <div className="text-text-secondary mt-1">
-                  {isNetwork
-                    ? "The browser couldn't reach the backend. The server may have been restarted while this tab was open. Click Retry, or refresh the page."
-                    : msg}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => refetchRoles()}
-                  disabled={rolesFetching}
-                  className="mt-2 px-3 py-1 text-xs font-medium bg-accent text-text-primary rounded-md hover:bg-accent-hover disabled:opacity-50"
-                >
-                  {rolesFetching ? "Retrying…" : "Retry"}
-                </button>
-              </div>
-            );
-          })()}
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-border">
-              <thead>
-                <tr className="bg-surface/80">
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Code</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Name</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Type</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Rate Unit</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Rate</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Rate</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Variance</th>
-                  <th className="border border-border px-4 py-2 text-right text-text-secondary">Users</th>
-                  <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rolesLoading && (
-                  <tr>
-                    <td colSpan={9} className="border border-border px-4 py-6 text-center text-text-muted">
-                      Loading roles…
-                    </td>
-                  </tr>
-                )}
-                {!rolesLoading && roles.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="border border-border px-4 py-6 text-center text-text-muted">
-                      No roles.
-                    </td>
-                  </tr>
-                )}
-                {roles.map((role) => {
-                  const isSelected = role.id === selectedRoleId;
-                  return (
-                    <tr
-                      key={role.id}
-                      onClick={() => setSelectedRoleId(role.id)}
-                      className={`cursor-pointer text-text-primary ${
-                        isSelected
-                          ? "bg-accent/10 ring-1 ring-accent/30"
-                          : "hover:bg-surface-hover/30"
-                      }`}
-                    >
-                      <td className="border border-border px-4 py-2">{role.code}</td>
-                      <td className="border border-border px-4 py-2">{role.name}</td>
-                      <td className="border border-border px-4 py-2">
-                        {role.resourceTypeName ?? BASE_CATEGORY_LABEL[role.resourceType] ?? role.resourceType}
-                      </td>
-                      <td className="border border-border px-4 py-2">{role.rateUnit ?? "—"}</td>
-                      <td className="border border-border px-4 py-2 text-right">
-                        {formatCurrency(role.budgetedRate)}
-                      </td>
-                      <td className="border border-border px-4 py-2 text-right">
-                        {formatCurrency(role.actualRate)}
-                      </td>
-                      <td className="border border-border px-4 py-2 text-right">
-                        {role.rateVariancePercent != null
-                          ? formatPercent(role.rateVariancePercent)
-                          : formatCurrency(role.rateVariance)}
-                      </td>
-                      <td className="border border-border px-4 py-2 text-right">
-                        {isSelected ? <UsersCountCell roleId={role.id} /> : "—"}
-                      </td>
-                      <td className="border border-border px-4 py-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteRole(role.id);
-                          }}
-                          className="text-danger hover:underline text-sm"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+      {error && (
+        <div className="mb-4 rounded-xl border border-burgundy/30 bg-burgundy/10 p-4 text-sm text-burgundy">
+          {error}
         </div>
+      )}
 
-        {/* Right column — users for selected role */}
-        <div className="lg:w-1/3">
-          <div className="bg-surface/50 p-4 rounded-lg border border-border shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-text-primary">
-                {selectedRole ? selectedRole.name : "Users"}
-              </h2>
-              {selectedRole && (
-                <button
-                  onClick={() => {
-                    setShowAssignForm(!showAssignForm);
-                    setError(null);
-                  }}
-                  className="px-3 py-1 text-sm bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
-                >
-                  {showAssignForm ? "Cancel" : "Assign User"}
-                </button>
-              )}
+      {showForm && (
+        <form
+          onSubmit={handleSubmit}
+          className="mb-6 rounded-xl border border-hairline bg-paper p-5 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]"
+        >
+          <h2 className="text-lg font-semibold text-charcoal mb-4">
+            {editingId ? "Edit Role" : "New Role"}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Code *
+              </label>
+              <input
+                type="text"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+                required
+              />
             </div>
-
-            {!selectedRole && (
-              <p className="text-sm text-text-muted">
-                Select a role from the table to view its users.
-              </p>
-            )}
-
-            {selectedRole && showAssignForm && (
-              <form
-                onSubmit={handleAssignUser}
-                className="mb-4 space-y-3 bg-surface-hover/40 p-3 rounded-lg border border-border"
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Name *
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+                required
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Description
+              </label>
+              <input
+                type="text"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Resource Type *
+              </label>
+              <select
+                value={form.resourceTypeId}
+                onChange={(e) => setForm({ ...form, resourceTypeId: e.target.value })}
+                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+                required
               >
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    User ID (UUID)
-                  </label>
-                  <input
-                    type="text"
-                    value={assignForm.userId}
-                    onChange={(e) =>
-                      setAssignForm({ ...assignForm, userId: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                    required
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="primary"
-                    checked={assignForm.primary}
-                    onChange={(e) =>
-                      setAssignForm({ ...assignForm, primary: e.target.checked })
-                    }
-                    className="rounded border-border"
-                  />
-                  <label htmlFor="primary" className="text-sm text-text-secondary">
-                    Primary role for this user
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Assigned From
-                  </label>
-                  <input
-                    type="date"
-                    value={assignForm.assignedFrom}
-                    onChange={(e) =>
-                      setAssignForm({ ...assignForm, assignedFrom: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Assigned To
-                  </label>
-                  <input
-                    type="date"
-                    value={assignForm.assignedTo}
-                    onChange={(e) =>
-                      setAssignForm({ ...assignForm, assignedTo: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-text-secondary">
-                    Remarks
-                  </label>
-                  <input
-                    type="text"
-                    value={assignForm.remarks}
-                    onChange={(e) =>
-                      setAssignForm({ ...assignForm, remarks: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="px-3 py-1 text-sm bg-green-600 text-text-primary rounded-lg hover:bg-green-600"
-                  >
-                    Assign
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAssignForm(false)}
-                    className="px-3 py-1 text-sm bg-surface-active/50 text-text-secondary rounded-lg hover:bg-border"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
+                <option value="">— select —</option>
+                {types.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Productivity Unit
+              </label>
+              <input
+                type="text"
+                value={form.productivityUnit}
+                onChange={(e) => setForm({ ...form, productivityUnit: e.target.value })}
+                placeholder="Hours/Day, Sqm/Day, Bags…"
+                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Default Rate
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.defaultRate}
+                onChange={(e) => setForm({ ...form, defaultRate: e.target.value })}
+                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Sort Order
+              </label>
+              <input
+                type="number"
+                value={form.sortOrder}
+                onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
+                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+              />
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                />
+                Active
+              </label>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              type="submit"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-gold px-4 text-sm font-semibold text-paper transition-all duration-200 hover:bg-gold-deep hover:shadow-[0_4px_14px_rgba(212,175,55,0.3)]"
+            >
+              {editingId ? "Save Changes" : "Create"}
+            </button>
+            <button
+              type="button"
+              onClick={closeForm}
+              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-hairline bg-paper px-4 text-sm font-semibold text-slate hover:border-gold hover:text-gold-deep"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
-            {selectedRole && usersLoading && (
-              <p className="text-sm text-text-muted">Loading users…</p>
-            )}
-            {selectedRole && usersError && (
-              <p className="text-sm text-danger">
-                {getErrorMessage(usersQueryError, "Failed to load users")}
-              </p>
-            )}
-            {selectedRole && !usersLoading && users.length === 0 && (
-              <p className="text-sm text-text-muted">No users assigned.</p>
-            )}
+      {rolesError && (() => {
+        const msg = getErrorMessage(rolesQueryError, "Failed to load roles");
+        const isNetwork = msg === "Network Error";
+        return (
+          <div className="mb-4 rounded-xl border border-burgundy/30 bg-burgundy/10 p-4 text-sm">
+            <div className="font-medium text-burgundy">
+              {isNetwork ? "Couldn't reach the API" : "Failed to load roles"}
+            </div>
+            <div className="text-slate mt-1">
+              {isNetwork
+                ? "The browser couldn't reach the backend. Click Retry, or refresh the page."
+                : msg}
+            </div>
+            <button
+              type="button"
+              onClick={() => refetchRoles()}
+              disabled={rolesFetching}
+              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-[10px] bg-gold px-3 text-xs font-semibold text-paper hover:bg-gold-deep disabled:opacity-50"
+            >
+              {rolesFetching ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        );
+      })()}
 
-            {selectedRole && users.length > 0 && (
-              <ul className="space-y-3">
-                {users.map((u) => (
-                  <li
-                    key={u.id}
-                    className="p-3 rounded-lg border border-border bg-surface-hover/30"
+      {rolesLoading && (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-14 animate-pulse rounded-lg bg-parchment" />
+          ))}
+        </div>
+      )}
+
+      {!rolesLoading && filteredRoles.length === 0 && (
+        <div className="rounded-xl border border-dashed border-hairline bg-paper py-12 text-center">
+          <p className="text-sm text-slate">
+            {roles.length === 0
+              ? "No roles yet. Add your first role to get started."
+              : "No roles match your filters."}
+          </p>
+        </div>
+      )}
+
+      {!rolesLoading && filteredRoles.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
+          <table className="w-full border-collapse text-sm">
+            <thead className="border-b border-hairline bg-ivory">
+              <tr>
+                {[
+                  "Code",
+                  "Name",
+                  "Type",
+                  "Productivity Unit",
+                  "Default Rate",
+                  "Sort",
+                  "Active",
+                  "",
+                ].map((h, idx) => (
+                  <th
+                    key={`${h}-${idx}`}
+                    className={`px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep ${h === "" ? "text-right" : ""}`}
                   >
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-mono text-text-primary break-all">
-                        {u.userId}
-                      </div>
-                      {u.primary && (
-                        <span className="inline-flex items-center rounded-md bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent ring-1 ring-inset ring-accent/20">
-                          Primary
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-text-muted mt-1">
-                      {(u.assignedFrom ?? "—")} → {(u.assignedTo ?? "—")}
-                    </div>
-                    {u.remarks && (
-                      <div className="text-xs text-text-secondary mt-1">{u.remarks}</div>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRoles.map((role) => (
+                <tr key={role.id} className="border-b border-hairline last:border-b-0 hover:bg-ivory">
+                  <td className="px-4 py-3.5">
+                    <span className="font-mono text-[12px] font-medium text-gold-deep">
+                      {role.code}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className="font-semibold text-charcoal">{role.name}</span>
+                    {role.description && (
+                      <div className="text-xs text-slate mt-0.5">{role.description}</div>
                     )}
-                    <div className="flex items-center gap-3 mt-2">
-                      {!u.primary && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              await roleApi.setPrimaryRole(selectedRole.id, u.userId);
-                              queryClient.invalidateQueries({ queryKey: ["role-users", selectedRoleId] });
-                            } catch (err: unknown) {
-                              setError(getErrorMessage(err, "Failed to set primary role"));
-                            }
-                          }}
-                          className="text-xs text-accent hover:underline"
-                        >
-                          Set Primary
-                        </button>
-                      )}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Badge variant={typeBadgeVariant(role.resourceTypeCode)} withDot>
+                      {role.resourceTypeName ?? role.resourceTypeCode}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-slate">{role.productivityUnit ?? "—"}</td>
+                  <td className="px-4 py-3.5 text-right font-mono text-charcoal">
+                    {formatCurrency(role.defaultRate)}
+                  </td>
+                  <td className="px-4 py-3.5 text-right text-slate">{role.sortOrder ?? "—"}</td>
+                  <td className="px-4 py-3.5">
+                    {role.active ? (
+                      <span className="text-emerald font-medium text-xs">Active</span>
+                    ) : (
+                      <span className="text-slate text-xs">Inactive</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center justify-end gap-1">
                       <button
-                        onClick={() => handleUnassign(u.id)}
-                        className="text-danger hover:underline text-xs"
+                        onClick={() => openEdit(role)}
+                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+                        aria-label="Edit"
+                        title="Edit"
                       >
-                        Unassign
+                        <Pencil size={14} strokeWidth={1.5} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(role.id)}
+                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
+                        aria-label="Delete"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} strokeWidth={1.5} />
                       </button>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      )}
+
+      {!rolesLoading && filteredRoles.length > 0 && (
+        <div className="pt-3 text-center text-xs text-slate">
+          Showing{" "}
+          <span className="font-semibold text-charcoal">
+            {filteredRoles.length} of {roles.length}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -263,26 +263,16 @@ export interface ActivityResponse {
 }
 
 // === Resources ===
-
-export interface ResourceResponse {
-  id: string;
-  code: string;
-  name: string;
-  /** Base category derived from the chosen Resource Type def. */
-  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
-  /** The admin-managed Resource Type def this resource references. */
-  resourceTypeDefId?: string | null;
-  resourceTypeCode?: string | null;
-  resourceTypeName?: string | null;
-  status: string;
-  maxUnitsPerDay: number;
-  hourlyRate: number;
-  costPerUse: number;
-  overtimeRate: number;
-  calendarId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+// The canonical Resource shapes live in `src/lib/api/resourceApi.ts`. Re-exported
+// here for callers that import from `@/lib/types` for legacy reasons.
+export type {
+  ResourceResponse,
+  ResourceStatus,
+  CreateResourceRequest,
+  EquipmentDetailsDto,
+  MaterialDetailsDto,
+  ManpowerDto,
+} from "@/lib/api/resourceApi";
 
 // === Risk ===
 

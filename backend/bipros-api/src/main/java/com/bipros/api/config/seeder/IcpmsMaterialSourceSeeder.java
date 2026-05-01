@@ -6,7 +6,6 @@ import com.bipros.resource.domain.model.LabTestStatus;
 import com.bipros.resource.domain.model.MaterialSource;
 import com.bipros.resource.domain.model.MaterialSourceLabTest;
 import com.bipros.resource.domain.model.MaterialSourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
 import com.bipros.resource.domain.repository.MaterialSourceLabTestRepository;
 import com.bipros.resource.domain.repository.MaterialSourceRepository;
 import lombok.RequiredArgsConstructor;
@@ -71,7 +70,7 @@ public class IcpmsMaterialSourceSeeder implements CommandLineRunner {
             .state("Rajasthan")
             .distanceKm(new BigDecimal(String.valueOf(distanceKm)))
             .approvedQuantity(new BigDecimal("150000"))
-            .approvedQuantityUnit(ResourceUnit.CU_M)
+            .approvedQuantityUnit("CU_M")
             .approvalReference("REV/NHAI/" + code + "/2025")
             .approvalAuthority("Revenue Dept. Ajmer")
             .cbrAveragePercent(cbr)
@@ -94,7 +93,7 @@ public class IcpmsMaterialSourceSeeder implements CommandLineRunner {
             .state("Rajasthan")
             .distanceKm(new BigDecimal(String.valueOf(distanceKm)))
             .approvedQuantity(new BigDecimal("85000"))
-            .approvedQuantityUnit(ResourceUnit.MT)
+            .approvedQuantityUnit("MT")
             .approvalReference("MINES/RJ/" + code + "/2025")
             .approvalAuthority("State Mining Dept.")
             .labTestStatus(LabTestStatus.ALL_PASS)
@@ -116,7 +115,7 @@ public class IcpmsMaterialSourceSeeder implements CommandLineRunner {
             .state("Rajasthan")
             .distanceKm(new BigDecimal(String.valueOf(distanceKm)))
             .approvedQuantity(new BigDecimal("2500"))
-            .approvedQuantityUnit(ResourceUnit.MT)
+            .approvedQuantityUnit("MT")
             .approvalReference("IOCL/Supply/2025-26/001")
             .approvalAuthority("IOCL Commercial")
             .labTestStatus(LabTestStatus.ALL_PASS)

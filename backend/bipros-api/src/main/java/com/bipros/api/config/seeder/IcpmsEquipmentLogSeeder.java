@@ -5,7 +5,6 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.domain.model.EquipmentLog;
 import com.bipros.resource.domain.model.EquipmentStatus;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.repository.EquipmentLogRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,9 +53,9 @@ public class IcpmsEquipmentLogSeeder implements CommandLineRunner {
             return;
         }
 
-        List<Resource> equipment = resourceRepository.findByResourceType(ResourceType.NONLABOR);
+        List<Resource> equipment = resourceRepository.findByResourceType_Code("EQUIPMENT");
         if (equipment.isEmpty()) {
-            log.warn("[IC-PMS Equipment Logs] no NONLABOR resources found — run Phase D first");
+            log.warn("[IC-PMS Equipment Logs] no EQUIPMENT resources found — run Phase D first");
             return;
         }
 

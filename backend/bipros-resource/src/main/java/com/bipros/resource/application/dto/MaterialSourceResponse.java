@@ -4,7 +4,6 @@ import com.bipros.resource.domain.model.LabTestStatus;
 import com.bipros.resource.domain.model.MaterialSource;
 import com.bipros.resource.domain.model.MaterialSourceLabTest;
 import com.bipros.resource.domain.model.MaterialSourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -23,7 +22,7 @@ public record MaterialSourceResponse(
     String state,
     BigDecimal distanceKm,
     BigDecimal approvedQuantity,
-    ResourceUnit approvedQuantityUnit,
+    String approvedQuantityUnit,
     String approvalReference,
     String approvalAuthority,
     BigDecimal cbrAveragePercent,

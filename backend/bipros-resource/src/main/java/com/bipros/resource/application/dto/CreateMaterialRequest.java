@@ -2,7 +2,6 @@ package com.bipros.resource.application.dto;
 
 import com.bipros.resource.domain.model.MaterialCategory;
 import com.bipros.resource.domain.model.MaterialStatus;
-import com.bipros.resource.domain.model.ResourceUnit;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -20,7 +19,7 @@ public record CreateMaterialRequest(
     @Size(max = 30) String code,
     @NotBlank @Size(max = 150) String name,
     @NotNull MaterialCategory category,
-    ResourceUnit unit,
+    @Size(max = 20) String unit,
     @Size(max = 120) String specificationGrade,
     @PositiveOrZero BigDecimal minStockLevel,
     @PositiveOrZero BigDecimal reorderQuantity,

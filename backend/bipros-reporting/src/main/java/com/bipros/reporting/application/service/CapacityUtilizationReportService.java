@@ -67,8 +67,8 @@ public class CapacityUtilizationReportService {
                 + "  wa.code, "
                 + "  wa.name, "
                 + "  wa.default_unit, "
-                + "  r.resource_type_def_id, "
-                + "  rtd.name AS resource_type_def_name, "
+                + "  r.resource_type_id, "
+                + "  rt.name AS resource_type_name, "
                 + "  r.id AS resource_id, "
                 + "  r.code AS resource_code, "
                 + "  r.name AS resource_name, "
@@ -79,7 +79,7 @@ public class CapacityUtilizationReportService {
                 + "JOIN activity.activities a ON a.id = o.activity_id "
                 + "JOIN resource.work_activities wa ON wa.id = a.work_activity_id "
                 + "JOIN resource.resources r ON r.id = o.resource_id "
-                + "LEFT JOIN resource.resource_type_defs rtd ON rtd.id = r.resource_type_def_id "
+                + "LEFT JOIN resource.resource_types rt ON rt.id = r.resource_type_id "
                 + "WHERE o.project_id = :projectId "
                 + "  AND o.output_date BETWEEN :fromDate AND :toDate "
                 + "  AND a.work_activity_id IS NOT NULL")
@@ -88,7 +88,7 @@ public class CapacityUtilizationReportService {
         .setParameter("toDate", effectiveTo)
         .getResultList();
 
-    // 2. Aggregate by (workActivity, group-key). Group key = resourceTypeDefId or resourceId.
+    // 2. Aggregate by (workActivity, group-key). Group key = resourceTypeId or resourceId.
     Map<String, Aggregate> byBucket = new LinkedHashMap<>();
     for (Object[] r : raw) {
       LocalDate outputDate = ((java.sql.Date) r[0]).toLocalDate();
@@ -96,8 +96,8 @@ public class CapacityUtilizationReportService {
       String workActivityCode = (String) r[2];
       String workActivityName = (String) r[3];
       String workActivityDefaultUnit = (String) r[4];
-      UUID resourceTypeDefId = (UUID) r[5];
-      String resourceTypeDefName = (String) r[6];
+      UUID resourceTypeId = (UUID) r[5];
+      String resourceTypeName = (String) r[6];
       UUID resourceId = (UUID) r[7];
       String resourceCode = (String) r[8];
       String resourceName = (String) r[9];
@@ -114,12 +114,12 @@ public class CapacityUtilizationReportService {
         effectiveDays = 0.0;
       }
 
-      UUID groupResourceTypeId = groupByResource ? null : resourceTypeDefId;
+      UUID groupResourceTypeId = groupByResource ? null : resourceTypeId;
       UUID groupResourceId = groupByResource ? resourceId : null;
       String displayLabel = groupByResource
           ? (resourceCode != null ? resourceCode + " — " + resourceName : resourceName)
-          : (resourceTypeDefName != null ? resourceTypeDefName : "(no type)");
-      String bucketKey = workActivityId + "|" + (groupByResource ? resourceId : nullSafe(resourceTypeDefId));
+          : (resourceTypeName != null ? resourceTypeName : "(no type)");
+      String bucketKey = workActivityId + "|" + (groupByResource ? resourceId : nullSafe(resourceTypeId));
 
       Aggregate agg = byBucket.computeIfAbsent(bucketKey, k -> new Aggregate(
           new GroupKey(groupResourceTypeId, groupResourceId, displayLabel),

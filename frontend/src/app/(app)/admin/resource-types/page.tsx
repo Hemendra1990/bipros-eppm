@@ -4,11 +4,8 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   resourceTypeApi,
-  BASE_CATEGORY_LABEL,
-  type CreateResourceTypeDefRequest,
-  type ResourceTypeBaseCategory,
-  type ResourceTypeDef,
-  type UpdateResourceTypeDefRequest,
+  type ResourceType,
+  type ResourceTypeRequest,
 } from "@/lib/api/resourceTypeApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -16,8 +13,7 @@ import { getErrorMessage } from "@/lib/utils/error";
 interface DefForm {
   code: string;
   name: string;
-  baseCategory: ResourceTypeBaseCategory;
-  codePrefix: string;
+  description: string;
   sortOrder: string;
   active: boolean;
 }
@@ -25,26 +21,23 @@ interface DefForm {
 const emptyForm = (): DefForm => ({
   code: "",
   name: "",
-  baseCategory: "LABOR",
-  codePrefix: "",
+  description: "",
   sortOrder: "",
   active: true,
 });
 
-const formFromDef = (d: ResourceTypeDef): DefForm => ({
+const formFromDef = (d: ResourceType): DefForm => ({
   code: d.code,
   name: d.name,
-  baseCategory: d.baseCategory,
-  codePrefix: d.codePrefix ?? "",
+  description: d.description ?? "",
   sortOrder: d.sortOrder == null ? "" : String(d.sortOrder),
   active: d.active,
 });
 
-const toPayload = (form: DefForm): CreateResourceTypeDefRequest => ({
+const toPayload = (form: DefForm): ResourceTypeRequest => ({
   code: form.code.trim().toUpperCase(),
   name: form.name.trim(),
-  baseCategory: form.baseCategory,
-  codePrefix: form.codePrefix.trim() ? form.codePrefix.trim().toUpperCase() : null,
+  description: form.description.trim() ? form.description.trim() : null,
   sortOrder: form.sortOrder.trim() === "" ? null : Number(form.sortOrder),
   active: form.active,
 });
@@ -62,7 +55,7 @@ export default function ResourceTypesAdminPage() {
     queryFn: () => resourceTypeApi.list(),
   });
 
-  const defs: ResourceTypeDef[] = useMemo(() => data?.data ?? [], [data]);
+  const defs: ResourceType[] = useMemo(() => data?.data ?? [], [data]);
   const editingDef = defs.find((d) => d.id === editingId) ?? null;
   const isEditingSystemDefault = editingDef?.systemDefault === true;
 
@@ -73,7 +66,7 @@ export default function ResourceTypesAdminPage() {
     setShowForm(true);
   };
 
-  const openEdit = (def: ResourceTypeDef) => {
+  const openEdit = (def: ResourceType) => {
     setEditingId(def.id);
     setForm(formFromDef(def));
     setError(null);
@@ -92,8 +85,7 @@ export default function ResourceTypesAdminPage() {
     setError(null);
     try {
       if (editingId) {
-        const payload: UpdateResourceTypeDefRequest = toPayload(form);
-        await resourceTypeApi.update(editingId, payload);
+        await resourceTypeApi.update(editingId, toPayload(form));
       } else {
         await resourceTypeApi.create(toPayload(form));
       }
@@ -104,7 +96,7 @@ export default function ResourceTypesAdminPage() {
     }
   };
 
-  const handleDelete = async (def: ResourceTypeDef) => {
+  const handleDelete = async (def: ResourceType) => {
     if (def.systemDefault) return;
     if (!window.confirm(`Delete resource type "${def.name}"? This cannot be undone.`)) return;
     try {
@@ -120,7 +112,7 @@ export default function ResourceTypesAdminPage() {
     <div className="p-6">
       <TabTip
         title="Resource Types"
-        description="Manage the list of Resource Type categories shown when creating resources. The 3M defaults — Manpower, Material and Machine — are locked; admins can add custom types tagged with one of those base categories."
+        description="Manage the list of Resource Type categories shown when creating resources. Three system defaults — Manpower (LABOR), Equipment (EQUIPMENT) and Material (MATERIAL) — are locked; admins can add custom types."
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -147,7 +139,7 @@ export default function ResourceTypesAdminPage() {
             {editingId ? `Edit "${editingDef?.name ?? "Type"}"` : "New Resource Type"}
             {isEditingSystemDefault && (
               <span className="ml-2 text-xs uppercase tracking-wide text-text-muted">
-                System default — code &amp; base category locked
+                System default — code locked
               </span>
             )}
           </h2>
@@ -175,44 +167,17 @@ export default function ResourceTypesAdminPage() {
                 required
               />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Base Category
+                Description
               </label>
-              <select
-                value={form.baseCategory}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    baseCategory: e.target.value as ResourceTypeBaseCategory,
-                  })
-                }
-                disabled={isEditingSystemDefault}
-                className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg disabled:opacity-60"
-              >
-                <option value="LABOR">Manpower</option>
-                <option value="MATERIAL">Material</option>
-                <option value="NONLABOR">Machine</option>
-              </select>
-              <p className="mt-1 text-xs text-text-muted">
-                Drives cost reporting bucket and equipment-only fields on the new-resource form.
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Code Prefix
-              </label>
-              <input
-                type="text"
-                value={form.codePrefix}
-                onChange={(e) => setForm({ ...form, codePrefix: e.target.value })}
-                placeholder="Default LAB / MAT / EQ"
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={2}
+                placeholder="Optional notes describing how this type is used"
                 className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
               />
-              <p className="mt-1 text-xs text-text-muted">
-                Used when a resource is created without an explicit code. Falls back to the base
-                category default.
-              </p>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -268,16 +233,16 @@ export default function ResourceTypesAdminPage() {
               <th className="border border-border px-4 py-2 text-left text-text-secondary">Code</th>
               <th className="border border-border px-4 py-2 text-left text-text-secondary">Name</th>
               <th className="border border-border px-4 py-2 text-left text-text-secondary">
-                Base Category
-              </th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">
-                Prefix
+                Description
               </th>
               <th className="border border-border px-4 py-2 text-right text-text-secondary">
                 Sort Order
               </th>
               <th className="border border-border px-4 py-2 text-left text-text-secondary">
                 Status
+              </th>
+              <th className="border border-border px-4 py-2 text-left text-text-secondary">
+                System
               </th>
               <th className="border border-border px-4 py-2 text-left text-text-secondary">
                 Actions
@@ -309,18 +274,10 @@ export default function ResourceTypesAdminPage() {
               <tr key={def.id} className="text-text-primary hover:bg-surface-hover/30">
                 <td className="border border-border px-4 py-2 font-mono text-sm">
                   {def.code}
-                  {def.systemDefault && (
-                    <span className="ml-2 text-[10px] uppercase tracking-wide text-text-muted">
-                      system
-                    </span>
-                  )}
                 </td>
                 <td className="border border-border px-4 py-2">{def.name}</td>
-                <td className="border border-border px-4 py-2">
-                  {BASE_CATEGORY_LABEL[def.baseCategory]}
-                </td>
-                <td className="border border-border px-4 py-2 font-mono text-sm">
-                  {def.codePrefix ?? "—"}
+                <td className="border border-border px-4 py-2 text-text-secondary">
+                  {def.description ?? "—"}
                 </td>
                 <td className="border border-border px-4 py-2 text-right">
                   {def.sortOrder ?? "—"}
@@ -332,20 +289,33 @@ export default function ResourceTypesAdminPage() {
                     <span className="text-text-muted">Inactive</span>
                   )}
                 </td>
+                <td className="border border-border px-4 py-2">
+                  {def.systemDefault ? (
+                    <span className="inline-flex rounded bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent ring-1 ring-accent/20">
+                      system
+                    </span>
+                  ) : (
+                    <span className="text-text-muted">—</span>
+                  )}
+                </td>
                 <td className="border border-border px-4 py-2 text-sm">
-                  <button
-                    onClick={() => openEdit(def)}
-                    className="text-accent hover:underline mr-3"
-                  >
-                    Edit
-                  </button>
-                  {!def.systemDefault && (
-                    <button
-                      onClick={() => handleDelete(def)}
-                      className="text-danger hover:underline"
-                    >
-                      Delete
-                    </button>
+                  {!def.systemDefault ? (
+                    <>
+                      <button
+                        onClick={() => openEdit(def)}
+                        className="text-accent hover:underline mr-3"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(def)}
+                        className="text-danger hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-text-muted">Locked</span>
                   )}
                 </td>
               </tr>

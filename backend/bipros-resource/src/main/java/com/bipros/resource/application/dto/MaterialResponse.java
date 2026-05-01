@@ -3,7 +3,6 @@ package com.bipros.resource.application.dto;
 import com.bipros.resource.domain.model.Material;
 import com.bipros.resource.domain.model.MaterialCategory;
 import com.bipros.resource.domain.model.MaterialStatus;
-import com.bipros.resource.domain.model.ResourceUnit;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,7 +14,7 @@ public record MaterialResponse(
     String code,
     String name,
     MaterialCategory category,
-    ResourceUnit unit,
+    String unit,
     String specificationGrade,
     BigDecimal minStockLevel,
     BigDecimal reorderQuantity,

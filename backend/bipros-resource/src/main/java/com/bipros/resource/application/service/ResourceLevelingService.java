@@ -76,7 +76,7 @@ public class ResourceLevelingService {
     for (UUID resourceId : resourceIds) {
       Resource resource = resourceRepository.findById(resourceId)
           .orElseThrow(() -> new ResourceNotFoundException("Resource", resourceId));
-      resourceMaxUnits.put(resourceId, resource.getMaxUnitsPerDay());
+      resourceMaxUnits.put(resourceId, dailyCapacityFor(resource));
     }
 
     // Convert to algorithm input format
@@ -281,6 +281,19 @@ public class ResourceLevelingService {
     return entries;
   }
 
+  /**
+   * Daily capacity for leveling. The new Resource entity has no {@code maxUnitsPerDay}; we read
+   * {@code availability} (a percentage 0–100) and convert to an 8-hour-day equivalent, defaulting
+   * to 8.0 when no availability is recorded.
+   */
+  private static double dailyCapacityFor(Resource r) {
+    if (r.getAvailability() != null) {
+      double pct = r.getAvailability().doubleValue();
+      if (pct > 0.0) return pct / 100.0 * 8.0;
+    }
+    return 8.0;
+  }
+
   private Map<UUID, Double> buildResourceCapacityMap(List<ResourceAssignment> assignments) {
     Set<UUID> resourceIds = assignments.stream()
         .map(ResourceAssignment::getResourceId)
@@ -289,7 +302,7 @@ public class ResourceLevelingService {
     Map<UUID, Double> resourceMaxUnits = new HashMap<>();
     for (UUID resourceId : resourceIds) {
       resourceRepository.findById(resourceId)
-          .ifPresent(r -> resourceMaxUnits.put(resourceId, r.getMaxUnitsPerDay()));
+          .ifPresent(r -> resourceMaxUnits.put(resourceId, dailyCapacityFor(r)));
     }
     return resourceMaxUnits;
   }

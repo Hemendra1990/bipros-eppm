@@ -1,0 +1,760 @@
+databaseChangeLog:
+  # ---------------------------------------------------------------------------
+  # Resource subsystem rewrite (clean slate).
+  #
+  # Replaces the previous Type → Role → Resource shape (resource_type_defs +
+  # resource_roles + resources + resource_role_assignments) with:
+  #   resource_types       — three system rows (LABOR / EQUIPMENT / MATERIAL)
+  #   resource_roles       — what the resource does (Bulldozer Operator, Cement)
+  #   resources            — slim base; FK directly to a single role
+  #   per-type detail tables — equipment / material / 6 manpower tables
+  #
+  # Preserves resource_assignments, resource_rates, resource_curves with the
+  # same column names so EVM/Cost/Baseline cross-module joins keep working.
+  #
+  # Dev (ddl-auto: update) users should reset with DDL_AUTO=create-drop once,
+  # since this changeset drops a large number of tables.
+  # ---------------------------------------------------------------------------
+
+  - changeSet:
+      id: 056-drop-legacy-resource-tables
+      author: bipros
+      changes:
+        - sql:
+            comment: Drop all legacy resource subsystem tables (CASCADE handles FKs).
+            sql: |
+              DROP TABLE IF EXISTS resource.resource_role_assignments CASCADE;
+              DROP TABLE IF EXISTS resource.resource_assignments      CASCADE;
+              DROP TABLE IF EXISTS resource.resource_rates            CASCADE;
+              DROP TABLE IF EXISTS resource.resource_curves           CASCADE;
+              DROP TABLE IF EXISTS resource.user_resource_roles       CASCADE;
+              DROP TABLE IF EXISTS resource.resources                 CASCADE;
+              DROP TABLE IF EXISTS resource.resource_roles            CASCADE;
+              DROP TABLE IF EXISTS resource.resource_type_defs        CASCADE;
+
+  # ── Core 3-tier ────────────────────────────────────────────────────────────
+
+  - changeSet:
+      id: 056-create-resource-types
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_types
+            columns:
+              - column: { name: id,             type: UUID,         constraints: { primaryKey: true, nullable: false } }
+              - column: { name: code,           type: VARCHAR(30),  constraints: { nullable: false, unique: true } }
+              - column: { name: name,           type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: description,    type: VARCHAR(500) }
+              - column: { name: sort_order,     type: INTEGER, defaultValueNumeric: 0,    constraints: { nullable: false } }
+              - column: { name: active,         type: BOOLEAN, defaultValueBoolean: true, constraints: { nullable: false } }
+              - column: { name: system_default, type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: created_at,     type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,     type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,     type: VARCHAR(255) }
+              - column: { name: updated_by,     type: VARCHAR(255) }
+              - column: { name: version,        type: BIGINT }
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: resource_types
+            columnNames: code
+            constraintName: uk_resource_type_code
+        - createIndex:
+            schemaName: resource
+            tableName: resource_types
+            indexName: idx_resource_type_active_sort
+            columns:
+              - column: { name: active }
+              - column: { name: sort_order }
+
+  - changeSet:
+      id: 056-seed-resource-types
+      author: bipros
+      changes:
+        - sql:
+            comment: Seed three system-default resource types.
+            sql: |
+              INSERT INTO resource.resource_types
+                (id, code, name, description, sort_order, active, system_default,
+                 created_at, updated_at, version)
+              VALUES
+                (gen_random_uuid(), 'LABOR',     'Labor',     'Human workforce',          10, true, true, now(), now(), 0),
+                (gen_random_uuid(), 'EQUIPMENT', 'Equipment', 'Machines used in project', 20, true, true, now(), now(), 0),
+                (gen_random_uuid(), 'MATERIAL',  'Material',  'Consumables or supplies',  30, true, true, now(), now(), 0)
+              ON CONFLICT (code) DO NOTHING;
+
+  - changeSet:
+      id: 056-create-resource-roles
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_roles
+            columns:
+              - column: { name: id,                type: UUID,         constraints: { primaryKey: true, nullable: false } }
+              - column: { name: code,              type: VARCHAR(50),  constraints: { nullable: false, unique: true } }
+              - column: { name: name,              type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: description,       type: VARCHAR(500) }
+              - column: { name: resource_type_id,  type: UUID,         constraints: { nullable: false } }
+              - column: { name: productivity_unit, type: VARCHAR(50) }
+              - column: { name: default_rate,      type: DECIMAL(19, 4) }
+              - column: { name: sort_order,        type: INTEGER, defaultValueNumeric: 0,    constraints: { nullable: false } }
+              - column: { name: active,            type: BOOLEAN, defaultValueBoolean: true, constraints: { nullable: false } }
+              - column: { name: created_at,        type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,        type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,        type: VARCHAR(255) }
+              - column: { name: updated_by,        type: VARCHAR(255) }
+              - column: { name: version,           type: BIGINT }
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: resource_roles
+            columnNames: code
+            constraintName: uk_resource_role_code
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_roles
+            baseColumnNames: resource_type_id
+            referencedTableSchemaName: resource
+            referencedTableName: resource_types
+            referencedColumnNames: id
+            constraintName: fk_resource_role_type
+        - createIndex:
+            schemaName: resource
+            tableName: resource_roles
+            indexName: idx_resource_role_type
+            columns:
+              - column: { name: resource_type_id }
+
+  - changeSet:
+      id: 056-create-resources
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resources
+            columns:
+              - column: { name: id,               type: UUID,         constraints: { primaryKey: true, nullable: false } }
+              - column: { name: code,             type: VARCHAR(50),  constraints: { nullable: false, unique: true } }
+              - column: { name: name,             type: VARCHAR(150), constraints: { nullable: false } }
+              - column: { name: description,      type: VARCHAR(1000) }
+              - column: { name: role_id,          type: UUID,         constraints: { nullable: false } }
+              - column: { name: resource_type_id, type: UUID,         constraints: { nullable: false } }
+              - column: { name: availability,     type: DECIMAL(5, 2) }
+              - column: { name: cost_per_unit,    type: DECIMAL(19, 4) }
+              - column: { name: unit,             type: VARCHAR(30) }
+              - column: { name: status,           type: VARCHAR(20), defaultValue: 'ACTIVE', constraints: { nullable: false } }
+              - column: { name: calendar_id,      type: UUID }
+              - column: { name: parent_id,        type: UUID }
+              - column: { name: user_id,          type: UUID }
+              - column: { name: sort_order,       type: INTEGER, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: created_at,       type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,       type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,       type: VARCHAR(255) }
+              - column: { name: updated_by,       type: VARCHAR(255) }
+              - column: { name: version,          type: BIGINT }
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: resources
+            columnNames: code
+            constraintName: uk_resource_code
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resources
+            baseColumnNames: role_id
+            referencedTableSchemaName: resource
+            referencedTableName: resource_roles
+            referencedColumnNames: id
+            constraintName: fk_resource_role
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resources
+            baseColumnNames: resource_type_id
+            referencedTableSchemaName: resource
+            referencedTableName: resource_types
+            referencedColumnNames: id
+            constraintName: fk_resource_type
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resources
+            baseColumnNames: calendar_id
+            referencedTableSchemaName: scheduling
+            referencedTableName: calendars
+            referencedColumnNames: id
+            constraintName: fk_resource_calendar
+        - createIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_role
+            columns: [{ column: { name: role_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_type
+            columns: [{ column: { name: resource_type_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_status
+            columns: [{ column: { name: status } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_parent
+            columns: [{ column: { name: parent_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_calendar
+            columns: [{ column: { name: calendar_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resources
+            indexName: idx_resource_user
+            columns: [{ column: { name: user_id } }]
+
+  # ── Equipment 1:1 detail ───────────────────────────────────────────────────
+
+  - changeSet:
+      id: 056-create-equipment-details
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_equipment_details
+            columns:
+              - column: { name: resource_id,             type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: make,                    type: VARCHAR(80) }
+              - column: { name: model,                   type: VARCHAR(80) }
+              - column: { name: variant,                 type: VARCHAR(80) }
+              - column: { name: manufacturer_name,       type: VARCHAR(120) }
+              - column: { name: country_of_origin,       type: VARCHAR(60) }
+              - column: { name: year_of_manufacture,     type: INTEGER }
+              - column: { name: serial_number,           type: VARCHAR(80) }
+              - column: { name: chassis_number,          type: VARCHAR(80) }
+              - column: { name: engine_number,           type: VARCHAR(80) }
+              - column: { name: registration_number,     type: VARCHAR(80) }
+              - column: { name: capacity_spec,           type: VARCHAR(80) }
+              - column: { name: fuel_litres_per_hour,    type: DECIMAL(10, 2) }
+              - column: { name: standard_output_per_day, type: DECIMAL(15, 4) }
+              - column: { name: standard_output_unit,    type: VARCHAR(30) }
+              - column: { name: ownership_type,          type: VARCHAR(30) }
+              - column: { name: quantity_available,      type: INTEGER }
+              - column: { name: insurance_expiry,        type: DATE }
+              - column: { name: last_service_date,       type: DATE }
+              - column: { name: next_service_date,       type: DATE }
+              - column: { name: created_at,              type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,              type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,              type: VARCHAR(255) }
+              - column: { name: updated_by,              type: VARCHAR(255) }
+              - column: { name: version,                 type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_equipment_details
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_equipment_details_resource
+            onDelete: CASCADE
+
+  # ── Material 1:1 detail ────────────────────────────────────────────────────
+
+  - changeSet:
+      id: 056-create-material-details
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_material_details
+            columns:
+              - column: { name: resource_id,        type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: material_type,      type: VARCHAR(30) }
+              - column: { name: category,           type: VARCHAR(80) }
+              - column: { name: sub_category,       type: VARCHAR(80) }
+              - column: { name: material_grade,     type: VARCHAR(80) }
+              - column: { name: specification,      type: VARCHAR(500) }
+              - column: { name: brand,              type: VARCHAR(80) }
+              - column: { name: manufacturer_name,  type: VARCHAR(120) }
+              - column: { name: standard_code,      type: VARCHAR(80) }
+              - column: { name: quality_class,      type: VARCHAR(60) }
+              - column: { name: base_unit,          type: VARCHAR(30) }
+              - column: { name: conversion_factor,  type: DECIMAL(15, 6) }
+              - column: { name: alternate_units,    type: JSONB }
+              - column: { name: density,            type: DECIMAL(10, 4) }
+              - column: { name: created_at,         type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,         type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,         type: VARCHAR(255) }
+              - column: { name: updated_by,         type: VARCHAR(255) }
+              - column: { name: version,            type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_material_details
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_material_details_resource
+            onDelete: CASCADE
+
+  # ── Manpower (6 tables, full HRIS) ─────────────────────────────────────────
+
+  - changeSet:
+      id: 056-create-manpower-master
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: manpower_master
+            columns:
+              - column: { name: resource_id,           type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: employee_code,         type: VARCHAR(50), constraints: { unique: true } }
+              - column: { name: first_name,            type: VARCHAR(80) }
+              - column: { name: last_name,             type: VARCHAR(80) }
+              - column: { name: full_name,             type: VARCHAR(160) }
+              - column: { name: category,              type: VARCHAR(30) }
+              - column: { name: sub_category,          type: VARCHAR(60) }
+              - column: { name: date_of_birth,         type: DATE }
+              - column: { name: gender,                type: VARCHAR(20) }
+              - column: { name: nationality,           type: VARCHAR(60) }
+              - column: { name: contact_number,        type: VARCHAR(30) }
+              - column: { name: email,                 type: VARCHAR(120) }
+              - column: { name: address,               type: VARCHAR(500) }
+              - column: { name: emergency_contact,     type: VARCHAR(120) }
+              - column: { name: photo_url,             type: VARCHAR(500) }
+              - column: { name: employment_type,       type: VARCHAR(30) }
+              - column: { name: designation,           type: VARCHAR(100) }
+              - column: { name: department,            type: VARCHAR(100) }
+              - column: { name: joining_date,          type: DATE }
+              - column: { name: exit_date,             type: DATE }
+              - column: { name: reporting_manager_id,  type: UUID }
+              - column: { name: company_name,          type: VARCHAR(120) }
+              - column: { name: work_location,         type: VARCHAR(120) }
+              - column: { name: created_at,            type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,            type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,            type: VARCHAR(255) }
+              - column: { name: updated_by,            type: VARCHAR(255) }
+              - column: { name: version,               type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: manpower_master
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_manpower_master_resource
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: manpower_master
+            baseColumnNames: reporting_manager_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_manpower_master_manager
+        - createIndex:
+            schemaName: resource
+            tableName: manpower_master
+            indexName: idx_manpower_employee_code
+            columns: [{ column: { name: employee_code } }]
+        - createIndex:
+            schemaName: resource
+            tableName: manpower_master
+            indexName: idx_manpower_designation
+            columns: [{ column: { name: designation } }]
+
+  - changeSet:
+      id: 056-create-manpower-skills
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: manpower_skills
+            columns:
+              - column: { name: resource_id,       type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: primary_skill,     type: VARCHAR(120) }
+              - column: { name: secondary_skills,  type: JSONB }
+              - column: { name: skill_level,       type: VARCHAR(30) }
+              - column: { name: certifications,    type: JSONB }
+              - column: { name: license_details,   type: JSONB }
+              - column: { name: experience_years,  type: INTEGER }
+              - column: { name: training_records,  type: JSONB }
+              - column: { name: created_at,        type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,        type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,        type: VARCHAR(255) }
+              - column: { name: updated_by,        type: VARCHAR(255) }
+              - column: { name: version,           type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: manpower_skills
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_manpower_skills_resource
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 056-create-manpower-financials
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: manpower_financials
+            columns:
+              - column: { name: resource_id,           type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: salary_type,           type: VARCHAR(20) }
+              - column: { name: base_salary,           type: DECIMAL(15, 2) }
+              - column: { name: hourly_rate,           type: DECIMAL(15, 4) }
+              - column: { name: overtime_rate,         type: DECIMAL(15, 4) }
+              - column: { name: allowances,            type: JSONB }
+              - column: { name: deductions,            type: JSONB }
+              - column: { name: currency,              type: CHAR(3) }
+              - column: { name: bank_account_details,  type: JSONB }
+              - column: { name: payment_mode,          type: VARCHAR(30) }
+              - column: { name: tax_details,           type: JSONB }
+              - column: { name: pf_number,             type: VARCHAR(40) }
+              - column: { name: esi_number,            type: VARCHAR(40) }
+              - column: { name: created_at,            type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,            type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,            type: VARCHAR(255) }
+              - column: { name: updated_by,            type: VARCHAR(255) }
+              - column: { name: version,               type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: manpower_financials
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_manpower_financials_resource
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 056-create-manpower-attendance
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: manpower_attendance
+            columns:
+              - column: { name: resource_id,             type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: daily_attendance_status, type: VARCHAR(20) }
+              - column: { name: last_check_in_time,      type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: last_check_out_time,     type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: working_hours_per_day,   type: DECIMAL(5, 2) }
+              - column: { name: shift_type,              type: VARCHAR(20) }
+              - column: { name: total_work_hours_mtd,    type: DECIMAL(8, 2) }
+              - column: { name: overtime_hours_mtd,      type: DECIMAL(8, 2) }
+              - column: { name: leave_balance,           type: DECIMAL(6, 2) }
+              - column: { name: leave_schedule,          type: JSONB }
+              - column: { name: created_at,              type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,              type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,              type: VARCHAR(255) }
+              - column: { name: updated_by,              type: VARCHAR(255) }
+              - column: { name: version,                 type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: manpower_attendance
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_manpower_attendance_resource
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 056-create-manpower-allocation
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: manpower_allocation
+            columns:
+              - column: { name: resource_id,              type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: availability_status,      type: VARCHAR(30) }
+              - column: { name: current_project_id,       type: UUID }
+              - column: { name: assigned_activity_id,     type: UUID }
+              - column: { name: site_name,                type: VARCHAR(120) }
+              - column: { name: role_in_project,          type: VARCHAR(120) }
+              - column: { name: crew_id,                  type: UUID }
+              - column: { name: utilization_percentage,   type: DECIMAL(5, 2) }
+              - column: { name: standard_output_per_hour, type: DECIMAL(15, 4) }
+              - column: { name: output_unit,              type: VARCHAR(30) }
+              - column: { name: efficiency_factor,        type: DECIMAL(5, 4) }
+              - column: { name: performance_rating,       type: DECIMAL(4, 2) }
+              - column: { name: productivity_trend,       type: JSONB }
+              - column: { name: attrition_risk_score,     type: DECIMAL(5, 4) }
+              - column: { name: skill_gap_analysis,       type: JSONB }
+              - column: { name: recommended_training,     type: JSONB }
+              - column: { name: optimal_assignment,       type: JSONB }
+              - column: { name: created_at,               type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,               type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,               type: VARCHAR(255) }
+              - column: { name: updated_by,               type: VARCHAR(255) }
+              - column: { name: version,                  type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: manpower_allocation
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_manpower_allocation_resource
+            onDelete: CASCADE
+        - createIndex:
+            schemaName: resource
+            tableName: manpower_allocation
+            indexName: idx_manpower_alloc_project
+            columns: [{ column: { name: current_project_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: manpower_allocation
+            indexName: idx_manpower_alloc_status
+            columns: [{ column: { name: availability_status } }]
+
+  - changeSet:
+      id: 056-create-manpower-compliance
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: manpower_compliance
+            columns:
+              - column: { name: resource_id,                type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: id_proof_type,              type: VARCHAR(40) }
+              - column: { name: id_proof_number,            type: VARCHAR(60) }
+              - column: { name: labor_license_number,       type: VARCHAR(60) }
+              - column: { name: insurance_provider,         type: VARCHAR(120) }
+              - column: { name: insurance_policy_number,    type: VARCHAR(60) }
+              - column: { name: insurance_expiry,           type: DATE }
+              - column: { name: medical_fitness_status,     type: VARCHAR(20) }
+              - column: { name: medical_expiry,             type: DATE }
+              - column: { name: safety_training_completed,  type: BOOLEAN, defaultValueBoolean: false }
+              - column: { name: safety_training_date,       type: DATE }
+              - column: { name: compliance_certificates,    type: JSONB }
+              - column: { name: resume_url,                 type: VARCHAR(500) }
+              - column: { name: certification_documents,    type: JSONB }
+              - column: { name: contract_document_url,      type: VARCHAR(500) }
+              - column: { name: created_at,                 type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,                 type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,                 type: VARCHAR(255) }
+              - column: { name: updated_by,                 type: VARCHAR(255) }
+              - column: { name: version,                    type: BIGINT }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: manpower_compliance
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_manpower_compliance_resource
+            onDelete: CASCADE
+
+  # ── Recreate preserved tables with same column names ───────────────────────
+  # resource_assignments / resource_rates / resource_curves keep their shape so
+  # EVM, Cost, Baseline, Reporting, Import/Export joins keep working unchanged.
+
+  - changeSet:
+      id: 056-create-resource-curves
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_curves
+            columns:
+              - column: { name: id,          type: UUID,         constraints: { primaryKey: true, nullable: false } }
+              - column: { name: name,        type: VARCHAR(100), constraints: { nullable: false, unique: true } }
+              - column: { name: description, type: VARCHAR(500) }
+              - column: { name: is_default,  type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: curve_data,  type: TEXT, constraints: { nullable: false } }
+              - column: { name: created_at,  type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,  type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,  type: VARCHAR(255) }
+              - column: { name: updated_by,  type: VARCHAR(255) }
+              - column: { name: version,     type: BIGINT }
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: resource_curves
+            columnNames: name
+            constraintName: uk_resource_curve_name
+        - createIndex:
+            schemaName: resource
+            tableName: resource_curves
+            indexName: idx_curve_is_default
+            columns: [{ column: { name: is_default } }]
+
+  - changeSet:
+      id: 056-create-resource-rates
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_rates
+            columns:
+              - column: { name: id,                  type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: resource_id,         type: UUID, constraints: { nullable: false } }
+              - column: { name: rate_type,           type: VARCHAR(50), constraints: { nullable: false } }
+              - column: { name: price_per_unit,      type: DECIMAL(19, 4), constraints: { nullable: false } }
+              - column: { name: effective_date,      type: DATE, constraints: { nullable: false } }
+              - column: { name: max_units_per_time,  type: DOUBLE PRECISION }
+              - column: { name: created_at,          type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,          type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,          type: VARCHAR(255) }
+              - column: { name: updated_by,          type: VARCHAR(255) }
+              - column: { name: version,             type: BIGINT }
+        - addUniqueConstraint:
+            schemaName: resource
+            tableName: resource_rates
+            columnNames: resource_id,rate_type,effective_date
+            constraintName: uk_resource_rate_type_date
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_rates
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_resource_rates_resource
+            onDelete: CASCADE
+        - createIndex:
+            schemaName: resource
+            tableName: resource_rates
+            indexName: idx_rate_resource_id
+            columns: [{ column: { name: resource_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_rates
+            indexName: idx_rate_type
+            columns: [{ column: { name: rate_type } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_rates
+            indexName: idx_rate_effective_date
+            columns: [{ column: { name: effective_date } }]
+
+  - changeSet:
+      id: 056-create-resource-assignments
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: resource_assignments
+            columns:
+              - column: { name: id,                   type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: activity_id,          type: UUID, constraints: { nullable: false } }
+              - column: { name: resource_id,          type: UUID }
+              - column: { name: role_id,              type: UUID }
+              - column: { name: project_id,           type: UUID, constraints: { nullable: false } }
+              - column: { name: planned_units,        type: DOUBLE PRECISION }
+              - column: { name: actual_units,         type: DOUBLE PRECISION }
+              - column: { name: remaining_units,      type: DOUBLE PRECISION }
+              - column: { name: at_completion_units,  type: DOUBLE PRECISION }
+              - column: { name: planned_cost,         type: DECIMAL(19, 4) }
+              - column: { name: actual_cost,          type: DECIMAL(19, 4) }
+              - column: { name: remaining_cost,       type: DECIMAL(19, 4) }
+              - column: { name: at_completion_cost,   type: DECIMAL(19, 4) }
+              - column: { name: rate_type,            type: VARCHAR(50) }
+              - column: { name: resource_curve_id,    type: UUID }
+              - column: { name: planned_start_date,   type: DATE }
+              - column: { name: planned_finish_date,  type: DATE }
+              - column: { name: actual_start_date,    type: DATE }
+              - column: { name: actual_finish_date,   type: DATE }
+              - column: { name: created_at,           type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: updated_at,           type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_by,           type: VARCHAR(255) }
+              - column: { name: updated_by,           type: VARCHAR(255) }
+              - column: { name: version,              type: BIGINT }
+        - addCheckConstraint:
+            schemaName: resource
+            tableName: resource_assignments
+            constraintName: chk_assignment_resource_or_role
+            validate: true
+            constraintBody: resource_id IS NOT NULL OR role_id IS NOT NULL
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_assignments
+            baseColumnNames: activity_id
+            referencedTableSchemaName: activity
+            referencedTableName: activities
+            referencedColumnNames: id
+            constraintName: fk_resource_assignments_activity
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_assignments
+            baseColumnNames: resource_id
+            referencedTableSchemaName: resource
+            referencedTableName: resources
+            referencedColumnNames: id
+            constraintName: fk_resource_assignments_resource
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_assignments
+            baseColumnNames: role_id
+            referencedTableSchemaName: resource
+            referencedTableName: resource_roles
+            referencedColumnNames: id
+            constraintName: fk_resource_assignments_role
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_assignments
+            baseColumnNames: project_id
+            referencedTableSchemaName: project
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_resource_assignments_project
+        - addForeignKeyConstraint:
+            baseTableSchemaName: resource
+            baseTableName: resource_assignments
+            baseColumnNames: resource_curve_id
+            referencedTableSchemaName: resource
+            referencedTableName: resource_curves
+            referencedColumnNames: id
+            constraintName: fk_resource_assignments_curve
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: idx_assignment_activity_id
+            columns: [{ column: { name: activity_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: idx_assignment_resource_id
+            columns: [{ column: { name: resource_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: idx_assignment_role_id
+            columns: [{ column: { name: role_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: idx_assignment_project_id
+            columns: [{ column: { name: project_id } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: idx_assignment_planned_start_date
+            columns: [{ column: { name: planned_start_date } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: idx_assignment_planned_finish_date
+            columns: [{ column: { name: planned_finish_date } }]
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: uk_assignment_activity_resource_partial
+            unique: true
+            columns:
+              - column: { name: activity_id }
+              - column: { name: resource_id }
+            where: resource_id IS NOT NULL
+        - createIndex:
+            schemaName: resource
+            tableName: resource_assignments
+            indexName: uk_assignment_activity_role_partial
+            unique: true
+            columns:
+              - column: { name: activity_id }
+              - column: { name: role_id }
+            where: resource_id IS NULL

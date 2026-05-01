@@ -14,8 +14,6 @@ import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
-import { roleApi } from "@/lib/api/roleApi";
-import type { RoleResponse } from "@/lib/api/roleApi";
 import type { ResourceResponse } from "@/lib/api/resourceApi";
 import { costApi } from "@/lib/api/costApi";
 import type { CostAccount } from "@/lib/api/costApi";
@@ -1400,33 +1398,21 @@ function StaffSwapDialog({
 
   const roleId = assignment?.roleId ?? null;
 
-  const { data: roleUsersData } = useQuery({
-    queryKey: ["role-users", roleId],
-    queryFn: () => roleApi.listUsers(roleId!),
+  // Pull every resource carrying the same role as this assignment. The new model
+  // ties a resource to a single role via Resource.roleId, so a by-role lookup is
+  // exactly the set of qualified candidates.
+  const { data: resourcesData } = useQuery({
+    queryKey: ["resources-by-role", roleId],
+    queryFn: () => resourceApi.listByRole(roleId!),
     enabled: !!roleId && open,
   });
 
-  const roleUsers = roleUsersData?.data ?? [];
-  const userIds = roleUsers.map((u) => u.userId);
-
-  const { data: resourcesData } = useQuery({
-    queryKey: ["resources-by-users", userIds],
-    queryFn: () => resourceApi.listResources(0, 100),
-    enabled: open,
-  });
-
-  const allResources: ResourceResponse[] = useMemo(() => {
+  const qualifiedResources: ResourceResponse[] = useMemo(() => {
     const raw = resourcesData?.data as unknown;
     return Array.isArray(raw)
       ? (raw as ResourceResponse[])
       : ((raw as { content?: ResourceResponse[] } | undefined)?.content ?? []);
   }, [resourcesData]);
-
-  // Filter resources that have a userId matching one of the role-qualified users
-  const qualifiedResources = useMemo(() => {
-    const qualifiedUserIds = new Set(userIds);
-    return allResources.filter((r: ResourceResponse) => r.userId && qualifiedUserIds.has(r.userId));
-  }, [allResources, userIds]);
 
   const staffMutation = useMutation({
     mutationFn: () =>

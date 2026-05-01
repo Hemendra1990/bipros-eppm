@@ -1,119 +1,235 @@
 import { apiClient } from "./client";
 import type { ApiResponse, PagedResponse } from "../types";
 
-export type ResourceCategory =
-  | "SITE_ENGINEER"
-  | "FOREMAN"
-  | "SKILLED_LABOUR"
-  | "UNSKILLED_LABOUR"
-  | "OPERATOR"
-  | "DRIVER"
-  | "WELDER"
-  | "ELECTRICIAN"
-  | "EARTH_MOVING"
-  | "CRANES_LIFTING"
-  | "CONCRETE_EQUIPMENT"
-  | "PAVING_EQUIPMENT"
-  | "TRANSPORT_VEHICLES"
-  | "PILING_RIG"
-  | "SURVEY_EQUIPMENT"
-  | "CEMENT"
-  | "STEEL_REBAR"
-  | "AGGREGATE"
-  | "BITUMEN"
-  | "READY_MIX_CONCRETE"
-  | "BRICKS_BLOCKS"
-  | "ELECTRICAL_CABLE"
-  | "FORMWORK"
-  | "OTHER";
+// === Enums (mirroring backend) ===
 
-export type ResourceUnit =
-  | "PER_DAY"
-  | "MT"
-  | "CU_M"
-  | "RMT"
-  | "NOS"
-  | "KG"
-  | "LITRE";
+export type ResourceStatus = "ACTIVE" | "INACTIVE";
 
-export type UtilisationStatus =
-  | "ACTIVE"
-  | "OVER_90"
-  | "CRITICAL_100"
-  | "ON_HOLD_NOT_MOBILISED"
-  | "PROCUREMENT"
-  | "DELIVERY_ONGOING"
-  | "LAYING";
+export type ResourceOwnership = "OWNED" | "HIRED" | "SUB_CONTRACTOR_PROVIDED";
 
+export type MaterialType = "CONSUMABLE" | "NON_CONSUMABLE";
+
+export type ManpowerCategory = "SKILLED" | "UNSKILLED" | "STAFF";
+
+export type EmploymentType = "PERMANENT" | "CONTRACT" | "DAILY_WAGE";
+
+export type SkillLevel = "BEGINNER" | "INTERMEDIATE" | "EXPERT";
+
+export type SalaryType = "MONTHLY" | "DAILY" | "HOURLY";
+
+export type PaymentMode = "BANK" | "CASH" | "CHEQUE";
+
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "ON_LEAVE" | "HALF_DAY";
+
+export type ShiftType = "DAY" | "NIGHT";
+
+export type AvailabilityStatus = "AVAILABLE" | "ASSIGNED" | "ON_LEAVE";
+
+export type MedicalStatus = "FIT" | "UNFIT" | "PENDING";
+
+// === Detail DTOs ===
+
+export interface EquipmentDetailsDto {
+  make?: string | null;
+  model?: string | null;
+  variant?: string | null;
+  manufacturerName?: string | null;
+  countryOfOrigin?: string | null;
+  yearOfManufacture?: number | null;
+  serialNumber?: string | null;
+  chassisNumber?: string | null;
+  engineNumber?: string | null;
+  registrationNumber?: string | null;
+  capacitySpec?: string | null;
+  fuelLitresPerHour?: number | null;
+  standardOutputPerDay?: number | null;
+  standardOutputUnit?: string | null;
+  ownershipType?: ResourceOwnership | null;
+  quantityAvailable?: number | null;
+  insuranceExpiry?: string | null;
+  lastServiceDate?: string | null;
+  nextServiceDate?: string | null;
+}
+
+export interface MaterialDetailsDto {
+  materialType?: MaterialType | null;
+  category?: string | null;
+  subCategory?: string | null;
+  materialGrade?: string | null;
+  specification?: string | null;
+  brand?: string | null;
+  manufacturerName?: string | null;
+  standardCode?: string | null;
+  qualityClass?: string | null;
+  baseUnit?: string | null;
+  conversionFactor?: number | null;
+  alternateUnits?: string | null;
+  density?: number | null;
+}
+
+export interface ManpowerMasterDto {
+  employeeCode?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+  category?: ManpowerCategory | null;
+  subCategory?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  nationality?: string | null;
+  contactNumber?: string | null;
+  email?: string | null;
+  address?: string | null;
+  emergencyContact?: string | null;
+  photoUrl?: string | null;
+  employmentType?: EmploymentType | null;
+  designation?: string | null;
+  department?: string | null;
+  joiningDate?: string | null;
+  exitDate?: string | null;
+  reportingManagerId?: string | null;
+  companyName?: string | null;
+  workLocation?: string | null;
+}
+
+export interface ManpowerSkillsDto {
+  primarySkill?: string | null;
+  secondarySkills?: string | null;
+  skillLevel?: SkillLevel | null;
+  certifications?: string | null;
+  licenseDetails?: string | null;
+  experienceYears?: number | null;
+  trainingRecords?: string | null;
+}
+
+export interface ManpowerFinancialsDto {
+  salaryType?: SalaryType | null;
+  baseSalary?: number | null;
+  hourlyRate?: number | null;
+  overtimeRate?: number | null;
+  allowances?: string | null;
+  deductions?: string | null;
+  currency?: string | null;
+  bankAccountDetails?: string | null;
+  paymentMode?: PaymentMode | null;
+  taxDetails?: string | null;
+  pfNumber?: string | null;
+  esiNumber?: string | null;
+}
+
+export interface ManpowerAttendanceDto {
+  dailyAttendanceStatus?: AttendanceStatus | null;
+  lastCheckInTime?: string | null;
+  lastCheckOutTime?: string | null;
+  workingHoursPerDay?: number | null;
+  shiftType?: ShiftType | null;
+  totalWorkHoursMtd?: number | null;
+  overtimeHoursMtd?: number | null;
+  leaveBalance?: number | null;
+  leaveSchedule?: string | null;
+}
+
+export interface ManpowerAllocationDto {
+  availabilityStatus?: AvailabilityStatus | null;
+  currentProjectId?: string | null;
+  assignedActivityId?: string | null;
+  siteName?: string | null;
+  roleInProject?: string | null;
+  crewId?: string | null;
+  utilizationPercentage?: number | null;
+  standardOutputPerHour?: number | null;
+  outputUnit?: string | null;
+  efficiencyFactor?: number | null;
+  performanceRating?: number | null;
+  productivityTrend?: string | null;
+  attritionRiskScore?: number | null;
+  skillGapAnalysis?: string | null;
+  recommendedTraining?: string | null;
+  optimalAssignment?: string | null;
+}
+
+export interface ManpowerComplianceDto {
+  idProofType?: string | null;
+  idProofNumber?: string | null;
+  laborLicenseNumber?: string | null;
+  insuranceProvider?: string | null;
+  insurancePolicyNumber?: string | null;
+  insuranceExpiry?: string | null;
+  medicalFitnessStatus?: MedicalStatus | null;
+  medicalExpiry?: string | null;
+  safetyTrainingCompleted?: boolean | null;
+  safetyTrainingDate?: string | null;
+  complianceCertificates?: string | null;
+  resumeUrl?: string | null;
+  certificationDocuments?: string | null;
+  contractDocumentUrl?: string | null;
+}
+
+export interface ManpowerDto {
+  master?: ManpowerMasterDto | null;
+  skills?: ManpowerSkillsDto | null;
+  financials?: ManpowerFinancialsDto | null;
+  attendance?: ManpowerAttendanceDto | null;
+  allocation?: ManpowerAllocationDto | null;
+  compliance?: ManpowerComplianceDto | null;
+}
+
+// === Resource Response / Request ===
+
+/**
+ * Slim resource shape returned by list endpoints. The detail blocks
+ * (equipment / material / manpower) are populated only on detail GETs.
+ */
 export interface ResourceResponse {
   id: string;
   code: string;
   name: string;
-  /** Base category derived from the chosen Resource Type def. */
-  resourceType: "LABOR" | "NONLABOR" | "MATERIAL";
-  /** The admin-managed Resource Type def this resource references. */
-  resourceTypeDefId?: string | null;
-  resourceTypeCode?: string | null;
-  resourceTypeName?: string | null;
-  resourceCategory?: ResourceCategory | null;
-  unit?: ResourceUnit | null;
-  status: string;
-  maxUnitsPerDay: number;
-  hourlyRate: number;
-  costPerUse: number;
-  overtimeRate: number;
-  poolMaxAvailable?: number | null;
-  plannedUnitsToday?: number | null;
-  actualUnitsToday?: number | null;
-  utilisationPercent?: number | null;
-  utilisationStatus?: UtilisationStatus | null;
-  dailyCostLakh?: number | null;
-  cumulativeCostCrores?: number | null;
-  wbsAssignmentId?: string | null;
-  calendarId: string | null;
+  description?: string | null;
+  roleId: string;
+  roleCode: string;
+  roleName: string;
+  resourceTypeId: string;
+  resourceTypeCode: string;
+  resourceTypeName: string;
+  availability?: number | null;
+  costPerUnit?: number | null;
+  unit?: string | null;
+  status: ResourceStatus;
+  calendarId?: string | null;
+  parentId?: string | null;
   userId?: string | null;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
-}
 
-export type ResourceOwnership = "OWNED" | "HIRED" | "SUB_CONTRACTOR_PROVIDED";
+  // Populated on detail GET only.
+  equipment?: EquipmentDetailsDto | null;
+  material?: MaterialDetailsDto | null;
+  manpower?: ManpowerDto | null;
+}
 
 export interface CreateResourceRequest {
   code?: string;
   name: string;
-  /** Preferred: id of the admin-managed Resource Type def. */
-  resourceTypeDefId?: string;
-  /** Legacy: base-category enum. Used when resourceTypeDefId is absent. */
-  type?: "LABOR" | "NONLABOR" | "MATERIAL";
-  maxUnits?: number;
-  hourlyRate?: number;
-  costPerUse?: number;
-  overtimeRate?: number;
-  calendarId?: string;
-  // PMS MasterData Screen 04 equipment fields
-  capacitySpec?: string;
-  makeModel?: string;
-  quantityAvailable?: number;
-  ownershipType?: ResourceOwnership;
-  standardOutputPerDay?: number;
-  standardOutputUnit?: string;
-  fuelLitresPerHour?: number;
+  description?: string;
+  roleId: string;
+  resourceTypeId: string;
+  availability?: number | null;
+  costPerUnit?: number | null;
+  unit?: string | null;
+  status?: ResourceStatus;
+  calendarId?: string | null;
+  parentId?: string | null;
+  userId?: string | null;
+  sortOrder?: number | null;
+
+  /** Pass only the block matching the chosen resource type. */
+  equipment?: EquipmentDetailsDto;
+  material?: MaterialDetailsDto;
+  manpower?: ManpowerDto;
 }
 
-export interface UpdateResourceRequest {
-  code: string;
-  name: string;
-  /** Preferred: id of the admin-managed Resource Type def. */
-  resourceTypeDefId?: string;
-  /** Legacy: base-category enum. Used when resourceTypeDefId is absent. */
-  resourceType?: "LABOR" | "NONLABOR" | "MATERIAL";
-  maxUnitsPerDay?: number;
-  status?: string;
-  hourlyRate?: number;
-  costPerUse?: number;
-  overtimeRate?: number;
-  calendarId?: string;
-}
+// === Assignments / Leveling (unchanged wire shape) ===
 
 export type LevelingMode = "LEVEL_WITHIN_FLOAT" | "LEVEL_ALL" | "SMOOTH";
 
@@ -197,45 +313,92 @@ export interface SwapResourceRequest {
 }
 
 export const resourceApi = {
-  // The backend `ResourceController.listResources` returns
-  // `ApiResponse<List<ResourceResponse>>` (a flat array), NOT a Spring Page.
-  // It only accepts optional `type` / `status` filters. We keep the legacy
-  // `page`/`size` positional signature for backwards compatibility with
-  // existing callers, but the parameters are ignored by the server.
-  listResources: (_page = 0, _size = 20) =>
-    apiClient
+  // The backend `ResourceController.list` returns ApiResponse<List<ResourceResponse>>
+  // (a flat array). Optional page/size positional args are accepted by callers
+  // for legacy reasons; the server doesn't paginate this endpoint so we drop them.
+  listResources: (...args: number[]) => {
+    void args;
+    return apiClient
       .get<ApiResponse<ResourceResponse[]>>("/v1/resources")
-      .then((r) => r.data),
+      .then((r) => r.data);
+  },
 
   getResource: (id: string) =>
-    apiClient.get<ApiResponse<ResourceResponse>>(`/v1/resources/${id}`).then((r) => r.data),
+    apiClient
+      .get<ApiResponse<ResourceResponse>>(`/v1/resources/${id}`)
+      .then((r) => r.data),
+
+  listByType: (typeCode: string) =>
+    apiClient
+      .get<ApiResponse<ResourceResponse[]>>(`/v1/resources/by-type/${typeCode}`)
+      .then((r) => r.data),
+
+  listByRole: (roleId: string) =>
+    apiClient
+      .get<ApiResponse<ResourceResponse[]>>(`/v1/resources/by-role/${roleId}`)
+      .then((r) => r.data),
+
+  listRoots: () =>
+    apiClient
+      .get<ApiResponse<ResourceResponse[]>>("/v1/resources/roots")
+      .then((r) => r.data),
+
+  listByParent: (parentId: string) =>
+    apiClient
+      .get<ApiResponse<ResourceResponse[]>>(`/v1/resources/by-parent/${parentId}`)
+      .then((r) => r.data),
+
+  listByStatus: (status: ResourceStatus) =>
+    apiClient
+      .get<ApiResponse<ResourceResponse[]>>(`/v1/resources/by-status/${status}`)
+      .then((r) => r.data),
 
   createResource: (data: CreateResourceRequest) =>
-    apiClient.post<ApiResponse<ResourceResponse>>("/v1/resources", {
-      code: data.code,
-      name: data.name,
-      resourceTypeDefId: data.resourceTypeDefId,
-      resourceType: data.type,
-      maxUnitsPerDay: data.maxUnits ?? 8,
-      hourlyRate: data.hourlyRate ?? 0,
-      costPerUse: data.costPerUse ?? 0,
-      overtimeRate: data.overtimeRate ?? 0,
-      calendarId: data.calendarId,
-      capacitySpec: data.capacitySpec,
-      makeModel: data.makeModel,
-      quantityAvailable: data.quantityAvailable,
-      ownershipType: data.ownershipType,
-      standardOutputPerDay: data.standardOutputPerDay,
-      standardOutputUnit: data.standardOutputUnit,
-      fuelLitresPerHour: data.fuelLitresPerHour,
-    }).then((r) => r.data),
+    apiClient
+      .post<ApiResponse<ResourceResponse>>("/v1/resources", data)
+      .then((r) => r.data),
 
-  updateResource: (id: string, data: UpdateResourceRequest) =>
-    apiClient.put<ApiResponse<ResourceResponse>>(`/v1/resources/${id}`, data).then((r) => r.data),
+  updateResource: (id: string, data: CreateResourceRequest) =>
+    apiClient
+      .put<ApiResponse<ResourceResponse>>(`/v1/resources/${id}`, data)
+      .then((r) => r.data),
 
   deleteResource: (id: string) => apiClient.delete(`/v1/resources/${id}`),
 
   deleteAllResources: () => apiClient.delete("/v1/resources"),
+
+  // Per-section detail endpoints
+  getEquipmentDetails: (id: string) =>
+    apiClient
+      .get<ApiResponse<EquipmentDetailsDto>>(`/v1/resources/${id}/equipment-details`)
+      .then((r) => r.data),
+
+  updateEquipmentDetails: (id: string, dto: EquipmentDetailsDto) =>
+    apiClient
+      .put<ApiResponse<EquipmentDetailsDto>>(`/v1/resources/${id}/equipment-details`, dto)
+      .then((r) => r.data),
+
+  getMaterialDetails: (id: string) =>
+    apiClient
+      .get<ApiResponse<MaterialDetailsDto>>(`/v1/resources/${id}/material-details`)
+      .then((r) => r.data),
+
+  updateMaterialDetails: (id: string, dto: MaterialDetailsDto) =>
+    apiClient
+      .put<ApiResponse<MaterialDetailsDto>>(`/v1/resources/${id}/material-details`, dto)
+      .then((r) => r.data),
+
+  getManpower: (id: string) =>
+    apiClient
+      .get<ApiResponse<ManpowerDto>>(`/v1/resources/${id}/manpower`)
+      .then((r) => r.data),
+
+  updateManpower: (id: string, dto: ManpowerDto) =>
+    apiClient
+      .put<ApiResponse<ManpowerDto>>(`/v1/resources/${id}/manpower`, dto)
+      .then((r) => r.data),
+
+  // ─── Assignments / leveling — wire shape unchanged ───
 
   getResourceAssignments: (resourceId: string, page = 0, size = 20) =>
     apiClient
@@ -268,7 +431,10 @@ export const resourceApi = {
       )
       .then((r) => r.data),
 
-  createProjectResourceAssignment: (projectId: string, data: CreateProjectResourceAssignmentRequest) =>
+  createProjectResourceAssignment: (
+    projectId: string,
+    data: CreateProjectResourceAssignmentRequest
+  ) =>
     apiClient
       .post<ApiResponse<ResourceAssignmentResponse>>(
         `/v1/projects/${projectId}/resource-assignments`,

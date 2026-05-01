@@ -11,12 +11,11 @@ import com.bipros.resource.application.dto.ResourceUsageEntry;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.ResourceRate;
-import com.bipros.resource.domain.model.Role;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
-import com.bipros.resource.domain.repository.UserResourceRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,7 +41,6 @@ public class ResourceAssignmentService {
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository rateRepository;
   private final ResourceRoleRepository roleRepository;
-  private final UserResourceRoleRepository userResourceRoleRepository;
   private final ActivityRepository activityRepository;
   private final AuditService auditService;
 
@@ -67,7 +65,7 @@ public class ResourceAssignmentService {
     Map<UUID, String> roleNames = roleIds.isEmpty()
         ? Map.of()
         : roleRepository.findAllById(roleIds).stream()
-            .collect(Collectors.toMap(Role::getId, Role::getName));
+            .collect(Collectors.toMap(ResourceRole::getId, ResourceRole::getName));
     Map<UUID, String> activityNames = activityRepository.findAllById(activityIds).stream()
         .collect(Collectors.toMap(Activity::getId, Activity::getName));
     return assignments.stream()
@@ -80,20 +78,13 @@ public class ResourceAssignmentService {
 
   /**
    * Pick the latest rate (by effectiveDate) for the resource+type and multiply by units.
-   *
-   * <p>Prefers the PMS MasterData {@code budgetedRate} when set (Screen 05) so project-baseline
-   * rate locks take effect; falls back to the legacy {@code pricePerUnit} otherwise. Callers
-   * that want the current market rate should use {@link #computeActualCost} instead.
+   * Prefers {@code budgetedRate} when set, falls back to {@code pricePerUnit}.
    */
   private BigDecimal computePlannedCost(UUID resourceId, String rateType, Double plannedUnits) {
     if (plannedUnits == null) return null;
     List<ResourceRate> rates = rateType != null
         ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
         : List.of();
-    // Fallback: if no rate exists for the requested rateType (or none was supplied),
-    // use the most recent rate of any type so cost is non-null whenever the resource
-    // has any rate row at all. The frontend rateType taxonomy and the seeded
-    // ResourceRate taxonomy don't always line up.
     if (rates.isEmpty()) {
       rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(resourceId);
     }
@@ -107,19 +98,15 @@ public class ResourceAssignmentService {
   }
 
   /**
-   * Compute planned cost from a role's budgeted rate when no specific resource is assigned yet.
+   * Compute planned cost from a role's defaultRate when no specific resource is assigned yet.
    */
   private BigDecimal computePlannedCostFromRole(UUID roleId, String rateType, Double plannedUnits) {
-    if (plannedUnits == null || rateType == null) return null;
-    Role role = roleRepository.findById(roleId).orElse(null);
-    if (role == null || role.getBudgetedRate() == null) return null;
-    return role.getBudgetedRate().multiply(BigDecimal.valueOf(plannedUnits));
+    if (plannedUnits == null) return null;
+    ResourceRole role = roleRepository.findById(roleId).orElse(null);
+    if (role == null || role.getDefaultRate() == null) return null;
+    return role.getDefaultRate().multiply(BigDecimal.valueOf(plannedUnits));
   }
 
-  /**
-   * Compute incurred cost using the market/actual rate when set (PMS Screen 05), else fall back
-   * to the budgeted or legacy price. Used by cost-summary / EVM callers that need AC.
-   */
   @SuppressWarnings("unused")
   private BigDecimal computeActualCost(UUID resourceId, String rateType, Double actualUnits) {
     if (actualUnits == null) return null;
@@ -140,14 +127,13 @@ public class ResourceAssignmentService {
     return rate.multiply(BigDecimal.valueOf(actualUnits));
   }
 
-  /** Single-assignment hydration path. */
   private ResourceAssignmentResponse hydrate(ResourceAssignment a) {
     String rn = a.getResourceId() != null
         ? resourceRepository.findById(a.getResourceId()).map(Resource::getName).orElse(null)
         : null;
     String an = activityRepository.findById(a.getActivityId()).map(Activity::getName).orElse(null);
     String ron = a.getRoleId() != null
-        ? roleRepository.findById(a.getRoleId()).map(Role::getName).orElse(null)
+        ? roleRepository.findById(a.getRoleId()).map(ResourceRole::getName).orElse(null)
         : null;
     return ResourceAssignmentResponse.from(a, rn, an, ron);
   }
@@ -166,10 +152,9 @@ public class ResourceAssignmentService {
     }
 
     if (request.roleId() != null && !roleRepository.existsById(request.roleId())) {
-      throw new ResourceNotFoundException("Role", request.roleId());
+      throw new ResourceNotFoundException("ResourceRole", request.roleId());
     }
 
-    // Duplicate detection
     if (request.resourceId() != null) {
       assignmentRepository.findByActivityId(request.activityId())
           .stream()
@@ -192,10 +177,8 @@ public class ResourceAssignmentService {
           });
     }
 
-    // Default to STANDARD rate when the caller didn't specify one (BUG-031).
     String effectiveRateType = request.rateType() != null ? request.rateType() : "STANDARD";
 
-    // Back-fill planned dates from the activity when not provided (BUG-031).
     LocalDate plannedStart = request.plannedStartDate();
     LocalDate plannedFinish = request.plannedFinishDate();
     if (plannedStart == null || plannedFinish == null) {
@@ -254,28 +237,22 @@ public class ResourceAssignmentService {
     Resource resource = resourceRepository.findById(resourceId)
         .orElseThrow(() -> new ResourceNotFoundException("Resource", resourceId));
 
-    // Eligibility check
-    if (resource.getUserId() != null) {
-      boolean qualified = userResourceRoleRepository.existsByUserIdAndResourceRoleId(
-          resource.getUserId(), assignment.getRoleId());
-      if (!qualified && !override) {
+    // Eligibility: resource's role must match assignment role (the new model has 1 role per resource)
+    if (resource.getRole() == null || !assignment.getRoleId().equals(resource.getRole().getId())) {
+      if (!override) {
         throw new BusinessRuleException("RESOURCE_NOT_QUALIFIED",
-            "Resource's user does not hold the required role: resourceId=" + resourceId
+            "Resource's role does not match the required assignment role: resourceId=" + resourceId
                 + ", roleId=" + assignment.getRoleId());
       }
-      if (!qualified && override) {
-        // Simple admin check via SecurityContext
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        boolean isAdmin = auth != null && auth.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (!isAdmin) {
-          throw new BusinessRuleException("STAFF_OVERRIDE_NOT_AUTHORIZED",
-              "Only admins can override qualification checks");
-        }
+      var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+      boolean isAdmin = auth != null && auth.getAuthorities().stream()
+          .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+      if (!isAdmin) {
+        throw new BusinessRuleException("STAFF_OVERRIDE_NOT_AUTHORIZED",
+            "Only admins can override qualification checks");
       }
     }
 
-    // Verify no existing (activity, resource) row
     assignmentRepository.findByActivityId(assignment.getActivityId())
         .stream()
         .filter(a -> resourceId.equals(a.getResourceId()))
@@ -317,27 +294,21 @@ public class ResourceAssignmentService {
     Resource resource = resourceRepository.findById(newResourceId)
         .orElseThrow(() -> new ResourceNotFoundException("Resource", newResourceId));
 
-    // Eligibility check
-    if (resource.getUserId() != null) {
-      boolean qualified = userResourceRoleRepository.existsByUserIdAndResourceRoleId(
-          resource.getUserId(), assignment.getRoleId());
-      if (!qualified && !override) {
+    if (resource.getRole() == null || !assignment.getRoleId().equals(resource.getRole().getId())) {
+      if (!override) {
         throw new BusinessRuleException("RESOURCE_NOT_QUALIFIED",
-            "Resource's user does not hold the required role: resourceId=" + newResourceId
+            "Resource's role does not match the required assignment role: resourceId=" + newResourceId
                 + ", roleId=" + assignment.getRoleId());
       }
-      if (!qualified && override) {
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        boolean isAdmin = auth != null && auth.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (!isAdmin) {
-          throw new BusinessRuleException("SWAP_OVERRIDE_NOT_AUTHORIZED",
-              "Only admins can override qualification checks");
-        }
+      var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+      boolean isAdmin = auth != null && auth.getAuthorities().stream()
+          .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+      if (!isAdmin) {
+        throw new BusinessRuleException("SWAP_OVERRIDE_NOT_AUTHORIZED",
+            "Only admins can override qualification checks");
       }
     }
 
-    // Verify no existing (activity, newResource) row (excluding current)
     assignmentRepository.findByActivityId(assignment.getActivityId())
         .stream()
         .filter(a -> newResourceId.equals(a.getResourceId()) && !a.getId().equals(assignmentId))
@@ -362,19 +333,16 @@ public class ResourceAssignmentService {
   }
 
   public ResourceAssignmentResponse getAssignment(UUID id) {
-    log.info("Fetching resource assignment: id={}", id);
     ResourceAssignment assignment = assignmentRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("ResourceAssignment", id));
     return hydrate(assignment);
   }
 
   public List<ResourceAssignmentResponse> getAssignmentsByActivity(UUID activityId) {
-    log.info("Fetching assignments for activity: {}", activityId);
     return hydrate(assignmentRepository.findByActivityId(activityId));
   }
 
   public List<ResourceAssignmentResponse> getAssignmentsByResource(UUID resourceId) {
-    log.info("Fetching assignments for resource: {}", resourceId);
     if (!resourceRepository.existsById(resourceId)) {
       throw new ResourceNotFoundException("Resource", resourceId);
     }
@@ -382,16 +350,13 @@ public class ResourceAssignmentService {
   }
 
   public List<ResourceAssignmentResponse> getAssignmentsByProject(UUID projectId) {
-    log.info("Fetching assignments for project: {}", projectId);
     return hydrate(assignmentRepository.findByProjectId(projectId));
   }
 
   public ResourceAssignmentResponse updateAssignment(UUID id, CreateResourceAssignmentRequest request) {
-    log.info("Updating resource assignment: id={}", id);
     ResourceAssignment assignment = assignmentRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("ResourceAssignment", id));
 
-    // Disallow flipping staffed state via PUT
     boolean wasStaffed = assignment.getResourceId() != null;
     boolean willBeStaffed = request.resourceId() != null;
     if (wasStaffed != willBeStaffed) {
@@ -404,7 +369,6 @@ public class ResourceAssignmentService {
           "Either roleId or resourceId is required");
     }
 
-    // Null-aware duplicate detection
     if (request.resourceId() != null
         && !request.resourceId().equals(assignment.getResourceId())) {
       assignmentRepository.findByActivityId(request.activityId())
@@ -441,7 +405,6 @@ public class ResourceAssignmentService {
     assignment.setPlannedStartDate(request.plannedStartDate());
     assignment.setPlannedFinishDate(request.plannedFinishDate());
 
-    // Recompute planned cost
     BigDecimal plannedCost;
     if (request.resourceId() != null) {
       plannedCost = computePlannedCost(
@@ -460,14 +423,6 @@ public class ResourceAssignmentService {
     return response;
   }
 
-  /**
-   * Recompute and persist all cost fields ({@code plannedCost}, {@code actualCost},
-   * {@code remainingCost}, {@code atCompletionCost}) for every assignment in the project.
-   * Used to backfill rows that were created before a rate existed (or with a rateType
-   * that didn't match any rate row), and to fill in {@code actualCost} for assignments
-   * whose units were written outside the daily-output rollup path.
-   * Cheap — O(N) over the project's assignments.
-   */
   public int recomputeProjectCosts(UUID projectId) {
     log.info("Recomputing costs for project: projectId={}", projectId);
     List<ResourceAssignment> assignments = assignmentRepository.findByProjectId(projectId);
@@ -506,12 +461,6 @@ public class ResourceAssignmentService {
     return updated;
   }
 
-  /**
-   * Resolve the rate for actual-cost computation: latest {@code actualRate} →
-   * {@code budgetedRate} → {@code pricePerUnit}, with a fallback to the most recent
-   * rate of any type when no rate matches the requested {@code rateType}. Mirrors
-   * {@link com.bipros.resource.application.listener.ResourceAssignmentCostRollupListener}.
-   */
   private BigDecimal resolveActualRate(UUID resourceId, String rateType) {
     List<ResourceRate> rates = rateType != null
         ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
@@ -527,21 +476,14 @@ public class ResourceAssignmentService {
   }
 
   public void removeAssignment(UUID assignmentId) {
-    log.info("Removing resource assignment: id={}", assignmentId);
     if (!assignmentRepository.existsById(assignmentId)) {
       throw new ResourceNotFoundException("ResourceAssignment", assignmentId);
     }
     assignmentRepository.deleteById(assignmentId);
-    log.info("Resource assignment removed: id={}", assignmentId);
-
-    // Audit log deletion
     auditService.logDelete("ResourceAssignment", assignmentId);
   }
 
   public List<ResourceUsageEntry> getResourceUsageProfile(UUID resourceId, LocalDate startDate, LocalDate endDate) {
-    log.info("Fetching resource usage profile: resourceId={}, startDate={}, endDate={}",
-        resourceId, startDate, endDate);
-
     if (!resourceRepository.existsById(resourceId)) {
       throw new ResourceNotFoundException("Resource", resourceId);
     }
@@ -600,7 +542,6 @@ public class ResourceAssignmentService {
       current = current.plusDays(1);
     }
 
-    log.info("Usage profile computed: {} entries", entries.size());
     return entries;
   }
 }

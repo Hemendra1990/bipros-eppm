@@ -17,8 +17,8 @@ export interface ProductivityNormResponse {
   workActivityName: string | null;
   workActivityCode: string | null;
 
-  resourceTypeDefId: string | null;
-  resourceTypeDefName: string | null;
+  resourceTypeId: string | null;
+  resourceTypeName: string | null;
 
   resourceId: string | null;
   resourceCode: string | null;
@@ -41,7 +41,7 @@ export interface ProductivityNormResponse {
 export interface CreateProductivityNormRequest {
   normType: ProductivityNormType;
   workActivityId?: string | null;
-  resourceTypeDefId?: string | null;
+  resourceTypeId?: string | null;
   resourceId?: string | null;
   /** @deprecated use {@link workActivityId}. Server will resolve by name when id is omitted. */
   activityName?: string | null;

@@ -66,7 +66,7 @@ public class DailyOutputChangedListener {
                 }
                 etl.insertResourceUsageDaily(
                         event.projectId(), event.activityId(), event.resourceId(),
-                        resource.getResourceType() != null ? resource.getResourceType().name() : null,
+                        resource.getResourceType() != null ? resource.getResourceType().getCode() : null,
                         event.outputDate(),
                         output.getHoursWorked() != null ? output.getHoursWorked().floatValue() : null,
                         output.getDaysWorked() != null ? output.getDaysWorked().floatValue() : null,

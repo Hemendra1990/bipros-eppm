@@ -72,6 +72,7 @@ export function AiChatPanel() {
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -194,30 +195,71 @@ export function AiChatPanel() {
   };
 
   const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        try {
-          const text = await aiApi.speechToText(blob);
-          setInput((prev) => prev + (prev ? " " : "") + text);
-        } catch (err) {
-          console.error("STT failed", err);
-        }
-        setIsRecording(false);
-        stream.getTracks().forEach((t) => t.stop());
-      };
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setIsRecording(true);
-    } catch (err) {
-      console.error("Microphone access denied", err);
+    setMicError(null);
+
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setMicError(
+        window.isSecureContext
+          ? "Microphone API is not available in this browser."
+          : "Microphone requires a secure context (HTTPS or localhost)."
+      );
+      return;
     }
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      const name = (err as DOMException)?.name;
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setMicError(
+          "Microphone permission denied. Click the lock icon in the address bar to allow it, then try again."
+        );
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        setMicError("No microphone device was found.");
+      } else if (name === "NotReadableError") {
+        setMicError("Microphone is in use by another application.");
+      } else {
+        setMicError("Could not start the microphone. Check browser settings.");
+      }
+      console.error("Microphone access failed", err);
+      return;
+    }
+
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+      ? "audio/webm"
+      : MediaRecorder.isTypeSupported("audio/mp4")
+      ? "audio/mp4"
+      : "";
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch (err) {
+      console.error("MediaRecorder init failed", err);
+      setMicError("Audio recording is not supported in this browser.");
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
+    const chunks: BlobPart[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+      try {
+        const text = await aiApi.speechToText(blob);
+        setInput((prev) => prev + (prev ? " " : "") + text);
+      } catch (err) {
+        console.error("STT failed", err);
+        setMicError("Speech-to-text failed. Please try again.");
+      }
+      setIsRecording(false);
+      stream.getTracks().forEach((t) => t.stop());
+    };
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+    setIsRecording(true);
   };
 
   const stopRecording = () => {
@@ -389,6 +431,22 @@ export function AiChatPanel() {
                     className="absolute -top-1 -right-1 bg-danger text-white rounded-full p-0.5"
                   >
                     <X size={10} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Mic error */}
+            {micError && (
+              <div className="px-4 pt-2">
+                <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                  <span className="flex-1">{micError}</span>
+                  <button
+                    onClick={() => setMicError(null)}
+                    className="text-danger/70 hover:text-danger"
+                    title="Dismiss"
+                  >
+                    <X size={12} />
                   </button>
                 </div>
               </div>
