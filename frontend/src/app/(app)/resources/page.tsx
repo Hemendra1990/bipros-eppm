@@ -22,6 +22,9 @@ const TYPE_TABS: { key: TypeTab; label: string }[] = [
   { key: "MATERIAL", label: "Material" },
 ];
 
+// The "Manpower" tab is a UX label; the backend's seeded ResourceType code is "LABOR".
+const tabKeyToTypeCode = (key: TypeTab): string => (key === "MANPOWER" ? "LABOR" : key);
+
 export default function ResourcesPage() {
   const queryClient = useQueryClient();
   const [typeTab, setTypeTab] = useState<TypeTab>("ALL");
@@ -58,7 +61,8 @@ export default function ResourcesPage() {
 
   const resources = useMemo(() => {
     if (typeTab === "ALL") return allResources;
-    return allResources.filter((r) => r.resourceTypeCode === typeTab);
+    const code = tabKeyToTypeCode(typeTab);
+    return allResources.filter((r) => r.resourceTypeCode === code);
   }, [allResources, typeTab]);
 
   // Columns vary by tab. The list endpoint returns slim fields only — detail blocks come on
@@ -204,7 +208,7 @@ export default function ResourcesPage() {
             <span className="ml-2 inline-flex items-center justify-center rounded bg-surface-hover/60 px-1.5 py-0.5 text-xs">
               {t.key === "ALL"
                 ? allResources.length
-                : allResources.filter((r) => r.resourceTypeCode === t.key).length}
+                : allResources.filter((r) => r.resourceTypeCode === tabKeyToTypeCode(t.key)).length}
             </span>
           </button>
         ))}

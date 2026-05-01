@@ -4,6 +4,7 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.resource.application.dto.CreateProductivityNormRequest;
 import com.bipros.resource.application.dto.ProductivityNormResponse;
 import com.bipros.resource.application.dto.ResolvedNormResponse;
+import com.bipros.resource.application.dto.SuggestedUnitsResponse;
 import com.bipros.resource.application.service.ProductivityNormService;
 import com.bipros.resource.domain.model.ProductivityNormType;
 import com.bipros.resource.domain.service.ProductivityNormLookupService;
@@ -71,6 +72,21 @@ public class ProductivityNormController {
     log.info("GET /v1/productivity-norms/lookup - workActivityId={}, resourceId={}", workActivityId, resourceId);
     return ResponseEntity.ok(ApiResponse.ok(
         ResolvedNormResponse.from(lookupService.resolve(workActivityId, resourceId))));
+  }
+
+  /**
+   * Suggest a {@code plannedUnits} value for a (resource, activity) pair using the resolved
+   * productivity norm. The Assign Resource UI calls this after the user picks both an
+   * activity and a resource so the form can pre-fill plannedUnits with provenance shown.
+   */
+  @GetMapping("/suggest-units")
+  public ResponseEntity<ApiResponse<SuggestedUnitsResponse>> suggestUnits(
+      @RequestParam UUID activityId,
+      @RequestParam UUID resourceId,
+      @RequestParam(required = false) java.math.BigDecimal quantity) {
+    log.info("GET /v1/productivity-norms/suggest-units - activityId={}, resourceId={}, quantity={}",
+        activityId, resourceId, quantity);
+    return ResponseEntity.ok(ApiResponse.ok(service.suggestUnits(activityId, resourceId, quantity)));
   }
 
   @GetMapping("/{id}")

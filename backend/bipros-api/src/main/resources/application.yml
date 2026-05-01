@@ -98,6 +98,15 @@ bipros:
     # Default: every day at 2:05 AM local time.
     duration-percent-cron: "0 5 2 * * *"
 
+  # Seeder gates. The Excel master-data loader replaces the entire resource catalog
+  # on every boot (it deletes resources/contracts/etc and re-inserts from
+  # seed-data/ic-pms-sample.xlsx). Default OFF here so dev iterations don't lose
+  # custom resources/rates/pool entries between restarts. Set to true when you
+  # genuinely want the IC-PMS demo dataset (e.g. BIPROS_SEEDERS_EXCEL_MASTER_ENABLED=true).
+  seeders:
+    excel-master:
+      enabled: ${BIPROS_SEEDERS_EXCEL_MASTER_ENABLED:false}
+
   # Satellite raster storage. MinIO in dev (docker-compose.yml), AWS S3 in prod
   # via the same config keys (change endpoint + credentials).
   storage:

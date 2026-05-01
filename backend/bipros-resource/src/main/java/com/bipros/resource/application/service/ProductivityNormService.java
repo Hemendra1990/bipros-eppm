@@ -1,10 +1,13 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateProductivityNormRequest;
 import com.bipros.resource.application.dto.ProductivityNormResponse;
+import com.bipros.resource.application.dto.SuggestedUnitsResponse;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.ProductivityNormType;
 import com.bipros.resource.domain.model.Resource;
@@ -13,12 +16,15 @@ import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceTypeRepository;
 import com.bipros.resource.domain.repository.WorkActivityRepository;
+import com.bipros.resource.domain.service.ProductivityNormLookupService;
+import com.bipros.resource.domain.service.ResolvedNorm;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,7 +38,61 @@ public class ProductivityNormService {
   private final WorkActivityRepository workActivityRepository;
   private final ResourceTypeRepository resourceTypeRepository;
   private final ResourceRepository resourceRepository;
+  private final ActivityRepository activityRepository;
+  private final ProductivityNormLookupService normLookupService;
   private final AuditService auditService;
+
+  /**
+   * Suggest a {@code plannedUnits} value for an upcoming resource assignment based on the
+   * applicable productivity norm. The activity must be linked to a {@code WorkActivity}
+   * (via {@code Activity.workActivityId}) so a norm can be resolved; otherwise the response
+   * carries a null suggestion and a NONE source.
+   *
+   * <p>Formula (when a norm with positive {@code outputPerDay} is found):
+   * {@code suggestedPlannedUnits = quantity / outputPerDay} → days the resource is needed.
+   *
+   * <p>The endpoint deliberately requires the caller to pass {@code quantity} since
+   * {@link Activity} doesn't store its target quantity (it lives on linked BoQ items, with
+   * project-specific multiplicities). Callers that want auto-quantity should pre-fetch the
+   * BoQ total and pass it here.
+   */
+  @Transactional(readOnly = true)
+  public SuggestedUnitsResponse suggestUnits(UUID activityId, UUID resourceId, BigDecimal quantity) {
+    Activity activity = activityRepository.findById(activityId)
+        .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
+    if (resourceId != null && !resourceRepository.existsById(resourceId)) {
+      throw new ResourceNotFoundException("Resource", resourceId);
+    }
+    UUID workActivityId = activity.getWorkActivityId();
+    if (workActivityId == null) {
+      return new SuggestedUnitsResponse(activityId, resourceId, null, quantity, null, null, null,
+          "Activity is not linked to a WorkActivity master row — no norm can be resolved.",
+          ResolvedNorm.Source.NONE.name());
+    }
+
+    ResolvedNorm norm = normLookupService.resolve(workActivityId, resourceId);
+    if (norm.outputPerDay() == null || norm.outputPerDay().signum() <= 0) {
+      return new SuggestedUnitsResponse(activityId, resourceId, workActivityId, quantity, null, null, null,
+          "No productivity norm with positive daily output found for this activity + resource.",
+          norm.source().name());
+    }
+    if (quantity == null || quantity.signum() <= 0) {
+      return new SuggestedUnitsResponse(activityId, resourceId, workActivityId, quantity,
+          norm.unit(), norm.outputPerDay(), null,
+          "Pass a positive quantity (in " + norm.unit() + ") to compute suggested planned units.",
+          norm.source().name());
+    }
+
+    BigDecimal suggested = quantity.divide(norm.outputPerDay(), 2, RoundingMode.HALF_UP);
+    String basis = String.format("%s %s ÷ %s/day = %s days",
+        quantity.stripTrailingZeros().toPlainString(),
+        norm.unit() == null ? "units" : norm.unit(),
+        norm.outputPerDay().stripTrailingZeros().toPlainString(),
+        suggested.stripTrailingZeros().toPlainString());
+    return new SuggestedUnitsResponse(
+        activityId, resourceId, workActivityId, quantity,
+        norm.unit(), norm.outputPerDay(), suggested, basis, norm.source().name());
+  }
 
   public ProductivityNormResponse create(CreateProductivityNormRequest request) {
     log.info("Creating productivity norm: type={}, workActivityId={}, resourceTypeId={}, resourceId={}",

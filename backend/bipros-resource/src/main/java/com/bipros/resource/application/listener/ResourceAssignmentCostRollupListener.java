@@ -2,6 +2,7 @@ package com.bipros.resource.application.listener;
 
 import com.bipros.common.event.DailyOutputChangedEvent;
 import com.bipros.common.event.ResourceAssignmentActualsRolledUpEvent;
+import com.bipros.resource.application.service.ProjectResourceService;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.ResourceRate;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
@@ -37,6 +38,7 @@ public class ResourceAssignmentCostRollupListener {
 
   private final ResourceAssignmentRepository assignmentRepository;
   private final ResourceRateRepository rateRepository;
+  private final ProjectResourceService projectResourceService;
   private final ApplicationEventPublisher eventPublisher;
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -85,6 +87,14 @@ public class ResourceAssignmentCostRollupListener {
   }
 
   private BigDecimal resolveRate(ResourceAssignment assignment) {
+    // Pool entry's rateOverride wins when set — mirrors ResourceAssignmentService.computeActualCost
+    // so plannedCost (computed at assignment time) and actualCost (rolled up here from daily logs)
+    // both honour the per-project override. Without this, a pool override silently affected only
+    // plannedCost and produced a divergent actualCost using the master rate.
+    BigDecimal rateOverride = projectResourceService.resolveRateOverride(
+        assignment.getProjectId(), assignment.getResourceId());
+    if (rateOverride != null) return rateOverride;
+
     List<ResourceRate> rates = assignment.getRateType() != null
         ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(
             assignment.getResourceId(), assignment.getRateType())

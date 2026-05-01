@@ -68,6 +68,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
@@ -160,9 +161,16 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
     @PersistenceContext
     private EntityManager entityManager;
 
+    @Value("${bipros.seeders.excel-master.enabled:true}")
+    private boolean enabled;
+
     @Override
     @Transactional
     public void run(String... args) {
+        if (!enabled) {
+            log.info("[Excel] master-data loader disabled via bipros.seeders.excel-master.enabled=false");
+            return;
+        }
         // Idempotency sentinel: detect a prior successful Excel load by the presence of
         // the Excel-specific contract number DMIC/P01/LOA/2024-012 which no other seeder emits.
         if (contractRepository.findByContractNumber("DMIC/P01/LOA/2024-012").isPresent()) {

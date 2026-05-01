@@ -141,11 +141,19 @@ public class BaselineService {
     // until SOMETHING is the reference, and forcing the user to click "Activate" right
     // after "Create" is friction. Subsequent baselines do not auto-replace the active
     // one; the user has to explicitly switch via setActiveBaseline().
+    // Taking any new baseline also clears the requires_rebaseline nudge — the new
+    // snapshot is, by definition, current.
     projectRepository.findById(projectId).ifPresent(p -> {
+      boolean dirty = false;
       if (p.getActiveBaselineId() == null) {
         p.setActiveBaselineId(saved.getId());
-        projectRepository.save(p);
+        dirty = true;
       }
+      if (p.isRequiresRebaseline()) {
+        p.setRequiresRebaseline(false);
+        dirty = true;
+      }
+      if (dirty) projectRepository.save(p);
     });
 
     auditService.logCreate("Baseline", saved.getId(), BaselineResponse.from(saved));

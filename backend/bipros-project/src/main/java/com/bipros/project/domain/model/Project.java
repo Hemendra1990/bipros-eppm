@@ -103,6 +103,14 @@ public class Project extends BaseEntity {
     private UUID activeBaselineId;
 
     /**
+     * Set to true by listeners (e.g. VariationOrderApprovedListener) when something material
+     * changed that should be reflected in a fresh baseline. Cleared when a new baseline is
+     * taken via BaselineService. UI surfaces a "needs re-baseline" banner on the Baselines tab.
+     */
+    @Column(name = "requires_rebaseline", nullable = false)
+    private boolean requiresRebaseline = false;
+
+    /**
      * Optional project owner — soft FK to {@code public.users.id}. Used by ABAC ownership
      * checks (e.g. CLIENT-role users see projects they own without needing OBS assignment).
      * Nullable: legacy projects created before owner tracking will leave this empty.

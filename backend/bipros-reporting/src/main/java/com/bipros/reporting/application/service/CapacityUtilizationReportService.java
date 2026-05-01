@@ -170,19 +170,25 @@ public class CapacityUtilizationReportService {
     if (specific != null) {
       return new Budgeted(specific, "SPECIFIC_RESOURCE");
     }
-    // 2) type-level norm via the resource's type_def
+    // 2) type-level norm — joined via the resource's resource_type_id (post 3-tier rewrite).
+    //    Productivity_norms keeps both legacy (resource_type_def_id) and new (resource_type_id)
+    //    columns; resources only has the new one. Match on the new column on both sides.
     BigDecimal typeLevel = singleBigDecimal(
         "SELECT n.output_per_day FROM resource.productivity_norms n "
-            + "JOIN resource.resources r ON r.resource_type_def_id = n.resource_type_def_id "
+            + "JOIN resource.resources r ON r.resource_type_id = n.resource_type_id "
             + "WHERE n.work_activity_id = :wa AND n.resource_id IS NULL "
             + "  AND r.id = :res",
         Map.of("wa", workActivityId, "res", resourceId));
     if (typeLevel != null) {
       return new Budgeted(typeLevel, "RESOURCE_TYPE");
     }
-    // 3) legacy Resource.standardOutputPerDay
+    // 3) legacy Resource.standardOutputPerDay — column was moved to
+    //    resource_equipment_details.standard_output_per_day in the 3-tier rewrite.
+    //    Only equipment-typed resources have it; manpower/material don't, so this fallback
+    //    only fires for equipment.
     BigDecimal legacy = singleBigDecimal(
-        "SELECT r.standard_output_per_day FROM resource.resources r WHERE r.id = :res",
+        "SELECT d.standard_output_per_day FROM resource.resource_equipment_details d "
+            + "WHERE d.resource_id = :res",
         Map.of("res", resourceId));
     if (legacy != null) {
       return new Budgeted(legacy, "RESOURCE_LEGACY");

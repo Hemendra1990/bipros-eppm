@@ -4,6 +4,7 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.project.application.dto.CreateProjectRequest;
 import com.bipros.project.application.dto.ProjectResponse;
+import com.bipros.project.application.dto.SetDataDateRequest;
 import com.bipros.project.application.dto.UpdateProjectRequest;
 import com.bipros.project.application.service.ProjectService;
 import jakarta.validation.Valid;
@@ -70,6 +71,19 @@ public class ProjectController {
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
         @PathVariable UUID id, @Valid @RequestBody UpdateProjectRequest request) {
         ProjectResponse response = projectService.updateProject(id, request);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    /**
+     * Advance (or rewind) the project's data date — the "as-of" cursor used by EVM, schedule
+     * health, and progress reports. Separated from the omnibus PUT so a small UI control
+     * (e.g. a date picker on the project header) can update just this field cleanly.
+     */
+    @PutMapping("/{id:[0-9a-fA-F-]{36}}/data-date")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER') and @projectAccess.canEdit(#id)")
+    public ResponseEntity<ApiResponse<ProjectResponse>> setDataDate(
+        @PathVariable UUID id, @Valid @RequestBody SetDataDateRequest request) {
+        ProjectResponse response = projectService.setDataDate(id, request.dataDate());
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 

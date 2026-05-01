@@ -147,9 +147,24 @@ public class ResourceLevelingService {
 
   /**
    * Performs resource leveling with mode selection: LEVEL_ALL, LEVEL_WITHIN_FLOAT, or SMOOTH.
+   * Persists the proposed activity-date shifts.
    */
   public ResourceLevelingResponse levelResourcesWithMode(UUID projectId, LevelingMode mode, List<UUID> resourceFilter) {
-    log.info("Starting resource leveling for project: {}, mode: {}", projectId, mode);
+    return runLevelingWithMode(projectId, mode, resourceFilter, false);
+  }
+
+  /**
+   * Preview-only counterpart of {@link #levelResourcesWithMode}. Runs the same algorithm
+   * and returns the same shape of result, but does NOT write activity dates back to the DB.
+   * Lets the UI show a "would do this" preview before the user clicks Apply.
+   */
+  @Transactional(readOnly = true)
+  public ResourceLevelingResponse previewLevelingWithMode(UUID projectId, LevelingMode mode, List<UUID> resourceFilter) {
+    return runLevelingWithMode(projectId, mode, resourceFilter, true);
+  }
+
+  private ResourceLevelingResponse runLevelingWithMode(UUID projectId, LevelingMode mode, List<UUID> resourceFilter, boolean dryRun) {
+    log.info("Starting resource leveling for project: {}, mode: {}, dryRun: {}", projectId, mode, dryRun);
 
     Project project = projectRepository.findById(projectId)
         .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
@@ -203,9 +218,9 @@ public class ResourceLevelingService {
         .collect(Collectors.toMap(ActivityInfo::activityId, ActivityInfo::currentStart));
 
     return switch (mode) {
-      case SMOOTH -> runSmoothing(activityInfos, assignmentInfos, resourceMaxUnits, originalStarts, peakBefore, activities);
-      case LEVEL_WITHIN_FLOAT -> runLevelingWithinFloat(activityInfos, assignmentInfos, resourceMaxUnits, originalStarts, peakBefore, activities);
-      case LEVEL_ALL -> runFullLeveling(activityInfos, assignmentInfos, resourceMaxUnits, originalStarts, peakBefore, activities);
+      case SMOOTH -> runSmoothing(activityInfos, assignmentInfos, resourceMaxUnits, originalStarts, peakBefore, activities, dryRun);
+      case LEVEL_WITHIN_FLOAT -> runLevelingWithinFloat(activityInfos, assignmentInfos, resourceMaxUnits, originalStarts, peakBefore, activities, dryRun);
+      case LEVEL_ALL -> runFullLeveling(activityInfos, assignmentInfos, resourceMaxUnits, originalStarts, peakBefore, activities, dryRun);
     };
   }
 
@@ -341,12 +356,12 @@ public class ResourceLevelingService {
 
   private ResourceLevelingResponse runSmoothing(List<ActivityInfo> activityInfos,
       List<AssignmentInfo> assignmentInfos, Map<UUID, Double> resourceMaxUnits,
-      Map<UUID, LocalDate> originalStarts, double peakBefore, List<Activity> activities) {
+      Map<UUID, LocalDate> originalStarts, double peakBefore, List<Activity> activities, boolean dryRun) {
 
     ResourceSmoother smoother = new ResourceSmoother();
     ResourceSmoother.SmoothingResult result = smoother.smooth(activityInfos, assignmentInfos, resourceMaxUnits);
 
-    // Apply shifted dates to activities
+    // Apply shifted dates to activities (skipped on dryRun — preview path)
     List<ResourceLevelingResponse.ShiftedActivity> shifted = new ArrayList<>();
     for (var entry : result.shiftedActivities().entrySet()) {
       UUID activityId = entry.getKey();
@@ -354,7 +369,7 @@ public class ResourceLevelingService {
       LocalDate origStart = originalStarts.get(activityId);
 
       Activity activity = activities.stream().filter(a -> a.getId().equals(activityId)).findFirst().orElse(null);
-      if (activity != null && activity.getPlannedStartDate() != null) {
+      if (activity != null && activity.getPlannedStartDate() != null && !dryRun) {
         long duration = ChronoUnit.DAYS.between(activity.getPlannedStartDate(), activity.getPlannedFinishDate()) + 1;
         activity.setPlannedStartDate(newStart);
         activity.setPlannedFinishDate(newStart.plusDays(duration - 1));
@@ -378,7 +393,7 @@ public class ResourceLevelingService {
 
   private ResourceLevelingResponse runLevelingWithinFloat(List<ActivityInfo> activityInfos,
       List<AssignmentInfo> assignmentInfos, Map<UUID, Double> resourceMaxUnits,
-      Map<UUID, LocalDate> originalStarts, double peakBefore, List<Activity> activities) {
+      Map<UUID, LocalDate> originalStarts, double peakBefore, List<Activity> activities, boolean dryRun) {
 
     // Filter to only activities with float > 0
     List<ActivityInfo> floatActivities = activityInfos.stream()
@@ -407,7 +422,7 @@ public class ResourceLevelingService {
       }
 
       Activity activity = activities.stream().filter(a -> a.getId().equals(activityId)).findFirst().orElse(null);
-      if (activity != null && activity.getPlannedStartDate() != null) {
+      if (activity != null && activity.getPlannedStartDate() != null && !dryRun) {
         long duration = ChronoUnit.DAYS.between(activity.getPlannedStartDate(), activity.getPlannedFinishDate()) + 1;
         activity.setPlannedStartDate(newStart);
         activity.setPlannedFinishDate(newStart.plusDays(duration - 1));
@@ -432,7 +447,7 @@ public class ResourceLevelingService {
 
   private ResourceLevelingResponse runFullLeveling(List<ActivityInfo> activityInfos,
       List<AssignmentInfo> assignmentInfos, Map<UUID, Double> resourceMaxUnits,
-      Map<UUID, LocalDate> originalStarts, double peakBefore, List<Activity> activities) {
+      Map<UUID, LocalDate> originalStarts, double peakBefore, List<Activity> activities, boolean dryRun) {
 
     ResourceLeveler leveler = new ResourceLeveler();
     LevelingInput input = new LevelingInput(activityInfos, assignmentInfos, resourceMaxUnits);
@@ -445,7 +460,7 @@ public class ResourceLevelingService {
       LocalDate origStart = originalStarts.get(activityId);
 
       Activity activity = activities.stream().filter(a -> a.getId().equals(activityId)).findFirst().orElse(null);
-      if (activity != null && activity.getPlannedStartDate() != null) {
+      if (activity != null && activity.getPlannedStartDate() != null && !dryRun) {
         long duration = ChronoUnit.DAYS.between(activity.getPlannedStartDate(), activity.getPlannedFinishDate()) + 1;
         activity.setPlannedStartDate(newStart);
         activity.setPlannedFinishDate(newStart.plusDays(duration - 1));

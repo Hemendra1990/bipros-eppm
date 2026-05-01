@@ -1,19 +1,25 @@
 package com.bipros.contract.application.service;
 
+import com.bipros.common.event.VariationOrderApprovedEvent;
+import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.contract.application.dto.VariationOrderRequest;
 import com.bipros.contract.application.dto.VariationOrderResponse;
 import com.bipros.contract.domain.model.AttachmentEntityType;
+import com.bipros.contract.domain.model.Contract;
 import com.bipros.contract.domain.model.VariationOrder;
 import com.bipros.contract.domain.model.VariationOrderStatus;
 import com.bipros.contract.domain.repository.ContractAttachmentRepository;
+import com.bipros.contract.domain.repository.ContractRepository;
 import com.bipros.contract.domain.repository.VariationOrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,7 +33,9 @@ public class VariationOrderService {
     private final VariationOrderRepository variationOrderRepository;
     private final ContractAttachmentRepository attachmentRepository;
     private final ContractAttachmentService attachmentService;
+    private final ContractRepository contractRepository;
     private final AuditService auditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public VariationOrderResponse create(VariationOrderRequest request) {
         log.info("Creating variation order for contract: {}", request.contractId());
@@ -90,6 +98,55 @@ public class VariationOrderService {
         VariationOrderResponse response = toResponse(updated, count);
         auditService.logUpdate("VariationOrder", id, "vo", null, response);
         return response;
+    }
+
+    /**
+     * Transition the VO to a new status. Approving a VO publishes
+     * {@link VariationOrderApprovedEvent} (advisory — does NOT auto-edit activities or budgets).
+     * Listeners use the event to log a typed audit entry and flag the parent project for
+     * re-baseline; the planner then decides how to amend the schedule.
+     */
+    public VariationOrderResponse updateStatus(UUID id, VariationOrderStatus newStatus, String approvedBy) {
+        log.info("Transitioning VO {} to status {}", id, newStatus);
+        if (newStatus == null) {
+            throw new BusinessRuleException("VO_STATUS_REQUIRED", "status is required");
+        }
+        VariationOrder vo = variationOrderRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("VariationOrder", id));
+
+        VariationOrderStatus previous = vo.getStatus();
+        if (previous == newStatus) {
+            long count = attachmentRepository.countByContractIdAndEntityTypeAndEntityId(
+                vo.getContractId(), AttachmentEntityType.VARIATION_ORDER, id);
+            return toResponse(vo, count);
+        }
+
+        vo.setStatus(newStatus);
+        if (newStatus == VariationOrderStatus.APPROVED) {
+            vo.setApprovedAt(Instant.now());
+            if (approvedBy != null) vo.setApprovedBy(approvedBy);
+        }
+        VariationOrder saved = variationOrderRepository.save(vo);
+        auditService.logUpdate("VariationOrder", id, "status", previous, newStatus);
+
+        if (newStatus == VariationOrderStatus.APPROVED) {
+            // Look up the parent project so listeners outside the contract module don't have to.
+            Contract contract = contractRepository.findById(saved.getContractId())
+                .orElseThrow(() -> new ResourceNotFoundException("Contract", saved.getContractId()));
+            eventPublisher.publishEvent(new VariationOrderApprovedEvent(
+                saved.getId(),
+                saved.getContractId(),
+                contract.getProjectId(),
+                saved.getVoNumber(),
+                saved.getVoValue(),
+                saved.getImpactOnBudget(),
+                saved.getImpactOnScheduleDays()
+            ));
+        }
+
+        long count = attachmentRepository.countByContractIdAndEntityTypeAndEntityId(
+            saved.getContractId(), AttachmentEntityType.VARIATION_ORDER, id);
+        return toResponse(saved, count);
     }
 
     public void delete(UUID id) {

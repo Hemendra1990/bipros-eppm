@@ -307,6 +307,31 @@ public class ProjectService {
         return buildProjectResponse(project);
     }
 
+    /**
+     * Focused endpoint for advancing the project's data date — the as-of date used by
+     * EVM, schedule status, and "what should have been done by now" reporting.
+     * Kept separate from {@link #updateProject} so callers can move the data date
+     * without touching unrelated fields, and so audit history clearly attributes the change.
+     */
+    public ProjectResponse setDataDate(UUID id, java.time.LocalDate dataDate) {
+        log.info("Setting dataDate on project {} to {}", id, dataDate);
+
+        projectAccess.requireEdit(id);
+
+        Project project = projectRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Project", id));
+
+        java.time.LocalDate previous = project.getDataDate();
+        if (java.util.Objects.equals(previous, dataDate)) {
+            return buildProjectResponse(project);
+        }
+
+        project.setDataDate(dataDate);
+        Project saved = projectRepository.save(project);
+        auditService.logUpdate("Project", id, "dataDate", previous, dataDate);
+        return buildProjectResponse(saved);
+    }
+
     public PagedResponse<ProjectResponse> listProjects(Pageable pageable) {
         log.info("Fetching projects page: {}", pageable);
         return queryProjects(pageable, false);
@@ -395,6 +420,7 @@ public class ProjectService {
             project.getTotalLengthKm(),
             project.getCalendarId(),
             project.getActiveBaselineId(),
+            project.isRequiresRebaseline(),
             primaryContractSummary(project.getId()),
             project.getOriginalBudget(),
             project.getCurrentBudget(),
