@@ -25,6 +25,7 @@ import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, Arro
 import { UdfSection } from "@/components/udf/UdfSection";
 import { costApi } from "@/lib/api/costApi";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
+import { projectResourceApi } from "@/lib/api/projectResourceApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
@@ -402,6 +403,16 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
   const queryClient = useQueryClient();
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  const { data: poolData } = useQuery({
+    queryKey: ["resource-pool", projectId],
+    queryFn: () => projectResourceApi.listPool(projectId),
+  });
+
+  const poolSize = (() => {
+    const raw = poolData?.data as unknown;
+    return Array.isArray(raw) ? (raw as unknown[]).length : -1;
+  })();
+
   const { data: kpiSnapshotsData, isLoading: isLoadingKpis } = useQuery({
     queryKey: ["project-kpis", projectId],
     queryFn: () => dashboardApi.getProjectKpiSnapshots(projectId),
@@ -455,6 +466,28 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
 
   return (
     <div className="space-y-6">
+      {poolSize === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                No resources in this project yet.
+              </p>
+              <p className="text-sm text-amber-700">
+                Pick from master data to set up your project pool{" "}
+                <a href={`/projects/${projectId}?tab=resources`} className="font-semibold underline hover:text-amber-900">
+                  Open Resources
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-text-secondary">Code</h3>

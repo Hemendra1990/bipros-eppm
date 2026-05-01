@@ -89,3 +89,5 @@ databaseChangeLog:
       file: db/changelog/055-resource-role-link.yaml
   - include:
       file: db/changelog/056-resource-rewrite.yaml
+  - include:
+      file: db/changelog/057-project-resource-pool.yaml

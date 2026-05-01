@@ -14,7 +14,8 @@ import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
-import type { ResourceResponse } from "@/lib/api/resourceApi";
+import { projectResourceApi } from "@/lib/api/projectResourceApi";
+import type { ProjectResourceResponse } from "@/lib/api/projectResourceApi";
 import { costApi } from "@/lib/api/costApi";
 import type { CostAccount } from "@/lib/api/costApi";
 import { evmApi } from "@/lib/api/evmApi";
@@ -1398,21 +1399,19 @@ function StaffSwapDialog({
 
   const roleId = assignment?.roleId ?? null;
 
-  // Pull every resource carrying the same role as this assignment. The new model
-  // ties a resource to a single role via Resource.roleId, so a by-role lookup is
-  // exactly the set of qualified candidates.
-  const { data: resourcesData } = useQuery({
-    queryKey: ["resources-by-role", roleId],
-    queryFn: () => resourceApi.listByRole(roleId!),
+  // Pull pooled resources carrying the same role as this assignment.
+  const { data: poolByRoleData } = useQuery({
+    queryKey: ["resource-pool-by-role", projectId, roleId],
+    queryFn: () => projectResourceApi.listPoolByRole(projectId, roleId!),
     enabled: !!roleId && open,
   });
 
-  const qualifiedResources: ResourceResponse[] = useMemo(() => {
-    const raw = resourcesData?.data as unknown;
+  const qualifiedResources: ProjectResourceResponse[] = useMemo(() => {
+    const raw = poolByRoleData?.data as unknown;
     return Array.isArray(raw)
-      ? (raw as ResourceResponse[])
-      : ((raw as { content?: ResourceResponse[] } | undefined)?.content ?? []);
-  }, [resourcesData]);
+      ? (raw as ProjectResourceResponse[])
+      : [];
+  }, [poolByRoleData]);
 
   const staffMutation = useMutation({
     mutationFn: () =>
@@ -1467,15 +1466,15 @@ function StaffSwapDialog({
             <SearchableSelect
               value={selectedResourceId}
               onChange={(val) => setSelectedResourceId(val)}
-              placeholder="Search qualified resources..."
-              options={qualifiedResources.map((r) => ({
-                value: r.id,
-                label: `${r.code} - ${r.name}`,
+              placeholder="Search pooled resources..."
+              options={qualifiedResources.map((p) => ({
+                value: p.resourceId,
+                label: `${p.resourceCode ?? p.resourceId} - ${p.resourceName ?? "Unknown"}`,
               }))}
             />
             {qualifiedResources.length === 0 && (
-              <p className="text-xs text-text-muted mt-1">
-                No resources linked to users with this role. You may still override below.
+              <p className="text-xs text-amber-600 mt-1">
+                No pooled resources match this role. Add resources from the Pool sub-tab first.
               </p>
             )}
           </div>

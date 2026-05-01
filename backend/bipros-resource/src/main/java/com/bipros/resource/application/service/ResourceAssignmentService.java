@@ -42,6 +42,7 @@ public class ResourceAssignmentService {
   private final ResourceRateRepository rateRepository;
   private final ResourceRoleRepository roleRepository;
   private final ActivityRepository activityRepository;
+  private final ProjectResourceService projectResourceService;
   private final AuditService auditService;
 
   /** Batch-hydrate resource + activity + role names onto a list of assignments in 3 queries total. */
@@ -79,9 +80,16 @@ public class ResourceAssignmentService {
   /**
    * Pick the latest rate (by effectiveDate) for the resource+type and multiply by units.
    * Prefers {@code budgetedRate} when set, falls back to {@code pricePerUnit}.
+   * Rate priority: rateType-specific rate > ProjectResource.rateOverride > Resource.costPerUnit.
    */
-  private BigDecimal computePlannedCost(UUID resourceId, String rateType, Double plannedUnits) {
+  private BigDecimal computePlannedCost(UUID projectId, UUID resourceId, String rateType, Double plannedUnits) {
     if (plannedUnits == null) return null;
+
+    BigDecimal rateOverride = projectResourceService.resolveRateOverride(projectId, resourceId);
+    if (rateOverride != null) {
+      return rateOverride.multiply(BigDecimal.valueOf(plannedUnits));
+    }
+
     List<ResourceRate> rates = rateType != null
         ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
         : List.of();
@@ -108,8 +116,14 @@ public class ResourceAssignmentService {
   }
 
   @SuppressWarnings("unused")
-  private BigDecimal computeActualCost(UUID resourceId, String rateType, Double actualUnits) {
+  private BigDecimal computeActualCost(UUID projectId, UUID resourceId, String rateType, Double actualUnits) {
     if (actualUnits == null) return null;
+
+    BigDecimal rateOverride = projectResourceService.resolveRateOverride(projectId, resourceId);
+    if (rateOverride != null) {
+      return rateOverride.multiply(BigDecimal.valueOf(actualUnits));
+    }
+
     List<ResourceRate> rates = rateType != null
         ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
         : List.of();
@@ -149,6 +163,12 @@ public class ResourceAssignmentService {
 
     if (request.resourceId() != null && !resourceRepository.existsById(request.resourceId())) {
       throw new ResourceNotFoundException("Resource", request.resourceId());
+    }
+
+    if (request.resourceId() != null && !projectResourceService.isInPool(request.projectId(), request.resourceId())) {
+      throw new BusinessRuleException("RESOURCE_NOT_IN_POOL",
+          "Resource is not in the project pool: projectId=" + request.projectId() +
+          ", resourceId=" + request.resourceId());
     }
 
     if (request.roleId() != null && !roleRepository.existsById(request.roleId())) {
@@ -192,7 +212,7 @@ public class ResourceAssignmentService {
     BigDecimal plannedCost;
     if (request.resourceId() != null) {
       plannedCost = computePlannedCost(
-          request.resourceId(), effectiveRateType, request.plannedUnits());
+          request.projectId(), request.resourceId(), effectiveRateType, request.plannedUnits());
     } else {
       plannedCost = computePlannedCostFromRole(
           request.roleId(), effectiveRateType, request.plannedUnits());
@@ -237,6 +257,12 @@ public class ResourceAssignmentService {
     Resource resource = resourceRepository.findById(resourceId)
         .orElseThrow(() -> new ResourceNotFoundException("Resource", resourceId));
 
+    if (!projectResourceService.isInPool(assignment.getProjectId(), resourceId)) {
+      throw new BusinessRuleException("RESOURCE_NOT_IN_POOL",
+          "Resource is not in the project pool: projectId=" + assignment.getProjectId() +
+          ", resourceId=" + resourceId);
+    }
+
     // Eligibility: resource's role must match assignment role (the new model has 1 role per resource)
     if (resource.getRole() == null || !assignment.getRoleId().equals(resource.getRole().getId())) {
       if (!override) {
@@ -265,7 +291,7 @@ public class ResourceAssignmentService {
         });
 
     assignment.setResourceId(resourceId);
-    BigDecimal plannedCost = computePlannedCost(resourceId, assignment.getRateType(), assignment.getPlannedUnits());
+    BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), resourceId, assignment.getRateType(), assignment.getPlannedUnits());
     assignment.setPlannedCost(plannedCost);
 
     ResourceAssignment saved = assignmentRepository.save(assignment);
@@ -294,6 +320,12 @@ public class ResourceAssignmentService {
     Resource resource = resourceRepository.findById(newResourceId)
         .orElseThrow(() -> new ResourceNotFoundException("Resource", newResourceId));
 
+    if (!projectResourceService.isInPool(assignment.getProjectId(), newResourceId)) {
+      throw new BusinessRuleException("RESOURCE_NOT_IN_POOL",
+          "Resource is not in the project pool: projectId=" + assignment.getProjectId() +
+          ", resourceId=" + newResourceId);
+    }
+
     if (resource.getRole() == null || !assignment.getRoleId().equals(resource.getRole().getId())) {
       if (!override) {
         throw new BusinessRuleException("RESOURCE_NOT_QUALIFIED",
@@ -321,7 +353,7 @@ public class ResourceAssignmentService {
         });
 
     assignment.setResourceId(newResourceId);
-    BigDecimal plannedCost = computePlannedCost(newResourceId, assignment.getRateType(), assignment.getPlannedUnits());
+    BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), newResourceId, assignment.getRateType(), assignment.getPlannedUnits());
     assignment.setPlannedCost(plannedCost);
 
     ResourceAssignment saved = assignmentRepository.save(assignment);
@@ -369,6 +401,12 @@ public class ResourceAssignmentService {
           "Either roleId or resourceId is required");
     }
 
+    if (request.resourceId() != null && !projectResourceService.isInPool(request.projectId(), request.resourceId())) {
+      throw new BusinessRuleException("RESOURCE_NOT_IN_POOL",
+          "Resource is not in the project pool: projectId=" + request.projectId() +
+          ", resourceId=" + request.resourceId());
+    }
+
     if (request.resourceId() != null
         && !request.resourceId().equals(assignment.getResourceId())) {
       assignmentRepository.findByActivityId(request.activityId())
@@ -408,7 +446,7 @@ public class ResourceAssignmentService {
     BigDecimal plannedCost;
     if (request.resourceId() != null) {
       plannedCost = computePlannedCost(
-          request.resourceId(), request.rateType(), request.plannedUnits());
+          request.projectId(), request.resourceId(), request.rateType(), request.plannedUnits());
     } else {
       plannedCost = computePlannedCostFromRole(
           request.roleId(), request.rateType(), request.plannedUnits());
@@ -429,10 +467,10 @@ public class ResourceAssignmentService {
     int updated = 0;
     for (ResourceAssignment a : assignments) {
       BigDecimal newPlanned = a.getResourceId() != null
-          ? computePlannedCost(a.getResourceId(), a.getRateType(), a.getPlannedUnits())
+          ? computePlannedCost(projectId, a.getResourceId(), a.getRateType(), a.getPlannedUnits())
           : computePlannedCostFromRole(a.getRoleId(), a.getRateType(), a.getPlannedUnits());
       BigDecimal actualRate = a.getResourceId() != null
-          ? resolveActualRate(a.getResourceId(), a.getRateType())
+          ? resolveActualRate(projectId, a.getResourceId(), a.getRateType())
           : null;
       BigDecimal newActual = (actualRate != null && a.getActualUnits() != null)
           ? actualRate.multiply(BigDecimal.valueOf(a.getActualUnits()))
@@ -461,7 +499,10 @@ public class ResourceAssignmentService {
     return updated;
   }
 
-  private BigDecimal resolveActualRate(UUID resourceId, String rateType) {
+  private BigDecimal resolveActualRate(UUID projectId, UUID resourceId, String rateType) {
+    BigDecimal rateOverride = projectResourceService.resolveRateOverride(projectId, resourceId);
+    if (rateOverride != null) return rateOverride;
+
     List<ResourceRate> rates = rateType != null
         ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
         : List.of();

@@ -1,0 +1,107 @@
+databaseChangeLog:
+  - changeSet:
+      id: 057-create-project-resources
+      author: bipros
+      changes:
+        - createTable:
+            tableName: project_resources
+            schemaName: resource
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resource_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rate_override
+                  type: numeric(19, 4)
+              - column:
+                  name: availability_override
+                  type: double
+              - column:
+                  name: custom_unit
+                  type: varchar(50)
+              - column:
+                  name: notes
+                  type: text
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: varchar(255)
+              - column:
+                  name: updated_by
+                  type: varchar(255)
+              - column:
+                  name: version
+                  type: bigint
+                  defaultValueNumeric: 0
+
+  - changeSet:
+      id: 057-unique-project-resource
+      author: bipros
+      changes:
+        - addUniqueConstraint:
+            tableName: project_resources
+            schemaName: resource
+            columnNames: project_id, resource_id
+            constraintName: uk_project_resource
+
+  - changeSet:
+      id: 057-index-pr-project
+      author: bipros
+      changes:
+        - createIndex:
+            tableName: project_resources
+            schemaName: resource
+            indexName: idx_pr_project_id
+            columns:
+              - column:
+                  name: project_id
+
+  - changeSet:
+      id: 057-index-pr-resource
+      author: bipros
+      changes:
+        - createIndex:
+            tableName: project_resources
+            schemaName: resource
+            indexName: idx_pr_resource_id
+            columns:
+              - column:
+                  name: resource_id
+
+  - changeSet:
+      id: 057-backfill-pool-from-assignments
+      author: bipros
+      context: prod
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO resource.project_resources
+                  (id, project_id, resource_id, created_at, updated_at, created_by, updated_by, version)
+              SELECT gen_random_uuid(), ra.project_id, ra.resource_id,
+                     NOW(), NOW(), 'migration', 'migration', 0
+              FROM resource.resource_assignments ra
+              WHERE ra.resource_id IS NOT NULL
+              GROUP BY ra.project_id, ra.resource_id
+              ON CONFLICT (project_id, resource_id) DO NOTHING;

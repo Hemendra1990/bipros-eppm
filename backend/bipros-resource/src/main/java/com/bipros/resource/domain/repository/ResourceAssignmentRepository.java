@@ -29,8 +29,13 @@ public interface ResourceAssignmentRepository extends JpaRepository<ResourceAssi
   Optional<ResourceAssignment> findByActivityIdAndResourceIdIsNullAndRoleId(
       UUID activityId, UUID roleId);
 
+  List<ResourceAssignment> findByProjectIdAndResourceId(UUID projectId, UUID resourceId);
+
   @Query("select coalesce(sum(ra.plannedUnits), 0) from ResourceAssignment ra where ra.activityId = :activityId")
   Double sumPlannedUnitsByActivityId(@Param("activityId") UUID activityId);
+
+  @Query(value = "SELECT DISTINCT project_id, resource_id FROM resource.resource_assignments WHERE resource_id IS NOT NULL", nativeQuery = true)
+  List<Object[]> findDistinctProjectResourcePairs();
 
   @Query("select coalesce(sum(ra.actualUnits), 0) from ResourceAssignment ra where ra.activityId = :activityId")
   Double sumActualUnitsByActivityId(@Param("activityId") UUID activityId);
