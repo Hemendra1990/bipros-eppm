@@ -8,6 +8,7 @@ import type {
   ActivityAiGenerationResponse,
   ActivityAiApplyRequest,
   ActivityAiApplyResponse,
+  InsightsResponse,
 } from "../types";
 
 export interface LlmProviderResponse {
@@ -139,6 +140,11 @@ export const aiApi = {
     apiClient.post<ApiResponse<ActivityAiApplyResponse>>(
       `/v1/projects/${projectId}/activities/ai/apply`, body
     ).then((r) => r.data),
+
+  getInsights: (endpoint: string, projectId: string, force?: boolean) => {
+    const url = `${endpoint}${force ? "?force=true" : ""}`;
+    return apiClient.post<ApiResponse<InsightsResponse>>(url, { projectId }).then((r) => r.data);
+  },
 
   streamChat: async function* (req: ChatRequest, signal: AbortSignal): AsyncGenerator<SseEvent> {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";

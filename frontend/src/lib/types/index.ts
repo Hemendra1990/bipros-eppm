@@ -1402,3 +1402,40 @@ export interface UserCorridorScopeResponse {
   userId: string;
   wbsNodeId: string | null; // NULL = All Corridors
 }
+
+// === AI Insights ===
+
+export interface InsightHighlight {
+  label: string;
+  value: string;
+  severity: "info" | "warning" | "critical";
+  trend: "up" | "down" | "flat" | null;
+}
+
+export interface InsightVariance {
+  name: string;
+  delta: string;
+  explanation: string;
+}
+
+export interface InsightRecommendation {
+  title: string;
+  priority: "low" | "medium" | "high";
+  action: string;
+  rationale: string;
+}
+
+export interface InsightFinding {
+  label: string;
+  detail: string;
+  severity: "info" | "warning" | "critical";
+}
+
+export interface InsightsResponse {
+  summary: string;
+  highlights?: InsightHighlight[] | null;
+  variances?: InsightVariance[] | null;
+  recommendations?: InsightRecommendation[] | null;
+  findings?: InsightFinding[] | null;
+  rationale: string;
+}

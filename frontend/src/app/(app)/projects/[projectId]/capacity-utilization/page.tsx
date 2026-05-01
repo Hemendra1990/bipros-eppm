@@ -12,6 +12,7 @@ import {
   type CapacityPeriod,
   type CapacityUtilizationRow,
 } from "@/lib/api/capacityUtilizationApi";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -179,6 +180,7 @@ export default function CapacityUtilizationPage() {
 
   return (
     <div className="p-6">
+      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/capacity-utilization/ai/insights`} />
       <TabTip
         title="Capacity Utilization"
         description="Mirrors the Plant utilization / Manpower utilization sheets from the Capacity_Utilization workbook. Each row pairs a Work Activity with a Resource (or Resource Type) and shows the budgeted-vs-actual matrix for the day, the month, and cumulative."

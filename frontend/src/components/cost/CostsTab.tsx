@@ -30,6 +30,7 @@ import {
 } from "recharts";
 import { useCurrency } from "@/lib/hooks/useCurrency";
 import { SecretField } from "@/components/auth/SecretField";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 
 const FINANCE_ROLES = ["ROLE_FINANCE", "ROLE_PMO", "ROLE_ADMIN"] as const;
 const NO_FINANCE_PLACEHOLDER = (
@@ -400,6 +401,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/cost/ai/insights`} />
       {isLoadingSummary ? (
         <div className="text-center text-text-secondary">Loading cost summary...</div>
       ) : (

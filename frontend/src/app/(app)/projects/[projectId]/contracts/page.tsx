@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contractApi } from "@/lib/api/contractApi";
 import { TabTip } from "@/components/common/TabTip";
 import { ContractForm } from "@/components/contracts/ContractForm";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import type { ContractResponse, CreateContractRequest } from "@/lib/types";
 
 /**
@@ -62,6 +63,10 @@ export default function ContractsPage() {
 
   return (
     <div className="space-y-6">
+      <AiInsightsPanel
+        projectId={projectId}
+        endpoint={`/v1/projects/${projectId}/contracts/ai/insights`}
+      />
       <TabTip
         title="Contracts & Procurement"
         description="Track contractor agreements, LOA values, milestones, and variation orders. Create contracts to link with project activities and costs."

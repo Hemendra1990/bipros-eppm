@@ -19,6 +19,7 @@ import {
 } from "@/components/gis/DrawReviewPanel";
 import { PolygonEditPanel } from "@/components/gis/PolygonEditPanel";
 import { TabTip } from "@/components/common/TabTip";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { Button } from "@/components/ui/button";
 import {
   gisApi,
@@ -431,6 +432,11 @@ export default function GisViewerPage() {
 
   return (
     <div className="flex flex-col h-full gap-4 p-4">
+      <AiInsightsPanel
+        projectId={projectId}
+        endpoint={`/v1/projects/${projectId}/gis/ai/insights`}
+        defaultCollapsed
+      />
       <TabTip
         title="GIS Map Viewer"
         description="View your project location on a map. Draw, edit, and delete WBS polygons; step through satellite scenes; track construction progress geographically."

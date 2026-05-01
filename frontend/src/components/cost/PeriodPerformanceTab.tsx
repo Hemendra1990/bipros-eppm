@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/periodPerformanceApi";
 import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
 import { KpiTile } from "@/components/common/KpiTile";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 
 const INR_PER_CRORE = 10_000_000;
 
@@ -132,6 +133,7 @@ export function PeriodPerformanceTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6 px-6 pb-8">
+      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/period-performance/ai/insights`} />
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <KpiTile

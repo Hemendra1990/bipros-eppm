@@ -91,3 +91,5 @@ databaseChangeLog:
       file: db/changelog/056-resource-rewrite.yaml
   - include:
       file: db/changelog/057-project-resource-pool.yaml
+  - include:
+      file: db/changelog/058-ai-insight-cache.yaml

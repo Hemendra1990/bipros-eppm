@@ -7,6 +7,7 @@ import { dprApi, type CreateDailyProgressReportRequest, type DailyProgressReport
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -191,6 +192,7 @@ export default function DprPage() {
 
   return (
     <div className="p-6">
+      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/dpr/ai/insights`} />
       <TabTip
         title="Daily Progress Report"
         description="Supervisor-level record of work executed each day by chainage — quantities, activity, weather, and remarks."

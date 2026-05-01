@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/dailyActivityResourceOutputApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { resourceApi } from "@/lib/api/resourceApi";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -148,6 +149,7 @@ export default function DailyOutputsPage() {
 
   return (
     <div className="p-6">
+      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/daily-outputs/ai/insights`} />
       <TabTip
         title="Daily Outputs"
         description="One row per (date × activity × resource): how much work the resource did on that activity that day. Feeds the Capacity Utilization report — actual productivity is computed from these rows against the planned norm."

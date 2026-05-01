@@ -20,6 +20,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiTile } from "@/components/common/KpiTile";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 
 // EVM endpoints (and the seeded data) carry absolute INR values — e.g. BAC = 4,850,000,000.
 // Display in ₹cr to stay consistent with the Costs tab, which uses the same convention
@@ -139,6 +140,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/evm/ai/insights`} />
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4">
         <div>

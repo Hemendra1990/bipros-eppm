@@ -40,7 +40,7 @@ public class LlmProviderConfig extends BaseEntity {
     private java.math.BigDecimal temperature = new java.math.BigDecimal("0.20");
 
     @Column(name = "timeout_ms", nullable = false)
-    private int timeoutMs = 60000;
+    private int timeoutMs = 120000;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "extra_headers", columnDefinition = "jsonb")
