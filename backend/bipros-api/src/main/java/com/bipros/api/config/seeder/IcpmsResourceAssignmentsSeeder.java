@@ -35,7 +35,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(950)
 @RequiredArgsConstructor
 public class IcpmsResourceAssignmentsSeeder implements CommandLineRunner {

@@ -195,6 +195,96 @@ public class OmanRoadProjectBaselineSeeder implements CommandLineRunner {
 
         log.info("[BNK-BASELINE] seeded BL1 for {} with {} activity snapshots + {} relationships (active)",
                 PROJECT_CODE, staged.size(), relCount);
+
+        // ── BL2 — Re-forecast 2026-Q1 (skewed +8% on remaining work) ──
+        BigDecimal bl2TotalCost = BigDecimal.ZERO;
+        LocalDate bl2EarliestStart = null;
+        LocalDate bl2LatestFinish = null;
+        List<BaselineActivity> bl2Staged = new ArrayList<>(activities.size());
+
+        for (int i = 0; i < activities.size(); i++) {
+            Activity a = activities.get(i);
+            int driftDays = computeDriftDays(i);
+
+            LocalDate baselineStart = a.getPlannedStartDate() != null
+                    ? a.getPlannedStartDate().minusDays(driftDays)
+                    : null;
+            LocalDate baselineFinish = a.getPlannedFinishDate() != null
+                    ? a.getPlannedFinishDate().minusDays(driftDays)
+                    : null;
+
+            // BL2: remainingDuration × 1.08 (8% skew on remaining work)
+            double bl2Remaining = a.getOriginalDuration() != null
+                    ? a.getOriginalDuration() * 1.08
+                    : 0.0;
+
+            BigDecimal planned = sumPlanned(a, expensesByActivity, assignmentsByActivity);
+            BigDecimal actual = sumActual(a, expensesByActivity, assignmentsByActivity);
+
+            BaselineActivity ba = new BaselineActivity();
+            ba.setActivityId(a.getId());
+            ba.setEarlyStart(baselineStart);
+            ba.setEarlyFinish(baselineStart != null && a.getOriginalDuration() != null
+                    ? baselineStart.plusDays((long) bl2Remaining) : baselineFinish);
+            ba.setLateStart(baselineStart);
+            ba.setLateFinish(ba.getEarlyFinish());
+            ba.setOriginalDuration(a.getOriginalDuration());
+            ba.setRemainingDuration(bl2Remaining);
+            ba.setTotalFloat(a.getTotalFloat());
+            ba.setFreeFloat(a.getFreeFloat());
+            ba.setPlannedCost(planned);
+            ba.setActualCost(actual);
+            ba.setPercentComplete(0.0);
+            bl2Staged.add(ba);
+
+            bl2TotalCost = bl2TotalCost.add(planned);
+            if (baselineStart != null && (bl2EarliestStart == null || baselineStart.isBefore(bl2EarliestStart))) {
+                bl2EarliestStart = baselineStart;
+            }
+            if (ba.getEarlyFinish() != null && (bl2LatestFinish == null || ba.getEarlyFinish().isAfter(bl2LatestFinish))) {
+                bl2LatestFinish = ba.getEarlyFinish();
+            }
+        }
+
+        Baseline bl2 = new Baseline();
+        bl2.setProjectId(projectId);
+        bl2.setName("BL2 — Re-forecast 2026-Q1");
+        bl2.setDescription("Re-forecast baseline for project " + PROJECT_CODE
+                + " (Barka–Nakhal Road dualisation). Remaining durations skewed +8% "
+                + "to reflect Q1-2026 re-forecast expectations.");
+        bl2.setBaselineType(BaselineType.SECONDARY);
+        bl2.setBaselineDate(LocalDate.of(2026, 1, 1));
+        bl2.setIsActive(false);
+        bl2.setTotalActivities(activities.size());
+        bl2.setTotalCost(bl2TotalCost);
+        bl2.setProjectStartDate(bl2EarliestStart);
+        bl2.setProjectFinishDate(bl2LatestFinish);
+        bl2.setProjectDuration(bl2EarliestStart != null && bl2LatestFinish != null
+                ? (double) ChronoUnit.DAYS.between(bl2EarliestStart, bl2LatestFinish)
+                : 0.0);
+        Baseline bl2Saved = baselineRepository.save(bl2);
+
+        for (BaselineActivity ba : bl2Staged) {
+            ba.setBaselineId(bl2Saved.getId());
+            baselineActivityRepository.save(ba);
+        }
+
+        // BL2 relationships (same topology as BL1)
+        int bl2RelCount = 0;
+        for (ActivityRelationship r : rels) {
+            BaselineRelationship br = new BaselineRelationship();
+            br.setBaselineId(bl2Saved.getId());
+            br.setPredecessorActivityId(r.getPredecessorActivityId());
+            br.setSuccessorActivityId(r.getSuccessorActivityId());
+            br.setRelationshipType(r.getRelationshipType() != null
+                    ? r.getRelationshipType().name() : null);
+            br.setLag(r.getLag());
+            baselineRelationshipRepository.save(br);
+            bl2RelCount++;
+        }
+
+        log.info("[BNK-BASELINE] seeded BL2 for {} with {} activity snapshots + {} relationships (inactive, +8% remaining skew)",
+                PROJECT_CODE, bl2Staged.size(), bl2RelCount);
     }
 
     private static int computeDriftDays(int index) {

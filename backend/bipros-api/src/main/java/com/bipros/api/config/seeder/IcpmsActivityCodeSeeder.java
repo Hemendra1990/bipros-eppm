@@ -47,7 +47,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(121)
 @RequiredArgsConstructor
 public class IcpmsActivityCodeSeeder implements CommandLineRunner {

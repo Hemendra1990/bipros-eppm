@@ -93,7 +93,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("seed")
+@Profile("legacy-demo")
 @Order(160)
 @RequiredArgsConstructor
 public class OdishaSh10ProjectSeeder implements CommandLineRunner {

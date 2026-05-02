@@ -178,8 +178,11 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     // 6-7: WBS + BOQ (read BOQ rows from workbook 3)
     List<BoqRow> boqRows = reader.withWorkbook(OmanRoadProjectWorkbookReader.SUPERVISOR_DBS_PATH,
         reader::readBoqItems);
+    List<OmanRoadProjectWorkbookReader.BoqRateRow> revisedRates = reader.withWorkbook(
+        OmanRoadProjectWorkbookReader.CAPACITY_UTIL_PATH,
+        reader::readBoqRates);
     Map<String, UUID> wbs = seedWbs(project.getId(), boqRows);
-    List<BoqItem> savedBoqs = seedBoqItems(project.getId(), wbs, boqRows);
+    List<BoqItem> savedBoqs = seedBoqItems(project.getId(), wbs, boqRows, revisedRates);
 
     // 8: productivity norms (workbook 2)
     List<ProductivityNormRow> normRows = reader.withWorkbook(
@@ -308,13 +311,45 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
         "Main Works Contractor — Barka–Nakhal", rdp.getId(), 1);
     ObsNode pmTeam = saveObs("BNK-PM-TEAM",
         "Project Team — PM Mohsin Ahmad", contractor.getId(), 0);
-    saveObs("BNK-SUP-TSWAMY",     "Site Supervisor — T. Swamy (Section A)",     pmTeam.getId(), 0);
-    saveObs("BNK-SUP-NAGARAJAN",  "Site Supervisor — Nagarajan (Section B)",    pmTeam.getId(), 1);
-    saveObs("BNK-SUP-AKSINGH",    "Site Supervisor — A.K. Singh (Section C)",   pmTeam.getId(), 2);
-    saveObs("BNK-SUP-ANBAZHAGAN", "Site Supervisor — Anbazhagan (Section D)",   pmTeam.getId(), 3);
+    ObsNode supTswamy = saveObs("BNK-SUP-TSWAMY",     "Site Supervisor — T. Swamy (Section A)",     pmTeam.getId(), 0);
+    saveObs("BNK-SE-TSWAMY",     "Site Engineer — T. Swamy Team",     supTswamy.getId(), 0);
+    saveObs("BNK-CM-TSWAMY",     "Construction Manager — T. Swamy Team",     supTswamy.getId(), 1);
+
+    ObsNode supNagarajan = saveObs("BNK-SUP-NAGARAJAN",  "Site Supervisor — Nagarajan (Section B)",    pmTeam.getId(), 1);
+    saveObs("BNK-SE-NAGARAJAN",  "Site Engineer — Nagarajan Team",  supNagarajan.getId(), 0);
+    saveObs("BNK-CM-NAGARAJAN",  "Construction Manager — Nagarajan Team",  supNagarajan.getId(), 1);
+
+    ObsNode supAksingh = saveObs("BNK-SUP-AKSINGH",    "Site Supervisor — A.K. Singh (Section C)",   pmTeam.getId(), 2);
+    saveObs("BNK-SE-AKSINGH",    "Site Engineer — A.K. Singh Team",    supAksingh.getId(), 0);
+    saveObs("BNK-CM-AKSINGH",    "Construction Manager — A.K. Singh Team",    supAksingh.getId(), 1);
+
+    ObsNode supAnbazhagan = saveObs("BNK-SUP-ANBAZHAGAN", "Site Supervisor — Anbazhagan (Section D)",   pmTeam.getId(), 3);
+    saveObs("BNK-SE-ANBAZHAGAN", "Site Engineer — Anbazhagan Team", supAnbazhagan.getId(), 0);
+    saveObs("BNK-CM-ANBAZHAGAN", "Construction Manager — Anbazhagan Team", supAnbazhagan.getId(), 1);
+
+    ObsNode supManoj = saveObs("BNK-SUP-MANOJ",  "Site Supervisor — Manoj (Section E)",    pmTeam.getId(), 4);
+    saveObs("BNK-SE-MANOJ",  "Site Engineer — Manoj Team",  supManoj.getId(), 0);
+    saveObs("BNK-CM-MANOJ",  "Construction Manager — Manoj Team",  supManoj.getId(), 1);
+
+    ObsNode supLiju = saveObs("BNK-SUP-LIJU",   "Site Supervisor — Liju (Section F)",     pmTeam.getId(), 5);
+    saveObs("BNK-SE-LIJU",   "Site Engineer — Liju Team",   supLiju.getId(), 0);
+    saveObs("BNK-CM-LIJU",   "Construction Manager — Liju Team",   supLiju.getId(), 1);
+
+    ObsNode supAnish = saveObs("BNK-SUP-ANISH",  "Site Supervisor — Anish (Section G)",    pmTeam.getId(), 6);
+    saveObs("BNK-SE-ANISH",  "Site Engineer — Anish Team",  supAnish.getId(), 0);
+    saveObs("BNK-CM-ANISH",  "Construction Manager — Anish Team",  supAnish.getId(), 1);
+
+    ObsNode supAnand = saveObs("BNK-SUP-ANAND",  "Site Supervisor — Anand (Section H)",    pmTeam.getId(), 7);
+    saveObs("BNK-SE-ANAND",  "Site Engineer — Anand Team",  supAnand.getId(), 0);
+    saveObs("BNK-CM-ANAND",  "Construction Manager — Anand Team",  supAnand.getId(), 1);
+
+    ObsNode supMohsin = saveObs("BNK-SUP-MOHSIN", "Site Supervisor — Mohsin Mohamed (Section I)", pmTeam.getId(), 8);
+    saveObs("BNK-SE-MOHSIN", "Site Engineer — Mohsin Mohamed Team", supMohsin.getId(), 0);
+    saveObs("BNK-CM-MOHSIN", "Construction Manager — Mohsin Mohamed Team", supMohsin.getId(), 1);
+
     // Suppress unused-warning when consEng not yet referenced — it's in the tree.
     if (consEng == null) throw new IllegalStateException("OBS save returned null");
-    log.info("[BNK] Seeded 9 OBS nodes");
+    log.info("[BNK] Seeded 25 OBS nodes");
     return pmTeam.getId();
   }
 
@@ -583,7 +618,8 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
    * deterministic values from the RNG seeded with the project code + item index.
    * After populating fields we always call {@link BoqCalculator#recompute(BoqItem)}.
    */
-  private List<BoqItem> seedBoqItems(UUID projectId, Map<String, UUID> wbs, List<BoqRow> rows) {
+  private List<BoqItem> seedBoqItems(UUID projectId, Map<String, UUID> wbs, List<BoqRow> rows,
+                                     List<OmanRoadProjectWorkbookReader.BoqRateRow> revisedRates) {
     List<BoqItem> items = new ArrayList<>();
     int idx = 0;
     for (BoqRow r : rows) {
@@ -608,6 +644,19 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       // Synthesise missing values deterministically per item.
       Random rng = new Random(DETERMINISTIC_SEED + idx);
       BigDecimal rate = r.rate();
+      if (rate == null || rate.signum() == 0) {
+        // Try revised rates from File 2 (Capacity Utilization workbook) by code prefix match.
+        if (revisedRates != null) {
+          for (OmanRoadProjectWorkbookReader.BoqRateRow rr : revisedRates) {
+            if (rr.code() != null && !rr.code().isBlank()
+                && rr.revisedRate() != null && rr.revisedRate().signum() > 0
+                && itemNo.startsWith(rr.code())) {
+              rate = rr.revisedRate();
+              break;
+            }
+          }
+        }
+      }
       if (rate == null || rate.signum() == 0) {
         // 1 – 200 OMR/unit ranges, depending on a stable hash bucket.
         int bucket = Math.abs(itemNo.hashCode()) % 5;

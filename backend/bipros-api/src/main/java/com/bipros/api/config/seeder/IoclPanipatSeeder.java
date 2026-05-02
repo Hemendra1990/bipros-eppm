@@ -82,7 +82,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(130)
 @RequiredArgsConstructor
 public class IoclPanipatSeeder implements CommandLineRunner {

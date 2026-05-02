@@ -33,7 +33,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(107)
 @RequiredArgsConstructor
 public class IcpmsActivityRelationshipsSeeder implements CommandLineRunner {

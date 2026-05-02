@@ -70,7 +70,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(101)
 @RequiredArgsConstructor
 public class IcpmsPhaseASeeder implements CommandLineRunner {

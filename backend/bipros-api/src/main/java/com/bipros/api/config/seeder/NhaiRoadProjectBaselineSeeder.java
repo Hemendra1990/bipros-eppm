@@ -56,7 +56,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-@Profile("seed")
+@Profile("legacy-demo")
 @Order(160)
 @RequiredArgsConstructor
 public class NhaiRoadProjectBaselineSeeder implements CommandLineRunner {

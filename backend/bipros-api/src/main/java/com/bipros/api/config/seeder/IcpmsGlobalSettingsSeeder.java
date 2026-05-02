@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(109)
 @RequiredArgsConstructor
 public class IcpmsGlobalSettingsSeeder implements CommandLineRunner {

@@ -1,9 +1,23 @@
 package com.bipros.api.config.seeder;
 
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityCode;
+import com.bipros.activity.domain.model.ActivityCodeAssignment;
+import com.bipros.activity.domain.model.CodeScope;
+import com.bipros.activity.domain.repository.ActivityCodeAssignmentRepository;
+import com.bipros.activity.domain.repository.ActivityCodeRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.calendar.domain.model.Calendar;
+import com.bipros.calendar.domain.model.CalendarException;
+import com.bipros.calendar.domain.model.DayType;
+import com.bipros.calendar.domain.repository.CalendarExceptionRepository;
+import com.bipros.calendar.domain.repository.CalendarRepository;
 import com.bipros.cost.domain.entity.CostAccount;
 import com.bipros.cost.domain.repository.CostAccountRepository;
+import com.bipros.evm.domain.entity.EvmCalculation;
+import com.bipros.evm.domain.entity.EvmTechnique;
+import com.bipros.evm.domain.entity.EtcMethod;
+import com.bipros.evm.domain.repository.EvmCalculationRepository;
 import com.bipros.document.domain.model.DrawingDiscipline;
 import com.bipros.document.domain.model.DrawingRegister;
 import com.bipros.document.domain.model.DrawingStatus;
@@ -20,7 +34,13 @@ import com.bipros.document.domain.repository.RfiRegisterRepository;
 import com.bipros.document.domain.repository.TransmittalItemRepository;
 import com.bipros.document.domain.repository.TransmittalRepository;
 import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
+import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.model.ResourceDailyLog;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
+import com.bipros.resource.domain.repository.ResourceDailyLogRepository;
 import com.bipros.risk.domain.model.ActivityCorrelation;
 import com.bipros.risk.domain.model.Risk;
 import com.bipros.risk.domain.model.RiskActivityAssignment;
@@ -81,6 +101,8 @@ import java.util.stream.Collectors;
 public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
 
     private static final String PROJECT_CODE = "6155";
+    private static final long DETERMINISTIC_SEED = 6155L;
+    private static final LocalDate DEFAULT_DATA_DATE = LocalDate.of(2026, 4, 29);
 
     // ── Repositories ───────────────────────────────────────────────
     private final ProjectRepository projectRepository;
@@ -97,6 +119,14 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
     private final ActivityCorrelationRepository activityCorrelationRepository;
     private final ScheduleScenarioRepository scheduleScenarioRepository;
     private final CostAccountRepository costAccountRepository;
+    private final EvmCalculationRepository evmCalculationRepository;
+    private final ActivityCodeRepository activityCodeRepository;
+    private final ActivityCodeAssignmentRepository activityCodeAssignmentRepository;
+    private final CalendarExceptionRepository calendarExceptionRepository;
+    private final CalendarRepository calendarRepository;
+    private final WbsNodeRepository wbsNodeRepository;
+    private final ResourceAssignmentRepository resourceAssignmentRepository;
+    private final ResourceDailyLogRepository resourceDailyLogRepository;
 
     @Override
     public void run(String... args) {
@@ -116,6 +146,10 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
         seedScheduleScenarios(projectId);
         seedActivityCorrelations(projectId);
         seedCostAccounts();
+        seedCalendarExceptions(projectId);
+        seedActivityCodes(projectId);
+        seedEvmCalculations(projectId);
+        seedDailyActivityResourceOutput(projectId);
 
         log.info("[BNK-SUPP] supplemental seeding completed");
     }
@@ -691,5 +725,214 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
             saved++;
         }
         log.info("[BNK-SUPP] seeded {} cost accounts (3-level GL hierarchy)", saved);
+    }
+
+    // ────────────────────────── Calendar Exceptions ─────────────────────────
+    private void seedCalendarExceptions(UUID projectId) {
+        if (!calendarExceptionRepository.findByCalendarId(
+                calendarRepository.findAll().stream()
+                        .filter(c -> "OMAN-5day".equals(c.getCode()))
+                        .findFirst().map(Calendar::getId).orElse(UUID.randomUUID()))
+                .isEmpty()) {
+            log.info("[BNK-SUPP] calendar exceptions already seeded — skipping");
+            return;
+        }
+        Calendar cal = calendarRepository.findAll().stream()
+                .filter(c -> "OMAN-5day".equals(c.getCode()))
+                .findFirst().orElse(null);
+        if (cal == null) {
+            log.warn("[BNK-SUPP] OMAN-5day calendar not found — skipping exceptions");
+            return;
+        }
+        record HolidaySpec(LocalDate date, String name) {}
+        List<HolidaySpec> holidays = List.of(
+                new HolidaySpec(LocalDate.of(2025, 7, 23), "Renaissance Day"),
+                new HolidaySpec(LocalDate.of(2025, 11, 18), "National Day"),
+                new HolidaySpec(LocalDate.of(2025, 3, 30), "Eid Al Fitr (placeholder)"),
+                new HolidaySpec(LocalDate.of(2025, 6, 6), "Eid Al Adha (placeholder)"),
+                new HolidaySpec(LocalDate.of(2025, 9, 4), "Prophet's Birthday"),
+                new HolidaySpec(LocalDate.of(2026, 1, 1), "New Year's Day"));
+        int count = 0;
+        for (HolidaySpec h : holidays) {
+            CalendarException ex = new CalendarException();
+            ex.setCalendarId(cal.getId());
+            ex.setExceptionDate(h.date());
+            ex.setDayType(DayType.NON_WORKING);
+            ex.setName(h.name());
+            calendarExceptionRepository.save(ex);
+            count++;
+        }
+        log.info("[BNK-SUPP] seeded {} calendar exceptions (Oman public holidays)", count);
+    }
+
+    // ────────────────────────── Activity Codes ─────────────────────────
+    private void seedActivityCodes(UUID projectId) {
+        if (activityCodeRepository.findByProjectId(projectId).size() > 0) {
+            log.info("[BNK-SUPP] activity codes already seeded — skipping");
+            return;
+        }
+        List<Activity> activities = activityRepository.findByProjectId(projectId);
+        if (activities.isEmpty()) return;
+
+        String[][] codeDefs = {
+                {"Phase", "WBS Phase classification"},
+                {"Stretch", "Corridor stretch assignment"},
+                {"Trade", "Construction trade classification"},
+                {"Supervisor", "Responsible supervisor"},
+                {"Cost-Center", "Cost center allocation"}};
+        String[] phaseValues = {"MOBILISATION", "EARTHWORKS", "DRAINAGE", "PAVEMENT", "STRUCTURES"};
+        String[] stretchValues = {"BNK-S1", "BNK-S2", "BNK-S3", "BNK-S4"};
+        String[] tradeValues = {"EARTHWORK", "PAVEMENT", "DRAINAGE", "BRIDGE", "UTILITIES"};
+        String[] supervisorValues = {"T-SWAMY", "NAGARAJAN", "AKSINGH", "ANBAZHAGAN"};
+        String[] costCenterValues = {"CC-1000", "CC-2000", "CC-3000"};
+        String[][] allValues = {phaseValues, stretchValues, tradeValues, supervisorValues, costCenterValues};
+
+        Random rng = new Random("6155-supp".hashCode());
+        int codeCount = 0, assignCount = 0;
+        for (int i = 0; i < codeDefs.length; i++) {
+            ActivityCode ac = new ActivityCode();
+            ac.setName(codeDefs[i][0]);
+            ac.setDescription(codeDefs[i][1]);
+            ac.setScope(CodeScope.PROJECT);
+            ac.setProjectId(projectId);
+            ac.setSortOrder(i);
+            ActivityCode saved = activityCodeRepository.save(ac);
+            codeCount++;
+
+            String[] values = allValues[i];
+            for (Activity a : activities) {
+                if (rng.nextInt(5) > 1) continue; // ~40% assignment rate
+                String value = values[rng.nextInt(values.length)];
+                ActivityCodeAssignment assignment = new ActivityCodeAssignment();
+                assignment.setActivityId(a.getId());
+                assignment.setActivityCodeId(saved.getId());
+                assignment.setCodeValue(value);
+                activityCodeAssignmentRepository.save(assignment);
+                assignCount++;
+            }
+        }
+        log.info("[BNK-SUPP] seeded {} activity codes + {} assignments", codeCount, assignCount);
+    }
+
+    // ────────────────────────── EVM Calculations ─────────────────────────
+    private void seedEvmCalculations(UUID projectId) {
+        if (evmCalculationRepository.findByProjectIdOrderByDataDateDesc(projectId).size() > 0) {
+            log.info("[BNK-SUPP] EVM calculations already seeded — skipping");
+            return;
+        }
+        List<WbsNode> wbsNodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId);
+        List<WbsNode> leaves = wbsNodes.stream()
+                .filter(n -> n.getWbsLevel() != null && n.getWbsLevel() >= 3)
+                .toList();
+        if (leaves.isEmpty()) {
+            leaves = wbsNodes.stream()
+                    .filter(n -> n.getWbsLevel() != null && n.getWbsLevel() >= 2)
+                    .toList();
+        }
+        if (leaves.isEmpty()) return;
+
+        LocalDate[] periodDates = {
+                LocalDate.of(2026, 1, 31),
+                LocalDate.of(2026, 2, 28),
+                LocalDate.of(2026, 3, 31),
+                LocalDate.of(2026, 4, 29)};
+        Random rng = new Random(DETERMINISTIC_SEED);
+        int count = 0;
+        for (WbsNode node : leaves) {
+            BigDecimal bac = node.getBudgetCrores() != null
+                    ? node.getBudgetCrores().multiply(new BigDecimal("1000000"))
+                    : new BigDecimal("5000000");
+            for (int p = 0; p < periodDates.length; p++) {
+                double progressPct = Math.min(1.0, 0.15 + p * 0.20 + rng.nextDouble() * 0.1);
+                BigDecimal pv = bac.multiply(BigDecimal.valueOf(Math.min(1.0, 0.20 + p * 0.22)));
+                BigDecimal ev = bac.multiply(BigDecimal.valueOf(progressPct));
+                BigDecimal ac = ev.multiply(BigDecimal.valueOf(1.03 + rng.nextDouble() * 0.05));
+                BigDecimal sv = ev.subtract(pv);
+                BigDecimal cv = ev.subtract(ac);
+                double spi = pv.signum() > 0 ? ev.doubleValue() / pv.doubleValue() : 1.0;
+                double cpi = ac.signum() > 0 ? ev.doubleValue() / ac.doubleValue() : 1.0;
+                BigDecimal eac = cpi > 0 ? bac.divide(BigDecimal.valueOf(cpi), 2, java.math.RoundingMode.HALF_UP) : bac;
+                BigDecimal etc = eac.subtract(ac);
+
+                EvmCalculation evm = new EvmCalculation();
+                evm.setProjectId(projectId);
+                evm.setWbsNodeId(node.getId());
+                evm.setDataDate(periodDates[p]);
+                evm.setBudgetAtCompletion(bac.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setPlannedValue(pv.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setEarnedValue(ev.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setActualCost(ac.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setScheduleVariance(sv.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setCostVariance(cv.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setSchedulePerformanceIndex(Math.round(spi * 1000.0) / 1000.0);
+                evm.setCostPerformanceIndex(Math.round(cpi * 1000.0) / 1000.0);
+                evm.setEstimateAtCompletion(eac.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setEstimateToComplete(etc.setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setVarianceAtCompletion(bac.subtract(eac).setScale(2, java.math.RoundingMode.HALF_UP));
+                evm.setEvmTechnique(EvmTechnique.ACTIVITY_PERCENT_COMPLETE);
+                evm.setEtcMethod(EtcMethod.CPI_BASED);
+                evm.setPerformancePercentComplete(Math.round(progressPct * 10000.0) / 100.0);
+                evmCalculationRepository.save(evm);
+                count++;
+            }
+        }
+        log.info("[BNK-SUPP] seeded {} EVM calculations ({} leaves × 4 periods)", count, leaves.size());
+    }
+
+    // ────────────────────────── Daily Activity Resource Output ─────────────────────────
+    private void seedDailyActivityResourceOutput(UUID projectId) {
+        if (resourceDailyLogRepository.count() > 0) {
+            log.info("[BNK-SUPP] resource daily logs already present — skipping");
+            return;
+        }
+        List<Activity> activities = activityRepository.findByProjectId(projectId).stream()
+                .filter(a -> a.getStatus() == com.bipros.activity.domain.model.ActivityStatus.IN_PROGRESS)
+                .limit(20)
+                .toList();
+        if (activities.isEmpty()) return;
+
+        List<ResourceAssignment> assignments = resourceAssignmentRepository.findByProjectId(projectId);
+        Map<UUID, List<ResourceAssignment>> byActivity = assignments.stream()
+                .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+
+        LocalDate from = DEFAULT_DATA_DATE.minusDays(30);
+        Random rng = new Random(DETERMINISTIC_SEED);
+        // Dedupe globally: uk_resource_daily_log forbids duplicate (resource_id, log_date)
+        // — without this, two activities sharing a resource collide.
+        Set<String> seen = new HashSet<>();
+        int count = 0;
+        for (Activity a : activities) {
+            List<ResourceAssignment> actAssignments = byActivity.getOrDefault(a.getId(), List.of());
+            List<UUID> resourceIds = actAssignments.stream()
+                    .map(ResourceAssignment::getResourceId)
+                    .distinct()
+                    .limit(3)
+                    .toList();
+            if (resourceIds.isEmpty()) continue;
+
+            LocalDate d = from;
+            while (!d.isAfter(DEFAULT_DATA_DATE.minusDays(1))) {
+                if (d.getDayOfWeek() == java.time.DayOfWeek.FRIDAY
+                        || d.getDayOfWeek() == java.time.DayOfWeek.SATURDAY) {
+                    d = d.plusDays(1);
+                    continue;
+                }
+                for (UUID resId : resourceIds) {
+                    if (!seen.add(resId + "|" + d)) continue;
+                    ResourceDailyLog log = new ResourceDailyLog();
+                    log.setResourceId(resId);
+                    log.setLogDate(d);
+                    log.setPlannedUnits(8.0);
+                    log.setActualUnits(6.0 + rng.nextDouble() * 2.5);
+                    log.setUtilisationPercent(75.0 + rng.nextDouble() * 20.0);
+                    log.setWbsPackageCode(a.getCode());
+                    log.setRemarks("Auto-seeded by BNK supplemental seeder");
+                    resourceDailyLogRepository.save(log);
+                    count++;
+                }
+                d = d.plusDays(1);
+            }
+        }
+        log.info("[BNK-SUPP] seeded {} resource daily log entries", count);
     }
 }

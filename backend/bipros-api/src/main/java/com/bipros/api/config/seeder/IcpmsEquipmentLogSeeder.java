@@ -28,7 +28,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(110)
 @RequiredArgsConstructor
 public class IcpmsEquipmentLogSeeder implements CommandLineRunner {

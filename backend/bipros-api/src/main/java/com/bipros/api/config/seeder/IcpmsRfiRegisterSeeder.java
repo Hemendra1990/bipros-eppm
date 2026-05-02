@@ -36,7 +36,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(114)
 @RequiredArgsConstructor
 public class IcpmsRfiRegisterSeeder implements CommandLineRunner {

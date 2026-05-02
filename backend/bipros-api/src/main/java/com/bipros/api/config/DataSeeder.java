@@ -32,7 +32,7 @@ import java.time.LocalTime;
 
 @Slf4j
 @Component
-@Profile("dev")
+@Profile({"dev", "seed"})
 @Order(100)
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {

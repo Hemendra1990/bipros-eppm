@@ -25,7 +25,7 @@ import java.time.LocalDate;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(961)
 @RequiredArgsConstructor
 public class IcpmsMaterialSourceSeeder implements CommandLineRunner {
