@@ -166,6 +166,9 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       projectRepository.findByCode(PROJECT_CODE).ifPresent(p -> {
         seedProjectLabourDeployments(p.getId());
         backfillActivityWorkActivityLinks(p.getId());
+        // Manpower trades aren't in the global Resources catalogue on legacy seed data —
+        // top them up here so the existing-project path matches a fresh seed.
+        seedManpowerResources(p.getCalendarId());
       });
       return;
     }
@@ -208,6 +211,10 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
 
     // 11: manpower Role rows (resource-domain) from workbook 1
     seedManpowerResourceRoles();
+
+    // 11b: manpower Resource rows so they appear in the global Resources catalogue
+    //      (Manpower utilization trades from workbook 2 + direct-labour list from workbook 1)
+    seedManpowerResources(calendarId);
 
     // 12: ProjectLabourDeployment — bind 44 Oman LabourDesignations to this project
     seedProjectLabourDeployments(project.getId());
@@ -941,6 +948,128 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     rate.setPricePerUnit(price != null ? price : BigDecimal.ZERO);
     rate.setEffectiveDate(effective);
     return rate;
+  }
+
+  // ───────────────── Manpower Resources (catalogue rows) ─────────────────
+  /**
+   * Creates a {@code Resource} row of type {@code LABOR} for every distinct manpower trade
+   * surfaced by the Oman workbooks, so the global Resources catalogue exposes them
+   * (otherwise the Resources page shows Manpower=0).
+   *
+   * <p>Two sources are merged and deduped by name:
+   * <ul>
+   *   <li><b>Workbook 2 / Manpower utilization sheet</b> — the 4 productivity-norm trades
+   *       that the Capacity Utilization report tracks (Mason, Carpenter, Steel Fixer,
+   *       Helper). Cost-per-unit reads from the productivity norm if present.</li>
+   *   <li><b>Workbook 1 / Resource sheet (direct-labour right column)</b> — the 39 site
+   *       trades that are deployed daily (Welder, Plumber, Electrician, Operator,
+   *       Painter, Rigger, Scaffolder, etc.). These don't all have norms; they get
+   *       the deterministic OMR/day rate from {@link #manpowerDailyRateOmr}.</li>
+   * </ul>
+   *
+   * <p>Idempotent — skipped per-row by code.
+   */
+  private void seedManpowerResources(UUID calendarId) {
+    ResourceType laborType = resourceFactory.requireType("LABOR");
+
+    // 1. Trades with explicit productivity norms (Manpower utilization sheet).
+    List<ProductivityNormRow> manpowerNorms = reader.withWorkbook(
+        OmanRoadProjectWorkbookReader.CAPACITY_UTIL_PATH,
+        wb -> {
+          List<ProductivityNormRow> all = reader.readProductivityNorms(wb);
+          // Drop equipment rows — they were already seeded as EQUIPMENT resources.
+          // Manpower utilization sheet header trades are: Mason, Carpenter, Steel Fixer, Helper.
+          java.util.Set<String> manpowerSet = java.util.Set.of(
+              "mason", "carpenter", "steel fixer", "helper");
+          return all.stream()
+              .filter(r -> r.equipmentOrLabour() != null
+                  && manpowerSet.contains(r.equipmentOrLabour().toLowerCase(Locale.ROOT).trim()))
+              .toList();
+        });
+
+    java.util.Map<String, ProductivityNormRow> normByTrade = new java.util.LinkedHashMap<>();
+    for (ProductivityNormRow row : manpowerNorms) {
+      String trade = row.equipmentOrLabour();
+      if (trade == null) continue;
+      // Keep first norm row per trade (representative for the resource definition).
+      normByTrade.putIfAbsent(trade.trim(), row);
+    }
+
+    // 2. All direct labour positions from workbook 1.
+    List<DirectLabourRow> directRows = reader.withWorkbook(
+        OmanRoadProjectWorkbookReader.DPR_INTERNAL_PATH, reader::readDirectLabour);
+
+    int resCount = 0, rateCount = 0;
+    java.util.Set<String> seenCodes = new java.util.HashSet<>();
+    int sortOrder = 0;
+
+    // Pass 1: norm-backed manpower trades — these are the Capacity Utilization headers.
+    for (java.util.Map.Entry<String, ProductivityNormRow> e : normByTrade.entrySet()) {
+      String trade = e.getKey();
+      ProductivityNormRow row = e.getValue();
+      String code = "BNK-MP-" + slug(trade);
+      if (code.length() > 50) code = code.substring(0, 50);
+      if (!seenCodes.add(code)) continue;
+      if (resourceRepository.findByCode(code).isPresent()) continue;
+      String unit = row.unit() != null && !row.unit().isBlank() ? row.unit() : "Day";
+      BigDecimal rate = manpowerDailyRateOmr(trade);
+      ResourceRole role = resourceFactory.ensureRole("ROLE-" + slug(trade), "LABOR");
+      Resource res = Resource.builder()
+          .code(code)
+          .name(trade)
+          .resourceType(laborType)
+          .role(role)
+          .unit(resourceUnitCodeFor(unit))
+          .calendarId(calendarId)
+          .status(ResourceStatus.ACTIVE)
+          .availability(BigDecimal.valueOf(100))
+          .costPerUnit(rate)
+          .sortOrder(sortOrder++)
+          .build();
+      Resource saved = resourceRepository.save(res);
+      resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", rate, DEFAULT_START));
+      resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL",
+          rate.multiply(new BigDecimal("1.05")).setScale(3, RoundingMode.HALF_UP),
+          DEFAULT_START));
+      resCount++;
+      rateCount += 2;
+    }
+
+    // Pass 2: direct labour trades from DPR-internal (skip dupes with pass 1).
+    for (DirectLabourRow row : directRows) {
+      String trade = row.position();
+      if (trade == null || trade.isBlank()) continue;
+      trade = trade.trim().replaceAll("\\s+", " ");
+      String code = "BNK-MP-" + slug(trade);
+      if (code.length() > 50) code = code.substring(0, 50);
+      if (!seenCodes.add(code)) continue;
+      if (resourceRepository.findByCode(code).isPresent()) continue;
+      BigDecimal rate = manpowerDailyRateOmr(trade);
+      ResourceRole role = resourceFactory.ensureRole("ROLE-" + slug(trade), "LABOR");
+      Resource res = Resource.builder()
+          .code(code)
+          .name(trade)
+          .resourceType(laborType)
+          .role(role)
+          .unit("Day")
+          .calendarId(calendarId)
+          .status(ResourceStatus.ACTIVE)
+          .availability(BigDecimal.valueOf(100))
+          .costPerUnit(rate)
+          .sortOrder(sortOrder++)
+          .build();
+      Resource saved = resourceRepository.save(res);
+      resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", rate, DEFAULT_START));
+      resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL",
+          rate.multiply(new BigDecimal("1.05")).setScale(3, RoundingMode.HALF_UP),
+          DEFAULT_START));
+      resCount++;
+      rateCount += 2;
+    }
+
+    log.info("[BNK] Seeded {} manpower resources + {} rates ({} norm-backed, {} direct-labour)",
+        resCount, rateCount, normByTrade.size(),
+        Math.max(0, resCount - normByTrade.size()));
   }
 
   // ────────────────────── Manpower Roles ──────────────────────
