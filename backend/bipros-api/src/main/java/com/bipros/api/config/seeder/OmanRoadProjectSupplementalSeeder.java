@@ -34,9 +34,12 @@ import com.bipros.document.domain.repository.RfiRegisterRepository;
 import com.bipros.document.domain.repository.TransmittalItemRepository;
 import com.bipros.document.domain.repository.TransmittalRepository;
 import com.bipros.project.domain.model.DailyActivityResourceOutput;
+import com.bipros.project.domain.model.DailyResourceDeployment;
+import com.bipros.project.domain.model.DeploymentResourceType;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
+import com.bipros.project.domain.repository.DailyResourceDeploymentRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.ProductivityNorm;
@@ -134,6 +137,7 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
     private final ResourceAssignmentRepository resourceAssignmentRepository;
     private final ResourceDailyLogRepository resourceDailyLogRepository;
     private final DailyActivityResourceOutputRepository dailyActivityResourceOutputRepository;
+    private final DailyResourceDeploymentRepository dailyResourceDeploymentRepository;
     private final ProductivityNormRepository productivityNormRepository;
     private final ResourceRepository resourceRepository;
 
@@ -160,6 +164,7 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
         seedEvmCalculations(projectId);
         seedDailyActivityResourceOutput(projectId);
         seedDailyActivityResourceOutputs(projectId);
+        seedManpowerOperationalWiring(projectId);
 
         log.info("[BNK-SUPP] supplemental seeding completed");
     }
@@ -1101,5 +1106,220 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
         log.info("[BNK-SUPP] seeded {} daily activity-resource outputs across {} activities "
                 + "(skipped: {} no-resources, {} no-norm)",
                 count, activities.size(), skippedNoResources, skippedNoNorm);
+    }
+
+    // ──────────────── Manpower Operational Wiring ────────────────
+    /**
+     * Wires the manpower {@code Resource} rows (codes starting {@code BNK-MP-}) into the
+     * three operational tables that drive the DPR / Daily Outputs / Capacity Util / Resource
+     * Deployment tabs:
+     * <ol>
+     *   <li>{@code resource.resource_assignments} — every IN_PROGRESS / COMPLETED activity
+     *       gets two manpower trades (round-robin) alongside its existing equipment
+     *       assignments. Without this, manpower never appears in the activity-detail
+     *       Resources tab and never feeds Daily Outputs.</li>
+     *   <li>{@code project.daily_activity_resource_outputs} — for each new manpower
+     *       assignment × working day in the activity window, write a productivity row.
+     *       Quantity uses the trade's productivity norm (from the Capacity_Utilization
+     *       workbook's Manpower utilization sheet) where available, else falls back to
+     *       a tier-based default. Capacity Util now picks up manpower lines too.</li>
+     *   <li>{@code project.daily_resource_deployments} — for each manpower trade × last
+     *       30 working days, write a deployment row of type MANPOWER. The DPR-deployment
+     *       grid then shows manpower head-counts next to the equipment hours.</li>
+     * </ol>
+     *
+     * <p>Idempotent — sentinel-checks each table for existing manpower rows before
+     * writing.
+     */
+    private void seedManpowerOperationalWiring(UUID projectId) {
+        // Find manpower resources by code prefix (set by OmanRoadProjectSeeder).
+        List<com.bipros.resource.domain.model.Resource> manpower = resourceRepository.findAll().stream()
+                .filter(r -> r.getCode() != null && r.getCode().startsWith("BNK-MP-"))
+                .toList();
+        if (manpower.isEmpty()) {
+            log.info("[BNK-SUPP] no manpower resources (code prefix BNK-MP-) — skipping manpower wiring");
+            return;
+        }
+
+        // Sentinel: are manpower assignments already present?
+        long existingManpowerAssignments = resourceAssignmentRepository.findByProjectId(projectId).stream()
+                .filter(ra -> manpower.stream().anyMatch(mp -> mp.getId().equals(ra.getResourceId())))
+                .count();
+
+        Random rng = new Random(DETERMINISTIC_SEED + 1L);
+        LocalDate dataDate = DEFAULT_DATA_DATE;
+
+        // ─── Step 1: ResourceAssignments (manpower → activities) ───
+        List<Activity> targetActivities = activityRepository.findByProjectId(projectId).stream()
+                .filter(a -> a.getStatus() == com.bipros.activity.domain.model.ActivityStatus.IN_PROGRESS
+                          || a.getStatus() == com.bipros.activity.domain.model.ActivityStatus.COMPLETED)
+                .toList();
+        int newAssignments = 0;
+        if (existingManpowerAssignments == 0L) {
+            int idx = 0;
+            for (Activity a : targetActivities) {
+                // Two manpower trades per activity, round-robin, deterministic.
+                for (int k = 0; k < 2; k++) {
+                    com.bipros.resource.domain.model.Resource mp = manpower.get((idx + k * 7) % manpower.size());
+                    double durationDays = a.getOriginalDuration() != null ? a.getOriginalDuration() : 5.0;
+                    double plannedUnits = durationDays * 8.0;
+                    BigDecimal plannedCost = mp.getCostPerUnit() == null
+                            ? BigDecimal.ZERO
+                            : mp.getCostPerUnit()
+                                .multiply(BigDecimal.valueOf(plannedUnits / 8.0))
+                                .setScale(2, java.math.RoundingMode.HALF_UP);
+                    ResourceAssignment ra = ResourceAssignment.builder()
+                            .projectId(projectId)
+                            .activityId(a.getId())
+                            .resourceId(mp.getId())
+                            .plannedUnits(plannedUnits)
+                            .remainingUnits(plannedUnits)
+                            .rateType("STANDARD")
+                            .plannedStartDate(a.getPlannedStartDate())
+                            .plannedFinishDate(a.getPlannedFinishDate())
+                            .plannedCost(plannedCost)
+                            .build();
+                    resourceAssignmentRepository.save(ra);
+                    newAssignments++;
+                }
+                idx++;
+            }
+        }
+
+        // ─── Step 2: Daily Activity Resource Outputs for manpower assignments ───
+        // Generate only for manpower assignments that don't yet have outputs.
+        Set<UUID> manpowerResourceIds = manpower.stream()
+                .map(com.bipros.resource.domain.model.Resource::getId)
+                .collect(Collectors.toSet());
+        // Map productivity norm by resourceId where the resource is bound directly to a norm.
+        Map<UUID, com.bipros.resource.domain.model.ProductivityNorm> normByResource = new java.util.HashMap<>();
+        for (com.bipros.resource.domain.model.ProductivityNorm pn : productivityNormRepository.findAll()) {
+            if (pn.getResource() != null && pn.getOutputPerDay() != null
+                    && pn.getOutputPerDay().signum() > 0
+                    && manpowerResourceIds.contains(pn.getResource().getId())) {
+                normByResource.putIfAbsent(pn.getResource().getId(), pn);
+            }
+        }
+
+        int newOutputs = 0;
+        Set<String> outputSeen = new HashSet<>();
+        // Pre-load existing manpower outputs so we don't recreate.
+        dailyActivityResourceOutputRepository.findByProjectIdOrderByOutputDateDescIdAsc(projectId).stream()
+                .filter(o -> manpowerResourceIds.contains(o.getResourceId()))
+                .forEach(o -> outputSeen.add(o.getActivityId() + "|" + o.getResourceId() + "|" + o.getOutputDate()));
+
+        List<ResourceAssignment> manpowerAssignments = resourceAssignmentRepository.findByProjectId(projectId).stream()
+                .filter(ra -> manpowerResourceIds.contains(ra.getResourceId()))
+                .toList();
+
+        LocalDate from = dataDate.minusDays(60);
+        for (ResourceAssignment ra : manpowerAssignments) {
+            Activity act = activityRepository.findById(ra.getActivityId()).orElse(null);
+            if (act == null) continue;
+            if (act.getStatus() == com.bipros.activity.domain.model.ActivityStatus.NOT_STARTED) continue;
+            LocalDate actStart = act.getActualStartDate() != null ? act.getActualStartDate()
+                    : act.getPlannedStartDate() != null ? act.getPlannedStartDate() : from;
+            LocalDate actEnd = act.getActualFinishDate() != null ? act.getActualFinishDate()
+                    : dataDate.minusDays(1);
+            com.bipros.resource.domain.model.Resource mp = manpower.stream()
+                    .filter(m -> m.getId().equals(ra.getResourceId()))
+                    .findFirst().orElse(null);
+            if (mp == null) continue;
+            com.bipros.resource.domain.model.ProductivityNorm norm = normByResource.get(ra.getResourceId());
+            BigDecimal normPerDay = norm != null ? norm.getOutputPerDay() : null;
+            String unit = norm != null ? norm.getUnit() : null;
+            if (normPerDay == null || normPerDay.signum() <= 0) {
+                normPerDay = BigDecimal.valueOf(8); // 8 hours / man-day fallback
+                unit = "Day";
+            }
+            if (unit == null || unit.isBlank()) unit = "Day";
+
+            LocalDate d = from;
+            while (!d.isAfter(dataDate.minusDays(1))) {
+                if (d.getDayOfWeek() == java.time.DayOfWeek.FRIDAY
+                        || d.getDayOfWeek() == java.time.DayOfWeek.SATURDAY) {
+                    d = d.plusDays(1);
+                    continue;
+                }
+                if (d.isBefore(actStart) || d.isAfter(actEnd)) {
+                    d = d.plusDays(1);
+                    continue;
+                }
+                String key = act.getId() + "|" + ra.getResourceId() + "|" + d;
+                if (outputSeen.add(key)) {
+                    double pick = rng.nextDouble();
+                    double factor = pick < 0.25 ? 0.55 + rng.nextDouble() * 0.20
+                                  : pick < 0.60 ? 0.80 + rng.nextDouble() * 0.18
+                                                : 1.00 + rng.nextDouble() * 0.10;
+                    BigDecimal qty = normPerDay.multiply(BigDecimal.valueOf(factor))
+                            .setScale(3, java.math.RoundingMode.HALF_UP);
+                    double hours = 7.5 + rng.nextDouble() * 1.5;
+                    double days = Math.round((hours / 8.0) * 100.0) / 100.0;
+                    DailyActivityResourceOutput out = DailyActivityResourceOutput.builder()
+                            .projectId(projectId)
+                            .outputDate(d)
+                            .activityId(act.getId())
+                            .resourceId(ra.getResourceId())
+                            .qtyExecuted(qty)
+                            .unit(unit)
+                            .hoursWorked(Math.round(hours * 100.0) / 100.0)
+                            .daysWorked(days)
+                            .remarks("Manpower — auto-seeded by BNK supplemental seeder")
+                            .build();
+                    dailyActivityResourceOutputRepository.save(out);
+                    newOutputs++;
+                }
+                d = d.plusDays(1);
+            }
+        }
+
+        // ─── Step 3: Daily Resource Deployments — manpower head-count rows ───
+        // Skip if any MANPOWER deployments already exist.
+        long existingMpDeployments = dailyResourceDeploymentRepository.findAll().stream()
+                .filter(drd -> projectId.equals(drd.getProjectId())
+                        && drd.getResourceType() == DeploymentResourceType.MANPOWER)
+                .count();
+        int newDeployments = 0;
+        if (existingMpDeployments == 0L) {
+            LocalDate dpFrom = dataDate.minusDays(30);
+            LocalDate d = dpFrom;
+            while (!d.isAfter(dataDate.minusDays(1))) {
+                if (d.getDayOfWeek() == java.time.DayOfWeek.FRIDAY
+                        || d.getDayOfWeek() == java.time.DayOfWeek.SATURDAY) {
+                    d = d.plusDays(1);
+                    continue;
+                }
+                // Each working day, deploy 8 manpower trades (rotating subset).
+                int dayOffset = (int) java.time.temporal.ChronoUnit.DAYS.between(dpFrom, d);
+                for (int k = 0; k < Math.min(8, manpower.size()); k++) {
+                    com.bipros.resource.domain.model.Resource mp = manpower.get(
+                            (dayOffset * 3 + k * 5) % manpower.size());
+                    int planned = 4 + rng.nextInt(8);              // 4–11 men planned
+                    int deployed = Math.max(1, planned - rng.nextInt(3)); // 1–planned deployed
+                    double hours = deployed * (7.5 + rng.nextDouble() * 1.5);
+                    double idle = deployed * (rng.nextDouble() * 0.5);
+                    DailyResourceDeployment drd = DailyResourceDeployment.builder()
+                            .projectId(projectId)
+                            .logDate(d)
+                            .resourceType(DeploymentResourceType.MANPOWER)
+                            .resourceDescription(mp.getName())
+                            .resourceId(mp.getId())
+                            .resourceRoleId(mp.getRole() != null ? mp.getRole().getId() : null)
+                            .nosPlanned(planned)
+                            .nosDeployed(deployed)
+                            .hoursWorked(Math.round(hours * 10.0) / 10.0)
+                            .idleHours(Math.round(idle * 10.0) / 10.0)
+                            .remarks(deployed < planned ? "Short by " + (planned - deployed) : null)
+                            .build();
+                    dailyResourceDeploymentRepository.save(drd);
+                    newDeployments++;
+                }
+                d = d.plusDays(1);
+            }
+        }
+
+        log.info("[BNK-SUPP] manpower wiring — assignments: {} new ({} pre-existing), "
+                + "daily outputs: {} new, deployments: {} new",
+                newAssignments, existingManpowerAssignments, newOutputs, newDeployments);
     }
 }
