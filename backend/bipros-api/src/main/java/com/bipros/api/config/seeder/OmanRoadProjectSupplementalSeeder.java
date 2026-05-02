@@ -33,14 +33,20 @@ import com.bipros.document.domain.repository.DrawingRegisterRepository;
 import com.bipros.document.domain.repository.RfiRegisterRepository;
 import com.bipros.document.domain.repository.TransmittalItemRepository;
 import com.bipros.document.domain.repository.TransmittalRepository;
+import com.bipros.project.domain.model.DailyActivityResourceOutput;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
+import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.resource.domain.model.ProductivityNorm;
+import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.ResourceDailyLog;
+import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceDailyLogRepository;
+import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.risk.domain.model.ActivityCorrelation;
 import com.bipros.risk.domain.model.Risk;
 import com.bipros.risk.domain.model.RiskActivityAssignment;
@@ -127,6 +133,9 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
     private final WbsNodeRepository wbsNodeRepository;
     private final ResourceAssignmentRepository resourceAssignmentRepository;
     private final ResourceDailyLogRepository resourceDailyLogRepository;
+    private final DailyActivityResourceOutputRepository dailyActivityResourceOutputRepository;
+    private final ProductivityNormRepository productivityNormRepository;
+    private final ResourceRepository resourceRepository;
 
     @Override
     public void run(String... args) {
@@ -150,6 +159,7 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
         seedActivityCodes(projectId);
         seedEvmCalculations(projectId);
         seedDailyActivityResourceOutput(projectId);
+        seedDailyActivityResourceOutputs(projectId);
 
         log.info("[BNK-SUPP] supplemental seeding completed");
     }
@@ -934,5 +944,162 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
             }
         }
         log.info("[BNK-SUPP] seeded {} resource daily log entries", count);
+    }
+
+    // ──────────────── Daily Activity-Resource Outputs (UI-facing) ────────────────
+    /**
+     * Populates {@code project.daily_activity_resource_outputs} — the table behind the
+     * "Daily Outputs" tab and the source of the "Capacity Utilization" report. One row
+     * per (date × activity × resource) for the last 60 working days, drawn from
+     * {@link ResourceAssignment} and the activity's productivity norm so the
+     * Capacity-vs-Norm view actually has something to compute.
+     *
+     * <p>Quantity executed = norm × deterministic variance factor (0.65–1.05) so the
+     * UI's traffic-light bands (≥100 % green, 80–99 % yellow, &lt;80 % red) all show
+     * up. When no norm is found for the activity, falls back to 1.0 unit/day with
+     * unit "LS" (lump-sum) — keeps the row valid without hiding the gap.
+     */
+    private void seedDailyActivityResourceOutputs(UUID projectId) {
+        if (dailyActivityResourceOutputRepository
+                .findByProjectIdOrderByOutputDateDescIdAsc(projectId).size() > 0) {
+            log.info("[BNK-SUPP] daily activity resource outputs already present — skipping");
+            return;
+        }
+
+        // Only IN_PROGRESS / COMPLETED activities — NOT_STARTED has no real outputs to show.
+        List<Activity> activities = activityRepository.findByProjectId(projectId).stream()
+                .filter(a -> a.getStatus() == com.bipros.activity.domain.model.ActivityStatus.IN_PROGRESS
+                          || a.getStatus() == com.bipros.activity.domain.model.ActivityStatus.COMPLETED)
+                .toList();
+        if (activities.isEmpty()) {
+            log.warn("[BNK-SUPP] no in-progress/completed activities — skipping daily outputs");
+            return;
+        }
+
+        List<ResourceAssignment> assignments = resourceAssignmentRepository.findByProjectId(projectId);
+        if (assignments.isEmpty()) {
+            log.warn("[BNK-SUPP] no resource assignments — skipping daily outputs");
+            return;
+        }
+        Map<UUID, List<ResourceAssignment>> byActivity = assignments.stream()
+                .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+
+        // Resource lookup once (used to map a resource to its type for type-scoped norms).
+        Map<UUID, Resource> resourcesById = resourceRepository.findAll().stream()
+                .collect(Collectors.toMap(Resource::getId, r -> r, (a, b) -> a));
+
+        Random rng = new Random(DETERMINISTIC_SEED);
+        LocalDate dataDate = DEFAULT_DATA_DATE;
+        LocalDate from = dataDate.minusDays(60);
+        int count = 0;
+        int skippedNoNorm = 0;
+        int skippedNoResources = 0;
+
+        for (Activity a : activities) {
+            List<ResourceAssignment> actAssignments = byActivity.getOrDefault(a.getId(), List.of());
+            // Cap at 3 distinct resources per activity to keep volume sane (~60 days × 3 ≈ 180 rows/activity).
+            List<UUID> resourceIds = actAssignments.stream()
+                    .map(ResourceAssignment::getResourceId)
+                    .filter(java.util.Objects::nonNull)
+                    .distinct()
+                    .limit(3)
+                    .toList();
+            if (resourceIds.isEmpty()) {
+                skippedNoResources++;
+                continue;
+            }
+
+            // Look up productivity norms for the activity's WorkActivity once (multiple norms ⇒
+            // pick one that matches the resource's type, else fall back to the first).
+            List<ProductivityNorm> norms = a.getWorkActivityId() != null
+                    ? productivityNormRepository.findByWorkActivityId(a.getWorkActivityId())
+                    : List.of();
+
+            // Pick a per-resource norm (resource-scoped > type-scoped > first available > null).
+            Map<UUID, ProductivityNorm> normByResource = new java.util.HashMap<>();
+            for (UUID resId : resourceIds) {
+                Resource res = resourcesById.get(resId);
+                ProductivityNorm picked = null;
+                if (res != null) {
+                    picked = norms.stream()
+                            .filter(n -> n.getResource() != null && resId.equals(n.getResource().getId()))
+                            .findFirst().orElse(null);
+                    if (picked == null && res.getResourceType() != null) {
+                        UUID typeId = res.getResourceType().getId();
+                        picked = norms.stream()
+                                .filter(n -> n.getResourceType() != null
+                                        && typeId.equals(n.getResourceType().getId()))
+                                .findFirst().orElse(null);
+                    }
+                }
+                if (picked == null && !norms.isEmpty()) picked = norms.get(0);
+                normByResource.put(resId, picked);
+            }
+            if (normByResource.values().stream().allMatch(java.util.Objects::isNull)) {
+                skippedNoNorm++;
+            }
+
+            LocalDate d = from;
+            // Activity window: don't generate output rows after actual finish (for COMPLETED) or
+            // after data date (for IN_PROGRESS). Skip days before activity actually started.
+            LocalDate actStart = a.getActualStartDate() != null ? a.getActualStartDate()
+                    : a.getPlannedStartDate() != null ? a.getPlannedStartDate() : from;
+            LocalDate actEnd = a.getActualFinishDate() != null ? a.getActualFinishDate()
+                    : dataDate.minusDays(1);
+
+            while (!d.isAfter(dataDate.minusDays(1))) {
+                // Skip weekends (Friday/Saturday in Oman).
+                if (d.getDayOfWeek() == java.time.DayOfWeek.FRIDAY
+                        || d.getDayOfWeek() == java.time.DayOfWeek.SATURDAY) {
+                    d = d.plusDays(1);
+                    continue;
+                }
+                if (d.isBefore(actStart) || d.isAfter(actEnd)) {
+                    d = d.plusDays(1);
+                    continue;
+                }
+                for (UUID resId : resourceIds) {
+                    ProductivityNorm norm = normByResource.get(resId);
+                    BigDecimal normPerDay = norm != null ? norm.getOutputPerDay() : null;
+                    String normUnit = norm != null ? norm.getUnit() : null;
+                    if (normPerDay == null || normPerDay.signum() <= 0) {
+                        normPerDay = BigDecimal.ONE;
+                        normUnit = (normUnit == null || normUnit.isBlank()) ? "LS" : normUnit;
+                    }
+                    if (normUnit == null || normUnit.isBlank()) normUnit = "Cum";
+
+                    // Variance band tuned so ~25 % red, ~35 % yellow, ~40 % green.
+                    double pick = rng.nextDouble();
+                    double factor = pick < 0.25 ? 0.55 + rng.nextDouble() * 0.20    // red 0.55–0.75
+                                  : pick < 0.60 ? 0.80 + rng.nextDouble() * 0.18    // yellow 0.80–0.98
+                                                : 1.00 + rng.nextDouble() * 0.10;   // green 1.00–1.10
+                    BigDecimal qty = normPerDay
+                            .multiply(BigDecimal.valueOf(factor))
+                            .setScale(3, java.math.RoundingMode.HALF_UP);
+                    double hours = 7.5 + rng.nextDouble() * 1.5;   // 7.5–9.0 h
+                    double days = Math.round((hours / 8.0) * 100.0) / 100.0;
+
+                    DailyActivityResourceOutput out = DailyActivityResourceOutput.builder()
+                            .projectId(projectId)
+                            .outputDate(d)
+                            .activityId(a.getId())
+                            .resourceId(resId)
+                            .qtyExecuted(qty)
+                            .unit(normUnit)
+                            .hoursWorked(Math.round(hours * 100.0) / 100.0)
+                            .daysWorked(days)
+                            .remarks(factor < 0.80 ? "Below norm — site condition variance"
+                                  : factor > 1.05 ? "Above norm — favourable conditions"
+                                                  : null)
+                            .build();
+                    dailyActivityResourceOutputRepository.save(out);
+                    count++;
+                }
+                d = d.plusDays(1);
+            }
+        }
+        log.info("[BNK-SUPP] seeded {} daily activity-resource outputs across {} activities "
+                + "(skipped: {} no-resources, {} no-norm)",
+                count, activities.size(), skippedNoResources, skippedNoNorm);
     }
 }

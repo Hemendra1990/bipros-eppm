@@ -41,6 +41,7 @@ import com.bipros.project.domain.repository.StretchRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.api.config.seeder.util.SeederResourceFactory;
 import com.bipros.resource.application.service.WorkActivityService;
+import com.bipros.resource.domain.repository.WorkActivityRepository;
 import com.bipros.resource.domain.model.LabourDesignation;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.ProductivityNormType;
@@ -129,6 +130,7 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
   private final BoqItemRepository boqItemRepository;
   private final ProductivityNormRepository productivityNormRepository;
   private final WorkActivityService workActivityService;
+  private final WorkActivityRepository workActivityRepository;
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository resourceRateRepository;
   private final ResourceRoleRepository resourceRoleRepository;
@@ -156,7 +158,15 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       return;
     }
     if (projectRepository.findByCode(PROJECT_CODE).isPresent()) {
-      log.info("[BNK] project '{}' already seeded, skipping", PROJECT_CODE);
+      log.info("[BNK] project '{}' already seeded, skipping core but topping up labour deployments + activity links", PROJECT_CODE);
+      // Top up: when the LabourDesignation master expands (e.g. JSON master is extended
+      // or Excel-derived positions are merged in), every existing project still needs a
+      // deployment row per designation. The deployment seeder is row-idempotent.
+      // Also re-link activities to work_activities — needed for Capacity Utilization.
+      projectRepository.findByCode(PROJECT_CODE).ifPresent(p -> {
+        seedProjectLabourDeployments(p.getId());
+        backfillActivityWorkActivityLinks(p.getId());
+      });
       return;
     }
 
@@ -1218,10 +1228,61 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       idx++;
     }
     activityRepository.saveAll(activities);
+    backfillActivityWorkActivityLinks(projectId);
     log.info("[BNK] activity %% spread: NOT_STARTED={}, IN_PROGRESS={}, COMPLETED={}, on-hold/cancelled={}",
         notStarted, inProgress, completed, suspended);
     int relCount = seedActivityRelationships(projectId);
     log.info("[BNK] Seeded {} activities + {} relationships", total, relCount);
+  }
+
+  /**
+   * Link every project activity to a {@code resource.work_activities} row by exact name
+   * match (case-insensitive); for activities whose BOQ description doesn't match a master
+   * activity, fall back to a deterministic round-robin assignment over the work-activity
+   * pool. The link is required by Capacity Utilization, which joins
+   * {@code daily_activity_resource_outputs → activities → work_activities} to look up
+   * the productivity norm.
+   *
+   * <p>Idempotent — only updates rows where {@code work_activity_id IS NULL}.
+   */
+  private void backfillActivityWorkActivityLinks(UUID projectId) {
+    List<Activity> activities = activityRepository.findByProjectId(projectId);
+    if (activities.isEmpty()) return;
+    List<UUID> waPool = workActivityRepository.findAll().stream()
+        .sorted(Comparator.comparing(wa -> wa.getName() == null ? "" : wa.getName()))
+        .map(WorkActivity::getId)
+        .toList();
+    if (waPool.isEmpty()) {
+      log.warn("[BNK] no WorkActivity rows — Capacity Utilization will be empty");
+      return;
+    }
+    int linkedExact = 0, linkedRoundRobin = 0, alreadyLinked = 0;
+    int idx = 0;
+    List<Activity> dirty = new ArrayList<>();
+    for (Activity a : activities) {
+      if (a.getWorkActivityId() != null) {
+        alreadyLinked++;
+        idx++;
+        continue;
+      }
+      UUID resolved = workActivityRepository.findByNameIgnoreCase(a.getName())
+          .map(WorkActivity::getId)
+          .orElse(null);
+      if (resolved != null) {
+        a.setWorkActivityId(resolved);
+        linkedExact++;
+      } else {
+        a.setWorkActivityId(waPool.get(idx % waPool.size()));
+        linkedRoundRobin++;
+      }
+      dirty.add(a);
+      idx++;
+    }
+    if (!dirty.isEmpty()) {
+      activityRepository.saveAll(dirty);
+    }
+    log.info("[BNK] Activity→WorkActivity links: {} exact, {} round-robin ({} already linked)",
+        linkedExact, linkedRoundRobin, alreadyLinked);
   }
 
   /** Compute duration in days using best-match productivity norm; clamp [14, 240]. */
