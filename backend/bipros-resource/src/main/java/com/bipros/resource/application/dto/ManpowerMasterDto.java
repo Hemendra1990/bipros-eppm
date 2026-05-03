@@ -1,18 +1,22 @@
 package com.bipros.resource.application.dto;
 
-import com.bipros.resource.domain.model.enums.EmploymentType;
-import com.bipros.resource.domain.model.enums.ManpowerCategory;
 import com.bipros.resource.domain.model.manpower.ManpowerMaster;
 
 import java.time.LocalDate;
 import java.util.UUID;
 
+/**
+ * {@code category}, {@code subCategory}, {@code employmentType} are plain strings now (was enum).
+ * The form picks values from the corresponding admin masters
+ * ({@code ManpowerCategoryMaster}, {@code EmploymentTypeMaster}); legacy enum strings remain valid
+ * because the seeder creates master rows with those names.
+ */
 public record ManpowerMasterDto(
     String employeeCode,
     String firstName,
     String lastName,
     String fullName,
-    ManpowerCategory category,
+    String category,
     String subCategory,
     LocalDate dateOfBirth,
     String gender,
@@ -22,7 +26,7 @@ public record ManpowerMasterDto(
     String address,
     String emergencyContact,
     String photoUrl,
-    EmploymentType employmentType,
+    String employmentType,
     String designation,
     String department,
     LocalDate joiningDate,

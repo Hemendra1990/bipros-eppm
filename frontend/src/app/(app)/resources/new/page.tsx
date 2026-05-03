@@ -14,20 +14,18 @@ import {
   type ResourceStatus,
   type ResourceOwnership,
   type MaterialType,
-  type ManpowerCategory,
-  type EmploymentType,
-  type SkillLevel,
-  type PaymentMode,
-  type AttendanceStatus,
-  type ShiftType,
-  type AvailabilityStatus,
-  type MedicalStatus,
 } from "@/lib/api/resourceApi";
 import { resourceTypeApi } from "@/lib/api/resourceTypeApi";
 import { resourceRoleApi } from "@/lib/api/resourceRoleApi";
 import { calendarApi } from "@/lib/api/calendarApi";
+import { manpowerCategoryMasterApi } from "@/lib/api/manpowerCategoryMasterApi";
+import { employmentTypeMasterApi } from "@/lib/api/employmentTypeMasterApi";
+import { skillMasterApi } from "@/lib/api/skillMasterApi";
+import { skillLevelMasterApi } from "@/lib/api/skillLevelMasterApi";
+import { nationalityMasterApi } from "@/lib/api/nationalityMasterApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
+import { MultiSelect } from "@/components/common/MultiSelect";
 import toast from "react-hot-toast";
 
 type TypeKind = "MANPOWER" | "EQUIPMENT" | "MATERIAL" | "OTHER";
@@ -141,9 +139,8 @@ export default function NewResourcePage() {
   const [equipment, setEquipment] = useState<EquipmentDetailsDto>(emptyEquipment());
   const [material, setMaterial] = useState<MaterialDetailsDto>(emptyMaterial());
   const [manpower, setManpower] = useState<ManpowerDto>(emptyManpower());
-  const [activeManpowerSection, setActiveManpowerSection] = useState<
-    "master" | "skills" | "financials" | "attendance" | "allocation" | "compliance"
-  >("master");
+  // 4 sections (financials/attendance/allocation/compliance) hidden for now — see ManpowerForm.
+  const [activeManpowerSection, setActiveManpowerSection] = useState<"master" | "skills">("master");
 
   // Reference data
   const { data: typesData } = useQuery({
@@ -245,18 +242,9 @@ export default function NewResourcePage() {
         }
         base.material = material;
       } else if (kind === "MANPOWER") {
-        // Validate JSON-ish textareas. Each may be undefined; surface a nice error if user typed bad JSON.
-        const skills = manpower.skills;
-        if (skills?.secondarySkills)
-          parseJsonStringOrThrow(skills.secondarySkills, "Secondary Skills (JSON)");
-        const financials = manpower.financials;
-        if (financials?.allowances)
-          parseJsonStringOrThrow(financials.allowances, "Allowances (JSON)");
-        if (financials?.deductions)
-          parseJsonStringOrThrow(financials.deductions, "Deductions (JSON)");
-        const attendance = manpower.attendance;
-        if (attendance?.leaveSchedule)
-          parseJsonStringOrThrow(attendance.leaveSchedule, "Leave Schedule (JSON)");
+        // Skills now use the MultiSelect component (already JSON-encoded internally), so the
+        // textarea-validation step is no longer needed. Financial/Attendance/Allocation/Compliance
+        // sections are hidden — their JSON fields aren't surfaced.
         base.manpower = manpower;
       }
 
@@ -897,14 +885,12 @@ function MaterialForm({
 // Manpower form
 // ────────────────────────────────────────────────────────────────────────────
 
-type ManpowerSection =
-  | "master"
-  | "skills"
-  | "financials"
-  | "attendance"
-  | "allocation"
-  | "compliance";
+type ManpowerSection = "master" | "skills";
 
+// Financial / Attendance / Allocation / Compliance sections are hidden for now per requirements.
+// Their backend entities, columns, and DTOs are intact — only the UI surface is removed. To
+// re-enable, restore the section keys + tab buttons + conditional renders, and recreate the
+// corresponding ManpowerXxxFields components (see git history before this change).
 function ManpowerForm({
   value,
   onChange,
@@ -919,10 +905,6 @@ function ManpowerForm({
   const sections: { key: ManpowerSection; label: string }[] = [
     { key: "master", label: "Master" },
     { key: "skills", label: "Skills" },
-    { key: "financials", label: "Financial" },
-    { key: "attendance", label: "Attendance" },
-    { key: "allocation", label: "Allocation" },
-    { key: "compliance", label: "Compliance" },
   ];
 
   return (
@@ -950,20 +932,35 @@ function ManpowerForm({
       {activeSection === "skills" && (
         <ManpowerSkillsFields value={value} onChange={onChange} />
       )}
-      {activeSection === "financials" && (
-        <ManpowerFinancialsFields value={value} onChange={onChange} />
-      )}
-      {activeSection === "attendance" && (
-        <ManpowerAttendanceFields value={value} onChange={onChange} />
-      )}
-      {activeSection === "allocation" && (
-        <ManpowerAllocationFields value={value} onChange={onChange} />
-      )}
-      {activeSection === "compliance" && (
-        <ManpowerComplianceFields value={value} onChange={onChange} />
-      )}
     </div>
   );
+}
+
+/**
+ * Build a SearchableSelect options list from master rows, optionally injecting the current
+ * stored value as a synthetic "(legacy)" option when it doesn't match any master row. Lets
+ * users see existing data that pre-dates a master entry instead of silently showing blank.
+ */
+function masterOptions(
+  rows: Array<{ id?: string; name: string }>,
+  currentValue: string | null | undefined,
+): { value: string; label: string }[] {
+  const opts = rows.map((r) => ({ value: r.name, label: r.name }));
+  if (currentValue && !opts.some((o) => o.value === currentValue)) {
+    opts.unshift({ value: currentValue, label: `${currentValue} (legacy)` });
+  }
+  return opts;
+}
+
+/** Tolerant parse for primary/secondary skills — JSON array, single legacy string, or empty. */
+function parseSkillArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
+  } catch {
+    return [raw];
+  }
 }
 
 function ManpowerMasterFields({
@@ -976,6 +973,44 @@ function ManpowerMasterFields({
   const m = value.master ?? {};
   const set = (patch: Partial<typeof m>) =>
     onChange({ ...value, master: { ...m, ...patch } });
+
+  // Master data for dropdowns
+  const { data: topCategoriesData } = useQuery({
+    queryKey: ["manpower-categories", "top-level"],
+    queryFn: () => manpowerCategoryMasterApi.listTopLevel(),
+  });
+  const topCategories = useMemo(() => topCategoriesData?.data ?? [], [topCategoriesData]);
+
+  const selectedCategoryId = useMemo(
+    () => topCategories.find((c) => c.name === m.category)?.id ?? null,
+    [topCategories, m.category],
+  );
+
+  const { data: subCategoriesData } = useQuery({
+    queryKey: ["manpower-categories", "by-parent", selectedCategoryId],
+    queryFn: () => manpowerCategoryMasterApi.listByParent(selectedCategoryId!),
+    enabled: !!selectedCategoryId,
+  });
+  const subCategories = useMemo(() => subCategoriesData?.data ?? [], [subCategoriesData]);
+
+  const { data: employmentTypesData } = useQuery({
+    queryKey: ["employment-types"],
+    queryFn: () => employmentTypeMasterApi.list(),
+  });
+  const employmentTypes = useMemo(
+    () => employmentTypesData?.data ?? [],
+    [employmentTypesData],
+  );
+
+  const { data: nationalitiesData } = useQuery({
+    queryKey: ["nationalities"],
+    queryFn: () => nationalityMasterApi.list(),
+  });
+  const nationalities = useMemo(() => nationalitiesData?.data ?? [], [nationalitiesData]);
+
+  const categoryOptions = masterOptions(topCategories, m.category);
+  const subCategoryOptions = masterOptions(subCategories, m.subCategory);
+  const employmentTypeOptions = masterOptions(employmentTypes, m.employmentType);
 
   return (
     <Section title="Personal & Employment">
@@ -1008,24 +1043,31 @@ function ManpowerMasterFields({
         />
       </Field>
       <Field label="Category">
-        <select
-          className={inputCls}
+        <SearchableSelect
+          options={categoryOptions}
           value={m.category ?? ""}
-          onChange={(e) =>
-            set({ category: (e.target.value || null) as ManpowerCategory | null })
-          }
-        >
-          <option value="">—</option>
-          <option value="SKILLED">Skilled</option>
-          <option value="UNSKILLED">Unskilled</option>
-          <option value="STAFF">Staff</option>
-        </select>
+          onChange={(v) => {
+            // Clear sub-category when category changes if it no longer fits.
+            const newSet: Partial<typeof m> = { category: v || null };
+            if (v !== m.category) newSet.subCategory = null;
+            set(newSet);
+          }}
+          placeholder="— select category —"
+        />
       </Field>
       <Field label="Sub-Category">
-        <input
-          className={inputCls}
+        <SearchableSelect
+          options={subCategoryOptions}
           value={m.subCategory ?? ""}
-          onChange={(e) => set({ subCategory: e.target.value || null })}
+          onChange={(v) => set({ subCategory: v || null })}
+          placeholder={
+            !selectedCategoryId
+              ? "Pick Category first"
+              : subCategoryOptions.length === 0
+                ? "No sub-categories defined"
+                : "— select sub-category —"
+          }
+          disabled={!selectedCategoryId}
         />
       </Field>
       <Field label="Date of Birth">
@@ -1037,18 +1079,29 @@ function ManpowerMasterFields({
         />
       </Field>
       <Field label="Gender">
-        <input
+        <select
           className={inputCls}
           value={m.gender ?? ""}
           onChange={(e) => set({ gender: e.target.value || null })}
-        />
+        >
+          <option value="">—</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
       </Field>
       <Field label="Nationality">
         <input
           className={inputCls}
+          list="nationalities-datalist"
           value={m.nationality ?? ""}
           onChange={(e) => set({ nationality: e.target.value || null })}
+          placeholder="Type to search or pick a suggestion…"
         />
+        <datalist id="nationalities-datalist">
+          {nationalities.map((n) => (
+            <option key={n.id} value={n.name} />
+          ))}
+        </datalist>
       </Field>
       <Field label="Contact Number">
         <input
@@ -1087,18 +1140,12 @@ function ManpowerMasterFields({
         />
       </Field>
       <Field label="Employment Type">
-        <select
-          className={inputCls}
+        <SearchableSelect
+          options={employmentTypeOptions}
           value={m.employmentType ?? ""}
-          onChange={(e) =>
-            set({ employmentType: (e.target.value || null) as EmploymentType | null })
-          }
-        >
-          <option value="">—</option>
-          <option value="PERMANENT">Permanent</option>
-          <option value="CONTRACT">Contract</option>
-          <option value="DAILY_WAGE">Daily Wage</option>
-        </select>
+          onChange={(v) => set({ employmentType: v || null })}
+          placeholder="— select employment type —"
+        />
       </Field>
       <Field label="Designation">
         <input
@@ -1165,28 +1212,42 @@ function ManpowerSkillsFields({
   const s = value.skills ?? {};
   const set = (patch: Partial<typeof s>) =>
     onChange({ ...value, skills: { ...s, ...patch } });
+
+  const { data: skillsData } = useQuery({
+    queryKey: ["skills"],
+    queryFn: () => skillMasterApi.list(),
+  });
+  const skills = useMemo(() => skillsData?.data ?? [], [skillsData]);
+
+  const { data: skillLevelsData } = useQuery({
+    queryKey: ["skill-levels"],
+    queryFn: () => skillLevelMasterApi.list(),
+  });
+  const skillLevels = useMemo(() => skillLevelsData?.data ?? [], [skillLevelsData]);
+
+  const skillOptions = skills.map((sk) => ({ value: sk.name, label: sk.name }));
+  const skillLevelOptions = masterOptions(skillLevels, s.skillLevel);
+
+  const primarySelected = parseSkillArray(s.primarySkill);
+  const secondarySelected = parseSkillArray(s.secondarySkills);
+
   return (
     <Section title="Skills & Certifications">
-      <Field label="Primary Skill">
-        <input
-          className={inputCls}
-          value={s.primarySkill ?? ""}
-          onChange={(e) => set({ primarySkill: e.target.value || null })}
+      <Field label="Primary Skills" colSpan={2}>
+        <MultiSelect
+          options={skillOptions}
+          value={primarySelected}
+          onChange={(arr) => set({ primarySkill: arr.length === 0 ? null : JSON.stringify(arr) })}
+          placeholder="Pick one or more skills…"
         />
       </Field>
       <Field label="Skill Level">
-        <select
-          className={inputCls}
+        <SearchableSelect
+          options={skillLevelOptions}
           value={s.skillLevel ?? ""}
-          onChange={(e) =>
-            set({ skillLevel: (e.target.value || null) as SkillLevel | null })
-          }
-        >
-          <option value="">—</option>
-          <option value="BEGINNER">Beginner</option>
-          <option value="INTERMEDIATE">Intermediate</option>
-          <option value="EXPERT">Expert</option>
-        </select>
+          onChange={(v) => set({ skillLevel: v || null })}
+          placeholder="— select skill level —"
+        />
       </Field>
       <Field label="Experience (years)">
         <input
@@ -1203,13 +1264,14 @@ function ManpowerSkillsFields({
           onChange={(e) => set({ licenseDetails: e.target.value || null })}
         />
       </Field>
-      <Field label="Secondary Skills (JSON)" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={3}
-          placeholder='["welding","plumbing"]'
-          value={s.secondarySkills ?? ""}
-          onChange={(e) => set({ secondarySkills: e.target.value || null })}
+      <Field label="Secondary Skills" colSpan={2}>
+        <MultiSelect
+          options={skillOptions}
+          value={secondarySelected}
+          onChange={(arr) =>
+            set({ secondarySkills: arr.length === 0 ? null : JSON.stringify(arr) })
+          }
+          placeholder="Pick additional skills (if any)…"
         />
       </Field>
       <Field label="Certifications" colSpan={2}>
@@ -1232,487 +1294,6 @@ function ManpowerSkillsFields({
   );
 }
 
-function ManpowerFinancialsFields({
-  value,
-  onChange,
-}: {
-  value: ManpowerDto;
-  onChange: (v: ManpowerDto) => void;
-}) {
-  const f = value.financials ?? {};
-  const set = (patch: Partial<typeof f>) =>
-    onChange({ ...value, financials: { ...f, ...patch } });
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-info/20 bg-info/5 p-3 text-xs text-text-muted">
-        This section is for HR/payroll record-keeping only. The rate the project cost system uses
-        is <strong className="text-text-primary">Default Rate</strong> on the Identity step. Salary,
-        allowances, and deductions live here as reference data; they don&apos;t affect project cost
-        calculations.
-      </div>
-      <Section title="Financial">
-        <Field label="Currency">
-          <input
-            className={inputCls}
-            value={f.currency ?? ""}
-            onChange={(e) => set({ currency: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Payment Mode">
-          <select
-            className={inputCls}
-            value={f.paymentMode ?? ""}
-            onChange={(e) =>
-              set({ paymentMode: (e.target.value || null) as PaymentMode | null })
-            }
-          >
-            <option value="">—</option>
-            <option value="BANK">Bank</option>
-            <option value="CASH">Cash</option>
-            <option value="CHEQUE">Cheque</option>
-          </select>
-        </Field>
-        <Field label="Allowances (JSON)" colSpan={2}>
-          <textarea
-            className={inputCls}
-            rows={2}
-            value={f.allowances ?? ""}
-            onChange={(e) => set({ allowances: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Deductions (JSON)" colSpan={2}>
-          <textarea
-            className={inputCls}
-            rows={2}
-            value={f.deductions ?? ""}
-            onChange={(e) => set({ deductions: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Bank Account Details" colSpan={2}>
-          <textarea
-            className={inputCls}
-            rows={2}
-            value={f.bankAccountDetails ?? ""}
-            onChange={(e) => set({ bankAccountDetails: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Tax Details" colSpan={2}>
-          <textarea
-            className={inputCls}
-            rows={2}
-            value={f.taxDetails ?? ""}
-            onChange={(e) => set({ taxDetails: e.target.value || null })}
-          />
-        </Field>
-        <Field label="PF Number">
-          <input
-            className={inputCls}
-            value={f.pfNumber ?? ""}
-            onChange={(e) => set({ pfNumber: e.target.value || null })}
-          />
-        </Field>
-        <Field label="ESI Number">
-          <input
-            className={inputCls}
-            value={f.esiNumber ?? ""}
-            onChange={(e) => set({ esiNumber: e.target.value || null })}
-          />
-        </Field>
-      </Section>
-    </div>
-  );
-}
-
-function ManpowerAttendanceFields({
-  value,
-  onChange,
-}: {
-  value: ManpowerDto;
-  onChange: (v: ManpowerDto) => void;
-}) {
-  const a = value.attendance ?? {};
-  const set = (patch: Partial<typeof a>) =>
-    onChange({ ...value, attendance: { ...a, ...patch } });
-  return (
-    <Section title="Attendance & Hours">
-      <Field label="Daily Status">
-        <select
-          className={inputCls}
-          value={a.dailyAttendanceStatus ?? ""}
-          onChange={(e) =>
-            set({
-              dailyAttendanceStatus: (e.target.value || null) as AttendanceStatus | null,
-            })
-          }
-        >
-          <option value="">—</option>
-          <option value="PRESENT">Present</option>
-          <option value="ABSENT">Absent</option>
-          <option value="ON_LEAVE">On leave</option>
-          <option value="HALF_DAY">Half day</option>
-        </select>
-      </Field>
-      <Field label="Shift">
-        <select
-          className={inputCls}
-          value={a.shiftType ?? ""}
-          onChange={(e) =>
-            set({ shiftType: (e.target.value || null) as ShiftType | null })
-          }
-        >
-          <option value="">—</option>
-          <option value="DAY">Day</option>
-          <option value="NIGHT">Night</option>
-        </select>
-      </Field>
-      <Field label="Last Check-In (ISO)">
-        <input
-          className={inputCls}
-          value={a.lastCheckInTime ?? ""}
-          onChange={(e) => set({ lastCheckInTime: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Last Check-Out (ISO)">
-        <input
-          className={inputCls}
-          value={a.lastCheckOutTime ?? ""}
-          onChange={(e) => set({ lastCheckOutTime: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Working Hours / Day">
-        <input
-          type="number"
-          step="0.1"
-          className={inputCls}
-          value={a.workingHoursPerDay ?? ""}
-          onChange={(e) => set({ workingHoursPerDay: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Total Work Hours MTD">
-        <input
-          type="number"
-          step="0.1"
-          className={inputCls}
-          value={a.totalWorkHoursMtd ?? ""}
-          onChange={(e) => set({ totalWorkHoursMtd: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Overtime Hours MTD">
-        <input
-          type="number"
-          step="0.1"
-          className={inputCls}
-          value={a.overtimeHoursMtd ?? ""}
-          onChange={(e) => set({ overtimeHoursMtd: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Leave Balance">
-        <input
-          type="number"
-          step="0.5"
-          className={inputCls}
-          value={a.leaveBalance ?? ""}
-          onChange={(e) => set({ leaveBalance: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Leave Schedule (JSON)" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={a.leaveSchedule ?? ""}
-          onChange={(e) => set({ leaveSchedule: e.target.value || null })}
-        />
-      </Field>
-    </Section>
-  );
-}
-
-function ManpowerAllocationFields({
-  value,
-  onChange,
-}: {
-  value: ManpowerDto;
-  onChange: (v: ManpowerDto) => void;
-}) {
-  const a = value.allocation ?? {};
-  const set = (patch: Partial<typeof a>) =>
-    onChange({ ...value, allocation: { ...a, ...patch } });
-  return (
-    <Section title="Allocation & Performance">
-      <Field label="Availability Status">
-        <select
-          className={inputCls}
-          value={a.availabilityStatus ?? ""}
-          onChange={(e) =>
-            set({
-              availabilityStatus: (e.target.value || null) as AvailabilityStatus | null,
-            })
-          }
-        >
-          <option value="">—</option>
-          <option value="AVAILABLE">Available</option>
-          <option value="ASSIGNED">Assigned</option>
-          <option value="ON_LEAVE">On leave</option>
-        </select>
-      </Field>
-      <Field label="Site Name">
-        <input
-          className={inputCls}
-          value={a.siteName ?? ""}
-          onChange={(e) => set({ siteName: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Current Project (UUID)">
-        <input
-          className={inputCls}
-          value={a.currentProjectId ?? ""}
-          onChange={(e) => set({ currentProjectId: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Assigned Activity (UUID)">
-        <input
-          className={inputCls}
-          value={a.assignedActivityId ?? ""}
-          onChange={(e) => set({ assignedActivityId: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Role in Project">
-        <input
-          className={inputCls}
-          value={a.roleInProject ?? ""}
-          onChange={(e) => set({ roleInProject: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Crew ID (UUID)">
-        <input
-          className={inputCls}
-          value={a.crewId ?? ""}
-          onChange={(e) => set({ crewId: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Utilization %">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={a.utilizationPercentage ?? ""}
-          onChange={(e) => set({ utilizationPercentage: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Standard Output / Hour">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={a.standardOutputPerHour ?? ""}
-          onChange={(e) => set({ standardOutputPerHour: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Output Unit">
-        <input
-          className={inputCls}
-          value={a.outputUnit ?? ""}
-          onChange={(e) => set({ outputUnit: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Efficiency Factor">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={a.efficiencyFactor ?? ""}
-          onChange={(e) => set({ efficiencyFactor: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Performance Rating">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={a.performanceRating ?? ""}
-          onChange={(e) => set({ performanceRating: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Productivity Trend">
-        <input
-          className={inputCls}
-          value={a.productivityTrend ?? ""}
-          onChange={(e) => set({ productivityTrend: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Attrition Risk Score">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={a.attritionRiskScore ?? ""}
-          onChange={(e) => set({ attritionRiskScore: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Skill Gap Analysis" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={a.skillGapAnalysis ?? ""}
-          onChange={(e) => set({ skillGapAnalysis: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Recommended Training" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={a.recommendedTraining ?? ""}
-          onChange={(e) => set({ recommendedTraining: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Optimal Assignment" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={a.optimalAssignment ?? ""}
-          onChange={(e) => set({ optimalAssignment: e.target.value || null })}
-        />
-      </Field>
-    </Section>
-  );
-}
-
-function ManpowerComplianceFields({
-  value,
-  onChange,
-}: {
-  value: ManpowerDto;
-  onChange: (v: ManpowerDto) => void;
-}) {
-  const c = value.compliance ?? {};
-  const set = (patch: Partial<typeof c>) =>
-    onChange({ ...value, compliance: { ...c, ...patch } });
-  return (
-    <Section title="Compliance & Documents">
-      <Field label="ID Proof Type">
-        <input
-          className={inputCls}
-          value={c.idProofType ?? ""}
-          onChange={(e) => set({ idProofType: e.target.value || null })}
-        />
-      </Field>
-      <Field label="ID Proof Number">
-        <input
-          className={inputCls}
-          value={c.idProofNumber ?? ""}
-          onChange={(e) => set({ idProofNumber: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Labor License Number">
-        <input
-          className={inputCls}
-          value={c.laborLicenseNumber ?? ""}
-          onChange={(e) => set({ laborLicenseNumber: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Insurance Provider">
-        <input
-          className={inputCls}
-          value={c.insuranceProvider ?? ""}
-          onChange={(e) => set({ insuranceProvider: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Insurance Policy Number">
-        <input
-          className={inputCls}
-          value={c.insurancePolicyNumber ?? ""}
-          onChange={(e) => set({ insurancePolicyNumber: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Insurance Expiry">
-        <input
-          type="date"
-          className={inputCls}
-          value={c.insuranceExpiry ?? ""}
-          onChange={(e) => set({ insuranceExpiry: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Medical Status">
-        <select
-          className={inputCls}
-          value={c.medicalFitnessStatus ?? ""}
-          onChange={(e) =>
-            set({
-              medicalFitnessStatus: (e.target.value || null) as MedicalStatus | null,
-            })
-          }
-        >
-          <option value="">—</option>
-          <option value="FIT">Fit</option>
-          <option value="UNFIT">Unfit</option>
-          <option value="PENDING">Pending</option>
-        </select>
-      </Field>
-      <Field label="Medical Expiry">
-        <input
-          type="date"
-          className={inputCls}
-          value={c.medicalExpiry ?? ""}
-          onChange={(e) => set({ medicalExpiry: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Safety Training Completed">
-        <select
-          className={inputCls}
-          value={c.safetyTrainingCompleted == null ? "" : c.safetyTrainingCompleted ? "yes" : "no"}
-          onChange={(e) =>
-            set({
-              safetyTrainingCompleted:
-                e.target.value === "" ? null : e.target.value === "yes",
-            })
-          }
-        >
-          <option value="">—</option>
-          <option value="yes">Yes</option>
-          <option value="no">No</option>
-        </select>
-      </Field>
-      <Field label="Safety Training Date">
-        <input
-          type="date"
-          className={inputCls}
-          value={c.safetyTrainingDate ?? ""}
-          onChange={(e) => set({ safetyTrainingDate: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Resume URL" colSpan={2}>
-        <input
-          className={inputCls}
-          value={c.resumeUrl ?? ""}
-          onChange={(e) => set({ resumeUrl: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Compliance Certificates" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={c.complianceCertificates ?? ""}
-          onChange={(e) => set({ complianceCertificates: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Certification Documents" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={c.certificationDocuments ?? ""}
-          onChange={(e) => set({ certificationDocuments: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Contract Document URL" colSpan={2}>
-        <input
-          className={inputCls}
-          value={c.contractDocumentUrl ?? ""}
-          onChange={(e) => set({ contractDocumentUrl: e.target.value || null })}
-        />
-      </Field>
-    </Section>
-  );
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Layout helpers

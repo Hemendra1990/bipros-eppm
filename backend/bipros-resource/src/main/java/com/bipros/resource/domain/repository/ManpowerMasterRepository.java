@@ -11,4 +11,12 @@ import java.util.UUID;
 public interface ManpowerMasterRepository extends JpaRepository<ManpowerMaster, UUID> {
 
   Optional<ManpowerMaster> findByEmployeeCode(String code);
+
+  long countByCategory(String category);
+
+  long countBySubCategory(String subCategory);
+
+  long countByEmploymentType(String employmentType);
+
+  long countByNationality(String nationality);
 }

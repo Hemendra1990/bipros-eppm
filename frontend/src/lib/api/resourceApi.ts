@@ -9,11 +9,9 @@ export type ResourceOwnership = "OWNED" | "HIRED" | "SUB_CONTRACTOR_PROVIDED";
 
 export type MaterialType = "CONSUMABLE" | "NON_CONSUMABLE";
 
-export type ManpowerCategory = "SKILLED" | "UNSKILLED" | "STAFF";
-
-export type EmploymentType = "PERMANENT" | "CONTRACT" | "DAILY_WAGE";
-
-export type SkillLevel = "BEGINNER" | "INTERMEDIATE" | "EXPERT";
+// ManpowerCategory / EmploymentType / SkillLevel were removed — these dropdowns are now
+// admin-managed master data (see ManpowerCategoryMaster, EmploymentTypeMaster, SkillLevelMaster).
+// The DTO fields below carry the master row's `name` as a plain string.
 
 export type PaymentMode = "BANK" | "CASH" | "CHEQUE";
 
@@ -70,17 +68,21 @@ export interface ManpowerMasterDto {
   firstName?: string | null;
   lastName?: string | null;
   fullName?: string | null;
-  category?: ManpowerCategory | null;
+  /** Master row name from ManpowerCategoryMaster (top-level, parentId = null). */
+  category?: string | null;
+  /** Master row name from ManpowerCategoryMaster (children of the picked Category). */
   subCategory?: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
+  /** Free-text or master row name from NationalityMaster (autocomplete-with-free-text). */
   nationality?: string | null;
   contactNumber?: string | null;
   email?: string | null;
   address?: string | null;
   emergencyContact?: string | null;
   photoUrl?: string | null;
-  employmentType?: EmploymentType | null;
+  /** Master row name from EmploymentTypeMaster. */
+  employmentType?: string | null;
   designation?: string | null;
   department?: string | null;
   joiningDate?: string | null;
@@ -91,9 +93,12 @@ export interface ManpowerMasterDto {
 }
 
 export interface ManpowerSkillsDto {
+  /** JSON-stringified array of skill names from SkillMaster (e.g. '["Mason","Welder"]'). */
   primarySkill?: string | null;
+  /** JSON-stringified array of skill names from SkillMaster. */
   secondarySkills?: string | null;
-  skillLevel?: SkillLevel | null;
+  /** Master row name from SkillLevelMaster. */
+  skillLevel?: string | null;
   certifications?: string | null;
   licenseDetails?: string | null;
   experienceYears?: number | null;

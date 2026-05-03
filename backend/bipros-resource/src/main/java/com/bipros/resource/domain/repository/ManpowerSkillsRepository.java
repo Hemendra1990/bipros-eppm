@@ -7,4 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.UUID;
 
 @Repository
-public interface ManpowerSkillsRepository extends JpaRepository<ManpowerSkills, UUID> {}
+public interface ManpowerSkillsRepository extends JpaRepository<ManpowerSkills, UUID> {
+
+  long countBySkillLevel(String skillLevel);
+}

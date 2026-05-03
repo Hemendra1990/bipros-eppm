@@ -1,12 +1,8 @@
 package com.bipros.resource.domain.model.manpower;
 
-import com.bipros.resource.domain.model.enums.EmploymentType;
-import com.bipros.resource.domain.model.enums.ManpowerCategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
@@ -62,11 +58,15 @@ public class ManpowerMaster {
   @Column(name = "full_name", length = 160)
   private String fullName;
 
-  @Enumerated(EnumType.STRING)
-  @Column(length = 30)
-  private ManpowerCategory category;
+  // Stored as the master row's `name` (string) — the form picks from ManpowerCategoryMaster
+  // (top-level Categories where parent_id IS NULL). Legacy enum strings ("SKILLED" /
+  // "UNSKILLED" / "STAFF") remain valid because the seeder creates master rows with those names.
+  @Column(length = 120)
+  private String category;
 
-  @Column(name = "sub_category", length = 60)
+  // Stored as the master row's `name` (string) — picks from ManpowerCategoryMaster children of
+  // the selected Category. Free-text fallback for any legacy values.
+  @Column(name = "sub_category", length = 120)
   private String subCategory;
 
   @Column(name = "date_of_birth")
@@ -93,9 +93,11 @@ public class ManpowerMaster {
   @Column(name = "photo_url", length = 500)
   private String photoUrl;
 
-  @Enumerated(EnumType.STRING)
-  @Column(name = "employment_type", length = 30)
-  private EmploymentType employmentType;
+  // Stored as the master row's `name` (string) — the form picks from EmploymentTypeMaster.
+  // Legacy enum strings ("PERMANENT" / "CONTRACT" / "DAILY_WAGE") remain valid because the
+  // seeder creates master rows with those names.
+  @Column(name = "employment_type", length = 120)
+  private String employmentType;
 
   @Column(length = 100)
   private String designation;
