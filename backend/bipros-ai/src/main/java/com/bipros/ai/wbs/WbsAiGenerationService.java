@@ -36,7 +36,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -125,9 +127,15 @@ public class WbsAiGenerationService {
                 log.info("Cache hit for sha {} ({} bytes); skipping LLM call", fileSha, pdfBytes.length);
                 extractionCache.recordHit(fileSha, "openai");
                 WbsAiGenerationResponse hit = cached.get();
-                List<CollisionResult> annotations = previewMerge(projectId, hit.nodes());
+                // Run rehydrate on cache hits too: idempotent, but lets stale cached
+                // entries (populated before this safety net existed) self-heal.
+                Set<String> existingCodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId)
+                        .stream().map(com.bipros.project.domain.model.WbsNode::getCode)
+                        .collect(Collectors.toSet());
+                List<WbsAiNode> rehydrated = WbsHierarchyReconstructor.rehydrate(hit.nodes(), existingCodes);
+                List<CollisionResult> annotations = previewMerge(projectId, rehydrated);
                 return new WbsAiGenerationResponse(hit.resolvedAssetClass(),
-                        hit.assetClassNeedsConfirmation(), hit.rationale(), hit.nodes(), annotations);
+                        hit.assetClassNeedsConfirmation(), hit.rationale(), rehydrated, annotations);
             }
 
             String prompt = buildNativeDocumentPrompt(project, req, resolvedAssetClass, safeFileName, wbsContext);
@@ -179,7 +187,28 @@ public class WbsAiGenerationService {
             "You are a construction WBS (Work Breakdown Structure) expert. " +
             "Generate a hierarchical WBS tree appropriate for the given project type and context. " +
             "Use industry-standard codes and naming conventions. " +
-            "Return ONLY valid JSON matching the provided schema. No markdown, no explanations outside the JSON.";
+            "Return ONLY valid JSON matching the provided schema. No markdown, no explanations outside the JSON.\n" +
+            "\n" +
+            "HIERARCHY RULES (these are mandatory — a flat list of dotted codes is INVALID):\n" +
+            "1. The output is a tree, not a list. Express each parent-child relationship in EXACTLY ONE of these two ways:\n" +
+            "   (A) Nesting: place the child inside its parent's `children` array. parentCode is null. Use this for new branches you introduce.\n" +
+            "   (B) parentCode reference: emit the node at the top level (in the root `nodes` array) with empty `children`, and set `parentCode` to its parent's `code`. Use this only when grafting under a node that ALREADY EXISTS in the project's WBS (not one you are also emitting).\n" +
+            "2. Every non-root node MUST have a parent reachable from the same response — either as an enclosing `children[]` ancestor (option A) or as an already-existing project node referenced via parentCode (option B). Never emit a node whose parent is neither.\n" +
+            "3. Always emit intermediate parents. If you emit a leaf coded `2.3.1.1`, you must also emit the nodes coded `2`, `2.3`, and `2.3.1` (unless they already exist in the project's WBS — in which case use parentCode = `2.3.1`).\n" +
+            "4. Use stable dotted hierarchical codes (e.g., 1, 1.1, 1.1.1 — or PRJ.1, PRJ.1.1). If the source document already uses dotted numbering, preserve it exactly so the numeric segments encode parentage: `2.3.1` is a child of `2.3`, which is a child of `2`.\n" +
+            "\n" +
+            "EXAMPLE of a correctly nested response (option A):\n" +
+            "{\n" +
+            "  \"rationale\": \"...\",\n" +
+            "  \"nodes\": [\n" +
+            "    { \"code\": \"1\", \"name\": \"Pre-construction\", \"description\": null, \"parentCode\": null,\n" +
+            "      \"children\": [\n" +
+            "        { \"code\": \"1.1\", \"name\": \"Statutory clearances\", \"description\": null, \"parentCode\": null, \"children\": [] },\n" +
+            "        { \"code\": \"1.2\", \"name\": \"Design submission\", \"description\": null, \"parentCode\": null, \"children\": [] }\n" +
+            "      ]\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}";
 
     /**
      * System message used when the user prompt contains text extracted from an
@@ -258,6 +287,16 @@ public class WbsAiGenerationService {
             JsonNode nodesNode = root.has("nodes") ? root.get("nodes") : root;
             List<WbsAiNode> nodes = objectMapper.convertValue(nodesNode,
                     objectMapper.getTypeFactory().constructCollectionType(List.class, WbsAiNode.class));
+            // Deterministic safety net: rebuild the tree from whatever shape the
+            // model returned (perfectly nested, fully flat with hierarchical codes,
+            // leaves-only, or anything in between). Existing-project codes guide
+            // synthesis: a leaf coded RES-0012.3.1.1 whose prefix matches an
+            // existing project node grafts under that node instead of producing
+            // a duplicate intermediate. Idempotent on already-correct trees.
+            Set<String> existingCodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId)
+                    .stream().map(com.bipros.project.domain.model.WbsNode::getCode)
+                    .collect(Collectors.toSet());
+            nodes = WbsHierarchyReconstructor.rehydrate(nodes, existingCodes);
             String rationale = root.has("rationale") ? root.get("rationale").asText() : "";
             if (prependRationale != null && !prependRationale.isBlank()) {
                 rationale = prependRationale + (rationale == null ? "" : rationale);
@@ -549,6 +588,9 @@ public class WbsAiGenerationService {
         sb.append("Source document: ").append(originalFileName == null ? "(unnamed)" : originalFileName).append("\n");
 
         sb.append("\nUse hierarchical codes (e.g., PRJ.1, PRJ.1.1, PRJ.1.1.1). ");
+        sb.append("If the document numbers items as 1, 1.1, 1.2, 2, 2.1, …, preserve that scheme and ");
+        sb.append("nest each child inside its dotted-segment parent (1.1 inside 1, 2.1 inside 2). ");
+        sb.append("Always include the intermediate parent rows from the document — do not return only leaves. ");
         sb.append("Include a brief rationale that mentions which parts of the WBS were taken directly ");
         sb.append("from the document vs. inferred.");
 
@@ -576,6 +618,9 @@ public class WbsAiGenerationService {
         sb.append("\nSource document: ").append(originalFileName == null ? "(unnamed)" : originalFileName).append("\n");
 
         sb.append("\nUse hierarchical codes (e.g., PRJ.1, PRJ.1.1, PRJ.1.1.1). ");
+        sb.append("If the document numbers items as 1, 1.1, 1.2, 2, 2.1, …, preserve that scheme and ");
+        sb.append("nest each child inside its dotted-segment parent (1.1 inside 1, 2.1 inside 2). ");
+        sb.append("Always include the intermediate parent rows from the document — do not return only leaves. ");
         sb.append("Include a brief rationale that mentions which parts of the WBS were taken directly from ");
         sb.append("the document vs. inferred.\n");
 

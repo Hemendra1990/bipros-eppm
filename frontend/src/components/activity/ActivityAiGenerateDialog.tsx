@@ -558,7 +558,7 @@ function GeneratingPhase({ fromDocument }: { fromDocument: boolean }) {
             ? "Reading document and extracting activities..."
             : "Generating activities..."}
         </p>
-        <p className="mt-1 text-xs text-text-muted">This may take 30\u201390 seconds</p>
+        <p className="mt-1 text-xs text-text-muted">This may take 30-90 seconds</p>
       </div>
     </div>
   );

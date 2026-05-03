@@ -30,7 +30,7 @@ import java.util.Optional;
 public class WbsAiExtractionCacheService {
 
     /** Bump this when the prompt template changes in a way that affects output. */
-    public static final int CURRENT_PROMPT_VERSION = 1;
+    public static final int CURRENT_PROMPT_VERSION = 2;
 
     /** Stale entries past this are ignored at lookup time. */
     public static final Duration TTL = Duration.ofHours(24);
