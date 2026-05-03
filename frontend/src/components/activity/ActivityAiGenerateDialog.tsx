@@ -41,7 +41,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
   const queryClient = useQueryClient();
 
   const [phase, setPhase] = useState<Phase>("setup");
-  const [setupTab, setSetupTab] = useState<SetupTab>("scratch");
+  const [setupTab, setSetupTab] = useState<SetupTab>("document");
   const [projectTypeHint, setProjectTypeHint] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
   const [targetActivityCount, setTargetActivityCount] = useState(15);
@@ -128,7 +128,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
 
   const handleClose = () => {
     setPhase("setup");
-    setSetupTab("scratch");
+    setSetupTab("document");
     setGenerationResult(null);
     setApplyResult(null);
     setDocFile(null);
