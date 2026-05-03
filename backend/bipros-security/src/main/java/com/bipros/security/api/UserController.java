@@ -2,7 +2,11 @@ package com.bipros.security.api;
 
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.common.dto.PagedResponse;
+import com.bipros.security.application.dto.AssignProfileRequest;
+import com.bipros.security.application.dto.CreateUserRequest;
 import com.bipros.security.application.dto.UpdateUserProfileRequest;
+import com.bipros.security.application.dto.UpdateUserRolesRequest;
+import com.bipros.security.application.dto.UpdateUserStatusRequest;
 import com.bipros.security.application.dto.UserAccessResponse;
 import com.bipros.security.application.dto.UserResponse;
 import com.bipros.security.application.service.UserAccessService;
@@ -18,13 +22,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/v1/users")
@@ -88,6 +92,14 @@ public class UserController {
         }
     }
 
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Create user", description = "Create a new user (admin only).")
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(
+            @Valid @RequestBody CreateUserRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.createUser(request)));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update personnel profile",
@@ -97,6 +109,33 @@ public class UserController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateUserProfileRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(userService.updateProfile(id, request)));
+    }
+
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Enable or disable a user")
+    public ResponseEntity<ApiResponse<UserResponse>> updateStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserStatusRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.setEnabled(id, request.enabled())));
+    }
+
+    @PutMapping("/{id}/roles")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Replace the user's role set")
+    public ResponseEntity<ApiResponse<UserResponse>> updateRoles(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserRolesRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.setRoles(id, request)));
+    }
+
+    @PutMapping("/{id}/profile")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Assign (or clear with null) a permission profile to a user")
+    public ResponseEntity<ApiResponse<UserResponse>> assignProfile(
+            @PathVariable UUID id,
+            @RequestBody AssignProfileRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.setProfile(id, request.profileId())));
     }
 
     @GetMapping("/{id}/access")

@@ -23,6 +23,8 @@ public record UserResponse(
         String lastName,
         boolean enabled,
         List<String> roles,
+        UUID profileId,
+        String profileName,
         UUID organisationId,
         String designation,
         String primaryIcpmsRole,
@@ -37,29 +39,15 @@ public record UserResponse(
         List<UUID> assignedStretchIds
 ) {
     public static UserResponse from(User user, List<String> roles) {
-        return new UserResponse(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.isEnabled(),
-                roles,
-                user.getOrganisationId(),
-                user.getDesignation(),
-                user.getPrimaryIcpmsRole(),
-                user.getAuthMethods(),
-                user.getEmployeeCode(),
-                user.getMobile(),
-                user.getDepartment(),
-                user.getJoiningDate(),
-                user.getContractEndDate(),
-                user.getPresenceStatus(),
-                List.of()
-        );
+        return from(user, roles, null, null, List.of());
     }
 
     public static UserResponse from(User user, List<String> roles, List<UUID> stretchIds) {
+        return from(user, roles, null, null, stretchIds);
+    }
+
+    public static UserResponse from(User user, List<String> roles, UUID profileId, String profileName,
+                                    List<UUID> stretchIds) {
         return new UserResponse(
                 user.getId(),
                 user.getUsername(),
@@ -68,6 +56,8 @@ public record UserResponse(
                 user.getLastName(),
                 user.isEnabled(),
                 roles,
+                profileId,
+                profileName,
                 user.getOrganisationId(),
                 user.getDesignation(),
                 user.getPrimaryIcpmsRole(),

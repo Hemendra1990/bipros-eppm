@@ -1,79 +1,75 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { Plus, ShieldCheck, UserCheck, UserX } from "lucide-react";
+
+import { profileApi } from "@/lib/api/profileApi";
 import { userApi } from "@/lib/api/userApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import type { UserResponse } from "@/lib/types";
 import { getErrorMessage } from "@/lib/utils/error";
-import toast from "react-hot-toast";
-import { Shield, ShieldCheck, UserCheck, UserX } from "lucide-react";
+import { CreateUserDialog } from "./CreateUserDialog";
 
-const AVAILABLE_ROLES = ["ROLE_ADMIN", "ROLE_MANAGER", "ROLE_USER", "ROLE_VIEWER"];
-
-function RoleBadge({ role }: { role: string }) {
-  const label = role.replace("ROLE_", "");
-  const colors: Record<string, string> = {
-    ADMIN: "bg-red-500/20 text-danger",
-    MANAGER: "bg-amber-500/20 text-warning",
-    USER: "bg-blue-500/20 text-accent",
-    VIEWER: "bg-surface-active/50 text-text-secondary",
-  };
+function ProfileBadge({ name }: { name: string | null | undefined }) {
+  if (!name) {
+    return <span className="text-xs italic text-text-muted">No profile</span>;
+  }
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[label] ?? "bg-surface-active/50 text-text-secondary"}`}>
-      {label}
+    <span className="inline-block rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-accent">
+      {name}
     </span>
   );
 }
 
-function RoleEditor({ user, onClose }: { user: UserResponse; onClose: () => void }) {
+function ProfilePicker({
+  user,
+  profiles,
+  onSaved,
+}: {
+  user: UserResponse;
+  profiles: { id: string; name: string }[];
+  onSaved: () => void;
+}) {
   const queryClient = useQueryClient();
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles);
+  const [value, setValue] = useState<string>(user.profileId ?? "");
 
   const mutation = useMutation({
-    mutationFn: () => userApi.updateUserRoles(user.id, { roles: selectedRoles }),
+    mutationFn: (next: string | null) => userApi.assignProfile(user.id, next),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast.success(`Roles updated for ${user.username}`);
-      onClose();
+      toast.success(`Profile updated for ${user.username}`);
+      onSaved();
     },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to update roles"));
-    },
+    onError: (err: unknown) => toast.error(getErrorMessage(err, "Failed to assign profile")),
   });
-
-  const toggleRole = (role: string) => {
-    setSelectedRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
-    );
-  };
 
   return (
     <div className="flex items-center gap-2">
-      {AVAILABLE_ROLES.map((role) => (
-        <button
-          key={role}
-          onClick={() => toggleRole(role)}
-          className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
-            selectedRoles.includes(role)
-              ? "bg-accent text-text-primary"
-              : "bg-surface-hover text-text-secondary hover:bg-surface-active"
-          }`}
-        >
-          {role.replace("ROLE_", "")}
-        </button>
-      ))}
+      <select
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="rounded border border-border bg-surface-hover px-2 py-1 text-xs text-text-primary"
+      >
+        <option value="">— No profile —</option>
+        {profiles.map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
       <button
-        onClick={() => mutation.mutate()}
-        disabled={mutation.isPending}
-        className="ml-2 rounded bg-green-600 px-2 py-0.5 text-xs text-text-primary hover:bg-green-500 disabled:opacity-50"
+        type="button"
+        disabled={mutation.isPending || value === (user.profileId ?? "")}
+        onClick={() => mutation.mutate(value || null)}
+        className="rounded bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
       >
         {mutation.isPending ? "..." : "Save"}
       </button>
       <button
-        onClick={onClose}
-        className="rounded bg-surface-active px-2 py-0.5 text-xs text-text-secondary hover:bg-border"
+        type="button"
+        onClick={onSaved}
+        className="rounded bg-surface-hover px-2 py-1 text-xs text-text-secondary hover:bg-surface-active"
       >
         Cancel
       </button>
@@ -83,12 +79,19 @@ function RoleEditor({ user, onClose }: { user: UserResponse; onClose: () => void
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
-  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: () => userApi.listUsers(),
   });
+
+  const { data: profilesResponse } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: () => profileApi.listProfiles(),
+  });
+  const profiles = (profilesResponse?.data ?? []).map((p) => ({ id: p.id, name: p.name }));
 
   const toggleMutation = useMutation({
     mutationFn: ({ userId, enabled }: { userId: string; enabled: boolean }) =>
@@ -97,9 +100,7 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User status updated");
     },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to update user status"));
-    },
+    onError: (err: unknown) => toast.error(getErrorMessage(err, "Failed to update user status")),
   });
 
   const users = data?.data?.content ?? [];
@@ -111,27 +112,27 @@ export default function UsersPage() {
       key: "firstName",
       label: "Name",
       sortable: true,
-      render: (_value, row) => `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "-",
+      render: (_v, row) => `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "-",
     },
     {
-      key: "roles",
-      label: "Roles",
-      render: (_value, row) =>
-        editingUserId === row.id ? (
-          <RoleEditor user={row} onClose={() => setEditingUserId(null)} />
+      key: "profileName",
+      label: "Profile",
+      render: (_v, row) =>
+        editingProfileId === row.id ? (
+          <ProfilePicker
+            user={row}
+            profiles={profiles}
+            onSaved={() => setEditingProfileId(null)}
+          />
         ) : (
-          <div className="flex items-center gap-1">
-            {row.roles.map((role) => (
-              <RoleBadge key={role} role={role} />
-            ))}
-            <button
-              onClick={() => setEditingUserId(row.id)}
-              className="ml-2 text-text-muted hover:text-accent transition-colors"
-              title="Edit roles"
-            >
-              <Shield size={14} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setEditingProfileId(row.id)}
+            className="cursor-pointer hover:opacity-80"
+            title="Click to change profile"
+          >
+            <ProfileBadge name={row.profileName} />
+          </button>
         ),
     },
     {
@@ -151,16 +152,12 @@ export default function UsersPage() {
     {
       key: "id",
       label: "Actions",
-      render: (_value, row) => (
+      render: (_v, row) => (
         <button
-          onClick={() =>
-            toggleMutation.mutate({ userId: row.id, enabled: !row.enabled })
-          }
+          onClick={() => toggleMutation.mutate({ userId: row.id, enabled: !row.enabled })}
           disabled={toggleMutation.isPending}
           className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-            row.enabled
-              ? "text-danger hover:bg-danger/10"
-              : "text-success hover:bg-success/10"
+            row.enabled ? "text-danger hover:bg-danger/10" : "text-success hover:bg-success/10"
           }`}
           title={row.enabled ? "Disable user" : "Enable user"}
         >
@@ -176,6 +173,15 @@ export default function UsersPage() {
       <PageHeader
         title="User Management"
         description="Manage users, roles, and access permissions"
+        actions={
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90"
+          >
+            <Plus size={16} /> New User
+          </button>
+        }
       />
 
       {error && (
@@ -191,6 +197,8 @@ export default function UsersPage() {
           <DataTable columns={columns} data={users} rowKey="id" />
         )}
       </div>
+
+      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

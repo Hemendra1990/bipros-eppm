@@ -82,6 +82,7 @@ const groups: NavGroup[] = [
     adminOnly: true,
     items: [
       { name: "Users", href: "/admin/users", icon: UsersRound, adminOnly: true },
+      { name: "Profiles", href: "/admin/profiles", icon: ShieldCheck, adminOnly: true },
       { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true },
       { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true },
       { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },

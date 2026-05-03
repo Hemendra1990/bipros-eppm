@@ -64,6 +64,8 @@ export interface UserResponse {
   lastName: string;
   enabled: boolean;
   roles: string[];
+  profileId?: string | null;
+  profileName?: string | null;
   // IC-PMS fields (nullable for legacy users)
   organisationId?: string | null;
   designation?: string | null;
@@ -77,6 +79,40 @@ export interface UserResponse {
   contractEndDate?: string | null;
   presenceStatus?: PresenceStatus | null;
   assignedStretchIds?: string[] | null;
+}
+
+// === Permission Profiles ===
+
+export interface PermissionDescriptor {
+  code: string;
+  module: string;
+  action: string;
+  label: string;
+}
+
+export interface ProfileResponse {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  systemDefault: boolean;
+  legacyRoleName: string;
+  permissions: string[];
+}
+
+export interface CreateProfileRequest {
+  code: string;
+  name: string;
+  description?: string;
+  legacyRoleName: string;
+  permissions: string[];
+}
+
+export interface UpdateProfileRequest {
+  name?: string;
+  description?: string;
+  legacyRoleName?: string;
+  permissions?: string[];
 }
 
 // === Project Structure ===
