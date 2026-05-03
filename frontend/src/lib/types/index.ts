@@ -948,6 +948,8 @@ export interface WbsAiNode {
   code: string;
   name: string;
   description?: string;
+  /** When set, the AI is asking us to graft this node under an existing project node by code. */
+  parentCode?: string | null;
   children?: WbsAiNode[];
 }
 
@@ -958,9 +960,29 @@ export interface WbsAiGenerateRequest {
   targetDepth?: number;
 }
 
+export type ApplyMode = "MERGE" | "ADD_UNDER" | "REPLACE";
+
 export interface WbsAiApplyRequest {
   parentId?: string | null;
+  mode?: ApplyMode;
   nodes: WbsAiNode[];
+}
+
+export type CollisionAction =
+  | "SKIPPED_DUPLICATE"
+  | "RENAMED"
+  | "RESOLVED_TO_EXISTING_PARENT"
+  | "INSERTED_NEW"
+  /** Activity-only: wbsNodeCode does not exist in this project; will be skipped on apply. */
+  | "MISSING_WBS_NODE"
+  /** Activity-only: wbsNodeCode close to an existing code; resolvedCode carries the suggestion. */
+  | "WBS_NEAR_MATCH";
+
+export interface CollisionResult {
+  originalCode: string;
+  resolvedCode: string;
+  action: CollisionAction;
+  reason?: string | null;
 }
 
 export interface WbsAiGenerationResponse {
@@ -968,6 +990,31 @@ export interface WbsAiGenerationResponse {
   assetClassNeedsConfirmation: boolean;
   rationale: string;
   nodes: WbsAiNode[];
+  /** Per-node dry-run annotations: what apply will do for each node. */
+  previewAnnotations?: CollisionResult[] | null;
+}
+
+export type WbsAiJobStatus = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "CANCELLED";
+
+/** 202 response body from POST .../generate-from-document. */
+export interface WbsAiJobAccepted {
+  jobId: string;
+  status: WbsAiJobStatus;
+}
+
+/** GET .../jobs/{id} response. */
+export interface WbsAiJobView {
+  id: string;
+  projectId: string;
+  status: WbsAiJobStatus;
+  progressStage?: string | null;
+  progressPct?: number | null;
+  result?: WbsAiGenerationResponse | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  createdAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 // === AI Activity Generation ===
@@ -988,16 +1035,39 @@ export interface ActivityAiGenerateRequest {
   defaultDurationDays?: number;
 }
 
+/** Multipart metadata for the from-document activity-generation flow. */
+export interface ActivityAiGenerateFromDocumentMetadata {
+  targetActivityCount?: number;
+  defaultDurationDays?: number;
+}
+
 export interface ActivityAiGenerationResponse {
   rationale: string;
   activities: ActivityAiNode[];
+  /** Per-activity dry-run annotations: NEW / RENAMED / SKIPPED on apply. */
+  previewAnnotations?: CollisionResult[] | null;
 }
 
 export interface ActivityAiApplyRequest {
+  mode?: ApplyMode;
   activities: ActivityAiNode[];
+  /**
+   * Map of original wbsNodeCode (from the AI generation) to the existing
+   * project WBS code the user wants to use instead. Populated by accepting
+   * "WBS_NEAR_MATCH" suggestions in the preview.
+   */
+  wbsRemap?: Record<string, string>;
+  /**
+   * When true, apply aborts atomically if any activity has unresolved WBS.
+   * Default false: skip-and-report (current behavior).
+   */
+  strictWbs?: boolean;
 }
 
 export interface ActivityAiApplyResponse {
+  /** Categorized per-activity outcome (preferred — used to paint diff tags). */
+  collisions?: CollisionResult[] | null;
+  /** Legacy "A-001 -> A-001-AI" string list, kept for back-compat. */
   codeCollisions: string[];
   wbsResolutionFailures: string[];
   relationshipResolutionFailures: string[];

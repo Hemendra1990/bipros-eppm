@@ -1,15 +1,25 @@
 import { apiClient } from "./client";
 import type {
   ApiResponse,
+  AssetClass,
+  CollisionResult,
   WbsAiGenerateRequest,
   WbsAiApplyRequest,
   WbsAiGenerationResponse,
+  WbsAiJobAccepted,
+  WbsAiJobView,
   ActivityAiGenerateRequest,
+  ActivityAiGenerateFromDocumentMetadata,
   ActivityAiGenerationResponse,
   ActivityAiApplyRequest,
   ActivityAiApplyResponse,
   InsightsResponse,
 } from "../types";
+
+export interface WbsAiGenerateFromDocumentMetadata {
+  assetClass?: AssetClass;
+  targetDepth?: number;
+}
 
 export interface LlmProviderResponse {
   id: string;
@@ -128,13 +138,73 @@ export const aiApi = {
   generateWbs: (projectId: string, body: WbsAiGenerateRequest) =>
     apiClient.post<ApiResponse<WbsAiGenerationResponse>>(`/v1/projects/${projectId}/wbs/ai/generate`, body).then((r) => r.data),
 
+  /**
+   * Submit a from-document generation job. Returns 202 + {jobId} immediately;
+   * the actual extraction runs on the bounded executor on the backend. Poll
+   * {@link aiApi.getWbsAiJob} every ~2 s until status is DONE / FAILED / CANCELLED.
+   */
+  generateWbsFromDocument: (
+    projectId: string,
+    metadata: WbsAiGenerateFromDocumentMetadata,
+    file: File
+  ) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" })
+    );
+    form.append("file", file);
+    return apiClient
+      .post<ApiResponse<WbsAiJobAccepted>>(
+        `/v1/projects/${projectId}/wbs/ai/generate-from-document`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((r) => r.data);
+  },
+
+  getWbsAiJob: (projectId: string, jobId: string) =>
+    apiClient
+      .get<ApiResponse<WbsAiJobView>>(`/v1/projects/${projectId}/wbs/ai/jobs/${jobId}`)
+      .then((r) => r.data),
+
+  cancelWbsAiJob: (projectId: string, jobId: string) =>
+    apiClient.delete<void>(`/v1/projects/${projectId}/wbs/ai/jobs/${jobId}`).then((r) => r.data),
+
   applyGeneratedWbs: (projectId: string, body: WbsAiApplyRequest) =>
-    apiClient.post<ApiResponse<string[]>>(`/v1/projects/${projectId}/wbs/ai/apply`, body).then((r) => r.data),
+    apiClient
+      .post<ApiResponse<CollisionResult[]>>(`/v1/projects/${projectId}/wbs/ai/apply`, body)
+      .then((r) => r.data),
 
   generateActivities: (projectId: string, body: ActivityAiGenerateRequest) =>
     apiClient.post<ApiResponse<ActivityAiGenerationResponse>>(
       `/v1/projects/${projectId}/activities/ai/generate`, body
     ).then((r) => r.data),
+
+  /**
+   * Submit a from-document activity-generation request. Mirrors the WBS path:
+   * the file is sent natively to OpenAI (Files API for >5 MB); the model reads
+   * tables, layout, and scanned content from the PDF directly.
+   */
+  generateActivitiesFromDocument: (
+    projectId: string,
+    metadata: ActivityAiGenerateFromDocumentMetadata,
+    file: File
+  ) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" })
+    );
+    form.append("file", file);
+    return apiClient
+      .post<ApiResponse<ActivityAiGenerationResponse>>(
+        `/v1/projects/${projectId}/activities/ai/generate-from-document`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((r) => r.data);
+  },
 
   applyGeneratedActivities: (projectId: string, body: ActivityAiApplyRequest) =>
     apiClient.post<ApiResponse<ActivityAiApplyResponse>>(

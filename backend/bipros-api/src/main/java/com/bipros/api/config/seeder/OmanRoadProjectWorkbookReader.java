@@ -155,11 +155,17 @@ public class OmanRoadProjectWorkbookReader {
     if (!res.exists()) {
       throw new IllegalStateException("Workbook not on classpath: " + path);
     }
+    // POI's default min inflate ratio (0.01) flags legitimate Excel files whose
+    // styles.xml compresses below 1% — observed at 0.009995 on these workbooks.
+    double previous = ZipSecureFile.getMinInflateRatio();
+    ZipSecureFile.setMinInflateRatio(0.001);
     try (InputStream is = res.getInputStream();
          Workbook wb = new XSSFWorkbook(is)) {
       return fn.apply(wb);
     } catch (Exception e) {
       throw new RuntimeException("Failed reading " + path + ": " + e.getMessage(), e);
+    } finally {
+      ZipSecureFile.setMinInflateRatio(previous);
     }
   }
 

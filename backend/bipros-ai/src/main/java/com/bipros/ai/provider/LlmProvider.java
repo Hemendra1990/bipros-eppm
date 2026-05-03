@@ -18,17 +18,49 @@ public interface LlmProvider {
 
     String providerKey();
 
-    record ChatRequest(java.util.List<Message> messages, java.util.List<ToolSpec> tools, Integer maxTokens,
-                       Double temperature, Long timeoutMs, JsonNode responseFormat) {
+    record ChatRequest(java.util.List<Message> messages,
+                       java.util.List<ToolSpec> tools,
+                       Integer maxTokens,
+                       Double temperature,
+                       Long timeoutMs,
+                       JsonNode responseFormat,
+                       java.util.List<DocumentInput> documents,
+                       String reasoningEffort) {
+        // Back-compat: 5-arg, 6-arg constructors used by existing callers.
         public ChatRequest(java.util.List<Message> messages, java.util.List<ToolSpec> tools, Integer maxTokens,
                            Double temperature, Long timeoutMs) {
-            this(messages, tools, maxTokens, temperature, timeoutMs, null);
+            this(messages, tools, maxTokens, temperature, timeoutMs, null, null, null);
+        }
+        public ChatRequest(java.util.List<Message> messages, java.util.List<ToolSpec> tools, Integer maxTokens,
+                           Double temperature, Long timeoutMs, JsonNode responseFormat) {
+            this(messages, tools, maxTokens, temperature, timeoutMs, responseFormat, null, null);
         }
     }
 
     record Message(String role, String content, String imageUrl) {
         public Message(String role, String content) {
             this(role, content, null);
+        }
+    }
+
+    /**
+     * A binary document attached to the user message. Two transport modes:
+     * <ul>
+     *   <li><b>Inline</b> — set {@code data} to the raw bytes; the provider
+     *       base64-encodes them into a {@code file_data} content block. Best
+     *       for files up to ~5 MB.</li>
+     *   <li><b>By reference</b> — set {@code fileId} to a {@code file-…} id
+     *       returned by a prior {@code POST /v1/files} upload; the provider
+     *       sends a {@code file_id} content block. Best for files >5 MB.</li>
+     * </ul>
+     * Exactly one of {@code data} / {@code fileId} should be non-null.
+     */
+    record DocumentInput(String filename, String mimeType, byte[] data, String fileId) {
+        public DocumentInput(String filename, String mimeType, byte[] data) {
+            this(filename, mimeType, data, null);
+        }
+        public static DocumentInput byReference(String filename, String mimeType, String fileId) {
+            return new DocumentInput(filename, mimeType, null, fileId);
         }
     }
 

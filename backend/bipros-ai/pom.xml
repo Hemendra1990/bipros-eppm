@@ -73,5 +73,30 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
+
+        <!-- PDF text extraction for AI document ingestion (e.g. WBS from
+             vendor-supplied PDFs). Pure-Java, no native deps. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
+        <!-- Excel text extraction for AI document ingestion. poi-ooxml pulls
+             in poi (HSSF) transitively, covering both .xlsx and .xls. -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+
+        <!-- Content-based MIME detection. Browser-supplied Content-Type and
+             file extensions are user-controlled; Tika sniffs magic bytes so we
+             never hand attacker-renamed bytes to PDFBox/POI. -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>2.9.2</version>
+        </dependency>
     </dependencies>
 </project>

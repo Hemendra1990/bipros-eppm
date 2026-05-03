@@ -93,3 +93,7 @@ databaseChangeLog:
       file: db/changelog/057-project-resource-pool.yaml
   - include:
       file: db/changelog/058-ai-insight-cache.yaml
+  - include:
+      file: db/changelog/059-wbs-ai-jobs.yaml
+  - include:
+      file: db/changelog/060-wbs-ai-extraction-cache.yaml
