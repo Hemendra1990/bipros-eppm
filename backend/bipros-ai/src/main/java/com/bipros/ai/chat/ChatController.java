@@ -67,8 +67,18 @@ public class ChatController {
 
         conversationService.appendUserMessage(conv.getId(), request.message());
 
+        // Emit the conversation id as the very first SSE frame so the client
+        // can persist it and send it back on the next turn (the streaming
+        // endpoint has no response body to return ChatResponse through).
+        org.springframework.http.codec.ServerSentEvent<String> startedEvent =
+                org.springframework.http.codec.ServerSentEvent.<String>builder()
+                        .event("conversation_started")
+                        .data("{\"conversationId\":\"" + conv.getId() + "\"}")
+                        .build();
+
         StringBuilder accumulated = new StringBuilder();
-        return orchestrator.handle(request.message(), request.imageUrl(), history, ctx, llmProvider, resolveConfig())
+        Flux<org.springframework.http.codec.ServerSentEvent<String>> body = orchestrator
+                .handle(request.message(), request.imageUrl(), history, ctx, llmProvider, resolveConfig())
                 .doOnNext(event -> {
                     if ("done".equals(event.event()) && event.data().get("text") != null) {
                         accumulated.setLength(0);
@@ -92,6 +102,8 @@ public class ChatController {
                 })
                 .doOnComplete(() -> conversationService.appendAssistantMessage(
                         conv.getId(), accumulated.length() > 0 ? accumulated.toString() : "(empty)"));
+
+        return Flux.concat(Flux.just(startedEvent), body);
     }
 
     @GetMapping("/conversations")

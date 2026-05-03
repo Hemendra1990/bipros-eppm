@@ -55,11 +55,18 @@ public class AnalyzeScheduleTool extends ProjectScopedTool {
         boolean crossProject = ctx.projectId() == null;
 
         if (crossProject) {
-            List<java.util.UUID> scope = ctx.scopedProjectIds();
-            if (scope == null || scope.isEmpty()) {
-                return ToolResult.error("No accessible projects in scope. Call list_projects first to see available projects.");
+            if ("ADMIN".equals(ctx.role())) {
+                // Admin under the AiContextResolver "empty-scope = unrestricted"
+                // convention — fetch all so the per-project rollup below covers
+                // the whole portfolio.
+                activities = activityRepository.findAll();
+            } else {
+                List<java.util.UUID> scope = ctx.scopedProjectIds();
+                if (scope == null || scope.isEmpty()) {
+                    return ToolResult.error("No accessible projects in scope. Call list_projects first to see available projects.");
+                }
+                activities = activityRepository.findByProjectIdIn(scope);
             }
-            activities = activityRepository.findByProjectIdIn(scope);
         } else {
             activities = activityRepository.findByProjectId(ctx.projectId());
         }

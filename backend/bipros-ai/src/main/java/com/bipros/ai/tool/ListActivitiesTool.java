@@ -87,6 +87,11 @@ public class ListActivitiesTool extends ProjectScopedTool {
         List<Activity> activities;
         if (ctx.projectId() != null) {
             activities = activityRepository.findByProjectId(ctx.projectId());
+        } else if ("ADMIN".equals(ctx.role())) {
+            // AiContextResolver collapses admin's null sentinel ("no row-level
+            // filter, all projects") into an empty scope list — so we must
+            // recover the unrestricted intent here, mirroring ListProjectsTool.
+            activities = activityRepository.findAll();
         } else {
             List<UUID> scope = ctx.scopedProjectIds();
             if (scope == null || scope.isEmpty()) {

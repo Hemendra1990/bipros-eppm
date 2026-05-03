@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import { useAiStore } from "@/lib/state/store";
 import { useAppStore } from "@/lib/state/store";
 import { aiApi, type SseEvent } from "@/lib/api/aiApi";
-import { Bot, X, Send, Loader2, PanelRightClose, PanelRightOpen, Mic, Image as ImageIcon, Square, Check } from "lucide-react";
+import { Bot, X, Send, Loader2, PanelRightClose, PanelRightOpen, Mic, Image as ImageIcon, Square, Check, Copy, Maximize2, Minimize2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
+import { Children, isValidElement, type ReactElement } from "react";
+import { ChatChart } from "@/components/ai/charts/chatChart";
 
 interface ChatMessage {
   id: string;
@@ -30,9 +32,18 @@ const markdownComponents: Components = {
       {children}
     </code>
   ),
-  pre: ({ children }) => (
-    <pre className="bg-black/20 p-2 rounded-lg overflow-x-auto mb-2">{children}</pre>
-  ),
+  pre: ({ children }) => {
+    // Detect ```chart fenced blocks and swap in an inline ECharts viz.
+    // react-markdown nests <code class="language-chart"> inside <pre>.
+    const only = Children.toArray(children).find(isValidElement) as
+      | ReactElement<{ className?: string; children?: unknown }>
+      | undefined;
+    if (only?.props?.className === "language-chart") {
+      const raw = String(only.props.children ?? "").trim();
+      return <ChatChart raw={raw} />;
+    }
+    return <pre className="bg-black/20 p-2 rounded-lg overflow-x-auto mb-2">{children}</pre>;
+  },
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent underline">
       {children}
@@ -91,10 +102,46 @@ function ToolDataExpander({ data }: { data: unknown }) {
   );
 }
 
+function CopyButton({ text, dark }: { text: string; dark?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const onClick = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Some older browsers / insecure contexts deny clipboard writes — fall
+      // back to a hidden textarea + execCommand so the action still succeeds.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "absolute";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
+      document.body.removeChild(ta);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={copied ? "Copied" : "Copy"}
+      aria-label={copied ? "Copied" : "Copy message"}
+      className={`absolute -bottom-2 ${dark ? "right-2 text-text-primary/70 hover:text-text-primary" : "left-2 text-text-secondary hover:text-text-primary"} bg-surface border border-border rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm`}
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
+  );
+}
+
 export function AiChatPanel() {
   const open = useAiStore((s) => s.open);
   const toggle = useAiStore((s) => s.toggle);
   const setOpen = useAiStore((s) => s.setOpen);
+  const conversationId = useAiStore((s) => s.currentConversationId);
+  const setConversationId = useAiStore((s) => s.setConversationId);
   const storeProjectId = useAppStore((s) => s.currentProjectId);
   const pathname = usePathname();
   const activeModule = inferModule(pathname);
@@ -107,6 +154,7 @@ export function AiChatPanel() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [maximized, setMaximized] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
@@ -114,10 +162,28 @@ export function AiChatPanel() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastScopeRef = useRef<string | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming]);
+
+  // Reset the chat when the user moves to a different scope (project or
+  // module). The persisted conversationId belongs to the previous scope —
+  // continuing it would stitch unrelated turns together. Skip the very first
+  // run so a page reload keeps the existing conversation intact.
+  useEffect(() => {
+    const scopeKey = `${projectId ?? "general"}|${activeModule}`;
+    if (lastScopeRef.current === null) {
+      lastScopeRef.current = scopeKey;
+      return;
+    }
+    if (lastScopeRef.current !== scopeKey) {
+      lastScopeRef.current = scopeKey;
+      setConversationId(null);
+      setMessages([]);
+    }
+  }, [projectId, activeModule, setConversationId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -156,6 +222,7 @@ export function AiChatPanel() {
 
     try {
       const chatReq: import("@/lib/api/aiApi").ChatRequest = {
+        conversationId: conversationId ?? null,
         projectId: projectId ?? null,
         module: activeModule,
         message: userMsg,
@@ -185,9 +252,14 @@ export function AiChatPanel() {
       );
       abortRef.current = null;
     }
-  }, [input, isStreaming, projectId, activeModule, pendingImage]);
+  }, [input, isStreaming, projectId, activeModule, pendingImage, conversationId]);
 
   const handleEvent = (ev: SseEvent, assistantId: string) => {
+    if (ev.event === "conversation_started") {
+      const id = ev.data.conversationId as string | undefined;
+      if (id && id !== conversationId) setConversationId(id);
+      return;
+    }
     if (ev.event === "token") {
       const delta = (ev.data.delta as string) || "";
       setMessages((prev) =>
@@ -329,13 +401,17 @@ export function AiChatPanel() {
     );
   }
 
+  const widthClass = collapsed
+    ? "w-16"
+    : maximized
+      ? "w-screen sm:w-[min(96vw,1200px)]"
+      : "w-full sm:w-[420px]";
+
   return (
     <div className="fixed inset-y-0 right-0 z-50 flex">
       <div className="absolute inset-0 bg-black/20 sm:hidden" onClick={() => setOpen(false)} />
       <div
-        className={`relative flex flex-col bg-surface border-l border-border shadow-xl transition-all duration-200 ${
-          collapsed ? "w-16" : "w-full sm:w-[420px]"
-        }`}
+        className={`relative flex flex-col bg-surface border-l border-border shadow-xl transition-all duration-200 ${widthClass}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -351,6 +427,16 @@ export function AiChatPanel() {
             </div>
           )}
           <div className="flex items-center gap-1 ml-auto">
+            {!collapsed && (
+              <button
+                onClick={() => setMaximized((m) => !m)}
+                className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                title={maximized ? "Restore size" : "Maximize"}
+                aria-label={maximized ? "Restore panel size" : "Maximize panel"}
+              >
+                {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </button>
+            )}
             <button
               onClick={() => setCollapsed(!collapsed)}
               className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-hover"
@@ -394,12 +480,12 @@ export function AiChatPanel() {
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex ${
+                  className={`group relative flex ${
                     msg.role === "user" ? "justify-end" : "justify-start"
                   }`}
                 >
                   <div
-                    className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${
+                    className={`relative max-w-[90%] rounded-xl px-3 py-2 text-sm ${
                       msg.role === "user"
                         ? "bg-accent text-text-primary"
                         : msg.role === "tool_call"
@@ -409,6 +495,9 @@ export function AiChatPanel() {
                         : "bg-surface-hover text-text-primary border border-border"
                     }`}
                   >
+                    {(msg.role === "user" || msg.role === "assistant") && msg.content && (
+                      <CopyButton text={msg.content} dark={msg.role === "user"} />
+                    )}
                     {msg.role === "tool_call" && (
                       <div className="flex items-center gap-2 text-xs font-medium">
                         {msg.meta?.completed ? (
