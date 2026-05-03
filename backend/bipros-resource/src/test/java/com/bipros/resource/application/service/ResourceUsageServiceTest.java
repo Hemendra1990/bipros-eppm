@@ -3,6 +3,9 @@ package com.bipros.resource.application.service;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.calendar.application.service.CalendarService;
+import com.bipros.calendar.application.service.CalendarSnapshot;
+import com.bipros.calendar.domain.model.CalendarWorkWeek;
+import com.bipros.calendar.domain.model.DayType;
 import com.bipros.project.domain.model.DailyActivityResourceOutput;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
@@ -28,8 +31,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,7 +43,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -159,19 +164,20 @@ class ResourceUsageServiceTest {
   }
 
   private void mockMonFriCalendar() {
-    when(calendarService.isWorkingDay(eq(calendarId), any(LocalDate.class))).thenAnswer(inv -> {
-      LocalDate d = inv.getArgument(1);
-      return d.getDayOfWeek().getValue() <= 5;
-    });
-    when(calendarService.countWorkingDays(eq(calendarId), any(LocalDate.class), any(LocalDate.class))).thenAnswer(inv -> {
-      LocalDate s = inv.getArgument(1);
-      LocalDate e = inv.getArgument(2);
-      double count = 0;
-      for (LocalDate d = s; d.isBefore(e); d = d.plusDays(1)) {
-        if (d.getDayOfWeek().getValue() <= 5) count++;
-      }
-      return count;
-    });
+    // Build a real snapshot with Mon-Fri WORKING, Sat-Sun NON_WORKING. No exceptions —
+    // the snapshot's in-memory isWorkingDay/countWorkingDays do all the work.
+    Map<DayOfWeek, CalendarWorkWeek> workWeekByDay = new HashMap<>();
+    for (DayOfWeek dow : DayOfWeek.values()) {
+      workWeekByDay.put(dow, CalendarWorkWeek.builder()
+          .calendarId(calendarId)
+          .dayOfWeek(dow)
+          .dayType(dow.getValue() <= 5 ? DayType.WORKING : DayType.NON_WORKING)
+          .totalWorkHours(dow.getValue() <= 5 ? 8.0 : 0.0)
+          .build());
+    }
+    CalendarSnapshot snapshot = new CalendarSnapshot(calendarId, workWeekByDay, Map.of());
+    when(calendarService.loadSnapshot(eq(calendarId), any(LocalDate.class), any(LocalDate.class)))
+        .thenReturn(snapshot);
   }
 
   private void mockNoActuals() {
@@ -374,7 +380,6 @@ class ResourceUsageServiceTest {
     when(roleRepository.findAllById(anyIterable())).thenReturn(List.of(helperRole));
     when(activityRepository.findAllById(anyIterable())).thenReturn(List.of(excavation));
     when(resourceTypeRepository.findAllById(anyIterable())).thenReturn(List.of(labourType));
-    lenient().when(calendarService.isWorkingDay(any(), any())).thenReturn(true);
     mockNoActuals();
 
     ActivityUsage act = service.getTimePhased(projectId, null, null)

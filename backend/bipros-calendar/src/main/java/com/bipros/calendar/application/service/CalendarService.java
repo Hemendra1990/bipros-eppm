@@ -283,6 +283,28 @@ public class CalendarService {
 
   // ========== Calendar Calculation Helpers ==========
 
+  /**
+   * Load a {@link CalendarSnapshot} for the given calendar and date range — 2 SQL queries
+   * (work-week rows + exceptions in range), then unlimited in-memory {@code isWorkingDay} /
+   * {@code countWorkingDays} calls. Use this whenever a single request needs many working-day
+   * lookups against the same calendar (e.g. the resource-usage time-phased report). The
+   * per-call {@link #isWorkingDay(UUID, LocalDate)} and {@link #countWorkingDays(UUID, LocalDate, LocalDate)}
+   * are convenient for one-off scheduler ops but become an N+1 trap when looped.
+   */
+  @Transactional(readOnly = true)
+  public CalendarSnapshot loadSnapshot(UUID calendarId, LocalDate from, LocalDate to) {
+    log.debug("Loading calendar snapshot: id={}, range={}..{}", calendarId, from, to);
+    Map<DayOfWeek, CalendarWorkWeek> workWeekByDay = new HashMap<>();
+    for (CalendarWorkWeek w : workWeekRepository.findByCalendarId(calendarId)) {
+      workWeekByDay.put(w.getDayOfWeek(), w);
+    }
+    Map<LocalDate, CalendarException> exceptionByDate = new HashMap<>();
+    for (CalendarException ex : exceptionRepository.findByCalendarIdAndExceptionDateBetween(calendarId, from, to)) {
+      exceptionByDate.put(ex.getExceptionDate(), ex);
+    }
+    return new CalendarSnapshot(calendarId, workWeekByDay, exceptionByDate);
+  }
+
   /** Check if a date is a working day (considering exceptions and work week pattern). */
   @Transactional(readOnly = true)
   public boolean isWorkingDay(UUID calendarId, LocalDate date) {

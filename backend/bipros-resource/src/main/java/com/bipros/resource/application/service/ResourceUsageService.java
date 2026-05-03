@@ -3,6 +3,7 @@ package com.bipros.resource.application.service;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.calendar.application.service.CalendarService;
+import com.bipros.calendar.application.service.CalendarSnapshot;
 import com.bipros.project.domain.model.DailyActivityResourceOutput;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
@@ -80,6 +81,12 @@ public class ResourceUsageService {
     List<String> periods = buildPeriodKeys(resolvedFrom, resolvedTo);
 
     UUID calendarId = project != null ? project.getCalendarId() : null;
+    // Load the calendar's work-week + exceptions ONCE for the entire request. Every subsequent
+    // isWorkingDay / countWorkingDays call hits memory — avoids the per-day N+1 (~10K SQL round
+    // trips for a typical project) the per-call CalendarService methods would otherwise produce.
+    CalendarSnapshot calendar = calendarId != null
+        ? calendarService.loadSnapshot(calendarId, resolvedFrom, resolvedTo)
+        : null;
 
     Map<UUID, Activity> activitiesById = bulkLoad(
         assignments.stream().map(ResourceAssignment::getActivityId).filter(Objects::nonNull),
@@ -116,7 +123,7 @@ public class ResourceUsageService {
     Map<UUID, Map<UUID, Map<String, Double>>> actualsByResourceActivity = bucketActuals(dailyOutputs);
 
     return assemble(
-        assignments, periods, resolvedFrom, resolvedTo, calendarId,
+        assignments, periods, resolvedFrom, resolvedTo, calendar,
         resourcesById, rolesById, activitiesById, typesById, actualsByResourceActivity);
   }
 
@@ -164,7 +171,7 @@ public class ResourceUsageService {
    * <p>If the calendar is unknown or every day in the range is non-working, the units fall into
    * the start month as a defensive fallback so we don't silently drop them.
    */
-  Map<String, Double> spreadAssignment(ResourceAssignment a, Activity activity, UUID calendarId) {
+  Map<String, Double> spreadAssignment(ResourceAssignment a, Activity activity, CalendarSnapshot calendar) {
     Double plannedUnits = a.getPlannedUnits();
     LocalDate start = a.getPlannedStartDate() != null
         ? a.getPlannedStartDate()
@@ -176,12 +183,12 @@ public class ResourceUsageService {
       return Map.of();
     }
 
-    if (calendarId == null) {
+    if (calendar == null) {
       return Map.of(YearMonth.from(start).format(PERIOD_KEY), plannedUnits);
     }
 
     // countWorkingDays uses half-open [start, end); add a day so finishDate is included.
-    double workingDays = calendarService.countWorkingDays(calendarId, start, finish.plusDays(1));
+    double workingDays = calendar.countWorkingDays(start, finish.plusDays(1));
     if (workingDays <= 0.0) {
       return Map.of(YearMonth.from(start).format(PERIOD_KEY), plannedUnits);
     }
@@ -189,7 +196,7 @@ public class ResourceUsageService {
     double unitsPerDay = plannedUnits / workingDays;
     Map<String, Double> bucket = new TreeMap<>();
     for (LocalDate d = start; !d.isAfter(finish); d = d.plusDays(1)) {
-      if (calendarService.isWorkingDay(calendarId, d)) {
+      if (calendar.isWorkingDay(d)) {
         bucket.merge(YearMonth.from(d).format(PERIOD_KEY), unitsPerDay, Double::sum);
       }
     }
@@ -223,7 +230,7 @@ public class ResourceUsageService {
       List<String> periods,
       LocalDate from,
       LocalDate to,
-      UUID calendarId,
+      CalendarSnapshot calendar,
       Map<UUID, Resource> resourcesById,
       Map<UUID, ResourceRole> rolesById,
       Map<UUID, Activity> activitiesById,
@@ -267,7 +274,7 @@ public class ResourceUsageService {
           Activity activity = activitiesById.get(activityId);
           Map<String, Double> plannedBucket = new TreeMap<>();
           for (ResourceAssignment a : actEntry.getValue()) {
-            spreadAssignment(a, activity, calendarId).forEach((k, v) -> plannedBucket.merge(k, v, Double::sum));
+            spreadAssignment(a, activity, calendar).forEach((k, v) -> plannedBucket.merge(k, v, Double::sum));
           }
           Map<String, Double> actualBucket = new TreeMap<>(actualsForResource.getOrDefault(activityId, Map.of()));
           activityNodes.add(new ActivityUsage(

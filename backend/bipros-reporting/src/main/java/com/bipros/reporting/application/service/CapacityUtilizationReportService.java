@@ -158,13 +158,22 @@ public class CapacityUtilizationReportService {
   }
 
   // ─── Norm resolution (native SQL — same fallback as ProductivityNormLookupService) ──────────
+  // Per-day rate semantics:
+  //   For Manpower norms we prefer output_per_man_per_day so the rate is "per person per day",
+  //   matching the unit captured in daily_activity_resource_outputs.days_worked (each row is one
+  //   person on one date). Comparing person-days against a gang's combined daily output would
+  //   under-state utilization by a factor of crew size — see issue notes.
+  //   Equipment norms don't populate output_per_man_per_day; COALESCE falls through to
+  //   output_per_day, which is the equipment's per-machine-per-day rate (matches daily outputs
+  //   for equipment).
   private Budgeted resolveBudgeted(UUID workActivityId, UUID resourceId) {
     if (workActivityId == null || resourceId == null) {
       return new Budgeted(null, "NONE");
     }
     // 1) specific-resource norm
     BigDecimal specific = singleBigDecimal(
-        "SELECT n.output_per_day FROM resource.productivity_norms n "
+        "SELECT COALESCE(n.output_per_man_per_day, n.output_per_day) "
+            + "FROM resource.productivity_norms n "
             + "WHERE n.work_activity_id = :wa AND n.resource_id = :res",
         Map.of("wa", workActivityId, "res", resourceId));
     if (specific != null) {
@@ -174,7 +183,8 @@ public class CapacityUtilizationReportService {
     //    Productivity_norms keeps both legacy (resource_type_def_id) and new (resource_type_id)
     //    columns; resources only has the new one. Match on the new column on both sides.
     BigDecimal typeLevel = singleBigDecimal(
-        "SELECT n.output_per_day FROM resource.productivity_norms n "
+        "SELECT COALESCE(n.output_per_man_per_day, n.output_per_day) "
+            + "FROM resource.productivity_norms n "
             + "JOIN resource.resources r ON r.resource_type_id = n.resource_type_id "
             + "WHERE n.work_activity_id = :wa AND n.resource_id IS NULL "
             + "  AND r.id = :res",
