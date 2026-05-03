@@ -294,6 +294,45 @@ export interface ResourceAssignmentResponse {
   updatedAt: string;
 }
 
+export interface ActivityUsage {
+  activityId: string;
+  activityCode: string | null;
+  activityName: string;
+  plannedByPeriod: Record<string, number>;
+  actualByPeriod: Record<string, number>;
+}
+
+export interface ResourceUsageNode {
+  resourceId: string;
+  resourceCode: string | null;
+  resourceName: string;
+  unit: string | null;
+  plannedByPeriod: Record<string, number>;
+  actualByPeriod: Record<string, number>;
+  activities: ActivityUsage[];
+}
+
+export interface ResourceTypeUsage {
+  resourceTypeId: string;
+  resourceTypeCode: string;
+  resourceTypeName: string;
+  /** Null when child resources have differing productivity units (mixed-unit type). */
+  unit: string | null;
+  /** Null when {@link unit} is null — UI should render an em dash for those rows. */
+  plannedByPeriod: Record<string, number> | null;
+  /** Null when {@link unit} is null — UI should render an em dash for those rows. */
+  actualByPeriod: Record<string, number> | null;
+  resources: ResourceUsageNode[];
+}
+
+export interface ResourceUsageTimePhasedResponse {
+  /** "YYYY-MM" period codes in chronological order. */
+  periods: string[];
+  fromDate: string | null;
+  toDate: string | null;
+  resourceTypes: ResourceTypeUsage[];
+}
+
 export interface CreateProjectResourceAssignmentRequest {
   activityId: string;
   resourceId?: string;
@@ -423,6 +462,17 @@ export const resourceApi = {
     apiClient
       .get<ApiResponse<ResourceAssignmentResponse[]>>(
         `/v1/projects/${projectId}/resource-assignments/activity/${activityId}`
+      )
+      .then((r) => r.data),
+
+  getTimePhasedUsage: (
+    projectId: string,
+    params?: { from?: string; to?: string }
+  ) =>
+    apiClient
+      .get<ApiResponse<ResourceUsageTimePhasedResponse>>(
+        `/v1/projects/${projectId}/resource-usage/time-phased`,
+        { params }
       )
       .then((r) => r.data),
 
