@@ -21,6 +21,9 @@ interface ResourceAssignmentRow {
   activityId: string;
   resourceId: string | null;
   roleId: string | null;
+  effectiveRoleId: string | null;
+  effectiveRoleName: string | null;
+  unit: string | null;
   projectId: string;
   resourceName: string;
   roleName: string | null;
@@ -31,6 +34,7 @@ interface ResourceAssignmentRow {
   rateType: string;
   plannedCost: number;
   actualCost: number;
+  remainingCost: number;
   staffed: boolean;
 }
 
@@ -145,21 +149,39 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       const poolEntry = a.resourceId ? poolMap.get(a.resourceId) : undefined;
       const activity = activityMap.get(a.activityId);
       const anyA = a as unknown as Record<string, unknown>;
+      const plannedUnits = a.plannedUnits;
+      const actualUnits = a.actualUnits;
+      const plannedCost = (anyA.plannedCost as number) ?? 0;
+      const actualCost = (anyA.actualCost as number) ?? 0;
+      // Backend's daily-output rollup leaves remaining_units / remaining_cost null until the
+      // first daily output row exists. Derive from planned − actual so role rollups still tally.
+      const storedRemainingUnits = anyA.remainingUnits as number | null | undefined;
+      const remainingUnits = storedRemainingUnits != null
+        ? storedRemainingUnits
+        : Math.max((plannedUnits ?? 0) - (actualUnits ?? 0), 0);
+      const storedRemainingCost = anyA.remainingCost as number | null | undefined;
+      const remainingCost = storedRemainingCost != null
+        ? storedRemainingCost
+        : Math.max(plannedCost - actualCost, 0);
       return {
         id: a.id,
         activityId: a.activityId,
         resourceId: a.resourceId ?? null,
         roleId: a.roleId ?? null,
+        effectiveRoleId: a.effectiveRoleId ?? a.roleId ?? null,
+        effectiveRoleName: a.effectiveRoleName ?? a.roleName ?? null,
+        unit: a.unit ?? null,
         projectId: (anyA.projectId as string) ?? projectId,
         resourceName: poolEntry?.resourceName ?? a.resourceName ?? a.resourceId ?? "—",
         roleName: a.roleName ?? null,
         activityName: activity?.name ?? a.activityName ?? a.activityId,
-        plannedUnits: a.plannedUnits,
-        actualUnits: a.actualUnits,
-        remainingUnits: (anyA.remainingUnits as number) ?? 0,
+        plannedUnits,
+        actualUnits,
+        remainingUnits,
         rateType: (anyA.rateType as string) ?? "STANDARD",
-        plannedCost: (anyA.plannedCost as number) ?? 0,
-        actualCost: (anyA.actualCost as number) ?? 0,
+        plannedCost,
+        actualCost,
+        remainingCost,
         staffed: a.staffed ?? a.resourceId != null,
       };
     });

@@ -45,7 +45,12 @@ public class ResourceAssignmentService {
   private final ProjectResourceService projectResourceService;
   private final AuditService auditService;
 
-  /** Batch-hydrate resource + activity + role names onto a list of assignments in 3 queries total. */
+  /**
+   * Batch-hydrate resource + activity + role names onto a list of assignments in 3 queries total.
+   * Also derives an "effective role" per assignment: the assignment's own roleId when set, otherwise
+   * the role of the staffed resource. Surface for grouping in the UI without changing the meaning of
+   * the original {@code roleId} field (which the staff/swap workflow still relies on).
+   */
   private List<ResourceAssignmentResponse> hydrate(List<ResourceAssignment> assignments) {
     if (assignments.isEmpty()) return List.of();
     var resourceIds = assignments.stream()
@@ -53,28 +58,73 @@ public class ResourceAssignmentService {
         .filter(Objects::nonNull)
         .distinct()
         .toList();
-    var roleIds = assignments.stream()
-        .map(ResourceAssignment::getRoleId)
-        .filter(Objects::nonNull)
-        .distinct()
-        .toList();
     var activityIds = assignments.stream().map(ResourceAssignment::getActivityId).distinct().toList();
-    Map<UUID, String> resourceNames = resourceIds.isEmpty()
+
+    Map<UUID, Resource> resourceMap = resourceIds.isEmpty()
         ? Map.of()
         : resourceRepository.findAllById(resourceIds).stream()
-            .collect(Collectors.toMap(Resource::getId, Resource::getName));
-    Map<UUID, String> roleNames = roleIds.isEmpty()
+            .collect(Collectors.toMap(Resource::getId, r -> r));
+
+    // Roles needed: those explicitly set on assignments + those reachable via the staffed resource.
+    // Calling getRole().getId() on a lazy proxy reads the FK without triggering a SQL fetch.
+    var roleIds = java.util.stream.Stream.concat(
+            assignments.stream().map(ResourceAssignment::getRoleId).filter(Objects::nonNull),
+            resourceMap.values().stream()
+                .map(Resource::getRole)
+                .filter(Objects::nonNull)
+                .map(ResourceRole::getId))
+        .distinct()
+        .toList();
+    Map<UUID, ResourceRole> roleMap = roleIds.isEmpty()
         ? Map.of()
         : roleRepository.findAllById(roleIds).stream()
-            .collect(Collectors.toMap(ResourceRole::getId, ResourceRole::getName));
+            .collect(Collectors.toMap(ResourceRole::getId, r -> r));
+
     Map<UUID, String> activityNames = activityRepository.findAllById(activityIds).stream()
         .collect(Collectors.toMap(Activity::getId, Activity::getName));
+
     return assignments.stream()
-        .map(a -> ResourceAssignmentResponse.from(a,
-            a.getResourceId() == null ? null : resourceNames.get(a.getResourceId()),
-            a.getActivityId() == null ? null : activityNames.get(a.getActivityId()),
-            a.getRoleId() == null ? null : roleNames.get(a.getRoleId())))
+        .map(a -> {
+          UUID effectiveRoleId = resolveEffectiveRoleId(a, resourceMap);
+          ResourceRole effectiveRole = effectiveRoleId == null ? null : roleMap.get(effectiveRoleId);
+          ResourceRole assignmentRole = a.getRoleId() == null ? null : roleMap.get(a.getRoleId());
+          return ResourceAssignmentResponse.from(a,
+              a.getResourceId() == null ? null : resourceMap.get(a.getResourceId()) == null
+                  ? null
+                  : resourceMap.get(a.getResourceId()).getName(),
+              a.getActivityId() == null ? null : activityNames.get(a.getActivityId()),
+              assignmentRole == null ? null : assignmentRole.getName(),
+              effectiveRoleId,
+              effectiveRole == null ? null : effectiveRole.getName(),
+              effectiveRole == null ? null : effectiveRole.getProductivityUnit());
+        })
         .toList();
+  }
+
+  /**
+   * {@code max(planned − actual, 0)} for units; returns null when planned is null (no info to
+   * derive). Mirrors the SQL the daily-output rollup runs so create / update / staff / swap leave
+   * the same value the rollup would produce after the first daily output is recorded.
+   */
+  private static Double remainingFromPlanned(Double planned, Double actual) {
+    if (planned == null) return null;
+    double a = actual == null ? 0.0 : actual;
+    return Math.max(planned - a, 0.0);
+  }
+
+  private static BigDecimal remainingFromPlanned(BigDecimal planned, BigDecimal actual) {
+    if (planned == null) return null;
+    BigDecimal a = actual == null ? BigDecimal.ZERO : actual;
+    BigDecimal diff = planned.subtract(a);
+    return diff.signum() < 0 ? BigDecimal.ZERO : diff;
+  }
+
+  private UUID resolveEffectiveRoleId(ResourceAssignment a, Map<UUID, Resource> resourceMap) {
+    if (a.getRoleId() != null) return a.getRoleId();
+    if (a.getResourceId() == null) return null;
+    Resource r = resourceMap.get(a.getResourceId());
+    if (r == null || r.getRole() == null) return null;
+    return r.getRole().getId();
   }
 
   /**
@@ -142,14 +192,25 @@ public class ResourceAssignmentService {
   }
 
   private ResourceAssignmentResponse hydrate(ResourceAssignment a) {
-    String rn = a.getResourceId() != null
-        ? resourceRepository.findById(a.getResourceId()).map(Resource::getName).orElse(null)
+    Resource resource = a.getResourceId() != null
+        ? resourceRepository.findById(a.getResourceId()).orElse(null)
         : null;
+    String rn = resource != null ? resource.getName() : null;
     String an = activityRepository.findById(a.getActivityId()).map(Activity::getName).orElse(null);
     String ron = a.getRoleId() != null
         ? roleRepository.findById(a.getRoleId()).map(ResourceRole::getName).orElse(null)
         : null;
-    return ResourceAssignmentResponse.from(a, rn, an, ron);
+
+    UUID effectiveRoleId = a.getRoleId() != null
+        ? a.getRoleId()
+        : (resource != null && resource.getRole() != null ? resource.getRole().getId() : null);
+    ResourceRole effectiveRole = effectiveRoleId == null
+        ? null
+        : roleRepository.findById(effectiveRoleId).orElse(null);
+    String effectiveRoleName = effectiveRole == null ? null : effectiveRole.getName();
+    String unit = effectiveRole == null ? null : effectiveRole.getProductivityUnit();
+
+    return ResourceAssignmentResponse.from(a, rn, an, ron, effectiveRoleId, effectiveRoleName, unit);
   }
 
   public ResourceAssignmentResponse assignResource(CreateResourceAssignmentRequest request) {
@@ -218,17 +279,22 @@ public class ResourceAssignmentService {
           request.roleId(), effectiveRateType, request.plannedUnits());
     }
 
+    // Initialize remaining = planned at creation time. Without this the columns sit at NULL until
+    // the daily-output rollup runs, which makes role-grouped totals understate the true remaining
+    // work. See DailyActivityResourceOutputService.recomputeAssignmentRollup for the running rule.
     ResourceAssignment assignment = ResourceAssignment.builder()
         .activityId(request.activityId())
         .resourceId(request.resourceId())
         .roleId(request.roleId())
         .projectId(request.projectId())
         .plannedUnits(request.plannedUnits())
+        .remainingUnits(request.plannedUnits())
         .rateType(effectiveRateType)
         .resourceCurveId(request.resourceCurveId())
         .plannedStartDate(plannedStart)
         .plannedFinishDate(plannedFinish)
         .plannedCost(plannedCost)
+        .remainingCost(plannedCost)
         .build();
 
     ResourceAssignment saved = assignmentRepository.save(assignment);
@@ -293,6 +359,7 @@ public class ResourceAssignmentService {
     assignment.setResourceId(resourceId);
     BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), resourceId, assignment.getRateType(), assignment.getPlannedUnits());
     assignment.setPlannedCost(plannedCost);
+    assignment.setRemainingCost(remainingFromPlanned(plannedCost, assignment.getActualCost()));
 
     ResourceAssignment saved = assignmentRepository.save(assignment);
     log.info("Assignment staffed: id={}, resourceId={}", saved.getId(), resourceId);
@@ -355,6 +422,7 @@ public class ResourceAssignmentService {
     assignment.setResourceId(newResourceId);
     BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), newResourceId, assignment.getRateType(), assignment.getPlannedUnits());
     assignment.setPlannedCost(plannedCost);
+    assignment.setRemainingCost(remainingFromPlanned(plannedCost, assignment.getActualCost()));
 
     ResourceAssignment saved = assignmentRepository.save(assignment);
     log.info("Resource swapped: id={}, newResourceId={}", saved.getId(), newResourceId);
@@ -438,6 +506,7 @@ public class ResourceAssignmentService {
     assignment.setRoleId(request.roleId());
     assignment.setProjectId(request.projectId());
     assignment.setPlannedUnits(request.plannedUnits());
+    assignment.setRemainingUnits(remainingFromPlanned(request.plannedUnits(), assignment.getActualUnits()));
     assignment.setRateType(request.rateType());
     assignment.setResourceCurveId(request.resourceCurveId());
     assignment.setPlannedStartDate(request.plannedStartDate());
@@ -452,6 +521,7 @@ public class ResourceAssignmentService {
           request.roleId(), request.rateType(), request.plannedUnits());
     }
     assignment.setPlannedCost(plannedCost);
+    assignment.setRemainingCost(remainingFromPlanned(plannedCost, assignment.getActualCost()));
 
     ResourceAssignment updated = assignmentRepository.save(assignment);
     log.info("Resource assignment updated: id={}", id);

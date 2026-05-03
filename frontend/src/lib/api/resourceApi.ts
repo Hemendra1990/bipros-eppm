@@ -272,6 +272,9 @@ export interface ResourceAssignmentResponse {
   resourceName: string | null;
   roleId: string | null;
   roleName: string | null;
+  effectiveRoleId: string | null;
+  effectiveRoleName: string | null;
+  unit: string | null;
   projectId: string | null;
   plannedUnits: number;
   actualUnits: number;

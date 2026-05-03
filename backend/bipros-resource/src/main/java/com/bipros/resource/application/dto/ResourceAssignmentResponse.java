@@ -15,6 +15,11 @@ public record ResourceAssignmentResponse(
     String resourceName,
     UUID roleId,
     String roleName,
+    UUID effectiveRoleId,
+    String effectiveRoleName,
+    /** Productivity unit of the effective role (e.g. "Day", "Bag", "Nos") — used by the UI to
+     * decide whether activity-level rollups can sum units (only when all assignments share it). */
+    String unit,
     UUID projectId,
     Double plannedUnits,
     Double actualUnits,
@@ -36,13 +41,19 @@ public record ResourceAssignmentResponse(
     String createdBy,
     String updatedBy) {
 
-  /** Legacy constructor — names null; prefer {@link #from(ResourceAssignment, String, String, String)}. */
+  /** Legacy constructor — names null. */
   public static ResourceAssignmentResponse from(ResourceAssignment assignment) {
-    return from(assignment, null, null, null);
+    return from(assignment, null, null, null, null, null, null);
   }
 
   public static ResourceAssignmentResponse from(
-      ResourceAssignment assignment, String resourceName, String activityName, String roleName) {
+      ResourceAssignment assignment,
+      String resourceName,
+      String activityName,
+      String roleName,
+      UUID effectiveRoleId,
+      String effectiveRoleName,
+      String unit) {
     return new ResourceAssignmentResponse(
         assignment.getId(),
         assignment.getActivityId(),
@@ -51,6 +62,9 @@ public record ResourceAssignmentResponse(
         resourceName,
         assignment.getRoleId(),
         roleName,
+        effectiveRoleId,
+        effectiveRoleName,
+        unit,
         assignment.getProjectId(),
         assignment.getPlannedUnits(),
         assignment.getActualUnits(),

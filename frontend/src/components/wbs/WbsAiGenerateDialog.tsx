@@ -60,7 +60,7 @@ export function WbsAiGenerateDialog({ open, onOpenChange, project }: WbsAiGenera
     : null;
 
   const [phase, setPhase] = useState<Phase>("setup");
-  const [setupTab, setSetupTab] = useState<SetupTab>("scratch");
+  const [setupTab, setSetupTab] = useState<SetupTab>("document");
   const [assetClass, setAssetClass] = useState<AssetClass | null>(detectedAssetClass);
   const [projectTypeHint, setProjectTypeHint] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
@@ -195,7 +195,7 @@ export function WbsAiGenerateDialog({ open, onOpenChange, project }: WbsAiGenera
       aiApi.cancelWbsAiJob(project.id, jobId).catch(() => { /* best-effort */ });
     }
     setPhase("setup");
-    setSetupTab("scratch");
+    setSetupTab("document");
     setGenerationResult(null);
     setDocFile(null);
     setAddUnderParentId(null);
@@ -468,7 +468,7 @@ function SetupFromDocument({
           >
             <Upload size={22} className="text-text-secondary" />
             <p className="text-sm text-text-primary">Drop a file here or click to browse</p>
-            <p className="text-xs text-text-muted">PDF, .xlsx, .xls — up to 10 MB</p>
+            <p className="text-xs text-text-muted">PDF, .xlsx, .xls — up to 50 MB</p>
           </div>
         )}
       </div>
