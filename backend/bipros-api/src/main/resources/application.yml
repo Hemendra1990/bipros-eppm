@@ -21,6 +21,7 @@ spring:
       connection-timeout: 30000
 
   jpa:
+    show-sql: false
     hibernate:
       # Dev default is `update` so test data (projects, norms, work-activities, daily outputs)
       # survives backend restarts — otherwise every restart re-issues all UUIDs and breaks any
@@ -33,7 +34,7 @@ spring:
       hibernate:
         default_schema: public
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
         jdbc:
           batch_size: 50
         order_inserts: true
@@ -175,7 +176,12 @@ bipros:
   ai-orchestrator:
     enabled: ${BIPROS_AI_ENABLED:false}
     kek: ${BIPROS_AI_KEK:}
-    max-tool-rounds: 3
+    # Per-module ReAct loop caps. `general` is the global / portfolio mode that
+    # typically needs an extra round (list_projects → query → drill in → answer);
+    # `default` covers project-scoped chats (cost / schedule / risk / dpr / evm).
+    max-tool-rounds:
+      general: 8
+      default: 6
     conversation:
       max-messages: 32
       max-input-tokens: 200000
@@ -204,8 +210,8 @@ management:
 logging:
   level:
     com.bipros: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: INFO
     org.springframework.security: DEBUG
 
 ---

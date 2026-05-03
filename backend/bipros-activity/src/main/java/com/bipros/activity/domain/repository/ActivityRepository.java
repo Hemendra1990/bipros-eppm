@@ -17,6 +17,8 @@ import java.util.UUID;
 public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSpecificationExecutor<Activity> {
   List<Activity> findByProjectId(UUID projectId);
 
+  List<Activity> findByProjectIdIn(List<UUID> projectIds);
+
   List<Activity> findByWbsNodeId(UUID wbsNodeId);
 
   List<Activity> findByProjectIdAndIsCritical(UUID projectId, Boolean isCritical);

@@ -304,7 +304,15 @@ public class OpenAiCompatibleProvider {
     }
 
     private WebClient buildClient(long timeoutMs) {
+        // Force the JDK address resolver so DNS lookups go through the OS
+        // (InetAddress.getAllByName → system resolver). Netty's default
+        // DnsNameResolver needs the io.netty:netty-resolver-dns-native-macos
+        // native lib on macOS; without it, it falls back to querying the
+        // configured router directly, which times out on flaky AAAA / split
+        // DNS networks. Using the JDK resolver makes us behave like every
+        // other Java HTTP client on the box.
         HttpClient httpClient = HttpClient.create()
+                .resolver(io.netty.resolver.DefaultAddressResolverGroup.INSTANCE)
                 .responseTimeout(Duration.ofMillis(timeoutMs));
         return WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
@@ -392,7 +400,27 @@ public class OpenAiCompatibleProvider {
                 return new OpenAiMessage(m.role(), List.of(
                         new OpenAiContent("text", m.content(), null),
                         new OpenAiContent("image_url", null, new OpenAiImageUrl(m.imageUrl()))
-                ));
+                ), null, null);
+            }
+            // Tool result message: must reference the assistant's tool_call by id,
+            // otherwise OpenAI rejects the request with
+            // "messages with role 'tool' must be a response to a preceeding message
+            //  with 'tool_calls'".
+            if ("tool".equalsIgnoreCase(m.role()) && m.toolCallId() != null) {
+                return new OpenAiMessage(m.role(), m.content(), m.toolCallId(), null);
+            }
+            // Assistant turn that issued tool calls: serialize the calls so the
+            // following tool messages have something to reference.
+            if ("assistant".equalsIgnoreCase(m.role()) && m.toolCalls() != null && !m.toolCalls().isEmpty()) {
+                List<OpenAiAssistantToolCall> calls = m.toolCalls().stream()
+                        .map(tc -> new OpenAiAssistantToolCall(
+                                tc.id(),
+                                "function",
+                                new OpenAiAssistantToolCallFunction(
+                                        tc.name(),
+                                        tc.arguments() == null ? "{}" : tc.arguments().toString())))
+                        .toList();
+                return new OpenAiMessage(m.role(), m.content(), null, calls);
             }
             return new OpenAiMessage(m.role(), m.content());
         }).toList();
@@ -538,17 +566,28 @@ public class OpenAiCompatibleProvider {
                 JsonNode delta = choice.path("delta");
                 String text = delta.path("content").asText(null);
                 String finishReason = choice.path("finish_reason").asText(null);
-                LlmProvider.ToolCallDelta tcd = null;
                 JsonNode tcNode = delta.path("tool_calls");
+                boolean emittedToolCall = false;
                 if (tcNode.isArray() && tcNode.size() > 0) {
-                    JsonNode tc = tcNode.get(0);
-                    tcd = new LlmProvider.ToolCallDelta(
-                            tc.path("id").asText(null),
-                            tc.path("function").path("name").asText(null),
-                            tc.path("function").path("arguments").asText(null)
-                    );
+                    // Emit one chunk per tool_call entry. Subsequent argument
+                    // deltas usually carry only `index`+`function.arguments` —
+                    // we propagate `index` so the orchestrator can accumulate
+                    // by call slot rather than relying on `id`, which only
+                    // appears on the first delta of each call.
+                    for (JsonNode tc : tcNode) {
+                        int idx = tc.path("index").asInt(0);
+                        String id = tc.hasNonNull("id") ? tc.get("id").asText() : null;
+                        JsonNode fn = tc.path("function");
+                        String name = fn.hasNonNull("name") ? fn.get("name").asText() : null;
+                        String argsDelta = fn.hasNonNull("arguments") ? fn.get("arguments").asText() : null;
+                        LlmProvider.ToolCallDelta tcd = new LlmProvider.ToolCallDelta(idx, id, name, argsDelta);
+                        chunks.add(new LlmProvider.ChatChunk(null, tcd, null));
+                        emittedToolCall = true;
+                    }
                 }
-                chunks.add(new LlmProvider.ChatChunk(text, tcd, finishReason));
+                if (!emittedToolCall || text != null || finishReason != null) {
+                    chunks.add(new LlmProvider.ChatChunk(text, null, finishReason));
+                }
             } catch (JsonProcessingException e) {
                 log.warn("Failed to parse SSE data line: {}", data);
             }
@@ -749,7 +788,23 @@ public class OpenAiCompatibleProvider {
         public Object responseFormat;
     }
 
-    private record OpenAiMessage(String role, Object content) {
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private record OpenAiMessage(
+            String role,
+            Object content,
+            @com.fasterxml.jackson.annotation.JsonProperty("tool_call_id") String toolCallId,
+            @com.fasterxml.jackson.annotation.JsonProperty("tool_calls") List<OpenAiAssistantToolCall> toolCalls) {
+        OpenAiMessage(String role, Object content) {
+            this(role, content, null, null);
+        }
+    }
+
+    /** Entry inside an assistant message's {@code tool_calls} array. */
+    private record OpenAiAssistantToolCall(String id, String type, OpenAiAssistantToolCallFunction function) {
+    }
+
+    /** Function detail inside a tool_calls entry. {@code arguments} is a JSON-encoded string. */
+    private record OpenAiAssistantToolCallFunction(String name, String arguments) {
     }
 
     private record OpenAiContent(

@@ -58,6 +58,15 @@ function inferModule(pathname: string): string {
   return "general";
 }
 
+// Pull a project UUID out of /projects/<uuid>/... so the AI panel can scope to
+// the project the user is currently viewing, even on pages that haven't called
+// setCurrentProjectId(). Fallback only — useAppStore wins when set.
+const PROJECT_PATH_RE = /\/projects\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
+function inferProjectIdFromPath(pathname: string): string | null {
+  const m = pathname.match(PROJECT_PATH_RE);
+  return m ? m[1] : null;
+}
+
 function ToolDataExpander({ data }: { data: unknown }) {
   const [expanded, setExpanded] = useState(false);
   const json = typeof data === "string" ? data : JSON.stringify(data, null, 2);
@@ -86,9 +95,12 @@ export function AiChatPanel() {
   const open = useAiStore((s) => s.open);
   const toggle = useAiStore((s) => s.toggle);
   const setOpen = useAiStore((s) => s.setOpen);
-  const projectId = useAppStore((s) => s.currentProjectId);
+  const storeProjectId = useAppStore((s) => s.currentProjectId);
   const pathname = usePathname();
   const activeModule = inferModule(pathname);
+  // Prefer the store's currentProjectId; fall back to the URL when the user
+  // landed on a project page directly (most pages don't set the store).
+  const projectId = storeProjectId ?? inferProjectIdFromPath(pathname);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -122,7 +134,7 @@ export function AiChatPanel() {
   }, [open, toggle, setOpen]);
 
   const sendMessage = useCallback(async () => {
-    if ((!input.trim() && !pendingImage) || isStreaming || !projectId) return;
+    if ((!input.trim() && !pendingImage) || isStreaming) return;
     const userMsg = input.trim();
     setInput("");
 
@@ -144,7 +156,7 @@ export function AiChatPanel() {
 
     try {
       const chatReq: import("@/lib/api/aiApi").ChatRequest = {
-        projectId,
+        projectId: projectId ?? null,
         module: activeModule,
         message: userMsg,
         imageUrl: pendingImage,
@@ -181,25 +193,12 @@ export function AiChatPanel() {
       setMessages((prev) =>
         prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m))
       );
-    } else if (ev.event === "tool_call") {
-      const name = (ev.data.name as string) || "";
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "tool_call", content: `Running ${name}...`, meta: ev.data },
-      ]);
-    } else if (ev.event === "tool_result") {
-      const summary = (ev.data.summary as string) || "";
-      const success = ev.data.success as boolean;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "tool_result",
-          content: summary,
-          meta: { ...ev.data, success },
-        },
-      ]);
-    } else if (ev.event === "done") {
+    } else if (ev.event === "tool_call" || ev.event === "tool_result") {
+      // Intentionally NOT shown in the conversation — internal tool names and
+      // column-level result payloads are implementation detail. The streaming
+      // status indicator (animated pulse next to the assistant bubble) is
+      // enough signal that work is in progress; the answer arrives when ready.
+    } else if (ev.event === "done" || ev.event === "final_answer") {
       const text = (ev.data.text as string) || "";
       setMessages((prev) =>
         prev.map((m) => {
@@ -207,6 +206,20 @@ export function AiChatPanel() {
           if (m.role === "tool_call") return { ...m, meta: { ...m.meta, completed: true } };
           return m;
         })
+      );
+    } else if (ev.event === "max_rounds_exceeded") {
+      const rounds = (ev.data.rounds as number) ?? 0;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                content:
+                  m.content +
+                  `\n\n_(Agent stopped after ${rounds} steps — refine your question or pick a specific project to drill into.)_`,
+              }
+            : m
+        )
       );
     } else if (ev.event === "error") {
       const message = (ev.data.message as string) || "Unknown error";
@@ -365,6 +378,14 @@ export function AiChatPanel() {
                 <div className="text-center text-text-muted py-12">
                   <Bot size={32} className="mx-auto mb-3 opacity-50" />
                   <p className="text-sm">Ask me about cost variance, schedule health, DPR summaries, or EVM forecasts.</p>
+                  {!projectId && (
+                    <p className="text-xs mt-3 text-text-muted/80">
+                      No project selected — try portfolio questions like
+                      <span className="block italic mt-1">
+                        &ldquo;Which projects have the worst CPI this month?&rdquo;
+                      </span>
+                    </p>
+                  )}
                   <p className="text-xs mt-2 text-text-muted/70">
                     Use the microphone for voice input or attach images for analysis.
                   </p>
@@ -499,7 +520,7 @@ export function AiChatPanel() {
                 />
                 <button
                   onClick={isRecording ? stopRecording : startRecording}
-                  disabled={!projectId || isStreaming}
+                  disabled={isStreaming}
                   className={`p-2 rounded-lg transition-colors ${
                     isRecording
                       ? "bg-danger text-white animate-pulse"
@@ -518,14 +539,14 @@ export function AiChatPanel() {
                       sendMessage();
                     }
                   }}
-                  placeholder={projectId ? "Ask anything..." : "Select a project first"}
-                  disabled={!projectId || isStreaming}
+                  placeholder={projectId ? "Ask anything..." : "Ask anything (portfolio mode)..."}
+                  disabled={isStreaming}
                   rows={1}
                   className="flex-1 resize-none rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent min-h-[40px] max-h-[120px]"
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={(!input.trim() && !pendingImage) || !projectId || isStreaming}
+                  disabled={(!input.trim() && !pendingImage) || isStreaming}
                   className="rounded-lg bg-accent p-2 text-text-primary hover:bg-accent-hover disabled:bg-border disabled:text-text-muted transition-colors"
                 >
                   {isStreaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

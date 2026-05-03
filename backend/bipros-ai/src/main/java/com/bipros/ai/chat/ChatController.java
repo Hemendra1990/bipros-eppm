@@ -30,7 +30,7 @@ public class ChatController {
     private final com.bipros.ai.provider.LlmProviderConfigRepository llmProviderConfigRepository;
 
     @PostMapping("/chat")
-    @PreAuthorize("@projectAccess.canRead(#request.projectId)")
+    @PreAuthorize("@aiAccess.canChat(#request.projectId)")
     public ResponseEntity<ApiResponse<ChatResponse>> chat(@RequestBody ChatRequest request) {
         AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);
@@ -59,7 +59,7 @@ public class ChatController {
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @PreAuthorize("@projectAccess.canRead(#request.projectId)")
+    @PreAuthorize("@aiAccess.canChat(#request.projectId)")
     public Flux<org.springframework.http.codec.ServerSentEvent<String>> chatStream(@RequestBody ChatRequest request) {
         AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);

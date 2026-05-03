@@ -54,7 +54,9 @@ bipros:
   ai-orchestrator:
     enabled: true
     kek: dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=
-    max-tool-rounds: 3
+    max-tool-rounds:
+      general: 4
+      default: 3
 
 logging:
   level:

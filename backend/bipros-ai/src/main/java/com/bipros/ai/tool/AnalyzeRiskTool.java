@@ -14,6 +14,8 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -21,7 +23,7 @@ import java.util.Map;
 public class AnalyzeRiskTool extends ProjectScopedTool {
 
     private final ClickHouseTemplate clickHouse;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public String name() {
@@ -30,7 +32,9 @@ public class AnalyzeRiskTool extends ProjectScopedTool {
 
     @Override
     public String description() {
-        return "Analyze project risks. Aggregates fact_risk_snapshot_daily by category, owner, response_type, risk_type, or rag. Returns counts, exposure totals, and average / max risk scores.";
+        return "Analyze risks. With a current project, groups by category / owner / response_type / "
+                + "risk_type / rag. With no current project (general mode), groups by project_id over "
+                + "the user's accessible scope.";
     }
 
     @Override
@@ -84,7 +88,8 @@ public class AnalyzeRiskTool extends ProjectScopedTool {
             }
         }
 
-        String groupExpr = switch (groupBy) {
+        boolean crossProject = ctx.projectId() == null;
+        String groupExpr = crossProject ? "toString(f.project_id)" : switch (groupBy) {
             case "owner" -> "toString(f.owner_id)";
             case "response_type" -> "f.response_type";
             case "risk_type" -> "f.risk_type";
@@ -92,9 +97,30 @@ public class AnalyzeRiskTool extends ProjectScopedTool {
             default -> "coalesce(d.category_name, '')";
         };
 
-        StringBuilder where = new StringBuilder("WHERE f.project_id = :projectId AND f.date BETWEEN :from AND :to");
+        StringBuilder where = new StringBuilder("WHERE f.date BETWEEN :from AND :to");
+        Map<String, Object> params = new HashMap<>();
+        params.put("from", from);
+        params.put("to", to);
+        params.put("topN", topN);
+
+        if (!crossProject) {
+            where.append(" AND f.project_id = :projectId");
+            params.put("projectId", ctx.projectId());
+        } else {
+            List<UUID> scope = ctx.scopedProjectIds();
+            if (scope != null && !scope.isEmpty()) {
+                String inList = scope.stream().map(id -> "'" + id + "'").collect(Collectors.joining(","));
+                where.append(" AND f.project_id IN (").append(inList).append(")");
+            } else {
+                // Admin or unrestricted — keep the substring "project_id" present so any
+                // upstream guard sees a filter clause.
+                where.append(" AND f.project_id IS NOT NULL");
+            }
+        }
+
         if (typeFilter != null && !typeFilter.isBlank()) {
             where.append(" AND f.risk_type = :riskTypeFilter");
+            params.put("riskTypeFilter", typeFilter);
         }
 
         String sql = """
@@ -115,15 +141,6 @@ public class AnalyzeRiskTool extends ProjectScopedTool {
             LIMIT :topN
             """.formatted(groupExpr, where);
 
-        Map<String, Object> params = new HashMap<>();
-        params.put("projectId", ctx.projectId());
-        params.put("from", from);
-        params.put("to", to);
-        params.put("topN", topN);
-        if (typeFilter != null && !typeFilter.isBlank()) {
-            params.put("riskTypeFilter", typeFilter);
-        }
-
         List<Map<String, Object>> rows = clickHouse.queryForList(sql, params);
         ArrayNode arr = objectMapper.createArrayNode();
         for (Map<String, Object> r : rows) {
@@ -132,7 +149,10 @@ public class AnalyzeRiskTool extends ProjectScopedTool {
             arr.add(o);
         }
 
-        return ToolResult.table("Risk analysis by " + groupBy, arr,
+        String summary = crossProject
+                ? "Risk exposure per project across portfolio (" + from + ".." + to + ")"
+                : "Risk analysis by " + groupBy;
+        return ToolResult.table(summary, arr,
                 new String[]{"group_key", "count", "open_count", "closed_count",
                         "sum_pre_exposure_cost", "sum_post_exposure_cost",
                         "avg_risk_score", "max_residual_score", "total_impact_days"});

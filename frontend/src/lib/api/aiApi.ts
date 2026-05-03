@@ -74,7 +74,8 @@ export interface ProviderTestResponse {
 
 export interface ChatRequest {
   conversationId?: string | null;
-  projectId: string;
+  // Nullable for cross-project ("general") agentic search.
+  projectId: string | null;
   module: string;
   message: string;
   imageUrl?: string | null;

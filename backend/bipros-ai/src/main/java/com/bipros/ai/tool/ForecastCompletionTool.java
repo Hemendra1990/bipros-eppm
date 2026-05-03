@@ -23,7 +23,7 @@ import java.util.Map;
 public class ForecastCompletionTool extends ProjectScopedTool {
 
     private final ClickHouseTemplate clickHouse;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public String name() {
@@ -61,6 +61,10 @@ public class ForecastCompletionTool extends ProjectScopedTool {
 
     @Override
     protected ToolResult doExecute(JsonNode input, AiContext ctx) {
+        if (ctx.projectId() == null) {
+            return ToolResult.error("forecast_completion needs a single project_id. "
+                    + "Call list_projects to discover candidates, then re-invoke chat with the chosen project as your current scope.");
+        }
         String method = input.path("method").asText("cpi");
 
         LocalDate from = LocalDate.now().minusDays(30);
