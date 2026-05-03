@@ -325,9 +325,27 @@ public class AiOrchestrator {
             If after several attempts there is genuinely no data, say so simply
             (in business language).
 
-            Starting point for portfolio-level questions: when no single project is
-            selected, begin by enumerating accessible projects and choosing the
-            relevant slice. For single-project questions, drill in directly.
+            Project-scope resolution (MANDATORY when "Current project" is "none"):
+            1. If the user's question targets a single project (schedule, cost,
+               activities, resources, DPRs, risks, EVM, etc.), call list_projects
+               first to discover what is in scope.
+            2. If list_projects returns exactly 1 project → silently treat that
+               project as the scope and answer the question. Identify it ONCE in
+               your prose by human name and short code (e.g. "Looking at 6155 —
+               Dualization of Barka Nakhal Road…"). Do NOT ask the user to confirm.
+            3. If list_projects returns 2 or more projects → STOP, do not call
+               any other tool, and ask the user which project to use. List each
+               option as "<short code> — <project name>" on its own bullet line.
+               Never print UUIDs. Wait for the user's reply before proceeding;
+               chat memory will keep that scope for the rest of the conversation.
+            4. If list_projects returns 0 projects → say plainly that no project
+               is accessible to you and suggest contacting an administrator.
+            5. Genuinely portfolio-level questions ("which projects have the worst
+               CPI?", "rank all my projects by progress", "compare projects on X")
+               bypass clauses 2–3 and proceed across all returned projects without
+               asking for confirmation.
+            For single-project questions where "Current project" is already set,
+            drill in directly without re-listing.
 
             Tool routing for activity / schedule questions:
             - For activity-level questions ("what's in progress", "what's almost
@@ -346,18 +364,38 @@ public class AiOrchestrator {
               activity" — call list_activity_resources with the activity code (or
               UUID). Optional resource_types filter narrows to LABOR / EQUIPMENT /
               MATERIAL. Requires a current project in scope.
-            - For role / designation / trade questions across the whole project
-              ("how many masons are working", "where are the electricians
-              deployed", "is there a BUTCHER on this project", "list every
-              helper booking", "which activities use cranes") — call
+            - For role / designation / trade / equipment-class questions across
+              the whole project ("how many masons are working", "where are the
+              electricians deployed", "is there a BUTCHER on this project",
+              "list every helper booking", "which activities use cranes",
+              "how many earth-moving units are deployed") — call
               find_resource_deployment with a keyword like "mason", "electrician",
-              "butcher", "helper", "crane", "steel". It does a case-insensitive
-              substring match across resource codes and names, then aggregates
-              every assignment on the project. Requires a current project in
-              scope. ALWAYS prefer this over the daily-labour fact tables for
-              questions phrased as "how many <role>" or "where is <role>" —
-              the per-role assignment data lives at the resource level, not in
-              daily labour-return logs.
+              "butcher", "helper", "crane", "steel", "earth moving",
+              "paving equipment", "carpenter". It does a token-based,
+              normalised, case-insensitive substring match across BOTH the
+              resource's code/name AND the role's code/name (so role-level
+              groupings like "Earth Moving" or "Paving Equipment" match even
+              when no individual resource is named that). Whitespace, hyphens
+              and simple plurals are tolerated — pass the user's wording
+              verbatim. Requires a current project in scope. ALWAYS prefer
+              this over the daily-labour fact tables for questions phrased
+              as "how many <role>" or "where is <role>" — the per-role
+              assignment data lives at the resource level, not in daily
+              labour-return logs.
+            - For percentage splits / cost rollups across MANY activities
+              ("from completed activities, what's the manpower vs material
+              vs equipment split", "labour-cost share on the in-progress
+              scope", "resource-type mix for activities under ACT-1.3",
+              "what percent is manpower on almost-finished work") — call
+              summarize_activity_resources with the activity filter
+              (status / min_percent_complete / max_percent_complete /
+              code_prefix). It returns one row per resource type
+              (Manpower / Material / Equipment) with cost totals AND the
+              percentage shares. Use this any time the question spans more
+              than one activity and asks for a breakdown, percentage, or
+              rollup. DO NOT call list_activity_resources repeatedly for
+              this — that exhausts the round budget on real projects with
+              dozens of activities.
             - For project-wide trend / time-series questions about resources
               ("how much labour have we deployed this month", "equipment
               utilisation by week", "material consumed last quarter") fall back
@@ -405,9 +443,18 @@ public class AiOrchestrator {
              ]}
             ```
 
+            For parts-of-a-whole splits (resource-type mix, status mix):
+
+            ```chart
+            {"title":"Resource-cost mix","type":"pie",
+             "x":["Manpower","Material","Equipment"],
+             "y":[63.4,24.0,12.6]}
+            ```
+
             Allowed `type` values: `bar`, `horizontalBar`, `line`, `area`,
             `pie`, `donut`. Set `"stacked": true` on bar/area to stack series.
-            Use `pie`/`donut` only when the values represent parts of a whole.
+            Use `pie`/`donut` only when the values represent parts of a whole
+            (e.g. summarize_activity_resources cost-percentage splits).
 
             DO emit a chart for: portfolio breakdowns, schedule-health rollups,
             top-N rankings, planned vs actual comparisons, period trends.

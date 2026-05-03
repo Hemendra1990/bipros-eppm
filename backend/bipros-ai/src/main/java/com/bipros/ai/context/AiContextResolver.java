@@ -27,6 +27,14 @@ public class AiContextResolver {
         List<UUID> scoped = projectAccess.getAccessibleProjectIdsForCurrentUser() != null
                 ? List.copyOf(projectAccess.getAccessibleProjectIdsForCurrentUser())
                 : List.of();
-        return new AiContext(userId, projectId, module, role, scoped);
+
+        UUID effectiveProjectId = projectId;
+        if (effectiveProjectId == null
+                && !"ADMIN".equals(role)
+                && scoped.size() == 1) {
+            effectiveProjectId = scoped.get(0);
+        }
+
+        return new AiContext(userId, effectiveProjectId, module, role, scoped);
     }
 }

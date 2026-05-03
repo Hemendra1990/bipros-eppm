@@ -3,9 +3,14 @@ package com.bipros.reporting.presentation.controller;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.reporting.application.dto.*;
 import com.bipros.reporting.application.service.CapacityUtilizationReportService;
+import com.bipros.reporting.application.service.DailyDeploymentReportService;
+import com.bipros.reporting.application.service.DprReportService;
 import com.bipros.reporting.application.service.ReportService;
 import com.bipros.reporting.domain.model.ReportFormat;
 import com.bipros.reporting.domain.model.ReportType;
+import com.bipros.reporting.infrastructure.export.CapacityUtilizationExcelWriter;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,6 +21,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,6 +35,11 @@ public class ReportController {
 
   private final ReportService reportService;
   private final CapacityUtilizationReportService capacityUtilizationReportService;
+  private final DailyDeploymentReportService dailyDeploymentReportService;
+  private final DprReportService dprReportService;
+  private final CapacityUtilizationExcelWriter capacityUtilizationExcelWriter;
+
+  @PersistenceContext private EntityManager em;
 
   /** Alias for {@code /reports/definitions}. Dashboards and links that expect the bare
    * {@code /v1/reports} collection endpoint land here instead of receiving a 404. */
@@ -160,6 +172,48 @@ public class ReportController {
       @RequestParam(required = false) String normType) {
     return ApiResponse.ok(
         capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType));
+  }
+
+  /**
+   * Streams the 5-sheet Capacity Utilisation .xlsx workbook (Plant utilization, Manpower
+   * utilization, SUMMARY, Daily Deployment, DPR) for a single project and calendar month.
+   * {@code month} accepts ISO {@code YYYY-MM}; {@code workDays} populates the highlighted Work
+   * days cell (defaults to 26 — typical 6-day-week construction month).
+   */
+  @GetMapping("/capacity-utilization/excel")
+  public ResponseEntity<byte[]> downloadCapacityUtilizationExcel(
+      @RequestParam UUID projectId,
+      @RequestParam String month,
+      @RequestParam(required = false, defaultValue = "26") int workDays) {
+    YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
+    LocalDate from = ym.atDay(1);
+    LocalDate to = ym.atEndOfMonth();
+    var plant = capacityUtilizationReportService.build(projectId, from, to, "RESOURCE_TYPE", "EQUIPMENT");
+    var manpower = capacityUtilizationReportService.build(projectId, from, to, "RESOURCE_TYPE", "MANPOWER");
+    var daily = dailyDeploymentReportService.build(projectId, ym);
+    var dpr = dprReportService.build(projectId, ym);
+    String projectName = lookupProjectName(projectId);
+
+    byte[] bytes = capacityUtilizationExcelWriter.generate(
+        plant, manpower, daily, dpr, ym, workDays, projectName);
+
+    String fileName = "capacity-utilization-" + ym + ".xlsx";
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"" + fileName + "\"")
+        .body(bytes);
+  }
+
+  private String lookupProjectName(UUID projectId) {
+    @SuppressWarnings("unchecked")
+    List<Object> rows = em.createNativeQuery(
+            "SELECT name FROM project.projects WHERE id = :id")
+        .setParameter("id", projectId)
+        .setMaxResults(1)
+        .getResultList();
+    return rows.isEmpty() || rows.get(0) == null ? null : rows.get(0).toString();
   }
 
   @GetMapping("/trend-analysis")

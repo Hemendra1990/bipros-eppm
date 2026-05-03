@@ -59,6 +59,27 @@ const markdownComponents: Components = {
   ),
 };
 
+// Friendly progress labels — keep tool-name plumbing out of the UI while still
+// telling the user what's underway. Unknown tools fall back to "Working".
+const TOOL_PROGRESS_LABELS: Record<string, string> = {
+  list_projects: "Looking up projects",
+  list_activities: "Checking activities",
+  list_activity_resources: "Checking activity resources",
+  find_resource_deployment: "Checking resource deployment",
+  summarize_activity_resources: "Rolling up resource costs by type",
+  analyze_schedule: "Reading schedule health",
+  analyze_cost: "Reading cost performance",
+  analyze_risk: "Reading risk register",
+  forecast_completion: "Running forecast",
+  portfolio_kpi: "Reading portfolio KPIs",
+  read_dpr_summary: "Reading daily progress",
+  query_clickhouse: "Querying analytics",
+  describe_schema: "Inspecting data shape",
+};
+function friendlyToolLabel(name: string): string {
+  return TOOL_PROGRESS_LABELS[name] ?? "Working";
+}
+
 function inferModule(pathname: string): string {
   if (pathname.includes("/cost")) return "cost";
   if (pathname.includes("/schedule")) return "schedule";
@@ -153,6 +174,7 @@ export function AiChatPanel() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
+  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -211,6 +233,7 @@ export function AiChatPanel() {
     ]);
     setPendingImage(null);
     setIsStreaming(true);
+    setStreamingStatus(null);
 
     abortRef.current = new AbortController();
     const assistantId = crypto.randomUUID();
@@ -245,6 +268,7 @@ export function AiChatPanel() {
     } finally {
       setIsStreaming(false);
       setStreamingAssistantId(null);
+      setStreamingStatus(null);
       setMessages((prev) =>
         prev.map((m) =>
           m.role === "tool_call" ? { ...m, meta: { ...m.meta, completed: true } } : m
@@ -265,13 +289,19 @@ export function AiChatPanel() {
       setMessages((prev) =>
         prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m))
       );
-    } else if (ev.event === "tool_call" || ev.event === "tool_result") {
-      // Intentionally NOT shown in the conversation — internal tool names and
-      // column-level result payloads are implementation detail. The streaming
-      // status indicator (animated pulse next to the assistant bubble) is
-      // enough signal that work is in progress; the answer arrives when ready.
+    } else if (ev.event === "tool_call") {
+      // Show a friendly progress line inside the assistant bubble so the user
+      // sees something happening during multi-round agentic work. We map the
+      // tool name to a business label — never leak the raw internal name.
+      const name = (ev.data.name as string) || "";
+      setStreamingStatus(friendlyToolLabel(name));
+    } else if (ev.event === "tool_result") {
+      // Keep the last tool_call's label visible until the next tool_call or
+      // the final answer arrives — gives a steady "still working" signal
+      // without flickering between rounds.
     } else if (ev.event === "done" || ev.event === "final_answer") {
       const text = (ev.data.text as string) || "";
+      setStreamingStatus(null);
       setMessages((prev) =>
         prev.map((m) => {
           if (m.id === assistantId) return { ...m, content: text || m.content };
@@ -281,6 +311,7 @@ export function AiChatPanel() {
       );
     } else if (ev.event === "max_rounds_exceeded") {
       const rounds = (ev.data.rounds as number) ?? 0;
+      setStreamingStatus(null);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -295,6 +326,7 @@ export function AiChatPanel() {
       );
     } else if (ev.event === "error") {
       const message = (ev.data.message as string) || "Unknown error";
+      setStreamingStatus(null);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId ? { ...m, content: m.content + "\n[Error: " + message + "]" } : m
@@ -530,7 +562,19 @@ export function AiChatPanel() {
                         )}
                         {msg.role === "assistant" ? (
                           msg.id === streamingAssistantId ? (
-                            <div className="whitespace-pre-wrap">{msg.content}</div>
+                            <div>
+                              {msg.content && (
+                                <div className="whitespace-pre-wrap">{msg.content}</div>
+                              )}
+                              <div
+                                className={`flex items-center gap-2 text-xs text-text-muted ${
+                                  msg.content ? "mt-2" : ""
+                                }`}
+                              >
+                                <Loader2 size={11} className="animate-spin" />
+                                <span>{streamingStatus ?? "Thinking"}…</span>
+                              </div>
+                            </div>
                           ) : (
                             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                               {msg.content}
@@ -544,13 +588,6 @@ export function AiChatPanel() {
                   </div>
                 </div>
               ))}
-              {isStreaming && (
-                <div className="flex justify-start">
-                  <div className="bg-surface-hover text-text-primary border border-border rounded-xl px-3 py-2 text-sm">
-                    <span className="inline-block w-1.5 h-1.5 bg-text-muted rounded-full animate-pulse" />
-                  </div>
-                </div>
-              )}
               <div ref={bottomRef} />
             </div>
 
