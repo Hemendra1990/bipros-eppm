@@ -10,10 +10,8 @@ import com.bipros.resource.application.dto.ResourceAssignmentResponse;
 import com.bipros.resource.application.dto.ResourceUsageEntry;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
-import com.bipros.resource.domain.model.ResourceRate;
 import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
-import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +37,6 @@ public class ResourceAssignmentService {
 
   private final ResourceAssignmentRepository assignmentRepository;
   private final ResourceRepository resourceRepository;
-  private final ResourceRateRepository rateRepository;
   private final ResourceRoleRepository roleRepository;
   private final ActivityRepository activityRepository;
   private final ProjectResourceService projectResourceService;
@@ -128,11 +125,12 @@ public class ResourceAssignmentService {
   }
 
   /**
-   * Pick the latest rate (by effectiveDate) for the resource+type and multiply by units.
-   * Prefers {@code budgetedRate} when set, falls back to {@code pricePerUnit}.
-   * Rate priority: rateType-specific rate > ProjectResource.rateOverride > Resource.costPerUnit.
+   * Two-tier cost-resolution chain: {@code ProjectResource.rateOverride} → {@code Resource.costPerUnit} → null.
+   * The simpler model intentionally drops the period-aware {@code ResourceRate} tier — Bipros doesn't
+   * actively use rate cards today, and a single rate per resource matches the user's mental model.
+   * If time-varying rates become a need later, re-introduce the {@code ResourceRate} tier deliberately.
    */
-  private BigDecimal computePlannedCost(UUID projectId, UUID resourceId, String rateType, Double plannedUnits) {
+  private BigDecimal computePlannedCost(UUID projectId, UUID resourceId, Double plannedUnits) {
     if (plannedUnits == null) return null;
 
     BigDecimal rateOverride = projectResourceService.resolveRateOverride(projectId, resourceId);
@@ -140,55 +138,11 @@ public class ResourceAssignmentService {
       return rateOverride.multiply(BigDecimal.valueOf(plannedUnits));
     }
 
-    List<ResourceRate> rates = rateType != null
-        ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
-        : List.of();
-    if (rates.isEmpty()) {
-      rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(resourceId);
+    Resource resource = resourceRepository.findById(resourceId).orElse(null);
+    if (resource != null && resource.getCostPerUnit() != null) {
+      return resource.getCostPerUnit().multiply(BigDecimal.valueOf(plannedUnits));
     }
-    if (rates.isEmpty()) return null;
-    ResourceRate latest = rates.get(0);
-    BigDecimal baseRate = latest.getBudgetedRate() != null
-        ? latest.getBudgetedRate()
-        : latest.getPricePerUnit();
-    if (baseRate == null) return null;
-    return baseRate.multiply(BigDecimal.valueOf(plannedUnits));
-  }
-
-  /**
-   * Compute planned cost from a role's defaultRate when no specific resource is assigned yet.
-   */
-  private BigDecimal computePlannedCostFromRole(UUID roleId, String rateType, Double plannedUnits) {
-    if (plannedUnits == null) return null;
-    ResourceRole role = roleRepository.findById(roleId).orElse(null);
-    if (role == null || role.getDefaultRate() == null) return null;
-    return role.getDefaultRate().multiply(BigDecimal.valueOf(plannedUnits));
-  }
-
-  @SuppressWarnings("unused")
-  private BigDecimal computeActualCost(UUID projectId, UUID resourceId, String rateType, Double actualUnits) {
-    if (actualUnits == null) return null;
-
-    BigDecimal rateOverride = projectResourceService.resolveRateOverride(projectId, resourceId);
-    if (rateOverride != null) {
-      return rateOverride.multiply(BigDecimal.valueOf(actualUnits));
-    }
-
-    List<ResourceRate> rates = rateType != null
-        ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
-        : List.of();
-    if (rates.isEmpty()) {
-      rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(resourceId);
-    }
-    if (rates.isEmpty()) return null;
-    ResourceRate latest = rates.get(0);
-    BigDecimal rate = latest.getActualRate() != null
-        ? latest.getActualRate()
-        : latest.getBudgetedRate() != null
-            ? latest.getBudgetedRate()
-            : latest.getPricePerUnit();
-    if (rate == null) return null;
-    return rate.multiply(BigDecimal.valueOf(actualUnits));
+    return null;
   }
 
   private ResourceAssignmentResponse hydrate(ResourceAssignment a) {
@@ -270,14 +224,11 @@ public class ResourceAssignmentService {
       }
     }
 
-    BigDecimal plannedCost;
-    if (request.resourceId() != null) {
-      plannedCost = computePlannedCost(
-          request.projectId(), request.resourceId(), effectiveRateType, request.plannedUnits());
-    } else {
-      plannedCost = computePlannedCostFromRole(
-          request.roleId(), effectiveRateType, request.plannedUnits());
-    }
+    // Unstaffed role-only slots get null planned cost (honest "rate unknown until staffed").
+    // Staffed slots resolve via the two-tier chain in computePlannedCost.
+    BigDecimal plannedCost = request.resourceId() != null
+        ? computePlannedCost(request.projectId(), request.resourceId(), request.plannedUnits())
+        : null;
 
     // Initialize remaining = planned at creation time. Without this the columns sit at NULL until
     // the daily-output rollup runs, which makes role-grouped totals understate the true remaining
@@ -357,7 +308,7 @@ public class ResourceAssignmentService {
         });
 
     assignment.setResourceId(resourceId);
-    BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), resourceId, assignment.getRateType(), assignment.getPlannedUnits());
+    BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), resourceId, assignment.getPlannedUnits());
     assignment.setPlannedCost(plannedCost);
     assignment.setRemainingCost(remainingFromPlanned(plannedCost, assignment.getActualCost()));
 
@@ -420,7 +371,7 @@ public class ResourceAssignmentService {
         });
 
     assignment.setResourceId(newResourceId);
-    BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), newResourceId, assignment.getRateType(), assignment.getPlannedUnits());
+    BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), newResourceId, assignment.getPlannedUnits());
     assignment.setPlannedCost(plannedCost);
     assignment.setRemainingCost(remainingFromPlanned(plannedCost, assignment.getActualCost()));
 
@@ -512,14 +463,10 @@ public class ResourceAssignmentService {
     assignment.setPlannedStartDate(request.plannedStartDate());
     assignment.setPlannedFinishDate(request.plannedFinishDate());
 
-    BigDecimal plannedCost;
-    if (request.resourceId() != null) {
-      plannedCost = computePlannedCost(
-          request.projectId(), request.resourceId(), request.rateType(), request.plannedUnits());
-    } else {
-      plannedCost = computePlannedCostFromRole(
-          request.roleId(), request.rateType(), request.plannedUnits());
-    }
+    // Unstaffed role-only slots get null planned cost; staffed slots resolve via the two-tier chain.
+    BigDecimal plannedCost = request.resourceId() != null
+        ? computePlannedCost(request.projectId(), request.resourceId(), request.plannedUnits())
+        : null;
     assignment.setPlannedCost(plannedCost);
     assignment.setRemainingCost(remainingFromPlanned(plannedCost, assignment.getActualCost()));
 
@@ -536,11 +483,12 @@ public class ResourceAssignmentService {
     List<ResourceAssignment> assignments = assignmentRepository.findByProjectId(projectId);
     int updated = 0;
     for (ResourceAssignment a : assignments) {
+      // Unstaffed role-only slots: planned cost is null (no rate to apply until staffed).
       BigDecimal newPlanned = a.getResourceId() != null
-          ? computePlannedCost(projectId, a.getResourceId(), a.getRateType(), a.getPlannedUnits())
-          : computePlannedCostFromRole(a.getRoleId(), a.getRateType(), a.getPlannedUnits());
+          ? computePlannedCost(projectId, a.getResourceId(), a.getPlannedUnits())
+          : null;
       BigDecimal actualRate = a.getResourceId() != null
-          ? resolveActualRate(projectId, a.getResourceId(), a.getRateType())
+          ? resolveActualRate(projectId, a.getResourceId())
           : null;
       BigDecimal newActual = (actualRate != null && a.getActualUnits() != null)
           ? actualRate.multiply(BigDecimal.valueOf(a.getActualUnits()))
@@ -569,21 +517,16 @@ public class ResourceAssignmentService {
     return updated;
   }
 
-  private BigDecimal resolveActualRate(UUID projectId, UUID resourceId, String rateType) {
+  /**
+   * Two-tier rate resolution mirroring {@link #computePlannedCost(UUID, UUID, Double)}:
+   * project pool override → resource's costPerUnit → null.
+   */
+  private BigDecimal resolveActualRate(UUID projectId, UUID resourceId) {
     BigDecimal rateOverride = projectResourceService.resolveRateOverride(projectId, resourceId);
     if (rateOverride != null) return rateOverride;
 
-    List<ResourceRate> rates = rateType != null
-        ? rateRepository.findByResourceIdAndRateTypeOrderByEffectiveDateDesc(resourceId, rateType)
-        : List.of();
-    if (rates.isEmpty()) {
-      rates = rateRepository.findByResourceIdOrderByEffectiveDateDesc(resourceId);
-    }
-    if (rates.isEmpty()) return null;
-    ResourceRate latest = rates.get(0);
-    if (latest.getActualRate() != null) return latest.getActualRate();
-    if (latest.getBudgetedRate() != null) return latest.getBudgetedRate();
-    return latest.getPricePerUnit();
+    Resource resource = resourceRepository.findById(resourceId).orElse(null);
+    return resource == null ? null : resource.getCostPerUnit();
   }
 
   public void removeAssignment(UUID assignmentId) {

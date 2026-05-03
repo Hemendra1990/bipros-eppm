@@ -69,7 +69,6 @@ public class ResourceRoleService {
         .description(req.description())
         .resourceType(type)
         .productivityUnit(req.productivityUnit())
-        .defaultRate(req.defaultRate())
         .sortOrder(req.sortOrder() == null ? 0 : req.sortOrder())
         .active(req.active() == null ? Boolean.TRUE : req.active())
         .build();
@@ -97,7 +96,6 @@ public class ResourceRoleService {
     r.setDescription(req.description());
     r.setResourceType(type);
     r.setProductivityUnit(req.productivityUnit());
-    r.setDefaultRate(req.defaultRate());
     if (req.sortOrder() != null) r.setSortOrder(req.sortOrder());
     if (req.active() != null) r.setActive(req.active());
 

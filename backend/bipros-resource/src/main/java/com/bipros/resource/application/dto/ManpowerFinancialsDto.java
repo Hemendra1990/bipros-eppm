@@ -1,16 +1,16 @@
 package com.bipros.resource.application.dto;
 
 import com.bipros.resource.domain.model.enums.PaymentMode;
-import com.bipros.resource.domain.model.enums.SalaryType;
 import com.bipros.resource.domain.model.manpower.ManpowerFinancials;
 
-import java.math.BigDecimal;
-
+/**
+ * HR/payroll record-keeping fields for a manpower resource. Intentionally does NOT carry the
+ * project-cost rate — that lives on {@link com.bipros.resource.domain.model.Resource#getCostPerUnit()}.
+ * Salary, allowances, deductions, PF/ESI/bank live here as reference data; project costing reads
+ * only {@code Resource.costPerUnit}. Decoupled by design — matches Primavera P6 and other mature
+ * PM tools where payroll and project-cost rates are separate concerns.
+ */
 public record ManpowerFinancialsDto(
-    SalaryType salaryType,
-    BigDecimal baseSalary,
-    BigDecimal hourlyRate,
-    BigDecimal overtimeRate,
     String allowances,
     String deductions,
     String currency,
@@ -24,10 +24,6 @@ public record ManpowerFinancialsDto(
   public static ManpowerFinancialsDto from(ManpowerFinancials f) {
     if (f == null) return null;
     return new ManpowerFinancialsDto(
-        f.getSalaryType(),
-        f.getBaseSalary(),
-        f.getHourlyRate(),
-        f.getOvertimeRate(),
         f.getAllowances(),
         f.getDeductions(),
         f.getCurrency(),

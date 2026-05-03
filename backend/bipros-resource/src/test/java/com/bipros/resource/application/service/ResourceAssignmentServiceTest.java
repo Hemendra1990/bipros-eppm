@@ -9,7 +9,6 @@ import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
-import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -37,7 +36,6 @@ class ResourceAssignmentServiceTest {
 
   @Mock private ResourceAssignmentRepository assignmentRepository;
   @Mock private ResourceRepository resourceRepository;
-  @Mock private ResourceRateRepository rateRepository;
   @Mock private ResourceRoleRepository roleRepository;
   @Mock private ActivityRepository activityRepository;
   @Mock private ProjectResourceService projectResourceService;
@@ -204,6 +202,108 @@ class ResourceAssignmentServiceTest {
     assertThat(persisted.getRemainingCost())
         .as("remainingCost should mirror plannedCost at creation time")
         .isEqualByComparingTo("3500");
+  }
+
+  @Test
+  @DisplayName("computePlannedCost: Resource.costPerUnit is used as fallback when no project rateOverride")
+  void costPerUnitFallbackWhenNoOverride() {
+    ResourceRole helperRole = role("RM-HLP", "Helper");
+    Resource helper = Resource.builder()
+        .code("LAB-HLP-01").name("Anil Das").role(helperRole)
+        .costPerUnit(new BigDecimal("300"))
+        .build();
+    helper.setId(UUID.randomUUID());
+
+    when(resourceRepository.existsById(helper.getId())).thenReturn(true);
+    when(projectResourceService.isInPool(projectId, helper.getId())).thenReturn(true);
+    when(assignmentRepository.findByActivityId(activityId)).thenReturn(List.of());
+    when(activityRepository.findById(activityId)).thenReturn(Optional.empty());
+    when(projectResourceService.resolveRateOverride(projectId, helper.getId())).thenReturn(null);
+    when(resourceRepository.findById(helper.getId())).thenReturn(Optional.of(helper));
+
+    ArgumentCaptor<ResourceAssignment> saved = ArgumentCaptor.forClass(ResourceAssignment.class);
+    when(assignmentRepository.save(saved.capture())).thenAnswer(inv -> {
+      ResourceAssignment a = inv.getArgument(0);
+      a.setId(UUID.randomUUID());
+      return a;
+    });
+
+    service.assignResource(new CreateResourceAssignmentRequest(
+        activityId, helper.getId(), null, projectId, 10.0, null, null, null, null));
+
+    ResourceAssignment persisted = saved.getValue();
+    assertThat(persisted.getPlannedCost())
+        .as("no override -> falls back to Resource.costPerUnit (300) * plannedUnits (10) = 3000")
+        .isEqualByComparingTo("3000");
+    assertThat(persisted.getRemainingCost()).isEqualByComparingTo("3000");
+  }
+
+  @Test
+  @DisplayName("computePlannedCost: project rateOverride wins over Resource.costPerUnit")
+  void overrideWinsOverCostPerUnit() {
+    ResourceRole helperRole = role("RM-HLP", "Helper");
+    Resource helper = Resource.builder()
+        .code("LAB-HLP-01").name("Anil Das").role(helperRole)
+        .costPerUnit(new BigDecimal("300"))
+        .build();
+    helper.setId(UUID.randomUUID());
+
+    when(resourceRepository.existsById(helper.getId())).thenReturn(true);
+    when(projectResourceService.isInPool(projectId, helper.getId())).thenReturn(true);
+    when(assignmentRepository.findByActivityId(activityId)).thenReturn(List.of());
+    when(activityRepository.findById(activityId)).thenReturn(Optional.empty());
+    when(projectResourceService.resolveRateOverride(projectId, helper.getId()))
+        .thenReturn(new BigDecimal("500"));
+    when(resourceRepository.findById(helper.getId())).thenReturn(Optional.of(helper));
+
+    ArgumentCaptor<ResourceAssignment> saved = ArgumentCaptor.forClass(ResourceAssignment.class);
+    when(assignmentRepository.save(saved.capture())).thenAnswer(inv -> {
+      ResourceAssignment a = inv.getArgument(0);
+      a.setId(UUID.randomUUID());
+      return a;
+    });
+
+    service.assignResource(new CreateResourceAssignmentRequest(
+        activityId, helper.getId(), null, projectId, 10.0, null, null, null, null));
+
+    ResourceAssignment persisted = saved.getValue();
+    assertThat(persisted.getPlannedCost())
+        .as("override (500) wins over Resource.costPerUnit (300): 500 * 10 = 5000")
+        .isEqualByComparingTo("5000");
+  }
+
+  @Test
+  @DisplayName("computePlannedCost: role-only assignment (no resource staffed) -> plannedCost null")
+  void roleOnlyAssignmentHasNullPlannedCost() {
+    ResourceRole helperRole = role("RM-HLP", "Helper");
+    helperRole.setId(UUID.randomUUID());
+
+    when(roleRepository.existsById(helperRole.getId())).thenReturn(true);
+    // Role-only assignments use findByActivityIdAndResourceIdIsNullAndRoleId, not findByActivityId.
+    when(assignmentRepository.findByActivityIdAndResourceIdIsNullAndRoleId(activityId, helperRole.getId()))
+        .thenReturn(Optional.empty());
+    when(activityRepository.findById(activityId)).thenReturn(Optional.empty());
+
+    ArgumentCaptor<ResourceAssignment> saved = ArgumentCaptor.forClass(ResourceAssignment.class);
+    when(assignmentRepository.save(saved.capture())).thenAnswer(inv -> {
+      ResourceAssignment a = inv.getArgument(0);
+      a.setId(UUID.randomUUID());
+      return a;
+    });
+    // hydrate(saved) is called post-save
+    lenient().when(roleRepository.findById(helperRole.getId())).thenReturn(Optional.of(helperRole));
+
+    service.assignResource(new CreateResourceAssignmentRequest(
+        activityId, null, helperRole.getId(), projectId, 5.0, null, null, null, null));
+
+    ResourceAssignment persisted = saved.getValue();
+    assertThat(persisted.getResourceId()).as("role-only slot, no resource staffed").isNull();
+    assertThat(persisted.getPlannedCost())
+        .as("unstaffed role-only slots get null planned cost (no rate to apply until staffed)")
+        .isNull();
+    assertThat(persisted.getRemainingCost())
+        .as("plannedCost null -> remainingCost null")
+        .isNull();
   }
 
   @Test

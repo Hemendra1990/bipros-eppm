@@ -737,11 +737,7 @@ function ManpowerTabs({
         {!editing && tab === "FINANCIAL" && (
           <ReadOnlyGrid
             entries={[
-              ["Salary Type", financials.salaryType],
               ["Currency", financials.currency],
-              ["Base Salary", financials.baseSalary],
-              ["Hourly Rate", financials.hourlyRate],
-              ["Overtime Rate", financials.overtimeRate],
               ["Payment Mode", financials.paymentMode],
               ["Allowances", financials.allowances],
               ["Deductions", financials.deductions],
@@ -973,40 +969,34 @@ function ManpowerFinancialEditor({
   const setF = (patch: Partial<typeof f>) =>
     setDraft({ ...draft, financials: { ...f, ...patch } });
   return (
-    <Grid>
-      <SelectField
-        label="Salary Type"
-        value={f.salaryType ?? ""}
-        onChange={(v) => setF({ salaryType: (v || null) as typeof f.salaryType })}
-        options={[
-          { value: "", label: "—" },
-          { value: "MONTHLY", label: "Monthly" },
-          { value: "DAILY", label: "Daily" },
-          { value: "HOURLY", label: "Hourly" },
-        ]}
-      />
-      <TextField label="Currency" value={f.currency ?? ""} onChange={(v) => setF({ currency: v || null })} />
-      <NumberField label="Base Salary" value={f.baseSalary} onChange={(v) => setF({ baseSalary: v })} />
-      <NumberField label="Hourly Rate" value={f.hourlyRate} onChange={(v) => setF({ hourlyRate: v })} />
-      <NumberField label="Overtime Rate" value={f.overtimeRate} onChange={(v) => setF({ overtimeRate: v })} />
-      <SelectField
-        label="Payment Mode"
-        value={f.paymentMode ?? ""}
-        onChange={(v) => setF({ paymentMode: (v || null) as typeof f.paymentMode })}
-        options={[
-          { value: "", label: "—" },
-          { value: "BANK", label: "Bank" },
-          { value: "CASH", label: "Cash" },
-          { value: "CHEQUE", label: "Cheque" },
-        ]}
-      />
-      <TextareaField label="Allowances (JSON)" value={f.allowances ?? ""} onChange={(v) => setF({ allowances: v || null })} colSpan={2} />
-      <TextareaField label="Deductions (JSON)" value={f.deductions ?? ""} onChange={(v) => setF({ deductions: v || null })} colSpan={2} />
-      <TextareaField label="Bank Account Details" value={f.bankAccountDetails ?? ""} onChange={(v) => setF({ bankAccountDetails: v || null })} colSpan={2} />
-      <TextareaField label="Tax Details" value={f.taxDetails ?? ""} onChange={(v) => setF({ taxDetails: v || null })} colSpan={2} />
-      <TextField label="PF Number" value={f.pfNumber ?? ""} onChange={(v) => setF({ pfNumber: v || null })} />
-      <TextField label="ESI Number" value={f.esiNumber ?? ""} onChange={(v) => setF({ esiNumber: v || null })} />
-    </Grid>
+    <div className="space-y-4">
+      <div className="rounded-lg border border-info/20 bg-info/5 p-3 text-xs text-text-muted">
+        This section is for HR/payroll record-keeping only. The rate the project cost system uses
+        is <strong className="text-text-primary">Default Rate</strong> on the resource&apos;s Identity
+        fields. Salary, allowances, and deductions live here as reference data; they don&apos;t
+        affect project cost calculations.
+      </div>
+      <Grid>
+        <TextField label="Currency" value={f.currency ?? ""} onChange={(v) => setF({ currency: v || null })} />
+        <SelectField
+          label="Payment Mode"
+          value={f.paymentMode ?? ""}
+          onChange={(v) => setF({ paymentMode: (v || null) as typeof f.paymentMode })}
+          options={[
+            { value: "", label: "—" },
+            { value: "BANK", label: "Bank" },
+            { value: "CASH", label: "Cash" },
+            { value: "CHEQUE", label: "Cheque" },
+          ]}
+        />
+        <TextareaField label="Allowances (JSON)" value={f.allowances ?? ""} onChange={(v) => setF({ allowances: v || null })} colSpan={2} />
+        <TextareaField label="Deductions (JSON)" value={f.deductions ?? ""} onChange={(v) => setF({ deductions: v || null })} colSpan={2} />
+        <TextareaField label="Bank Account Details" value={f.bankAccountDetails ?? ""} onChange={(v) => setF({ bankAccountDetails: v || null })} colSpan={2} />
+        <TextareaField label="Tax Details" value={f.taxDetails ?? ""} onChange={(v) => setF({ taxDetails: v || null })} colSpan={2} />
+        <TextField label="PF Number" value={f.pfNumber ?? ""} onChange={(v) => setF({ pfNumber: v || null })} />
+        <TextField label="ESI Number" value={f.esiNumber ?? ""} onChange={(v) => setF({ esiNumber: v || null })} />
+      </Grid>
+    </div>
   );
 }
 

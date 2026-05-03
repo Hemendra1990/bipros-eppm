@@ -555,7 +555,6 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
                     .description("Manpower role for OWD SH-10 — " + r.description())
                     .resourceType(laborType)
                     .productivityUnit(r.unit())
-                    .defaultRate(BigDecimal.valueOf(r.budgetedRate()))
                     .sortOrder(0)
                     .active(true)
                     .build();

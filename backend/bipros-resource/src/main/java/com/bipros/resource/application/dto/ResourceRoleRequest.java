@@ -4,7 +4,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 public record ResourceRoleRequest(
@@ -23,8 +22,6 @@ public record ResourceRoleRequest(
 
     @Size(max = 50, message = "productivityUnit must be at most 50 characters")
     String productivityUnit,
-
-    BigDecimal defaultRate,
 
     Integer sortOrder,
 

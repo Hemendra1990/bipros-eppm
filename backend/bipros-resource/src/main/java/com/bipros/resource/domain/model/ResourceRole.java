@@ -16,11 +16,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
-
 /**
  * What a resource <em>does</em> — Bulldozer Operator, Cement, Senior Welder, etc. Each role
  * belongs to exactly one {@link ResourceType}.
+ *
+ * <p>Pure metadata — no rate field. Rate lives on the individual {@link Resource} (via
+ * {@code costPerUnit}) because actual rates vary by experience, skill, and project even within
+ * a single role. The legacy {@code default_rate} column is left in the schema (nullable, harmless)
+ * but no longer mapped to an entity field.
  */
 @Entity
 @Table(
@@ -54,9 +57,6 @@ public class ResourceRole extends BaseEntity {
 
   @Column(name = "productivity_unit", length = 50)
   private String productivityUnit;
-
-  @Column(name = "default_rate", precision = 19, scale = 4)
-  private BigDecimal defaultRate;
 
   @Column(name = "sort_order", nullable = false)
   @Default

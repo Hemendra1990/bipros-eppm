@@ -110,10 +110,8 @@ public class ManpowerService {
   public ManpowerFinancialsDto upsertFinancials(UUID resourceId, ManpowerFinancialsDto dto) {
     ManpowerFinancials e = financialsRepository.findById(resourceId).orElseGet(ManpowerFinancials::new);
     e.setResourceId(resourceId);
-    e.setSalaryType(dto.salaryType());
-    e.setBaseSalary(dto.baseSalary());
-    e.setHourlyRate(dto.hourlyRate());
-    e.setOvertimeRate(dto.overtimeRate());
+    // salaryType / baseSalary / hourlyRate / overtimeRate columns intentionally not surfaced —
+    // project costing uses Resource.costPerUnit, payroll details live in HR fields below.
     e.setAllowances(dto.allowances());
     e.setDeductions(dto.deductions());
     e.setCurrency(dto.currency());

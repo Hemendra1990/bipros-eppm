@@ -21,7 +21,6 @@ interface RoleForm {
   description: string;
   resourceTypeId: string;
   productivityUnit: string;
-  defaultRate: string;
   sortOrder: string;
   active: boolean;
 }
@@ -32,7 +31,6 @@ const initialRoleForm = (): RoleForm => ({
   description: "",
   resourceTypeId: "",
   productivityUnit: "",
-  defaultRate: "",
   sortOrder: "",
   active: true,
 });
@@ -43,26 +41,14 @@ const formFromRole = (r: ResourceRole): RoleForm => ({
   description: r.description ?? "",
   resourceTypeId: r.resourceTypeId,
   productivityUnit: r.productivityUnit ?? "",
-  defaultRate: r.defaultRate == null ? "" : String(r.defaultRate),
   sortOrder: r.sortOrder == null ? "" : String(r.sortOrder),
   active: r.active,
 });
-
-const toNumberOrNull = (value: string): number | null => {
-  if (value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 
 const toIntOrNull = (value: string): number | null => {
   if (value.trim() === "") return null;
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : null;
-};
-
-const formatCurrency = (value: number | null | undefined): string => {
-  if (value == null) return "—";
-  return value.toLocaleString("en-IN");
 };
 
 function typeBadgeVariant(typeCode: string): import("@/components/ui/badge").BadgeVariant {
@@ -180,7 +166,6 @@ export default function ResourceRolesPage() {
         description: form.description.trim() || null,
         resourceTypeId: form.resourceTypeId,
         productivityUnit: form.productivityUnit.trim() || null,
-        defaultRate: toNumberOrNull(form.defaultRate),
         sortOrder: toIntOrNull(form.sortOrder),
         active: form.active,
       };
@@ -234,8 +219,8 @@ export default function ResourceRolesPage() {
             Resource Roles
           </h1>
           <p className="mt-2 max-w-[560px] text-sm text-slate leading-relaxed">
-            Define manpower, equipment and material roles. Set default rate and productivity unit
-            once per role; resources inherit them.
+            Define manpower, equipment and material roles. Pure metadata — rates live on the
+            individual Resource (Default Rate) because they vary by experience, skill, and project.
           </p>
         </div>
         <button
@@ -356,18 +341,6 @@ export default function ResourceRolesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Default Rate
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.defaultRate}
-                onChange={(e) => setForm({ ...form, defaultRate: e.target.value })}
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
                 Sort Order
               </label>
               <input
@@ -459,7 +432,6 @@ export default function ResourceRolesPage() {
                   "Name",
                   "Type",
                   "Productivity Unit",
-                  "Default Rate",
                   "Sort",
                   "Active",
                   "",
@@ -493,9 +465,6 @@ export default function ResourceRolesPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3.5 text-slate">{role.productivityUnit ?? "—"}</td>
-                  <td className="px-4 py-3.5 text-right font-mono text-charcoal">
-                    {formatCurrency(role.defaultRate)}
-                  </td>
                   <td className="px-4 py-3.5 text-right text-slate">{role.sortOrder ?? "—"}</td>
                   <td className="px-4 py-3.5">
                     {role.active ? (

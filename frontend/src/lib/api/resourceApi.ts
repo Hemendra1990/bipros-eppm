@@ -15,8 +15,6 @@ export type EmploymentType = "PERMANENT" | "CONTRACT" | "DAILY_WAGE";
 
 export type SkillLevel = "BEGINNER" | "INTERMEDIATE" | "EXPERT";
 
-export type SalaryType = "MONTHLY" | "DAILY" | "HOURLY";
-
 export type PaymentMode = "BANK" | "CASH" | "CHEQUE";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "ON_LEAVE" | "HALF_DAY";
@@ -102,11 +100,13 @@ export interface ManpowerSkillsDto {
   trainingRecords?: string | null;
 }
 
+/**
+ * HR/payroll record-keeping for a manpower resource. Intentionally does NOT carry the
+ * project-cost rate — that lives on Resource.costPerUnit ("Default Rate"). Salary type and
+ * salary fields removed: project costing is decoupled from payroll, matching Primavera P6 /
+ * MSP / SAP PPM patterns.
+ */
 export interface ManpowerFinancialsDto {
-  salaryType?: SalaryType | null;
-  baseSalary?: number | null;
-  hourlyRate?: number | null;
-  overtimeRate?: number | null;
   allowances?: string | null;
   deductions?: string | null;
   currency?: string | null;

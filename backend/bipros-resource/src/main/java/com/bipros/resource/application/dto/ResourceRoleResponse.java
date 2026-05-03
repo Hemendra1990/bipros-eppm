@@ -3,7 +3,6 @@ package com.bipros.resource.application.dto;
 import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceType;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,7 +15,6 @@ public record ResourceRoleResponse(
     String resourceTypeCode,
     String resourceTypeName,
     String productivityUnit,
-    BigDecimal defaultRate,
     Integer sortOrder,
     Boolean active,
     Instant createdAt,
@@ -33,7 +31,6 @@ public record ResourceRoleResponse(
         type == null ? null : type.getCode(),
         type == null ? null : type.getName(),
         r.getProductivityUnit(),
-        r.getDefaultRate(),
         r.getSortOrder(),
         r.getActive(),
         r.getCreatedAt(),

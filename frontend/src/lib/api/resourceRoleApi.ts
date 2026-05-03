@@ -2,8 +2,10 @@ import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
 /**
- * Resource Role — labour / equipment / material role within a Resource Type. Drives
- * default rate, productivity unit, and is the FK target on Resource.roleId.
+ * Resource Role — pure metadata for a labour / equipment / material role within a Resource Type.
+ * Drives productivity unit and is the FK target on Resource.roleId. Rate is NOT carried here —
+ * it lives on the individual Resource (`costPerUnit`) because actual rates vary by experience,
+ * skill, and project even within a single role.
  */
 export interface ResourceRole {
   id: string;
@@ -14,7 +16,6 @@ export interface ResourceRole {
   resourceTypeCode: string;
   resourceTypeName: string;
   productivityUnit?: string | null;
-  defaultRate?: number | null;
   sortOrder: number;
   active: boolean;
   createdAt: string;
@@ -27,7 +28,6 @@ export interface ResourceRoleRequest {
   description?: string | null;
   resourceTypeId: string;
   productivityUnit?: string | null;
-  defaultRate?: number | null;
   sortOrder?: number | null;
   active?: boolean;
 }

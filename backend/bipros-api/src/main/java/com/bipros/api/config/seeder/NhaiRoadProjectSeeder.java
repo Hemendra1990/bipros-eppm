@@ -584,7 +584,6 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
           .description("Manpower role seeded from Daily Cost Report Section A")
           .resourceType(laborType)
           .productivityUnit(r.unit())
-          .defaultRate(r.budgetedRate())
           .sortOrder(0)
           .active(true)
           .build();

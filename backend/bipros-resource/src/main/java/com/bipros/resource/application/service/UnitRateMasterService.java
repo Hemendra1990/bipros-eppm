@@ -29,8 +29,9 @@ import java.util.Map;
  * <p>Category routing now hangs off {@link ResourceType#getCode()} (LABOR / EQUIPMENT /
  * MATERIAL plus admin-defined custom codes), not the deleted {@code CostCategory} enum. All
  * rate data — for every category, including Manpower — is read from {@code ResourceRate} rows
- * because the new {@code ResourceRole} carries only a single {@code defaultRate}, not the
- * budgeted/actual pair the Unit Rate Master needs.
+ * because {@code ResourceRole} carries no rate field (rates live on {@link Resource#getCostPerUnit()}
+ * for the standard rate, or on {@code ResourceRate} for the budgeted/actual pair the Unit Rate
+ * Master needs).
  */
 @Service
 @Transactional(readOnly = true)

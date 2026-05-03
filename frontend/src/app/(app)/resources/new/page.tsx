@@ -17,7 +17,6 @@ import {
   type ManpowerCategory,
   type EmploymentType,
   type SkillLevel,
-  type SalaryType,
   type PaymentMode,
   type AttendanceStatus,
   type ShiftType,
@@ -188,7 +187,8 @@ export default function NewResourcePage() {
     });
   }, [selectedType, kind]);
 
-  // Auto-fill name and costPerUnit from selected role's defaults (only if blank).
+  // Auto-fill name and unit from selected role (only if blank). Default Rate is NOT auto-filled —
+  // role no longer carries a rate; the user enters costPerUnit explicitly per resource.
   useEffect(() => {
     if (!roleId) return;
     const role = roles.find((r) => r.id === roleId);
@@ -196,9 +196,6 @@ export default function NewResourcePage() {
     setCommon((prev) => {
       const next = { ...prev };
       if (prev.name.trim() === "") next.name = role.name;
-      if (prev.costPerUnit.trim() === "" && role.defaultRate != null) {
-        next.costPerUnit = String(role.defaultRate);
-      }
       if (prev.unit.trim() === "" && role.productivityUnit) {
         next.unit = role.productivityUnit;
       }
@@ -366,7 +363,7 @@ export default function NewResourcePage() {
 
           {typeId && (
             <>
-              <h2 className="mb-3 text-lg font-semibold text-text-primary">Role</h2>
+              <h2 className="mb-3 text-lg font-semibold text-text-primary">Role *</h2>
               <div className="mb-6">
                 <SearchableSelect
                   options={roles.map((r) => ({
@@ -385,11 +382,12 @@ export default function NewResourcePage() {
                   disabled={rolesLoading || roles.length === 0}
                 />
                 <p className="mt-1 text-xs text-text-muted">
-                  Define roles in{" "}
+                  Required. Define roles in{" "}
                   <a href="/admin/resource-roles" className="text-accent hover:underline">
                     Resource Roles
                   </a>
-                  . The chosen role auto-fills name, unit and rate when blank.
+                  . The chosen role auto-fills Name and Unit when blank. Default Rate must be
+                  entered per resource.
                 </p>
               </div>
 
@@ -439,7 +437,7 @@ export default function NewResourcePage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Cost Per Unit</label>
+                  <label className={labelCls}>Default Rate</label>
                   <input
                     type="number"
                     step="0.01"
@@ -447,6 +445,12 @@ export default function NewResourcePage() {
                     onChange={(e) => setCommon({ ...common, costPerUnit: e.target.value })}
                     className={inputCls}
                   />
+                  <p className="mt-1 text-xs text-text-muted">
+                    Rate used for project cost calculations. Enter the cost for ONE unit of this
+                    resource (e.g. ₹2,400 per Day for a mason, ₹4,500 per Hour for a JCB,
+                    ₹65,000 per MT for steel). For Manpower paid monthly, this is the project
+                    charge-out rate per Day — not the salary.
+                  </p>
                 </div>
                 <div>
                   <label className={labelCls}>Unit</label>
@@ -1239,116 +1243,83 @@ function ManpowerFinancialsFields({
   const set = (patch: Partial<typeof f>) =>
     onChange({ ...value, financials: { ...f, ...patch } });
   return (
-    <Section title="Financial">
-      <Field label="Salary Type">
-        <select
-          className={inputCls}
-          value={f.salaryType ?? ""}
-          onChange={(e) =>
-            set({ salaryType: (e.target.value || null) as SalaryType | null })
-          }
-        >
-          <option value="">—</option>
-          <option value="MONTHLY">Monthly</option>
-          <option value="DAILY">Daily</option>
-          <option value="HOURLY">Hourly</option>
-        </select>
-      </Field>
-      <Field label="Currency">
-        <input
-          className={inputCls}
-          value={f.currency ?? ""}
-          onChange={(e) => set({ currency: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Base Salary">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={f.baseSalary ?? ""}
-          onChange={(e) => set({ baseSalary: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Hourly Rate">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={f.hourlyRate ?? ""}
-          onChange={(e) => set({ hourlyRate: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Overtime Rate">
-        <input
-          type="number"
-          step="0.01"
-          className={inputCls}
-          value={f.overtimeRate ?? ""}
-          onChange={(e) => set({ overtimeRate: toNumberOrUndef(e.target.value) ?? null })}
-        />
-      </Field>
-      <Field label="Payment Mode">
-        <select
-          className={inputCls}
-          value={f.paymentMode ?? ""}
-          onChange={(e) =>
-            set({ paymentMode: (e.target.value || null) as PaymentMode | null })
-          }
-        >
-          <option value="">—</option>
-          <option value="BANK">Bank</option>
-          <option value="CASH">Cash</option>
-          <option value="CHEQUE">Cheque</option>
-        </select>
-      </Field>
-      <Field label="Allowances (JSON)" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={f.allowances ?? ""}
-          onChange={(e) => set({ allowances: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Deductions (JSON)" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={f.deductions ?? ""}
-          onChange={(e) => set({ deductions: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Bank Account Details" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={f.bankAccountDetails ?? ""}
-          onChange={(e) => set({ bankAccountDetails: e.target.value || null })}
-        />
-      </Field>
-      <Field label="Tax Details" colSpan={2}>
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={f.taxDetails ?? ""}
-          onChange={(e) => set({ taxDetails: e.target.value || null })}
-        />
-      </Field>
-      <Field label="PF Number">
-        <input
-          className={inputCls}
-          value={f.pfNumber ?? ""}
-          onChange={(e) => set({ pfNumber: e.target.value || null })}
-        />
-      </Field>
-      <Field label="ESI Number">
-        <input
-          className={inputCls}
-          value={f.esiNumber ?? ""}
-          onChange={(e) => set({ esiNumber: e.target.value || null })}
-        />
-      </Field>
-    </Section>
+    <div className="space-y-4">
+      <div className="rounded-lg border border-info/20 bg-info/5 p-3 text-xs text-text-muted">
+        This section is for HR/payroll record-keeping only. The rate the project cost system uses
+        is <strong className="text-text-primary">Default Rate</strong> on the Identity step. Salary,
+        allowances, and deductions live here as reference data; they don&apos;t affect project cost
+        calculations.
+      </div>
+      <Section title="Financial">
+        <Field label="Currency">
+          <input
+            className={inputCls}
+            value={f.currency ?? ""}
+            onChange={(e) => set({ currency: e.target.value || null })}
+          />
+        </Field>
+        <Field label="Payment Mode">
+          <select
+            className={inputCls}
+            value={f.paymentMode ?? ""}
+            onChange={(e) =>
+              set({ paymentMode: (e.target.value || null) as PaymentMode | null })
+            }
+          >
+            <option value="">—</option>
+            <option value="BANK">Bank</option>
+            <option value="CASH">Cash</option>
+            <option value="CHEQUE">Cheque</option>
+          </select>
+        </Field>
+        <Field label="Allowances (JSON)" colSpan={2}>
+          <textarea
+            className={inputCls}
+            rows={2}
+            value={f.allowances ?? ""}
+            onChange={(e) => set({ allowances: e.target.value || null })}
+          />
+        </Field>
+        <Field label="Deductions (JSON)" colSpan={2}>
+          <textarea
+            className={inputCls}
+            rows={2}
+            value={f.deductions ?? ""}
+            onChange={(e) => set({ deductions: e.target.value || null })}
+          />
+        </Field>
+        <Field label="Bank Account Details" colSpan={2}>
+          <textarea
+            className={inputCls}
+            rows={2}
+            value={f.bankAccountDetails ?? ""}
+            onChange={(e) => set({ bankAccountDetails: e.target.value || null })}
+          />
+        </Field>
+        <Field label="Tax Details" colSpan={2}>
+          <textarea
+            className={inputCls}
+            rows={2}
+            value={f.taxDetails ?? ""}
+            onChange={(e) => set({ taxDetails: e.target.value || null })}
+          />
+        </Field>
+        <Field label="PF Number">
+          <input
+            className={inputCls}
+            value={f.pfNumber ?? ""}
+            onChange={(e) => set({ pfNumber: e.target.value || null })}
+          />
+        </Field>
+        <Field label="ESI Number">
+          <input
+            className={inputCls}
+            value={f.esiNumber ?? ""}
+            onChange={(e) => set({ esiNumber: e.target.value || null })}
+          />
+        </Field>
+      </Section>
+    </div>
   );
 }
 

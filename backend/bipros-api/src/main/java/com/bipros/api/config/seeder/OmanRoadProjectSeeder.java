@@ -1095,14 +1095,12 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       if (!seenCodes.add(code)) continue; // dedupe
       String trimmedCode = code.length() > 50 ? code.substring(0, 50) : code;
       if (resourceRoleRepository.findByCode(trimmedCode).isPresent()) continue;
-      BigDecimal rate = manpowerDailyRateOmr(pos);
       ResourceRole role = ResourceRole.builder()
           .code(trimmedCode)
           .name(truncate(pos, 100))
           .description("Indirect staff role — workbook 1 (Resource sheet, left half)")
           .resourceType(laborType)
           .productivityUnit("Day")
-          .defaultRate(rate)
           .sortOrder(sortOrder++)
           .active(true)
           .build();
@@ -1116,14 +1114,12 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       if (!seenCodes.add(code)) continue;
       String trimmedCode = code.length() > 50 ? code.substring(0, 50) : code;
       if (resourceRoleRepository.findByCode(trimmedCode).isPresent()) continue;
-      BigDecimal rate = manpowerDailyRateOmr(pos);
       ResourceRole role = ResourceRole.builder()
           .code(trimmedCode)
           .name(truncate(pos, 100))
           .description("Direct labour role — workbook 1 (Resource sheet, right half)")
           .resourceType(laborType)
           .productivityUnit("Day")
-          .defaultRate(rate)
           .sortOrder(sortOrder++)
           .active(true)
           .build();
