@@ -8,5 +8,7 @@ public record InsightsResponse(
     List<InsightVariance> variances,
     List<InsightRecommendation> recommendations,
     List<InsightFinding> findings,
-    String rationale
+    String rationale,
+    String mdx,
+    List<ChartSpec> charts
 ) {}

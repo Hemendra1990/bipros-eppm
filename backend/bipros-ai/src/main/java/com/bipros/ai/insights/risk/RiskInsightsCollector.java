@@ -1,6 +1,8 @@
 package com.bipros.ai.insights.risk;
 
 import com.bipros.ai.insights.InsightDataCollector;
+import com.bipros.ai.insights.charts.EChartsOptions;
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.risk.application.dto.RiskSummary;
 import com.bipros.risk.application.service.RiskService;
 import com.bipros.risk.domain.model.RiskStatus;
@@ -12,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -77,6 +81,44 @@ public class RiskInsightsCollector implements InsightDataCollector {
         ragBreakdown.forEach(ragNode::put);
 
         return root;
+    }
+
+    @Override
+    public List<ChartSpec> charts(UUID projectId) {
+        if (projectId == null) {
+            return List.of(
+                    new ChartSpec("risk-matrix", "Probability x Impact", "scatter", null, null),
+                    new ChartSpec("risk-rag", "RAG Distribution", "donut", null, null),
+                    new ChartSpec("risk-status", "Risks by Status", "donut", null, null)
+            );
+        }
+
+        List<RiskSummary> allRisks = riskService.listRisks(projectId, null);
+        List<ChartSpec> charts = new ArrayList<>();
+
+        List<double[]> matrixPoints = allRisks.stream()
+                .filter(r -> r.getProbability() != null && r.getImpact() != null)
+                .map(r -> new double[]{r.getProbability().getValue(), r.getImpact().getValue()})
+                .toList();
+        charts.add(new ChartSpec("risk-matrix", "Probability x Impact", "scatter",
+                EChartsOptions.scatter(objectMapper, matrixPoints, "Risk"),
+                "Each dot is a risk (1=Very Low, 5=Very High)"));
+
+        Map<String, Long> ragBreakdown = allRisks.stream()
+                .filter(r -> r.getRag() != null)
+                .collect(Collectors.groupingBy(r -> r.getRag().name(), Collectors.counting()));
+        charts.add(new ChartSpec("risk-rag", "RAG Distribution", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(ragBreakdown)),
+                "Red / Amber / Green status counts"));
+
+        Map<String, Long> statusBreakdown = allRisks.stream()
+                .filter(r -> r.getStatus() != null)
+                .collect(Collectors.groupingBy(r -> r.getStatus().name(), Collectors.counting()));
+        charts.add(new ChartSpec("risk-status", "Risks by Status", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(statusBreakdown)),
+                "Open vs closed risk lifecycle"));
+
+        return charts;
     }
 
     @Override

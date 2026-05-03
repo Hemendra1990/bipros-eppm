@@ -1,6 +1,8 @@
 package com.bipros.ai.insights.gis;
 
 import com.bipros.ai.insights.InsightDataCollector;
+import com.bipros.ai.insights.charts.EChartsOptions;
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.gis.application.dto.ProgressVarianceResponse;
 import com.bipros.gis.application.dto.SatelliteImageResponse;
 import com.bipros.gis.application.dto.WbsPolygonResponse;
@@ -15,7 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,6 +104,49 @@ public class GisInsightsCollector implements InsightDataCollector {
         root.put("polygonsMissingArea", polygonsMissingArea);
 
         return root;
+    }
+
+    @Override
+    public List<ChartSpec> charts(UUID projectId) {
+        if (projectId == null) {
+            return List.of(
+                    new ChartSpec("gis-variance-status", "Variance Status", "donut", null, null),
+                    new ChartSpec("gis-top-variance", "Top Progress Variances", "bar", null, null),
+                    new ChartSpec("gis-image-source", "Imagery by Source", "donut", null, null)
+            );
+        }
+
+        List<SatelliteImageResponse> images = satelliteImageService.getByProject(projectId);
+        List<ProgressVarianceResponse> variances = constructionProgressService.getProgressVariance(projectId);
+        List<ChartSpec> charts = new ArrayList<>();
+
+        Map<String, Long> varianceStatusBreakdown = variances.stream()
+                .filter(v -> v.varianceStatus() != null)
+                .collect(Collectors.groupingBy(ProgressVarianceResponse::varianceStatus, Collectors.counting()));
+        charts.add(new ChartSpec("gis-variance-status", "Variance Status", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(varianceStatusBreakdown)),
+                "WBS zones grouped by progress-variance status"));
+
+        List<ProgressVarianceResponse> topVariances = variances.stream()
+                .filter(v -> v.variancePercent() != null)
+                .sorted(Comparator.comparingDouble((ProgressVarianceResponse v) -> Math.abs(v.variancePercent())).reversed())
+                .limit(8)
+                .toList();
+        charts.add(new ChartSpec("gis-top-variance", "Top Progress Variances", "bar",
+                EChartsOptions.bar(objectMapper,
+                        topVariances.stream().map(v -> v.wbsCode() != null ? v.wbsCode() : "").toList(),
+                        "Variance %",
+                        topVariances.stream().map(ProgressVarianceResponse::variancePercent).toList()),
+                "Claimed vs imagery-derived variance, top 8 zones"));
+
+        Map<String, Long> sourceBreakdown = images.stream()
+                .filter(i -> i.source() != null)
+                .collect(Collectors.groupingBy(i -> i.source().name(), Collectors.counting()));
+        charts.add(new ChartSpec("gis-image-source", "Imagery by Source", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(sourceBreakdown)),
+                "Distribution of satellite-image sources"));
+
+        return charts;
     }
 
     @Override

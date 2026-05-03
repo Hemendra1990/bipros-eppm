@@ -1,5 +1,6 @@
 package com.bipros.ai.insights;
 
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.ai.insights.dto.InsightsResponse;
 import com.bipros.ai.provider.LlmProvider;
 import com.bipros.ai.provider.LlmProviderConfig;
@@ -24,7 +25,8 @@ public class InsightsGenerator {
     private final InsightsSchemaBuilder insightsSchemaBuilder;
     private final ObjectMapper objectMapper;
 
-    public InsightsResponse generate(String tabKey, JsonNode dataSnapshot, String promptInstructions) {
+    public InsightsResponse generate(String tabKey, JsonNode dataSnapshot, String promptInstructions,
+                                     List<ChartSpec> charts) {
         log.info("Generating insights for tab: {}", tabKey);
 
         LlmProviderConfig config = llmProviderConfigRepository.findByIsDefaultTrueAndIsActiveTrue()
@@ -76,7 +78,22 @@ public class InsightsGenerator {
                     "AI returned an empty insights payload — the configured model may not support strict JSON schema responses, or the input data was too sparse.");
         }
 
-        return parsed;
+        return withCharts(parsed, charts);
+    }
+
+    /**
+     * Merge server-built charts into an InsightsResponse. Charts are deterministic and
+     * always sourced from the collector — never from the LLM. Used both right after the
+     * LLM call and on cache hits, so cached responses always render with fresh charts.
+     */
+    public static InsightsResponse withCharts(InsightsResponse response, List<ChartSpec> charts) {
+        if (response == null) return null;
+        List<ChartSpec> merged = (charts != null && !charts.isEmpty()) ? charts : response.charts();
+        return new InsightsResponse(
+                response.summary(), response.highlights(), response.variances(),
+                response.recommendations(), response.findings(), response.rationale(),
+                response.mdx(), merged
+        );
     }
 
     private static boolean isEmpty(InsightsResponse r) {

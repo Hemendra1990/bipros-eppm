@@ -1,6 +1,8 @@
 package com.bipros.ai.insights.project;
 
 import com.bipros.ai.insights.InsightDataCollector;
+import com.bipros.ai.insights.charts.EChartsOptions;
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.project.application.dto.DailyActivityResourceOutputResponse;
 import com.bipros.project.application.service.DailyActivityResourceOutputService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -11,9 +13,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -80,6 +86,55 @@ public class DailyOutputsInsightsCollector implements InsightDataCollector {
         root.put("overallTotalQtyExecuted", overallQty.doubleValue());
 
         return root;
+    }
+
+    @Override
+    public List<ChartSpec> charts(UUID projectId) {
+        if (projectId == null) {
+            return List.of(
+                    new ChartSpec("do-qty-trend", "Daily Quantity Trend", "line", null, null),
+                    new ChartSpec("do-top-pairs", "Top Activity-Resource Output", "bar", null, null)
+            );
+        }
+
+        List<DailyActivityResourceOutputResponse> rows = outputService.list(projectId, null, null, null, null);
+        List<ChartSpec> charts = new ArrayList<>();
+
+        Map<LocalDate, BigDecimal> qtyByDate = rows.stream()
+                .filter(r -> r.outputDate() != null && r.qtyExecuted() != null)
+                .collect(Collectors.groupingBy(
+                        DailyActivityResourceOutputResponse::outputDate,
+                        TreeMap::new,
+                        Collectors.reducing(BigDecimal.ZERO,
+                                DailyActivityResourceOutputResponse::qtyExecuted,
+                                BigDecimal::add)));
+        List<LocalDate> dates = qtyByDate.keySet().stream().toList();
+        if (dates.size() > 30) dates = dates.subList(dates.size() - 30, dates.size());
+        List<String> dateLabels = dates.stream().map(LocalDate::toString).toList();
+        List<BigDecimal> qtyValues = dates.stream().map(qtyByDate::get).toList();
+        charts.add(new ChartSpec("do-qty-trend", "Daily Quantity Trend", "line",
+                EChartsOptions.line(objectMapper, dateLabels, "Qty Executed", qtyValues),
+                "Daily total quantity executed (last 30 days)"));
+
+        Map<String, BigDecimal> qtyByPair = rows.stream()
+                .filter(r -> r.qtyExecuted() != null && r.activityId() != null && r.resourceId() != null)
+                .collect(Collectors.groupingBy(
+                        r -> r.activityId() + "|" + r.resourceId(),
+                        Collectors.reducing(BigDecimal.ZERO,
+                                DailyActivityResourceOutputResponse::qtyExecuted,
+                                BigDecimal::add)));
+        List<Map.Entry<String, BigDecimal>> topPairs = qtyByPair.entrySet().stream()
+                .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                .limit(8)
+                .toList();
+        charts.add(new ChartSpec("do-top-pairs", "Top Activity-Resource Output", "bar",
+                EChartsOptions.bar(objectMapper,
+                        topPairs.stream().map(e -> e.getKey().substring(0, Math.min(8, e.getKey().length()))).toList(),
+                        "Total Quantity",
+                        topPairs.stream().map(Map.Entry::getValue).toList()),
+                "Top 8 activity-resource pairs by output"));
+
+        return charts;
     }
 
     @Override

@@ -1,6 +1,8 @@
 package com.bipros.reporting.insights;
 
 import com.bipros.ai.insights.InsightDataCollector;
+import com.bipros.ai.insights.charts.EChartsOptions;
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.reporting.application.dto.CapacityUtilizationReport;
 import com.bipros.reporting.application.service.CapacityUtilizationReportService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -11,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -58,6 +61,45 @@ public class CapacityUtilizationInsightsCollector implements InsightDataCollecto
         root.put("underUtilizedRowCount", underUtilizedCount);
 
         return root;
+    }
+
+    @Override
+    public List<ChartSpec> charts(UUID projectId) {
+        if (projectId == null) {
+            return List.of(
+                    new ChartSpec("cu-util-bar", "Cumulative Utilization %", "bar", null, null),
+                    new ChartSpec("cu-overall-gauge", "Average Utilization", "gauge", null, null)
+            );
+        }
+
+        CapacityUtilizationReport report = reportService.build(projectId, null, null, "RESOURCE_TYPE", null);
+        List<CapacityUtilizationReport.Row> rows = report.rows();
+        List<ChartSpec> charts = new ArrayList<>();
+
+        List<CapacityUtilizationReport.Row> top = rows.stream()
+                .filter(r -> r.cumulative().utilizationPct() != null)
+                .sorted(Comparator.comparing((CapacityUtilizationReport.Row r) ->
+                        r.cumulative().utilizationPct() != null ? r.cumulative().utilizationPct() : BigDecimal.ZERO).reversed())
+                .limit(10)
+                .toList();
+        charts.add(new ChartSpec("cu-util-bar", "Cumulative Utilization %", "bar",
+                EChartsOptions.bar(objectMapper,
+                        top.stream().map(r -> r.workActivity().code() != null ? r.workActivity().code() : "").toList(),
+                        "Utilization %",
+                        top.stream().map(r -> r.cumulative().utilizationPct()).toList()),
+                "Top 10 work activities by cumulative utilization"));
+
+        double avgUtil = rows.stream()
+                .map(r -> r.cumulative().utilizationPct())
+                .filter(p -> p != null)
+                .mapToDouble(BigDecimal::doubleValue)
+                .average()
+                .orElse(0.0);
+        charts.add(new ChartSpec("cu-overall-gauge", "Average Utilization", "gauge",
+                EChartsOptions.gauge(objectMapper, "Avg %", Math.round(avgUtil * 10) / 10.0, 0, 150),
+                "Mean cumulative utilization across all rows"));
+
+        return charts;
     }
 
     @Override

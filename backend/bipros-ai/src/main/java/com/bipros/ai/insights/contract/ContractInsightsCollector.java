@@ -1,6 +1,8 @@
 package com.bipros.ai.insights.contract;
 
 import com.bipros.ai.insights.InsightDataCollector;
+import com.bipros.ai.insights.charts.EChartsOptions;
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.contract.application.dto.ContractResponse;
 import com.bipros.contract.application.service.ContractService;
@@ -15,6 +17,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -92,6 +96,60 @@ public class ContractInsightsCollector implements InsightDataCollector {
         }
 
         return root;
+    }
+
+    @Override
+    public List<ChartSpec> charts(UUID projectId) {
+        if (projectId == null) {
+            return List.of(
+                    new ChartSpec("ctr-status", "Contract Status", "donut", null, null),
+                    new ChartSpec("ctr-value", "Contract Value vs Revised", "bar", null, null),
+                    new ChartSpec("ctr-loa", "Top Value Variance", "bar", null, null)
+            );
+        }
+
+        Pageable pageable = PageRequest.of(0, 1000);
+        List<ContractResponse> contracts = contractService.listByProject(projectId, pageable).content();
+        List<ChartSpec> charts = new ArrayList<>();
+
+        Map<String, Long> statusBreakdown = contracts.stream()
+                .filter(c -> c.status() != null)
+                .collect(Collectors.groupingBy(c -> c.status().name(), Collectors.counting()));
+        charts.add(new ChartSpec("ctr-status", "Contract Status", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(statusBreakdown)),
+                "Distribution of contract statuses"));
+
+        BigDecimal totalValue = contracts.stream()
+                .map(ContractResponse::contractValue)
+                .filter(v -> v != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalRevised = contracts.stream()
+                .map(ContractResponse::revisedValue)
+                .filter(v -> v != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        charts.add(new ChartSpec("ctr-value", "Contract Value vs Revised", "bar",
+                EChartsOptions.bar(objectMapper, List.of("Original", "Revised"), "Total Value",
+                        List.of(totalValue, totalRevised)),
+                "Aggregate contract value vs revised value"));
+
+        List<ContractResponse> variance = contracts.stream()
+                .filter(c -> c.revisedValue() != null && c.contractValue() != null)
+                .filter(c -> c.revisedValue().compareTo(c.contractValue()) != 0)
+                .sorted((a, b) -> b.revisedValue().subtract(b.contractValue())
+                        .abs().compareTo(a.revisedValue().subtract(a.contractValue()).abs()))
+                .limit(5)
+                .toList();
+        List<String> varianceCats = variance.stream()
+                .map(c -> c.contractNumber() != null ? c.contractNumber() : "")
+                .toList();
+        List<BigDecimal> varianceValues = variance.stream()
+                .map(c -> c.revisedValue().subtract(c.contractValue()))
+                .toList();
+        charts.add(new ChartSpec("ctr-loa", "Top Value Variance", "bar",
+                EChartsOptions.bar(objectMapper, varianceCats, "Variance (Revised - Original)", varianceValues),
+                "Top 5 contracts by absolute revised-vs-original variance"));
+
+        return charts;
     }
 
     @Override

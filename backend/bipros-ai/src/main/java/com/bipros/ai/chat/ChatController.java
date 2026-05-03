@@ -67,7 +67,17 @@ public class ChatController {
 
         conversationService.appendUserMessage(conv.getId(), request.message());
 
+        StringBuilder accumulated = new StringBuilder();
         return orchestrator.handle(request.message(), request.imageUrl(), history, ctx, llmProvider, resolveConfig())
+                .doOnNext(event -> {
+                    if ("done".equals(event.event()) && event.data().get("text") != null) {
+                        accumulated.setLength(0);
+                        accumulated.append(event.data().get("text").toString());
+                    } else if ("token".equals(event.event()) && accumulated.length() == 0
+                            && event.data().get("delta") != null) {
+                        accumulated.append(event.data().get("delta").toString());
+                    }
+                })
                 .map(event -> {
                     String json;
                     try {
@@ -80,7 +90,8 @@ public class ChatController {
                             .data(json)
                             .build();
                 })
-                .doOnComplete(() -> conversationService.appendAssistantMessage(conv.getId(), "(streamed)"));
+                .doOnComplete(() -> conversationService.appendAssistantMessage(
+                        conv.getId(), accumulated.length() > 0 ? accumulated.toString() : "(empty)"));
     }
 
     @GetMapping("/conversations")

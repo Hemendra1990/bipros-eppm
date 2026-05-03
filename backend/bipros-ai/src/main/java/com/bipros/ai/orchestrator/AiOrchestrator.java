@@ -100,9 +100,16 @@ public class AiOrchestrator {
                         if (tool == null) {
                             return new ToolCallResult(tc.name(), false, "Unknown tool: " + tc.name(), null, 0);
                         }
-                        ToolResult result = tool.execute(tc.arguments(), ctx);
-                        return new ToolCallResult(tc.name(), result.success(), result.summary(), result.data(),
-                                (int) (System.currentTimeMillis() - start));
+                        try {
+                            ToolResult result = tool.execute(tc.arguments(), ctx);
+                            return new ToolCallResult(tc.name(), result.success(),
+                                    result.summary() != null ? result.summary() : result.error(),
+                                    result.data(), (int) (System.currentTimeMillis() - start));
+                        } catch (Exception e) {
+                            log.error("Tool {} threw", tc.name(), e);
+                            return new ToolCallResult(tc.name(), false, "Tool failed: " + e.getMessage(), null,
+                                    (int) (System.currentTimeMillis() - start));
+                        }
                     }))
                     .toList();
 
@@ -110,25 +117,31 @@ public class AiOrchestrator {
 
             List<ToolCallResult> results = futures.stream().map(CompletableFuture::join).toList();
 
-            // Emit tool_result events
+            // Emit tool_result events (include data so the UI can offer a "View data" expander)
             for (ToolCallResult r : results) {
-                sink.tryEmitNext(new ChatEvent("tool_result",
-                        Map.of("name", r.name(), "summary", r.summary() != null ? r.summary() : "No summary",
-                                "success", r.success())));
-            }
-
-            // Synthesize with tool results
-            StringBuilder synthesisInput = new StringBuilder(userMessage);
-            synthesisInput.append("\n\nTool results:\n");
-            for (ToolCallResult r : results) {
-                synthesisInput.append("- ").append(r.name()).append(": ")
-                        .append(r.summary() != null ? r.summary() : "No summary").append("\n");
+                Map<String, Object> eventData = new java.util.HashMap<>();
+                eventData.put("name", r.name());
+                eventData.put("summary", r.summary() != null ? r.summary() : "No summary");
+                eventData.put("success", r.success());
+                if (r.data() != null) {
+                    eventData.put("data", r.data());
+                }
+                sink.tryEmitNext(new ChatEvent("tool_result", eventData));
             }
 
             messages.add(new LlmProvider.Message("assistant", resp.content()));
             for (ToolCallResult r : results) {
-                messages.add(new LlmProvider.Message("tool",
-                        r.name() + ": " + (r.summary() != null ? r.summary() : "No summary")));
+                StringBuilder payload = new StringBuilder();
+                payload.append(r.summary() != null ? r.summary() : "No summary");
+                if (r.data() != null) {
+                    String json = r.data().toString();
+                    if (json.length() > 16_000) json = json.substring(0, 16_000) + "…(truncated)";
+                    payload.append("\n\n```json\n").append(json).append("\n```");
+                }
+                if (!r.success()) {
+                    payload.append("\n[tool call did not succeed]");
+                }
+                messages.add(new LlmProvider.Message("tool", r.name() + ":\n" + payload));
             }
             messages.add(new LlmProvider.Message("user", "Please synthesize the above tool results into a concise answer."));
 

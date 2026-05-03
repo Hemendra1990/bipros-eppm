@@ -1501,6 +1501,30 @@ export interface InsightFinding {
   severity: "info" | "warning" | "critical";
 }
 
+export type ChartType =
+  | "kpi"
+  | "line"
+  | "bar"
+  | "stacked-bar"
+  | "pie"
+  | "donut"
+  | "gauge"
+  | "dual-gauge"
+  | "heatmap"
+  | "scatter"
+  | "treemap"
+  | "waterfall"
+  | "area";
+
+export interface ChartSpec {
+  id: string;
+  title: string;
+  type: ChartType | string;
+  /** Raw Apache ECharts option object — passed directly to ReactECharts. */
+  option: Record<string, unknown> | null;
+  note?: string | null;
+}
+
 export interface InsightsResponse {
   summary: string;
   highlights?: InsightHighlight[] | null;
@@ -1508,4 +1532,8 @@ export interface InsightsResponse {
   recommendations?: InsightRecommendation[] | null;
   findings?: InsightFinding[] | null;
   rationale: string;
+  /** Short MDX narrative (LLM-authored) referencing chart IDs via <Chart id="..."/> tags. */
+  mdx?: string | null;
+  /** Chart specs built deterministically server-side. Always present in fresh responses. */
+  charts?: ChartSpec[] | null;
 }

@@ -1,6 +1,8 @@
 package com.bipros.ai.insights.project;
 
 import com.bipros.ai.insights.InsightDataCollector;
+import com.bipros.ai.insights.charts.EChartsOptions;
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.project.application.dto.DailyProgressReportResponse;
 import com.bipros.project.application.service.DailyProgressReportService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -12,7 +14,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -103,6 +107,59 @@ public class DprInsightsCollector implements InsightDataCollector {
         root.set("weatherBreakdown", weatherBreakdown);
 
         return root;
+    }
+
+    @Override
+    public List<ChartSpec> charts(UUID projectId) {
+        if (projectId == null) {
+            return List.of(
+                    new ChartSpec("dpr-top-activities", "Top Activities by Quantity", "bar", null, null),
+                    new ChartSpec("dpr-weather", "Weather Conditions", "donut", null, null),
+                    new ChartSpec("dpr-coverage", "Reporting Coverage (last 14 days)", "gauge", null, null)
+            );
+        }
+
+        List<DailyProgressReportResponse> rows = dprService.list(projectId, null, null, null);
+        List<ChartSpec> charts = new ArrayList<>();
+
+        Map<String, BigDecimal> qtyByActivity = rows.stream()
+                .filter(r -> r.activityName() != null && r.qtyExecuted() != null)
+                .collect(Collectors.groupingBy(
+                        DailyProgressReportResponse::activityName,
+                        Collectors.reducing(BigDecimal.ZERO,
+                                DailyProgressReportResponse::qtyExecuted,
+                                BigDecimal::add)));
+        List<Map.Entry<String, BigDecimal>> topActivities = qtyByActivity.entrySet().stream()
+                .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                .limit(8)
+                .toList();
+        charts.add(new ChartSpec("dpr-top-activities", "Top Activities by Quantity", "bar",
+                EChartsOptions.bar(objectMapper,
+                        topActivities.stream().map(Map.Entry::getKey).toList(),
+                        "Total Qty Executed",
+                        topActivities.stream().map(Map.Entry::getValue).toList()),
+                "Top 8 activities by cumulative quantity executed"));
+
+        Map<String, Long> weatherBreakdown = rows.stream()
+                .filter(r -> r.weatherCondition() != null && !r.weatherCondition().isBlank())
+                .collect(Collectors.groupingBy(DailyProgressReportResponse::weatherCondition, Collectors.counting()));
+        charts.add(new ChartSpec("dpr-weather", "Weather Conditions", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(weatherBreakdown)),
+                "Days reported by weather"));
+
+        LocalDate today = LocalDate.now();
+        LocalDate fourteenDaysAgo = today.minusDays(13);
+        long reportedDaysInLast14 = rows.stream()
+                .map(DailyProgressReportResponse::reportDate)
+                .filter(d -> d != null && !d.isBefore(fourteenDaysAgo) && !d.isAfter(today))
+                .distinct()
+                .count();
+        double coverageRatio = reportedDaysInLast14 / 14.0;
+        charts.add(new ChartSpec("dpr-coverage", "Reporting Coverage (last 14 days)", "gauge",
+                EChartsOptions.gauge(objectMapper, "Coverage", Math.round(coverageRatio * 100), 0, 100),
+                "Days with at least one DPR record, last 14 days"));
+
+        return charts;
     }
 
     @Override

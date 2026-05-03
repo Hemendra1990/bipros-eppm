@@ -1,6 +1,8 @@
 package com.bipros.ai.insights.document;
 
 import com.bipros.ai.insights.InsightDataCollector;
+import com.bipros.ai.insights.charts.EChartsOptions;
+import com.bipros.ai.insights.dto.ChartSpec;
 import com.bipros.document.application.dto.DocumentResponse;
 import com.bipros.document.application.service.DocumentService;
 import com.bipros.document.domain.model.DocumentStatus;
@@ -13,7 +15,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -109,6 +113,50 @@ public class DocumentInsightsCollector implements InsightDataCollector {
         }
 
         return root;
+    }
+
+    @Override
+    public List<ChartSpec> charts(UUID projectId) {
+        if (projectId == null) {
+            return List.of(
+                    new ChartSpec("doc-status", "Document Status", "donut", null, null),
+                    new ChartSpec("doc-discipline", "Documents by Discipline", "bar", null, null),
+                    new ChartSpec("doc-type", "Documents by Type", "donut", null, null)
+            );
+        }
+
+        List<DocumentResponse> documents = documentService.listDocuments(projectId);
+        List<ChartSpec> charts = new ArrayList<>();
+
+        Map<String, Long> statusBreakdown = documents.stream()
+                .filter(d -> d.status() != null)
+                .collect(Collectors.groupingBy(d -> d.status().name(), Collectors.counting()));
+        charts.add(new ChartSpec("doc-status", "Document Status", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(statusBreakdown)),
+                "Document status distribution"));
+
+        Map<String, Long> disciplineBreakdown = documents.stream()
+                .filter(d -> d.discipline() != null)
+                .collect(Collectors.groupingBy(d -> d.discipline().name(), Collectors.counting()));
+        List<Map.Entry<String, Long>> disciplineEntries = disciplineBreakdown.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(8)
+                .toList();
+        charts.add(new ChartSpec("doc-discipline", "Documents by Discipline", "bar",
+                EChartsOptions.bar(objectMapper,
+                        disciplineEntries.stream().map(Map.Entry::getKey).toList(),
+                        "Documents",
+                        disciplineEntries.stream().map(Map.Entry::getValue).toList()),
+                "Top disciplines by document count"));
+
+        Map<String, Long> typeBreakdown = documents.stream()
+                .filter(d -> d.documentType() != null)
+                .collect(Collectors.groupingBy(d -> d.documentType().name(), Collectors.counting()));
+        charts.add(new ChartSpec("doc-type", "Documents by Type", "donut",
+                EChartsOptions.donut(objectMapper, new LinkedHashMap<>(typeBreakdown)),
+                "Distribution by document type"));
+
+        return charts;
     }
 
     @Override

@@ -58,6 +58,30 @@ function inferModule(pathname: string): string {
   return "general";
 }
 
+function ToolDataExpander({ data }: { data: unknown }) {
+  const [expanded, setExpanded] = useState(false);
+  const json = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const isLong = json.length > 200;
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="text-accent hover:underline text-xs font-medium"
+      >
+        {expanded ? "Hide data" : "View data"}
+      </button>
+      {expanded && (
+        <pre className="mt-1 bg-black/20 p-2 rounded-lg overflow-x-auto max-h-[300px] overflow-y-auto text-xs">
+          {json}
+        </pre>
+      )}
+      {!expanded && isLong && (
+        <div className="mt-1 text-text-muted text-xs">{json.substring(0, 200)}...</div>
+      )}
+    </div>
+  );
+}
+
 export function AiChatPanel() {
   const open = useAiStore((s) => s.open);
   const toggle = useAiStore((s) => s.toggle);
@@ -376,10 +400,13 @@ export function AiChatPanel() {
                     )}
                     {msg.role === "tool_result" && (
                       <div className="text-xs">
-                        <div className="font-medium mb-1">
-                          {msg.meta?.success ? "Result" : "Failed"}
+                        <div className={`font-medium mb-1 ${msg.meta?.success === false ? "text-danger" : ""}`}>
+                          {msg.meta?.success === false ? "Failed" : "Result"}
                         </div>
                         <div className="whitespace-pre-wrap">{msg.content}</div>
+                        {msg.meta?.data != null && (
+                          <ToolDataExpander data={msg.meta.data} />
+                        )}
                       </div>
                     )}
                     {(msg.role === "user" || msg.role === "assistant") && (

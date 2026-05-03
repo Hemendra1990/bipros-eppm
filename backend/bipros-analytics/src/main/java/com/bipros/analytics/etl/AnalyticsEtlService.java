@@ -184,18 +184,18 @@ public class AnalyticsEtlService {
 
         Map<String, Object> params = new HashMap<>();
         params.put("projectId", projectId);
-        params.put("activityId", activityId);
+        params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
         params.put("dprId", dprId);
         params.put("reportDate", reportDate);
-        params.put("supervisorUserId", supervisorUserId);
-        params.put("supervisorName", supervisorName);
+        params.put("supervisorUserId", supervisorUserId != null ? supervisorUserId : new UUID(0L, 0L));
+        params.put("supervisorName", supervisorName != null ? supervisorName : "");
         params.put("chainageFrom", chainageFromM);
         params.put("chainageTo", chainageToM);
-        params.put("qtyExecuted", qtyExecuted);
-        params.put("cumulativeQty", cumulativeQty);
-        params.put("weather", weather);
+        params.put("qtyExecuted", qtyExecuted != null ? qtyExecuted : 0.0);
+        params.put("cumulativeQty", cumulativeQty != null ? cumulativeQty : 0.0);
+        params.put("weather", weather != null ? weather : "");
         params.put("temperatureC", temperatureC);
-        params.put("remarksText", remarksText);
+        params.put("remarksText", remarksText != null ? remarksText : "");
         params.put("version", nowVersion());
 
         clickHouse.execute(sql, params);

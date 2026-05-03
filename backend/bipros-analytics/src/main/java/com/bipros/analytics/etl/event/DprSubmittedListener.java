@@ -7,6 +7,7 @@ import com.bipros.analytics.etl.DeadLetterHandler;
 import com.bipros.common.event.DprSubmittedEvent;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,7 @@ public class DprSubmittedListener {
     private final DeadLetterHandler deadLetter;
     private final DailyProgressReportRepository dprRepository;
     private final ActivityRepository activityRepository;
+    private final MeterRegistry meterRegistry;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDprSubmitted(DprSubmittedEvent event) {
@@ -51,7 +53,7 @@ public class DprSubmittedListener {
 
             etl.insertDprLog(
                     event.projectId(), activityId, dpr.getId(), dpr.getReportDate(),
-                    null,
+                    new UUID(0L, 0L),
                     dpr.getSupervisorName(),
                     dpr.getChainageFromM() != null ? dpr.getChainageFromM().doubleValue() : null,
                     dpr.getChainageToM() != null ? dpr.getChainageToM().doubleValue() : null,
@@ -73,6 +75,7 @@ public class DprSubmittedListener {
             log.debug("ETL processed DprSubmittedEvent: project={} dpr={}", event.projectId(), event.dprId());
         } catch (Exception e) {
             log.error("ETL failed for DprSubmittedEvent: {}", event, e);
+            meterRegistry.counter("bipros.analytics.etl.failures", "fact", "fact_dpr_logs").increment();
             deadLetter.record("project.daily_progress_reports", "fact_dpr_logs", event, e);
         }
     }

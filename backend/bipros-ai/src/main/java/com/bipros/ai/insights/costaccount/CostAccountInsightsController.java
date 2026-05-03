@@ -55,14 +55,16 @@ public class CostAccountInsightsController {
                     String hash = dataHashUtil.computeHash(snapshot);
                     Optional<InsightsResponse> cached = cacheService.getCached(projectId, tab, hash);
                     if (cached.isPresent()) {
-                        return ResponseEntity.ok(ApiResponse.ok(cached.get()));
+                        return ResponseEntity.ok(ApiResponse.ok(
+                                InsightsGenerator.withCharts(cached.get(), collector.charts(projectId))));
                     }
                 }
 
                 JsonNode snapshot = collector.collect(projectId);
                 String hash = dataHashUtil.computeHash(snapshot);
 
-                InsightsResponse response = insightsGenerator.generate(tab, snapshot, collector.promptInstructions());
+                InsightsResponse response = insightsGenerator.generate(tab, snapshot,
+                        collector.chartAwarePromptInstructions(), collector.charts(projectId));
                 cacheService.save(projectId, tab, hash, response, null, null, null);
                 return ResponseEntity.ok(ApiResponse.ok(response));
             }

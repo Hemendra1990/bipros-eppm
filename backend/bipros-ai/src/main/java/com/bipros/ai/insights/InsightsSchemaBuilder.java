@@ -63,6 +63,13 @@ public class InsightsSchemaBuilder {
         rationaleProp.put("type", "string");
         properties.set("rationale", rationaleProp);
 
+        ObjectNode mdxProp = objectMapper.createObjectNode();
+        ArrayNode mdxTypes = objectMapper.createArrayNode();
+        mdxTypes.add("string");
+        mdxTypes.add("null");
+        mdxProp.set("type", mdxTypes);
+        properties.set("mdx", mdxProp);
+
         schema.set("properties", properties);
 
         ArrayNode topRequired = objectMapper.createArrayNode();
@@ -72,6 +79,7 @@ public class InsightsSchemaBuilder {
         topRequired.add("recommendations");
         topRequired.add("findings");
         topRequired.add("rationale");
+        topRequired.add("mdx");
         schema.set("required", topRequired);
 
         ObjectNode defs = objectMapper.createObjectNode();
