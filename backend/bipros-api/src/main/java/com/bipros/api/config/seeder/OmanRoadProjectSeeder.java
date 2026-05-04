@@ -39,27 +39,29 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.StretchActivityLinkRepository;
 import com.bipros.project.domain.repository.StretchRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.api.config.seeder.util.SeederResourceFactory;
 import com.bipros.resource.application.service.WorkActivityService;
-import com.bipros.resource.domain.model.CostCategory;
+import com.bipros.resource.domain.repository.WorkActivityRepository;
 import com.bipros.resource.domain.model.LabourDesignation;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.ProductivityNormType;
 import com.bipros.resource.domain.model.ProjectLabourDeployment;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceCategory;
+import com.bipros.resource.domain.model.ResourceEquipmentDetails;
+import com.bipros.resource.domain.model.ResourceMaterialDetails;
 import com.bipros.resource.domain.model.ResourceRate;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
-import com.bipros.resource.domain.model.Role;
 import com.bipros.resource.domain.model.WorkActivity;
 import com.bipros.resource.domain.repository.LabourDesignationRepository;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ProjectLabourDeploymentRepository;
+import com.bipros.resource.domain.repository.ResourceEquipmentDetailsRepository;
+import com.bipros.resource.domain.repository.ResourceMaterialDetailsRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
-import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -128,10 +130,13 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
   private final BoqItemRepository boqItemRepository;
   private final ProductivityNormRepository productivityNormRepository;
   private final WorkActivityService workActivityService;
+  private final WorkActivityRepository workActivityRepository;
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository resourceRateRepository;
   private final ResourceRoleRepository resourceRoleRepository;
-  private final ResourceTypeDefRepository resourceTypeDefRepository;
+  private final ResourceEquipmentDetailsRepository resourceEquipmentDetailsRepository;
+  private final ResourceMaterialDetailsRepository resourceMaterialDetailsRepository;
+  private final SeederResourceFactory resourceFactory;
   private final ActivityRepository activityRepository;
   private final ActivityRelationshipRepository activityRelationshipRepository;
   private final StretchRepository stretchRepository;
@@ -153,7 +158,18 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       return;
     }
     if (projectRepository.findByCode(PROJECT_CODE).isPresent()) {
-      log.info("[BNK] project '{}' already seeded, skipping", PROJECT_CODE);
+      log.info("[BNK] project '{}' already seeded, skipping core but topping up labour deployments + activity links", PROJECT_CODE);
+      // Top up: when the LabourDesignation master expands (e.g. JSON master is extended
+      // or Excel-derived positions are merged in), every existing project still needs a
+      // deployment row per designation. The deployment seeder is row-idempotent.
+      // Also re-link activities to work_activities — needed for Capacity Utilization.
+      projectRepository.findByCode(PROJECT_CODE).ifPresent(p -> {
+        seedProjectLabourDeployments(p.getId());
+        backfillActivityWorkActivityLinks(p.getId());
+        // Manpower trades aren't in the global Resources catalogue on legacy seed data —
+        // top them up here so the existing-project path matches a fresh seed.
+        seedManpowerResources(p.getCalendarId());
+      });
       return;
     }
 
@@ -175,8 +191,11 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     // 6-7: WBS + BOQ (read BOQ rows from workbook 3)
     List<BoqRow> boqRows = reader.withWorkbook(OmanRoadProjectWorkbookReader.SUPERVISOR_DBS_PATH,
         reader::readBoqItems);
+    List<OmanRoadProjectWorkbookReader.BoqRateRow> revisedRates = reader.withWorkbook(
+        OmanRoadProjectWorkbookReader.CAPACITY_UTIL_PATH,
+        reader::readBoqRates);
     Map<String, UUID> wbs = seedWbs(project.getId(), boqRows);
-    List<BoqItem> savedBoqs = seedBoqItems(project.getId(), wbs, boqRows);
+    List<BoqItem> savedBoqs = seedBoqItems(project.getId(), wbs, boqRows, revisedRates);
 
     // 8: productivity norms (workbook 2)
     List<ProductivityNormRow> normRows = reader.withWorkbook(
@@ -192,6 +211,10 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
 
     // 11: manpower Role rows (resource-domain) from workbook 1
     seedManpowerResourceRoles();
+
+    // 11b: manpower Resource rows so they appear in the global Resources catalogue
+    //      (Manpower utilization trades from workbook 2 + direct-labour list from workbook 1)
+    seedManpowerResources(calendarId);
 
     // 12: ProjectLabourDeployment — bind 44 Oman LabourDesignations to this project
     seedProjectLabourDeployments(project.getId());
@@ -305,13 +328,45 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
         "Main Works Contractor — Barka–Nakhal", rdp.getId(), 1);
     ObsNode pmTeam = saveObs("BNK-PM-TEAM",
         "Project Team — PM Mohsin Ahmad", contractor.getId(), 0);
-    saveObs("BNK-SUP-TSWAMY",     "Site Supervisor — T. Swamy (Section A)",     pmTeam.getId(), 0);
-    saveObs("BNK-SUP-NAGARAJAN",  "Site Supervisor — Nagarajan (Section B)",    pmTeam.getId(), 1);
-    saveObs("BNK-SUP-AKSINGH",    "Site Supervisor — A.K. Singh (Section C)",   pmTeam.getId(), 2);
-    saveObs("BNK-SUP-ANBAZHAGAN", "Site Supervisor — Anbazhagan (Section D)",   pmTeam.getId(), 3);
+    ObsNode supTswamy = saveObs("BNK-SUP-TSWAMY",     "Site Supervisor — T. Swamy (Section A)",     pmTeam.getId(), 0);
+    saveObs("BNK-SE-TSWAMY",     "Site Engineer — T. Swamy Team",     supTswamy.getId(), 0);
+    saveObs("BNK-CM-TSWAMY",     "Construction Manager — T. Swamy Team",     supTswamy.getId(), 1);
+
+    ObsNode supNagarajan = saveObs("BNK-SUP-NAGARAJAN",  "Site Supervisor — Nagarajan (Section B)",    pmTeam.getId(), 1);
+    saveObs("BNK-SE-NAGARAJAN",  "Site Engineer — Nagarajan Team",  supNagarajan.getId(), 0);
+    saveObs("BNK-CM-NAGARAJAN",  "Construction Manager — Nagarajan Team",  supNagarajan.getId(), 1);
+
+    ObsNode supAksingh = saveObs("BNK-SUP-AKSINGH",    "Site Supervisor — A.K. Singh (Section C)",   pmTeam.getId(), 2);
+    saveObs("BNK-SE-AKSINGH",    "Site Engineer — A.K. Singh Team",    supAksingh.getId(), 0);
+    saveObs("BNK-CM-AKSINGH",    "Construction Manager — A.K. Singh Team",    supAksingh.getId(), 1);
+
+    ObsNode supAnbazhagan = saveObs("BNK-SUP-ANBAZHAGAN", "Site Supervisor — Anbazhagan (Section D)",   pmTeam.getId(), 3);
+    saveObs("BNK-SE-ANBAZHAGAN", "Site Engineer — Anbazhagan Team", supAnbazhagan.getId(), 0);
+    saveObs("BNK-CM-ANBAZHAGAN", "Construction Manager — Anbazhagan Team", supAnbazhagan.getId(), 1);
+
+    ObsNode supManoj = saveObs("BNK-SUP-MANOJ",  "Site Supervisor — Manoj (Section E)",    pmTeam.getId(), 4);
+    saveObs("BNK-SE-MANOJ",  "Site Engineer — Manoj Team",  supManoj.getId(), 0);
+    saveObs("BNK-CM-MANOJ",  "Construction Manager — Manoj Team",  supManoj.getId(), 1);
+
+    ObsNode supLiju = saveObs("BNK-SUP-LIJU",   "Site Supervisor — Liju (Section F)",     pmTeam.getId(), 5);
+    saveObs("BNK-SE-LIJU",   "Site Engineer — Liju Team",   supLiju.getId(), 0);
+    saveObs("BNK-CM-LIJU",   "Construction Manager — Liju Team",   supLiju.getId(), 1);
+
+    ObsNode supAnish = saveObs("BNK-SUP-ANISH",  "Site Supervisor — Anish (Section G)",    pmTeam.getId(), 6);
+    saveObs("BNK-SE-ANISH",  "Site Engineer — Anish Team",  supAnish.getId(), 0);
+    saveObs("BNK-CM-ANISH",  "Construction Manager — Anish Team",  supAnish.getId(), 1);
+
+    ObsNode supAnand = saveObs("BNK-SUP-ANAND",  "Site Supervisor — Anand (Section H)",    pmTeam.getId(), 7);
+    saveObs("BNK-SE-ANAND",  "Site Engineer — Anand Team",  supAnand.getId(), 0);
+    saveObs("BNK-CM-ANAND",  "Construction Manager — Anand Team",  supAnand.getId(), 1);
+
+    ObsNode supMohsin = saveObs("BNK-SUP-MOHSIN", "Site Supervisor — Mohsin Mohamed (Section I)", pmTeam.getId(), 8);
+    saveObs("BNK-SE-MOHSIN", "Site Engineer — Mohsin Mohamed Team", supMohsin.getId(), 0);
+    saveObs("BNK-CM-MOHSIN", "Construction Manager — Mohsin Mohamed Team", supMohsin.getId(), 1);
+
     // Suppress unused-warning when consEng not yet referenced — it's in the tree.
     if (consEng == null) throw new IllegalStateException("OBS save returned null");
-    log.info("[BNK] Seeded 9 OBS nodes");
+    log.info("[BNK] Seeded 25 OBS nodes");
     return pmTeam.getId();
   }
 
@@ -580,7 +635,8 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
    * deterministic values from the RNG seeded with the project code + item index.
    * After populating fields we always call {@link BoqCalculator#recompute(BoqItem)}.
    */
-  private List<BoqItem> seedBoqItems(UUID projectId, Map<String, UUID> wbs, List<BoqRow> rows) {
+  private List<BoqItem> seedBoqItems(UUID projectId, Map<String, UUID> wbs, List<BoqRow> rows,
+                                     List<OmanRoadProjectWorkbookReader.BoqRateRow> revisedRates) {
     List<BoqItem> items = new ArrayList<>();
     int idx = 0;
     for (BoqRow r : rows) {
@@ -605,6 +661,19 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       // Synthesise missing values deterministically per item.
       Random rng = new Random(DETERMINISTIC_SEED + idx);
       BigDecimal rate = r.rate();
+      if (rate == null || rate.signum() == 0) {
+        // Try revised rates from File 2 (Capacity Utilization workbook) by code prefix match.
+        if (revisedRates != null) {
+          for (OmanRoadProjectWorkbookReader.BoqRateRow rr : revisedRates) {
+            if (rr.code() != null && !rr.code().isBlank()
+                && rr.revisedRate() != null && rr.revisedRate().signum() > 0
+                && itemNo.startsWith(rr.code())) {
+              rate = rr.revisedRate();
+              break;
+            }
+          }
+        }
+      }
       if (rate == null || rate.signum() == 0) {
         // 1 – 200 OMR/unit ranges, depending on a stable hash bucket.
         int bucket = Math.abs(itemNo.hashCode()) % 5;
@@ -722,30 +791,30 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
    */
   private void seedEquipmentResourcesAndRates(UUID calendarId) {
     List<Map<String, Object>> equipment = readJsonList("oman-road-equipment-master.json");
+    ResourceType eqType = resourceFactory.requireType("EQUIPMENT");
     int resCount = 0, rateCount = 0;
     for (Map<String, Object> e : equipment) {
       String code = "BNK-EQ-" + slug((String) e.get("code"));
       String name = (String) e.get("name");
       String unit = (String) e.getOrDefault("unit", "Day");
       BigDecimal rate = new BigDecimal(e.get("ratePerDayOmr").toString());
+      ResourceRole role = resourceFactory.ensureRole(equipmentRoleCodeFor(name), "EQUIPMENT");
 
       Resource res = Resource.builder()
           .code(code)
           .name(name)
-          .resourceType(ResourceType.NONLABOR)
-          .resourceTypeDef(resourceTypeDefRepository
-              .findFirstByBaseCategoryAndSystemDefaultTrue(ResourceType.NONLABOR).orElse(null))
-          .resourceCategory(equipmentCategoryFor(name))
-          .costCategory(CostCategory.EQUIPMENT)
-          .unit(resourceUnitFor(unit))
+          .resourceType(eqType)
+          .role(role)
+          .unit(resourceUnitCodeFor(unit))
           .calendarId(calendarId)
           .status(ResourceStatus.ACTIVE)
-          .maxUnitsPerDay(8.0)
-          .hourlyRate(rate.doubleValue() / 8.0)
-          .costPerUse(0.0)
-          .overtimeRate(rate.doubleValue() / 8.0 * 1.5)
+          .availability(BigDecimal.valueOf(100))
+          .costPerUnit(rate)
           .build();
       Resource saved = resourceRepository.save(res);
+      resourceEquipmentDetailsRepository.save(ResourceEquipmentDetails.builder()
+          .resourceId(saved.getId())
+          .build());
       resCount++;
       resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", rate, DEFAULT_START));
       resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL",
@@ -789,28 +858,29 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
         {"BNK-MT-ROYALTY",       "Royalty Charges",                 "Cum",    "1.500"}
     };
     int resCount = 0, rateCount = 0;
+    ResourceType matType = resourceFactory.requireType("MATERIAL");
     for (Object[] m : materials) {
       String code = (String) m[0];
       String name = (String) m[1];
       String unit = (String) m[2];
       BigDecimal rate = new BigDecimal((String) m[3]);
+      ResourceRole role = resourceFactory.ensureRole(materialRoleCodeFor(name), "MATERIAL");
       Resource res = Resource.builder()
           .code(code)
           .name(name)
-          .resourceType(ResourceType.MATERIAL)
-          .resourceTypeDef(resourceTypeDefRepository
-              .findFirstByBaseCategoryAndSystemDefaultTrue(ResourceType.MATERIAL).orElse(null))
-          .resourceCategory(materialCategoryFor(name))
-          .costCategory(CostCategory.MATERIAL)
-          .unit(resourceUnitFor(unit))
+          .resourceType(matType)
+          .role(role)
+          .unit(resourceUnitCodeFor(unit))
           .calendarId(calendarId)
           .status(ResourceStatus.ACTIVE)
-          .maxUnitsPerDay(8.0)
-          .hourlyRate(rate.doubleValue() / 8.0)
-          .costPerUse(0.0)
-          .overtimeRate(0.0)
+          .availability(BigDecimal.valueOf(100))
+          .costPerUnit(rate)
           .build();
       Resource saved = resourceRepository.save(res);
+      resourceMaterialDetailsRepository.save(ResourceMaterialDetails.builder()
+          .resourceId(saved.getId())
+          .baseUnit(resourceUnitCodeFor(unit))
+          .build());
       resCount++;
       resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", rate, DEFAULT_START));
       resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL",
@@ -821,52 +891,52 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     log.info("[BNK] Seeded {} material resources + {} rates", resCount, rateCount);
   }
 
-  private ResourceCategory equipmentCategoryFor(String name) {
-    if (name == null) return ResourceCategory.OTHER;
+  private String equipmentRoleCodeFor(String name) {
+    if (name == null) return "OTHER";
     String n = name.toLowerCase(Locale.ROOT);
     if (n.contains("excavator") || n.contains("dozer") || n.contains("grader")
         || n.contains("loader") || n.contains("tipper") || n.contains("back hoe")) {
-      return ResourceCategory.EARTH_MOVING;
+      return "EARTH_MOVING";
     }
     if (n.contains("crane") || n.contains("manlift") || n.contains("hiab")
         || n.contains("cargo")) {
-      return ResourceCategory.CRANES_LIFTING;
+      return "CRANES_LIFTING";
     }
     if (n.contains("paver") || n.contains("roller") || n.contains("bitumen distributor")) {
-      return ResourceCategory.PAVING_EQUIPMENT;
+      return "PAVING_EQUIPMENT";
     }
     if (n.contains("trailer") || n.contains("low bed") || n.contains("tanker")) {
-      return ResourceCategory.TRANSPORT_VEHICLES;
+      return "TRANSPORT_VEHICLES";
     }
     if (n.contains("vibrator") || n.contains("compactor")) {
-      return ResourceCategory.CONCRETE_EQUIPMENT;
+      return "CONCRETE_EQUIPMENT";
     }
-    return ResourceCategory.OTHER;
+    return "OTHER";
   }
 
-  private ResourceCategory materialCategoryFor(String name) {
-    if (name == null) return ResourceCategory.OTHER;
+  private String materialRoleCodeFor(String name) {
+    if (name == null) return "OTHER";
     String n = name.toLowerCase(Locale.ROOT);
-    if (n.contains("cement")) return ResourceCategory.CEMENT;
-    if (n.contains("steel")) return ResourceCategory.STEEL_REBAR;
+    if (n.contains("cement")) return "CEMENT";
+    if (n.contains("steel")) return "STEEL_REBAR";
     if (n.contains("aggregate") || n.contains("sand") || n.contains("gsb")
-        || n.contains("wmm")) return ResourceCategory.AGGREGATE;
+        || n.contains("wmm")) return "AGGREGATE";
     if (n.contains("bitumen") || n.contains("prime") || n.contains("emulsion")
-        || n.contains("dbm") || n.contains("bc mix")) return ResourceCategory.BITUMEN;
-    if (n.contains("concrete")) return ResourceCategory.READY_MIX_CONCRETE;
-    return ResourceCategory.OTHER;
+        || n.contains("dbm") || n.contains("bc mix")) return "BITUMEN";
+    if (n.contains("concrete")) return "READY_MIX_CONCRETE";
+    return "OTHER";
   }
 
-  private ResourceUnit resourceUnitFor(String label) {
-    if (label == null) return ResourceUnit.PER_DAY;
+  private String resourceUnitCodeFor(String label) {
+    if (label == null) return "PER_DAY";
     return switch (label.toLowerCase(Locale.ROOT)) {
-      case "cum" -> ResourceUnit.CU_M;
-      case "mt", "bag" -> ResourceUnit.MT;
-      case "rm", "rmt", "lin.m" -> ResourceUnit.RMT;
-      case "each", "nr.", "nr", "no", "nos" -> ResourceUnit.NOS;
-      case "kg" -> ResourceUnit.KG;
-      case "litre", "l", "liter" -> ResourceUnit.LITRE;
-      default -> ResourceUnit.PER_DAY;
+      case "cum" -> "CU_M";
+      case "mt", "bag" -> "MT";
+      case "rm", "rmt", "lin.m" -> "RMT";
+      case "each", "nr.", "nr", "no", "nos" -> "NOS";
+      case "kg" -> "KG";
+      case "litre", "l", "liter" -> "LITRE";
+      default -> "PER_DAY";
     };
   }
 
@@ -878,6 +948,128 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     rate.setPricePerUnit(price != null ? price : BigDecimal.ZERO);
     rate.setEffectiveDate(effective);
     return rate;
+  }
+
+  // ───────────────── Manpower Resources (catalogue rows) ─────────────────
+  /**
+   * Creates a {@code Resource} row of type {@code LABOR} for every distinct manpower trade
+   * surfaced by the Oman workbooks, so the global Resources catalogue exposes them
+   * (otherwise the Resources page shows Manpower=0).
+   *
+   * <p>Two sources are merged and deduped by name:
+   * <ul>
+   *   <li><b>Workbook 2 / Manpower utilization sheet</b> — the 4 productivity-norm trades
+   *       that the Capacity Utilization report tracks (Mason, Carpenter, Steel Fixer,
+   *       Helper). Cost-per-unit reads from the productivity norm if present.</li>
+   *   <li><b>Workbook 1 / Resource sheet (direct-labour right column)</b> — the 39 site
+   *       trades that are deployed daily (Welder, Plumber, Electrician, Operator,
+   *       Painter, Rigger, Scaffolder, etc.). These don't all have norms; they get
+   *       the deterministic OMR/day rate from {@link #manpowerDailyRateOmr}.</li>
+   * </ul>
+   *
+   * <p>Idempotent — skipped per-row by code.
+   */
+  private void seedManpowerResources(UUID calendarId) {
+    ResourceType laborType = resourceFactory.requireType("LABOR");
+
+    // 1. Trades with explicit productivity norms (Manpower utilization sheet).
+    List<ProductivityNormRow> manpowerNorms = reader.withWorkbook(
+        OmanRoadProjectWorkbookReader.CAPACITY_UTIL_PATH,
+        wb -> {
+          List<ProductivityNormRow> all = reader.readProductivityNorms(wb);
+          // Drop equipment rows — they were already seeded as EQUIPMENT resources.
+          // Manpower utilization sheet header trades are: Mason, Carpenter, Steel Fixer, Helper.
+          java.util.Set<String> manpowerSet = java.util.Set.of(
+              "mason", "carpenter", "steel fixer", "helper");
+          return all.stream()
+              .filter(r -> r.equipmentOrLabour() != null
+                  && manpowerSet.contains(r.equipmentOrLabour().toLowerCase(Locale.ROOT).trim()))
+              .toList();
+        });
+
+    java.util.Map<String, ProductivityNormRow> normByTrade = new java.util.LinkedHashMap<>();
+    for (ProductivityNormRow row : manpowerNorms) {
+      String trade = row.equipmentOrLabour();
+      if (trade == null) continue;
+      // Keep first norm row per trade (representative for the resource definition).
+      normByTrade.putIfAbsent(trade.trim(), row);
+    }
+
+    // 2. All direct labour positions from workbook 1.
+    List<DirectLabourRow> directRows = reader.withWorkbook(
+        OmanRoadProjectWorkbookReader.DPR_INTERNAL_PATH, reader::readDirectLabour);
+
+    int resCount = 0, rateCount = 0;
+    java.util.Set<String> seenCodes = new java.util.HashSet<>();
+    int sortOrder = 0;
+
+    // Pass 1: norm-backed manpower trades — these are the Capacity Utilization headers.
+    for (java.util.Map.Entry<String, ProductivityNormRow> e : normByTrade.entrySet()) {
+      String trade = e.getKey();
+      ProductivityNormRow row = e.getValue();
+      String code = "BNK-MP-" + slug(trade);
+      if (code.length() > 50) code = code.substring(0, 50);
+      if (!seenCodes.add(code)) continue;
+      if (resourceRepository.findByCode(code).isPresent()) continue;
+      String unit = row.unit() != null && !row.unit().isBlank() ? row.unit() : "Day";
+      BigDecimal rate = manpowerDailyRateOmr(trade);
+      ResourceRole role = resourceFactory.ensureRole("ROLE-" + slug(trade), "LABOR");
+      Resource res = Resource.builder()
+          .code(code)
+          .name(trade)
+          .resourceType(laborType)
+          .role(role)
+          .unit(resourceUnitCodeFor(unit))
+          .calendarId(calendarId)
+          .status(ResourceStatus.ACTIVE)
+          .availability(BigDecimal.valueOf(100))
+          .costPerUnit(rate)
+          .sortOrder(sortOrder++)
+          .build();
+      Resource saved = resourceRepository.save(res);
+      resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", rate, DEFAULT_START));
+      resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL",
+          rate.multiply(new BigDecimal("1.05")).setScale(3, RoundingMode.HALF_UP),
+          DEFAULT_START));
+      resCount++;
+      rateCount += 2;
+    }
+
+    // Pass 2: direct labour trades from DPR-internal (skip dupes with pass 1).
+    for (DirectLabourRow row : directRows) {
+      String trade = row.position();
+      if (trade == null || trade.isBlank()) continue;
+      trade = trade.trim().replaceAll("\\s+", " ");
+      String code = "BNK-MP-" + slug(trade);
+      if (code.length() > 50) code = code.substring(0, 50);
+      if (!seenCodes.add(code)) continue;
+      if (resourceRepository.findByCode(code).isPresent()) continue;
+      BigDecimal rate = manpowerDailyRateOmr(trade);
+      ResourceRole role = resourceFactory.ensureRole("ROLE-" + slug(trade), "LABOR");
+      Resource res = Resource.builder()
+          .code(code)
+          .name(trade)
+          .resourceType(laborType)
+          .role(role)
+          .unit("Day")
+          .calendarId(calendarId)
+          .status(ResourceStatus.ACTIVE)
+          .availability(BigDecimal.valueOf(100))
+          .costPerUnit(rate)
+          .sortOrder(sortOrder++)
+          .build();
+      Resource saved = resourceRepository.save(res);
+      resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", rate, DEFAULT_START));
+      resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL",
+          rate.multiply(new BigDecimal("1.05")).setScale(3, RoundingMode.HALF_UP),
+          DEFAULT_START));
+      resCount++;
+      rateCount += 2;
+    }
+
+    log.info("[BNK] Seeded {} manpower resources + {} rates ({} norm-backed, {} direct-labour)",
+        resCount, rateCount, normByTrade.size(),
+        Math.max(0, resCount - normByTrade.size()));
   }
 
   // ────────────────────── Manpower Roles ──────────────────────
@@ -892,6 +1084,7 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
         OmanRoadProjectWorkbookReader.DPR_INTERNAL_PATH, reader::readIndirectStaff);
     List<DirectLabourRow> direct = reader.withWorkbook(
         OmanRoadProjectWorkbookReader.DPR_INTERNAL_PATH, reader::readDirectLabour);
+    ResourceType laborType = resourceFactory.requireType("LABOR");
     int count = 0;
     int sortOrder = 0;
     java.util.Set<String> seenCodes = new java.util.HashSet<>();
@@ -900,20 +1093,16 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       if (pos == null || pos.isBlank()) continue;
       String code = "BNK-ROLE-" + slug(pos);
       if (!seenCodes.add(code)) continue; // dedupe
-      BigDecimal rate = manpowerDailyRateOmr(pos);
-      Role role = Role.builder()
-          .code(code.length() > 50 ? code.substring(0, 50) : code)
+      String trimmedCode = code.length() > 50 ? code.substring(0, 50) : code;
+      if (resourceRoleRepository.findByCode(trimmedCode).isPresent()) continue;
+      ResourceRole role = ResourceRole.builder()
+          .code(trimmedCode)
           .name(truncate(pos, 100))
           .description("Indirect staff role — workbook 1 (Resource sheet, left half)")
-          .resourceType(ResourceType.LABOR)
-          .resourceTypeDef(resourceTypeDefRepository
-              .findFirstByBaseCategoryAndSystemDefaultTrue(ResourceType.LABOR).orElse(null))
-          .rateUnit("Day")
-          .budgetedRate(rate)
-          .actualRate(rate.multiply(new BigDecimal("1.03")).setScale(4, RoundingMode.HALF_UP))
-          .defaultRate(rate)
-          .rateRemarks("Indirect / supervision tier")
+          .resourceType(laborType)
+          .productivityUnit("Day")
           .sortOrder(sortOrder++)
+          .active(true)
           .build();
       resourceRoleRepository.save(role);
       count++;
@@ -923,20 +1112,16 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       if (pos == null || pos.isBlank()) continue;
       String code = "BNK-ROLE-" + slug(pos);
       if (!seenCodes.add(code)) continue;
-      BigDecimal rate = manpowerDailyRateOmr(pos);
-      Role role = Role.builder()
-          .code(code.length() > 50 ? code.substring(0, 50) : code)
+      String trimmedCode = code.length() > 50 ? code.substring(0, 50) : code;
+      if (resourceRoleRepository.findByCode(trimmedCode).isPresent()) continue;
+      ResourceRole role = ResourceRole.builder()
+          .code(trimmedCode)
           .name(truncate(pos, 100))
           .description("Direct labour role — workbook 1 (Resource sheet, right half)")
-          .resourceType(ResourceType.LABOR)
-          .resourceTypeDef(resourceTypeDefRepository
-              .findFirstByBaseCategoryAndSystemDefaultTrue(ResourceType.LABOR).orElse(null))
-          .rateUnit("Day")
-          .budgetedRate(rate)
-          .actualRate(rate.multiply(new BigDecimal("1.03")).setScale(4, RoundingMode.HALF_UP))
-          .defaultRate(rate)
-          .rateRemarks("Direct labour tier")
+          .resourceType(laborType)
+          .productivityUnit("Day")
           .sortOrder(sortOrder++)
+          .active(true)
           .build();
       resourceRoleRepository.save(role);
       count++;
@@ -1168,10 +1353,61 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       idx++;
     }
     activityRepository.saveAll(activities);
+    backfillActivityWorkActivityLinks(projectId);
     log.info("[BNK] activity %% spread: NOT_STARTED={}, IN_PROGRESS={}, COMPLETED={}, on-hold/cancelled={}",
         notStarted, inProgress, completed, suspended);
     int relCount = seedActivityRelationships(projectId);
     log.info("[BNK] Seeded {} activities + {} relationships", total, relCount);
+  }
+
+  /**
+   * Link every project activity to a {@code resource.work_activities} row by exact name
+   * match (case-insensitive); for activities whose BOQ description doesn't match a master
+   * activity, fall back to a deterministic round-robin assignment over the work-activity
+   * pool. The link is required by Capacity Utilization, which joins
+   * {@code daily_activity_resource_outputs → activities → work_activities} to look up
+   * the productivity norm.
+   *
+   * <p>Idempotent — only updates rows where {@code work_activity_id IS NULL}.
+   */
+  private void backfillActivityWorkActivityLinks(UUID projectId) {
+    List<Activity> activities = activityRepository.findByProjectId(projectId);
+    if (activities.isEmpty()) return;
+    List<UUID> waPool = workActivityRepository.findAll().stream()
+        .sorted(Comparator.comparing(wa -> wa.getName() == null ? "" : wa.getName()))
+        .map(WorkActivity::getId)
+        .toList();
+    if (waPool.isEmpty()) {
+      log.warn("[BNK] no WorkActivity rows — Capacity Utilization will be empty");
+      return;
+    }
+    int linkedExact = 0, linkedRoundRobin = 0, alreadyLinked = 0;
+    int idx = 0;
+    List<Activity> dirty = new ArrayList<>();
+    for (Activity a : activities) {
+      if (a.getWorkActivityId() != null) {
+        alreadyLinked++;
+        idx++;
+        continue;
+      }
+      UUID resolved = workActivityRepository.findByNameIgnoreCase(a.getName())
+          .map(WorkActivity::getId)
+          .orElse(null);
+      if (resolved != null) {
+        a.setWorkActivityId(resolved);
+        linkedExact++;
+      } else {
+        a.setWorkActivityId(waPool.get(idx % waPool.size()));
+        linkedRoundRobin++;
+      }
+      dirty.add(a);
+      idx++;
+    }
+    if (!dirty.isEmpty()) {
+      activityRepository.saveAll(dirty);
+    }
+    log.info("[BNK] Activity→WorkActivity links: {} exact, {} round-robin ({} already linked)",
+        linkedExact, linkedRoundRobin, alreadyLinked);
   }
 
   /** Compute duration in days using best-match productivity norm; clamp [14, 240]. */

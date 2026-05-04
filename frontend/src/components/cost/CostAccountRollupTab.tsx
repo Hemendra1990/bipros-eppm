@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DollarSign, TrendingUp, BarChart3, Wallet } from "lucide-react";
 import { evmApi, type CostAccountRollupRow } from "@/lib/api/evmApi";
 import { KpiTile } from "@/components/common/KpiTile";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 
 const INR_PER_CRORE = 10_000_000;
 
@@ -82,6 +83,7 @@ export function CostAccountRollupTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6 px-6 pb-8">
+      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/cost-accounts/ai/insights`} />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <KpiTile
           label="Total BAC"

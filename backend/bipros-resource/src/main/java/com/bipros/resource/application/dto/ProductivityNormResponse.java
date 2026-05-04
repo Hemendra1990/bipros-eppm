@@ -3,7 +3,7 @@ package com.bipros.resource.application.dto;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.ProductivityNormType;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceTypeDef;
+import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.model.WorkActivity;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -18,8 +18,8 @@ public record ProductivityNormResponse(
     String workActivityName,
     String workActivityCode,
 
-    UUID resourceTypeDefId,
-    String resourceTypeDefName,
+    UUID resourceTypeId,
+    String resourceTypeName,
 
     UUID resourceId,
     String resourceCode,
@@ -41,7 +41,7 @@ public record ProductivityNormResponse(
 ) {
   public static ProductivityNormResponse from(ProductivityNorm norm) {
     WorkActivity wa = norm.getWorkActivity();
-    ResourceTypeDef def = norm.getResourceTypeDef();
+    ResourceType type = norm.getResourceType();
     Resource res = norm.getResource();
     return new ProductivityNormResponse(
         norm.getId(),
@@ -49,8 +49,8 @@ public record ProductivityNormResponse(
         wa == null ? null : wa.getId(),
         wa == null ? null : wa.getName(),
         wa == null ? null : wa.getCode(),
-        def == null ? null : def.getId(),
-        def == null ? null : def.getName(),
+        type == null ? null : type.getId(),
+        type == null ? null : type.getName(),
         res == null ? null : res.getId(),
         res == null ? null : res.getCode(),
         res == null ? null : res.getName(),

@@ -18,10 +18,12 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
-import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
+import com.bipros.resource.domain.repository.ResourceRoleRepository;
+import com.bipros.resource.domain.repository.ResourceTypeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -43,7 +45,8 @@ public class XerImportMapper {
   private final CalendarRepository calendarRepository;
   private final ResourceRepository resourceRepository;
   private final ResourceAssignmentRepository resourceAssignmentRepository;
-  private final ResourceTypeDefRepository resourceTypeDefRepository;
+  private final ResourceTypeRepository resourceTypeRepository;
+  private final ResourceRoleRepository resourceRoleRepository;
 
   private Map<String, UUID> xerIdToUuidMap;
   private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -56,7 +59,8 @@ public class XerImportMapper {
       CalendarRepository calendarRepository,
       ResourceRepository resourceRepository,
       ResourceAssignmentRepository resourceAssignmentRepository,
-      ResourceTypeDefRepository resourceTypeDefRepository) {
+      ResourceTypeRepository resourceTypeRepository,
+      ResourceRoleRepository resourceRoleRepository) {
     this.projectRepository = projectRepository;
     this.wbsNodeRepository = wbsNodeRepository;
     this.activityRepository = activityRepository;
@@ -64,7 +68,8 @@ public class XerImportMapper {
     this.calendarRepository = calendarRepository;
     this.resourceRepository = resourceRepository;
     this.resourceAssignmentRepository = resourceAssignmentRepository;
-    this.resourceTypeDefRepository = resourceTypeDefRepository;
+    this.resourceTypeRepository = resourceTypeRepository;
+    this.resourceRoleRepository = resourceRoleRepository;
     this.xerIdToUuidMap = new HashMap<>();
   }
 
@@ -280,10 +285,12 @@ public class XerImportMapper {
       resource.setName(row.getOrDefault("rsrc_name", "Resource"));
 
       String rsrcType = row.get("rsrc_type");
-      ResourceType baseCategory = mapResourceType(rsrcType);
-      resource.setResourceType(baseCategory);
-      resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(baseCategory)
-          .ifPresent(resource::setResourceTypeDef);
+      String typeCode = mapResourceTypeCode(rsrcType);
+      ResourceType type = resourceTypeRepository.findByCode(typeCode)
+          .orElseThrow(() -> new IllegalStateException(
+              "Required ResourceType " + typeCode + " has not been seeded"));
+      resource.setResourceType(type);
+      resource.setRole(ensureDefaultRoleForImport(type));
 
       Resource saved = resourceRepository.save(resource);
       xerIdToUuidMap.put("RSRC:" + rsrcId, saved.getId());
@@ -351,17 +358,31 @@ public class XerImportMapper {
     };
   }
 
-  private ResourceType mapResourceType(String xerType) {
+  private String mapResourceTypeCode(String xerType) {
     if (xerType == null) {
-      return ResourceType.LABOR;
+      return "LABOR";
     }
 
     return switch (xerType.toUpperCase()) {
-      case "LABOR", "L" -> ResourceType.LABOR;
-      case "MATERIAL", "M" -> ResourceType.MATERIAL;
-      case "EQUIPMENT", "E", "NONLABOR" -> ResourceType.NONLABOR;
-      default -> ResourceType.LABOR;
+      case "LABOR", "L" -> "LABOR";
+      case "MATERIAL", "M" -> "MATERIAL";
+      case "EQUIPMENT", "E", "NONLABOR" -> "EQUIPMENT";
+      default -> "LABOR";
     };
+  }
+
+  private ResourceRole ensureDefaultRoleForImport(ResourceType type) {
+    String code = "IMPORTED-" + type.getCode();
+    return resourceRoleRepository.findByCode(code)
+        .orElseGet(() -> {
+          ResourceRole role = new ResourceRole();
+          role.setCode(code);
+          role.setName("Imported " + type.getName());
+          role.setResourceType(type);
+          role.setActive(true);
+          role.setSortOrder(999);
+          return resourceRoleRepository.save(role);
+        });
   }
 
   private LocalDate parseDate(String dateStr) {

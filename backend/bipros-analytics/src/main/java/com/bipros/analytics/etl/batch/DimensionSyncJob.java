@@ -177,11 +177,11 @@ public class DimensionSyncJob {
             Map<String, Object> params = new HashMap<>();
             params.put("resourceId", r.getId());
             params.put("projectId", null);
-            params.put("resourceType", r.getResourceType() != null ? r.getResourceType().name() : null);
+            params.put("resourceType", r.getResourceType() != null ? r.getResourceType().getCode() : null);
             params.put("code", r.getCode());
             params.put("name", r.getName());
-            params.put("uom", r.getUnit() != null ? r.getUnit().name() : null);
-            params.put("unitRate", r.getHourlyRate());
+            params.put("uom", r.getUnit());
+            params.put("unitRate", r.getCostPerUnit() != null ? r.getCostPerUnit().doubleValue() : null);
             params.put("isSubcontractor", 0);
             params.put("version", VERSION);
             clickHouse.execute(sql, params);

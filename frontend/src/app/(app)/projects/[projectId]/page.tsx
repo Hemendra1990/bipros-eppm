@@ -21,15 +21,17 @@ import { EvmTab } from "@/components/evm/EvmTab";
 import { PeriodPerformanceTab } from "@/components/cost/PeriodPerformanceTab";
 import { CostAccountRollupTab } from "@/components/cost/CostAccountRollupTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree } from "lucide-react";
+import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree, Sparkles } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { costApi } from "@/lib/api/costApi";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
+import { projectResourceApi } from "@/lib/api/projectResourceApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
 import { TabTip } from "@/components/common/TabTip";
+import { WbsAiGenerateDialog } from "@/components/wbs/WbsAiGenerateDialog";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import type { ContractType } from "@/lib/types";
@@ -349,7 +351,7 @@ export default function ProjectDetailPage() {
       {currentTip && <TabTip title={currentTip.title} description={currentTip.description} steps={currentTip.steps} />}
       {tab === "overview" && <OverviewTab project={project} projectId={projectId} />}
       {tab === "wbs" && (
-        <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} />
+        <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} project={project} />
       )}
       {tab === "gantt" && (
         <GanttTab
@@ -401,6 +403,16 @@ export default function ProjectDetailPage() {
 function OverviewTab({ project, projectId }: { project: ProjectResponse; projectId: string }) {
   const queryClient = useQueryClient();
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const { data: poolData } = useQuery({
+    queryKey: ["resource-pool", projectId],
+    queryFn: () => projectResourceApi.listPool(projectId),
+  });
+
+  const poolSize = (() => {
+    const raw = poolData?.data as unknown;
+    return Array.isArray(raw) ? (raw as unknown[]).length : -1;
+  })();
 
   const { data: kpiSnapshotsData, isLoading: isLoadingKpis } = useQuery({
     queryKey: ["project-kpis", projectId],
@@ -455,6 +467,28 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
 
   return (
     <div className="space-y-6">
+      {poolSize === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                No resources in this project yet.
+              </p>
+              <p className="text-sm text-amber-700">
+                Pick from master data to set up your project pool{" "}
+                <a href={`/projects/${projectId}?tab=resources`} className="font-semibold underline hover:text-amber-900">
+                  Open Resources
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-text-secondary">Code</h3>
@@ -955,10 +989,11 @@ function GanttTab({
   );
 }
 
-function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[]; isLoading: boolean; projectId: string }) {
+function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeResponse[]; isLoading: boolean; projectId: string; project: ProjectResponse }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showAiDialog, setShowAiDialog] = useState(false);
   const [parentNode, setParentNode] = useState<{ id: string; code: string; name: string } | null>(null);
   const [formData, setFormData] = useState({ code: "", name: "" });
   const [selectedWbs, setSelectedWbs] = useState<{ id: string; code: string; name: string } | null>(null);
@@ -1089,6 +1124,13 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
         >
           <FileText size={16} />
           Apply Template
+        </button>
+        <button
+          onClick={() => setShowAiDialog(true)}
+          className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
+        >
+          <Sparkles size={16} />
+          Generate with AI
         </button>
         <button
           onClick={handleAddRoot}
@@ -1236,7 +1278,7 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
       {wbsTree.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-12 text-center">
           <h3 className="text-lg font-medium text-text-primary">No WBS Structure</h3>
-          <p className="mt-2 text-text-muted">Click &quot;Add WBS Node&quot; above to create your first work package.</p>
+          <p className="mt-2 text-text-muted">Click &quot;Add WBS Node&quot; above to create your first work package, or use &quot;Generate with AI&quot; for a quick start.</p>
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
@@ -1260,6 +1302,12 @@ function WbsTab({ wbsTree, isLoading, projectId }: { wbsTree: WbsNodeResponse[];
           <UdfSection entityId={selectedWbs.id} subject="WBS" projectId={projectId} />
         </div>
       )}
+
+      <WbsAiGenerateDialog
+        open={showAiDialog}
+        onOpenChange={setShowAiDialog}
+        project={project}
+      />
     </div>
   );
 }

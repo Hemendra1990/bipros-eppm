@@ -1,0 +1,131 @@
+databaseChangeLog:
+  - changeSet:
+      id: 059-wbs-ai-jobs
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: wbs_ai_jobs
+            remarks: |
+              Tracks asynchronous WBS-from-document generation jobs. Created with
+              status=PENDING when the user submits, transitioned to RUNNING by the
+              worker, then DONE/FAILED/CANCELLED. The frontend polls GET on the
+              job by id to render progress; the worker updates progress_stage and
+              progress_pct in their own transactions so the polling client always
+              sees fresh state.
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: creator_user_id
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(255)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(255)
+              - column:
+                  name: started_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: completed_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: file_sha256
+                  type: CHAR(64)
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+              - column:
+                  name: file_size_bytes
+                  type: BIGINT
+              - column:
+                  name: mime_type
+                  type: VARCHAR(100)
+              - column:
+                  name: metadata_json
+                  type: JSONB
+              - column:
+                  name: progress_stage
+                  type: VARCHAR(50)
+              - column:
+                  name: progress_pct
+                  type: INT
+              - column:
+                  name: result_json
+                  type: JSONB
+              - column:
+                  name: error_code
+                  type: VARCHAR(50)
+              - column:
+                  name: error_message
+                  type: TEXT
+              - column:
+                  name: input_tokens
+                  type: INT
+              - column:
+                  name: output_tokens
+                  type: INT
+              - column:
+                  name: model
+                  type: VARCHAR(100)
+              - column:
+                  name: cancel_requested
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - createIndex:
+            schemaName: ai
+            tableName: wbs_ai_jobs
+            indexName: idx_wbs_ai_jobs_project
+            columns:
+              - column:
+                  name: project_id
+        - createIndex:
+            schemaName: ai
+            tableName: wbs_ai_jobs
+            indexName: idx_wbs_ai_jobs_status
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            schemaName: ai
+            tableName: wbs_ai_jobs
+            indexName: idx_wbs_ai_jobs_created_at
+            columns:
+              - column:
+                  name: created_at

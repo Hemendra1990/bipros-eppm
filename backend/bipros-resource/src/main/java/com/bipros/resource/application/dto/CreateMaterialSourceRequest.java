@@ -2,7 +2,6 @@ package com.bipros.resource.application.dto;
 
 import com.bipros.resource.domain.model.LabTestStatus;
 import com.bipros.resource.domain.model.MaterialSourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,7 +25,7 @@ public record CreateMaterialSourceRequest(
     @Size(max = 80) String state,
     BigDecimal distanceKm,
     BigDecimal approvedQuantity,
-    ResourceUnit approvedQuantityUnit,
+    @Size(max = 20) String approvedQuantityUnit,
     @Size(max = 200) String approvalReference,
     @Size(max = 200) String approvalAuthority,
     BigDecimal cbrAveragePercent,

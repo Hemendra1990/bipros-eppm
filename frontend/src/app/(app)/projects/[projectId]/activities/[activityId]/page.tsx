@@ -14,9 +14,8 @@ import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { resourceApi } from "@/lib/api/resourceApi";
 import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
-import { roleApi } from "@/lib/api/roleApi";
-import type { RoleResponse } from "@/lib/api/roleApi";
-import type { ResourceResponse } from "@/lib/api/resourceApi";
+import { projectResourceApi } from "@/lib/api/projectResourceApi";
+import type { ProjectResourceResponse } from "@/lib/api/projectResourceApi";
 import { costApi } from "@/lib/api/costApi";
 import type { CostAccount } from "@/lib/api/costApi";
 import { evmApi } from "@/lib/api/evmApi";
@@ -26,6 +25,7 @@ import type { ActivityStepResponse, CreateActivityStepRequest } from "@/lib/api/
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
+import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
 import { UdfSection } from "@/components/udf/UdfSection";
 import type { ExpenseResponse } from "@/lib/types";
 
@@ -477,72 +477,11 @@ function ViewMode({
         {assignments.length > 0 ? (
           <div className="mb-4">
             <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Resource Assignments</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Resource</th>
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Role</th>
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Status</th>
-                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Planned Units</th>
-                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Actual Units</th>
-                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Planned Cost</th>
-                    <th className="text-right py-1.5 pr-3 text-xs font-medium text-text-secondary">Actual Cost</th>
-                    <th className="text-left py-1.5 text-xs font-medium text-text-secondary">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assignments.map((a) => (
-                    <tr key={a.id} className="border-b border-border/40">
-                      <td className="py-1.5 pr-3 text-text-primary">{a.resourceName ?? a.resourceId ?? "—"}</td>
-                      <td className="py-1.5 pr-3 text-text-secondary">{a.roleName ?? a.roleId ?? "—"}</td>
-                      <td className="py-1.5 pr-3">
-                        {a.staffed ? (
-                          <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                            Staffed
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
-                            Role-only
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.plannedUnits}</td>
-                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.actualUnits}</td>
-                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.plannedCost != null ? fmt(a.plannedCost) : "—"}</td>
-                      <td className="py-1.5 pr-3 text-right text-text-primary">{a.actualCost != null ? fmt(a.actualCost) : "—"}</td>
-                      <td className="py-1.5 text-text-primary">
-                        {!a.staffed && a.roleId && (
-                          <button
-                            onClick={() => openStaffDialog(a)}
-                            className="text-xs px-2 py-0.5 rounded bg-accent text-text-primary hover:bg-accent-hover"
-                          >
-                            Staff role
-                          </button>
-                        )}
-                        {a.staffed && a.roleId && (
-                          <button
-                            onClick={() => openSwapDialog(a)}
-                            className="text-xs px-2 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-hover"
-                          >
-                            Swap
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="font-semibold bg-surface-hover/30">
-                    <td className="py-1.5 pr-3 text-text-secondary">Totals</td>
-                    <td colSpan={2} />
-                    <td className="py-1.5 pr-3 text-right text-text-primary">{assignments.reduce((s, a) => s + a.plannedUnits, 0)}</td>
-                    <td className="py-1.5 pr-3 text-right text-text-primary">{assignments.reduce((s, a) => s + a.actualUnits, 0)}</td>
-                    <td className="py-1.5 pr-3 text-right text-accent">{fmt(totalPlannedCost)}</td>
-                    <td className="py-1.5 pr-3 text-right text-accent">{fmt(totalActualCost)}</td>
-                    <td />
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <ActivityAssignmentsByRole
+              assignments={assignments}
+              onStaff={openStaffDialog}
+              onSwap={openSwapDialog}
+            />
           </div>
         ) : (
           <p className="text-sm text-text-muted mb-4">No resource assignments for this activity.</p>
@@ -1400,33 +1339,19 @@ function StaffSwapDialog({
 
   const roleId = assignment?.roleId ?? null;
 
-  const { data: roleUsersData } = useQuery({
-    queryKey: ["role-users", roleId],
-    queryFn: () => roleApi.listUsers(roleId!),
+  // Pull pooled resources carrying the same role as this assignment.
+  const { data: poolByRoleData } = useQuery({
+    queryKey: ["resource-pool-by-role", projectId, roleId],
+    queryFn: () => projectResourceApi.listPoolByRole(projectId, roleId!),
     enabled: !!roleId && open,
   });
 
-  const roleUsers = roleUsersData?.data ?? [];
-  const userIds = roleUsers.map((u) => u.userId);
-
-  const { data: resourcesData } = useQuery({
-    queryKey: ["resources-by-users", userIds],
-    queryFn: () => resourceApi.listResources(0, 100),
-    enabled: open,
-  });
-
-  const allResources: ResourceResponse[] = useMemo(() => {
-    const raw = resourcesData?.data as unknown;
+  const qualifiedResources: ProjectResourceResponse[] = useMemo(() => {
+    const raw = poolByRoleData?.data as unknown;
     return Array.isArray(raw)
-      ? (raw as ResourceResponse[])
-      : ((raw as { content?: ResourceResponse[] } | undefined)?.content ?? []);
-  }, [resourcesData]);
-
-  // Filter resources that have a userId matching one of the role-qualified users
-  const qualifiedResources = useMemo(() => {
-    const qualifiedUserIds = new Set(userIds);
-    return allResources.filter((r: ResourceResponse) => r.userId && qualifiedUserIds.has(r.userId));
-  }, [allResources, userIds]);
+      ? (raw as ProjectResourceResponse[])
+      : [];
+  }, [poolByRoleData]);
 
   const staffMutation = useMutation({
     mutationFn: () =>
@@ -1481,15 +1406,15 @@ function StaffSwapDialog({
             <SearchableSelect
               value={selectedResourceId}
               onChange={(val) => setSelectedResourceId(val)}
-              placeholder="Search qualified resources..."
-              options={qualifiedResources.map((r) => ({
-                value: r.id,
-                label: `${r.code} - ${r.name}`,
+              placeholder="Search pooled resources..."
+              options={qualifiedResources.map((p) => ({
+                value: p.resourceId,
+                label: `${p.resourceCode ?? p.resourceId} - ${p.resourceName ?? "Unknown"}`,
               }))}
             />
             {qualifiedResources.length === 0 && (
-              <p className="text-xs text-text-muted mt-1">
-                No resources linked to users with this role. You may still override below.
+              <p className="text-xs text-amber-600 mt-1">
+                No pooled resources match this role. Add resources from the Pool sub-tab first.
               </p>
             )}
           </div>

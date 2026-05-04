@@ -38,6 +38,7 @@ public record ProjectResponse(
     BigDecimal totalLengthKm,
     UUID calendarId,
     UUID activeBaselineId,
+    boolean requiresRebaseline,
     ContractSummary contract,
     BigDecimal originalBudget,
     BigDecimal currentBudget,

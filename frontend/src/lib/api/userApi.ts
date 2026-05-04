@@ -13,6 +13,16 @@ export interface UpdateUserRolesRequest {
   roles: string[];
 }
 
+export interface CreateUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  profileId?: string | null;
+  enabled?: boolean;
+}
+
 export interface UpdateUserProfileRequest {
   firstName?: string | null;
   lastName?: string | null;
@@ -63,5 +73,13 @@ export const userApi = {
   updateProfile: (userId: string, body: UpdateUserProfileRequest) =>
     apiClient
       .put<ApiResponse<UserResponse>>(`/v1/users/${userId}`, body)
+      .then((r) => r.data),
+
+  createUser: (body: CreateUserRequest) =>
+    apiClient.post<ApiResponse<UserResponse>>("/v1/users", body).then((r) => r.data),
+
+  assignProfile: (userId: string, profileId: string | null) =>
+    apiClient
+      .put<ApiResponse<UserResponse>>(`/v1/users/${userId}/profile`, { profileId })
       .then((r) => r.data),
 };

@@ -176,6 +176,14 @@ export default function WorkActivitiesPage() {
             onSubmit={handleSubmit}
             className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl"
           >
+            <div className="mb-4 p-3 rounded-lg bg-info/5 border border-info/20 text-xs text-text-muted">
+              This is a <strong>master library</strong> entry — a reusable definition of one
+              <em> kind of work</em>. It feeds two places: (1) <strong>Productivity Norms</strong>
+              {" "}attach to it (&quot;for this activity, X output per day&quot;), and
+              (2) <strong>project Activities</strong> can reference it as their work-type, which
+              lets the Capacity Utilization report find the matching norm. Add an entry once;
+              reuse across every project.
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -188,6 +196,10 @@ export default function WorkActivitiesPage() {
                   className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                   maxLength={50}
                 />
+                <p className="text-xs text-text-muted mt-1">
+                  Short identifier shown in tables and exports (e.g. <em>WA_EXC</em>,{" "}
+                  <em>WA_PNT</em>). Leave blank to auto-generate from the name.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -201,6 +213,10 @@ export default function WorkActivitiesPage() {
                   required
                   maxLength={150}
                 />
+                <p className="text-xs text-text-muted mt-1">
+                  Human-friendly label. Use the same wording your site team uses (e.g.{" "}
+                  <em>Brick Masonry</em>, <em>Plastering</em>) so reports stay recognisable.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -214,6 +230,11 @@ export default function WorkActivitiesPage() {
                   placeholder="e.g. Sqm, Cum, MT"
                   maxLength={20}
                 />
+                <p className="text-xs text-text-muted mt-1">
+                  Pre-fills the <em>Unit</em> field on the Productivity Norms form when this
+                  activity is selected. Use the unit you most often measure this work in (Sqm for
+                  plastering, Cum for excavation, MT for steel).
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -227,6 +248,11 @@ export default function WorkActivitiesPage() {
                   placeholder="earthwork / pavement / structures"
                   maxLength={50}
                 />
+                <p className="text-xs text-text-muted mt-1">
+                  Free-text grouping label used in reports and dropdown ordering. Common values:{" "}
+                  <em>earthwork</em>, <em>pavement</em>, <em>structures</em>, <em>finishing</em>,{" "}
+                  <em>MEP</em>. No fixed list — pick what suits your project mix.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -239,17 +265,28 @@ export default function WorkActivitiesPage() {
                   onChange={(e) => setFormData({ ...formData, sortOrder: e.target.value })}
                   className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 />
+                <p className="text-xs text-text-muted mt-1">
+                  Lower numbers appear first in activity dropdowns. Leave blank to fall back to
+                  alphabetical order.
+                </p>
               </div>
-              <div className="flex items-end">
-                <label className="inline-flex items-center gap-2 text-text-secondary">
-                  <input
-                    type="checkbox"
-                    checked={formData.active}
-                    onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                    className="h-4 w-4"
-                  />
-                  Active
-                </label>
+              <div className="flex flex-col">
+                <div className="flex items-end h-[42px]">
+                  <label className="inline-flex items-center gap-2 text-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={formData.active}
+                      onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    Active
+                  </label>
+                </div>
+                <p className="text-xs text-text-muted mt-1">
+                  Inactive activities are hidden from <em>new</em> Productivity Norm forms but
+                  existing norms and project Activities continue to work. Use this instead of
+                  deleting when an activity is no longer used on new work.
+                </p>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -262,6 +299,10 @@ export default function WorkActivitiesPage() {
                   rows={3}
                   maxLength={500}
                 />
+                <p className="text-xs text-text-muted mt-1">
+                  Optional notes — scope inclusions / exclusions, measurement convention, contract
+                  reference. Shows up only on this admin page.
+                </p>
               </div>
             </div>
             <div className="flex gap-2 mt-4">

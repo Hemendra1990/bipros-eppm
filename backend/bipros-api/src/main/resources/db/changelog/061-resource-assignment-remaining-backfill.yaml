@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 061-resource-assignment-remaining-backfill
+      author: bipros
+      # Backfills remaining_units / remaining_cost for resource assignments whose values were
+      # left NULL because the daily-output rollup (DailyActivityResourceOutputService.recompute
+      # AssignmentRollup) only writes them after the first daily output is recorded. Going
+      # forward, ResourceAssignmentService initializes both columns at create / update / staff
+      # / swap time, so this fixes legacy rows once.
+      #
+      # Dev users on ddl-auto: update can run the equivalent psql commands:
+      #   UPDATE resource.resource_assignments
+      #   SET remaining_units = GREATEST(planned_units - COALESCE(actual_units, 0), 0)
+      #   WHERE remaining_units IS NULL AND planned_units IS NOT NULL;
+      #   UPDATE resource.resource_assignments
+      #   SET remaining_cost = GREATEST(planned_cost - COALESCE(actual_cost, 0), 0)
+      #   WHERE remaining_cost IS NULL AND planned_cost IS NOT NULL;
+      changes:
+        - sql:
+            comment: Initialize remaining_units for assignments where the rollup never ran.
+            sql: >-
+              UPDATE resource.resource_assignments
+              SET remaining_units = GREATEST(planned_units - COALESCE(actual_units, 0), 0)
+              WHERE remaining_units IS NULL AND planned_units IS NOT NULL
+        - sql:
+            comment: Initialize remaining_cost for assignments where the rollup never ran.
+            sql: >-
+              UPDATE resource.resource_assignments
+              SET remaining_cost = GREATEST(planned_cost - COALESCE(actual_cost, 0), 0)
+              WHERE remaining_cost IS NULL AND planned_cost IS NOT NULL

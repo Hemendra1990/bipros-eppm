@@ -2,7 +2,7 @@ package com.bipros.resource.domain.service;
 
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceTypeDef;
+import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.model.WorkActivity;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,8 +21,7 @@ import java.util.UUID;
  * <p>Fallback order:
  * <ol>
  *   <li>norm scoped to the specific resource ({@code resource_id})</li>
- *   <li>norm scoped to the resource's type ({@code resource_type_def_id})</li>
- *   <li>{@code Resource.standardOutputPerDay} (legacy denormalised default)</li>
+ *   <li>norm scoped to the resource's type ({@code resource_type_id})</li>
  *   <li>empty</li>
  * </ol>
  */
@@ -49,22 +47,13 @@ public class ProductivityNormLookupService {
       if (specific.isPresent()) {
         return materialise(specific.get(), ResolvedNorm.Source.SPECIFIC_RESOURCE, resource.getId());
       }
-      ResourceTypeDef def = resource.getResourceTypeDef();
-      if (def != null) {
+      ResourceType type = resource.getResourceType();
+      if (type != null) {
         Optional<ProductivityNorm> typeLevel = normRepository
-            .findFirstByWorkActivityIdAndResourceIsNullAndResourceTypeDefId(workActivityId, def.getId());
+            .findFirstByWorkActivityIdAndResourceIsNullAndResourceTypeId(workActivityId, type.getId());
         if (typeLevel.isPresent()) {
           return materialise(typeLevel.get(), ResolvedNorm.Source.RESOURCE_TYPE, resource.getId());
         }
-      }
-      if (resource.getStandardOutputPerDay() != null) {
-        return new ResolvedNorm(
-            BigDecimal.valueOf(resource.getStandardOutputPerDay()),
-            resource.getStandardOutputUnit(),
-            ResolvedNorm.Source.RESOURCE_LEGACY,
-            null,
-            workActivityId,
-            resource.getId());
       }
     }
     return ResolvedNorm.none(workActivityId, resourceId);

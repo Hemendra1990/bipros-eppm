@@ -106,6 +106,43 @@ public class OmanRoadProjectWorkbookReader {
   public record SupervisorTeamRow(
       String name, String role, String section) {}
 
+  public record SupervisorRow(
+      String name, String role, String scope,
+      BigDecimal contractAmount, BigDecimal achievedAmount) {}
+
+  public record ProjectStaffRow(
+      Integer itemNo, String position, Integer contractor,
+      Integer subcon, Integer total) {}
+
+  public record DirectLabourCountRow(
+      Integer itemNo, String position, Integer scc,
+      Integer subcon, Integer total) {}
+
+  public record EquipmentDeploymentRow(
+      String code, String description, double[] dailyHours) {}
+
+  public record BoqRateRow(
+      String code, String description, String unit, BigDecimal revisedRate) {}
+
+  public record FinancialSupervisorRow(
+      Integer slNo, String supervisorName, BigDecimal projectionAmount,
+      BigDecimal achievedAmount, BigDecimal prelimsIncome,
+      BigDecimal cost, BigDecimal costPct) {}
+
+  public record EquipmentMasterRow(
+      String code, String description, BigDecimal currentRate) {}
+
+  public record MaterialBoqRateRow(
+      String boqCode, String description, String unit,
+      BigDecimal materialUnitRate, BigDecimal materialQty) {}
+
+  public record PlantSummaryRow(
+      String equipment, String variation, Integer available,
+      Integer totalSiteCount, Integer perSupervisor) {}
+
+  public record EquipmentMpDaysRow(
+      String equipment, String supervisor, Integer dayCount, Integer monthCount) {}
+
   // ─────────────────────────── Workbook open helper ───────────────────────────
 
   /**
@@ -118,11 +155,17 @@ public class OmanRoadProjectWorkbookReader {
     if (!res.exists()) {
       throw new IllegalStateException("Workbook not on classpath: " + path);
     }
+    // POI's default min inflate ratio (0.01) flags legitimate Excel files whose
+    // styles.xml compresses below 1% — observed at 0.009995 on these workbooks.
+    double previous = ZipSecureFile.getMinInflateRatio();
+    ZipSecureFile.setMinInflateRatio(0.001);
     try (InputStream is = res.getInputStream();
          Workbook wb = new XSSFWorkbook(is)) {
       return fn.apply(wb);
     } catch (Exception e) {
       throw new RuntimeException("Failed reading " + path + ": " + e.getMessage(), e);
+    } finally {
+      ZipSecureFile.setMinInflateRatio(previous);
     }
   }
 
@@ -362,6 +405,283 @@ public class OmanRoadProjectWorkbookReader {
       if (lc.startsWith("position") || lc.contains("skilled") || lc.contains("un-skilled")
           || lc.contains("direct staff") || lc.startsWith("total")) continue;
       out.add(new DirectLabourRow(itemNo, position.trim()));
+    }
+    return out;
+  }
+
+  // ───────────────────── New reader methods ─────────────────────
+
+  /**
+   * File 1 sheet "Projection Vs Ach Summary" rows 9–80.
+   * Reads supervisor-level projection vs achieved amounts.
+   * Columns: B=name, C=role, D=scope, E=contractAmount, F=achievedAmount.
+   */
+  public List<SupervisorRow> readSupervisorProjection(Workbook wb) {
+    Sheet s = wb.getSheet("Projection Vs Ach Summary");
+    if (s == null) return List.of();
+    List<SupervisorRow> out = new ArrayList<>();
+    int last = Math.min(s.getLastRowNum(), 80);
+    int blankStreak = 0;
+    for (int i = 8; i <= last; i++) { // 0-based row 8 == 1-based row 9
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 5) break; continue; }
+      String name = stringValue(r.getCell(1)); // col B
+      String role = stringValue(r.getCell(2)); // col C
+      if (name == null && role == null) { if (++blankStreak >= 5) break; continue; }
+      blankStreak = 0;
+      if (name == null) continue;
+      String scope = stringValue(r.getCell(3)); // col D
+      BigDecimal contractAmt = numericValue(r.getCell(4)); // col E
+      BigDecimal achievedAmt = numericValue(r.getCell(5)); // col F
+      out.add(new SupervisorRow(name.trim(), role, scope, contractAmt, achievedAmt));
+    }
+    return out;
+  }
+
+  /**
+   * File 1 sheet "Resource" cols A–E (staff counts).
+   * Extends the existing IndirectStaffRow to include contractor/subcon counts.
+   */
+  public List<ProjectStaffRow> readProjectStaff(Workbook wb) {
+    Sheet s = findSheet(wb, "Resource", 3);
+    if (s == null) return List.of();
+    List<ProjectStaffRow> out = new ArrayList<>();
+    for (int i = 6; i <= Math.min(s.getLastRowNum(), 60); i++) {
+      Row r = s.getRow(i);
+      if (r == null) continue;
+      Integer itemNo = intValue(r.getCell(0));    // col A
+      String position = stringValue(r.getCell(1)); // col B
+      if (position == null) continue;
+      String lc = position.toLowerCase(Locale.ROOT);
+      if (lc.startsWith("position") || lc.contains("indirect staff") || lc.startsWith("total")) continue;
+      Integer contractor = intValue(r.getCell(2)); // col C
+      Integer subcon = intValue(r.getCell(3));     // col D
+      Integer total = intValue(r.getCell(4));       // col E
+      out.add(new ProjectStaffRow(itemNo, position.trim(), contractor, subcon, total));
+    }
+    return out;
+  }
+
+  /**
+   * File 1 sheet "Resource" cols F–J (direct labour counts).
+   * Extends the existing DirectLabourRow to include SCC/subcon counts.
+   */
+  public List<DirectLabourCountRow> readDirectLabourCounts(Workbook wb) {
+    Sheet s = findSheet(wb, "Resource", 3);
+    if (s == null) return List.of();
+    List<DirectLabourCountRow> out = new ArrayList<>();
+    for (int i = 6; i <= Math.min(s.getLastRowNum(), 60); i++) {
+      Row r = s.getRow(i);
+      if (r == null) continue;
+      Integer itemNo = intValue(r.getCell(5));    // col F
+      String position = stringValue(r.getCell(6)); // col G
+      if (position == null) continue;
+      String lc = position.toLowerCase(Locale.ROOT);
+      if (lc.startsWith("position") || lc.contains("skilled") || lc.contains("un-skilled")
+          || lc.contains("direct staff") || lc.startsWith("total")) continue;
+      Integer scc = intValue(r.getCell(7));        // col H
+      Integer subcon = intValue(r.getCell(8));     // col I
+      Integer total = intValue(r.getCell(9));       // col J
+      out.add(new DirectLabourCountRow(itemNo, position.trim(), scc, subcon, total));
+    }
+    return out;
+  }
+
+  /**
+   * File 2 sheet "Daily Deployment" rows 5–13.
+   * Reads equipment daily deployment hours.
+   * Columns: A=code, B=description, C-M=dailyHours (up to 11 days).
+   */
+  public List<EquipmentDeploymentRow> readEquipmentDeployment(Workbook wb) {
+    Sheet s = wb.getSheet("Daily Deployment");
+    if (s == null) return List.of();
+    List<EquipmentDeploymentRow> out = new ArrayList<>();
+    int last = Math.min(s.getLastRowNum(), 20);
+    int blankStreak = 0;
+    for (int i = 4; i <= last; i++) { // 0-based row 4 == 1-based row 5
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 3) break; continue; }
+      String code = stringValue(r.getCell(0)); // col A
+      String desc = stringValue(r.getCell(1)); // col B
+      if (code == null && desc == null) { if (++blankStreak >= 3) break; continue; }
+      blankStreak = 0;
+      if (desc == null) continue;
+      // Read up to 11 daily hour columns (C through M)
+      double[] hours = new double[11];
+      for (int c = 0; c < 11; c++) {
+        BigDecimal v = numericValue(r.getCell(2 + c)); // cols C-M
+        hours[c] = v != null ? v.doubleValue() : 0.0;
+      }
+      out.add(new EquipmentDeploymentRow(code, desc.trim(), hours));
+    }
+    return out;
+  }
+
+  /**
+   * File 2 sheet "DPR" col D rates (revised BOQ rates).
+   * Provides REAL rates; File 3 cells are #REF!.
+   * Columns: C=code, D=description, E=unit, F=revisedRate.
+   */
+  public List<BoqRateRow> readBoqRates(Workbook wb) {
+    Sheet s = findSheet(wb, "DPR", 4);
+    if (s == null) return List.of();
+    List<BoqRateRow> out = new ArrayList<>();
+    int last = s.getLastRowNum();
+    int blankStreak = 0;
+    for (int i = 4; i <= last; i++) {
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 5) break; continue; }
+      String code = stringValue(r.getCell(2)); // col C
+      String desc = stringValue(r.getCell(3)); // col D
+      if (code == null && desc == null) { if (++blankStreak >= 5) break; continue; }
+      blankStreak = 0;
+      if (desc == null) continue;
+      String unit = stringValue(r.getCell(4)); // col E
+      BigDecimal rate = numericValue(r.getCell(5)); // col F
+      out.add(new BoqRateRow(code, desc.trim(), unit, rate));
+    }
+    return out;
+  }
+
+  /**
+   * File 3 sheets "Summary-Financial" and "Summary-Financial (NEW)" rows 6–40.
+   * Reads supervisor-level financial summaries.
+   * Columns: A=slNo, B=supervisorName, C=projectionAmount, D=achievedAmount,
+   *          E=prelimsIncome, F=cost, G=costPct.
+   */
+  public List<FinancialSupervisorRow> readFinancialSupervisors(Workbook wb) {
+    List<FinancialSupervisorRow> out = new ArrayList<>();
+    out.addAll(readFinancialSupervisorsFromSheet(wb, "Summary-Financial"));
+    out.addAll(readFinancialSupervisorsFromSheet(wb, "Summary-Financial (NEW)"));
+    return out;
+  }
+
+  private List<FinancialSupervisorRow> readFinancialSupervisorsFromSheet(Workbook wb, String sheetName) {
+    Sheet s = wb.getSheet(sheetName);
+    if (s == null) return List.of();
+    List<FinancialSupervisorRow> out = new ArrayList<>();
+    int last = Math.min(s.getLastRowNum(), 40);
+    int blankStreak = 0;
+    for (int i = 5; i <= last; i++) { // 0-based row 5 == 1-based row 6
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 5) break; continue; }
+      String name = stringValue(r.getCell(1)); // col B
+      if (name == null) { if (++blankStreak >= 5) break; continue; }
+      blankStreak = 0;
+      Integer slNo = intValue(r.getCell(0)); // col A
+      BigDecimal projAmt = numericValue(r.getCell(2)); // col C
+      BigDecimal achAmt = numericValue(r.getCell(3)); // col D
+      BigDecimal prelims = numericValue(r.getCell(4)); // col E
+      BigDecimal cost = numericValue(r.getCell(5)); // col F
+      BigDecimal costPct = numericValue(r.getCell(6)); // col G
+      out.add(new FinancialSupervisorRow(slNo, name.trim(), projAmt, achAmt, prelims, cost, costPct));
+    }
+    return out;
+  }
+
+  /**
+   * File 3 sheet "MP & Eqpt Summary 1" — widened to include code from col A.
+   * This replaces the existing readEquipmentMaster for callers that need the code.
+   * The existing method remains for backward compatibility.
+   */
+  public List<EquipmentMasterRow> readEquipmentMasterWithCode(Workbook wb) {
+    Sheet s = findSheet(wb, "MP & Eqpt Summary 1", 7);
+    if (s == null) return List.of();
+    List<EquipmentMasterRow> out = new ArrayList<>();
+    int last = Math.min(s.getLastRowNum(), 100);
+    int blankStreak = 0;
+    for (int i = 2; i <= last; i++) {
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 5) break; continue; }
+      String code = stringValue(r.getCell(0));   // col A
+      String desc = stringValue(r.getCell(3));   // col D
+      if (code == null || desc == null) {
+        if (++blankStreak >= 5) break;
+        continue;
+      }
+      blankStreak = 0;
+      String lc = desc.toLowerCase(Locale.ROOT);
+      if (lc.contains("description") || lc.contains("major equipment")) continue;
+      if (code.length() > 8 || !code.matches("[A-Za-z][A-Za-z0-9 \\-]*")) continue;
+      BigDecimal rate = numericValue(r.getCell(4)); // col E
+      out.add(new EquipmentMasterRow(code.trim(), desc.trim(), rate));
+      if (out.size() >= 100) break;
+    }
+    return out;
+  }
+
+  /**
+   * File 3 sheet "Anbazhagan-TS-1" — material BOQ rates.
+   * Columns: A=boqCode, B=description, C=unit, D=materialUnitRate, E=materialQty.
+   */
+  public List<MaterialBoqRateRow> readMaterialBoqRates(Workbook wb) {
+    Sheet s = wb.getSheet("Anbazhagan-TS-1");
+    if (s == null) return List.of();
+    List<MaterialBoqRateRow> out = new ArrayList<>();
+    int last = Math.min(s.getLastRowNum(), 100);
+    int blankStreak = 0;
+    for (int i = 2; i <= last; i++) { // skip header rows
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 5) break; continue; }
+      String code = stringValue(r.getCell(0)); // col A
+      String desc = stringValue(r.getCell(1)); // col B
+      if (code == null && desc == null) { if (++blankStreak >= 5) break; continue; }
+      blankStreak = 0;
+      if (desc == null) continue;
+      String unit = stringValue(r.getCell(2)); // col C
+      BigDecimal rate = numericValue(r.getCell(3)); // col D
+      BigDecimal qty = numericValue(r.getCell(4)); // col E
+      out.add(new MaterialBoqRateRow(code, desc.trim(), unit, rate, qty));
+    }
+    return out;
+  }
+
+  /**
+   * File 3 sheet "Plant Summary" — plant availability and distribution.
+   * Columns: A=equipment, B=variation, C=available, D=totalSiteCount, E=perSupervisor.
+   */
+  public List<PlantSummaryRow> readPlantSummary(Workbook wb) {
+    Sheet s = wb.getSheet("Plant Summary");
+    if (s == null) return List.of();
+    List<PlantSummaryRow> out = new ArrayList<>();
+    int last = Math.min(s.getLastRowNum(), 60);
+    int blankStreak = 0;
+    for (int i = 2; i <= last; i++) {
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 5) break; continue; }
+      String equip = stringValue(r.getCell(0)); // col A
+      if (equip == null) { if (++blankStreak >= 5) break; continue; }
+      blankStreak = 0;
+      String variation = stringValue(r.getCell(1)); // col B
+      Integer available = intValue(r.getCell(2)); // col C
+      Integer totalSite = intValue(r.getCell(3)); // col D
+      Integer perSupervisor = intValue(r.getCell(4)); // col E
+      out.add(new PlantSummaryRow(equip.trim(), variation, available, totalSite, perSupervisor));
+    }
+    return out;
+  }
+
+  /**
+   * File 3 sheet "Eqpmnt & MP Days" — equipment MP days by supervisor.
+   * Columns: A=equipment, B=supervisor, C=dayCount, D=monthCount.
+   * NOTE: This sheet often has #REF! — store raw, seeder falls back synthetic.
+   */
+  public List<EquipmentMpDaysRow> readEquipmentMpDays(Workbook wb) {
+    Sheet s = wb.getSheet("Eqpmnt & MP Days");
+    if (s == null) return List.of();
+    List<EquipmentMpDaysRow> out = new ArrayList<>();
+    int last = Math.min(s.getLastRowNum(), 80);
+    int blankStreak = 0;
+    for (int i = 2; i <= last; i++) {
+      Row r = s.getRow(i);
+      if (r == null) { if (++blankStreak >= 5) break; continue; }
+      String equip = stringValue(r.getCell(0)); // col A
+      if (equip == null) { if (++blankStreak >= 5) break; continue; }
+      blankStreak = 0;
+      String supervisor = stringValue(r.getCell(1)); // col B
+      Integer dayCount = intValue(r.getCell(2)); // col C
+      Integer monthCount = intValue(r.getCell(3)); // col D
+      out.add(new EquipmentMpDaysRow(equip.trim(), supervisor, dayCount, monthCount));
     }
     return out;
   }

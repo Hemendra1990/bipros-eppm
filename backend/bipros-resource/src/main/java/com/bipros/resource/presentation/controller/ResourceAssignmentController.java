@@ -188,6 +188,22 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
+  /**
+   * Preview-only counterpart of {@code POST /level} — returns the same proposed shifts
+   * without writing them. Lets the UI render a "what would change" view before the user
+   * commits via {@code POST /level}.
+   */
+  @PostMapping("/level/preview")
+  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+  public ResponseEntity<ApiResponse<ResourceLevelingResponse>> previewLeveling(
+      @PathVariable UUID projectId,
+      @Valid @RequestBody ResourceLevelingRequest request) {
+    log.info("POST /v1/projects/{}/resource-assignments/level/preview - mode={}", projectId, request.mode());
+    ResourceLevelingResponse response = levelingService.previewLevelingWithMode(
+        projectId, request.mode(), request.resourceIds());
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
   @GetMapping("/utilization-profile")
   @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
   public ResponseEntity<ApiResponse<List<UtilizationProfileEntry>>> getUtilizationProfile(

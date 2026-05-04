@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
-  Banknote, BarChart3, Briefcase, Building2, Calendar, ChevronDown,
+  Award, Banknote, BarChart3, Briefcase, Building2, Calendar,
   ChevronLeft, ChevronRight, CircleDollarSign, Contact, FileText, FolderTree, Gauge,
   Grid, HardHat, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
   Network, Plug, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Tag,
@@ -32,7 +32,13 @@ type NavItem = {
   adminOnly?: boolean;
   requireRoles?: readonly string[];
 };
-type NavGroup = { label: string; items: NavItem[]; adminOnly?: boolean };
+type NavSubGroup = { label: string; items: NavItem[] };
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+  subGroups?: NavSubGroup[];
+  adminOnly?: boolean;
+};
 
 const groups: NavGroup[] = [
   {
@@ -48,8 +54,6 @@ const groups: NavGroup[] = [
   {
     label: "Execute",
     items: [
-      { name: "Resources", href: "/resources", icon: Users, module: "M8_RESOURCES" },
-      { name: "Labour Master", href: "/labour-master", icon: HardHat, module: "M8_RESOURCES" },
       { name: "Calendars", href: "/admin/calendars", icon: Calendar, module: "M2_SCHEDULE_EVM" },
     ],
   },
@@ -70,24 +74,46 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    label: "Resources",
+    adminOnly: true,
+    items: [
+      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
+      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
+      { name: "Resources", href: "/resources", icon: Users, adminOnly: true },
+      { name: "Labour Master", href: "/labour-master", icon: HardHat, adminOnly: true },
+    ],
+  },
+  // Nationalities admin page exists at /admin/nationalities (still routable, still seeded
+  // and consumed by the resource form's nationality datalist) but intentionally hidden
+  // from the sidebar — the form's autocomplete is the only place it surfaces.
+  {
+    label: "Master Data",
+    adminOnly: true,
+    items: [
+      { name: "Categories", href: "/admin/manpower-categories", icon: FolderTree, adminOnly: true },
+      { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true },
+      { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true },
+      { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true },
+      { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },
+      { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
+      { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
+      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
+      { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
+    ],
+  },
+  {
     label: "Admin",
     adminOnly: true,
     items: [
       { name: "Users", href: "/admin/users", icon: UsersRound, adminOnly: true },
+      { name: "Profiles", href: "/admin/profiles", icon: ShieldCheck, adminOnly: true },
       { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true },
       { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true },
-      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
-      { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },
-      { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
       { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true },
       { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText, adminOnly: true },
-      { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
-      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
       { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
       { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true },
-      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },
-      { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
       { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true },
       { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true },
     ],
@@ -97,6 +123,37 @@ const groups: NavGroup[] = [
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+function renderNavItem(item: NavItem, pathname: string, sidebarCollapsed: boolean) {
+  const active = isActive(pathname, item.href);
+  return (
+    <Link
+      key={item.href}
+      href={item.href}
+      title={sidebarCollapsed ? item.name : undefined}
+      className={cn(
+        "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
+        active
+          ? "text-charcoal font-semibold bg-[linear-gradient(90deg,rgba(212,175,55,0.09),rgba(212,175,55,0)_90%)]"
+          : "text-charcoal hover:bg-ivory",
+        sidebarCollapsed && "justify-center"
+      )}
+    >
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-[-13px] top-1.5 bottom-1.5 w-[3px] rounded-r-[3px] bg-gold"
+        />
+      )}
+      <item.icon
+        size={sidebarCollapsed ? 20 : 16}
+        className={cn("shrink-0", active ? "text-gold-deep" : "text-slate")}
+        strokeWidth={1.5}
+      />
+      {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
+    </Link>
+  );
 }
 
 export function Sidebar() {
@@ -114,19 +171,22 @@ export function Sidebar() {
   };
 
   // Filter the static groups by the current user's roles + module access. ADMIN sees everything.
-  const visibleGroups = groups
-    .map((group) => {
-      if (group.adminOnly && !isAdmin) return null;
-      const visibleItems = group.items.filter((item) => {
-        if (item.adminOnly && !isAdmin) return false;
-        if (item.requireRoles && !hasAnyRole(item.requireRoles)) return false;
-        if (item.module && !canAccessModule(item.module)) return false;
-        return true;
-      });
-      if (visibleItems.length === 0) return null;
-      return { ...group, items: visibleItems };
-    })
-    .filter((g): g is NavGroup => g !== null);
+  const itemVisible = (item: NavItem) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.requireRoles && !hasAnyRole(item.requireRoles)) return false;
+    if (item.module && !canAccessModule(item.module)) return false;
+    return true;
+  };
+  const visibleGroups: NavGroup[] = groups.flatMap((group) => {
+    if (group.adminOnly && !isAdmin) return [];
+    const visibleItems = group.items.filter(itemVisible);
+    const visibleSubGroups: NavSubGroup[] = (group.subGroups ?? [])
+      .map((sg) => ({ ...sg, items: sg.items.filter(itemVisible) }))
+      .filter((sg) => sg.items.length > 0);
+    if (visibleItems.length === 0 && visibleSubGroups.length === 0) return [];
+    const result: NavGroup = { ...group, items: visibleItems, subGroups: visibleSubGroups };
+    return [result];
+  });
 
   // Pick the most "senior" role to show beneath the user's name in the chip. Falls back to
   // the raw first role string if none of the well-known roles match.
@@ -201,22 +261,6 @@ export function Sidebar() {
         </button>
       )}
 
-      {/* Workspace picker */}
-      {!sidebarCollapsed && (
-        <div className="px-4 pt-4 pb-2">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
-            Workspace
-          </div>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-[10px] border border-hairline bg-ivory px-3 py-2.5 text-sm font-semibold text-charcoal hover:bg-paper"
-          >
-            <span className="truncate">Acme Infrastructure</span>
-            <ChevronDown size={14} className="text-ash" />
-          </button>
-        </div>
-      )}
-
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2">
         {visibleGroups.map((group) => (
@@ -226,36 +270,19 @@ export function Sidebar() {
                 {group.label}
               </div>
             )}
-            {group.items.map((item) => {
-              const active = isActive(pathname, item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  title={sidebarCollapsed ? item.name : undefined}
-                  className={cn(
-                    "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
-                    active
-                      ? "text-charcoal font-semibold bg-[linear-gradient(90deg,rgba(212,175,55,0.09),rgba(212,175,55,0)_90%)]"
-                      : "text-charcoal hover:bg-ivory",
-                    sidebarCollapsed && "justify-center"
-                  )}
-                >
-                  {active && (
-                    <span
-                      aria-hidden
-                      className="absolute left-[-13px] top-1.5 bottom-1.5 w-[3px] rounded-r-[3px] bg-gold"
-                    />
-                  )}
-                  <item.icon
-                    size={sidebarCollapsed ? 20 : 16}
-                    className={cn("shrink-0", active ? "text-gold-deep" : "text-slate")}
-                    strokeWidth={1.5}
-                  />
-                  {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
-                </Link>
-              );
-            })}
+            {group.items.map((item) => renderNavItem(item, pathname, sidebarCollapsed))}
+            {(group.subGroups ?? []).map((sg) => (
+              <div key={sg.label} className="mt-1">
+                {!sidebarCollapsed && (
+                  <div className="ml-3 px-2.5 pt-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-ash/80">
+                    {sg.label}
+                  </div>
+                )}
+                <div className={sidebarCollapsed ? "" : "ml-3 border-l border-hairline pl-1"}>
+                  {sg.items.map((item) => renderNavItem(item, pathname, sidebarCollapsed))}
+                </div>
+              </div>
+            ))}
           </div>
         ))}
       </nav>

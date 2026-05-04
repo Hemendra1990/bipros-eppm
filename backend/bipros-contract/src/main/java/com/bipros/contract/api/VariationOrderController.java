@@ -4,7 +4,9 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.contract.application.dto.VariationOrderRequest;
 import com.bipros.contract.application.dto.VariationOrderResponse;
 import com.bipros.contract.application.service.VariationOrderService;
+import com.bipros.contract.domain.model.VariationOrderStatus;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,6 +56,15 @@ public class VariationOrderController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PutMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<VariationOrderResponse>> updateStatus(
+        @PathVariable UUID contractId,
+        @PathVariable UUID id,
+        @Valid @RequestBody UpdateVoStatusRequest request) {
+        VariationOrderResponse response = variationOrderService.updateStatus(id, request.status(), request.approvedBy());
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
         @PathVariable UUID contractId,
@@ -61,4 +72,9 @@ public class VariationOrderController {
         variationOrderService.delete(id);
         return ResponseEntity.noContent().build();
     }
+
+    public record UpdateVoStatusRequest(
+        @NotNull VariationOrderStatus status,
+        String approvedBy
+    ) {}
 }

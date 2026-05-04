@@ -14,7 +14,7 @@ public interface ProductivityNormRepository extends JpaRepository<ProductivityNo
 
   List<ProductivityNorm> findByNormType(ProductivityNormType normType);
 
-  /** @deprecated activity is now linked via {@code workActivity}; this is kept for legacy callers. */
+  /** @deprecated activity is now linked via {@code workActivity}; kept for legacy callers. */
   @Deprecated
   List<ProductivityNorm> findByActivityNameIgnoreCase(String activityName);
 
@@ -25,6 +25,6 @@ public interface ProductivityNormRepository extends JpaRepository<ProductivityNo
   Optional<ProductivityNorm> findFirstByWorkActivityIdAndResourceId(
       UUID workActivityId, UUID resourceId);
 
-  Optional<ProductivityNorm> findFirstByWorkActivityIdAndResourceIsNullAndResourceTypeDefId(
-      UUID workActivityId, UUID resourceTypeDefId);
+  Optional<ProductivityNorm> findFirstByWorkActivityIdAndResourceIsNullAndResourceTypeId(
+      UUID workActivityId, UUID resourceTypeId);
 }

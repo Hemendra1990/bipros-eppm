@@ -132,4 +132,14 @@ export const reportApi = {
     apiClient.get(`/v1/reports/executions/${executionId}/download`, {
       responseType: "blob",
     }),
+
+  downloadCapacityUtilizationExcel: (
+    projectId: string,
+    month: string,
+    workDays = 26,
+  ) =>
+    apiClient.get(`/v1/reports/capacity-utilization/excel`, {
+      responseType: "blob",
+      params: { projectId, month, workDays },
+    }),
 };

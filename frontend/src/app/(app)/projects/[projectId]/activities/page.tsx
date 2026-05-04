@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { List, FolderTree, Play, AlertTriangle } from "lucide-react";
+import { List, FolderTree, Play, AlertTriangle, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
@@ -11,6 +11,7 @@ import type { ActivityResponse } from "@/lib/api/activityApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityWbsTreeView } from "@/components/activity/ActivityWbsTreeView";
+import { ActivityAiGenerateDialog } from "@/components/activity/ActivityAiGenerateDialog";
 import { getErrorMessage } from "@/lib/utils/error";
 import { notificationHelpers } from "@/lib/notificationHelpers";
 import Link from "next/link";
@@ -27,6 +28,7 @@ export default function ActivitiesPage() {
   const [lookAheadWeeks, setLookAheadWeeks] = useState<4 | 13 | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "tree">("tree");
   const [scheduleError, setScheduleError] = useState("");
+  const [showAiDialog, setShowAiDialog] = useState(false);
   // Row-specific inline editor state. Keyed by activity id; value = string
   // currently typed into the % input.
   const [progressEdit, setProgressEdit] = useState<Record<string, string>>({});
@@ -177,12 +179,21 @@ export default function ActivitiesPage() {
         title="Activities"
         description="View and manage project activities"
         actions={
-          <button
-            onClick={() => router.push(`/projects/${projectId}/activities/new`)}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
-          >
-            New Activity
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAiDialog(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
+            >
+              <Sparkles size={16} />
+              Generate with AI
+            </button>
+            <button
+              onClick={() => router.push(`/projects/${projectId}/activities/new`)}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            >
+              New Activity
+            </button>
+          </div>
         }
       />
 
@@ -348,6 +359,12 @@ export default function ActivitiesPage() {
           </p>
         </div>
       )}
+
+      <ActivityAiGenerateDialog
+        open={showAiDialog}
+        onClose={() => setShowAiDialog(false)}
+        projectId={projectId}
+      />
     </div>
   );
 }

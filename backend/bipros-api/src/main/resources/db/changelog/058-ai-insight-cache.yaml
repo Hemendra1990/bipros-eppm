@@ -1,0 +1,66 @@
+databaseChangeLog:
+  - changeSet:
+      id: 058-ai-insight-cache
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: ai_insight_cache
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tab
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: data_hash
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_json
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: model
+                  type: VARCHAR(128)
+              - column:
+                  name: token_usage_input
+                  type: INT
+              - column:
+                  name: token_usage_output
+                  type: INT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - createIndex:
+            schemaName: ai
+            tableName: ai_insight_cache
+            indexName: idx_ai_cache_project_tab
+            columns:
+              - column:
+                  name: project_id
+              - column:
+                  name: tab
+        - createIndex:
+            schemaName: ai
+            tableName: ai_insight_cache
+            indexName: idx_ai_cache_created_at
+            columns:
+              - column:
+                  name: created_at

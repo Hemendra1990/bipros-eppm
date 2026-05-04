@@ -402,7 +402,7 @@ PARTITION BY toYYYYMM(week_start)
 ORDER BY (portfolio_id, week_start)
 AS SELECT assumeNotNull(p.portfolio_id) AS portfolio_id, toMonday(e.date) AS week_start,
           sumState(e.pv) AS pv_state, sumState(e.ev) AS ev_state, sumState(e.ac) AS ac_state
-FROM bipros_analytics.fact_evm_daily e INNER JOIN bipros_analytics.dim_project p USING (project_id)
+FROM bipros_analytics.fact_evm_daily e INNER JOIN bipros_analytics.dim_project p ON e.project_id = p.project_id
 WHERE p.portfolio_id IS NOT NULL
 GROUP BY portfolio_id, week_start;
 

@@ -74,6 +74,10 @@ public class User extends BaseEntity {
     @OneToMany(mappedBy = "user", fetch = FetchType.EAGER)
     private Set<UserRole> roles = new HashSet<>();
 
+    /** Permission profile assigned to this user. Single profile per user (current scope). */
+    @Column(name = "profile_id")
+    private UUID profileId;
+
     // ── PMS MasterData Screen 07 (Personnel Master) fields ───────────────────
 
     /** Auto-generated employee code {@code EMP-NNN}, unique per project. */

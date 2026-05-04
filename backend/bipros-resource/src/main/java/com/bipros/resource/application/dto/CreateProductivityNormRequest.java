@@ -21,7 +21,7 @@ public record CreateProductivityNormRequest(
     UUID workActivityId,
 
     /** Type-level scope: norm applies to every resource of this type. */
-    UUID resourceTypeDefId,
+    UUID resourceTypeId,
 
     /** Override scope: norm applies only to this specific resource. */
     UUID resourceId,

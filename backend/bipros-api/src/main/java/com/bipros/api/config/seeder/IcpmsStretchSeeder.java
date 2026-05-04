@@ -28,7 +28,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(960)
 @RequiredArgsConstructor
 public class IcpmsStretchSeeder implements CommandLineRunner {

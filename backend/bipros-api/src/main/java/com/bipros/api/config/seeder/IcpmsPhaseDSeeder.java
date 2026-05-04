@@ -2,6 +2,7 @@ package com.bipros.api.config.seeder;
 
 import com.bipros.admin.domain.model.Organisation;
 import com.bipros.admin.domain.repository.OrganisationRepository;
+import com.bipros.api.config.seeder.util.SeederResourceFactory;
 import com.bipros.document.domain.model.Document;
 import com.bipros.document.domain.model.DocumentCategory;
 import com.bipros.document.domain.model.DocumentFolder;
@@ -14,16 +15,16 @@ import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.application.service.ResourceUtilisationService;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceCategory;
+import com.bipros.resource.domain.model.ResourceEquipmentDetails;
+import com.bipros.resource.domain.model.ResourceMaterialDetails;
 import com.bipros.resource.domain.model.ResourceRate;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceTypeDef;
-import com.bipros.resource.domain.model.ResourceUnit;
-import com.bipros.resource.domain.model.UtilisationStatus;
+import com.bipros.resource.domain.repository.ResourceEquipmentDetailsRepository;
+import com.bipros.resource.domain.repository.ResourceMaterialDetailsRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
-import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -43,13 +44,14 @@ import java.util.UUID;
  *
  * <p>Seeds 30 documents (drawings, specs, RFIs, minutes, reports, LOAs) across a 7-folder
  * register, plus 32 resources (labour + equipment + materials) with daily deployment logs.
- * Resource {@code EQP-EXCAV-20T} is tuned to 93.8% utilisation → {@link UtilisationStatus#OVER_90}.
+ * Resource {@code EQP-EXCAV-20T} is tuned to ~93.8% utilisation via the daily-log aggregator.
  *
- * <p>Sentinel: first drawing {@code DRW-N03-P01-001} present → skip.
+ * <p>Sentinel: any resource or document already present → skip (the Excel master-data loader
+ * takes precedence).
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(104)
 @RequiredArgsConstructor
 public class IcpmsPhaseDSeeder implements CommandLineRunner {
@@ -58,10 +60,12 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
     private final DocumentFolderRepository folderRepository;
     private final DocumentRepository documentRepository;
     private final ResourceRepository resourceRepository;
-    private final ResourceTypeDefRepository resourceTypeDefRepository;
+    private final ResourceEquipmentDetailsRepository equipmentDetailsRepository;
+    private final ResourceMaterialDetailsRepository materialDetailsRepository;
     private final ResourceRateRepository resourceRateRepository;
     private final ResourceUtilisationService utilisationService;
     private final OrganisationRepository organisationRepository;
+    private final SeederResourceFactory resourceFactory;
 
     /** Cached WBS → contractor map built once per seed run. */
     private Map<String, Organisation> contractorByWbs;
@@ -259,156 +263,160 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
 
         // ---- Equipment (10) ----
         // EQP-EXCAV-20T is tuned to 93.8% → OVER_90 (Excel scenario)
-        seedResource("EQP-EXCAV-20T", "Excavator 20T", ResourceType.NONLABOR,
-            ResourceCategory.EARTH_MOVING, ResourceUnit.PER_DAY, 16.0, today, 15.0, 14.07,
-            bd("42.50"), bd("385.20"), "DMIC-N03-P01");
-        seedResource("EQP-EXCAV-10T", "Excavator 10T", ResourceType.NONLABOR,
-            ResourceCategory.EARTH_MOVING, ResourceUnit.PER_DAY, 12.0, today, 10.0, 8.5,
-            bd("22.00"), bd("198.00"), "DMIC-N03-P01");
-        seedResource("EQP-BULLDOZER", "Bulldozer D85", ResourceType.NONLABOR,
-            ResourceCategory.EARTH_MOVING, ResourceUnit.PER_DAY, 8.0, today, 7.0, 7.2,
-            bd("36.00"), bd("312.50"), "DMIC-N03-P02");
-        seedResource("EQP-CRANE-50T", "Mobile Crane 50T", ResourceType.NONLABOR,
-            ResourceCategory.CRANES_LIFTING, ResourceUnit.PER_DAY, 6.0, today, 5.0, 5.0,
-            bd("28.00"), bd("198.00"), "DMIC-N04-P01");
-        seedResource("EQP-TRANSIT-MIXER", "Transit Mixer 6 CuM", ResourceType.NONLABOR,
-            ResourceCategory.CONCRETE_EQUIPMENT, ResourceUnit.PER_DAY, 20.0, today, 18.0, 17.5,
-            bd("18.00"), bd("145.30"), "DMIC-N03-P01");
-        seedResource("EQP-BATCHING-PLANT", "Batching Plant 30 CuM/hr", ResourceType.NONLABOR,
-            ResourceCategory.CONCRETE_EQUIPMENT, ResourceUnit.PER_DAY, 4.0, today, 4.0, 4.0,
-            bd("52.00"), bd("412.00"), "DMIC-N03-P01");
-        seedResource("EQP-PAVER", "Asphalt Paver Vögele", ResourceType.NONLABOR,
-            ResourceCategory.PAVING_EQUIPMENT, ResourceUnit.PER_DAY, 4.0, today, 3.0, 2.8,
-            bd("46.00"), bd("256.80"), "DMIC-N04-P02");
-        seedResource("EQP-DUMPER-25T", "Dumper 25T", ResourceType.NONLABOR,
-            ResourceCategory.TRANSPORT_VEHICLES, ResourceUnit.PER_DAY, 30.0, today, 25.0, 23.0,
-            bd("18.50"), bd("142.80"), "DMIC-N03-P01");
-        seedResource("EQP-PILING-RIG", "Piling Rig Bauer BG28", ResourceType.NONLABOR,
-            ResourceCategory.PILING_RIG, ResourceUnit.PER_DAY, 3.0, today, 2.0, 2.0,
-            bd("68.00"), bd("285.40"), "DMIC-N05-P01");
-        seedResource("EQP-TOTAL-STATION", "Total Station Leica TS16", ResourceType.NONLABOR,
-            ResourceCategory.SURVEY_EQUIPMENT, ResourceUnit.PER_DAY, 12.0, today, 10.0, 9.0,
-            bd("3.20"), bd("22.00"), "DMIC-N03-P01");
+        seedResource("EQP-EXCAV-20T", "Excavator 20T", "EQUIPMENT",
+            "EARTH_MOVING", "PER_DAY", 16.0, today, 15.0, 14.07,
+            bd("42.50"), "DMIC-N03-P01");
+        seedResource("EQP-EXCAV-10T", "Excavator 10T", "EQUIPMENT",
+            "EARTH_MOVING", "PER_DAY", 12.0, today, 10.0, 8.5,
+            bd("22.00"), "DMIC-N03-P01");
+        seedResource("EQP-BULLDOZER", "Bulldozer D85", "EQUIPMENT",
+            "EARTH_MOVING", "PER_DAY", 8.0, today, 7.0, 7.2,
+            bd("36.00"), "DMIC-N03-P02");
+        seedResource("EQP-CRANE-50T", "Mobile Crane 50T", "EQUIPMENT",
+            "CRANES_LIFTING", "PER_DAY", 6.0, today, 5.0, 5.0,
+            bd("28.00"), "DMIC-N04-P01");
+        seedResource("EQP-TRANSIT-MIXER", "Transit Mixer 6 CuM", "EQUIPMENT",
+            "CONCRETE_EQUIPMENT", "PER_DAY", 20.0, today, 18.0, 17.5,
+            bd("18.00"), "DMIC-N03-P01");
+        seedResource("EQP-BATCHING-PLANT", "Batching Plant 30 CuM/hr", "EQUIPMENT",
+            "CONCRETE_EQUIPMENT", "PER_DAY", 4.0, today, 4.0, 4.0,
+            bd("52.00"), "DMIC-N03-P01");
+        seedResource("EQP-PAVER", "Asphalt Paver Vögele", "EQUIPMENT",
+            "PAVING_EQUIPMENT", "PER_DAY", 4.0, today, 3.0, 2.8,
+            bd("46.00"), "DMIC-N04-P02");
+        seedResource("EQP-DUMPER-25T", "Dumper 25T", "EQUIPMENT",
+            "TRANSPORT_VEHICLES", "PER_DAY", 30.0, today, 25.0, 23.0,
+            bd("18.50"), "DMIC-N03-P01");
+        seedResource("EQP-PILING-RIG", "Piling Rig Bauer BG28", "EQUIPMENT",
+            "PILING_RIG", "PER_DAY", 3.0, today, 2.0, 2.0,
+            bd("68.00"), "DMIC-N05-P01");
+        seedResource("EQP-TOTAL-STATION", "Total Station Leica TS16", "EQUIPMENT",
+            "SURVEY_EQUIPMENT", "PER_DAY", 12.0, today, 10.0, 9.0,
+            bd("3.20"), "DMIC-N03-P01");
 
         // ---- Labour (12) ----
-        seedResource("LAB-SITE-ENG", "Site Engineer", ResourceType.LABOR,
-            ResourceCategory.SITE_ENGINEER, ResourceUnit.PER_DAY, 45.0, today, 40.0, 38.0,
-            bd("14.40"), bd("125.60"), "DMIC-N03-P01");
-        seedResource("LAB-FOREMAN", "Foreman", ResourceType.LABOR,
-            ResourceCategory.FOREMAN, ResourceUnit.PER_DAY, 60.0, today, 55.0, 52.0,
-            bd("12.80"), bd("102.40"), "DMIC-N03-P01");
-        seedResource("LAB-SKILLED-MASON", "Skilled Mason", ResourceType.LABOR,
-            ResourceCategory.SKILLED_LABOUR, ResourceUnit.PER_DAY, 200.0, today, 180.0, 172.0,
-            bd("15.48"), bd("142.60"), "DMIC-N03-P01");
-        seedResource("LAB-UNSKILLED", "Unskilled Labour", ResourceType.LABOR,
-            ResourceCategory.UNSKILLED_LABOUR, ResourceUnit.PER_DAY, 500.0, today, 450.0, 425.0,
-            bd("25.50"), bd("232.00"), "DMIC-N03-P01");
-        seedResource("LAB-EQP-OPERATOR", "Equipment Operator", ResourceType.LABOR,
-            ResourceCategory.OPERATOR, ResourceUnit.PER_DAY, 80.0, today, 72.0, 68.0,
-            bd("10.20"), bd("94.40"), "DMIC-N03-P01");
-        seedResource("LAB-DRIVER", "Dumper Driver", ResourceType.LABOR,
-            ResourceCategory.DRIVER, ResourceUnit.PER_DAY, 60.0, today, 52.0, 50.0,
-            bd("6.50"), bd("58.40"), "DMIC-N03-P02");
-        seedResource("LAB-WELDER", "Certified Welder 6G", ResourceType.LABOR,
-            ResourceCategory.WELDER, ResourceUnit.PER_DAY, 30.0, today, 25.0, 24.0,
-            bd("7.20"), bd("62.80"), "DMIC-N04-P01");
-        seedResource("LAB-ELECTRICIAN", "Certified Electrician", ResourceType.LABOR,
-            ResourceCategory.ELECTRICIAN, ResourceUnit.PER_DAY, 25.0, today, 20.0, 18.0,
-            bd("5.40"), bd("42.00"), "DMIC-N03-P01");
-        seedResource("LAB-SITE-ENG-N04", "Site Engineer — N04", ResourceType.LABOR,
-            ResourceCategory.SITE_ENGINEER, ResourceUnit.PER_DAY, 25.0, today, 22.0, 20.0,
-            bd("8.00"), bd("64.20"), "DMIC-N04-P01");
-        seedResource("LAB-FOREMAN-N04", "Foreman — N04", ResourceType.LABOR,
-            ResourceCategory.FOREMAN, ResourceUnit.PER_DAY, 30.0, today, 28.0, 26.0,
-            bd("6.40"), bd("52.80"), "DMIC-N04-P02");
-        seedResource("LAB-UNSKILLED-N05", "Unskilled Labour — N05", ResourceType.LABOR,
-            ResourceCategory.UNSKILLED_LABOUR, ResourceUnit.PER_DAY, 250.0, today, 220.0, 210.0,
-            bd("12.60"), bd("98.40"), "DMIC-N05-P01");
-        seedResource("LAB-SKILLED-N06", "Skilled Labour — N06", ResourceType.LABOR,
-            ResourceCategory.SKILLED_LABOUR, ResourceUnit.PER_DAY, 100.0, today, 85.0, 80.0,
-            bd("7.20"), bd("56.40"), "DMIC-N06-P01");
+        seedResource("LAB-SITE-ENG", "Site Engineer", "LABOR",
+            "SITE_ENGINEER", "PER_DAY", 45.0, today, 40.0, 38.0,
+            bd("14.40"), "DMIC-N03-P01");
+        seedResource("LAB-FOREMAN", "Foreman", "LABOR",
+            "FOREMAN", "PER_DAY", 60.0, today, 55.0, 52.0,
+            bd("12.80"), "DMIC-N03-P01");
+        seedResource("LAB-SKILLED-MASON", "Skilled Mason", "LABOR",
+            "SKILLED_LABOUR", "PER_DAY", 200.0, today, 180.0, 172.0,
+            bd("15.48"), "DMIC-N03-P01");
+        seedResource("LAB-UNSKILLED", "Unskilled Labour", "LABOR",
+            "UNSKILLED_LABOUR", "PER_DAY", 500.0, today, 450.0, 425.0,
+            bd("25.50"), "DMIC-N03-P01");
+        seedResource("LAB-EQP-OPERATOR", "Equipment Operator", "LABOR",
+            "OPERATOR", "PER_DAY", 80.0, today, 72.0, 68.0,
+            bd("10.20"), "DMIC-N03-P01");
+        seedResource("LAB-DRIVER", "Dumper Driver", "LABOR",
+            "DRIVER", "PER_DAY", 60.0, today, 52.0, 50.0,
+            bd("6.50"), "DMIC-N03-P02");
+        seedResource("LAB-WELDER", "Certified Welder 6G", "LABOR",
+            "WELDER", "PER_DAY", 30.0, today, 25.0, 24.0,
+            bd("7.20"), "DMIC-N04-P01");
+        seedResource("LAB-ELECTRICIAN", "Certified Electrician", "LABOR",
+            "ELECTRICIAN", "PER_DAY", 25.0, today, 20.0, 18.0,
+            bd("5.40"), "DMIC-N03-P01");
+        seedResource("LAB-SITE-ENG-N04", "Site Engineer — N04", "LABOR",
+            "SITE_ENGINEER", "PER_DAY", 25.0, today, 22.0, 20.0,
+            bd("8.00"), "DMIC-N04-P01");
+        seedResource("LAB-FOREMAN-N04", "Foreman — N04", "LABOR",
+            "FOREMAN", "PER_DAY", 30.0, today, 28.0, 26.0,
+            bd("6.40"), "DMIC-N04-P02");
+        seedResource("LAB-UNSKILLED-N05", "Unskilled Labour — N05", "LABOR",
+            "UNSKILLED_LABOUR", "PER_DAY", 250.0, today, 220.0, 210.0,
+            bd("12.60"), "DMIC-N05-P01");
+        seedResource("LAB-SKILLED-N06", "Skilled Labour — N06", "LABOR",
+            "SKILLED_LABOUR", "PER_DAY", 100.0, today, 85.0, 80.0,
+            bd("7.20"), "DMIC-N06-P01");
 
         // ---- Materials (10) ----
-        seedResource("MAT-CEMENT-OPC43", "OPC Cement 43 Grade", ResourceType.MATERIAL,
-            ResourceCategory.CEMENT, ResourceUnit.MT, 500.0, today, 120.0, 118.0,
-            bd("47.20"), bd("1250.80"), "DMIC-N03-P01");
-        seedResource("MAT-CEMENT-PPC", "PPC Cement", ResourceType.MATERIAL,
-            ResourceCategory.CEMENT, ResourceUnit.MT, 300.0, today, 75.0, 72.0,
-            bd("28.80"), bd("680.50"), "DMIC-N04-P01");
-        seedResource("MAT-STEEL-FE500", "TMT Rebar Fe500D", ResourceType.MATERIAL,
-            ResourceCategory.STEEL_REBAR, ResourceUnit.MT, 800.0, today, 180.0, 175.0,
-            bd("122.50"), bd("3240.80"), "DMIC-N03-P01");
-        seedResource("MAT-AGG-20MM", "Coarse Aggregate 20mm", ResourceType.MATERIAL,
-            ResourceCategory.AGGREGATE, ResourceUnit.CU_M, 2500.0, today, 850.0, 820.0,
-            bd("14.76"), bd("382.40"), "DMIC-N03-P01");
-        seedResource("MAT-SAND-RIVER", "River Sand", ResourceType.MATERIAL,
-            ResourceCategory.AGGREGATE, ResourceUnit.CU_M, 1500.0, today, 620.0, 595.0,
-            bd("12.50"), bd("312.60"), "DMIC-N03-P02");
-        seedResource("MAT-BITUMEN-VG30", "Bitumen VG30", ResourceType.MATERIAL,
-            ResourceCategory.BITUMEN, ResourceUnit.MT, 200.0, today, 45.0, 42.0,
-            bd("25.20"), bd("425.00"), "DMIC-N04-P02");
-        seedResource("MAT-RMC-M30", "Ready Mix Concrete M30", ResourceType.MATERIAL,
-            ResourceCategory.READY_MIX_CONCRETE, ResourceUnit.CU_M, 600.0, today, 180.0, 175.0,
-            bd("105.00"), bd("2425.00"), "DMIC-N03-P01");
-        seedResource("MAT-BRICKS", "Clay Bricks Class-A", ResourceType.MATERIAL,
-            ResourceCategory.BRICKS_BLOCKS, ResourceUnit.NOS, 500000.0, today, 120000.0, 115000.0,
-            bd("8.05"), bd("125.40"), "DMIC-N03-P01");
-        seedResource("MAT-CABLE-LT", "LT Cable XLPE 3.5Cx300mm²", ResourceType.MATERIAL,
-            ResourceCategory.ELECTRICAL_CABLE, ResourceUnit.RMT, 5000.0, today, 800.0, 750.0,
-            bd("62.50"), bd("412.00"), "DMIC-N04-P01");
-        seedResource("MAT-FORMWORK", "Modular Aluminium Formwork", ResourceType.MATERIAL,
-            ResourceCategory.FORMWORK, ResourceUnit.CU_M, 1200.0, today, 400.0, 380.0,
-            bd("19.00"), bd("285.40"), "DMIC-N03-P01");
-
-        log.info("[IC-PMS Phase D] EQP-EXCAV-20T utilisation={}% → {}",
-            resourceRepository.findByCode("EQP-EXCAV-20T")
-                .map(Resource::getUtilisationPercent).orElse(null),
-            resourceRepository.findByCode("EQP-EXCAV-20T")
-                .map(Resource::getUtilisationStatus).orElse(null));
+        seedResource("MAT-CEMENT-OPC43", "OPC Cement 43 Grade", "MATERIAL",
+            "CEMENT", "MT", 500.0, today, 120.0, 118.0,
+            bd("47.20"), "DMIC-N03-P01");
+        seedResource("MAT-CEMENT-PPC", "PPC Cement", "MATERIAL",
+            "CEMENT", "MT", 300.0, today, 75.0, 72.0,
+            bd("28.80"), "DMIC-N04-P01");
+        seedResource("MAT-STEEL-FE500", "TMT Rebar Fe500D", "MATERIAL",
+            "STEEL_REBAR", "MT", 800.0, today, 180.0, 175.0,
+            bd("122.50"), "DMIC-N03-P01");
+        seedResource("MAT-AGG-20MM", "Coarse Aggregate 20mm", "MATERIAL",
+            "AGGREGATE", "CU_M", 2500.0, today, 850.0, 820.0,
+            bd("14.76"), "DMIC-N03-P01");
+        seedResource("MAT-SAND-RIVER", "River Sand", "MATERIAL",
+            "AGGREGATE", "CU_M", 1500.0, today, 620.0, 595.0,
+            bd("12.50"), "DMIC-N03-P02");
+        seedResource("MAT-BITUMEN-VG30", "Bitumen VG30", "MATERIAL",
+            "BITUMEN", "MT", 200.0, today, 45.0, 42.0,
+            bd("25.20"), "DMIC-N04-P02");
+        seedResource("MAT-RMC-M30", "Ready Mix Concrete M30", "MATERIAL",
+            "READY_MIX_CONCRETE", "CU_M", 600.0, today, 180.0, 175.0,
+            bd("105.00"), "DMIC-N03-P01");
+        seedResource("MAT-BRICKS", "Clay Bricks Class-A", "MATERIAL",
+            "BRICKS_BLOCKS", "NOS", 500000.0, today, 120000.0, 115000.0,
+            bd("8.05"), "DMIC-N03-P01");
+        seedResource("MAT-CABLE-LT", "LT Cable XLPE 3.5Cx300mm²", "MATERIAL",
+            "ELECTRICAL_CABLE", "RMT", 5000.0, today, 800.0, 750.0,
+            bd("62.50"), "DMIC-N04-P01");
+        seedResource("MAT-FORMWORK", "Modular Aluminium Formwork", "MATERIAL",
+            "FORMWORK", "CU_M", 1200.0, today, 400.0, 380.0,
+            bd("19.00"), "DMIC-N03-P01");
     }
 
-    private void seedResource(String code, String name, ResourceType type,
-                              ResourceCategory category, ResourceUnit unit,
+    /**
+     * Persist a Resource + (for equipment) ResourceEquipmentDetails / (for material)
+     * ResourceMaterialDetails + a daily log capturing planned vs actual deployment.
+     *
+     * @param roleCode  the {@link ResourceRole#getCode()} that captures what the resource <em>does</em>
+     *                  (formerly the legacy {@code ResourceCategory} enum).
+     */
+    private void seedResource(String code, String name, String typeCode,
+                              String roleCode, String unit,
                               Double poolMax, LocalDate logDate,
                               Double planned, Double actual,
-                              BigDecimal dailyCostLakh, BigDecimal cumulativeCrores,
+                              BigDecimal dailyCostLakh,
                               String wbsPackage) {
+        ResourceType type = resourceFactory.requireType(typeCode);
+        ResourceRole role = resourceFactory.ensureRole(roleCode, typeCode);
+
         Resource r = new Resource();
         r.setCode(code);
         r.setName(name);
         r.setResourceType(type);
-        ResourceTypeDef def = resourceTypeDefRepository
-            .findFirstByBaseCategoryAndSystemDefaultTrue(type).orElse(null);
-        if (def != null) {
-            r.setResourceTypeDef(def);
-        }
-        r.setResourceCategory(category);
+        r.setRole(role);
         r.setUnit(unit);
-        r.setPoolMaxAvailable(poolMax);
-        r.setMaxUnitsPerDay(poolMax);
-        r.setDailyCostLakh(dailyCostLakh);
-        r.setCumulativeCostCrores(cumulativeCrores);
-        r.setWbsAssignmentId(wbsPackage);
-        if (contractorByWbs != null) {
-            Organisation contractor = contractorByWbs.get(wbsPackage);
-            if (contractor != null) {
-                r.setResponsibleContractorId(contractor.getId());
-                r.setResponsibleContractorName(contractor.getShortName());
-            }
-        }
+        // Availability is the new percentage-allocation field; keep poolMax info on the equipment detail row
+        r.setAvailability(BigDecimal.valueOf(100));
         r.setStatus(ResourceStatus.ACTIVE);
         r.setSortOrder(0);
-        // Derive hourly rate from dailyCostLakh so ResourceResponse has non-zero rate fields
-        // (BUG-027): 1 lakh = 100 000 INR, standard working day = 8 hours.
-        double hourly = dailyCostLakh != null
-            ? dailyCostLakh.doubleValue() * 100_000d / 8d
-            : 0d;
-        r.setHourlyRate(hourly);
-        r.setOvertimeRate(hourly * 1.5);
+
+        // Derive cost-per-unit from dailyCostLakh (1 lakh = 100 000 INR) so cost rollups have a value.
+        if (dailyCostLakh != null && dailyCostLakh.signum() > 0) {
+            BigDecimal perDayInr = dailyCostLakh.multiply(BigDecimal.valueOf(100_000L));
+            r.setCostPerUnit(perDayInr.setScale(4, java.math.RoundingMode.HALF_UP));
+        }
+
         Resource saved = resourceRepository.save(r);
 
+        // Persist type-specific detail rows
+        if ("EQUIPMENT".equals(typeCode)) {
+            ResourceEquipmentDetails details = ResourceEquipmentDetails.builder()
+                .resourceId(saved.getId())
+                .quantityAvailable(poolMax != null ? poolMax.intValue() : null)
+                .build();
+            equipmentDetailsRepository.save(details);
+        } else if ("MATERIAL".equals(typeCode)) {
+            ResourceMaterialDetails details = ResourceMaterialDetails.builder()
+                .resourceId(saved.getId())
+                .baseUnit(unit)
+                .build();
+            materialDetailsRepository.save(details);
+        }
+
         // Seed standard + overtime ResourceRate rows so /resources/{id}/rates is non-empty
-        // and assignment cost derivation has something to multiply against (BUG-029).
+        // and assignment cost derivation has something to multiply against.
         if (dailyCostLakh != null && dailyCostLakh.signum() > 0) {
             BigDecimal standardRate = dailyCostLakh.multiply(BigDecimal.valueOf(100_000))
                 .divide(BigDecimal.valueOf(8), 2, java.math.RoundingMode.HALF_UP);
@@ -419,6 +427,13 @@ public class IcpmsPhaseDSeeder implements CommandLineRunner {
 
         // Record daily log — aggregator computes utilisation% and sets band
         utilisationService.recordDaily(saved.getId(), logDate, planned, actual, wbsPackage, null);
+
+        // contractorByWbs mapping is currently informational only — Resource.responsibleContractorId
+        // is gone in the slim model; the contract→resource link is now derived through assignments.
+        if (contractorByWbs != null && contractorByWbs.containsKey(wbsPackage)) {
+            log.debug("[IC-PMS Phase D] {} → contractor {} (WBS {})",
+                code, contractorByWbs.get(wbsPackage).getShortName(), wbsPackage);
+        }
     }
 
     private void persistRate(UUID resourceId, String rateType, BigDecimal pricePerUnit) {

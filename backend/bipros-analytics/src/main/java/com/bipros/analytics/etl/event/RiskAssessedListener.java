@@ -40,7 +40,7 @@ public class RiskAssessedListener {
         }
     }
 
-    static RiskSnapshotRow toSnapshot(Risk risk, LocalDate date) {
+    public static RiskSnapshotRow toSnapshot(Risk risk, LocalDate date) {
         Float probability = risk.getProbability() != null
                 ? (float) risk.getProbability().getValue() : null;
         Float postProbability = risk.getPostResponseProbability() != null

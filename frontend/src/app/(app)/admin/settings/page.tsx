@@ -499,6 +499,9 @@ function AiProvidersSection() {
                 placeholder="https://api.openai.com/v1"
                 className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
               />
+              <p className="mt-1 text-xs text-text-muted">
+                Root of the Chat Completions API. For OpenAI use <code>https://api.openai.com/v1</code> (not <code>/v1/responses</code>).
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">API Key {editingId ? "(leave blank to keep existing)" : "*"}</label>

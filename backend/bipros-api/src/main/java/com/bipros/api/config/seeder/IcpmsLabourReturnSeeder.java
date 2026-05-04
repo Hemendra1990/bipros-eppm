@@ -30,7 +30,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(111)
 @RequiredArgsConstructor
 public class IcpmsLabourReturnSeeder implements CommandLineRunner {

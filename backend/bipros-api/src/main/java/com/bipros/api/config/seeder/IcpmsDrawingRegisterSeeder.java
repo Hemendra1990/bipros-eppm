@@ -35,7 +35,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(113)
 @RequiredArgsConstructor
 public class IcpmsDrawingRegisterSeeder implements CommandLineRunner {

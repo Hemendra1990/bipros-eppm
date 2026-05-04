@@ -10,11 +10,14 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSpecificationExecutor<Activity> {
   List<Activity> findByProjectId(UUID projectId);
+
+  List<Activity> findByProjectIdIn(List<UUID> projectIds);
 
   List<Activity> findByWbsNodeId(UUID wbsNodeId);
 
@@ -31,4 +34,8 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
   List<Activity> findByIdIn(List<UUID> ids);
 
   List<Activity> findByPercentCompleteTypeAndStatusIn(PercentCompleteType percentCompleteType, List<ActivityStatus> statuses);
+
+  boolean existsByProjectIdAndCode(UUID projectId, String code);
+
+  Optional<Activity> findByProjectIdAndCode(UUID projectId, String code);
 }

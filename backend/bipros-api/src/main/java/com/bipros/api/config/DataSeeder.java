@@ -32,7 +32,7 @@ import java.time.LocalTime;
 
 @Slf4j
 @Component
-@Profile("dev")
+@Profile({"dev", "seed"})
 @Order(100)
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
@@ -45,6 +45,8 @@ public class DataSeeder implements CommandLineRunner {
   private final CurrencyRepository currencyRepository;
   private final GlobalSettingRepository globalSettingRepository;
   private final PasswordEncoder passwordEncoder;
+  private final ProfileSeeder profileSeeder;
+  private final com.bipros.security.domain.repository.ProfileRepository profileRepository;
 
   @Value("${bipros.admin.username:admin}")
   private String adminUsername;
@@ -62,14 +64,20 @@ public class DataSeeder implements CommandLineRunner {
     // FINANCE, TEAM_MEMBER, CLIENT) appear on existing dev databases without a wipe.
     seedRoles();
 
+    // Profiles seeded idempotently every boot so newly-introduced defaults appear without a wipe.
+    profileSeeder.seed();
+
     if (roleRepository.count() > 0 && userRepository.findByUsername(adminUsername).isPresent()) {
       log.info("Bulk data already seeded, skipping calendar/currency/settings");
       ensureAdminHasAdminRole();
+      ensureAdminHasSystemAdminProfile();
+      seedDemoUsers();
       return;
     }
 
     log.info("Starting data seeding...");
     seedAdminUser();
+    seedDemoUsers();
     seedGlobalCalendar();
     seedBaseCurrency();
     seedGlobalSettings();
@@ -122,11 +130,64 @@ public class DataSeeder implements CommandLineRunner {
     adminUser.setEnabled(true);
     adminUser.setAccountLocked(false);
 
+    profileRepository.findByCode("SYSTEM_ADMIN").ifPresent(p -> adminUser.setProfileId(p.getId()));
     User savedUser = userRepository.save(adminUser);
     log.debug("Created admin user: {}", savedUser.getUsername());
 
     assignAdminRole(savedUser);
     log.info("Seeded admin user with ADMIN role");
+  }
+
+  /** Idempotent: ensure the seeded admin user is linked to the SYSTEM_ADMIN profile. */
+  private void ensureAdminHasSystemAdminProfile() {
+    profileRepository
+        .findByCode("SYSTEM_ADMIN")
+        .ifPresent(profile ->
+            userRepository
+                .findByUsername(adminUsername)
+                .filter(u -> u.getProfileId() == null)
+                .ifPresent(u -> {
+                  u.setProfileId(profile.getId());
+                  userRepository.save(u);
+                  log.info("Self-heal: linked SYSTEM_ADMIN profile to '{}'", adminUsername);
+                }));
+  }
+
+  /**
+   * Seeds two demo users in addition to admin so the platform ships with one account per
+   * representative profile (Project Manager, Scheduler). Idempotent — skips if the username
+   * already exists. Together with the admin user this gives 3 demo accounts total.
+   */
+  private void seedDemoUsers() {
+    seedDemoUser("pmanager", "manager@bipros.local", "manager123",
+        "Priya", "Manager", "PROJECT_MANAGER");
+    seedDemoUser("scheduler", "scheduler@bipros.local", "scheduler123",
+        "Sam", "Scheduler", "SCHEDULER");
+  }
+
+  private void seedDemoUser(String username, String email, String password,
+                            String firstName, String lastName, String profileCode) {
+    if (userRepository.findByUsername(username).isPresent()) return;
+
+    User user = new User(username, email, passwordEncoder.encode(password));
+    user.setFirstName(firstName);
+    user.setLastName(lastName);
+    user.setEnabled(true);
+
+    com.bipros.security.domain.model.Profile profile =
+        profileRepository.findByCode(profileCode).orElse(null);
+    if (profile != null) user.setProfileId(profile.getId());
+
+    User saved = userRepository.save(user);
+
+    if (profile != null) {
+      Role role = roleRepository.findByName(profile.getLegacyRoleName()).orElse(null);
+      if (role != null
+          && !userRoleRepository.existsByUserIdAndRoleId(saved.getId(), role.getId())) {
+        userRoleRepository.save(new UserRole(saved.getId(), role.getId()));
+      }
+    }
+    log.info("Seeded demo user '{}' on profile {}", username, profileCode);
   }
 
   /**

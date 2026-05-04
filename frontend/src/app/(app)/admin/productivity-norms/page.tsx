@@ -21,7 +21,7 @@ type Scope = "TYPE" | "RESOURCE";
 interface NormForm {
   workActivityId: string;
   scope: Scope;
-  resourceTypeDefId: string;
+  resourceTypeId: string;
   resourceId: string;
   equipmentSpec: string;
   unit: string;
@@ -37,7 +37,7 @@ interface NormForm {
 const initialFormState: NormForm = {
   workActivityId: "",
   scope: "TYPE",
-  resourceTypeDefId: "",
+  resourceTypeId: "",
   resourceId: "",
   equipmentSpec: "",
   unit: "",
@@ -78,9 +78,9 @@ function groupNormsByScope(
   const map = new Map<string, { label: string; rows: ProductivityNormResponse[] }>();
   for (const n of norms) {
     const label =
-      n.resourceTypeDefName ??
+      n.resourceTypeName ??
       (n.resourceCode ? `${n.resourceCode}${n.resourceName ? " — " + n.resourceName : ""}` : "(unscoped)");
-    const key = n.resourceTypeDefId ?? n.resourceId ?? "_unscoped";
+    const key = n.resourceTypeId ?? n.resourceId ?? "_unscoped";
     const bucket = map.get(key) ?? { label, rows: [] };
     bucket.rows.push(n);
     map.set(key, bucket);
@@ -98,10 +98,10 @@ function ScopeBadge({ norm }: { norm: ProductivityNormResponse }) {
       </span>
     );
   }
-  if (norm.resourceTypeDefId) {
+  if (norm.resourceTypeId) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-info/10 text-info ring-1 ring-info/20">
-        {norm.resourceTypeDefName}
+        {norm.resourceTypeName}
       </span>
     );
   }
@@ -141,23 +141,27 @@ export default function ProductivityNormsPage() {
   });
   const activities = activitiesData?.data ?? [];
 
-  // Manpower → LABOR; Equipment → NONLABOR. Filter the type-def list to match.
-  const baseCategory = tab === "MANPOWER" ? "LABOR" : "NONLABOR";
+  // Manpower tab matches MANPOWER or LABOR codes; Equipment tab matches EQUIPMENT or MACHINE.
+  // Different DB seed generations used different spellings, so we accept both. Case-insensitive
+  // so manual entries like "manpower" / "Labor" still match.
+  const targetTypeCodes =
+    tab === "MANPOWER" ? ["MANPOWER", "LABOR"] : ["EQUIPMENT", "MACHINE"];
+  const matchesTargetCode = (code: string | null | undefined) =>
+    !!code && targetTypeCodes.includes(code.toUpperCase());
 
-  const { data: typeDefsData } = useQuery({
-    queryKey: ["resource-types", baseCategory],
-    queryFn: () => resourceTypeApi.list({ active: true, baseCategory }),
+  const { data: typesData } = useQuery({
+    queryKey: ["resource-types"],
+    queryFn: () => resourceTypeApi.list(),
   });
-  const typeDefs = typeDefsData?.data ?? [];
+  const allTypes = typesData?.data ?? [];
+  const typeDefs = allTypes.filter((t) => t.active && matchesTargetCode(t.code));
 
   const { data: resourcesData } = useQuery({
     queryKey: ["resources", "all"],
     queryFn: () => resourceApi.listResources(),
   });
-  const allResources = resourcesData?.data ?? [];
-  const filteredResources = allResources.filter(
-    (r) => r.resourceType === (tab === "MANPOWER" ? "LABOR" : "NONLABOR")
-  );
+  const allResources = (Array.isArray(resourcesData?.data) ? resourcesData?.data : []) ?? [];
+  const filteredResources = allResources.filter((r) => matchesTargetCode(r.resourceTypeCode));
 
   const handleTabChange = (nextTab: ProductivityNormType) => {
     setTab(nextTab);
@@ -178,8 +182,8 @@ export default function ProductivityNormsPage() {
     if (!formData.unit.trim()) {
       errors.unit = "Unit is required (e.g. Sqm, Cum, MT)";
     }
-    if (formData.scope === "TYPE" && !formData.resourceTypeDefId) {
-      errors.resourceTypeDefId = "Pick a Resource Type for the default scope";
+    if (formData.scope === "TYPE" && !formData.resourceTypeId) {
+      errors.resourceTypeId = "Pick a Resource Type for the default scope";
     }
     if (formData.scope === "RESOURCE" && !formData.resourceId) {
       errors.resourceId = "Pick a specific Resource for the override scope";
@@ -195,7 +199,7 @@ export default function ProductivityNormsPage() {
       const base: CreateProductivityNormRequest = {
         normType: tab,
         workActivityId: formData.workActivityId,
-        resourceTypeDefId: formData.scope === "TYPE" ? formData.resourceTypeDefId || null : null,
+        resourceTypeId: formData.scope === "TYPE" ? formData.resourceTypeId || null : null,
         resourceId: formData.scope === "RESOURCE" ? formData.resourceId || null : null,
         unit: formData.unit,
         remarks: formData.remarks || undefined,
@@ -471,6 +475,10 @@ export default function ProductivityNormsPage() {
                 {fieldErrors.workActivityId && (
                   <p className="mt-1 text-xs text-danger">{fieldErrors.workActivityId}</p>
                 )}
+                <p className="text-xs text-text-muted mt-1">
+                  Pick from the master library at <em>Admin → Work Activities</em>. The same activity
+                  can carry different norms per resource type or specific resource.
+                </p>
                 {activities.length === 0 && (
                   <p className="text-xs text-text-muted mt-1">
                     No activities yet — create one in <em>Admin → Work Activities</em> first.
@@ -498,24 +506,31 @@ export default function ProductivityNormsPage() {
                       name="scope"
                       checked={formData.scope === "RESOURCE"}
                       onChange={() =>
-                        setFormData({ ...formData, scope: "RESOURCE", resourceTypeDefId: "" })
+                        setFormData({ ...formData, scope: "RESOURCE", resourceTypeId: "" })
                       }
                     />
                     Specific resource (override)
                   </label>
                 </div>
+                <p className="text-xs text-text-muted mb-2">
+                  <strong>Type-level</strong> norms become the default for every resource of that
+                  type (e.g. every Helper). <strong>Specific-resource</strong> norms override the
+                  default for one resource only — use this when a particular crew consistently
+                  outperforms or underperforms the standard. At runtime the lookup tries Specific
+                  first, then falls back to Type-level.
+                </p>
                 {formData.scope === "TYPE" ? (
                   <>
                     <select
-                      value={formData.resourceTypeDefId}
+                      value={formData.resourceTypeId}
                       onChange={(e) => {
-                        setFormData({ ...formData, resourceTypeDefId: e.target.value });
-                        clearFieldError("resourceTypeDefId");
+                        setFormData({ ...formData, resourceTypeId: e.target.value });
+                        clearFieldError("resourceTypeId");
                       }}
                       className={`w-full px-3 py-2 border bg-surface-hover text-text-primary rounded-lg ${
-                        fieldErrors.resourceTypeDefId ? "border-danger" : "border-border"
+                        fieldErrors.resourceTypeId ? "border-danger" : "border-border"
                       }`}
-                      aria-invalid={!!fieldErrors.resourceTypeDefId}
+                      aria-invalid={!!fieldErrors.resourceTypeId}
                     >
                       <option value="">— select a resource type —</option>
                       {typeDefs.map((d) => (
@@ -524,8 +539,8 @@ export default function ProductivityNormsPage() {
                         </option>
                       ))}
                     </select>
-                    {fieldErrors.resourceTypeDefId && (
-                      <p className="mt-1 text-xs text-danger">{fieldErrors.resourceTypeDefId}</p>
+                    {fieldErrors.resourceTypeId && (
+                      <p className="mt-1 text-xs text-danger">{fieldErrors.resourceTypeId}</p>
                     )}
                   </>
                 ) : (
@@ -565,7 +580,12 @@ export default function ProductivityNormsPage() {
                     value={formData.equipmentSpec}
                     onChange={(e) => setFormData({ ...formData, equipmentSpec: e.target.value })}
                     className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                    placeholder='e.g. "JCB 210 (1.0 Cum Bucket)"'
                   />
+                  <p className="text-xs text-text-muted mt-1">
+                    Free-text description of the make / model / capacity. Useful when multiple
+                    equipment types share the same Resource Type.
+                  </p>
                 </div>
               )}
               <div>
@@ -587,10 +607,21 @@ export default function ProductivityNormsPage() {
                 {fieldErrors.unit && (
                   <p className="mt-1 text-xs text-danger">{fieldErrors.unit}</p>
                 )}
+                <p className="text-xs text-text-muted mt-1">
+                  Auto-fills from the selected Work Activity. Override only if this norm uses a
+                  different unit.
+                </p>
               </div>
 
               {tab === "MANPOWER" ? (
                 <>
+                  <div className="md:col-span-2 p-3 rounded-lg bg-info/5 border border-info/20 text-xs text-text-muted">
+                    Fill <strong>Output per Man per Day</strong> + <strong>Crew Size</strong> to
+                    describe the standard gang. <strong>Output per Day</strong> is the gang&apos;s
+                    combined output (= Output/Man × Crew Size). Leave it blank in the typical case;
+                    fill it only when you want to pin a specific gang output that doesn&apos;t match
+                    the multiplication.
+                  </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-text-secondary">
                       Output per Man per Day
@@ -604,6 +635,13 @@ export default function ProductivityNormsPage() {
                       }
                       className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                     />
+                    <p className="text-xs text-text-muted mt-1">
+                      What ONE worker produces in a normal 8-hour day. e.g. 2.5 Cum/day for hand
+                      excavation, 12 Sqm/day for 12 mm plastering. CPWD / IS-7272 lists baseline
+                      values; calibrate against your own daily-output history once you have data —
+                      Indian site studies show real productivity typically runs 55–77% of CPWD
+                      figures.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -616,6 +654,10 @@ export default function ProductivityNormsPage() {
                       onChange={(e) => setFormData({ ...formData, crewSize: e.target.value })}
                       className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                     />
+                    <p className="text-xs text-text-muted mt-1">
+                      Standard gang size for this activity. e.g. 4 (1 mason + 3 helpers) for brick
+                      masonry, 2 (1 fitter + 1 helper) for bar bending.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -628,6 +670,10 @@ export default function ProductivityNormsPage() {
                       onChange={(e) => setFormData({ ...formData, outputPerDay: e.target.value })}
                       className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                     />
+                    <p className="text-xs text-text-muted mt-1">
+                      Leave blank to imply (Output per Man per Day) × (Crew Size). Fill only when
+                      the actual gang output differs from that multiplication.
+                    </p>
                   </div>
                 </>
               ) : (

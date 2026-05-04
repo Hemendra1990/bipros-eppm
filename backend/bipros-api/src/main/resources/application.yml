@@ -1,6 +1,6 @@
 spring:
   profiles:
-    active: dev
+    active: seed
   application:
     name: bipros-eppm
 
@@ -21,6 +21,7 @@ spring:
       connection-timeout: 30000
 
   jpa:
+    show-sql: false
     hibernate:
       # Dev default is `update` so test data (projects, norms, work-activities, daily outputs)
       # survives backend restarts — otherwise every restart re-issues all UUIDs and breaks any
@@ -33,7 +34,7 @@ spring:
       hibernate:
         default_schema: public
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
         jdbc:
           batch_size: 50
         order_inserts: true
@@ -97,6 +98,15 @@ bipros:
     # Cron expression for the nightly DURATION percent-complete sweep.
     # Default: every day at 2:05 AM local time.
     duration-percent-cron: "0 5 2 * * *"
+
+  # Seeder gates. The Excel master-data loader replaces the entire resource catalog
+  # on every boot (it deletes resources/contracts/etc and re-inserts from
+  # seed-data/ic-pms-sample.xlsx). Default OFF here so dev iterations don't lose
+  # custom resources/rates/pool entries between restarts. Set to true when you
+  # genuinely want the IC-PMS demo dataset (e.g. BIPROS_SEEDERS_EXCEL_MASTER_ENABLED=true).
+  seeders:
+    excel-master:
+      enabled: ${BIPROS_SEEDERS_EXCEL_MASTER_ENABLED:false}
 
   # Satellite raster storage. MinIO in dev (docker-compose.yml), AWS S3 in prod
   # via the same config keys (change endpoint + credentials).
@@ -166,7 +176,12 @@ bipros:
   ai-orchestrator:
     enabled: ${BIPROS_AI_ENABLED:false}
     kek: ${BIPROS_AI_KEK:}
-    max-tool-rounds: 3
+    # Per-module ReAct loop caps. `general` is the global / portfolio mode that
+    # typically needs an extra round (list_projects → query → drill in → answer);
+    # `default` covers project-scoped chats (cost / schedule / risk / dpr / evm).
+    max-tool-rounds:
+      general: 8
+      default: 6
     conversation:
       max-messages: 32
       max-input-tokens: 200000
@@ -195,8 +210,8 @@ management:
 logging:
   level:
     com.bipros: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: INFO
     org.springframework.security: DEBUG
 
 ---

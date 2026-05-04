@@ -20,4 +20,6 @@ public interface WbsNodeRepository extends JpaRepository<WbsNode, UUID> {
     Optional<WbsNode> findByCode(String code);
 
     boolean existsByCode(String code);
+
+    boolean existsByProjectIdAndCode(UUID projectId, String code);
 }

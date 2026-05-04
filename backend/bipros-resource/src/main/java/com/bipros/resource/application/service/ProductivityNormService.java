@@ -1,25 +1,30 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.resource.application.dto.CreateProductivityNormRequest;
 import com.bipros.resource.application.dto.ProductivityNormResponse;
+import com.bipros.resource.application.dto.SuggestedUnitsResponse;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.ProductivityNormType;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceTypeDef;
 import com.bipros.resource.domain.model.WorkActivity;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
-import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
+import com.bipros.resource.domain.repository.ResourceTypeRepository;
 import com.bipros.resource.domain.repository.WorkActivityRepository;
+import com.bipros.resource.domain.service.ProductivityNormLookupService;
+import com.bipros.resource.domain.service.ResolvedNorm;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,13 +36,67 @@ public class ProductivityNormService {
 
   private final ProductivityNormRepository repository;
   private final WorkActivityRepository workActivityRepository;
-  private final ResourceTypeDefRepository resourceTypeDefRepository;
+  private final ResourceTypeRepository resourceTypeRepository;
   private final ResourceRepository resourceRepository;
+  private final ActivityRepository activityRepository;
+  private final ProductivityNormLookupService normLookupService;
   private final AuditService auditService;
 
+  /**
+   * Suggest a {@code plannedUnits} value for an upcoming resource assignment based on the
+   * applicable productivity norm. The activity must be linked to a {@code WorkActivity}
+   * (via {@code Activity.workActivityId}) so a norm can be resolved; otherwise the response
+   * carries a null suggestion and a NONE source.
+   *
+   * <p>Formula (when a norm with positive {@code outputPerDay} is found):
+   * {@code suggestedPlannedUnits = quantity / outputPerDay} → days the resource is needed.
+   *
+   * <p>The endpoint deliberately requires the caller to pass {@code quantity} since
+   * {@link Activity} doesn't store its target quantity (it lives on linked BoQ items, with
+   * project-specific multiplicities). Callers that want auto-quantity should pre-fetch the
+   * BoQ total and pass it here.
+   */
+  @Transactional(readOnly = true)
+  public SuggestedUnitsResponse suggestUnits(UUID activityId, UUID resourceId, BigDecimal quantity) {
+    Activity activity = activityRepository.findById(activityId)
+        .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
+    if (resourceId != null && !resourceRepository.existsById(resourceId)) {
+      throw new ResourceNotFoundException("Resource", resourceId);
+    }
+    UUID workActivityId = activity.getWorkActivityId();
+    if (workActivityId == null) {
+      return new SuggestedUnitsResponse(activityId, resourceId, null, quantity, null, null, null,
+          "Activity is not linked to a WorkActivity master row — no norm can be resolved.",
+          ResolvedNorm.Source.NONE.name());
+    }
+
+    ResolvedNorm norm = normLookupService.resolve(workActivityId, resourceId);
+    if (norm.outputPerDay() == null || norm.outputPerDay().signum() <= 0) {
+      return new SuggestedUnitsResponse(activityId, resourceId, workActivityId, quantity, null, null, null,
+          "No productivity norm with positive daily output found for this activity + resource.",
+          norm.source().name());
+    }
+    if (quantity == null || quantity.signum() <= 0) {
+      return new SuggestedUnitsResponse(activityId, resourceId, workActivityId, quantity,
+          norm.unit(), norm.outputPerDay(), null,
+          "Pass a positive quantity (in " + norm.unit() + ") to compute suggested planned units.",
+          norm.source().name());
+    }
+
+    BigDecimal suggested = quantity.divide(norm.outputPerDay(), 2, RoundingMode.HALF_UP);
+    String basis = String.format("%s %s ÷ %s/day = %s days",
+        quantity.stripTrailingZeros().toPlainString(),
+        norm.unit() == null ? "units" : norm.unit(),
+        norm.outputPerDay().stripTrailingZeros().toPlainString(),
+        suggested.stripTrailingZeros().toPlainString());
+    return new SuggestedUnitsResponse(
+        activityId, resourceId, workActivityId, quantity,
+        norm.unit(), norm.outputPerDay(), suggested, basis, norm.source().name());
+  }
+
   public ProductivityNormResponse create(CreateProductivityNormRequest request) {
-    log.info("Creating productivity norm: type={}, workActivityId={}, resourceTypeDefId={}, resourceId={}",
-        request.normType(), request.workActivityId(), request.resourceTypeDefId(), request.resourceId());
+    log.info("Creating productivity norm: type={}, workActivityId={}, resourceTypeId={}, resourceId={}",
+        request.normType(), request.workActivityId(), request.resourceTypeId(), request.resourceId());
     ProductivityNorm norm = toEntity(new ProductivityNorm(), request);
     ProductivityNorm saved = repository.save(norm);
     auditService.logCreate("ProductivityNorm", saved.getId(), ProductivityNormResponse.from(saved));
@@ -45,7 +104,6 @@ public class ProductivityNormService {
   }
 
   public List<ProductivityNormResponse> createBulk(List<CreateProductivityNormRequest> requests) {
-    log.info("Bulk-creating {} productivity norms", requests.size());
     List<ProductivityNorm> entities = requests.stream()
         .map(r -> toEntity(new ProductivityNorm(), r))
         .toList();
@@ -96,19 +154,19 @@ public class ProductivityNormService {
   }
 
   private ProductivityNorm toEntity(ProductivityNorm norm, CreateProductivityNormRequest r) {
-    if (r.resourceTypeDefId() != null && r.resourceId() != null) {
+    if (r.resourceTypeId() != null && r.resourceId() != null) {
       throw new BusinessRuleException("NORM_SCOPE_AMBIGUOUS",
-          "Provide either resourceTypeDefId (default scope) or resourceId (override) — not both");
+          "Provide either resourceTypeId (default scope) or resourceId (override) — not both");
     }
 
     WorkActivity workActivity = resolveWorkActivity(r);
-    enforceScopeUniqueness(norm, workActivity.getId(), r.resourceTypeDefId(), r.resourceId());
+    enforceScopeUniqueness(norm, workActivity.getId(), r.resourceTypeId(), r.resourceId());
     norm.setWorkActivity(workActivity);
-    norm.setActivityName(workActivity.getName()); // keep legacy column synced
+    norm.setActivityName(workActivity.getName());
 
-    norm.setResourceTypeDef(r.resourceTypeDefId() == null ? null
-        : resourceTypeDefRepository.findById(r.resourceTypeDefId())
-            .orElseThrow(() -> new ResourceNotFoundException("ResourceTypeDef", r.resourceTypeDefId())));
+    norm.setResourceType(r.resourceTypeId() == null ? null
+        : resourceTypeRepository.findById(r.resourceTypeId())
+            .orElseThrow(() -> new ResourceNotFoundException("ResourceType", r.resourceTypeId())));
 
     Resource resource = r.resourceId() == null ? null
         : resourceRepository.findById(r.resourceId())
@@ -139,13 +197,8 @@ public class ProductivityNormService {
     return norm;
   }
 
-  /**
-   * Mirrors the Postgres partial unique indexes ({@code uk_norm_by_resource}, {@code uk_norm_by_type})
-   * at the service layer so duplicate-scope creates are rejected even in dev (where
-   * {@code ddl-auto=create-drop} skips Liquibase and the indexes don't exist).
-   */
   private void enforceScopeUniqueness(
-      ProductivityNorm current, UUID workActivityId, UUID resourceTypeDefId, UUID resourceId) {
+      ProductivityNorm current, UUID workActivityId, UUID resourceTypeId, UUID resourceId) {
     if (resourceId != null) {
       repository.findFirstByWorkActivityIdAndResourceId(workActivityId, resourceId)
           .filter(existing -> !existing.getId().equals(current.getId()))
@@ -153,9 +206,9 @@ public class ProductivityNormService {
             throw new BusinessRuleException("NORM_SCOPE_DUPLICATE_RESOURCE",
                 "A productivity norm already exists for this activity + specific resource");
           });
-    } else if (resourceTypeDefId != null) {
-      repository.findFirstByWorkActivityIdAndResourceIsNullAndResourceTypeDefId(
-              workActivityId, resourceTypeDefId)
+    } else if (resourceTypeId != null) {
+      repository.findFirstByWorkActivityIdAndResourceIsNullAndResourceTypeId(
+              workActivityId, resourceTypeId)
           .filter(existing -> !existing.getId().equals(current.getId()))
           .ifPresent(existing -> {
             throw new BusinessRuleException("NORM_SCOPE_DUPLICATE_TYPE",

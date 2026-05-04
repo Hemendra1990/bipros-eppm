@@ -29,8 +29,6 @@ import com.bipros.resource.domain.model.MaterialStatus;
 import com.bipros.resource.domain.model.MaterialStock;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
 import com.bipros.resource.domain.model.SkillCategory;
 import com.bipros.resource.domain.model.StockStatusTag;
 import com.bipros.resource.domain.repository.EquipmentLogRepository;
@@ -157,29 +155,29 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
 
   /** Full 23-material catalogue per plan §4.7. Resource codes are BNK-MT-*. */
   private static final List<MaterialSpec> MATERIAL_CATALOG = List.of(
-      new MaterialSpec("BNK-MT-CEMENT-OPC43",   "Cement OPC 43",          MaterialCategory.CEMENT,    ResourceUnit.MT,    "OPC 43"),
-      new MaterialSpec("BNK-MT-CEMENT-PPC",     "Cement PPC",             MaterialCategory.CEMENT,    ResourceUnit.MT,    "PPC"),
-      new MaterialSpec("BNK-MT-AGG-20MM",       "Aggregate 20mm",         MaterialCategory.AGGREGATE, ResourceUnit.CU_M,  "20mm"),
-      new MaterialSpec("BNK-MT-AGG-10MM",       "Aggregate 10mm",         MaterialCategory.AGGREGATE, ResourceUnit.CU_M,  "10mm"),
-      new MaterialSpec("BNK-MT-AGG-6MM",        "Aggregate 6mm",          MaterialCategory.AGGREGATE, ResourceUnit.CU_M,  "6mm"),
-      new MaterialSpec("BNK-MT-AGG-DUST",       "Stone Dust",             MaterialCategory.AGGREGATE, ResourceUnit.CU_M,  "Dust"),
-      new MaterialSpec("BNK-MT-SAND-WASHED",    "Sand Washed",            MaterialCategory.SAND,      ResourceUnit.CU_M,  "Washed"),
-      new MaterialSpec("BNK-MT-SAND-CRUSHED",   "Sand Crushed",           MaterialCategory.SAND,      ResourceUnit.CU_M,  "Crushed"),
-      new MaterialSpec("BNK-MT-GSB",            "GSB",                    MaterialCategory.GRANULAR,  ResourceUnit.CU_M,  "GSB Grade-II"),
-      new MaterialSpec("BNK-MT-WMM",            "WMM",                    MaterialCategory.GRANULAR,  ResourceUnit.CU_M,  "WMM Grade-III"),
-      new MaterialSpec("BNK-MT-BITUMEN-VG30",   "Bitumen VG-30",          MaterialCategory.BITUMINOUS,ResourceUnit.MT,    "VG-30"),
-      new MaterialSpec("BNK-MT-EMULSION",       "Bitumen Emulsion",       MaterialCategory.BITUMINOUS,ResourceUnit.MT,    "RS-1"),
-      new MaterialSpec("BNK-MT-DBM-MIX",        "DBM Mix",                MaterialCategory.BITUMINOUS,ResourceUnit.MT,    "DBM Grade-II"),
-      new MaterialSpec("BNK-MT-BC-MIX",         "BC Mix",                 MaterialCategory.BITUMINOUS,ResourceUnit.MT,    "BC Grade-II"),
-      new MaterialSpec("BNK-MT-STEEL-FE500",    "Steel Fe500",            MaterialCategory.STEEL,     ResourceUnit.MT,    "Fe500D"),
-      new MaterialSpec("BNK-MT-STEEL-BIND",     "Binding Wire",           MaterialCategory.STEEL,     ResourceUnit.KG,    "16 SWG"),
-      new MaterialSpec("BNK-MT-CONCRETE-C30",   "Concrete C30",           MaterialCategory.PRECAST,   ResourceUnit.CU_M,  "C30/37"),
-      new MaterialSpec("BNK-MT-CONCRETE-C40",   "Concrete C40",           MaterialCategory.PRECAST,   ResourceUnit.CU_M,  "C40/50"),
-      new MaterialSpec("BNK-MT-PIPE-RCC",       "RCC Pipe NP3",           MaterialCategory.PRECAST,   ResourceUnit.RMT,   "NP3 1200mm"),
-      new MaterialSpec("BNK-MT-MARKING-PAINT",  "Road Marking Paint",     MaterialCategory.ROAD_MARKING, ResourceUnit.LITRE, "Thermoplastic"),
-      new MaterialSpec("BNK-MT-MARKING-BEAD",   "Glass Beads",            MaterialCategory.ROAD_MARKING, ResourceUnit.KG,  "Reflective"),
-      new MaterialSpec("BNK-MT-DIESEL",         "HSD Diesel",             MaterialCategory.AGGREGATE, ResourceUnit.LITRE, "EuroIV"),
-      new MaterialSpec("BNK-MT-ROYALTY",        "Royalty Charges",        MaterialCategory.GRANULAR,  ResourceUnit.MT,    "MEM Royalty")
+      new MaterialSpec("BNK-MT-CEMENT-OPC43",   "Cement OPC 43",          MaterialCategory.CEMENT,    "MT",    "OPC 43"),
+      new MaterialSpec("BNK-MT-CEMENT-PPC",     "Cement PPC",             MaterialCategory.CEMENT,    "MT",    "PPC"),
+      new MaterialSpec("BNK-MT-AGG-20MM",       "Aggregate 20mm",         MaterialCategory.AGGREGATE, "CU_M",  "20mm"),
+      new MaterialSpec("BNK-MT-AGG-10MM",       "Aggregate 10mm",         MaterialCategory.AGGREGATE, "CU_M",  "10mm"),
+      new MaterialSpec("BNK-MT-AGG-6MM",        "Aggregate 6mm",          MaterialCategory.AGGREGATE, "CU_M",  "6mm"),
+      new MaterialSpec("BNK-MT-AGG-DUST",       "Stone Dust",             MaterialCategory.AGGREGATE, "CU_M",  "Dust"),
+      new MaterialSpec("BNK-MT-SAND-WASHED",    "Sand Washed",            MaterialCategory.SAND,      "CU_M",  "Washed"),
+      new MaterialSpec("BNK-MT-SAND-CRUSHED",   "Sand Crushed",           MaterialCategory.SAND,      "CU_M",  "Crushed"),
+      new MaterialSpec("BNK-MT-GSB",            "GSB",                    MaterialCategory.GRANULAR,  "CU_M",  "GSB Grade-II"),
+      new MaterialSpec("BNK-MT-WMM",            "WMM",                    MaterialCategory.GRANULAR,  "CU_M",  "WMM Grade-III"),
+      new MaterialSpec("BNK-MT-BITUMEN-VG30",   "Bitumen VG-30",          MaterialCategory.BITUMINOUS,"MT",    "VG-30"),
+      new MaterialSpec("BNK-MT-EMULSION",       "Bitumen Emulsion",       MaterialCategory.BITUMINOUS,"MT",    "RS-1"),
+      new MaterialSpec("BNK-MT-DBM-MIX",        "DBM Mix",                MaterialCategory.BITUMINOUS,"MT",    "DBM Grade-II"),
+      new MaterialSpec("BNK-MT-BC-MIX",         "BC Mix",                 MaterialCategory.BITUMINOUS,"MT",    "BC Grade-II"),
+      new MaterialSpec("BNK-MT-STEEL-FE500",    "Steel Fe500",            MaterialCategory.STEEL,     "MT",    "Fe500D"),
+      new MaterialSpec("BNK-MT-STEEL-BIND",     "Binding Wire",           MaterialCategory.STEEL,     "KG",    "16 SWG"),
+      new MaterialSpec("BNK-MT-CONCRETE-C30",   "Concrete C30",           MaterialCategory.PRECAST,   "CU_M",  "C30/37"),
+      new MaterialSpec("BNK-MT-CONCRETE-C40",   "Concrete C40",           MaterialCategory.PRECAST,   "CU_M",  "C40/50"),
+      new MaterialSpec("BNK-MT-PIPE-RCC",       "RCC Pipe NP3",           MaterialCategory.PRECAST,   "RMT",   "NP3 1200mm"),
+      new MaterialSpec("BNK-MT-MARKING-PAINT",  "Road Marking Paint",     MaterialCategory.ROAD_MARKING, "LITRE", "Thermoplastic"),
+      new MaterialSpec("BNK-MT-MARKING-BEAD",   "Glass Beads",            MaterialCategory.ROAD_MARKING, "KG",  "Reflective"),
+      new MaterialSpec("BNK-MT-DIESEL",         "HSD Diesel",             MaterialCategory.AGGREGATE, "LITRE", "EuroIV"),
+      new MaterialSpec("BNK-MT-ROYALTY",        "Royalty Charges",        MaterialCategory.GRANULAR,  "MT",    "MEM Royalty")
   );
 
   /** Plan §4.21 supplier catalogue, mapped to the available {@link MaterialSourceType} values. */
@@ -246,11 +244,11 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
     // Collections needed by multiple methods — fetched once.
     List<Activity> activities = activityRepository.findByProjectId(projectId);
     List<ProductivityNorm> norms = productivityNormRepository.findAll();
-    List<Resource> equipment = resourceRepository.findByResourceType(ResourceType.NONLABOR);
-    List<Resource> materials = resourceRepository.findByResourceType(ResourceType.MATERIAL).stream()
+    List<Resource> equipment = resourceRepository.findByResourceType_Code("EQUIPMENT");
+    List<Resource> materials = resourceRepository.findByResourceType_Code("MATERIAL").stream()
         .filter(r -> r.getCode() != null && r.getCode().startsWith("BNK-MT"))
         .toList();
-    List<Resource> labourPool = resourceRepository.findByResourceType(ResourceType.LABOR);
+    List<Resource> labourPool = resourceRepository.findByResourceType_Code("LABOR");
     List<LabourDesignation> designations = labourDesignationRepository.findAll();
 
     // Compute working days (Sun–Thu) in window.
@@ -634,7 +632,7 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
     for (String matName : ACTIVE_MATERIALS) {
       BigDecimal opening = BigDecimal.valueOf(500 + rng.nextInt(2000));
       openingByMaterial.put(matName, opening);
-      ResourceUnit unit = resolveMaterialUnit(matName);
+      String unit = resolveMaterialUnit(matName);
       UUID resourceId = findResourceIdByMaterialName(materials, matName);
       int dayIdx = 0;
       for (LocalDate day : sampleDays) {
@@ -655,7 +653,7 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
             .logDate(day)
             .resourceId(resourceId)
             .materialName(matName)
-            .unit(unit.name())
+            .unit(unit)
             .openingStock(opening.setScale(3, RoundingMode.HALF_UP))
             .received(received.setScale(3, RoundingMode.HALF_UP))
             .consumed(consumed.setScale(3, RoundingMode.HALF_UP))
@@ -674,11 +672,11 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
     return rows.size();
   }
 
-  private ResourceUnit resolveMaterialUnit(String matName) {
+  private String resolveMaterialUnit(String matName) {
     for (MaterialSpec spec : MATERIAL_CATALOG) {
       if (spec.name().equalsIgnoreCase(matName)) return spec.unit();
     }
-    return ResourceUnit.MT;
+    return "MT";
   }
 
   private UUID findResourceIdByMaterialName(List<Resource> materials, String materialName) {
@@ -711,7 +709,7 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
           .distanceKm(sup.transportCost().multiply(BigDecimal.valueOf(8))
               .setScale(2, RoundingMode.HALF_UP))
           .approvedQuantity(BigDecimal.valueOf(50_000))
-          .approvedQuantityUnit(ResourceUnit.MT)
+          .approvedQuantityUnit("MT")
           .approvalReference("MEM/OMAN/" + sup.code() + "/2026")
           .approvalAuthority("Ministry of Energy & Minerals (MEM)")
           .labTestStatus(LabTestStatus.ALL_PASS)
@@ -1090,7 +1088,7 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
 
   /** Catalogue entry used by both Material seeding and Stock seeding. */
   private record MaterialSpec(String code, String name, MaterialCategory category,
-                              ResourceUnit unit, String grade) {}
+                              String unit, String grade) {}
 
   /** Plan §4.21 supplier descriptor. */
   private record SupplierSpec(String code, String name, MaterialSourceType type,

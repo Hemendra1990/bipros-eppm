@@ -30,7 +30,7 @@ public class ChatController {
     private final com.bipros.ai.provider.LlmProviderConfigRepository llmProviderConfigRepository;
 
     @PostMapping("/chat")
-    @PreAuthorize("@projectAccess.canRead(#request.projectId)")
+    @PreAuthorize("@aiAccess.canChat(#request.projectId)")
     public ResponseEntity<ApiResponse<ChatResponse>> chat(@RequestBody ChatRequest request) {
         AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);
@@ -59,7 +59,7 @@ public class ChatController {
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @PreAuthorize("@projectAccess.canRead(#request.projectId)")
+    @PreAuthorize("@aiAccess.canChat(#request.projectId)")
     public Flux<org.springframework.http.codec.ServerSentEvent<String>> chatStream(@RequestBody ChatRequest request) {
         AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);
@@ -67,7 +67,27 @@ public class ChatController {
 
         conversationService.appendUserMessage(conv.getId(), request.message());
 
-        return orchestrator.handle(request.message(), request.imageUrl(), history, ctx, llmProvider, resolveConfig())
+        // Emit the conversation id as the very first SSE frame so the client
+        // can persist it and send it back on the next turn (the streaming
+        // endpoint has no response body to return ChatResponse through).
+        org.springframework.http.codec.ServerSentEvent<String> startedEvent =
+                org.springframework.http.codec.ServerSentEvent.<String>builder()
+                        .event("conversation_started")
+                        .data("{\"conversationId\":\"" + conv.getId() + "\"}")
+                        .build();
+
+        StringBuilder accumulated = new StringBuilder();
+        Flux<org.springframework.http.codec.ServerSentEvent<String>> body = orchestrator
+                .handle(request.message(), request.imageUrl(), history, ctx, llmProvider, resolveConfig())
+                .doOnNext(event -> {
+                    if ("done".equals(event.event()) && event.data().get("text") != null) {
+                        accumulated.setLength(0);
+                        accumulated.append(event.data().get("text").toString());
+                    } else if ("token".equals(event.event()) && accumulated.length() == 0
+                            && event.data().get("delta") != null) {
+                        accumulated.append(event.data().get("delta").toString());
+                    }
+                })
                 .map(event -> {
                     String json;
                     try {
@@ -80,7 +100,10 @@ public class ChatController {
                             .data(json)
                             .build();
                 })
-                .doOnComplete(() -> conversationService.appendAssistantMessage(conv.getId(), "(streamed)"));
+                .doOnComplete(() -> conversationService.appendAssistantMessage(
+                        conv.getId(), accumulated.length() > 0 ? accumulated.toString() : "(empty)"));
+
+        return Flux.concat(Flux.just(startedEvent), body);
     }
 
     @GetMapping("/conversations")

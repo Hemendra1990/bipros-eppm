@@ -56,7 +56,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(123)
 @RequiredArgsConstructor
 public class IcpmsFundingSeeder implements CommandLineRunner {

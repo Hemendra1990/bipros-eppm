@@ -32,7 +32,7 @@ public class LlmProviderService {
         config.setModel(req.model());
         config.setMaxTokens(req.maxTokens() != null ? req.maxTokens() : 4096);
         config.setTemperature(req.temperature() != null ? req.temperature() : new java.math.BigDecimal("0.20"));
-        config.setTimeoutMs(req.timeoutMs() != null ? req.timeoutMs() : 60000);
+        config.setTimeoutMs(req.timeoutMs() != null ? req.timeoutMs() : 120000);
         config.setAuthScheme(req.authScheme() != null ? req.authScheme() : "BEARER");
         config.setSupportsNativeTools(req.supportsNativeTools() != null ? req.supportsNativeTools() : true);
         config.setActive(req.isActive() != null ? req.isActive() : true);

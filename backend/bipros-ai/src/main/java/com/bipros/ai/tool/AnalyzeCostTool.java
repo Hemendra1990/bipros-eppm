@@ -15,6 +15,8 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -22,7 +24,7 @@ import java.util.Map;
 public class AnalyzeCostTool extends ProjectScopedTool {
 
     private final ClickHouseTemplate clickHouse;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public String name() {
@@ -31,7 +33,9 @@ public class AnalyzeCostTool extends ProjectScopedTool {
 
     @Override
     public String description() {
-        return "Analyze cost variance for a project. Returns variance breakdown by WBS, top-N cost drivers, and EAC forecast.";
+        return "Analyze cost variance. With a current project_id, breaks down by WBS / cost_account / "
+                + "activity. With no current project_id (general mode), aggregates per project across the "
+                + "user's scope so the agent can compare projects.";
     }
 
     @Override
@@ -67,32 +71,40 @@ public class AnalyzeCostTool extends ProjectScopedTool {
             }
         }
 
-        String groupColumn = switch (groupBy) {
+        boolean crossProject = ctx.projectId() == null;
+        String groupColumn = crossProject ? "project_id" : switch (groupBy) {
             case "cost_account" -> "cost_account_id";
             case "activity" -> "activity_id";
             default -> "wbs_id";
         };
 
-        String sql = """
+        StringBuilder sql = new StringBuilder("""
             SELECT %s as group_key,
                    sum(total_actual) as actual,
                    sum(total_planned) as planned,
                    sum(total_earned) as earned,
                    sum(total_actual) - sum(total_planned) as variance
             FROM bipros_analytics.fact_cost_daily
-            WHERE project_id = :projectId
-              AND date BETWEEN :from AND :to
-            GROUP BY group_key
-            ORDER BY variance DESC
-            LIMIT 20
-            """.formatted(groupColumn);
+            WHERE date BETWEEN :from AND :to
+            """.formatted(groupColumn));
 
         Map<String, Object> params = new HashMap<>();
-        params.put("projectId", ctx.projectId());
         params.put("from", from);
         params.put("to", to);
 
-        List<Map<String, Object>> rows = clickHouse.queryForList(sql, params);
+        if (!crossProject) {
+            sql.append(" AND project_id = :projectId");
+            params.put("projectId", ctx.projectId());
+        } else {
+            List<UUID> scope = ctx.scopedProjectIds();
+            if (scope != null && !scope.isEmpty()) {
+                String inList = scope.stream().map(id -> "'" + id + "'").collect(Collectors.joining(","));
+                sql.append(" AND project_id IN (").append(inList).append(")");
+            }
+        }
+        sql.append(" GROUP BY group_key ORDER BY variance DESC LIMIT 20");
+
+        List<Map<String, Object>> rows = clickHouse.queryForList(sql.toString(), params);
         ArrayNode arr = objectMapper.createArrayNode();
         for (Map<String, Object> r : rows) {
             ObjectNode o = objectMapper.createObjectNode();
@@ -100,7 +112,10 @@ public class AnalyzeCostTool extends ProjectScopedTool {
             arr.add(o);
         }
 
-        return ToolResult.table("Cost variance by " + groupBy, arr,
+        String summary = crossProject
+                ? "Cost variance per project across portfolio (" + from + ".." + to + ")"
+                : "Cost variance by " + groupBy;
+        return ToolResult.table(summary, arr,
                 new String[]{"group_key", "actual", "planned", "earned", "variance"});
     }
 }

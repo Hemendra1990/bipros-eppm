@@ -67,8 +67,8 @@ public class CapacityUtilizationReportService {
                 + "  wa.code, "
                 + "  wa.name, "
                 + "  wa.default_unit, "
-                + "  r.resource_type_def_id, "
-                + "  rtd.name AS resource_type_def_name, "
+                + "  r.resource_type_id, "
+                + "  rt.name AS resource_type_name, "
                 + "  r.id AS resource_id, "
                 + "  r.code AS resource_code, "
                 + "  r.name AS resource_name, "
@@ -79,7 +79,7 @@ public class CapacityUtilizationReportService {
                 + "JOIN activity.activities a ON a.id = o.activity_id "
                 + "JOIN resource.work_activities wa ON wa.id = a.work_activity_id "
                 + "JOIN resource.resources r ON r.id = o.resource_id "
-                + "LEFT JOIN resource.resource_type_defs rtd ON rtd.id = r.resource_type_def_id "
+                + "LEFT JOIN resource.resource_types rt ON rt.id = r.resource_type_id "
                 + "WHERE o.project_id = :projectId "
                 + "  AND o.output_date BETWEEN :fromDate AND :toDate "
                 + "  AND a.work_activity_id IS NOT NULL")
@@ -88,7 +88,7 @@ public class CapacityUtilizationReportService {
         .setParameter("toDate", effectiveTo)
         .getResultList();
 
-    // 2. Aggregate by (workActivity, group-key). Group key = resourceTypeDefId or resourceId.
+    // 2. Aggregate by (workActivity, group-key). Group key = resourceTypeId or resourceId.
     Map<String, Aggregate> byBucket = new LinkedHashMap<>();
     for (Object[] r : raw) {
       LocalDate outputDate = ((java.sql.Date) r[0]).toLocalDate();
@@ -96,8 +96,8 @@ public class CapacityUtilizationReportService {
       String workActivityCode = (String) r[2];
       String workActivityName = (String) r[3];
       String workActivityDefaultUnit = (String) r[4];
-      UUID resourceTypeDefId = (UUID) r[5];
-      String resourceTypeDefName = (String) r[6];
+      UUID resourceTypeId = (UUID) r[5];
+      String resourceTypeName = (String) r[6];
       UUID resourceId = (UUID) r[7];
       String resourceCode = (String) r[8];
       String resourceName = (String) r[9];
@@ -114,12 +114,12 @@ public class CapacityUtilizationReportService {
         effectiveDays = 0.0;
       }
 
-      UUID groupResourceTypeId = groupByResource ? null : resourceTypeDefId;
+      UUID groupResourceTypeId = groupByResource ? null : resourceTypeId;
       UUID groupResourceId = groupByResource ? resourceId : null;
       String displayLabel = groupByResource
           ? (resourceCode != null ? resourceCode + " — " + resourceName : resourceName)
-          : (resourceTypeDefName != null ? resourceTypeDefName : "(no type)");
-      String bucketKey = workActivityId + "|" + (groupByResource ? resourceId : nullSafe(resourceTypeDefId));
+          : (resourceTypeName != null ? resourceTypeName : "(no type)");
+      String bucketKey = workActivityId + "|" + (groupByResource ? resourceId : nullSafe(resourceTypeId));
 
       Aggregate agg = byBucket.computeIfAbsent(bucketKey, k -> new Aggregate(
           new GroupKey(groupResourceTypeId, groupResourceId, displayLabel),
@@ -158,31 +158,47 @@ public class CapacityUtilizationReportService {
   }
 
   // ─── Norm resolution (native SQL — same fallback as ProductivityNormLookupService) ──────────
+  // Per-day rate semantics:
+  //   For Manpower norms we prefer output_per_man_per_day so the rate is "per person per day",
+  //   matching the unit captured in daily_activity_resource_outputs.days_worked (each row is one
+  //   person on one date). Comparing person-days against a gang's combined daily output would
+  //   under-state utilization by a factor of crew size — see issue notes.
+  //   Equipment norms don't populate output_per_man_per_day; COALESCE falls through to
+  //   output_per_day, which is the equipment's per-machine-per-day rate (matches daily outputs
+  //   for equipment).
   private Budgeted resolveBudgeted(UUID workActivityId, UUID resourceId) {
     if (workActivityId == null || resourceId == null) {
       return new Budgeted(null, "NONE");
     }
     // 1) specific-resource norm
     BigDecimal specific = singleBigDecimal(
-        "SELECT n.output_per_day FROM resource.productivity_norms n "
+        "SELECT COALESCE(n.output_per_man_per_day, n.output_per_day) "
+            + "FROM resource.productivity_norms n "
             + "WHERE n.work_activity_id = :wa AND n.resource_id = :res",
         Map.of("wa", workActivityId, "res", resourceId));
     if (specific != null) {
       return new Budgeted(specific, "SPECIFIC_RESOURCE");
     }
-    // 2) type-level norm via the resource's type_def
+    // 2) type-level norm — joined via the resource's resource_type_id (post 3-tier rewrite).
+    //    Productivity_norms keeps both legacy (resource_type_def_id) and new (resource_type_id)
+    //    columns; resources only has the new one. Match on the new column on both sides.
     BigDecimal typeLevel = singleBigDecimal(
-        "SELECT n.output_per_day FROM resource.productivity_norms n "
-            + "JOIN resource.resources r ON r.resource_type_def_id = n.resource_type_def_id "
+        "SELECT COALESCE(n.output_per_man_per_day, n.output_per_day) "
+            + "FROM resource.productivity_norms n "
+            + "JOIN resource.resources r ON r.resource_type_id = n.resource_type_id "
             + "WHERE n.work_activity_id = :wa AND n.resource_id IS NULL "
             + "  AND r.id = :res",
         Map.of("wa", workActivityId, "res", resourceId));
     if (typeLevel != null) {
       return new Budgeted(typeLevel, "RESOURCE_TYPE");
     }
-    // 3) legacy Resource.standardOutputPerDay
+    // 3) legacy Resource.standardOutputPerDay — column was moved to
+    //    resource_equipment_details.standard_output_per_day in the 3-tier rewrite.
+    //    Only equipment-typed resources have it; manpower/material don't, so this fallback
+    //    only fires for equipment.
     BigDecimal legacy = singleBigDecimal(
-        "SELECT r.standard_output_per_day FROM resource.resources r WHERE r.id = :res",
+        "SELECT d.standard_output_per_day FROM resource.resource_equipment_details d "
+            + "WHERE d.resource_id = :res",
         Map.of("res", resourceId));
     if (legacy != null) {
       return new Budgeted(legacy, "RESOURCE_LEGACY");

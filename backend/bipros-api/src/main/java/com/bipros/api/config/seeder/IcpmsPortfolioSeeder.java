@@ -32,7 +32,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(108)
 @RequiredArgsConstructor
 public class IcpmsPortfolioSeeder implements CommandLineRunner {

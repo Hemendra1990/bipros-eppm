@@ -35,18 +35,20 @@ import com.bipros.gis.domain.repository.ConstructionProgressSnapshotRepository;
 import com.bipros.gis.domain.repository.SatelliteImageRepository;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.ProjectRepository;
+import com.bipros.api.config.seeder.util.SeederResourceFactory;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceCategory;
+import com.bipros.resource.domain.model.ResourceEquipmentDetails;
+import com.bipros.resource.domain.model.ResourceMaterialDetails;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
-import com.bipros.resource.domain.model.UtilisationStatus;
 import com.bipros.resource.domain.repository.EquipmentLogRepository;
 import com.bipros.resource.domain.repository.LabourReturnRepository;
 import com.bipros.resource.domain.repository.MaterialReconciliationRepository;
 import com.bipros.resource.domain.repository.ResourceDailyLogRepository;
+import com.bipros.resource.domain.repository.ResourceEquipmentDetailsRepository;
+import com.bipros.resource.domain.repository.ResourceMaterialDetailsRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
-import com.bipros.resource.domain.repository.ResourceTypeDefRepository;
 import com.bipros.risk.domain.model.Risk;
 import com.bipros.risk.domain.model.RiskProbability;
 import com.bipros.risk.domain.model.RiskRag;
@@ -66,6 +68,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
@@ -124,7 +127,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("legacy-demo")
 @Order(109)
 @RequiredArgsConstructor
 public class ExcelMasterDataLoader implements CommandLineRunner {
@@ -143,8 +146,10 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
     private final DrawingRegisterRepository drawingRegisterRepository;
     private final RfiRegisterRepository rfiRegisterRepository;
     private final ResourceRepository resourceRepository;
-    private final ResourceTypeDefRepository resourceTypeDefRepository;
+    private final ResourceEquipmentDetailsRepository resourceEquipmentDetailsRepository;
+    private final ResourceMaterialDetailsRepository resourceMaterialDetailsRepository;
     private final ResourceDailyLogRepository resourceDailyLogRepository;
+    private final SeederResourceFactory resourceFactory;
     private final EquipmentLogRepository equipmentLogRepository;
     private final LabourReturnRepository labourReturnRepository;
     private final MaterialReconciliationRepository materialReconciliationRepository;
@@ -156,9 +161,16 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
     @PersistenceContext
     private EntityManager entityManager;
 
+    @Value("${bipros.seeders.excel-master.enabled:true}")
+    private boolean enabled;
+
     @Override
     @Transactional
     public void run(String... args) {
+        if (!enabled) {
+            log.info("[Excel] master-data loader disabled via bipros.seeders.excel-master.enabled=false");
+            return;
+        }
         // Idempotency sentinel: detect a prior successful Excel load by the presence of
         // the Excel-specific contract number DMIC/P01/LOA/2024-012 which no other seeder emits.
         if (contractRepository.findByContractNumber("DMIC/P01/LOA/2024-012").isPresent()) {
@@ -923,126 +935,116 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
             String unitText = stringValue(row.getCell(4));
             // col 5 cpwd rate, col 6 overtime rate — stored in dailyCostLakh approximation only
             Double poolMax = doubleValue(row.getCell(7));
-            Double planned = doubleValue(row.getCell(8));
-            Double actual = doubleValue(row.getCell(9));
-            Double utilisation = doubleValue(row.getCell(10));
+            // col 8 planned, col 9 actual, col 10 utilisation% — captured via daily logs
             String contractorText = stringValue(row.getCell(11));
-            String wbsAssignment = stringValue(row.getCell(12));
+            // col 12 wbs assignment — informational (Resource.wbsAssignmentId is gone)
             BigDecimal dailyCostLakh = bdValue(row.getCell(13));
-            BigDecimal cumulativeCostCrores = bdValue(row.getCell(14));
-            String statusText = stringValue(row.getCell(15));
+            // col 14 cumulative cost crores — derived from rollups; col 15 status — daily log signals
 
-            ResourceType rt = mapResourceType(typeText);
+            String typeCode = mapResourceTypeCode(typeText);
+            ResourceType rt = resourceFactory.requireType(typeCode);
+            String roleCode = mapResourceRoleCode(categoryText, typeCode);
+            ResourceRole role = resourceFactory.ensureRole(roleCode, typeCode);
 
             Resource res = new Resource();
             res.setCode(code);
             res.setName(name != null ? name : code);
             res.setResourceType(rt);
-            resourceTypeDefRepository.findFirstByBaseCategoryAndSystemDefaultTrue(rt)
-                .ifPresent(res::setResourceTypeDef);
-            res.setResourceCategory(mapResourceCategory(categoryText, rt));
-            res.setUnit(mapResourceUnit(unitText));
-            res.setMaxUnitsPerDay(poolMax != null ? poolMax : 8.0);
-            res.setPoolMaxAvailable(poolMax);
-            res.setPlannedUnitsToday(planned);
-            res.setActualUnitsToday(actual);
-            res.setUtilisationPercent(utilisation);
-            res.setUtilisationStatus(mapUtilisationStatus(statusText, utilisation));
-            res.setDailyCostLakh(dailyCostLakh);
-            res.setCumulativeCostCrores(cumulativeCostCrores);
-            res.setWbsAssignmentId(wbsAssignment);
-            UUID contractorOrgId = resolveContractorOrg(contractorText, orgIndex);
-            if (contractorOrgId != null) {
-                res.setResponsibleContractorId(contractorOrgId);
-                organisationRepository.findById(contractorOrgId)
-                    .ifPresent(o -> res.setResponsibleContractorName(o.getShortName()));
-            } else if (contractorText != null) {
-                res.setResponsibleContractorName(contractorText);
+            res.setRole(role);
+            res.setUnit(mapResourceUnitCode(unitText));
+            res.setAvailability(BigDecimal.valueOf(100));
+            // Map dailyCostLakh (1 lakh INR = 100 000) → costPerUnit so cost rollups work.
+            if (dailyCostLakh != null && dailyCostLakh.signum() > 0) {
+                res.setCostPerUnit(dailyCostLakh.multiply(BigDecimal.valueOf(100_000L))
+                    .setScale(4, RoundingMode.HALF_UP));
             }
             res.setStatus(ResourceStatus.ACTIVE);
             res.setSortOrder(0);
-            resourceRepository.save(res);
+            Resource saved = resourceRepository.save(res);
+
+            // Equipment-specific detail row (replaces the old in-Resource fields).
+            if ("EQUIPMENT".equals(typeCode)) {
+                ResourceEquipmentDetails details = ResourceEquipmentDetails.builder()
+                    .resourceId(saved.getId())
+                    .quantityAvailable(poolMax != null ? poolMax.intValue() : null)
+                    .build();
+                resourceEquipmentDetailsRepository.save(details);
+            } else if ("MATERIAL".equals(typeCode)) {
+                ResourceMaterialDetails details = ResourceMaterialDetails.builder()
+                    .resourceId(saved.getId())
+                    .baseUnit(mapResourceUnitCode(unitText))
+                    .build();
+                resourceMaterialDetailsRepository.save(details);
+            }
+
+            // Contractor mapping is now informational — Resource.responsibleContractorId is gone.
+            UUID contractorOrgId = resolveContractorOrg(contractorText, orgIndex);
+            if (contractorOrgId != null) {
+                log.debug("[Excel] resource {} → contractor org {}", code, contractorOrgId);
+            }
             seeded++;
         }
         entityManager.flush();
         log.info("[Excel] loaded {} resources from M8_Resource_Register", seeded);
     }
 
-    private ResourceType mapResourceType(String text) {
-        if (text == null) return ResourceType.LABOR;
+    /** Map an Excel free-text type to the canonical {@code ResourceType.code}. */
+    private String mapResourceTypeCode(String text) {
+        if (text == null) return "LABOR";
         String t = text.toLowerCase(Locale.ROOT);
-        if (t.contains("labour") || t.contains("labor")) return ResourceType.LABOR;
-        if (t.contains("equipment") || t.contains("plant") || t.contains("machine")) return ResourceType.NONLABOR;
-        if (t.contains("material")) return ResourceType.MATERIAL;
-        return ResourceType.LABOR;
+        if (t.contains("labour") || t.contains("labor")) return "LABOR";
+        if (t.contains("equipment") || t.contains("plant") || t.contains("machine")) return "EQUIPMENT";
+        if (t.contains("material")) return "MATERIAL";
+        return "LABOR";
     }
 
-    private ResourceCategory mapResourceCategory(String text, ResourceType rt) {
-        if (text == null) return ResourceCategory.OTHER;
+    /** Derive a {@link ResourceRole} code from the legacy "category" column free-text. */
+    private String mapResourceRoleCode(String text, String typeCode) {
+        if (text == null) return "IMPORTED-" + typeCode;
         String t = text.toLowerCase(Locale.ROOT);
         // Labour categories
-        if (t.contains("site engineer")) return ResourceCategory.SITE_ENGINEER;
-        if (t.contains("foreman")) return ResourceCategory.FOREMAN;
-        if (t.contains("skilled")) return ResourceCategory.SKILLED_LABOUR;
-        if (t.contains("semi-skilled") || t.contains("semi skilled")) return ResourceCategory.SKILLED_LABOUR;
-        if (t.contains("unskilled")) return ResourceCategory.UNSKILLED_LABOUR;
-        if (t.contains("technical") || t.contains("hse")) return ResourceCategory.SITE_ENGINEER;
-        if (t.contains("operator")) return ResourceCategory.OPERATOR;
-        if (t.contains("driver")) return ResourceCategory.DRIVER;
-        if (t.contains("welder")) return ResourceCategory.WELDER;
-        if (t.contains("electrician")) return ResourceCategory.ELECTRICIAN;
+        if (t.contains("site engineer")) return "SITE_ENGINEER";
+        if (t.contains("foreman")) return "FOREMAN";
+        if (t.contains("semi-skilled") || t.contains("semi skilled")) return "SKILLED_LABOUR";
+        if (t.contains("unskilled")) return "UNSKILLED_LABOUR";
+        if (t.contains("skilled")) return "SKILLED_LABOUR";
+        if (t.contains("technical") || t.contains("hse")) return "SITE_ENGINEER";
+        if (t.contains("operator")) return "OPERATOR";
+        if (t.contains("driver")) return "DRIVER";
+        if (t.contains("welder")) return "WELDER";
+        if (t.contains("electrician")) return "ELECTRICIAN";
         // Equipment categories
-        if (t.contains("earth")) return ResourceCategory.EARTH_MOVING;
-        if (t.contains("crane") || t.contains("lifting")) return ResourceCategory.CRANES_LIFTING;
-        if (t.contains("concrete")) return ResourceCategory.CONCRETE_EQUIPMENT;
-        if (t.contains("paving") || t.contains("road works")) return ResourceCategory.PAVING_EQUIPMENT;
-        if (t.contains("transport") || t.contains("vehicle")) return ResourceCategory.TRANSPORT_VEHICLES;
-        if (t.contains("piling")) return ResourceCategory.PILING_RIG;
-        if (t.contains("survey")) return ResourceCategory.SURVEY_EQUIPMENT;
-        if (t.contains("compaction") || t.contains("access") || t.contains("pipeline") || t.contains("power")) {
-            return rt == ResourceType.NONLABOR ? ResourceCategory.EARTH_MOVING : ResourceCategory.OTHER;
-        }
+        if (t.contains("earth")) return "EARTH_MOVING";
+        if (t.contains("crane") || t.contains("lifting")) return "CRANES_LIFTING";
+        if (t.contains("concrete")) return "CONCRETE_EQUIPMENT";
+        if (t.contains("paving") || t.contains("road works")) return "PAVING_EQUIPMENT";
+        if (t.contains("transport") || t.contains("vehicle")) return "TRANSPORT_VEHICLES";
+        if (t.contains("piling")) return "PILING_RIG";
+        if (t.contains("survey")) return "SURVEY_EQUIPMENT";
         // Material categories
-        if (t.contains("cement")) return ResourceCategory.CEMENT;
-        if (t.contains("steel")) return ResourceCategory.STEEL_REBAR;
-        if (t.contains("aggregate") || t.contains("sand")) return ResourceCategory.AGGREGATE;
-        if (t.contains("bitumen") || t.contains("asphalt")) return ResourceCategory.BITUMEN;
-        if (t.contains("rmc") || t.contains("ready")) return ResourceCategory.READY_MIX_CONCRETE;
-        if (t.contains("brick") || t.contains("block")) return ResourceCategory.BRICKS_BLOCKS;
-        if (t.contains("cable")) return ResourceCategory.ELECTRICAL_CABLE;
-        if (t.contains("formwork")) return ResourceCategory.FORMWORK;
-        if (t.contains("pipe")) return ResourceCategory.OTHER;
-        return ResourceCategory.OTHER;
+        if (t.contains("cement")) return "CEMENT";
+        if (t.contains("steel")) return "STEEL_REBAR";
+        if (t.contains("aggregate") || t.contains("sand")) return "AGGREGATE";
+        if (t.contains("bitumen") || t.contains("asphalt")) return "BITUMEN";
+        if (t.contains("rmc") || t.contains("ready")) return "READY_MIX_CONCRETE";
+        if (t.contains("brick") || t.contains("block")) return "BRICKS_BLOCKS";
+        if (t.contains("cable")) return "ELECTRICAL_CABLE";
+        if (t.contains("formwork")) return "FORMWORK";
+        return "IMPORTED-" + typeCode;
     }
 
-    private ResourceUnit mapResourceUnit(String text) {
-        if (text == null) return ResourceUnit.PER_DAY;
+    /** Map an Excel free-text unit string to the canonical short code stored in {@code Resource.unit}. */
+    private String mapResourceUnitCode(String text) {
+        if (text == null) return "PER_DAY";
         String t = text.toLowerCase(Locale.ROOT).replace(" ", "").replace(".", "");
-        if (t.contains("perday") || t.contains("/day")) return ResourceUnit.PER_DAY;
-        if (t.equals("mt") || t.contains("tonne")) return ResourceUnit.MT;
-        if (t.equals("cum") || t.contains("cu.m") || t.contains("cubic")) return ResourceUnit.CU_M;
-        if (t.equals("rmt") || t.contains("running")) return ResourceUnit.RMT;
-        if (t.equals("nos") || t.equals("no") || t.equals("number")) return ResourceUnit.NOS;
-        if (t.equals("kg")) return ResourceUnit.KG;
-        if (t.contains("litre") || t.equals("l")) return ResourceUnit.LITRE;
-        return ResourceUnit.PER_DAY;
-    }
-
-    private UtilisationStatus mapUtilisationStatus(String text, Double utilisation) {
-        if (text != null) {
-            String t = text.toLowerCase(Locale.ROOT);
-            if (t.contains("on hold") || t.contains("not mobilised")) return UtilisationStatus.ON_HOLD_NOT_MOBILISED;
-            if (t.contains("procurement")) return UtilisationStatus.PROCUREMENT;
-            if (t.contains("delivery")) return UtilisationStatus.DELIVERY_ONGOING;
-            if (t.contains("laying")) return UtilisationStatus.LAYING;
-            if (t.contains("critical") || t.contains("100%")) return UtilisationStatus.CRITICAL_100;
-            if (t.contains("over 90")) return UtilisationStatus.OVER_90;
-        }
-        if (utilisation != null) {
-            if (utilisation >= 100.0) return UtilisationStatus.CRITICAL_100;
-            if (utilisation >= 90.0) return UtilisationStatus.OVER_90;
-        }
-        return UtilisationStatus.ACTIVE;
+        if (t.contains("perday") || t.contains("/day")) return "PER_DAY";
+        if (t.equals("mt") || t.contains("tonne")) return "MT";
+        if (t.equals("cum") || t.contains("cu.m") || t.contains("cubic")) return "CU_M";
+        if (t.equals("rmt") || t.contains("running")) return "RMT";
+        if (t.equals("nos") || t.equals("no") || t.equals("number")) return "NOS";
+        if (t.equals("kg")) return "KG";
+        if (t.contains("litre") || t.equals("l")) return "LITRE";
+        return "PER_DAY";
     }
 
     // =========================================================================

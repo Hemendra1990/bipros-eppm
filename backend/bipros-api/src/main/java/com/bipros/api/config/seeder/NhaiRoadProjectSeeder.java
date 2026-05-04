@@ -46,20 +46,22 @@ import com.bipros.project.domain.repository.NextDayPlanRepository;
 import com.bipros.project.domain.repository.ObsNodeRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
-import com.bipros.resource.domain.model.CostCategory;
+import com.bipros.api.config.seeder.util.SeederResourceFactory;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
 import com.bipros.resource.application.service.WorkActivityService;
 import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.Resource;
-import com.bipros.resource.domain.model.ResourceCategory;
+import com.bipros.resource.domain.model.ResourceEquipmentDetails;
+import com.bipros.resource.domain.model.ResourceMaterialDetails;
 import com.bipros.resource.domain.model.ResourceRate;
+import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ResourceUnit;
-import com.bipros.resource.domain.model.Role;
 import com.bipros.resource.domain.model.WorkActivity;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
+import com.bipros.resource.domain.repository.ResourceEquipmentDetailsRepository;
+import com.bipros.resource.domain.repository.ResourceMaterialDetailsRepository;
 import com.bipros.resource.domain.repository.ResourceRateRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
@@ -112,7 +114,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("seed")
+@Profile("legacy-demo")
 @Order(140)
 @RequiredArgsConstructor
 public class NhaiRoadProjectSeeder implements CommandLineRunner {
@@ -138,7 +140,9 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
   private final ResourceRepository resourceRepository;
   private final ResourceRateRepository resourceRateRepository;
   private final ResourceRoleRepository resourceRoleRepository;
-  private final com.bipros.resource.domain.repository.ResourceTypeDefRepository resourceTypeDefRepository;
+  private final ResourceEquipmentDetailsRepository resourceEquipmentDetailsRepository;
+  private final ResourceMaterialDetailsRepository resourceMaterialDetailsRepository;
+  private final SeederResourceFactory resourceFactory;
   private final MaterialConsumptionLogRepository materialConsumptionLogRepository;
   private final NhaiRoadProjectWorkbookReader reader;
   private final ActivityRepository activityRepository;
@@ -513,28 +517,36 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
       if ("Manpower".equalsIgnoreCase(category)) continue;
 
       String code = "NH48-" + codePrefix(category) + "-" + slug(r.description());
-      CostCategory cc = costCategoryFor(category);
-      ResourceType rt = resourceTypeFor(category);
+      String typeCode = resourceTypeCodeFor(category);
+      ResourceType rt = resourceFactory.requireType(typeCode);
+      String roleCode = resourceRoleCodeFor(category, r.description());
+      ResourceRole role = resourceFactory.ensureRole(roleCode, typeCode);
       String unitLabel = r.unit();
-      double hourly = ratePerHourFrom(r.budgetedRate(), unitLabel);
+      BigDecimal costPerUnit = r.budgetedRate() != null ? r.budgetedRate() : BigDecimal.ZERO;
       Resource res = Resource.builder()
           .code(code)
           .name(r.description())
           .resourceType(rt)
-          .resourceTypeDef(resourceTypeDefRepository
-              .findFirstByBaseCategoryAndSystemDefaultTrue(rt).orElse(null))
-          .resourceCategory(resourceCategoryFor(category, r.description()))
-          .costCategory(cc)
-          .unit(resourceUnitFor(unitLabel))
+          .role(role)
+          .unit(resourceUnitCodeFor(unitLabel))
           .calendarId(calendarId)
           .status(ResourceStatus.ACTIVE)
-          .maxUnitsPerDay(8.0)
-          .hourlyRate(hourly)
-          .costPerUse(0.0)
-          .overtimeRate(hourly * 1.5)
+          .availability(BigDecimal.valueOf(100))
+          .costPerUnit(costPerUnit)
           .build();
       Resource saved = resourceRepository.save(res);
       byCode.put(code, saved.getId());
+      // Populate the per-type detail row so equipment / material specs are not silently lost.
+      if ("EQUIPMENT".equals(typeCode)) {
+        resourceEquipmentDetailsRepository.save(ResourceEquipmentDetails.builder()
+            .resourceId(saved.getId())
+            .build());
+      } else if ("MATERIAL".equals(typeCode)) {
+        resourceMaterialDetailsRepository.save(ResourceMaterialDetails.builder()
+            .resourceId(saved.getId())
+            .baseUnit(resourceUnitCodeFor(unitLabel))
+            .build());
+      }
       resourceRateRepository.save(buildRate(saved.getId(), "BUDGETED", r.budgetedRate(),
           project_start_hint()));
       resourceRateRepository.save(buildRate(saved.getId(), "ACTUAL", r.actualRate(),
@@ -560,73 +572,67 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
 
   private void seedManpowerResourceRoles(List<UnitRateRow> rows) {
     int count = 0;
+    ResourceType laborType = resourceFactory.requireType("LABOR");
     for (UnitRateRow r : rows) {
       if (!"Manpower".equalsIgnoreCase(r.category())) continue;
       String code = "NH48-ROLE-" + slug(r.description());
-      Role role = Role.builder()
+      // Skip if a role with this code already exists (handles re-runs after partial seed).
+      if (resourceRoleRepository.findByCode(code).isPresent()) continue;
+      ResourceRole role = ResourceRole.builder()
           .code(code)
           .name(r.description())
           .description("Manpower role seeded from Daily Cost Report Section A")
-          .resourceType(ResourceType.LABOR)
-          .resourceTypeDef(resourceTypeDefRepository
-              .findFirstByBaseCategoryAndSystemDefaultTrue(ResourceType.LABOR).orElse(null))
-          .rateUnit(r.unit())
-          .budgetedRate(r.budgetedRate())
-          .actualRate(r.actualRate())
-          .defaultRate(r.budgetedRate())
-          .rateRemarks(r.remarks())
+          .resourceType(laborType)
+          .productivityUnit(r.unit())
           .sortOrder(0)
+          .active(true)
           .build();
       resourceRoleRepository.save(role);
       count++;
     }
-    log.info("[NH-48] seeded {} manpower ResourceRoles with budgeted/actual rates", count);
+    log.info("[NH-48] seeded {} manpower ResourceRoles with default rates", count);
   }
 
-  private ResourceType resourceTypeFor(String category) {
+  private String resourceTypeCodeFor(String category) {
     return switch (category) {
-      case "Manpower" -> ResourceType.LABOR;
-      case "Material" -> ResourceType.MATERIAL;
-      default -> ResourceType.NONLABOR;
+      case "Manpower" -> "LABOR";
+      case "Material" -> "MATERIAL";
+      default -> "EQUIPMENT";
     };
   }
 
-  private CostCategory costCategoryFor(String category) {
-    return switch (category) {
-      case "Equipment" -> CostCategory.EQUIPMENT;
-      case "Material" -> CostCategory.MATERIAL;
-      case "Sub-Contract" -> CostCategory.SUB_CONTRACT;
-      default -> null;
-    };
-  }
-
-  private ResourceCategory resourceCategoryFor(String category, String name) {
-    if (name == null) return ResourceCategory.OTHER;
+  /**
+   * Derive a {@link ResourceRole#getCode()} from the legacy category × name match. This used to
+   * map to the deleted {@code ResourceCategory} enum; we now reuse the same identifiers as role
+   * codes so role lookup-or-create produces stable rows across re-runs.
+   */
+  private String resourceRoleCodeFor(String category, String name) {
+    if (name == null) return "OTHER";
     return switch (category) {
       case "Manpower" -> name.contains("Engineer") || name.contains("Supervisor")
-          ? ResourceCategory.SITE_ENGINEER
-          : (name.contains("Mason") ? ResourceCategory.SKILLED_LABOUR
-              : (name.contains("Operator") ? ResourceCategory.OPERATOR : ResourceCategory.UNSKILLED_LABOUR));
-      case "Material" -> name.contains("Bitumen") ? ResourceCategory.BITUMEN
-          : (name.contains("Cement") ? ResourceCategory.CEMENT
+          ? "SITE_ENGINEER"
+          : (name.contains("Mason") ? "SKILLED_LABOUR"
+              : (name.contains("Operator") ? "OPERATOR" : "UNSKILLED_LABOUR"));
+      case "Material" -> name.contains("Bitumen") ? "BITUMEN"
+          : (name.contains("Cement") ? "CEMENT"
               : (name.contains("Aggregate") || name.contains("GSB") || name.contains("WMM") || name.contains("Sand")
-                  ? ResourceCategory.AGGREGATE : ResourceCategory.OTHER));
+                  ? "AGGREGATE" : "OTHER"));
       case "Equipment" -> name.contains("Excavator") || name.contains("Tipper") || name.contains("Grader")
-          ? ResourceCategory.EARTH_MOVING
+          ? "EARTH_MOVING"
           : (name.contains("Paver") || name.contains("Hot Mix") || name.contains("Roller")
-              ? ResourceCategory.PAVING_EQUIPMENT : ResourceCategory.OTHER);
-      default -> ResourceCategory.OTHER;
+              ? "PAVING_EQUIPMENT" : "OTHER");
+      default -> "OTHER";
     };
   }
 
-  private ResourceUnit resourceUnitFor(String label) {
-    if (label == null) return ResourceUnit.PER_DAY;
+  private String resourceUnitCodeFor(String label) {
+    if (label == null) return "PER_DAY";
     return switch (label.toLowerCase(Locale.ROOT)) {
-      case "cum" -> ResourceUnit.CU_M;
-      case "mt", "bag" -> ResourceUnit.MT;
-      case "rm" -> ResourceUnit.RMT;
-      case "each" -> ResourceUnit.NOS;
-      default -> ResourceUnit.PER_DAY;
+      case "cum" -> "CU_M";
+      case "mt", "bag" -> "MT";
+      case "rm" -> "RMT";
+      case "each" -> "NOS";
+      default -> "PER_DAY";
     };
   }
 

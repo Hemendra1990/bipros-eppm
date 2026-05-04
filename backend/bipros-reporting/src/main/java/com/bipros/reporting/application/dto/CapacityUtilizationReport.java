@@ -33,7 +33,7 @@ public record CapacityUtilizationReport(
 
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public record GroupKey(
-      UUID resourceTypeDefId,
+      UUID resourceTypeId,
       UUID resourceId,
       String displayLabel
   ) {}

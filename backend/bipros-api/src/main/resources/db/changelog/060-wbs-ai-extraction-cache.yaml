@@ -1,0 +1,62 @@
+databaseChangeLog:
+  - changeSet:
+      id: 060-wbs-ai-extraction-cache
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: wbs_ai_extraction_cache
+            remarks: |
+              File-content cache for WBS-from-document extraction. Key is the
+              sha256 of the uploaded bytes, scoped by prompt_version (bumped
+              when the prompt template changes; old entries become misses) and
+              model_family (so OpenAI / Anthropic results don't cross). TTL is
+              applied at lookup time using created_at; rows are reaped lazily.
+            columns:
+              - column:
+                  name: file_sha256
+                  type: CHAR(64)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: prompt_version
+                  type: INT
+                  defaultValueNumeric: 1
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: model_family
+                  type: VARCHAR(50)
+                  defaultValue: openai
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: result_json
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hit_count
+                  type: INT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_hit_at
+                  type: TIMESTAMPTZ
+        - createIndex:
+            schemaName: ai
+            tableName: wbs_ai_extraction_cache
+            indexName: idx_wbs_ai_cache_created_at
+            columns:
+              - column:
+                  name: created_at

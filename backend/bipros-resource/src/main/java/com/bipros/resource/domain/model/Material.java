@@ -56,10 +56,9 @@ public class Material extends BaseEntity {
     @Column(name = "category", length = 30)
     private MaterialCategory category;
 
-    /** Reuses the shared {@link ResourceUnit} enum. */
-    @Enumerated(EnumType.STRING)
+    /** Free-text unit of measure (e.g. "MT", "CU_M", "NOS"). */
     @Column(name = "unit", length = 20)
-    private ResourceUnit unit;
+    private String unit;
 
     /** Technical grade / standard reference (e.g. "VG-30", "OPC 43", "Fe500D"). */
     @Column(name = "specification_grade", length = 120)

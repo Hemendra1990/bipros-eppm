@@ -129,7 +129,7 @@ public class MaterialIssueService {
             .logDate(issue.getIssueDate())
             .resourceId(material.getId())
             .materialName(material.getName())
-            .unit(material.getUnit() != null ? material.getUnit().name() : "NOS")
+            .unit(material.getUnit() != null ? material.getUnit() : "NOS")
             .openingStock(openingBeforeIssue)
             .received(java.math.BigDecimal.ZERO)
             .consumed(consumed)

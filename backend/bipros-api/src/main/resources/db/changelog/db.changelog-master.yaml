@@ -85,3 +85,17 @@ databaseChangeLog:
       file: db/changelog/053-analytics-etl-watermark.yaml
   - include:
       file: db/changelog/054-ai-conversation-tables.yaml
+  - include:
+      file: db/changelog/055-resource-role-link.yaml
+  - include:
+      file: db/changelog/056-resource-rewrite.yaml
+  - include:
+      file: db/changelog/057-project-resource-pool.yaml
+  - include:
+      file: db/changelog/058-ai-insight-cache.yaml
+  - include:
+      file: db/changelog/059-wbs-ai-jobs.yaml
+  - include:
+      file: db/changelog/060-wbs-ai-extraction-cache.yaml
+  - include:
+      file: db/changelog/061-resource-assignment-remaining-backfill.yaml

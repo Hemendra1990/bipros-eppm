@@ -25,7 +25,7 @@ import java.math.BigDecimal;
     indexes = {
         @Index(name = "idx_prod_norm_type", columnList = "norm_type"),
         @Index(name = "idx_prod_norm_work_activity", columnList = "work_activity_id"),
-        @Index(name = "idx_prod_norm_resource_type_def", columnList = "resource_type_def_id"),
+        @Index(name = "idx_prod_norm_resource_type", columnList = "resource_type_id"),
         @Index(name = "idx_prod_norm_resource", columnList = "resource_id")
     })
 @Getter
@@ -51,12 +51,12 @@ public class ProductivityNorm extends BaseEntity {
    * (e.g. all "Bull Dozer" instances). Mutually exclusive with {@link #resource}.
    */
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "resource_type_def_id")
-  private ResourceTypeDef resourceTypeDef;
+  @JoinColumn(name = "resource_type_id")
+  private ResourceType resourceType;
 
   /**
    * Override scope: when set, this norm applies only to one specific resource and overrides any
-   * type-level norm for the same activity. Mutually exclusive with {@link #resourceTypeDef}.
+   * type-level norm for the same activity. Mutually exclusive with {@link #resourceType}.
    */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "resource_id")
