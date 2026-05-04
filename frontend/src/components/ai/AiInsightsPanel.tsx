@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   AlertCircle,
@@ -24,6 +24,7 @@ interface AiInsightsPanelProps {
   projectId: string;
   endpoint: string;
   defaultCollapsed?: boolean;
+  autoLoad?: boolean;
 }
 
 type PanelState =
@@ -55,6 +56,7 @@ export function AiInsightsPanel({
   projectId,
   endpoint,
   defaultCollapsed = false,
+  autoLoad = true,
 }: AiInsightsPanelProps) {
   const [state, setState] = useState<PanelState>({ status: "empty" });
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -88,6 +90,15 @@ export function AiInsightsPanel({
 
   const handleGenerate = () => fetchInsights(false);
   const handleRefresh = () => fetchInsights(true);
+
+  const autoLoadedRef = useRef(false);
+  useEffect(() => {
+    if (autoLoad && !autoLoadedRef.current) {
+      autoLoadedRef.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void fetchInsights(false);
+    }
+  }, [autoLoad, fetchInsights]);
 
   return (
     <div className="rounded-lg border border-border bg-surface/50">

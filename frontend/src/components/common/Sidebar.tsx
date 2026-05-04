@@ -82,19 +82,23 @@ const groups: NavGroup[] = [
       { name: "Resources", href: "/resources", icon: Users, adminOnly: true },
       { name: "Labour Master", href: "/labour-master", icon: HardHat, adminOnly: true },
     ],
-    subGroups: [
-      {
-        label: "Manpower Masters",
-        items: [
-          { name: "Categories", href: "/admin/manpower-categories", icon: FolderTree, adminOnly: true },
-          { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true },
-          { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true },
-          { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true },
-          // Nationalities admin page exists at /admin/nationalities (still routable, still seeded
-          // and consumed by the resource form's nationality datalist) but intentionally hidden
-          // from the sidebar — the form's autocomplete is the only place it surfaces.
-        ],
-      },
+  },
+  // Nationalities admin page exists at /admin/nationalities (still routable, still seeded
+  // and consumed by the resource form's nationality datalist) but intentionally hidden
+  // from the sidebar — the form's autocomplete is the only place it surfaces.
+  {
+    label: "Master Data",
+    adminOnly: true,
+    items: [
+      { name: "Categories", href: "/admin/manpower-categories", icon: FolderTree, adminOnly: true },
+      { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true },
+      { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true },
+      { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true },
+      { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },
+      { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
+      { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
+      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
+      { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
     ],
   },
   {
@@ -105,16 +109,11 @@ const groups: NavGroup[] = [
       { name: "Profiles", href: "/admin/profiles", icon: ShieldCheck, adminOnly: true },
       { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true },
       { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true },
-      { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },
-      { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
       { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true },
       { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText, adminOnly: true },
-      { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
-      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
       { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
       { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true },
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },
-      { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
       { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true },
       { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true },
     ],
