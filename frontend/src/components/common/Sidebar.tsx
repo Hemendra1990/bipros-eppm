@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
-  Award, Banknote, BarChart3, Briefcase, Building2, Calendar, ChevronDown,
+  Award, Banknote, BarChart3, Briefcase, Building2, Calendar,
   ChevronLeft, ChevronRight, CircleDollarSign, Contact, FileText, FolderTree, Gauge,
   Grid, HardHat, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
   Network, Plug, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Tag,
@@ -259,22 +259,6 @@ export function Sidebar() {
         >
           <ChevronRight size={16} />
         </button>
-      )}
-
-      {/* Workspace picker */}
-      {!sidebarCollapsed && (
-        <div className="px-4 pt-4 pb-2">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
-            Workspace
-          </div>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-[10px] border border-hairline bg-ivory px-3 py-2.5 text-sm font-semibold text-charcoal hover:bg-paper"
-          >
-            <span className="truncate">Acme Infrastructure</span>
-            <ChevronDown size={14} className="text-ash" />
-          </button>
-        </div>
       )}
 
       {/* Nav */}
