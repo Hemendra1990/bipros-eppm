@@ -17,7 +17,8 @@ import { projectApi } from "@/lib/api/projectApi";
 import { budgetApi } from "@/lib/api/budgetApi";
 import { activityApi } from "@/lib/api/activityApi";
 import type { WbsNodeResponse } from "@/lib/types";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   LineChart,
   Line,
@@ -184,11 +185,12 @@ export function CostsTab({ projectId }: { projectId: string }) {
   }, [baseCurrency.code]);
 
   const expenseColumns = useMemo<ColumnDef<ExpenseRow>[]>(() => [
-    { key: "description", label: "Description", sortable: true },
+    { accessorKey: "description", header: "Description", enableSorting: true },
     {
-      key: "activityId",
-      label: "Activity",
-      render: (_value, row) => {
+      accessorKey: "activityId",
+      header: "Activity",
+      cell: (info) => {
+        const row = info.row.original;
         if (!row.activityId) {
           return <span className="text-text-muted">—</span>;
         }
@@ -204,38 +206,41 @@ export function CostsTab({ projectId }: { projectId: string }) {
         );
       },
     },
-    { key: "expenseCategory", label: "Category", sortable: true },
+    { accessorKey: "expenseCategory", header: "Category", enableSorting: true },
     {
-      key: "actualCost",
-      label: "Amount (₹)",
-      sortable: true,
-      render: (value) => formatInr(Number(value)),
+      accessorKey: "actualCost",
+      header: "Amount (₹)",
+      enableSorting: true,
+      cell: (info) => formatInr(Number(info.getValue())),
     },
-    { key: "actualStartDate", label: "Date", sortable: true },
+    { accessorKey: "actualStartDate", header: "Date", enableSorting: true },
     {
-      key: "actions",
-      label: "Actions",
-      render: (_value, row) => (
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleEdit(row)}
-            className="rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => {
-              if (window.confirm("Delete this expense?")) {
-                deleteExpenseMutation.mutate(row.id);
-              }
-            }}
-            disabled={deleteExpenseMutation.isPending}
-            className="rounded-md border border-border px-2 py-1 text-xs text-danger hover:bg-surface-hover disabled:opacity-50"
-          >
-            Delete
-          </button>
-        </div>
-      ),
+      id: "actions",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleEdit(row)}
+              className="rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm("Delete this expense?")) {
+                  deleteExpenseMutation.mutate(row.id);
+                }
+              }}
+              disabled={deleteExpenseMutation.isPending}
+              className="rounded-md border border-border px-2 py-1 text-xs text-danger hover:bg-surface-hover disabled:opacity-50"
+            >
+              Delete
+            </button>
+          </div>
+        );
+      },
     },
   ], [handleEdit, deleteExpenseMutation, activities, projectId]);
 
@@ -735,7 +740,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
             <p className="mt-2 text-text-muted">No expenses recorded yet.</p>
           </div>
         ) : (
-          <DataTable columns={expenseColumns} data={expenses} rowKey="id" />
+          <VirtualDataTable columns={expenseColumns} data={expenses} sortable resizable />
         )}
       </div>
       </SecretField>

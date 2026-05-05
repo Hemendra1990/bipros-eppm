@@ -11,7 +11,8 @@ import {
   type CreateBudgetChangeRequest,
   type BudgetChangeType,
 } from "@/lib/api/budgetApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -109,14 +110,15 @@ export default function BudgetChangesPage() {
 
   const columns: ColumnDef<BudgetChangeLogResponse>[] = [
     {
-      key: "requestedAt",
-      label: "Date",
-      render: (_val, row) => formatInstant(row.requestedAt),
+      accessorKey: "requestedAt",
+      header: "Date",
+      cell: (info) => formatInstant(info.row.original.requestedAt),
     },
     {
-      key: "changeType",
-      label: "Type",
-      render: (_val, row) => {
+      accessorKey: "changeType",
+      header: "Type",
+      cell: (info) => {
+        const row = info.row.original;
         const cfg = changeTypeConfig[row.changeType];
         const Icon = cfg.icon;
         return (
@@ -128,25 +130,29 @@ export default function BudgetChangesPage() {
       },
     },
     {
-      key: "fromWbsNodeCode",
-      label: "From WBS",
-      render: (_val, row) => row.fromWbsNodeCode ?? "\u2014",
+      accessorKey: "fromWbsNodeCode",
+      header: "From WBS",
+      cell: (info) => info.row.original.fromWbsNodeCode ?? "\u2014",
     },
     {
-      key: "toWbsNodeCode",
-      label: "To WBS",
-      render: (_val, row) => row.toWbsNodeCode ?? "\u2014",
+      accessorKey: "toWbsNodeCode",
+      header: "To WBS",
+      cell: (info) => info.row.original.toWbsNodeCode ?? "\u2014",
     },
     {
-      key: "amount",
-      label: "Amount",
-      sortable: true,
-      render: (_val, row) => <span className="font-mono font-medium">{formatCrores(row.amount)}</span>,
+      accessorKey: "amount",
+      header: "Amount",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return <span className="font-mono font-medium">{formatCrores(row.amount)}</span>;
+      },
     },
     {
-      key: "status",
-      label: "Status",
-      render: (_val, row) => {
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => {
+        const row = info.row.original;
         const cfg = statusConfig[row.status];
         return (
           <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg.color}`}>
@@ -156,27 +162,31 @@ export default function BudgetChangesPage() {
       },
     },
     {
-      key: "requestedByName",
-      label: "Requested By",
-      render: (_val, row) => row.requestedByName ?? row.requestedBy.slice(0, 8),
+      accessorKey: "requestedByName",
+      header: "Requested By",
+      cell: (info) => info.row.original.requestedByName ?? info.row.original.requestedBy.slice(0, 8),
     },
     {
-      key: "reason",
-      label: "Reason",
-      render: (_val, row) => (
-        <span className="max-w-[200px] truncate block" title={row.reason}>
-          {row.reason}
-        </span>
-      ),
+      accessorKey: "reason",
+      header: "Reason",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="max-w-[200px] truncate block" title={row.reason}>
+            {row.reason}
+          </span>
+        );
+      },
     },
   ];
 
   if (isAdmin) {
     columns.push({
-      key: "actions",
-      label: "Actions",
-      render: (_val, row) =>
-        row.status === "PENDING" ? (
+      id: "actions",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        return row.status === "PENDING" ? (
           <div className="flex gap-1">
             <button
               onClick={() => approveMutation.mutate(row.id)}
@@ -200,7 +210,8 @@ export default function BudgetChangesPage() {
           <span className="text-xs text-text-muted">
             {row.decidedByName ?? (row.decidedBy ? row.decidedBy.slice(0, 8) : "")}
           </span>
-        ),
+        );
+      },
     });
   }
 
@@ -356,7 +367,7 @@ export default function BudgetChangesPage() {
           description="Request a budget change to get started with P6-style budget management."
         />
       ) : (
-        <DataTable columns={columns} data={changes} rowKey="id" />
+        <VirtualDataTable columns={columns} data={changes} sortable resizable />
       )}
     </div>
   );

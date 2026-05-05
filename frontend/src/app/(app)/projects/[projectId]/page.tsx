@@ -11,7 +11,8 @@ import { projectCategoryApi } from "@/lib/api/projectCategoryApi";
 import { calendarApi } from "@/lib/api/calendarApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { baselineApi, type BaselineActivityResponse, type BaselineDetailResponse } from "@/lib/api/baselineApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { GanttChart } from "@/components/schedule/GanttChart";
@@ -239,80 +240,84 @@ export default function ProjectDetailPage() {
   const criticalPathIds = new Set((criticalPathData?.data ?? []).map((a: ActivityResponse) => a.id));
 
   const activityColumns: ColumnDef<ActivityResponse>[] = [
-    { key: "code", label: "Code", sortable: true },
-    { key: "name", label: "Name", sortable: true },
-    { key: "originalDuration", label: "Duration (days)", sortable: true },
+    { accessorKey: "code", header: "Code", enableSorting: true },
+    { accessorKey: "name", header: "Name", enableSorting: true },
+    { accessorKey: "originalDuration", header: "Duration (days)", enableSorting: true },
     {
-      key: "percentComplete",
-      label: "% Complete",
-      sortable: true,
-      render: (value) => `${String(value)}%`,
+      accessorKey: "percentComplete",
+      header: "% Complete",
+      enableSorting: true,
+      cell: (info) => `${String(info.getValue())}%`,
     },
     {
-      key: "status",
-      label: "Status",
-      render: (value) => <StatusBadge status={String(value)} />,
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => <StatusBadge status={String(info.getValue())} />,
     },
-    { key: "totalFloat", label: "Float (days)", sortable: true },
+    { accessorKey: "totalFloat", header: "Float (days)", enableSorting: true },
     {
-      key: "plannedStartDate",
-      label: "Planned Start",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
-    },
-    {
-      key: "plannedFinishDate",
-      label: "Planned Finish",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "plannedStartDate",
+      header: "Planned Start",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "earlyStartDate",
-      label: "ES",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "plannedFinishDate",
+      header: "Planned Finish",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "earlyFinishDate",
-      label: "EF",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "earlyStartDate",
+      header: "ES",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "lateStartDate",
-      label: "LS",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "earlyFinishDate",
+      header: "EF",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "lateFinishDate",
-      label: "LF",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "lateStartDate",
+      header: "LS",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "id",
-      label: "Actions",
-      render: (value, row: ActivityResponse) => (
-        <div className="flex gap-2">
-          <Link
-            href={`/projects/${projectId}/activities/${value}`}
-            className="text-accent hover:text-blue-300 text-sm font-medium"
-          >
-            Edit
-          </Link>
-          <button
-            onClick={() => {
-              if (window.confirm("Are you sure you want to delete this activity?")) {
-                deleteActivityMutation.mutate(String(value));
-              }
-            }}
-            className="text-danger hover:text-danger text-sm font-medium"
-          >
-            Delete
-          </button>
-        </div>
-      ),
+      accessorKey: "lateFinishDate",
+      header: "LF",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        const value = info.getValue();
+        return (
+          <div className="flex gap-2">
+            <Link
+              href={`/projects/${projectId}/activities/${value}`}
+              className="text-accent hover:text-blue-300 text-sm font-medium"
+            >
+              Edit
+            </Link>
+            <button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to delete this activity?")) {
+                  deleteActivityMutation.mutate(String(value));
+                }
+              }}
+              className="text-danger hover:text-danger text-sm font-medium"
+            >
+              Delete
+            </button>
+          </div>
+        );
+      },
     },
   ];
 

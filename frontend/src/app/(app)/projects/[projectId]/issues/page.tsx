@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { materialCatalogueApi, materialIssueApi } from "@/lib/api/materialCatalogueApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { MaterialIssueResponse } from "@/lib/types";
@@ -30,16 +31,16 @@ export default function IssuesPage() {
   const rows = data?.data ?? [];
 
   const columns: ColumnDef<MaterialIssueResponse>[] = [
-    { key: "challanNumber", label: "Challan #", sortable: true },
-    { key: "issueDate", label: "Date" },
+    { accessorKey: "challanNumber", header: "Challan #", enableSorting: true },
+    { accessorKey: "issueDate", header: "Date" },
     {
-      key: "materialId",
-      label: "Material",
-      render: (v) => matName(v as string),
+      accessorKey: "materialId",
+      header: "Material",
+      cell: (info) => matName(info.getValue() as string),
     },
-    { key: "quantity", label: "Qty Issued" },
-    { key: "wastageQuantity", label: "Wastage" },
-    { key: "remarks", label: "Remarks" },
+    { accessorKey: "quantity", header: "Qty Issued" },
+    { accessorKey: "wastageQuantity", header: "Wastage" },
+    { accessorKey: "remarks", header: "Remarks" },
   ];
 
   return (
@@ -62,7 +63,7 @@ export default function IssuesPage() {
       ) : rows.length === 0 ? (
         <EmptyState title="No issues yet" description="Log an issue when material leaves the store." />
       ) : (
-        <DataTable columns={columns} data={rows} rowKey="id" searchable searchPlaceholder="Search issues…" />
+        <VirtualDataTable columns={columns} data={rows} sortable resizable />
       )}
     </div>
   );

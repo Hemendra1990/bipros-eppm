@@ -6,7 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { materialCatalogueApi } from "@/lib/api/materialCatalogueApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -56,23 +57,26 @@ export default function MaterialsPage() {
   const rows = data?.data ?? [];
 
   const columns: ColumnDef<MaterialResponse>[] = [
-    { key: "code", label: "Code", sortable: true },
-    { key: "name", label: "Name" },
+    { accessorKey: "code", header: "Code", enableSorting: true },
+    { accessorKey: "name", header: "Name" },
     {
-      key: "category",
-      label: "Category",
-      render: (v) => (v ? (v as string).replace("_", " ") : "—"),
+      accessorKey: "category",
+      header: "Category",
+      cell: (info) => {
+        const v = info.getValue();
+        return v ? (v as string).replace("_", " ") : "—";
+      },
     },
-    { key: "unit", label: "Unit" },
-    { key: "specificationGrade", label: "Specification" },
-    { key: "minStockLevel", label: "Min Stock" },
-    { key: "reorderQuantity", label: "Reorder Qty" },
-    { key: "leadTimeDays", label: "Lead (days)" },
+    { accessorKey: "unit", header: "Unit" },
+    { accessorKey: "specificationGrade", header: "Specification" },
+    { accessorKey: "minStockLevel", header: "Min Stock" },
+    { accessorKey: "reorderQuantity", header: "Reorder Qty" },
+    { accessorKey: "leadTimeDays", header: "Lead (days)" },
     {
-      key: "status",
-      label: "Status",
-      render: (v) => {
-        const s = v as MaterialStatus | null;
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => {
+        const s = info.getValue() as MaterialStatus | null;
         if (!s) return "—";
         return (
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s]}`}>
@@ -82,21 +86,24 @@ export default function MaterialsPage() {
       },
     },
     {
-      key: "_actions",
-      label: "",
-      render: (_v, row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmId(row.id);
-          }}
-          className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger"
-          aria-label="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      ),
+      accessorKey: "_actions",
+      header: "",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmId(row.id);
+            }}
+            className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger"
+            aria-label="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        );
+      },
     },
   ];
 
@@ -138,13 +145,12 @@ export default function MaterialsPage() {
           description="Add materials to the catalogue to enable stock tracking, GRN and issue workflows."
         />
       ) : (
-        <DataTable
+        <VirtualDataTable
           columns={columns}
           data={rows}
-          rowKey="id"
+          sortable
+          resizable
           onRowClick={(row) => router.push(`/projects/${projectId}/materials/${row.id}`)}
-          searchable
-          searchPlaceholder="Search by code, name, specification…"
         />
       )}
 

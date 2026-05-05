@@ -19,7 +19,8 @@ import {
 } from "@/lib/api/riskTemplateApi";
 import { riskCategoryApi } from "@/lib/api/riskCategoryApi";
 import { apiClient } from "@/lib/api/client";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { ApiResponse, ProjectResponse } from "@/lib/types";
@@ -193,41 +194,47 @@ export default function ProjectRisksPage() {
   const opportunityCount = risks.filter((r) => computeRag(r) === "OPPORTUNITY").length;
 
   const columns: ColumnDef<RiskResponse>[] = [
-    { key: "code", label: "Code", sortable: true },
+    { accessorKey: "code", header: "Code", enableSorting: true },
     {
-      key: "title",
-      label: "Title",
-      sortable: true,
-      render: (_val, row) => (
-        <button
-          onClick={() => router.push(`/projects/${projectId}/risks/${row.id}`)}
-          className="text-accent hover:underline text-left font-medium"
-        >
-          {row.title}
-        </button>
-      ),
+      accessorKey: "title",
+      header: "Title",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <button
+            onClick={() => router.push(`/projects/${projectId}/risks/${row.id}`)}
+            className="text-accent hover:underline text-left font-medium"
+          >
+            {row.title}
+          </button>
+        );
+      },
     },
     {
-      key: "riskType",
-      label: "Type",
-      render: (val) => (
-        <span
-          className={`px-2 py-0.5 rounded text-xs font-medium ${
-            val === "OPPORTUNITY"
-              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
-              : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
-          }`}
-        >
-          {val === "OPPORTUNITY" ? "Opportunity" : "Threat"}
-        </span>
-      ),
+      accessorKey: "riskType",
+      header: "Type",
+      cell: (info) => {
+        const val = info.getValue();
+        return (
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium ${
+              val === "OPPORTUNITY"
+                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+                : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+            }`}
+          >
+            {val === "OPPORTUNITY" ? "Opportunity" : "Threat"}
+          </span>
+        );
+      },
     },
     {
-      key: "category",
-      label: "Category",
-      sortable: true,
-      // Backend returns RiskCategorySummary { code, name, ... } or null.
-      render: (_val, row) => {
+      accessorKey: "category",
+      header: "Category",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
         const cat = row.category;
         if (!cat) return <span className="text-text-muted">—</span>;
         return (
@@ -237,28 +244,11 @@ export default function ProjectRisksPage() {
         );
       },
     },
-    ...(canSeeRiskInternals ? [
-      { key: "probability" as const, label: "Probability", sortable: true },
-      { key: "impactCost" as const, label: "IC", sortable: true },
-      { key: "impactSchedule" as const, label: "IS", sortable: true },
-      {
-        key: "riskScore" as const,
-        label: "Score",
-        sortable: true,
-        render: (val: unknown) => {
-          const score = Number(String(val));
-          if (isNaN(score)) return <span className="text-text-muted">-</span>;
-          let color = "text-success";
-          if (score >= 15) color = "text-danger";
-          else if (score >= 8) color = "text-warning";
-          return <span className={`font-semibold ${color}`}>{score.toFixed(0)}</span>;
-        },
-      },
-    ] : []),
     {
-      key: "rag",
-      label: "RAG",
-      render: (_val, row) => {
+      accessorKey: "rag",
+      header: "RAG",
+      cell: (info) => {
+        const row = info.row.original;
         const rag = computeRag(row);
         if (!rag) return <span className="text-text-muted">—</span>;
         return (
@@ -269,9 +259,10 @@ export default function ProjectRisksPage() {
       },
     },
     {
-      key: "trend",
-      label: "Trend",
-      render: (val) => {
+      accessorKey: "trend",
+      header: "Trend",
+      cell: (info) => {
+        const val = info.getValue();
         const trend = String(val);
         const Icon = trendIcons[trend as keyof typeof trendIcons] || Minus;
         return (
@@ -283,41 +274,67 @@ export default function ProjectRisksPage() {
       },
     },
     {
-      key: "status",
-      label: "Status",
-      render: (val) => {
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => {
+        const val = info.getValue();
         const status = String(val).replace(/_/g, " ");
         return <span className="text-xs">{status}</span>;
       },
     },
     {
-      key: "id",
-      label: "Actions",
-      render: (val) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push(`/projects/${projectId}/risks/${String(val)}`)}
-            className="text-text-secondary hover:text-accent"
-            title="View details"
-          >
-            <Eye size={14} />
-          </button>
-          <button
-            onClick={() => {
-              if (window.confirm("Are you sure you want to delete this risk?")) {
-                deleteMutation.mutate(String(val));
-              }
-            }}
-            disabled={deleteMutation.isPending}
-            className="text-danger hover:text-danger disabled:text-text-muted"
-            title="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      ),
+      accessorKey: "id",
+      header: "Actions",
+      cell: (info) => {
+        const val = info.getValue();
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push(`/projects/${projectId}/risks/${String(val)}`)}
+              className="text-text-secondary hover:text-accent"
+              title="View details"
+            >
+              <Eye size={14} />
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to delete this risk?")) {
+                  deleteMutation.mutate(String(val));
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              className="text-danger hover:text-danger disabled:text-text-muted"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        );
+      },
     },
   ];
+
+  if (canSeeRiskInternals) {
+    columns.splice(4, 0,
+      { accessorKey: "probability", header: "Probability", enableSorting: true },
+      { accessorKey: "impactCost", header: "IC", enableSorting: true },
+      { accessorKey: "impactSchedule", header: "IS", enableSorting: true },
+      {
+        accessorKey: "riskScore",
+        header: "Score",
+        enableSorting: true,
+        cell: (info) => {
+          const val = info.getValue();
+          const score = Number(String(val));
+          if (isNaN(score)) return <span className="text-text-muted">-</span>;
+          let color = "text-success";
+          if (score >= 15) color = "text-danger";
+          else if (score >= 8) color = "text-warning";
+          return <span className={`font-semibold ${color}`}>{score.toFixed(0)}</span>;
+        },
+      },
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -553,7 +570,7 @@ export default function ProjectRisksPage() {
           description="Add risks and opportunities to this project's register"
         />
       ) : (
-        <DataTable columns={columns} data={risks} rowKey="id" />
+        <VirtualDataTable columns={columns} data={risks} sortable resizable />
       )}
 
       {/* Library Modal */}

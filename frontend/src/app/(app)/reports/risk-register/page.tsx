@@ -16,7 +16,8 @@ import {
   type RiskTemplate,
 } from "@/lib/api/riskTemplateApi";
 import { apiClient } from "@/lib/api/client";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -203,13 +204,14 @@ export default function RiskRegisterReportPage() {
 
   const internalColumns: ColumnDef<RiskResponse>[] = canSeeRiskInternals
     ? [
-        { key: "probability", label: "Probability", sortable: true },
-        { key: "impact", label: "Impact", sortable: true },
+        { accessorKey: "probability", header: "Probability", enableSorting: true },
+        { accessorKey: "impact", header: "Impact", enableSorting: true },
         {
-          key: "score",
-          label: "Score",
-          sortable: true,
-          render: (value) => {
+          accessorKey: "score",
+          header: "Score",
+          enableSorting: true,
+          cell: (info) => {
+            const value = info.getValue();
             if (value === null || value === undefined) {
               return <span className="text-text-muted">-</span>;
             }
@@ -226,21 +228,23 @@ export default function RiskRegisterReportPage() {
       ]
     : [];
   const columns: ColumnDef<RiskResponse>[] = [
-    { key: "code", label: "Code", sortable: true },
-    { key: "title", label: "Title", sortable: true },
+    { accessorKey: "code", header: "Code", enableSorting: true },
+    { accessorKey: "title", header: "Title", enableSorting: true },
     {
-      key: "category",
-      label: "Category",
-      render: (_value, row) => {
+      accessorKey: "category",
+      header: "Category",
+      cell: (info) => {
+        const row = info.row.original;
         const cat = row.category;
         return cat ? `${cat.code} — ${cat.name}` : "—";
       },
     },
     ...internalColumns,
     {
-      key: "status",
-      label: "Status",
-      render: (value) => {
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => {
+        const value = info.getValue();
         const statusMap: Record<string, "OPEN" | "MEDIUM" | "CLOSED"> = {
           OPEN: "OPEN",
           MITIGATED: "MEDIUM",
@@ -249,28 +253,34 @@ export default function RiskRegisterReportPage() {
         return <StatusBadge status={statusMap[String(value)] || String(value)} />;
       },
     },
-    { key: "owner", label: "Owner", sortable: true },
+    { accessorKey: "owner", header: "Owner", enableSorting: true },
     {
-      key: "analysisQuality",
-      label: "Analysis",
-      render: (_value, row) => <AnalysisQualityBadge quality={row.analysisQuality} />,
+      accessorKey: "analysisQuality",
+      header: "Analysis",
+      cell: (info) => {
+        const row = info.row.original;
+        return <AnalysisQualityBadge quality={row.analysisQuality} />;
+      },
     },
     {
-      key: "id",
-      label: "Actions",
-      render: (value) => (
-        <button
-          onClick={() => {
-            if (window.confirm("Are you sure you want to delete this risk?")) {
-              deleteMutation.mutate(String(value));
-            }
-          }}
-          disabled={deleteMutation.isPending}
-          className="text-danger hover:text-danger disabled:text-text-muted"
-        >
-          <Trash2 size={16} />
-        </button>
-      ),
+      accessorKey: "id",
+      header: "Actions",
+      cell: (info) => {
+        const value = info.getValue();
+        return (
+          <button
+            onClick={() => {
+              if (window.confirm("Are you sure you want to delete this risk?")) {
+                deleteMutation.mutate(String(value));
+              }
+            }}
+            disabled={deleteMutation.isPending}
+            className="text-danger hover:text-danger disabled:text-text-muted"
+          >
+            <Trash2 size={16} />
+          </button>
+        );
+      },
     },
   ];
 
@@ -534,7 +544,7 @@ export default function RiskRegisterReportPage() {
             />
           )}
 
-          {risks.length > 0 && <DataTable columns={columns} data={risks} rowKey="id" />}
+          {risks.length > 0 && <VirtualDataTable columns={columns} data={risks} sortable resizable />}
         </>
       )}
 

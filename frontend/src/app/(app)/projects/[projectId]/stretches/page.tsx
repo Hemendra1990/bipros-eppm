@@ -6,7 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { stretchApi, type StretchProgressResponse } from "@/lib/api/stretchApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -73,31 +74,33 @@ export default function StretchesPage() {
   const progressMap = progressQueries.data ?? new Map<string, StretchProgressResponse>();
 
   const columns: ColumnDef<StretchResponse>[] = [
-    { key: "stretchCode", label: "Stretch ID", sortable: true },
-    { key: "name", label: "Name" },
+    { accessorKey: "stretchCode", header: "Stretch ID", enableSorting: true },
+    { accessorKey: "name", header: "Name" },
     {
-      key: "fromChainageM",
-      label: "From",
-      render: (v) => formatChainage(v as number | null),
-      className: "font-mono text-sm",
+      accessorKey: "fromChainageM",
+      header: "From",
+      cell: (info) => formatChainage(info.getValue() as number | null),
     },
     {
-      key: "toChainageM",
-      label: "To",
-      render: (v) => formatChainage(v as number | null),
-      className: "font-mono text-sm",
+      accessorKey: "toChainageM",
+      header: "To",
+      cell: (info) => formatChainage(info.getValue() as number | null),
     },
     {
-      key: "lengthM",
-      label: "Length (m)",
-      render: (v) => (v == null ? "—" : `${v}`),
+      accessorKey: "lengthM",
+      header: "Length (m)",
+      cell: (info) => {
+        const v = info.getValue();
+        return v == null ? "—" : `${v}`;
+      },
     },
-    { key: "packageCode", label: "Package" },
+    { accessorKey: "packageCode", header: "Package" },
     {
-      key: "status",
-      label: "Status",
-      render: (v) => {
-        const s = v as StretchStatus | null;
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => {
+        const val = info.getValue();
+        const s = val as StretchStatus | null;
         if (!s) return "—";
         return (
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s]}`}>
@@ -107,9 +110,10 @@ export default function StretchesPage() {
       },
     },
     {
-      key: "_progress",
-      label: "% Complete",
-      render: (_v, row) => {
+      id: "_progress",
+      header: "% Complete",
+      cell: (info) => {
+        const row = info.row.original;
         const p = progressMap.get(row.id);
         if (!p) return "—";
         return (
@@ -127,24 +131,27 @@ export default function StretchesPage() {
         );
       },
     },
-    { key: "milestoneName", label: "Milestone" },
-    { key: "targetDate", label: "Target" },
+    { accessorKey: "milestoneName", header: "Milestone" },
+    { accessorKey: "targetDate", header: "Target" },
     {
-      key: "_actions",
-      label: "",
-      render: (_v, row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmId(row.id);
-          }}
-          className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger"
-          aria-label="Delete stretch"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      ),
+      id: "_actions",
+      header: "",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmId(row.id);
+            }}
+            className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger"
+            aria-label="Delete stretch"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        );
+      },
     },
   ];
 
@@ -173,13 +180,12 @@ export default function StretchesPage() {
           description="Create a stretch to subdivide the corridor for supervisor assignment and milestone tracking."
         />
       ) : (
-        <DataTable
+        <VirtualDataTable
           columns={columns}
           data={stretches}
-          rowKey="id"
+          sortable
+          resizable
           onRowClick={(row) => router.push(`/projects/${projectId}/stretches/${row.id}`)}
-          searchable
-          searchPlaceholder="Search stretches…"
         />
       )}
 

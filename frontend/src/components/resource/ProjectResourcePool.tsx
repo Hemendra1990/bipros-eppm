@@ -10,7 +10,8 @@ import {
 import { type ResourceResponse } from "@/lib/api/resourceApi";
 import { resourceTypeApi } from "@/lib/api/resourceTypeApi";
 import { resourceRoleApi } from "@/lib/api/resourceRoleApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Plus, Trash2, X } from "lucide-react";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
@@ -153,22 +154,22 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
   };
 
   const poolColumns: ColumnDef<ProjectResourceResponse>[] = [
-    { key: "resourceCode", label: "Code", sortable: true },
-    { key: "resourceName", label: "Name", sortable: true },
-    { key: "resourceTypeName", label: "Type", sortable: true },
-    { key: "roleName", label: "Role", sortable: true, render: (v) => (v as string) ?? "—" },
+    { accessorKey: "resourceCode", header: "Code", enableSorting: true },
+    { accessorKey: "resourceName", header: "Name", enableSorting: true },
+    { accessorKey: "resourceTypeName", header: "Type", enableSorting: true },
+    { accessorKey: "roleName", header: "Role", enableSorting: true, cell: (info) => (info.getValue() as string) ?? "—" },
     {
-      key: "masterRate",
-      label: "Master Rate",
-      sortable: true,
-      render: (v) => (v != null ? formatDefaultCurrency(Number(v)) : "—"),
+      accessorKey: "masterRate",
+      header: "Master Rate",
+      enableSorting: true,
+      cell: (info) => (info.getValue() != null ? formatDefaultCurrency(Number(info.getValue())) : "—"),
     },
     {
-      key: "rateOverride",
-      label: "Override Rate",
-      render: (value, row) => {
-        const r = row as ProjectResourceResponse;
-        if (editingId === r.id) {
+      accessorKey: "rateOverride",
+      header: "Override Rate",
+      cell: (info) => {
+        const row = info.row.original;
+        if (editingId === row.id) {
           return (
             <input
               type="number"
@@ -180,15 +181,15 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             />
           );
         }
-        return value != null ? formatDefaultCurrency(Number(value)) : "—";
+        return info.getValue() != null ? formatDefaultCurrency(Number(info.getValue())) : "—";
       },
     },
     {
-      key: "availabilityOverride",
-      label: "Override Avail.",
-      render: (value, row) => {
-        const r = row as ProjectResourceResponse;
-        if (editingId === r.id) {
+      accessorKey: "availabilityOverride",
+      header: "Override Avail.",
+      cell: (info) => {
+        const row = info.row.original;
+        if (editingId === row.id) {
           return (
             <input
               type="number"
@@ -200,15 +201,15 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             />
           );
         }
-        return value != null ? `${Number(value)}%` : "—";
+        return info.getValue() != null ? `${Number(info.getValue())}%` : "—";
       },
     },
     {
-      key: "notes",
-      label: "Notes",
-      render: (value, row) => {
-        const r = row as ProjectResourceResponse;
-        if (editingId === r.id) {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: (info) => {
+        const row = info.row.original;
+        if (editingId === row.id) {
           return (
             <input
               type="text"
@@ -219,19 +220,19 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             />
           );
         }
-        return (value as string) ?? "—";
+        return (info.getValue() as string) ?? "—";
       },
     },
     {
-      key: "actions",
-      label: "Actions",
-      render: (_value, row) => {
-        const r = row as ProjectResourceResponse;
-        if (editingId === r.id) {
+      id: "actions",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        if (editingId === row.id) {
           return (
             <div className="flex gap-1">
               <button
-                onClick={() => saveEdit(r.id)}
+                onClick={() => saveEdit(row.id)}
                 disabled={updateMutation.isPending}
                 className="rounded bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
@@ -249,13 +250,13 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
         return (
           <div className="flex gap-1">
             <button
-              onClick={() => startEdit(r)}
+              onClick={() => startEdit(row)}
               className="rounded border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover"
             >
               Edit
             </button>
             <button
-              onClick={() => setConfirmDelete(r)}
+              onClick={() => setConfirmDelete(row)}
               className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
             >
               <Trash2 size={12} />
@@ -384,12 +385,11 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             </p>
           </div>
         ) : (
-          <DataTable
+          <VirtualDataTable
             columns={poolColumns}
             data={pool}
-            rowKey="id"
-            searchable
-            searchPlaceholder="Search pool..."
+            sortable
+            resizable
           />
         )}
       </div>

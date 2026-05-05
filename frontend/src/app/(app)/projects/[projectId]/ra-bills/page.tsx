@@ -10,7 +10,8 @@ import {
   type RaBill,
   type SatelliteGate,
 } from "@/lib/api/raBillApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
 import { TabTip } from "@/components/common/TabTip";
@@ -109,42 +110,47 @@ export default function RaBillsPage() {
   const billItems = billItemsData?.data ?? [];
 
   const billColumns: ColumnDef<RaBill>[] = [
-    { key: "billNumber", label: "Bill Number", sortable: true },
-    { key: "wbsPackageCode", label: "Package", sortable: true },
-    { key: "billPeriodFrom", label: "From", sortable: true },
-    { key: "billPeriodTo", label: "To", sortable: true },
+    { accessorKey: "billNumber", header: "Bill Number", enableSorting: true },
+    { accessorKey: "wbsPackageCode", header: "Package", enableSorting: true },
+    { accessorKey: "billPeriodFrom", header: "From", enableSorting: true },
+    { accessorKey: "billPeriodTo", header: "To", enableSorting: true },
     {
-      key: "grossAmount",
-      label: "Gross",
-      sortable: true,
-      render: (value) => `₹${Number(value).toLocaleString("en-IN")}`,
+      accessorKey: "grossAmount",
+      header: "Gross",
+      enableSorting: true,
+      cell: (info) => `₹${Number(info.getValue()).toLocaleString("en-IN")}`,
     },
     {
-      key: "netAmount",
-      label: "Net",
-      sortable: true,
-      render: (value) => `₹${Number(value).toLocaleString("en-IN")}`,
+      accessorKey: "netAmount",
+      header: "Net",
+      enableSorting: true,
+      cell: (info) => `₹${Number(info.getValue()).toLocaleString("en-IN")}`,
     },
     {
-      key: "contractorClaimedPercent",
-      label: "Claim %",
-      sortable: true,
-      render: (value) =>
-        value != null ? `${Number(value).toFixed(1)}%` : "—",
+      accessorKey: "contractorClaimedPercent",
+      header: "Claim %",
+      enableSorting: true,
+      cell: (info) => {
+        const value = info.getValue();
+        return value != null ? `${Number(value).toFixed(1)}%` : "—";
+      },
     },
     {
-      key: "aiSatellitePercent",
-      label: "AI %",
-      sortable: true,
-      render: (value) =>
-        value != null ? `${Number(value).toFixed(1)}%` : "—",
+      accessorKey: "aiSatellitePercent",
+      header: "AI %",
+      enableSorting: true,
+      cell: (info) => {
+        const value = info.getValue();
+        return value != null ? `${Number(value).toFixed(1)}%` : "—";
+      },
     },
     {
-      key: "satelliteGate",
-      label: "Satellite Gate",
-      sortable: true,
-      render: (value, row) => {
-        const gate = value as SatelliteGate | null | undefined;
+      accessorKey: "satelliteGate",
+      header: "Satellite Gate",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        const gate = info.getValue() as SatelliteGate | null | undefined;
         if (!gate) return <span className="text-text-muted">—</span>;
         const variance = row.satelliteGateVariance;
         return (
@@ -158,16 +164,19 @@ export default function RaBillsPage() {
       },
     },
     {
-      key: "status",
-      label: "Status",
-      sortable: true,
-      render: (value) => (
-        <span
-          className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${statusBadge(String(value))}`}
-        >
-          {String(value).replace(/_/g, " ")}
-        </span>
-      ),
+      accessorKey: "status",
+      header: "Status",
+      enableSorting: true,
+      cell: (info) => {
+        const value = info.getValue();
+        return (
+          <span
+            className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${statusBadge(String(value))}`}
+          >
+            {String(value).replace(/_/g, " ")}
+          </span>
+        );
+      },
     },
   ];
 
@@ -625,10 +634,11 @@ export default function RaBillsPage() {
             </p>
           </div>
         ) : (
-          <DataTable
+          <VirtualDataTable
             columns={billColumns}
             data={bills}
-            rowKey="id"
+            sortable
+            resizable
             onRowClick={(bill) => setSelectedBillId(bill.id)}
           />
         )}
