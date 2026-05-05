@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import {
@@ -15,6 +15,14 @@ import { permitApi } from "@/lib/api/permitApi";
 import { PermitStatusBadge, PermitTypeBadge, RiskBadge } from "@/components/permits";
 
 export default function PermitsDashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate">Loading…</div>}>
+      <PermitsDashboardPageInner />
+    </Suspense>
+  );
+}
+
+function PermitsDashboardPageInner() {
   const search = useSearchParams();
   const projectId = search.get("projectId") || undefined;
 
