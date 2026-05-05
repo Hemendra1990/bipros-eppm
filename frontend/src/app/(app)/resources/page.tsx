@@ -6,7 +6,8 @@ import { Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -69,76 +70,90 @@ export default function ResourcesPage() {
   // /v1/resources/{id}, not the list — so we render only what's on ResourceResponse.
   const columns = useMemo<ColumnDef<ResourceResponse>[]>(() => {
     const baseCols: ColumnDef<ResourceResponse>[] = [
-      { key: "code", label: "Code", sortable: true },
-      { key: "name", label: "Name", sortable: true },
+      { accessorKey: "code", header: "Code", enableSorting: true },
+      { accessorKey: "name", header: "Name", enableSorting: true },
     ];
 
     const typeCol: ColumnDef<ResourceResponse> = {
-      key: "resourceTypeName",
-      label: "Type",
-      sortable: true,
-      render: (_value, row) => (
-        <span className="text-sm font-medium">
-          {row.resourceTypeName ?? row.resourceTypeCode ?? "—"}
-        </span>
-      ),
+      accessorKey: "resourceTypeName",
+      header: "Type",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="text-sm font-medium">
+            {row.resourceTypeName ?? row.resourceTypeCode ?? "—"}
+          </span>
+        );
+      },
     };
 
     const roleCol: ColumnDef<ResourceResponse> = {
-      key: "roleName",
-      label: "Role",
-      sortable: true,
-      render: (_value, row) => row.roleName ?? "—",
+      accessorKey: "roleName",
+      header: "Role",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return row.roleName ?? "—";
+      },
     };
 
     const availabilityCol: ColumnDef<ResourceResponse> = {
-      key: "availability",
-      label: "Availability",
-      sortable: true,
-      render: (_value, row) =>
-        row.availability == null ? "—" : Number(row.availability).toFixed(2),
+      accessorKey: "availability",
+      header: "Availability",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return row.availability == null ? "—" : Number(row.availability).toFixed(2);
+      },
     };
 
     const unitCol: ColumnDef<ResourceResponse> = {
-      key: "unit",
-      label: "Unit",
-      sortable: true,
-      render: (_value, row) => row.unit ?? "—",
+      accessorKey: "unit",
+      header: "Unit",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return row.unit ?? "—";
+      },
     };
 
     const statusCol: ColumnDef<ResourceResponse> = {
-      key: "status",
-      label: "Status",
-      render: (value) => <StatusBadge status={String(value)} />,
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => <StatusBadge status={String(info.getValue())} />,
     };
 
     const actionsCol: ColumnDef<ResourceResponse> = {
-      key: "id",
-      label: "Actions",
-      render: (_value, row) => (
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/resources/${row.id}`}
-            className="text-accent hover:underline text-sm"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View
-          </Link>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (window.confirm("Delete this resource?")) {
-                deleteMutation.mutate(String(row.id));
-              }
-            }}
-            disabled={deleteMutation.isPending}
-            className="text-text-secondary hover:text-danger disabled:text-text-muted"
-            title="Delete resource"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ),
+      id: "actions",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/resources/${row.id}`}
+              className="text-accent hover:underline text-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View
+            </Link>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm("Delete this resource?")) {
+                  deleteMutation.mutate(String(row.id));
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              className="text-text-secondary hover:text-danger disabled:text-text-muted"
+              title="Delete resource"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        );
+      },
     };
 
     if (typeTab === "MATERIAL") {
@@ -236,12 +251,12 @@ export default function ResourcesPage() {
       )}
 
       {resources.length > 0 && (
-        <DataTable
+        <VirtualDataTable
           columns={columns}
           data={resources}
-          rowKey="id"
           searchable
-          searchPlaceholder="Search resources..."
+          sortable
+          resizable
         />
       )}
     </div>

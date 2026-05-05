@@ -12,7 +12,8 @@ import {
 import { workActivityApi } from "@/lib/api/workActivityApi";
 import { resourceTypeApi } from "@/lib/api/resourceTypeApi";
 import { resourceApi } from "@/lib/api/resourceApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
 
@@ -256,60 +257,77 @@ export default function ProductivityNormsPage() {
   const manpowerColumns: ColumnDef<ProductivityNormResponse>[] = useMemo(
     () => [
       {
-        key: "workActivityName",
-        label: "Activity",
-        sortable: true,
-        render: (_v, row) => (row.workActivityName ?? row.activityName ?? "—"),
+        accessorKey: "workActivityName",
+        header: "Activity",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return row.workActivityName ?? row.activityName ?? "—";
+        },
       },
       {
-        key: "scope",
-        label: "Scope",
-        sortable: false,
-        render: (_v, row) => <ScopeBadge norm={row} />,
+        accessorKey: "scope",
+        header: "Scope",
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return <ScopeBadge norm={row} />;
+        },
       },
-      { key: "unit", label: "Unit", sortable: true },
+      { accessorKey: "unit", header: "Unit", enableSorting: true },
       {
-        key: "outputPerManPerDay",
-        label: "Output / Man / Day",
-        sortable: true,
-        className: "text-right",
-        render: (_v, row) => formatNumber(row.outputPerManPerDay),
-      },
-      {
-        key: "crewSize",
-        label: "Crew Size",
-        sortable: true,
-        className: "text-right",
-        render: (_v, row) => formatNumber(row.crewSize),
+        accessorKey: "outputPerManPerDay",
+        header: "Output / Man / Day",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return formatNumber(row.outputPerManPerDay);
+        },
       },
       {
-        key: "outputPerDay",
-        label: "Gang Output / Day",
-        sortable: true,
-        className: "text-right",
-        render: (_v, row) => formatNumber(row.outputPerDay),
+        accessorKey: "crewSize",
+        header: "Crew Size",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return formatNumber(row.crewSize);
+        },
       },
       {
-        key: "remarks",
-        label: "Remarks",
-        sortable: false,
-        render: (_v, row) => row.remarks || "—",
+        accessorKey: "outputPerDay",
+        header: "Gang Output / Day",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return formatNumber(row.outputPerDay);
+        },
       },
       {
-        key: "actions",
-        label: "Actions",
-        sortable: false,
-        className: "text-right",
-        render: (_v, row) => (
-          <button
-            onClick={() => handleDelete(row.id)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
-            title="Delete"
-          >
-            <Trash2 size={14} />
-            <span className="hidden sm:inline">Delete</span>
-          </button>
-        ),
+        accessorKey: "remarks",
+        header: "Remarks",
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return row.remarks || "—";
+        },
+      },
+      {
+        accessorKey: "actions",
+        header: "Actions",
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <button
+              onClick={() => handleDelete(row.id)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          );
+        },
       },
     ],
     [handleDelete]
@@ -318,73 +336,95 @@ export default function ProductivityNormsPage() {
   const equipmentColumns: ColumnDef<ProductivityNormResponse>[] = useMemo(
     () => [
       {
-        key: "equipmentSpec",
-        label: "Equipment Spec",
-        sortable: true,
-        render: (_v, row) => row.equipmentSpec || "—",
+        accessorKey: "equipmentSpec",
+        header: "Equipment Spec",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return row.equipmentSpec || "—";
+        },
       },
       {
-        key: "workActivityName",
-        label: "Activity",
-        sortable: true,
-        render: (_v, row) => (row.workActivityName ?? row.activityName ?? "—"),
+        accessorKey: "workActivityName",
+        header: "Activity",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return row.workActivityName ?? row.activityName ?? "—";
+        },
       },
       {
-        key: "scope",
-        label: "Scope",
-        sortable: false,
-        render: (_v, row) => <ScopeBadge norm={row} />,
+        accessorKey: "scope",
+        header: "Scope",
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return <ScopeBadge norm={row} />;
+        },
       },
-      { key: "unit", label: "Unit", sortable: true },
+      { accessorKey: "unit", header: "Unit", enableSorting: true },
       {
-        key: "outputPerHour",
-        label: "Output / Hour",
-        sortable: true,
-        className: "text-right",
-        render: (_v, row) => formatNumber(row.outputPerHour),
-      },
-      {
-        key: "workingHoursPerDay",
-        label: "Working Hrs / Day",
-        sortable: true,
-        className: "text-right",
-        render: (_v, row) => formatNumber(row.workingHoursPerDay),
+        accessorKey: "outputPerHour",
+        header: "Output / Hour",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return formatNumber(row.outputPerHour);
+        },
       },
       {
-        key: "outputPerDay",
-        label: "Output / Day",
-        sortable: true,
-        className: "text-right",
-        render: (_v, row) => formatNumber(row.outputPerDay),
+        accessorKey: "workingHoursPerDay",
+        header: "Working Hrs / Day",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return formatNumber(row.workingHoursPerDay);
+        },
       },
       {
-        key: "fuelLitresPerHour",
-        label: "Fuel L/Hr",
-        sortable: true,
-        className: "text-right",
-        render: (_v, row) => formatNumber(row.fuelLitresPerHour),
+        accessorKey: "outputPerDay",
+        header: "Output / Day",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return formatNumber(row.outputPerDay);
+        },
       },
       {
-        key: "remarks",
-        label: "Remarks",
-        sortable: false,
-        render: (_v, row) => row.remarks || "—",
+        accessorKey: "fuelLitresPerHour",
+        header: "Fuel L/Hr",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          return formatNumber(row.fuelLitresPerHour);
+        },
       },
       {
-        key: "actions",
-        label: "Actions",
-        sortable: false,
-        className: "text-right",
-        render: (_v, row) => (
-          <button
-            onClick={() => handleDelete(row.id)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
-            title="Delete"
-          >
-            <Trash2 size={14} />
-            <span className="hidden sm:inline">Delete</span>
-          </button>
-        ),
+        accessorKey: "remarks",
+        header: "Remarks",
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return row.remarks || "—";
+        },
+      },
+      {
+        accessorKey: "actions",
+        header: "Actions",
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <button
+              onClick={() => handleDelete(row.id)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          );
+        },
       },
     ],
     [handleDelete]
@@ -785,12 +825,11 @@ export default function ProductivityNormsPage() {
                   · {group.rows.length} {group.rows.length === 1 ? "norm" : "norms"}
                 </span>
               </div>
-              <DataTable
+              <VirtualDataTable
                 columns={tab === "MANPOWER" ? manpowerColumns : equipmentColumns}
                 data={group.rows}
-                rowKey="id"
-                searchable={false}
-                pageSize={50}
+                sortable
+                resizable
               />
             </div>
           ))}
