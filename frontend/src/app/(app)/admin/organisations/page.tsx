@@ -1,12 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { organisationApi } from "@/lib/api/organisationApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -56,15 +57,15 @@ export default function OrganisationsPage() {
 
   const orgs = data?.data ?? [];
 
-  const columns: ColumnDef<OrganisationResponse>[] = [
-    { key: "code", label: "Code", sortable: true },
-    { key: "name", label: "Name", sortable: true },
+  const columns: ColumnDef<OrganisationResponse, unknown>[] = [
+    { accessorKey: "code", header: "Code", enableSorting: true },
+    { accessorKey: "name", header: "Name", enableSorting: true },
     {
-      key: "organisationType",
-      label: "Type",
-      sortable: true,
-      render: (value) => {
-        const t = value as OrganisationType;
+      accessorKey: "organisationType",
+      header: "Type",
+      enableSorting: true,
+      cell: (info) => {
+        const t = info.getValue() as OrganisationType;
         return (
           <span className={`rounded px-2 py-0.5 text-xs font-medium ${ORG_TYPE_COLORS[t]}`}>
             {t.replace(/_/g, " ")}
@@ -72,29 +73,30 @@ export default function OrganisationsPage() {
         );
       },
     },
-    { key: "pan", label: "PAN" },
-    { key: "gstin", label: "GSTIN" },
-    { key: "contactPersonName", label: "Contact" },
-    { key: "contactMobile", label: "Mobile" },
-    { key: "city", label: "City" },
+    { accessorKey: "pan", header: "PAN" },
+    { accessorKey: "gstin", header: "GSTIN" },
+    { accessorKey: "contactPersonName", header: "Contact" },
+    { accessorKey: "contactMobile", header: "Mobile" },
+    { accessorKey: "city", header: "City" },
     {
-      key: "registrationStatus",
-      label: "Status",
-      render: (v, row) => {
-        const s = v as OrganisationRegistrationStatus | null;
+      accessorKey: "registrationStatus",
+      header: "Status",
+      cell: (info) => {
+        const s = info.getValue() as OrganisationRegistrationStatus | null;
+        const row = info.row.original;
         if (!s) return row.active ? <span className="text-success">Active</span> : <span className="text-text-muted">Inactive</span>;
         return <span className={STATUS_COLORS[s]}>{s.replace(/_/g, " ")}</span>;
       },
     },
     {
-      key: "_actions",
-      label: "",
-      render: (_v, row) => (
+      id: "actions",
+      header: "",
+      cell: (info) => (
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setConfirmId(row.id);
+            setConfirmId(info.row.original.id);
           }}
           className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger"
           aria-label="Delete"
@@ -136,13 +138,13 @@ export default function OrganisationsPage() {
       )}
 
       {orgs.length > 0 && (
-        <DataTable
+        <VirtualDataTable
           data={orgs}
           columns={columns}
-          rowKey="id"
-          onRowClick={(row) => router.push(`/admin/organisations/${row.id}`)}
           searchable
-          searchPlaceholder="Search organisations…"
+          sortable
+          resizable
+          onRowClick={(row) => router.push(`/admin/organisations/${row.id}`)}
         />
       )}
 
