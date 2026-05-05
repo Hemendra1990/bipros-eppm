@@ -22,6 +22,8 @@ import {
   SectionCard,
 } from "@/components/common/dashboard/primitives";
 import { KpiTile } from "@/components/common/KpiTile";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const STATUS_COLORS: Record<string, string> = {
   NOT_STARTED: CHART_COLORS.muted,
@@ -45,6 +47,98 @@ export function TasksSection({ projectId }: { projectId: string }) {
   });
 
   const rows: ActivityStatusRow[] = useMemo(() => data ?? [], [data]);
+
+  const taskColumns = useMemo<ColumnDef<ActivityStatusRow>[]>(
+    () => [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: (info) => (
+          <span className="font-mono text-[11px] text-text-muted">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => (
+          <span className="text-text-primary">{info.getValue() as string}</span>
+        ),
+      },
+      {
+        accessorKey: "wbsCode",
+        header: "WBS",
+        cell: (info) => (
+          <span className="font-mono text-[11px] text-text-muted">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => {
+          const status = info.getValue() as string;
+          return (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                status === "COMPLETED"
+                  ? "bg-success/15 text-success"
+                  : status === "IN_PROGRESS"
+                    ? "bg-accent/15 text-accent"
+                    : "bg-surface-hover text-text-secondary"
+              }`}
+            >
+              {status}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "pctComplete",
+        header: "%",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {Number(info.getValue()).toFixed(0)}%
+          </span>
+        ),
+      },
+      {
+        accessorKey: "plannedFinish",
+        header: "Planned Finish",
+        cell: (info) => <span>{(info.getValue() as string) ?? "—"}</span>,
+      },
+      {
+        accessorKey: "totalFloat",
+        header: "Float",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {(info.getValue() as number | null) != null
+              ? Number(info.getValue()).toFixed(0)
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "daysDelay",
+        header: "Delay",
+        cell: (info) => {
+          const daysDelay = Number(info.getValue());
+          return (
+            <span
+              className={`block text-right font-mono ${
+                daysDelay > 0 ? "text-danger" : "text-text-muted"
+              }`}
+            >
+              {daysDelay > 0 ? `+${daysDelay}d` : "—"}
+            </span>
+          );
+        },
+      },
+    ],
+    []
+  );
 
   const summary = useMemo(() => {
     const byStatus = new Map<string, number>();
@@ -151,60 +245,14 @@ export function TasksSection({ projectId }: { projectId: string }) {
           {rows.length === 0 ? (
             <EmptyBlock label="No tasks match the current filter" />
           ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-left uppercase tracking-wide text-text-muted">
-                  <th className="px-2 py-2">Code</th>
-                  <th className="px-2 py-2">Name</th>
-                  <th className="px-2 py-2">WBS</th>
-                  <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2 text-right">%</th>
-                  <th className="px-2 py-2">Planned Finish</th>
-                  <th className="px-2 py-2 text-right">Float</th>
-                  <th className="px-2 py-2 text-right">Delay</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(0, 50).map((r) => (
-                  <tr
-                    key={r.activityId}
-                    className={`border-b border-border/50 ${r.isCritical ? "bg-danger/5" : ""}`}
-                  >
-                    <td className="px-2 py-2 font-mono text-[11px] text-text-muted">{r.code}</td>
-                    <td className="px-2 py-2 text-text-primary">{r.name}</td>
-                    <td className="px-2 py-2 font-mono text-[11px] text-text-muted">{r.wbsCode}</td>
-                    <td className="px-2 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          r.status === "COMPLETED"
-                            ? "bg-success/15 text-success"
-                            : r.status === "IN_PROGRESS"
-                              ? "bg-accent/15 text-accent"
-                              : "bg-surface-hover text-text-secondary"
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 text-right font-mono">{r.pctComplete.toFixed(0)}%</td>
-                    <td className="px-2 py-2">{r.plannedFinish ?? "—"}</td>
-                    <td className="px-2 py-2 text-right font-mono">
-                      {r.totalFloat != null ? r.totalFloat.toFixed(0) : "—"}
-                    </td>
-                    <td
-                      className={`px-2 py-2 text-right font-mono ${r.daysDelay > 0 ? "text-danger" : "text-text-muted"}`}
-                    >
-                      {r.daysDelay > 0 ? `+${r.daysDelay}d` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {rows.length > 50 && (
-            <p className="mt-2 text-[11px] text-text-muted">
-              Showing first 50 of {rows.length} rows.
-            </p>
+            <VirtualDataTable
+              columns={taskColumns}
+              data={rows}
+              searchable={false}
+              resizable={false}
+              rowClassName={(row) => (row.isCritical ? "bg-danger/5" : "")}
+              maxHeight={400}
+            />
           )}
         </div>
       </div>

@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { labourApi, type LabourReturnResponse, type CreateLabourReturnRequest, type DeploymentSummary } from "@/lib/api/labourApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 // Spring's native Page<T> serialises with these fields at the root of the
 // response body (no `pagination` sub-object). LabourReturnController returns
@@ -119,6 +121,35 @@ export default function LabourReturnsPage() {
   if (isLoading && returns.length === 0) {
     return <div className="p-6 text-text-muted">Loading labour returns...</div>;
   }
+
+  const columns: ColumnDef<LabourReturnResponse>[] = [
+    { accessorKey: "returnDate", header: "Date" },
+    { accessorKey: "contractorName", header: "Contractor" },
+    {
+      accessorKey: "skillCategory",
+      header: "Skill Category",
+      cell: ({ row }) => (
+        <span className="px-2 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded text-sm">
+          {skillCategoryLabel[row.original.skillCategory]}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "headCount",
+      header: "Headcount",
+      cell: ({ row }) => <span className="font-semibold">{row.original.headCount}</span>,
+    },
+    {
+      accessorKey: "manDays",
+      header: "Man-Days",
+      cell: ({ row }) => row.original.manDays.toFixed(1),
+    },
+    {
+      accessorKey: "siteLocation",
+      header: "Site Location",
+      cell: ({ row }) => row.original.siteLocation || "-",
+    },
+  ];
 
   return (
     <div className="p-6">
@@ -270,36 +301,14 @@ export default function LabourReturnsPage() {
         )}
 
         {/* Returns Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Contractor</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Skill Category</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Headcount</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Man-Days</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Site Location</th>
-              </tr>
-            </thead>
-            <tbody>
-              {returns.map((ret) => (
-                <tr key={ret.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{ret.returnDate}</td>
-                  <td className="border border-border px-4 py-2">{ret.contractorName}</td>
-                  <td className="border border-border px-4 py-2">
-                    <span className="px-2 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded text-sm">
-                      {skillCategoryLabel[ret.skillCategory]}
-                    </span>
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right font-semibold">{ret.headCount}</td>
-                  <td className="border border-border px-4 py-2 text-right">{ret.manDays.toFixed(1)}</td>
-                  <td className="border border-border px-4 py-2">{ret.siteLocation || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={returns}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No labour returns for this project."
+        />
 
         {/* Pagination */}
         {totalElements > 20 && (

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { activityApi } from "@/lib/api/activityApi";
 import type { RelationshipResponse, RelationshipType, ActivityResponse } from "@/lib/api/activityApi";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Plus, Trash2, ArrowRight, ArrowLeft } from "lucide-react";
@@ -80,6 +82,108 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
     setShowAddForm(true);
   };
 
+  const predecessorColumns = useMemo<ColumnDef<RelationshipResponse>[]>(
+    () => [
+      {
+        header: "Activity",
+        accessorKey: "predecessorActivityId",
+        cell: ({ getValue }) => {
+          const id = String(getValue());
+          return (
+            <Link
+              href={`/projects/${projectId}/activities/${id}`}
+              className="text-text-primary hover:text-accent hover:underline"
+            >
+              {getActivityName(id)}
+            </Link>
+          );
+        },
+      },
+      {
+        header: "Type",
+        accessorKey: "relationshipType",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">
+            {RELATIONSHIP_TYPE_SHORT[String(getValue())] ?? String(getValue())}
+          </span>
+        ),
+      },
+      {
+        header: "Lag",
+        accessorKey: "lag",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">{Number(getValue() ?? 0)}d</span>
+        ),
+      },
+      {
+        header: "",
+        id: "actions",
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(row.original.id); }}
+            disabled={deleteMutation.isPending}
+            className="text-danger hover:text-danger"
+            title="Remove dependency"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ),
+      },
+    ],
+    [projectId, getActivityName, deleteMutation]
+  );
+
+  const successorColumns = useMemo<ColumnDef<RelationshipResponse>[]>(
+    () => [
+      {
+        header: "Activity",
+        accessorKey: "successorActivityId",
+        cell: ({ getValue }) => {
+          const id = String(getValue());
+          return (
+            <Link
+              href={`/projects/${projectId}/activities/${id}`}
+              className="text-text-primary hover:text-accent hover:underline"
+            >
+              {getActivityName(id)}
+            </Link>
+          );
+        },
+      },
+      {
+        header: "Type",
+        accessorKey: "relationshipType",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">
+            {RELATIONSHIP_TYPE_SHORT[String(getValue())] ?? String(getValue())}
+          </span>
+        ),
+      },
+      {
+        header: "Lag",
+        accessorKey: "lag",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">{Number(getValue() ?? 0)}d</span>
+        ),
+      },
+      {
+        header: "",
+        id: "actions",
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(row.original.id); }}
+            disabled={deleteMutation.isPending}
+            className="text-danger hover:text-danger"
+            title="Remove dependency"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ),
+      },
+    ],
+    [projectId, getActivityName, deleteMutation]
+  );
+
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-text-primary">Dependencies</h3>
@@ -107,45 +211,15 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
         ) : predecessors.length === 0 ? (
           <div className="text-sm text-text-muted">No predecessors. This activity can start independently.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-text-secondary">
-                <th className="pb-2">Activity</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Lag</th>
-                <th className="pb-2 w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {predecessors.map((rel) => (
-                  <tr key={rel.id} className="border-b border-border/50">
-                    <td className="py-2">
-                      <Link
-                        href={`/projects/${projectId}/activities/${rel.predecessorActivityId}`}
-                        className="text-text-primary hover:text-accent hover:underline"
-                      >
-                        {getActivityName(rel.predecessorActivityId)}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
-                    <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
-                    <td className="py-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(rel.id); }}
-                        disabled={deleteMutation.isPending}
-                        className="text-danger hover:text-danger"
-                        title="Remove dependency"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                   </tr>
-               ))}
-             </tbody>
-           </table>
-         )}
- 
-         {showAddForm && addDirection === "predecessor" && (
+          <SimpleTable
+            data={predecessors}
+            columns={predecessorColumns}
+            sortable={false}
+            className="rounded-lg border-0"
+          />
+        )}
+
+        {showAddForm && addDirection === "predecessor" && (
           <AddDependencyForm
             projectId={projectId}
             activityId={activityId}
@@ -188,42 +262,12 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
         ) : successors.length === 0 ? (
           <div className="text-sm text-text-muted">No successors. No activities depend on this one.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-text-secondary">
-                <th className="pb-2">Activity</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Lag</th>
-                <th className="pb-2 w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {successors.map((rel) => (
-                  <tr key={rel.id} className="border-b border-border/50">
-                    <td className="py-2">
-                      <Link
-                        href={`/projects/${projectId}/activities/${rel.successorActivityId}`}
-                        className="text-text-primary hover:text-accent hover:underline"
-                      >
-                        {getActivityName(rel.successorActivityId)}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
-                    <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
-                    <td className="py-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(rel.id); }}
-                        disabled={deleteMutation.isPending}
-                        className="text-danger hover:text-danger"
-                        title="Remove dependency"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-              ))}
-            </tbody>
-          </table>
+          <SimpleTable
+            data={successors}
+            columns={successorColumns}
+            sortable={false}
+            className="rounded-lg border-0"
+          />
         )}
 
         {showAddForm && addDirection === "successor" && (

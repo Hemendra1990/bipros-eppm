@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Trash2, Save, Clock } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   calendarApi,
   type CalendarWorkWeekRequest,
@@ -413,85 +415,97 @@ export default function CalendarDetailPage() {
             Configure working hours for each day of the week. Non-working days
             ignore time ranges.
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-text-secondary">
-                  <th className="pb-3 pr-4 font-medium">Day</th>
-                  <th className="pb-3 pr-4 font-medium">Type</th>
-                  <th className="pb-3 pr-4 font-medium">Morning Start</th>
-                  <th className="pb-3 pr-4 font-medium">Morning End</th>
-                  <th className="pb-3 pr-4 font-medium">Afternoon Start</th>
-                  <th className="pb-3 font-medium">Afternoon End</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workWeek.map((row, idx) => (
-                  <tr key={row.dayOfWeek} className="border-b border-border">
-                    <td className="py-3 pr-4 font-medium text-text-primary">
-                      {DAY_LABELS[row.dayOfWeek]}
-                    </td>
-                    <td className="py-3 pr-4">
-                      <select
-                        value={row.dayType}
-                        onChange={(e) =>
-                          updateWorkWeekRow(idx, "dayType", e.target.value)
-                        }
-                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary"
-                      >
-                        <option value="WORKING">Working</option>
-                        <option value="NON_WORKING">Non-Working</option>
-                      </select>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <input
-                        type="time"
-                        value={row.startTime1}
-                        onChange={(e) =>
-                          updateWorkWeekRow(idx, "startTime1", e.target.value)
-                        }
-                        disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
-                      />
-                    </td>
-                    <td className="py-3 pr-4">
-                      <input
-                        type="time"
-                        value={row.endTime1}
-                        onChange={(e) =>
-                          updateWorkWeekRow(idx, "endTime1", e.target.value)
-                        }
-                        disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
-                      />
-                    </td>
-                    <td className="py-3 pr-4">
-                      <input
-                        type="time"
-                        value={row.startTime2}
-                        onChange={(e) =>
-                          updateWorkWeekRow(idx, "startTime2", e.target.value)
-                        }
-                        disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
-                      />
-                    </td>
-                    <td className="py-3">
-                      <input
-                        type="time"
-                        value={row.endTime2}
-                        onChange={(e) =>
-                          updateWorkWeekRow(idx, "endTime2", e.target.value)
-                        }
-                        disabled={row.dayType === "NON_WORKING"}
-                        className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SimpleTable
+            columns={[
+              {
+                accessorKey: "dayOfWeek",
+                header: "Day",
+                cell: ({ row }) => <span className="font-medium text-text-primary">{DAY_LABELS[row.original.dayOfWeek]}</span>,
+              },
+              {
+                accessorKey: "dayType",
+                header: "Type",
+                cell: ({ row }) => {
+                  const idx = workWeek.findIndex((w) => w.dayOfWeek === row.original.dayOfWeek);
+                  return (
+                    <select
+                      value={row.original.dayType}
+                      onChange={(e) => updateWorkWeekRow(idx, "dayType", e.target.value)}
+                      className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary"
+                    >
+                      <option value="WORKING">Working</option>
+                      <option value="NON_WORKING">Non-Working</option>
+                    </select>
+                  );
+                },
+              },
+              {
+                accessorKey: "startTime1",
+                header: "Morning Start",
+                cell: ({ row }) => {
+                  const idx = workWeek.findIndex((w) => w.dayOfWeek === row.original.dayOfWeek);
+                  return (
+                    <input
+                      type="time"
+                      value={row.original.startTime1}
+                      onChange={(e) => updateWorkWeekRow(idx, "startTime1", e.target.value)}
+                      disabled={row.original.dayType === "NON_WORKING"}
+                      className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
+                    />
+                  );
+                },
+              },
+              {
+                accessorKey: "endTime1",
+                header: "Morning End",
+                cell: ({ row }) => {
+                  const idx = workWeek.findIndex((w) => w.dayOfWeek === row.original.dayOfWeek);
+                  return (
+                    <input
+                      type="time"
+                      value={row.original.endTime1}
+                      onChange={(e) => updateWorkWeekRow(idx, "endTime1", e.target.value)}
+                      disabled={row.original.dayType === "NON_WORKING"}
+                      className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
+                    />
+                  );
+                },
+              },
+              {
+                accessorKey: "startTime2",
+                header: "Afternoon Start",
+                cell: ({ row }) => {
+                  const idx = workWeek.findIndex((w) => w.dayOfWeek === row.original.dayOfWeek);
+                  return (
+                    <input
+                      type="time"
+                      value={row.original.startTime2}
+                      onChange={(e) => updateWorkWeekRow(idx, "startTime2", e.target.value)}
+                      disabled={row.original.dayType === "NON_WORKING"}
+                      className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
+                    />
+                  );
+                },
+              },
+              {
+                accessorKey: "endTime2",
+                header: "Afternoon End",
+                cell: ({ row }) => {
+                  const idx = workWeek.findIndex((w) => w.dayOfWeek === row.original.dayOfWeek);
+                  return (
+                    <input
+                      type="time"
+                      value={row.original.endTime2}
+                      onChange={(e) => updateWorkWeekRow(idx, "endTime2", e.target.value)}
+                      disabled={row.original.dayType === "NON_WORKING"}
+                      className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-primary disabled:opacity-40"
+                    />
+                  );
+                },
+              },
+            ]}
+            data={workWeek}
+          />
           <div className="mt-6 flex justify-end">
             <button
               onClick={handleSaveWorkWeek}

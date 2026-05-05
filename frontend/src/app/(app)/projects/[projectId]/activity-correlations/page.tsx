@@ -13,6 +13,8 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 export default function ActivityCorrelationsPage() {
   const params = useParams();
@@ -58,6 +60,40 @@ export default function ActivityCorrelationsPage() {
   });
 
   const canAdd = a && b && a !== b && Math.abs(coef) < 1 && !upsertMutation.isPending;
+
+  const columns: ColumnDef<ActivityCorrelation>[] = [
+    {
+      accessorKey: "activityAId",
+      header: "Activity A",
+      cell: ({ row }) => <span className="text-text-primary">{labelOf(row.original.activityAId)}</span>,
+    },
+    {
+      accessorKey: "activityBId",
+      header: "Activity B",
+      cell: ({ row }) => <span className="text-text-primary">{labelOf(row.original.activityBId)}</span>,
+    },
+    {
+      accessorKey: "coefficient",
+      header: "Coefficient",
+      cell: ({ row }) => <span className="text-right text-text-primary">{row.original.coefficient.toFixed(2)}</span>,
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <div className="text-right">
+          <button
+            className="text-danger hover:text-danger cursor-pointer"
+            onClick={() => deleteMutation.mutate({ aId: row.original.activityAId, bId: row.original.activityBId })}
+            disabled={deleteMutation.isPending}
+            aria-label="Remove correlation"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -148,39 +184,7 @@ export default function ActivityCorrelationsPage() {
         )}
 
         {correlations?.data?.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-text-secondary">
-                  <th className="text-left py-2 px-3">Activity A</th>
-                  <th className="text-left py-2 px-3">Activity B</th>
-                  <th className="text-right py-2 px-3">Coefficient</th>
-                  <th className="py-2 px-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {correlations.data.map((c) => (
-                  <tr key={c.id ?? `${c.activityAId}-${c.activityBId}`} className="border-b border-border/50">
-                    <td className="py-2 px-3 text-text-primary">{labelOf(c.activityAId)}</td>
-                    <td className="py-2 px-3 text-text-primary">{labelOf(c.activityBId)}</td>
-                    <td className="py-2 px-3 text-right text-text-primary">{c.coefficient.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-right">
-                      <button
-                        className="text-danger hover:text-danger cursor-pointer"
-                        onClick={() =>
-                          deleteMutation.mutate({ aId: c.activityAId, bId: c.activityBId })
-                        }
-                        disabled={deleteMutation.isPending}
-                        aria-label="Remove correlation"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SimpleTable columns={columns} data={correlations.data} />
         ) : null}
       </div>
     </div>

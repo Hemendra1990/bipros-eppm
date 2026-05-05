@@ -18,6 +18,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const LEVELING_MODES: { value: LevelingMode; label: string; description: string }[] = [
   {
@@ -185,30 +187,35 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
             {result.shiftedActivities.length > 0 && (
               <div className="rounded-lg border border-border bg-surface/50 p-4">
                 <h3 className="mb-3 text-sm font-semibold text-text-secondary">Shifted Activities</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-text-secondary">
-                        <th className="px-3 py-2">Activity ID</th>
-                        <th className="px-3 py-2">Original Start</th>
-                        <th className="px-3 py-2">New Start</th>
-                        <th className="px-3 py-2 text-right">Delay (days)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.shiftedActivities.map((sa) => (
-                        <tr key={sa.activityId} className="border-b border-border hover:bg-surface-hover/50">
-                          <td className="px-3 py-2 font-mono text-xs text-text-primary">
-                            {sa.activityId.substring(0, 8)}...
-                          </td>
-                          <td className="px-3 py-2 text-text-secondary">{sa.originalStart}</td>
-                          <td className="px-3 py-2 text-blue-300">{sa.newStart}</td>
-                          <td className="px-3 py-2 text-right text-yellow-300">+{sa.delayDays}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "activityId",
+                      header: "Activity ID",
+                      cell: ({ row }) => (
+                        <span className="font-mono text-xs text-text-primary">
+                          {row.original.activityId.substring(0, 8)}...
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "originalStart",
+                      header: "Original Start",
+                      cell: ({ row }) => <span className="text-text-secondary">{row.original.originalStart}</span>,
+                    },
+                    {
+                      accessorKey: "newStart",
+                      header: "New Start",
+                      cell: ({ row }) => <span className="text-blue-300">{row.original.newStart}</span>,
+                    },
+                    {
+                      accessorKey: "delayDays",
+                      header: "Delay (days)",
+                      cell: ({ row }) => <span className="text-right text-yellow-300">+{row.original.delayDays}</span>,
+                    },
+                  ]}
+                  data={result.shiftedActivities}
+                />
               </div>
             )}
 

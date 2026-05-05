@@ -9,6 +9,8 @@ import { documentApi } from "@/lib/api/documentApi";
 import { TabTip } from "@/components/common/TabTip";
 import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { NewFolderDialog, type NewFolderFormValues } from "@/components/document/NewFolderDialog";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import type {
   Document,
   DocumentFolder,
@@ -280,6 +282,56 @@ export default function DocumentsPage() {
     );
   };
 
+  const columns: ColumnDef<Document>[] = [
+    { accessorKey: "title", header: "Title" },
+    { accessorKey: "documentNumber", header: "Document #" },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-medium ${
+            row.original.status === "APPROVED"
+              ? "bg-success/10 text-success ring-1 ring-success/20"
+              : row.original.status === "DRAFT"
+                ? "bg-warning/10 text-warning ring-1 ring-amber-500/20"
+                : row.original.status === "UNDER_REVIEW"
+                  ? "bg-accent/10 text-accent ring-1 ring-accent/20"
+                  : row.original.status === "SUPERSEDED"
+                    ? "bg-surface-active/50 text-text-secondary ring-1 ring-border/50"
+                    : "bg-danger/10 text-danger ring-1 ring-red-500/20"
+          }`}
+        >
+          {row.original.status}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "currentVersion",
+      header: "Version",
+      cell: ({ row }) => `v${row.original.currentVersion}`,
+    },
+    {
+      accessorKey: "updatedAt",
+      header: "Updated",
+      cell: ({ row }) => new Date(row.original.updatedAt).toLocaleDateString(),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <button
+          onClick={() => handleDownload(row.original)}
+          disabled={!row.original.filePath}
+          title={row.original.filePath ? "Download file" : "No file attached"}
+          className="text-accent hover:text-blue-300 disabled:text-text-muted disabled:cursor-not-allowed text-xs font-medium"
+        >
+          Download
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <AiInsightsPanel
@@ -435,71 +487,12 @@ export default function DocumentsPage() {
             )}
 
             {documents.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface/80 border-b border-border">
-                    <tr>
-                      <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                        Title
-                      </th>
-                      <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                        Document #
-                      </th>
-                      <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                        Version
-                      </th>
-                      <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                        Updated
-                      </th>
-                      <th className="px-6 py-3 text-center font-semibold text-text-secondary">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {documents.map((doc) => (
-                      <tr key={doc.id} className="hover:bg-surface-hover/30 transition-colors border-border/50">
-                        <td className="px-6 py-4 text-text-primary font-medium">{doc.title}</td>
-                        <td className="px-6 py-4 text-text-secondary">{doc.documentNumber}</td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              doc.status === "APPROVED"
-                                ? "bg-success/10 text-success ring-1 ring-success/20"
-                                : doc.status === "DRAFT"
-                                  ? "bg-warning/10 text-warning ring-1 ring-amber-500/20"
-                                  : doc.status === "UNDER_REVIEW"
-                                    ? "bg-accent/10 text-accent ring-1 ring-accent/20"
-                                    : doc.status === "SUPERSEDED"
-                                      ? "bg-surface-active/50 text-text-secondary ring-1 ring-border/50"
-                                      : "bg-danger/10 text-danger ring-1 ring-red-500/20"
-                            }`}
-                          >
-                            {doc.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-text-secondary">v{doc.currentVersion}</td>
-                        <td className="px-6 py-4 text-text-secondary text-xs">
-                          {new Date(doc.updatedAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => handleDownload(doc)}
-                            disabled={!doc.filePath}
-                            title={doc.filePath ? "Download file" : "No file attached"}
-                            className="text-accent hover:text-blue-300 disabled:text-text-muted disabled:cursor-not-allowed text-xs font-medium"
-                          >
-                            Download
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <VirtualDataTable
+                columns={columns}
+                data={documents}
+                sortable
+                resizable
+              />
             ) : (
               <p className="text-text-muted text-center py-8">No documents in this folder</p>
             )}

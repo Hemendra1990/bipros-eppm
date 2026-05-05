@@ -11,6 +11,8 @@ import {
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const UNITS = ["Cum", "MT", "Bag", "Rm", "Each"] as const;
 
@@ -144,6 +146,67 @@ export default function MaterialConsumptionPage() {
   if (isLoading && logs.length === 0) {
     return <div className="p-6 text-text-muted">Loading material consumption...</div>;
   }
+
+  const columns: ColumnDef<MaterialConsumptionLogResponse>[] = [
+    { accessorKey: "logDate", header: "Date" },
+    { accessorKey: "materialName", header: "Material" },
+    { accessorKey: "unit", header: "Unit" },
+    {
+      accessorKey: "openingStock",
+      header: "Opening",
+      cell: ({ row }) => fmtNum(row.original.openingStock),
+    },
+    {
+      accessorKey: "received",
+      header: "Received",
+      cell: ({ row }) => fmtNum(row.original.received),
+    },
+    {
+      accessorKey: "consumed",
+      header: "Consumed",
+      cell: ({ row }) => fmtNum(row.original.consumed),
+    },
+    {
+      accessorKey: "closingStock",
+      header: "Closing",
+      cell: ({ row }) => fmtNum(row.original.closingStock),
+    },
+    {
+      accessorKey: "wastagePercent",
+      header: "Wastage %",
+      cell: ({ row }) =>
+        row.original.wastagePercent === null || row.original.wastagePercent === undefined
+          ? "—"
+          : `${row.original.wastagePercent.toFixed(2)}%`,
+    },
+    {
+      accessorKey: "issuedBy",
+      header: "Issued By",
+      cell: ({ row }) => row.original.issuedBy ?? "—",
+    },
+    {
+      accessorKey: "receivedBy",
+      header: "Received By",
+      cell: ({ row }) => row.original.receivedBy ?? "—",
+    },
+    {
+      accessorKey: "remarks",
+      header: "Remarks",
+      cell: ({ row }) => row.original.remarks ?? "—",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <button
+          onClick={() => handleDelete(row.original.id)}
+          className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
+        >
+          Delete
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="p-6">
@@ -355,74 +418,14 @@ export default function MaterialConsumptionPage() {
           </form>
         )}
 
-        {/* Logs Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Material</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Opening</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Received</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Consumed</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Closing</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Wastage %</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Issued By</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Received By</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{log.logDate}</td>
-                  <td className="border border-border px-4 py-2">{log.materialName}</td>
-                  <td className="border border-border px-4 py-2">{log.unit}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.openingStock)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.received)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.consumed)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.closingStock)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {log.wastagePercent === null || log.wastagePercent === undefined
-                      ? "—"
-                      : `${log.wastagePercent.toFixed(2)}%`}
-                  </td>
-                  <td className="border border-border px-4 py-2">{log.issuedBy ?? "—"}</td>
-                  <td className="border border-border px-4 py-2">{log.receivedBy ?? "—"}</td>
-                  <td className="border border-border px-4 py-2">{log.remarks ?? "—"}</td>
-                  <td className="border border-border px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(log.id)}
-                      className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {logs.length === 0 && !isLoading && (
-                <tr>
-                  <td
-                    colSpan={12}
-                    className="border border-border px-4 py-6 text-center text-text-muted"
-                  >
-                    No material consumption entries for this date range.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={logs}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No material consumption entries for this date range."
+        />
       </div>
     </div>
   );

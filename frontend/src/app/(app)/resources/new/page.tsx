@@ -26,6 +26,7 @@ import { nationalityMasterApi } from "@/lib/api/nationalityMasterApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { MultiSelect } from "@/components/common/MultiSelect";
+import { SupervisorPicker } from "@/components/resources/SupervisorPicker";
 import toast from "react-hot-toast";
 
 type TypeKind = "MANPOWER" | "EQUIPMENT" | "MATERIAL" | "OTHER";
@@ -481,13 +482,11 @@ export default function NewResourcePage() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Parent Resource ID</label>
-                  <input
-                    type="text"
+                  <label className={labelCls}>Parent / Supervisor</label>
+                  <SupervisorPicker
                     value={common.parentId}
-                    onChange={(e) => setCommon({ ...common, parentId: e.target.value })}
-                    placeholder="Optional — for hierarchical resources"
-                    className={inputCls}
+                    onChange={(id) => setCommon({ ...common, parentId: id ?? "" })}
+                    placeholder="Optional — pick a parent or supervising resource"
                   />
                 </div>
               </div>
@@ -1177,11 +1176,12 @@ function ManpowerMasterFields({
           onChange={(e) => set({ exitDate: e.target.value || null })}
         />
       </Field>
-      <Field label="Reporting Manager (UUID)">
-        <input
-          className={inputCls}
-          value={m.reportingManagerId ?? ""}
-          onChange={(e) => set({ reportingManagerId: e.target.value || null })}
+      <Field label="Reporting Manager">
+        <SupervisorPicker
+          value={m.reportingManagerId}
+          onChange={(id) => set({ reportingManagerId: id })}
+          typeCode="LABOR"
+          placeholder="Pick a manpower supervisor..."
         />
       </Field>
       <Field label="Company Name">

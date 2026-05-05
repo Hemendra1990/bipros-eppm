@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Network, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
@@ -66,6 +66,16 @@ export default function ResourcesPage() {
     return allResources.filter((r) => r.resourceTypeCode === code);
   }, [allResources, typeTab]);
 
+  // Resolve "Reports To" labels by id from the same dataset — the slim list
+  // doesn't carry the parent's name, so we look it up across allResources.
+  const parentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of allResources) {
+      map.set(r.id, r.name ?? r.code ?? r.id);
+    }
+    return map;
+  }, [allResources]);
+
   // Columns vary by tab. The list endpoint returns slim fields only — detail blocks come on
   // /v1/resources/{id}, not the list — so we render only what's on ResourceResponse.
   const columns = useMemo<ColumnDef<ResourceResponse>[]>(() => {
@@ -118,6 +128,26 @@ export default function ResourcesPage() {
       },
     };
 
+    const reportsToCol: ColumnDef<ResourceResponse> = {
+      accessorKey: "parentId",
+      header: "Reports To",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        if (!row.parentId) return <span className="text-text-muted">—</span>;
+        const name = parentNameById.get(row.parentId);
+        return (
+          <Link
+            href={`/resources/${row.parentId}`}
+            className="text-accent hover:underline text-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {name ?? row.parentId.slice(0, 8)}
+          </Link>
+        );
+      },
+    };
+
     const statusCol: ColumnDef<ResourceResponse> = {
       accessorKey: "status",
       header: "Status",
@@ -157,16 +187,16 @@ export default function ResourcesPage() {
     };
 
     if (typeTab === "MATERIAL") {
-      return [...baseCols, typeCol, roleCol, unitCol, availabilityCol, statusCol, actionsCol];
+      return [...baseCols, typeCol, roleCol, unitCol, availabilityCol, reportsToCol, statusCol, actionsCol];
     }
     if (typeTab === "MANPOWER") {
-      return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
+      return [...baseCols, typeCol, roleCol, availabilityCol, reportsToCol, statusCol, actionsCol];
     }
     if (typeTab === "EQUIPMENT") {
-      return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
+      return [...baseCols, typeCol, roleCol, availabilityCol, reportsToCol, statusCol, actionsCol];
     }
-    return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
-  }, [typeTab, deleteMutation]);
+    return [...baseCols, typeCol, roleCol, availabilityCol, reportsToCol, statusCol, actionsCol];
+  }, [typeTab, deleteMutation, parentNameById]);
 
   return (
     <div>
@@ -191,6 +221,20 @@ export default function ResourcesPage() {
               <Trash2 size={16} />
               {deleteAllMutation.isPending ? "Deleting..." : "Delete All"}
             </button>
+            <Link
+              href="/resources/crews"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover"
+            >
+              <Users size={16} />
+              Crews
+            </Link>
+            <Link
+              href="/resources/hierarchy"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover"
+            >
+              <Network size={16} />
+              Hierarchy
+            </Link>
             <Link
               href="/resources/new"
               className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"

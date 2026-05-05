@@ -7,6 +7,8 @@ import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import type { PagedResponse } from "@/lib/types";
 
 interface MaterialReconciliationForm {
@@ -110,6 +112,49 @@ export default function MaterialReconciliationPage() {
   if (isLoading && reconciliations.length === 0) {
     return <div className="p-6 text-text-muted">Loading material reconciliations...</div>;
   }
+
+  const columns: ColumnDef<MaterialReconciliationResponse>[] = [
+    { accessorKey: "period", header: "Period" },
+    {
+      accessorKey: "resourceId",
+      header: "Material",
+      cell: ({ row }) => getResourceName(row.original.resourceId),
+    },
+    {
+      accessorKey: "openingBalance",
+      header: "Opening",
+      cell: ({ row }) => row.original.openingBalance.toFixed(2),
+    },
+    {
+      accessorKey: "received",
+      header: "Received",
+      cell: ({ row }) => (
+        <span className="text-success font-semibold">{row.original.received.toFixed(2)}</span>
+      ),
+    },
+    {
+      accessorKey: "consumed",
+      header: "Consumed",
+      cell: ({ row }) => (
+        <span className="text-danger font-semibold">{row.original.consumed.toFixed(2)}</span>
+      ),
+    },
+    {
+      accessorKey: "wastage",
+      header: "Wastage",
+      cell: ({ row }) => (
+        <span className="text-orange-600">{row.original.wastage.toFixed(2)}</span>
+      ),
+    },
+    {
+      accessorKey: "closingBalance",
+      header: "Closing",
+      cell: ({ row }) => (
+        <span className="font-bold">{row.original.closingBalance.toFixed(2)}</span>
+      ),
+    },
+    { accessorKey: "unit", header: "Unit" },
+  ];
 
   return (
     <div className="p-6">
@@ -252,47 +297,14 @@ export default function MaterialReconciliationPage() {
           </form>
         )}
 
-        {/* Reconciliations Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface-hover/50">
-                <th className="border border-border px-4 py-2 text-left">Period</th>
-                <th className="border border-border px-4 py-2 text-left">Material</th>
-                <th className="border border-border px-4 py-2 text-right">Opening</th>
-                <th className="border border-border px-4 py-2 text-right">Received</th>
-                <th className="border border-border px-4 py-2 text-right">Consumed</th>
-                <th className="border border-border px-4 py-2 text-right">Wastage</th>
-                <th className="border border-border px-4 py-2 text-right">Closing</th>
-                <th className="border border-border px-4 py-2 text-left">Unit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reconciliations.map((recon) => (
-                <tr key={recon.id} className="hover:bg-surface/80">
-                  <td className="border border-border px-4 py-2">{recon.period}</td>
-                  <td className="border border-border px-4 py-2">{getResourceName(recon.resourceId)}</td>
-                  <td className="border border-border px-4 py-2 text-right">{recon.openingBalance.toFixed(2)}</td>
-                  <td className="border border-border px-4 py-2 text-right text-success font-semibold">
-                    {recon.received.toFixed(2)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right text-danger font-semibold">
-                    {recon.consumed.toFixed(2)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right text-orange-600">
-                    {recon.wastage.toFixed(2)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right font-bold">{recon.closingBalance.toFixed(2)}</td>
-                  <td className="border border-border px-4 py-2">{recon.unit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {reconciliations.length === 0 && !isLoading && (
-          <div className="text-center py-8 text-text-muted">No material reconciliations found.</div>
-        )}
+        <VirtualDataTable
+          columns={columns}
+          data={reconciliations}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No material reconciliations found."
+        />
       </div>
     </div>
   );

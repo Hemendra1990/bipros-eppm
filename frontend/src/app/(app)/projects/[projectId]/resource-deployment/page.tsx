@@ -12,6 +12,8 @@ import {
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 type TypeFilter = "ALL" | DeploymentResourceType;
 
@@ -145,6 +147,63 @@ export default function ResourceDeploymentPage() {
   if (isLoading && logs.length === 0) {
     return <div className="p-6 text-text-muted">Loading resource deployment...</div>;
   }
+
+  const columns: ColumnDef<DailyResourceDeploymentResponse>[] = [
+    { accessorKey: "logDate", header: "Date" },
+    {
+      accessorKey: "resourceType",
+      header: "Type",
+      cell: ({ row }) => (
+        <span
+          className={`px-2 py-1 rounded text-text-primary text-sm ${
+            row.original.resourceType === "MANPOWER"
+              ? "bg-success/10 text-success ring-1 ring-success/20"
+              : "bg-accent/10 text-accent ring-1 ring-accent/20"
+          }`}
+        >
+          {row.original.resourceType}
+        </span>
+      ),
+    },
+    { accessorKey: "resourceDescription", header: "Description" },
+    {
+      accessorKey: "nosPlanned",
+      header: "Nos. Planned",
+      cell: ({ row }) => fmtNum(row.original.nosPlanned),
+    },
+    {
+      accessorKey: "nosDeployed",
+      header: "Nos. Deployed",
+      cell: ({ row }) => fmtNum(row.original.nosDeployed),
+    },
+    {
+      accessorKey: "hoursWorked",
+      header: "Hours Worked",
+      cell: ({ row }) => fmtNum(row.original.hoursWorked),
+    },
+    {
+      accessorKey: "idleHours",
+      header: "Idle Hours",
+      cell: ({ row }) => fmtNum(row.original.idleHours),
+    },
+    {
+      accessorKey: "remarks",
+      header: "Remarks",
+      cell: ({ row }) => row.original.remarks ?? "—",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <button
+          onClick={() => handleDelete(row.original.id)}
+          className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
+        >
+          Delete
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="p-6">
@@ -346,74 +405,14 @@ export default function ResourceDeploymentPage() {
           </form>
         )}
 
-        {/* Logs Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Type</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Description</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Nos. Planned</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Nos. Deployed</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Hours Worked</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Idle Hours</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{log.logDate}</td>
-                  <td className="border border-border px-4 py-2">
-                    <span
-                      className={`px-2 py-1 rounded text-text-primary text-sm ${
-                        log.resourceType === "MANPOWER"
-                          ? "bg-success/10 text-success ring-1 ring-success/20"
-                          : "bg-accent/10 text-accent ring-1 ring-accent/20"
-                      }`}
-                    >
-                      {log.resourceType}
-                    </span>
-                  </td>
-                  <td className="border border-border px-4 py-2">{log.resourceDescription}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.nosPlanned)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.nosDeployed)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.hoursWorked)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.idleHours)}
-                  </td>
-                  <td className="border border-border px-4 py-2">{log.remarks ?? "—"}</td>
-                  <td className="border border-border px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(log.id)}
-                      className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {logs.length === 0 && !isLoading && (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="border border-border px-4 py-6 text-center text-text-muted"
-                  >
-                    No resource deployment entries for this date range.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={logs}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No resource deployment entries for this date range."
+        />
       </div>
     </div>
   );

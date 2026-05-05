@@ -17,6 +17,7 @@ import {
 } from "@/lib/api/riskTemplateApi";
 import { apiClient } from "@/lib/api/client";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -772,51 +773,42 @@ function RiskMatrix({ risks }: { risks: RiskResponse[] }) {
   const probLabels = ["Very Low", "Low", "Medium", "High", "Very High"];
   const impactLabels = ["Very High", "High", "Medium", "Low", "Very Low"];
 
+  const matrixData = matrix.map((row, rowIdx) => ({
+    impactLabel: impactLabels[rowIdx],
+    rowIdx,
+    counts: row,
+  }));
+
   return (
-    <div className="inline-block overflow-x-auto">
-      <table className="border-collapse">
-        <thead>
-          <tr>
-            <th className="w-32 border border-border bg-surface-hover p-2 text-right text-xs font-medium text-text-secondary">
-              Probability →
-            </th>
-            {probLabels.map((label) => (
-              <th
-                key={label}
-                className="w-24 border border-border bg-surface-hover p-2 text-center text-xs font-medium text-text-secondary"
-              >
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {matrix.map((row, rowIdx) => (
-            <tr key={rowIdx}>
-              <th className="border border-border bg-surface-hover p-2 text-left text-xs font-medium text-text-secondary">
-                {impactLabels[rowIdx]}
-              </th>
-              {row.map((count, colIdx) => {
-                let bgColor = "bg-success/10";
-                if (count > 0) {
-                  const riskLevel = (4 - rowIdx) * (colIdx + 1);
-                  if (riskLevel >= 15) bgColor = "bg-red-500/20";
-                  else if (riskLevel >= 8) bgColor = "bg-amber-500/20";
-                  else bgColor = "bg-success/20";
-                }
-                return (
-                  <td
-                    key={`${rowIdx}-${colIdx}`}
-                    className={`w-24 border border-border ${bgColor} p-2 text-center text-sm font-semibold text-text-secondary`}
-                  >
-                    {count > 0 && count}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <SimpleTable
+      columns={[
+        {
+          accessorKey: "impactLabel",
+          header: "Probability →",
+          cell: ({ row }) => <span className="text-xs font-medium text-text-secondary">{row.original.impactLabel}</span>,
+        },
+        ...probLabels.map((label, colIdx) => ({
+          accessorKey: `col${colIdx}`,
+          header: label,
+          cell: ({ row }: { row: { original: { rowIdx: number; counts: number[] } } }) => {
+            const count = row.original.counts[colIdx];
+            let bgColor = "bg-success/10";
+            if (count > 0) {
+              const riskLevel = (4 - row.original.rowIdx) * (colIdx + 1);
+              if (riskLevel >= 15) bgColor = "bg-red-500/20";
+              else if (riskLevel >= 8) bgColor = "bg-amber-500/20";
+              else bgColor = "bg-success/20";
+            }
+            return (
+              <div className={`w-24 ${bgColor} p-2 text-center text-sm font-semibold text-text-secondary`}>
+                {count > 0 && count}
+              </div>
+            );
+          },
+        })),
+      ]}
+      data={matrixData}
+      sortable={false}
+    />
   );
 }

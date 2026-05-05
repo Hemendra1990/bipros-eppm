@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { projectApi } from "@/lib/api/projectApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
 function formatArchivedAt(value: string | null | undefined) {
   if (!value) return "—";
@@ -62,6 +63,46 @@ export default function ArchivedProjectsPage() {
       (p) => p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
     );
   }, [allProjects, searchQuery]);
+
+  const columns: ColumnDef<(typeof allProjects)[number]>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => (
+        <span className="font-mono text-[12px] font-medium text-slate">{row.original.code}</span>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <span className="font-semibold text-charcoal">{row.original.name}</span>
+      ),
+    },
+    {
+      accessorKey: "archivedAt",
+      header: "Archived on",
+      cell: ({ row }) => <span className="text-slate">{formatArchivedAt(row.original.archivedAt)}</span>,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end">
+          <button
+            onClick={() =>
+              setRestoreConfirm({ open: true, projectId: row.original.id, projectName: row.original.name })
+            }
+            disabled={restoreMutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-[12px] font-semibold text-gold-deep transition-colors hover:border-gold hover:bg-ivory disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RotateCcw size={13} strokeWidth={1.75} />
+            Restore
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -130,50 +171,7 @@ export default function ArchivedProjectsPage() {
 
       {projects.length > 0 && (
         <>
-          <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
-            <table className="w-full border-collapse text-sm">
-              <thead className="border-b border-hairline bg-ivory">
-                <tr>
-                  {["Code", "Name", "Archived on", "Actions"].map((h) => (
-                    <th
-                      key={h}
-                      className={`px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep ${h === "Actions" ? "text-right" : ""}`}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {projects.map((project) => (
-                  <tr
-                    key={project.id}
-                    className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory"
-                  >
-                    <td className="px-4 py-3.5">
-                      <span className="font-mono text-[12px] font-medium text-slate">{project.code}</span>
-                    </td>
-                    <td className="px-4 py-3.5 font-semibold text-charcoal">{project.name}</td>
-                    <td className="px-4 py-3.5 text-slate">{formatArchivedAt(project.archivedAt)}</td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center justify-end">
-                        <button
-                          onClick={() =>
-                            setRestoreConfirm({ open: true, projectId: project.id, projectName: project.name })
-                          }
-                          disabled={restoreMutation.isPending}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-[12px] font-semibold text-gold-deep transition-colors hover:border-gold hover:bg-ivory disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <RotateCcw size={13} strokeWidth={1.75} />
-                          Restore
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <VirtualDataTable columns={columns} data={projects} sortable resizable searchable={false} />
           <div className="pt-3 text-center text-xs text-slate">
             Showing <span className="font-semibold text-charcoal">{projects.length} of {allProjects.length}</span>
           </div>

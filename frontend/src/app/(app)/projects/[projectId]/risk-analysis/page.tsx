@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 const TABS = ["overview", "criticality", "tornado", "milestones", "cashflow", "drivers"] as const;
@@ -404,45 +406,46 @@ export default function RiskAnalysisPage() {
                 <p className="text-sm text-text-muted">No activity stats available.</p>
               )}
               {activityStats?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Activity</th>
-                        <th className="text-right py-2 px-3">Criticality</th>
-                        <th className="text-right py-2 px-3">Sensitivity</th>
-                        <th className="text-right py-2 px-3">Cruciality</th>
-                        <th className="text-right py-2 px-3">Mean dur.</th>
-                        <th className="text-right py-2 px-3">σ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activityStats.data.map((s) => (
-                        <tr key={s.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">
-                            <span className="text-text-primary">{s.activityCode ?? s.activityId.slice(0, 8)}</span>
-                            <span className="text-text-muted ml-2">{s.activityName}</span>
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {(s.criticalityIndex * 100).toFixed(1)}%
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.durationSensitivity != null ? s.durationSensitivity.toFixed(2) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.cruciality != null ? s.cruciality.toFixed(2) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.durationMean != null ? s.durationMean.toFixed(1) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.durationStddev != null ? s.durationStddev.toFixed(2) : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "activityCode",
+                      header: "Activity",
+                      cell: ({ row }) => (
+                        <span>
+                          <span className="text-text-primary">{row.original.activityCode ?? row.original.activityId.slice(0, 8)}</span>
+                          <span className="text-text-muted ml-2">{row.original.activityName}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "criticalityIndex",
+                      header: "Criticality",
+                      cell: ({ row }) => <span className="text-right">{(row.original.criticalityIndex * 100).toFixed(1)}%</span>,
+                    },
+                    {
+                      accessorKey: "durationSensitivity",
+                      header: "Sensitivity",
+                      cell: ({ row }) => <span className="text-right">{row.original.durationSensitivity != null ? row.original.durationSensitivity.toFixed(2) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "cruciality",
+                      header: "Cruciality",
+                      cell: ({ row }) => <span className="text-right">{row.original.cruciality != null ? row.original.cruciality.toFixed(2) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "durationMean",
+                      header: "Mean dur.",
+                      cell: ({ row }) => <span className="text-right">{row.original.durationMean != null ? row.original.durationMean.toFixed(1) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "durationStddev",
+                      header: "σ",
+                      cell: ({ row }) => <span className="text-right">{row.original.durationStddev != null ? row.original.durationStddev.toFixed(2) : "—"}</span>,
+                    },
+                  ]}
+                  data={activityStats.data}
+                />
               ) : null}
             </div>
           )}
@@ -509,33 +512,25 @@ export default function RiskAnalysisPage() {
                 <p className="text-sm text-text-muted">No milestones in the project&apos;s activity list.</p>
               )}
               {milestones?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Milestone</th>
-                        <th className="text-left py-2 px-3">Planned</th>
-                        <th className="text-left py-2 px-3">P50 finish</th>
-                        <th className="text-left py-2 px-3">P80 finish</th>
-                        <th className="text-left py-2 px-3">P90 finish</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {milestones.data.map((m) => (
-                        <tr key={m.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">
-                            <span className="text-text-primary">{m.activityCode ?? m.activityId.slice(0, 8)}</span>
-                            <span className="text-text-muted ml-2">{m.activityName}</span>
-                          </td>
-                          <td className="py-2 px-3">{m.plannedFinishDate ?? "—"}</td>
-                          <td className="py-2 px-3">{m.p50FinishDate ?? "—"}</td>
-                          <td className="py-2 px-3">{m.p80FinishDate ?? "—"}</td>
-                          <td className="py-2 px-3">{m.p90FinishDate ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "activityCode",
+                      header: "Milestone",
+                      cell: ({ row }) => (
+                        <span>
+                          <span className="text-text-primary">{row.original.activityCode ?? row.original.activityId.slice(0, 8)}</span>
+                          <span className="text-text-muted ml-2">{row.original.activityName}</span>
+                        </span>
+                      ),
+                    },
+                    { accessorKey: "plannedFinishDate", header: "Planned", cell: ({ row }) => row.original.plannedFinishDate ?? "—" },
+                    { accessorKey: "p50FinishDate", header: "P50 finish", cell: ({ row }) => row.original.p50FinishDate ?? "—" },
+                    { accessorKey: "p80FinishDate", header: "P80 finish", cell: ({ row }) => row.original.p80FinishDate ?? "—" },
+                    { accessorKey: "p90FinishDate", header: "P90 finish", cell: ({ row }) => row.original.p90FinishDate ?? "—" },
+                  ]}
+                  data={milestones.data}
+                />
               ) : null}
             </div>
           )}
@@ -549,38 +544,32 @@ export default function RiskAnalysisPage() {
               </p>
               {!cashflow?.data?.length && <p className="text-sm text-text-muted">No cash-flow data available.</p>}
               {cashflow?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Period end</th>
-                        <th className="text-right py-2 px-3">P10 cumulative</th>
-                        <th className="text-right py-2 px-3">P50 cumulative</th>
-                        <th className="text-right py-2 px-3">P80 cumulative</th>
-                        <th className="text-right py-2 px-3">P90 cumulative</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cashflow.data.map((b) => (
-                        <tr key={b.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">{b.periodEndDate}</td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p10Cumulative != null ? Math.round(parseFloat(b.p10Cumulative)).toLocaleString() : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p50Cumulative != null ? Math.round(parseFloat(b.p50Cumulative)).toLocaleString() : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p80Cumulative != null ? Math.round(parseFloat(b.p80Cumulative)).toLocaleString() : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p90Cumulative != null ? Math.round(parseFloat(b.p90Cumulative)).toLocaleString() : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    { accessorKey: "periodEndDate", header: "Period end" },
+                    {
+                      accessorKey: "p10Cumulative",
+                      header: "P10 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p10Cumulative != null ? Math.round(parseFloat(row.original.p10Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "p50Cumulative",
+                      header: "P50 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p50Cumulative != null ? Math.round(parseFloat(row.original.p50Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "p80Cumulative",
+                      header: "P80 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p80Cumulative != null ? Math.round(parseFloat(row.original.p80Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "p90Cumulative",
+                      header: "P90 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p90Cumulative != null ? Math.round(parseFloat(row.original.p90Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                  ]}
+                  data={cashflow.data}
+                />
               ) : null}
             </div>
           )}
@@ -600,45 +589,46 @@ export default function RiskAnalysisPage() {
                 </p>
               )}
               {drivers?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Risk</th>
-                        <th className="text-right py-2 px-3">Rate</th>
-                        <th className="text-right py-2 px-3">Hits</th>
-                        <th className="text-right py-2 px-3">Mean Δ days</th>
-                        <th className="text-right py-2 px-3">Mean Δ cost</th>
-                        <th className="text-left py-2 px-3">Activities</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {drivers.data.map((c) => (
-                        <tr key={c.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">
-                            <span className="text-text-primary">{c.riskCode ?? c.riskId.slice(0, 8)}</span>
-                            <span className="text-text-muted ml-2">{c.riskTitle}</span>
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {c.occurrenceRate != null ? `${(c.occurrenceRate * 100).toFixed(1)}%` : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">{c.occurrences ?? 0}</td>
-                          <td className="py-2 px-3 text-right">
-                            {c.meanDurationImpact != null ? c.meanDurationImpact.toFixed(1) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {c.meanCostImpact != null
-                              ? Math.round(parseFloat(c.meanCostImpact)).toLocaleString()
-                              : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-xs text-text-secondary truncate max-w-xs">
-                            {c.affectedActivityIds ?? ""}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "riskCode",
+                      header: "Risk",
+                      cell: ({ row }) => (
+                        <span>
+                          <span className="text-text-primary">{row.original.riskCode ?? row.original.riskId.slice(0, 8)}</span>
+                          <span className="text-text-muted ml-2">{row.original.riskTitle}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "occurrenceRate",
+                      header: "Rate",
+                      cell: ({ row }) => <span className="text-right">{row.original.occurrenceRate != null ? `${(row.original.occurrenceRate * 100).toFixed(1)}%` : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "occurrences",
+                      header: "Hits",
+                      cell: ({ row }) => <span className="text-right">{row.original.occurrences ?? 0}</span>,
+                    },
+                    {
+                      accessorKey: "meanDurationImpact",
+                      header: "Mean Δ days",
+                      cell: ({ row }) => <span className="text-right">{row.original.meanDurationImpact != null ? row.original.meanDurationImpact.toFixed(1) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "meanCostImpact",
+                      header: "Mean Δ cost",
+                      cell: ({ row }) => <span className="text-right">{row.original.meanCostImpact != null ? Math.round(parseFloat(row.original.meanCostImpact)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "affectedActivityIds",
+                      header: "Activities",
+                      cell: ({ row }) => <span className="text-xs text-text-secondary truncate max-w-xs">{row.original.affectedActivityIds ?? ""}</span>,
+                    },
+                  ]}
+                  data={drivers.data}
+                />
               ) : null}
             </div>
           )}

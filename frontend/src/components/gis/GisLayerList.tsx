@@ -1,5 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { GisLayer } from "@/lib/api/gisApi";
 
 interface GisLayerListProps {
@@ -13,60 +16,74 @@ interface GisLayerListProps {
  * view is kept for admins who want to inspect the layer registry directly.
  */
 export function GisLayerList({ layers }: GisLayerListProps) {
+  const columns = useMemo<ColumnDef<GisLayer>[]>(
+    () => [
+      {
+        header: "Name",
+        accessorKey: "layerName",
+        cell: ({ row }) => (
+          <div className="text-text-primary">
+            {row.original.layerName}
+            {row.original.description && (
+              <div className="text-xs text-text-muted">
+                {row.original.description}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        header: "Type",
+        accessorKey: "layerType",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">
+            {String(getValue()).replace(/_/g, " ")}
+          </span>
+        ),
+      },
+      {
+        header: "Visible",
+        accessorKey: "isVisible",
+        cell: ({ getValue }) =>
+          getValue() ? (
+            <span className="text-green-400">✓</span>
+          ) : (
+            <span className="text-text-muted">—</span>
+          ),
+      },
+      {
+        header: "Opacity",
+        accessorKey: "opacity",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">
+            {Math.round(Number(getValue()) * 100)}%
+          </span>
+        ),
+      },
+      {
+        header: "Order",
+        accessorKey: "sortOrder",
+        cell: ({ getValue }) => (
+          <span className="text-text-muted">{String(getValue())}</span>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
     <div className="space-y-3">
       <div className="text-xs text-text-muted">
         Read-only. Use the Map tab for interactive layer controls.
       </div>
 
-      <div className="rounded-lg border border-border bg-surface/50 overflow-hidden">
-        {layers.length === 0 ? (
-          <p className="p-4 text-text-muted text-sm">No layers configured</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-surface/80 text-text-secondary text-xs uppercase">
-              <tr>
-                <th className="text-left px-3 py-2">Name</th>
-                <th className="text-left px-3 py-2">Type</th>
-                <th className="text-left px-3 py-2">Visible</th>
-                <th className="text-left px-3 py-2">Opacity</th>
-                <th className="text-left px-3 py-2">Order</th>
-              </tr>
-            </thead>
-            <tbody>
-              {layers.map((l) => (
-                <tr
-                  key={l.id as string}
-                  className="border-t border-border"
-                >
-                  <td className="px-3 py-2 text-text-primary">
-                    {l.layerName}
-                    {l.description && (
-                      <div className="text-xs text-text-muted">
-                        {l.description}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-text-secondary">
-                    {l.layerType.replace(/_/g, " ")}
-                  </td>
-                  <td className="px-3 py-2">
-                    {l.isVisible ? (
-                      <span className="text-green-400">✓</span>
-                    ) : (
-                      <span className="text-text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-text-secondary">
-                    {Math.round(l.opacity * 100)}%
-                  </td>
-                  <td className="px-3 py-2 text-text-muted">{l.sortOrder}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {layers.length === 0 ? (
+        <div className="rounded-lg border border-border bg-surface/50 overflow-hidden p-4">
+          <p className="text-text-muted text-sm">No layers configured</p>
+        </div>
+      ) : (
+        <SimpleTable data={layers} columns={columns} sortable={false} className="rounded-lg border border-border bg-surface/50 overflow-hidden" />
+      )}
     </div>
   );
 }

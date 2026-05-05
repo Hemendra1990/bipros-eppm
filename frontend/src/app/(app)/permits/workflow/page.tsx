@@ -3,6 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { permitApi } from "@/lib/api/permitApi";
 import { PermitTypeBadge } from "@/components/permits";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const STEPS = [
   { no: 1, label: "Application Submitted", role: "Worker / Foreman", color: "#FB923C" },
@@ -26,6 +28,45 @@ export default function WorkflowReferencePage() {
     },
     staleTime: 5 * 60_000,
   });
+
+  const columns: ColumnDef<(typeof types)[number]>[] = [
+    {
+      accessorKey: "code",
+      header: "Permit Type",
+      cell: ({ row }) => (
+        <PermitTypeBadge code={row.original.code} name={row.original.name} colorHex={row.original.colorHex} />
+      ),
+    },
+    { accessorKey: "defaultRiskLevel", header: "Default Risk" },
+    {
+      accessorKey: "jsaRequired",
+      header: "JSA",
+      cell: ({ row }) => <span className="text-slate">{row.original.jsaRequired ? "YES" : "—"}</span>,
+    },
+    {
+      accessorKey: "gasTestRequired",
+      header: "Gas Test",
+      cell: ({ row }) => <span className="text-slate">{row.original.gasTestRequired ? "YES" : "—"}</span>,
+    },
+    {
+      accessorKey: "isolationRequired",
+      header: "Isolation",
+      cell: ({ row }) => <span className="text-slate">{row.original.isolationRequired ? "YES" : "—"}</span>,
+    },
+    { accessorKey: "nightWorkPolicy", header: "Night Work" },
+    {
+      accessorKey: "maxDurationHours",
+      header: "Max Duration",
+      cell: ({ row }) => <span className="text-slate">{row.original.maxDurationHours}h</span>,
+    },
+    {
+      accessorKey: "minApprovalRole",
+      header: "Min. Approval",
+      cell: ({ row }) => (
+        <span className="text-slate">{(row.original.minApprovalRole || "").replace("ROLE_", "").replace(/_/g, " ")}</span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6 p-6">
@@ -61,40 +102,7 @@ export default function WorkflowReferencePage() {
 
       <section className="rounded-xl border border-hairline bg-paper p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-charcoal">Permit Type — Risk &amp; Approval Matrix</h2>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs font-semibold uppercase tracking-wider text-slate">
-              <tr>
-                <th className="py-2">Permit Type</th>
-                <th className="py-2">Default Risk</th>
-                <th className="py-2">JSA</th>
-                <th className="py-2">Gas Test</th>
-                <th className="py-2">Isolation</th>
-                <th className="py-2">Night Work</th>
-                <th className="py-2">Max Duration</th>
-                <th className="py-2">Min. Approval</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {types.map((t) => (
-                <tr key={t.id}>
-                  <td className="py-2">
-                    <PermitTypeBadge code={t.code} name={t.name} colorHex={t.colorHex} />
-                  </td>
-                  <td className="py-2 text-charcoal">{t.defaultRiskLevel}</td>
-                  <td className="py-2 text-slate">{t.jsaRequired ? "YES" : "—"}</td>
-                  <td className="py-2 text-slate">{t.gasTestRequired ? "YES" : "—"}</td>
-                  <td className="py-2 text-slate">{t.isolationRequired ? "YES" : "—"}</td>
-                  <td className="py-2 text-slate">{t.nightWorkPolicy}</td>
-                  <td className="py-2 text-slate">{t.maxDurationHours}h</td>
-                  <td className="py-2 text-slate">
-                    {(t.minApprovalRole || "").replace("ROLE_", "").replace(/_/g, " ")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <SimpleTable columns={columns} data={types} className="mt-3" />
       </section>
     </div>
   );

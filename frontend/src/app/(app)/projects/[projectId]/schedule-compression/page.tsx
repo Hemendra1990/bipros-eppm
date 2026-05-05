@@ -14,6 +14,8 @@ import {
 import { ApiResponse } from "@/lib/types";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 export default function ScheduleCompressionPage() {
   const params = useParams();
@@ -168,32 +170,23 @@ function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
 
             {/* Recommendations Table */}
             {(mutation.data.data?.recommendations?.length ?? 0) > 0 && (
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <table className="w-full">
-                  <thead className="bg-surface/80 border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Activity Code</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Original Duration</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Days Saved</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mutation.data.data?.recommendations?.map((rec: CompressionRecommendation, idx: number) => (
-                      <tr key={idx} className="border-b border-border hover:bg-surface/80">
-                        <td className="px-4 py-3 font-medium">{rec.activityCode}</td>
-                        <td className="px-4 py-3">{rec.originalDuration?.toFixed(1)} days</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-success/10 text-success rounded">
-                            {rec.durationSaved?.toFixed(1)} days
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{rec.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <SimpleTable
+                columns={[
+                  { accessorKey: "activityCode", header: "Activity Code", cell: ({ row }) => <span className="font-medium">{row.original.activityCode}</span> },
+                  { accessorKey: "originalDuration", header: "Original Duration", cell: ({ row }) => `${row.original.originalDuration?.toFixed(1)} days` },
+                  {
+                    accessorKey: "durationSaved",
+                    header: "Days Saved",
+                    cell: ({ row }) => (
+                      <span className="inline-block px-2 py-1 text-xs font-semibold bg-success/10 text-success rounded">
+                        {row.original.durationSaved?.toFixed(1)} days
+                      </span>
+                    ),
+                  },
+                  { accessorKey: "reason", header: "Reason", cell: ({ row }) => <span className="text-sm text-text-secondary">{row.original.reason}</span> },
+                ]}
+                data={mutation.data.data?.recommendations ?? []}
+              />
             )}
           </div>
         )}
@@ -266,38 +259,35 @@ function CrashingSection({ mutation }: CrashingSectionProps) {
 
             {/* Recommendations Table */}
             {(mutation.data.data?.recommendations?.length ?? 0) > 0 && (
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <table className="w-full">
-                  <thead className="bg-surface/80 border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Activity Code</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Original Duration</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Crashed Duration</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Days Saved</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Cost/Day</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mutation.data.data?.recommendations?.map((rec: CompressionRecommendation, idx: number) => (
-                      <tr key={idx} className="border-b border-border hover:bg-surface/80">
-                        <td className="px-4 py-3 font-medium">{rec.activityCode}</td>
-                        <td className="px-4 py-3">{rec.originalDuration?.toFixed(1)} days</td>
-                        <td className="px-4 py-3">{rec.newDuration?.toFixed(1)} days</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-danger/10 text-danger rounded">
-                            {rec.durationSaved?.toFixed(1)} days
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          ${rec.additionalCost && rec.durationSaved ? (rec.additionalCost / rec.durationSaved).toFixed(2) : "N/A"}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{rec.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <SimpleTable
+                columns={[
+                  { accessorKey: "activityCode", header: "Activity Code", cell: ({ row }) => <span className="font-medium">{row.original.activityCode}</span> },
+                  { accessorKey: "originalDuration", header: "Original Duration", cell: ({ row }) => `${row.original.originalDuration?.toFixed(1)} days` },
+                  { accessorKey: "newDuration", header: "Crashed Duration", cell: ({ row }) => `${row.original.newDuration?.toFixed(1)} days` },
+                  {
+                    accessorKey: "durationSaved",
+                    header: "Days Saved",
+                    cell: ({ row }) => (
+                      <span className="inline-block px-2 py-1 text-xs font-semibold bg-danger/10 text-danger rounded">
+                        {row.original.durationSaved?.toFixed(1)} days
+                      </span>
+                    ),
+                  },
+                  {
+                    accessorKey: "additionalCost",
+                    header: "Cost/Day",
+                    cell: ({ row }) => (
+                      <span>
+                        ${row.original.additionalCost && row.original.durationSaved
+                          ? (row.original.additionalCost / row.original.durationSaved).toFixed(2)
+                          : "N/A"}
+                      </span>
+                    ),
+                  },
+                  { accessorKey: "reason", header: "Reason", cell: ({ row }) => <span className="text-sm text-text-secondary">{row.original.reason}</span> },
+                ]}
+                data={mutation.data.data?.recommendations ?? []}
+              />
             )}
           </div>
         )}

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getErrorMessage } from "@/lib/utils/error";
 import { documentApi } from "@/lib/api/documentApi";
 import { TabTip } from "@/components/common/TabTip";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import type { RfiRegister } from "@/lib/api/documentApi";
 
 interface RfiFormData {
@@ -105,6 +107,103 @@ export default function RfisPage() {
     const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return diff;
   };
+
+  const rfiColumns = useMemo<ColumnDef<RfiRegister>[]>(
+    () => [
+      {
+        accessorKey: "rfiNumber",
+        header: "RFI Number",
+        cell: (info) => (
+          <span className="font-medium text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "subject",
+        header: "Subject",
+        cell: (info) => (
+          <span className="max-w-xs truncate block text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "raisedBy",
+        header: "Raised By",
+        cell: (info) => (
+          <span className="text-text-secondary text-sm">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "assignedTo",
+        header: "Assigned To",
+        cell: (info) => (
+          <span className="text-text-secondary text-sm">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "priority",
+        header: "Priority",
+        cell: (info) => (
+          <span
+            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(
+              info.getValue() as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+            )}`}
+          >
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <span
+            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+              info.getValue() as "OPEN" | "RESPONDED" | "CLOSED" | "OVERDUE"
+            )}`}
+          >
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "dueDate",
+        header: "Due Date",
+        cell: (info) => {
+          const dueDate = info.getValue() as string;
+          const status = info.row.original.status;
+          return (
+            <div className="flex flex-col gap-1">
+              <span className="text-text-secondary">
+                {new Date(dueDate).toLocaleDateString()}
+              </span>
+              {getDueDateAlert(dueDate, status) && (
+                <span className="text-xs font-medium text-orange-400">
+                  {getDueDateAlert(dueDate, status)}
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: () => (
+          <button className="text-accent hover:text-blue-300 text-xs font-medium">
+            View
+          </button>
+        ),
+      },
+    ],
+    []
+  );
 
   const getStatusColor = (status: "OPEN" | "RESPONDED" | "CLOSED" | "OVERDUE") => {
     switch (status) {
@@ -311,92 +410,18 @@ export default function RfisPage() {
       </div>
 
       {/* RFI List */}
-      <div className="bg-surface/50 rounded-xl border border-border overflow-hidden shadow-xl">
-        {filteredRfis.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface/80 border-b border-border">
-                <tr>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                    RFI Number
-                  </th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Subject</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                    Raised By
-                  </th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                    Assigned To
-                  </th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Priority</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Status</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Due Date</th>
-                  <th className="px-6 py-3 text-center font-semibold text-text-secondary">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {filteredRfis.map((rfi) => (
-                  <tr
-                    key={rfi.id}
-                    className={`hover:bg-surface-hover/30 transition-colors border-border/50 ${
-                      isOverdue(rfi.dueDate) && rfi.status !== "CLOSED"
-                        ? "bg-orange-500/10"
-                        : ""
-                    }`}
-                  >
-                    <td className="px-6 py-4 text-text-primary font-medium">{rfi.rfiNumber}</td>
-                    <td className="px-6 py-4 text-text-primary max-w-xs truncate">{rfi.subject}</td>
-                    <td className="px-6 py-4 text-text-secondary text-sm">{rfi.raisedBy}</td>
-                    <td className="px-6 py-4 text-text-secondary text-sm">{rfi.assignedTo}</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(
-                          rfi.priority
-                        )}`}
-                      >
-                        {rfi.priority}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          rfi.status
-                        )}`}
-                      >
-                        {rfi.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-text-secondary">
-                          {new Date(rfi.dueDate).toLocaleDateString()}
-                        </span>
-                        {getDueDateAlert(rfi.dueDate, rfi.status) && (
-                          <span className="text-xs font-medium text-orange-400">
-                            {getDueDateAlert(rfi.dueDate, rfi.status)}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button className="text-accent hover:text-blue-300 text-xs font-medium">
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <p className="text-text-muted">
-              {filterStatus === "ALL" ? "No RFIs found" : `No ${filterStatus} RFIs found`}
-            </p>
-          </div>
-        )}
-      </div>
+      <VirtualDataTable
+        columns={rfiColumns}
+        data={filteredRfis}
+        rowClassName={(row) =>
+          isOverdue(row.dueDate) && row.status !== "CLOSED"
+            ? "bg-orange-500/10"
+            : ""
+        }
+        emptyMessage={
+          filterStatus === "ALL" ? "No RFIs found" : `No ${filterStatus} RFIs found`
+        }
+      />
     </div>
   );
 }

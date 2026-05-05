@@ -34,6 +34,8 @@ import { ContractStatusReport } from "@/components/reports/ContractStatusReport"
 import { RiskRegisterReport } from "@/components/reports/RiskRegisterReport";
 import { ResourceUtilizationReport } from "@/components/reports/ResourceUtilizationReport";
 import type { ProjectResponse } from "@/lib/types";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 interface ReportCard {
   id: string;
@@ -913,38 +915,34 @@ export default function ReportsPage() {
               {reportData.scheduleComparison.length === 0 ? (
                 <p className="text-sm text-text-secondary">No schedule comparison data available. Create a baseline first.</p>
               ) : (
-                <div className="overflow-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="px-3 py-2">Activity</th>
-                        <th className="px-3 py-2">Baseline Start</th>
-                        <th className="px-3 py-2">Current Start</th>
-                        <th className="px-3 py-2">Start Var (days)</th>
-                        <th className="px-3 py-2">Baseline Finish</th>
-                        <th className="px-3 py-2">Current Finish</th>
-                        <th className="px-3 py-2">Finish Var (days)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.scheduleComparison.map((row) => (
-                        <tr key={row.activityCode} className="border-b border-border text-text-secondary">
-                          <td className="px-3 py-2 font-mono">{row.activityCode}</td>
-                          <td className="px-3 py-2">{row.baselineStart ?? "N/A"}</td>
-                          <td className="px-3 py-2">{row.currentStart ?? "N/A"}</td>
-                          <td className={`px-3 py-2 font-mono ${row.startVarianceDays > 0 ? "text-danger" : row.startVarianceDays < 0 ? "text-success" : ""}`}>
-                            {row.startVarianceDays > 0 ? `+${row.startVarianceDays}` : row.startVarianceDays}
-                          </td>
-                          <td className="px-3 py-2">{row.baselineFinish ?? "N/A"}</td>
-                          <td className="px-3 py-2">{row.currentFinish ?? "N/A"}</td>
-                          <td className={`px-3 py-2 font-mono ${row.finishVarianceDays > 0 ? "text-danger" : row.finishVarianceDays < 0 ? "text-success" : ""}`}>
-                            {row.finishVarianceDays > 0 ? `+${row.finishVarianceDays}` : row.finishVarianceDays}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    { accessorKey: "activityCode", header: "Activity", cell: ({ row }) => <span className="font-mono">{row.original.activityCode}</span> },
+                    { accessorKey: "baselineStart", header: "Baseline Start", cell: ({ row }) => row.original.baselineStart ?? "N/A" },
+                    { accessorKey: "currentStart", header: "Current Start", cell: ({ row }) => row.original.currentStart ?? "N/A" },
+                    {
+                      accessorKey: "startVarianceDays",
+                      header: "Start Var (days)",
+                      cell: ({ row }) => (
+                        <span className={`font-mono ${row.original.startVarianceDays > 0 ? "text-danger" : row.original.startVarianceDays < 0 ? "text-success" : ""}`}>
+                          {row.original.startVarianceDays > 0 ? `+${row.original.startVarianceDays}` : row.original.startVarianceDays}
+                        </span>
+                      ),
+                    },
+                    { accessorKey: "baselineFinish", header: "Baseline Finish", cell: ({ row }) => row.original.baselineFinish ?? "N/A" },
+                    { accessorKey: "currentFinish", header: "Current Finish", cell: ({ row }) => row.original.currentFinish ?? "N/A" },
+                    {
+                      accessorKey: "finishVarianceDays",
+                      header: "Finish Var (days)",
+                      cell: ({ row }) => (
+                        <span className={`font-mono ${row.original.finishVarianceDays > 0 ? "text-danger" : row.original.finishVarianceDays < 0 ? "text-success" : ""}`}>
+                          {row.original.finishVarianceDays > 0 ? `+${row.original.finishVarianceDays}` : row.original.finishVarianceDays}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  data={reportData.scheduleComparison}
+                />
               )}
             </div>
           )}

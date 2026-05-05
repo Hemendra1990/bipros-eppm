@@ -1,6 +1,7 @@
 "use client";
 
 import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+import { SimpleTable } from "@/components/common/SimpleTable";
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -716,43 +717,44 @@ export default function FormulasPage() {
           {overrides.length === 0 ? (
             <p className="text-sm text-slate">No overrides for this formula yet.</p>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-hairline">
-              <table className="w-full border-collapse text-sm">
-                <thead className="border-b border-hairline bg-ivory">
-                  <tr>
-                    {["Project", "Expression", "Reason", ""].map((h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {overrides.map((o) => (
-                    <tr key={o.id} className="border-b border-hairline last:border-b-0 hover:bg-ivory">
-                      <td className="px-4 py-2.5 text-charcoal font-medium">
-                        {projects.find((p) => p.id === o.projectId)?.name || o.projectId}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-slate max-w-[300px] truncate">
-                        {o.overrideExpression}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate">{o.overrideReason || "—"}</td>
-                      <td className="px-4 py-2.5">
-                        <button
-                          onClick={() => deleteOverride(o.id)}
-                          className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
-                        >
-                          <Trash2 size={14} strokeWidth={1.5} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SimpleTable
+              columns={[
+                {
+                  accessorKey: "projectId",
+                  header: "Project",
+                  cell: ({ row }) => (
+                    <span className="text-charcoal font-medium">
+                      {projects.find((p) => p.id === row.original.projectId)?.name || row.original.projectId}
+                    </span>
+                  ),
+                },
+                {
+                  accessorKey: "overrideExpression",
+                  header: "Expression",
+                  cell: ({ row }) => (
+                    <span className="font-mono text-[11px] text-slate max-w-[300px] truncate">{row.original.overrideExpression}</span>
+                  ),
+                },
+                {
+                  accessorKey: "overrideReason",
+                  header: "Reason",
+                  cell: ({ row }) => <span className="text-slate">{row.original.overrideReason || "—"}</span>,
+                },
+                {
+                  id: "actions",
+                  header: "",
+                  cell: ({ row }) => (
+                    <button
+                      onClick={() => deleteOverride(row.original.id)}
+                      className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
+                  ),
+                },
+              ]}
+              data={overrides}
+            />
           )}
         </div>
       )}

@@ -1,8 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { projectInsightsApi } from "@/lib/api/projectInsightsApi";
 import { KpiTile } from "@/components/common/KpiTile";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   EmptyBlock,
   LoadingBlock,
@@ -50,6 +53,135 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
     );
   }
 
+  const billColumns = useMemo<
+    ColumnDef<NonNullable<typeof billsQuery.data>["bills"][number]>[]
+  >(
+    () => [
+      {
+        accessorKey: "billNumber",
+        header: "Bill #",
+        cell: (info) => (
+          <span className="font-mono text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "billPeriodFrom",
+        header: "Period",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <span className="text-text-secondary">
+              {row.billPeriodFrom ?? "—"} → {row.billPeriodTo ?? "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "grossAmount",
+        header: "Gross",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {(info.getValue() as number).toLocaleString("en-IN")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "netAmount",
+        header: "Net",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {(info.getValue() as number).toLocaleString("en-IN")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "submittedDate",
+        header: "Submitted",
+        cell: (info) => <span>{(info.getValue() as string) ?? "—"}</span>,
+      },
+      {
+        accessorKey: "paidDate",
+        header: "Paid",
+        cell: (info) => <span>{(info.getValue() as string) ?? "—"}</span>,
+      },
+    ],
+    []
+  );
+
+  const voColumns = useMemo<ColumnDef<typeof vos[number]>[]>(
+    () => [
+      {
+        accessorKey: "voNumber",
+        header: "VO #",
+        cell: (info) => (
+          <span className="font-mono text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        cell: (info) => (
+          <span className="text-text-primary">
+            {truncate(info.getValue() as string, 90)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "costImpactCrores",
+        header: "Cost impact",
+        cell: (info) => {
+          const v = info.getValue() as number;
+          return (
+            <span
+              className={`block text-right font-mono ${
+                v < 0 ? "text-success" : "text-danger"
+              }`}
+            >
+              {formatCrore(v)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "timeImpactDays",
+        header: "Time (d)",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {(info.getValue() as number | null) ?? "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "approvedDate",
+        header: "Approved",
+        cell: (info) => <span>{(info.getValue() as string) ?? "—"}</span>,
+      },
+    ],
+    []
+  );
+
   return (
     <SectionCard
       title="Bills & Variation Orders"
@@ -67,40 +199,13 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
           </div>
 
           {bills.bills && bills.bills.length > 0 && (
-            <div className="mb-6 overflow-x-auto">
+            <div className="mb-6">
               <h3 className="mb-2 text-sm font-medium text-text-secondary">Recent bills</h3>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border text-left uppercase tracking-wide text-text-muted">
-                    <th className="px-2 py-2">Bill #</th>
-                    <th className="px-2 py-2">Period</th>
-                    <th className="px-2 py-2">Status</th>
-                    <th className="px-2 py-2 text-right">Gross</th>
-                    <th className="px-2 py-2 text-right">Net</th>
-                    <th className="px-2 py-2">Submitted</th>
-                    <th className="px-2 py-2">Paid</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bills.bills.slice(0, 20).map((b) => (
-                    <tr key={b.id} className="border-b border-border/50">
-                      <td className="px-2 py-2 font-mono text-text-primary">{b.billNumber}</td>
-                      <td className="px-2 py-2 text-text-secondary">
-                        {b.billPeriodFrom ?? "—"} → {b.billPeriodTo ?? "—"}
-                      </td>
-                      <td className="px-2 py-2">
-                        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
-                          {b.status}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2 text-right font-mono">{b.grossAmount.toLocaleString("en-IN")}</td>
-                      <td className="px-2 py-2 text-right font-mono">{b.netAmount.toLocaleString("en-IN")}</td>
-                      <td className="px-2 py-2">{b.submittedDate ?? "—"}</td>
-                      <td className="px-2 py-2">{b.paidDate ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <SimpleTable
+                columns={billColumns}
+                data={bills.bills.slice(0, 20)}
+                sortable={false}
+              />
             </div>
           )}
         </>
@@ -110,42 +215,7 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
       {!hasVos ? (
         <EmptyBlock label="No variation orders" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border text-left uppercase tracking-wide text-text-muted">
-                <th className="px-2 py-2">VO #</th>
-                <th className="px-2 py-2">Description</th>
-                <th className="px-2 py-2 text-right">Cost impact</th>
-                <th className="px-2 py-2 text-right">Time (d)</th>
-                <th className="px-2 py-2">Status</th>
-                <th className="px-2 py-2">Approved</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vos.map((v) => (
-                <tr key={v.id} className="border-b border-border/50">
-                  <td className="px-2 py-2 font-mono text-text-primary">{v.voNumber}</td>
-                  <td className="px-2 py-2 text-text-primary">{truncate(v.description, 90)}</td>
-                  <td
-                    className={`px-2 py-2 text-right font-mono ${v.costImpactCrores < 0 ? "text-success" : "text-danger"}`}
-                  >
-                    {formatCrore(v.costImpactCrores)}
-                  </td>
-                  <td className="px-2 py-2 text-right font-mono">
-                    {v.timeImpactDays ?? "—"}
-                  </td>
-                  <td className="px-2 py-2">
-                    <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
-                      {v.status}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2">{v.approvedDate ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <SimpleTable columns={voColumns} data={vos} sortable={false} />
       )}
     </SectionCard>
   );

@@ -18,6 +18,7 @@ import { budgetApi } from "@/lib/api/budgetApi";
 import { activityApi } from "@/lib/api/activityApi";
 import type { WbsNodeResponse } from "@/lib/types";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   LineChart,
@@ -243,6 +244,65 @@ export function CostsTab({ projectId }: { projectId: string }) {
       },
     },
   ], [handleEdit, deleteExpenseMutation, activities, projectId]);
+
+  const periodColumns = useMemo<ColumnDef<PeriodCostAggregation>[]>(
+    () => [
+      { accessorKey: "periodName", header: "Period" },
+      {
+        accessorKey: "budget",
+        header: "Budget (₹cr)",
+        cell: (info) => (
+          <span className="block text-right text-accent">
+            {formatInrAsCrores(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "actual",
+        header: "Actual (₹cr)",
+        cell: (info) => (
+          <span className="block text-right text-success">
+            {formatInrAsCrores(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "variance",
+        header: "Variance (₹cr)",
+        cell: (info) => {
+          const v = Number(info.getValue());
+          return (
+            <span
+              className={`block text-right ${
+                v >= 0 ? "text-success" : "text-danger"
+              }`}
+            >
+              {formatInrAsCrores(v)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "earnedValue",
+        header: "Earned Value (₹cr)",
+        cell: (info) => (
+          <span className="block text-right text-warning">
+            {formatInrAsCrores(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "plannedValue",
+        header: "Planned Value (₹cr)",
+        cell: (info) => (
+          <span className="block text-right text-info">
+            {formatInrAsCrores(Number(info.getValue()))}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
 
   const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
     queryKey: ["cost-summary", projectId],
@@ -560,49 +620,11 @@ export function CostsTab({ projectId }: { projectId: string }) {
           <h3 className="mb-4 text-lg font-semibold text-text-primary">
             Period Cost Breakdown
           </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-text-secondary">
-                  <th className="px-3 py-2">Period</th>
-                  <th className="px-3 py-2 text-right">Budget (₹cr)</th>
-                  <th className="px-3 py-2 text-right">Actual (₹cr)</th>
-                  <th className="px-3 py-2 text-right">Variance (₹cr)</th>
-                  <th className="px-3 py-2 text-right">Earned Value (₹cr)</th>
-                  <th className="px-3 py-2 text-right">Planned Value (₹cr)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {periodAggregations.map((pa) => (
-                  <tr
-                    key={pa.periodId}
-                    className="border-b border-border hover:bg-surface-hover/50"
-                  >
-                    <td className="px-3 py-2 text-text-primary">{pa.periodName}</td>
-                    <td className="px-3 py-2 text-right text-accent">
-                      {formatInrAsCrores(pa.budget)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-success">
-                      {formatInrAsCrores(pa.actual)}
-                    </td>
-                    <td
-                      className={`px-3 py-2 text-right ${
-                        pa.variance >= 0 ? "text-success" : "text-danger"
-                      }`}
-                    >
-                      {formatInrAsCrores(pa.variance)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-warning">
-                      {formatInrAsCrores(pa.earnedValue)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-info">
-                      {formatInrAsCrores(pa.plannedValue)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SimpleTable
+            columns={periodColumns}
+            data={periodAggregations}
+            sortable={false}
+          />
         </div>
         </SecretField>
       )}

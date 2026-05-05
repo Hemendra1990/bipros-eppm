@@ -5,6 +5,8 @@ import type {
   CalendarWorkWeekResponse,
   CalendarWorkWeekRequest,
 } from "@/lib/api/calendarApi";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const DAYS_OF_WEEK = [
   "MONDAY",
@@ -111,98 +113,94 @@ export function WorkWeekEditor({
   const inputClass =
     "w-20 rounded border border-border bg-surface-hover/50 px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none";
 
+  const data = DAYS_OF_WEEK.map((day) => ({ day, ...days[day] }));
+
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-semibold text-text-primary">
         Work Week Pattern
       </h3>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-text-secondary">
-              <th className="py-2 pr-4">Day</th>
-              <th className="py-2 pr-4">Working</th>
-              <th className="py-2 pr-4">Shift 1 Start</th>
-              <th className="py-2 pr-4">Shift 1 End</th>
-              <th className="py-2 pr-4">Shift 2 Start</th>
-              <th className="py-2 pr-4">Shift 2 End</th>
-            </tr>
-          </thead>
-          <tbody>
-            {DAYS_OF_WEEK.map((day) => {
-              const d = days[day];
-              return (
-                <tr
-                  key={day}
-                  className="border-b border-border/50"
-                >
-                  <td className="py-2 pr-4 font-medium text-text-secondary">
-                    {DAY_LABELS[day]}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <button
-                      type="button"
-                      onClick={() => toggleDay(day)}
-                      className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                        d.working
-                          ? "bg-success/20 text-success"
-                          : "bg-surface-active/50 text-text-muted"
-                      }`}
-                    >
-                      {d.working ? "Working" : "Non-Working"}
-                    </button>
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      type="time"
-                      value={d.startTime1}
-                      onChange={(e) =>
-                        updateTime(day, "startTime1", e.target.value)
-                      }
-                      disabled={!d.working}
-                      className={inputClass}
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      type="time"
-                      value={d.endTime1}
-                      onChange={(e) =>
-                        updateTime(day, "endTime1", e.target.value)
-                      }
-                      disabled={!d.working}
-                      className={inputClass}
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      type="time"
-                      value={d.startTime2}
-                      onChange={(e) =>
-                        updateTime(day, "startTime2", e.target.value)
-                      }
-                      disabled={!d.working}
-                      className={inputClass}
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      type="time"
-                      value={d.endTime2}
-                      onChange={(e) =>
-                        updateTime(day, "endTime2", e.target.value)
-                      }
-                      disabled={!d.working}
-                      className={inputClass}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <SimpleTable
+        columns={[
+          {
+            accessorKey: "day",
+            header: "Day",
+            cell: ({ row }) => <span className="font-medium text-text-secondary">{DAY_LABELS[row.original.day]}</span>,
+          },
+          {
+            accessorKey: "working",
+            header: "Working",
+            cell: ({ row }) => (
+              <button
+                type="button"
+                onClick={() => toggleDay(row.original.day)}
+                className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                  row.original.working
+                    ? "bg-success/20 text-success"
+                    : "bg-surface-active/50 text-text-muted"
+                }`}
+              >
+                {row.original.working ? "Working" : "Non-Working"}
+              </button>
+            ),
+          },
+          {
+            accessorKey: "startTime1",
+            header: "Shift 1 Start",
+            cell: ({ row }) => (
+              <input
+                type="time"
+                value={row.original.startTime1}
+                onChange={(e) => updateTime(row.original.day, "startTime1", e.target.value)}
+                disabled={!row.original.working}
+                className={inputClass}
+              />
+            ),
+          },
+          {
+            accessorKey: "endTime1",
+            header: "Shift 1 End",
+            cell: ({ row }) => (
+              <input
+                type="time"
+                value={row.original.endTime1}
+                onChange={(e) => updateTime(row.original.day, "endTime1", e.target.value)}
+                disabled={!row.original.working}
+                className={inputClass}
+              />
+            ),
+          },
+          {
+            accessorKey: "startTime2",
+            header: "Shift 2 Start",
+            cell: ({ row }) => (
+              <input
+                type="time"
+                value={row.original.startTime2}
+                onChange={(e) => updateTime(row.original.day, "startTime2", e.target.value)}
+                disabled={!row.original.working}
+                className={inputClass}
+              />
+            ),
+          },
+          {
+            accessorKey: "endTime2",
+            header: "Shift 2 End",
+            cell: ({ row }) => (
+              <input
+                type="time"
+                value={row.original.endTime2}
+                onChange={(e) => updateTime(row.original.day, "endTime2", e.target.value)}
+                disabled={!row.original.working}
+                className={inputClass}
+              />
+            ),
+          },
+        ]}
+        data={data}
+        sortable={false}
+      />
 
       <button
         type="button"

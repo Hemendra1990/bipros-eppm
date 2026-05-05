@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { dailyCostReportApi, type DailyCostReportResponse } from "@/lib/api/dailyCostReportApi";
+import { dailyCostReportApi, type DailyCostReportResponse, type DailyCostReportRow } from "@/lib/api/dailyCostReportApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 function formatCurrency(value: number | null): string {
   if (value === null || value === undefined) return "—";
@@ -72,6 +74,56 @@ export default function DailyCostReportPage() {
     return <div className="p-6 text-text-muted">Loading cost report...</div>;
   }
 
+  const columns: ColumnDef<DailyCostReportRow>[] = [
+    { accessorKey: "date", header: "Date" },
+    { accessorKey: "activity", header: "Activity" },
+    {
+      accessorKey: "qtyExecuted",
+      header: "Qty Executed",
+      cell: ({ row }) => row.original.qtyExecuted.toLocaleString("en-IN"),
+    },
+    { accessorKey: "unit", header: "Unit" },
+    {
+      accessorKey: "budgetedUnitRate",
+      header: "Budgeted Unit Rate (₹)",
+      cell: ({ row }) => formatCurrency(row.original.budgetedUnitRate),
+    },
+    {
+      accessorKey: "actualUnitRate",
+      header: "Actual Unit Rate (₹)",
+      cell: ({ row }) => formatCurrency(row.original.actualUnitRate),
+    },
+    {
+      accessorKey: "budgetedCost",
+      header: "Budgeted Cost (₹)",
+      cell: ({ row }) => formatCurrency(row.original.budgetedCost),
+    },
+    {
+      accessorKey: "actualCost",
+      header: "Actual Cost (₹)",
+      cell: ({ row }) => formatCurrency(row.original.actualCost),
+    },
+    {
+      accessorKey: "variance",
+      header: "Variance (₹)",
+      cell: ({ row }) => (
+        <span className={varianceClass(row.original.variance)}>
+          {formatCurrency(row.original.variance)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "variancePercent",
+      header: "Variance %",
+      cell: ({ row }) => (
+        <span className={varianceClass(row.original.variance)}>
+          {formatPercent(row.original.variancePercent)}
+        </span>
+      ),
+    },
+    { accessorKey: "supervisor", header: "Supervisor" },
+  ];
+
   return (
     <div className="p-6">
       <TabTip
@@ -120,88 +172,27 @@ export default function DailyCostReportPage() {
         )}
 
         {/* Report Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Activity</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Qty Executed</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Unit Rate (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Unit Rate (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Cost (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Cost (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Variance (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Variance %</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Supervisor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.dprId} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{row.date}</td>
-                  <td className="border border-border px-4 py-2">{row.activity}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {row.qtyExecuted.toLocaleString("en-IN")}
-                  </td>
-                  <td className="border border-border px-4 py-2">{row.unit}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.budgetedUnitRate)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.actualUnitRate)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.budgetedCost)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.actualCost)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(row.variance)}`}>
-                    {formatCurrency(row.variance)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(row.variance)}`}>
-                    {formatPercent(row.variancePercent)}
-                  </td>
-                  <td className="border border-border px-4 py-2">{row.supervisor}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && !isLoading && (
-                <tr>
-                  <td
-                    colSpan={11}
-                    className="border border-border px-4 py-6 text-center text-text-muted"
-                  >
-                    No cost report data for the selected period.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {report && rows.length > 0 && (
-              <tfoot className="sticky bottom-0 bg-surface/95 backdrop-blur font-semibold">
-                <tr className="text-text-primary">
-                  <td className="border border-border px-4 py-2" colSpan={6}>
-                    PERIOD TOTAL
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(report.periodBudgetedCost)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(report.periodActualCost)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(report.periodVariance)}`}>
-                    {formatCurrency(report.periodVariance)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(report.periodVariance)}`}>
-                    {formatPercent(report.periodVariancePercent)}
-                  </td>
-                  <td className="border border-border px-4 py-2"></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={rows}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No cost report data for the selected period."
+        />
+        {report && rows.length > 0 && (
+          <div className="mt-2 rounded-lg border border-border bg-surface/95 backdrop-blur font-semibold text-text-primary px-4 py-3 flex flex-wrap gap-4 text-sm">
+            <span className="font-medium">PERIOD TOTAL</span>
+            <span className="ml-auto">Budgeted: {formatCurrency(report.periodBudgetedCost)}</span>
+            <span>Actual: {formatCurrency(report.periodActualCost)}</span>
+            <span className={varianceClass(report.periodVariance)}>
+              Variance: {formatCurrency(report.periodVariance)}
+            </span>
+            <span className={varianceClass(report.periodVariance)}>
+              {formatPercent(report.periodVariancePercent)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

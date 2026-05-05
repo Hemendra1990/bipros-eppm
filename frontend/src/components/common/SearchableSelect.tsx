@@ -16,6 +16,22 @@ interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * When provided, the component switches to async mode: the parent owns the
+   * `options` list and receives every keystroke (debounce in the parent).
+   * Local label-based filtering is skipped — parent must apply the filter
+   * server-side and feed back the matching options.
+   */
+  onSearchChange?: (search: string) => void;
+  /** Show a "Loading…" row in the open list. Only meaningful in async mode. */
+  loading?: boolean;
+  /**
+   * Display label for the currently selected `value` when `value` is not
+   * present in `options` (common in async mode where the option list reflects
+   * the current search, not the historical selection). Falls back to a lookup
+   * inside `options` when omitted.
+   */
+  selectedLabel?: string;
 }
 
 export function SearchableSelect({
@@ -25,6 +41,9 @@ export function SearchableSelect({
   placeholder = "Search...",
   disabled = false,
   className,
+  onSearchChange,
+  loading = false,
+  selectedLabel: selectedLabelProp,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -33,11 +52,19 @@ export function SearchableSelect({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  const selectedLabel = options.find((o) => o.value === value)?.label || "";
+  const isAsync = typeof onSearchChange === "function";
+  const selectedLabel =
+    selectedLabelProp ??
+    options.find((o) => o.value === value)?.label ??
+    "";
 
-  const filtered = search
-    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
-    : options;
+  // In async mode the parent owns filtering — feed every keystroke back and
+  // render `options` verbatim. In sync mode keep the original local-filter UX.
+  const filtered = isAsync
+    ? options
+    : search
+      ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+      : options;
 
   // Close on click outside
   useEffect(() => {
@@ -69,8 +96,9 @@ export function SearchableSelect({
       onChange(val);
       setIsOpen(false);
       setSearch("");
+      onSearchChange?.("");
     },
-    [onChange]
+    [onChange, onSearchChange]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -138,7 +166,11 @@ export function SearchableSelect({
             ref={inputRef}
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSearch(next);
+              onSearchChange?.(next);
+            }}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             className="w-full bg-transparent px-2 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none"
@@ -149,6 +181,7 @@ export function SearchableSelect({
               onClick={() => {
                 if (search) {
                   setSearch("");
+                  onSearchChange?.("");
                 } else {
                   onChange("");
                   setIsOpen(false);
@@ -168,7 +201,9 @@ export function SearchableSelect({
           ref={listRef}
           className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-surface-hover py-1 shadow-lg"
         >
-          {filtered.length === 0 ? (
+          {loading ? (
+            <li className="px-3 py-2 text-sm text-text-muted">Loading...</li>
+          ) : filtered.length === 0 ? (
             <li className="px-3 py-2 text-sm text-text-muted">No matches found</li>
           ) : (
             filtered.map((option, index) => (

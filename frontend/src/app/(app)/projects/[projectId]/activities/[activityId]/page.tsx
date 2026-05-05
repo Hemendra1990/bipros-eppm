@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { getErrorMessage } from "@/lib/utils/error";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -376,6 +378,59 @@ function ViewMode({
   const fmt = (n: number) =>
     n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 
+  type ExpenseRow =
+    | ExpenseResponse
+    | {
+        id: "__TOTAL__";
+        description: string;
+        expenseCategory: string;
+        actualStartDate: string | null;
+        actualCost: number;
+      };
+
+  const expenseColumns: ColumnDef<ExpenseRow>[] = [
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => {
+        const isTotal = row.original.id === "__TOTAL__";
+        return (
+          <span className={isTotal ? "text-text-secondary font-semibold" : "text-text-primary"}>
+            {row.original.description}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "expenseCategory",
+      header: "Category",
+      cell: ({ row }) => (
+        <span className="text-text-secondary">{row.original.expenseCategory}</span>
+      ),
+    },
+    {
+      accessorKey: "actualStartDate",
+      header: "Date",
+      cell: ({ row }) => (
+        <span className="text-text-secondary">
+          {row.original.actualStartDate ?? "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "actualCost",
+      header: "Amount",
+      cell: ({ row }) => {
+        const isTotal = row.original.id === "__TOTAL__";
+        return (
+          <span className={`text-right block ${isTotal ? "text-accent font-semibold" : "text-text-primary"}`}>
+            {fmt(row.original.actualCost ?? 0)}
+          </span>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-5">
       {/* Key Metrics */}
@@ -499,32 +554,21 @@ function ViewMode({
         {activityExpenses.length > 0 && (
           <div className="mb-4">
             <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Expenses</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Description</th>
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Category</th>
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Date</th>
-                    <th className="text-right py-1.5 text-xs font-medium text-text-secondary">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activityExpenses.map((e) => (
-                    <tr key={e.id} className="border-b border-border/40">
-                      <td className="py-1.5 pr-3 text-text-primary">{e.description}</td>
-                      <td className="py-1.5 pr-3 text-text-secondary">{e.expenseCategory}</td>
-                      <td className="py-1.5 pr-3 text-text-secondary">{e.actualStartDate}</td>
-                      <td className="py-1.5 text-right text-text-primary">{fmt(e.actualCost ?? 0)}</td>
-                    </tr>
-                  ))}
-                  <tr className="font-semibold bg-surface-hover/30">
-                    <td colSpan={3} className="py-1.5 pr-3 text-text-secondary">Total Expenses</td>
-                    <td className="py-1.5 text-right text-accent">{fmt(totalExpenses)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <SimpleTable
+              data={[
+                ...activityExpenses,
+                {
+                  id: "__TOTAL__",
+                  description: "Total Expenses",
+                  expenseCategory: "",
+                  actualStartDate: null,
+                  actualCost: totalExpenses,
+                } as ExpenseRow,
+              ]}
+              columns={expenseColumns}
+              sortable={false}
+              className="border-0 rounded-none"
+            />
           </div>
         )}
 

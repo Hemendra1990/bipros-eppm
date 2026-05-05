@@ -15,6 +15,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 export default function ScheduleHealthPage() {
   const params = useParams();
@@ -161,91 +163,34 @@ export default function ScheduleHealthPage() {
           <h3 className="mb-4 text-lg font-semibold text-text-primary">
             Activity Status Summary
           </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-border bg-surface/80">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
-                    Category
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
-                    Count
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
-                    Percentage
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                <tr>
-                  <td className="px-4 py-3 text-sm text-text-primary">Critical Path</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                    {health.criticalActivities}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">
-                    {(
-                      (health.criticalActivities / health.totalActivities) *
-                      100
-                    ).toFixed(1)}
-                    %
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger">
-                      Risk
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    Near-Critical (1-5 days float)
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                    {health.nearCriticalActivities}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">
-                    {(
-                      (health.nearCriticalActivities / health.totalActivities) *
-                      100
-                    ).toFixed(1)}
-                    %
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block rounded-full bg-warning/10 px-3 py-1 text-xs font-semibold text-amber-800">
-                      Watch
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    Healthy (&gt;5 days float)
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                    {health.totalActivities -
-                      health.criticalActivities -
-                      health.nearCriticalActivities}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">
-                    {(
-                      ((health.totalActivities -
-                        health.criticalActivities -
-                        health.nearCriticalActivities) /
-                        health.totalActivities) *
-                      100
-                    ).toFixed(1)}
-                    %
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
-                      Good
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <SimpleTable
+            columns={[
+              { accessorKey: "category", header: "Category" },
+              { accessorKey: "count", header: "Count" },
+              { accessorKey: "percentage", header: "Percentage" },
+              { accessorKey: "status", header: "Status" },
+            ]}
+            data={[
+              {
+                category: "Critical Path",
+                count: health.criticalActivities,
+                percentage: `${((health.criticalActivities / health.totalActivities) * 100).toFixed(1)}%`,
+                status: "Risk",
+              },
+              {
+                category: "Near-Critical (1-5 days float)",
+                count: health.nearCriticalActivities,
+                percentage: `${((health.nearCriticalActivities / health.totalActivities) * 100).toFixed(1)}%`,
+                status: "Watch",
+              },
+              {
+                category: "Healthy (>5 days float)",
+                count: health.totalActivities - health.criticalActivities - health.nearCriticalActivities,
+                percentage: `${(((health.totalActivities - health.criticalActivities - health.nearCriticalActivities) / health.totalActivities) * 100).toFixed(1)}%`,
+                status: "Good",
+              },
+            ]}
+          />
         </div>
       </div>
     </div>

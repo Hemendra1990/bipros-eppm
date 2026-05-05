@@ -10,6 +10,7 @@ import { formatDate, getPriorityInfo } from "@/lib/utils/format";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
 const STATUS_OPTIONS = ["All", "PLANNED", "ACTIVE", "INACTIVE", "COMPLETED"] as const;
 const PRIORITY_OPTIONS = ["All", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
@@ -88,6 +89,86 @@ export default function ProjectsPage() {
     const completed = allProjects.filter((p) => p.status === "COMPLETED").length;
     return { active, planned, completed };
   }, [allProjects]);
+
+  const columns: ColumnDef<(typeof allProjects)[number]>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => (
+        <Link
+          href={`/projects/${row.original.id}`}
+          className="font-mono text-[12px] font-medium text-gold-deep hover:text-gold-ink"
+        >
+          {row.original.code}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <Link
+          href={`/projects/${row.original.id}`}
+          className="font-semibold text-charcoal hover:text-gold-ink hover:underline underline-offset-2"
+        >
+          {row.original.name}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant={statusVariant(row.original.status)} withDot>
+          {row.original.status}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "plannedStartDate",
+      header: "Start",
+      cell: ({ row }) => <span className="text-slate">{formatDate(row.original.plannedStartDate)}</span>,
+    },
+    {
+      accessorKey: "plannedFinishDate",
+      header: "Finish",
+      cell: ({ row }) => <span className="text-slate">{formatDate(row.original.plannedFinishDate)}</span>,
+    },
+    {
+      accessorKey: "priority",
+      header: "Priority",
+      cell: ({ row }) => {
+        const priority = getPriorityInfo(row.original.priority);
+        return <span className={`font-semibold ${priority.color}`}>{priority.label}</span>;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/projects/${row.original.id}`}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            aria-label="Edit"
+          >
+            <Edit2 size={14} strokeWidth={1.5} />
+          </Link>
+          <button
+            onClick={() =>
+              setDeleteConfirm({ open: true, projectId: row.original.id, projectName: row.original.name })
+            }
+            disabled={archiveMutation.isPending}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Archive"
+            title="Archive"
+          >
+            <Trash2 size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -222,80 +303,7 @@ export default function ProjectsPage() {
 
       {projects.length > 0 && (
         <>
-          <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
-            <table className="w-full border-collapse text-sm">
-              <thead className="border-b border-hairline bg-ivory">
-                <tr>
-                  {["Code","Name","Status","Start","Finish","Priority","Actions"].map((h) => (
-                    <th
-                      key={h}
-                      className={`px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep ${h === "Actions" ? "text-right" : ""}`}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {projects.map((project) => {
-                  const priority = getPriorityInfo(project.priority);
-                  return (
-                    <tr
-                      key={project.id}
-                      className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory"
-                    >
-                      <td className="px-4 py-3.5">
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="font-mono text-[12px] font-medium text-gold-deep hover:text-gold-ink"
-                        >
-                          {project.code}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="font-semibold text-charcoal hover:text-gold-ink hover:underline underline-offset-2"
-                        >
-                          {project.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge variant={statusVariant(project.status)} withDot>
-                          {project.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-slate">{formatDate(project.plannedStartDate)}</td>
-                      <td className="px-4 py-3.5 text-slate">{formatDate(project.plannedFinishDate)}</td>
-                      <td className={`px-4 py-3.5 font-semibold ${priority.color}`}>{priority.label}</td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link
-                            href={`/projects/${project.id}`}
-                            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
-                            aria-label="Edit"
-                          >
-                            <Edit2 size={14} strokeWidth={1.5} />
-                          </Link>
-                          <button
-                            onClick={() =>
-                              setDeleteConfirm({ open: true, projectId: project.id, projectName: project.name })
-                            }
-                            disabled={archiveMutation.isPending}
-                            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label="Archive"
-                            title="Archive"
-                          >
-                            <Trash2 size={14} strokeWidth={1.5} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <VirtualDataTable columns={columns} data={projects} sortable resizable searchable={false} />
           <div className="pt-3 text-center text-xs text-slate">
             Showing <span className="font-semibold text-charcoal">{projects.length} of {allProjects.length}</span>
           </div>

@@ -14,7 +14,8 @@ import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
-import { useStickyMeasure } from "@/hooks/useStickyMeasure";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 interface OutputForm {
   outputDate: string;
@@ -54,8 +55,6 @@ export default function DailyOutputsPage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<OutputForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
-  const { ref: stickyHeaderRef, height: upperH } = useStickyMeasure<HTMLDivElement>();
-  const stickyTheadTop = `calc(var(--tab-nav-h, 53px) + ${upperH}px)`;
 
   const { data: outputsData, isLoading } = useQuery({
     queryKey: ["daily-outputs", projectId],
@@ -150,6 +149,82 @@ export default function DailyOutputsPage() {
     return <div className="p-6 text-text-muted">Loading daily outputs...</div>;
   }
 
+  const columns: ColumnDef<DailyActivityResourceOutputResponse>[] = [
+    {
+      accessorKey: "outputDate",
+      header: "Date",
+      cell: ({ row }) => (
+        <span className="font-mono text-sm">{row.original.outputDate}</span>
+      ),
+    },
+    {
+      accessorKey: "activityId",
+      header: "Activity",
+      cell: ({ row }) => {
+        const activity = activityById[row.original.activityId];
+        return activity
+          ? `${activity.code} — ${activity.name}`
+          : row.original.activityId.slice(0, 8) + "…";
+      },
+    },
+    {
+      accessorKey: "resourceId",
+      header: "Resource",
+      cell: ({ row }) => {
+        const resource = resourceById[row.original.resourceId];
+        return resource
+          ? `${resource.code} — ${resource.name}`
+          : row.original.resourceId.slice(0, 8) + "…";
+      },
+    },
+    {
+      accessorKey: "qtyExecuted",
+      header: "Qty",
+      cell: ({ row }) => row.original.qtyExecuted.toLocaleString("en-IN"),
+    },
+    { accessorKey: "unit", header: "Unit" },
+    {
+      accessorKey: "hoursWorked",
+      header: "Hrs",
+      cell: ({ row }) => row.original.hoursWorked ?? "—",
+    },
+    {
+      accessorKey: "daysWorked",
+      header: "Days",
+      cell: ({ row }) => {
+        const days =
+          row.original.daysWorked ??
+          (row.original.hoursWorked != null ? row.original.hoursWorked / 8 : null);
+        return days != null ? days.toFixed(2) : "—";
+      },
+    },
+    {
+      id: "actualPerDay",
+      header: "Actual / Day",
+      cell: ({ row }) => {
+        const days =
+          row.original.daysWorked ??
+          (row.original.hoursWorked != null ? row.original.hoursWorked / 8 : null);
+        const actualPerDay = days && days > 0 ? row.original.qtyExecuted / days : null;
+        return actualPerDay != null
+          ? actualPerDay.toLocaleString("en-IN", { maximumFractionDigits: 1 })
+          : "—";
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <button
+          onClick={() => handleDelete(row.original.id)}
+          className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
+        >
+          Delete
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="p-6">
       <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/daily-outputs/ai/insights`} />
@@ -158,10 +233,7 @@ export default function DailyOutputsPage() {
         description="One row per (date × activity × resource): how much work the resource did on that activity that day. Feeds the Capacity Utilization report — actual productivity is computed from these rows against the planned norm."
       />
       <div className="mb-8">
-        <div
-          ref={stickyHeaderRef}
-          className="sticky top-[var(--tab-nav-h,53px)] z-20 -mx-6 px-6 pt-2 pb-3 bg-ivory border-b border-border"
-        >
+        <div className="sticky top-[var(--tab-nav-h,53px)] z-20 -mx-6 px-6 pt-2 pb-3 bg-ivory border-b border-border">
           <h1 className="text-3xl font-bold mb-4 text-text-primary">Daily Activity-Resource Outputs</h1>
 
           <button
@@ -318,67 +390,14 @@ export default function DailyOutputsPage() {
           </form>
         )}
 
-        <div className="mt-4">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface">
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Date</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Activity</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Resource</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Qty</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Unit</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Hrs</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Days</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Actual / Day</th>
-                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {outputs.map((o) => {
-                const days =
-                  o.daysWorked ??
-                  (o.hoursWorked != null ? o.hoursWorked / 8 : null);
-                const actualPerDay =
-                  days && days > 0 ? o.qtyExecuted / days : null;
-                const activity = activityById[o.activityId];
-                const resource = resourceById[o.resourceId];
-                return (
-                  <tr key={o.id} className="hover:bg-surface-hover/30 text-text-primary">
-                    <td className="border border-border px-3 py-2 font-mono text-sm">{o.outputDate}</td>
-                    <td className="border border-border px-3 py-2">
-                      {activity ? `${activity.code} — ${activity.name}` : o.activityId.slice(0, 8) + "…"}
-                    </td>
-                    <td className="border border-border px-3 py-2">
-                      {resource ? `${resource.code} — ${resource.name}` : o.resourceId.slice(0, 8) + "…"}
-                    </td>
-                    <td className="border border-border px-3 py-2 text-right">{o.qtyExecuted.toLocaleString("en-IN")}</td>
-                    <td className="border border-border px-3 py-2">{o.unit}</td>
-                    <td className="border border-border px-3 py-2 text-right">{o.hoursWorked ?? "—"}</td>
-                    <td className="border border-border px-3 py-2 text-right">{days != null ? days.toFixed(2) : "—"}</td>
-                    <td className="border border-border px-3 py-2 text-right">
-                      {actualPerDay != null ? actualPerDay.toLocaleString("en-IN", { maximumFractionDigits: 1 }) : "—"}
-                    </td>
-                    <td className="border border-border px-3 py-2">
-                      <button
-                        onClick={() => handleDelete(o.id)}
-                        className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {outputs.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="border border-border px-4 py-8 text-center text-text-muted">
-                    No outputs recorded yet — add one to start populating the Capacity Utilization report.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={outputs}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No outputs recorded yet — add one to start populating the Capacity Utilization report."
+        />
       </div>
     </div>
   );

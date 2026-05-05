@@ -22,6 +22,10 @@ import { Breadcrumb } from "@/components/common/Breadcrumb";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { MultiSelect } from "@/components/common/MultiSelect";
+import { SupervisorPicker } from "@/components/resources/SupervisorPicker";
+import { SubordinatesPanel } from "@/components/resources/SubordinatesPanel";
+import { AncestorsBreadcrumb } from "@/components/resources/AncestorsBreadcrumb";
+import { SupervisorCostCard } from "@/components/resources/SupervisorCostCard";
 import { getErrorMessage } from "@/lib/utils/error";
 
 type TypeKind = "MANPOWER" | "EQUIPMENT" | "MATERIAL" | "OTHER";
@@ -117,6 +121,9 @@ export default function ResourceDetailPage() {
           >
             <ArrowLeft size={12} /> Back
           </button>
+          <div className="mb-2">
+            <AncestorsBreadcrumb resourceId={resource.id} currentName={resource.name} />
+          </div>
           <h1 className="text-3xl font-bold text-text-primary">{resource.name}</h1>
           <p className="mt-1 text-sm text-text-secondary">
             <span className="font-mono">{resource.code}</span>
@@ -172,6 +179,19 @@ export default function ResourceDetailPage() {
         <div className="rounded-xl border border-dashed border-border bg-surface/30 p-8 text-center text-sm text-text-muted">
           No type-specific detail available for this resource type.
         </div>
+      )}
+
+      {/* Hierarchy: direct subordinates from the parent_id ∪ reporting_manager_id union */}
+      <section className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold text-text-primary">Subordinates</h2>
+        <SubordinatesPanel resourceId={resource.id} />
+      </section>
+
+      {/* Supervisor cost rollup — only meaningful for LABOR resources who file DPRs. */}
+      {kind === "MANPOWER" && (
+        <section className="mt-8">
+          <SupervisorCostCard supervisorResourceId={resource.id} />
+        </section>
       )}
     </div>
   );
@@ -916,7 +936,14 @@ function ManpowerEmploymentEditor({
       <TextField label="Department" value={m.department ?? ""} onChange={(v) => setMaster({ department: v || null })} />
       <DateField label="Joining Date" value={m.joiningDate ?? ""} onChange={(v) => setMaster({ joiningDate: v || null })} />
       <DateField label="Exit Date" value={m.exitDate ?? ""} onChange={(v) => setMaster({ exitDate: v || null })} />
-      <TextField label="Reporting Manager (UUID)" value={m.reportingManagerId ?? ""} onChange={(v) => setMaster({ reportingManagerId: v || null })} />
+      <FieldWrap label="Reporting Manager">
+        <SupervisorPicker
+          value={m.reportingManagerId}
+          onChange={(id) => setMaster({ reportingManagerId: id })}
+          typeCode="LABOR"
+          placeholder="Pick a manpower supervisor..."
+        />
+      </FieldWrap>
       <TextField label="Company Name" value={m.companyName ?? ""} onChange={(v) => setMaster({ companyName: v || null })} />
       <TextField label="Work Location" value={m.workLocation ?? ""} onChange={(v) => setMaster({ workLocation: v || null })} />
     </Grid>
