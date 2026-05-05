@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/common/Sidebar";
 import { Header } from "@/components/common/Header";
 import { AccessProvider } from "@/lib/auth/AccessProvider";
 import { AiChatPanel } from "@/components/ai/AiChatPanel";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
 
 export default function AppLayout({
   children,
@@ -21,6 +22,7 @@ export default function AppLayout({
           </main>
         </div>
         <AiChatPanel />
+        <CommandPalette />
       </div>
     </AccessProvider>
   );

@@ -3,6 +3,7 @@ package com.bipros.ai.orchestrator;
 import com.bipros.ai.context.AiContext;
 import com.bipros.ai.provider.LlmProvider;
 import com.bipros.ai.provider.LlmProviderConfig;
+import com.bipros.ai.tool.DataGraphCatalog;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolRegistry;
 import com.bipros.ai.tool.ToolResult;
@@ -39,14 +40,17 @@ import java.util.concurrent.CompletableFuture;
 public class AiOrchestrator {
 
     private final ToolRegistry toolRegistry;
+    private final DataGraphCatalog dataGraphCatalog;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final int generalRounds;
     private final int defaultRounds;
 
     public AiOrchestrator(ToolRegistry toolRegistry,
-                          @Value("${bipros.ai-orchestrator.max-tool-rounds.general:8}") int generalRounds,
-                          @Value("${bipros.ai-orchestrator.max-tool-rounds.default:6}") int defaultRounds) {
+                          DataGraphCatalog dataGraphCatalog,
+                          @Value("${bipros.ai-orchestrator.max-tool-rounds.general:12}") int generalRounds,
+                          @Value("${bipros.ai-orchestrator.max-tool-rounds.default:10}") int defaultRounds) {
         this.toolRegistry = toolRegistry;
+        this.dataGraphCatalog = dataGraphCatalog;
         this.generalRounds = generalRounds;
         this.defaultRounds = defaultRounds;
     }
@@ -252,6 +256,8 @@ public class AiOrchestrator {
                 ? "project_id = '" + ctx.projectId() + "'"
                 : projectFilter;
 
+        String moduleAddendum = buildModuleAddendum(ctx.module());
+
         return """
             You are Bipros AI, the project intelligence assistant for the Bipros EPPM
             construction programme management platform. Your audience is a project
@@ -358,7 +364,58 @@ public class AiOrchestrator {
             Both work for a single project (when one is in scope) and across the
             user's accessible portfolio (when none is selected).
 
-            Tool routing for resource questions:
+            Tool routing — entity resolution (ALWAYS try this first when the user
+            uses a name):
+            - When the user mentions an entity by name or partial code that you
+              don't already have a UUID for ("the foundation activity", "Foreman
+              John", "WBS 1.3", "Sandeep's team"), call resolve_entity FIRST with
+              the user's wording verbatim. Pick {kind} based on context: "supervisor"
+              for who-reports-to questions, "activity" for activity codes / names,
+              "wbs" for WBS labels, "resource" otherwise, "auto" only if intent is
+              genuinely ambiguous. Use the top match's UUID for the next call.
+              This saves a discovery round on cross-entity questions.
+
+            Tool routing for DPR / daily progress questions:
+            - For "what was reported on day X", "DPRs in March", "all DPRs by
+              supervisor Y", "field reports for activity Z" — call query_dpr with
+              date_from / date_to / activity_code / supervisor_name as needed.
+              Returns rows + by-date / by-activity rollups. Requires a project.
+            - For "details of THE DPR on date X for activity Y" (single record drill-down)
+              — call get_dpr_details with (report_date + activity_code) or dpr_id.
+            - For "actual productivity vs norm", "is the masonry crew slow",
+              "below-norm work last week" — call compare_actual_vs_norm. It joins
+              the daily activity-resource output table to ProductivityNorm and
+              ranks by variance %%.
+            - For "hours logged", "daily resource output", "what did the crane
+              deliver this month", "productivity matrix" — call query_daily_outputs
+              with group_by ∈ {date, activity, resource, none}.
+            - read_dpr_summary still works but is DEPRECATED — prefer query_dpr
+              for any new question.
+
+            Tool routing for supervisor / team questions:
+            - For "who reports to <name>", "what's <supervisor>'s team doing",
+              "<foreman>'s crew performance", "show me Sandeep's roster" — first
+              call resolve_entity(kind="supervisor") with the name to get a
+              supervisor_resource_id, then call supervisor with op ∈ {team,
+              performance, both}. The supervisor tool handles BOTH org-tree
+              (Resource.parent_id) and HR-tree (ManpowerMaster.reporting_manager_id)
+              hierarchies — don't re-orchestrate that yourself.
+
+            Tool routing for resource profile questions:
+            - For "skills of resource X", "rates for the operator", "Foreman John's
+              profile", "OSHA-certified workers" — call get_resource_profile with
+              resource_id / resource_code / employee_code. Use the include array
+              to keep responses tight: ["skills"] for skills, ["rates"] for cost,
+              ["manpower"] for HR data, ["hierarchy"] for org chart.
+
+            Tool routing for cross-entity activity drill-down:
+            - For "tell me about activity X", "what's the cost variance and
+              progress on <code>", "drill into the foundation activity" — call
+              get_activity_full_context. Returns activity, WBS path, assignment
+              summary, cost variance (ActivityExpense), latest EVM, and recent
+              DPRs in a single call. Saves 4–5 rounds vs orchestrating manually.
+
+            Tool routing for resource questions (legacy / surface-level):
             - For "what resources are on activity X", "which crews / equipment /
               materials are assigned to <code>", "planned vs actual hours on this
               activity" — call list_activity_resources with the activity code (or
@@ -492,6 +549,12 @@ public class AiOrchestrator {
             prose. This is mandatory unless the data isn't chartable.
 
             ────────────────────────────────────────
+            DOMAIN ENTITY GRAPH (internal — read silently, NEVER quote)
+            ────────────────────────────────────────
+            %s
+
+            %s
+            ────────────────────────────────────────
             CURRENT CONTEXT (internal only — never quote in answers)
             ────────────────────────────────────────
             - Current project: %s
@@ -523,11 +586,98 @@ public class AiOrchestrator {
             mistake; do not make it.
             """.formatted(
                 projectFilter,
+                dataGraphCatalog.compact(),
+                moduleAddendum,
                 currentProject,
                 scopedList,
                 ctx.module() != null ? ctx.module() : "general",
                 ctx.role() != null ? ctx.role() : "user"
         );
+    }
+
+    /**
+     * Module-aware system-prompt addendum. The frontend sets {@code ctx.module}
+     * based on the user's current route ("dpr", "cost", "schedule", "risk",
+     * "evm", "activity", "resource", "general"). We use that to nudge tool
+     * routing toward the most relevant tool family — pure prompt sugar, not
+     * a hard constraint.
+     */
+    private String buildModuleAddendum(String module) {
+        if (module == null || module.isBlank() || "general".equals(module)) {
+            return """
+                ────────────────────────────────────────
+                ROUTE HINT — general
+                ────────────────────────────────────────
+                No specific page context. Resolve to a single project (clauses 1–4
+                of Project-scope resolution) before drilling in. For named entities,
+                always start with resolve_entity.
+                """;
+        }
+        return switch (module.toLowerCase()) {
+            case "dpr", "daily-outputs", "daily-progress" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — DPR / daily progress page
+                ────────────────────────────────────────
+                The user is looking at Daily Progress Reports. Prefer the DPR tools
+                first: query_dpr (filtered rows + rollups), get_dpr_details (single
+                record drill-down), query_daily_outputs (productivity matrix),
+                compare_actual_vs_norm (variance vs plan). For supervisor or
+                resource names mentioned in the question, run resolve_entity first.
+                """;
+            case "supervisor", "team" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — supervisor / team page
+                ────────────────────────────────────────
+                Use the supervisor tool with op="both" by default. resolve_entity
+                with kind="supervisor" turns names into UUIDs.
+                """;
+            case "resource", "resources", "labour", "labour-master" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — resource page
+                ────────────────────────────────────────
+                Prefer get_resource_profile for single-resource drill-downs;
+                find_resource_deployment for cross-cutting role / trade questions.
+                resolve_entity(kind="resource") for free-text identifiers.
+                """;
+            case "activity", "activities", "wbs" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — activity / WBS page
+                ────────────────────────────────────────
+                Prefer get_activity_full_context for "tell me about activity X"
+                questions — it returns activity + WBS + assignments + cost + EVM +
+                DPRs in one call. list_activities for tabular browsing.
+                """;
+            case "cost", "evm" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — cost / EVM page
+                ────────────────────────────────────────
+                analyze_cost for trends; get_activity_full_context for activity-
+                level cost variance + EVM in one shot; forecast_completion for
+                EAC / ETC.
+                """;
+            case "schedule", "scheduling" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — schedule page
+                ────────────────────────────────────────
+                analyze_schedule for slip / critical-path; list_activities with
+                status filters for tabular drill-down.
+                """;
+            case "risk", "risks" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — risk page
+                ────────────────────────────────────────
+                analyze_risk for trends; query_clickhouse against fact_risk_snapshot_daily
+                for time-series.
+                """;
+            case "capacity-utilization", "capacity" -> """
+                ────────────────────────────────────────
+                ROUTE HINT — capacity utilization page
+                ────────────────────────────────────────
+                compare_actual_vs_norm and query_daily_outputs are the right tools.
+                Group outputs by resource for utilisation views.
+                """;
+            default -> "";
+        };
     }
 
     public record ChatEvent(String event, Map<String, Object> data) {

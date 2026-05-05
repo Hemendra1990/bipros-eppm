@@ -86,6 +86,25 @@ export interface SseEvent {
   data: Record<string, unknown>;
 }
 
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  module: string;
+  lastMessageAt: string;
+}
+
+export interface ConversationMessage {
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  messages: ConversationMessage[];
+}
+
 export const aiApi = {
   listProviders: () =>
     apiClient.get<ApiResponse<LlmProviderResponse[]>>("/v1/admin/llm-providers").then((r) => r.data),
@@ -216,6 +235,19 @@ export const aiApi = {
     const url = `${endpoint}${force ? "?force=true" : ""}`;
     return apiClient.post<ApiResponse<InsightsResponse>>(url, { projectId }).then((r) => r.data);
   },
+
+  listConversations: (params?: { projectId?: string; limit?: number }) =>
+    apiClient
+      .get<ApiResponse<ConversationSummary[]>>("/v1/ai/conversations", { params })
+      .then((r) => r.data),
+
+  getConversation: (id: string) =>
+    apiClient
+      .get<ApiResponse<ConversationDetail>>(`/v1/ai/conversations/${id}`)
+      .then((r) => r.data),
+
+  deleteConversation: (id: string) =>
+    apiClient.delete<ApiResponse<void>>(`/v1/ai/conversations/${id}`).then((r) => r.data),
 
   streamChat: async function* (req: ChatRequest, signal: AbortSignal): AsyncGenerator<SseEvent> {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";

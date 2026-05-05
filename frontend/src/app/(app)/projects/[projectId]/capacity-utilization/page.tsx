@@ -14,6 +14,7 @@ import {
 } from "@/lib/api/capacityUtilizationApi";
 import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
+import { useStickyMeasure } from "@/hooks/useStickyMeasure";
 
 const today = () => new Date().toISOString().split("T")[0];
 const startOfMonth = () => {
@@ -146,6 +147,9 @@ export default function CapacityUtilizationPage() {
   const [toDate, setToDate] = useState(today());
   const [groupBy, setGroupBy] = useState<CapacityGroupBy>("RESOURCE_TYPE");
   const [normType, setNormType] = useState<CapacityNormType | "">("");
+  const { ref: stickyHeaderRef, height: upperH } = useStickyMeasure<HTMLDivElement>();
+  const stickyTheadTopRow1 = `calc(var(--tab-nav-h, 53px) + ${upperH}px)`;
+  const stickyTheadTopRow2 = `calc(var(--tab-nav-h, 53px) + ${upperH}px + 37px)`;
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["capacity-utilization", projectId, fromDate, toDate, groupBy, normType],
@@ -186,35 +190,39 @@ export default function CapacityUtilizationPage() {
         description="Mirrors the Plant utilization / Manpower utilization sheets from the Capacity_Utilization workbook. Each row pairs a Work Activity with a Resource (or Resource Type) and shows the budgeted-vs-actual matrix for the day, the month, and cumulative."
       />
       <div className="mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h1 className="text-3xl font-bold text-text-primary">Capacity Utilization</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => downloadCsv(`capacity-utilization-${fromDate}-to-${toDate}.csv`, rows, fromDate, toDate)}
-              disabled={rows.length === 0}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-info/10 text-info ring-1 ring-info/30 rounded-lg hover:bg-info/20 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Download the matrix as CSV (opens in Excel)"
-            >
-              <Download size={16} />
-              Export CSV
-            </button>
-            <Link
-              href={`/projects/${projectId}/daily-outputs`}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover text-sm font-semibold"
-            >
-              <PlusCircle size={16} />
-              Record Daily Output
-            </Link>
+        <div
+          ref={stickyHeaderRef}
+          className="sticky top-[var(--tab-nav-h,53px)] z-20 -mx-6 px-6 pt-2 pb-3 bg-ivory border-b border-border"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h1 className="text-3xl font-bold text-text-primary">Capacity Utilization</h1>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => downloadCsv(`capacity-utilization-${fromDate}-to-${toDate}.csv`, rows, fromDate, toDate)}
+                disabled={rows.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-info/10 text-info ring-1 ring-info/30 rounded-lg hover:bg-info/20 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Download the matrix as CSV (opens in Excel)"
+              >
+                <Download size={16} />
+                Export CSV
+              </button>
+              <Link
+                href={`/projects/${projectId}/daily-outputs`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover text-sm font-semibold"
+              >
+                <PlusCircle size={16} />
+                Record Daily Output
+              </Link>
+            </div>
           </div>
-        </div>
-        <p className="text-sm text-text-muted mb-4">
-          This view is computed from <strong>Daily Outputs</strong>. Add a row there for each
-          (date × activity × resource) and the metrics below populate automatically. The
-          budgeted norm comes from{" "}
-          <em>Admin → Productivity Norms</em>.
-        </p>
+          <p className="text-sm text-text-muted mb-3">
+            This view is computed from <strong>Daily Outputs</strong>. Add a row there for each
+            (date × activity × resource) and the metrics below populate automatically. The
+            budgeted norm comes from{" "}
+            <em>Admin → Productivity Norms</em>.
+          </p>
 
-        <div className="bg-surface/50 p-4 rounded-lg border border-border mb-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="bg-surface/50 p-4 rounded-lg border border-border grid grid-cols-1 md:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs font-medium mb-1 text-text-secondary">From</label>
             <input
@@ -256,40 +264,41 @@ export default function CapacityUtilizationPage() {
               <option value="MANPOWER">Manpower</option>
             </select>
           </div>
-          <div className="flex items-end">
-            <span className="text-xs text-text-muted">
-              Color band: ≥100% green · 80–99% yellow · &lt;80% red · no norm grey
-            </span>
+            <div className="flex items-end">
+              <span className="text-xs text-text-muted">
+                Color band: ≥100% green · 80–99% yellow · &lt;80% red · no norm grey
+              </span>
+            </div>
           </div>
         </div>
 
-        {isLoading && <div className="text-text-muted">Loading report...</div>}
+        {isLoading && <div className="text-text-muted mt-4">Loading report...</div>}
         {isError && (
-          <div className="text-danger">
+          <div className="text-danger mt-4">
             Failed to load: {(error as Error)?.message ?? "unknown error"}
           </div>
         )}
 
         {!isLoading && !isError && (
-          <div className="overflow-x-auto">
+          <div className="mt-4">
             <table className="w-full border-collapse border border-border text-sm">
               <thead>
-                <tr className="bg-surface/80">
-                  <th className="border border-border px-3 py-2 text-center text-text-secondary w-12" rowSpan={2}>S.No.</th>
-                  <th className="border border-border px-3 py-2 text-left text-text-secondary" rowSpan={2}>
+                <tr className="bg-surface">
+                  <th style={{ top: stickyTheadTopRow1 }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-center text-text-secondary w-12 shadow-[inset_0_-1px_0_var(--color-border)]" rowSpan={2}>S.No.</th>
+                  <th style={{ top: stickyTheadTopRow1 }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]" rowSpan={2}>
                     Work Activity
                   </th>
-                  <th className="border border-border px-3 py-2 text-right text-text-secondary" rowSpan={2}>
+                  <th style={{ top: stickyTheadTopRow1 }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]" rowSpan={2}>
                     Norm / Day
                   </th>
-                  <th className="border border-border px-3 py-2 text-center text-text-secondary" colSpan={3}>
+                  <th style={{ top: stickyTheadTopRow1 }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-center text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]" colSpan={3}>
                     Metrics
                   </th>
                 </tr>
-                <tr className="bg-surface/80">
-                  <th className="border border-border px-3 py-1 text-left text-text-secondary">For the Day</th>
-                  <th className="border border-border px-3 py-1 text-left text-text-secondary">For the Month</th>
-                  <th className="border border-border px-3 py-1 text-left text-text-secondary">Cumulative</th>
+                <tr className="bg-surface">
+                  <th style={{ top: stickyTheadTopRow2 }} className="sticky z-10 bg-surface border border-border px-3 py-1 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">For the Day</th>
+                  <th style={{ top: stickyTheadTopRow2 }} className="sticky z-10 bg-surface border border-border px-3 py-1 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">For the Month</th>
+                  <th style={{ top: stickyTheadTopRow2 }} className="sticky z-10 bg-surface border border-border px-3 py-1 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Cumulative</th>
                 </tr>
               </thead>
               <tbody>

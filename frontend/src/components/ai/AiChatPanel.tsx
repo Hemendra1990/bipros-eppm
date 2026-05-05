@@ -1,16 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAiStore } from "@/lib/state/store";
 import { useAppStore } from "@/lib/state/store";
 import { aiApi, type SseEvent } from "@/lib/api/aiApi";
-import { Bot, X, Send, Loader2, PanelRightClose, PanelRightOpen, Mic, Image as ImageIcon, Square, Check, Copy, Maximize2, Minimize2 } from "lucide-react";
+import { Bot, X, Send, Loader2, PanelRightClose, PanelRightOpen, Mic, Image as ImageIcon, Square, Check, Copy, Maximize2, Minimize2, Plus, History, Download, FileText, FileSpreadsheet, Sheet } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { Children, isValidElement, type ReactElement } from "react";
 import { ChatChart } from "@/components/ai/charts/chatChart";
+import { AiHistoryView } from "@/components/ai/AiHistoryView";
+import {
+  exportConversationCsv,
+  exportConversationPdf,
+  exportConversationXlsx,
+} from "@/lib/utils/conversationExport";
 
 interface ChatMessage {
   id: string;
@@ -180,36 +186,72 @@ export function AiChatPanel() {
   const [isRecording, setIsRecording] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [view, setView] = useState<"chat" | "history">("chat");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState<null | "pdf" | "xlsx" | "csv">(null);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const lastScopeRef = useRef<string | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming]);
 
-  // Reset the chat when the user moves to a different scope (project or
-  // module). The persisted conversationId belongs to the previous scope —
-  // continuing it would stitch unrelated turns together. Skip the very first
-  // run so a page reload keeps the existing conversation intact.
+  // Rehydrate messages from the server when we have a conversationId but no
+  // local transcript (cold start, panel reopen, or after loading a past
+  // conversation from History). Backend is authoritative; the store only
+  // persists the conversation id, never the transcript.
   useEffect(() => {
-    const scopeKey = `${projectId ?? "general"}|${activeModule}`;
-    if (lastScopeRef.current === null) {
-      lastScopeRef.current = scopeKey;
-      return;
-    }
-    if (lastScopeRef.current !== scopeKey) {
-      lastScopeRef.current = scopeKey;
-      setConversationId(null);
-      setMessages([]);
-    }
-  }, [projectId, activeModule, setConversationId]);
+    if (!conversationId) return;
+    if (messages.length > 0) return;
+    if (isStreaming) return;
+    let cancelled = false;
+    aiApi
+      .getConversation(conversationId)
+      .then((res) => {
+        if (cancelled) return;
+        const detail = res.data;
+        if (!detail) return;
+        const restored: ChatMessage[] = detail.messages
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({
+            id: crypto.randomUUID(),
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }));
+        setMessages(restored);
+      })
+      .catch((err) => {
+        // 404 here is fine — the persisted conversationId may have been
+        // soft-deleted on another device. Drop it so a fresh chat starts.
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          setConversationId(null);
+        } else {
+          console.error("Failed to load conversation history", err);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, messages.length, isStreaming, setConversationId]);
+
+  // Close the export menu on outside-click.
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (!exportMenuRef.current) return;
+      if (!exportMenuRef.current.contains(e.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [exportOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
         toggle();
       }
@@ -220,6 +262,90 @@ export function AiChatPanel() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, toggle, setOpen]);
+
+  const newChat = useCallback(() => {
+    abortRef.current?.abort();
+    setConversationId(null);
+    setMessages([]);
+    setInput("");
+    setPendingImage(null);
+    setStreamingStatus(null);
+    setStreamingAssistantId(null);
+    setIsStreaming(false);
+    setView("chat");
+  }, [setConversationId]);
+
+  const loadConversation = useCallback(
+    (id: string) => {
+      if (id === conversationId) {
+        setView("chat");
+        return;
+      }
+      abortRef.current?.abort();
+      setIsStreaming(false);
+      setStreamingAssistantId(null);
+      setStreamingStatus(null);
+      setMessages([]);
+      setInput("");
+      setPendingImage(null);
+      setConversationId(id);
+      setView("chat");
+    },
+    [conversationId, setConversationId],
+  );
+
+  const conversationTitle = useMemo(() => {
+    const firstUser = messages.find((m) => m.role === "user");
+    if (firstUser?.content) {
+      const single = firstUser.content.replace(/\s+/g, " ").trim();
+      return single.length <= 60 ? single : `${single.slice(0, 57)}...`;
+    }
+    return "Bipros AI Conversation";
+  }, [messages]);
+
+  const runExport = useCallback(
+    async (kind: "pdf" | "xlsx" | "csv") => {
+      setExportOpen(false);
+      if (messages.length === 0) return;
+      setExporting(kind);
+      try {
+        const conv: { title: string; messages: { role: string; content: string; createdAt: string }[] } = {
+          title: conversationTitle,
+          messages: messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m) => ({
+              role: m.role as string,
+              content: m.content,
+              createdAt: new Date().toISOString(),
+            })),
+        };
+        // Pull canonical timestamps from the server when we have an id, so
+        // CSV/XLSX exports show real send times instead of "now".
+        if (conversationId) {
+          try {
+            const res = await aiApi.getConversation(conversationId);
+            const detail = res.data;
+            if (detail?.messages?.length) {
+              conv.messages = detail.messages.filter(
+                (m) => m.role === "user" || m.role === "assistant",
+              );
+              if (detail.title) conv.title = detail.title;
+            }
+          } catch {
+            // Fall back to client-side data — export should still succeed.
+          }
+        }
+        if (kind === "csv") exportConversationCsv(conv);
+        else if (kind === "xlsx") await exportConversationXlsx(conv);
+        else await exportConversationPdf(conv);
+      } catch (err) {
+        console.error("Export failed", err);
+      } finally {
+        setExporting(null);
+      }
+    },
+    [conversationId, conversationTitle, messages],
+  );
 
   const sendMessage = useCallback(async () => {
     if ((!input.trim() && !pendingImage) || isStreaming) return;
@@ -425,7 +551,7 @@ export function AiChatPanel() {
       <button
         onClick={toggle}
         className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-medium text-text-primary shadow-lg hover:bg-accent-hover transition-colors"
-        title="Open AI chat (Ctrl+K)"
+        title="Open AI chat (Ctrl+Shift+K)"
       >
         <Bot size={18} />
         <span className="hidden sm:inline">Ask AI</span>
@@ -460,14 +586,78 @@ export function AiChatPanel() {
           )}
           <div className="flex items-center gap-1 ml-auto">
             {!collapsed && (
-              <button
-                onClick={() => setMaximized((m) => !m)}
-                className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-                title={maximized ? "Restore size" : "Maximize"}
-                aria-label={maximized ? "Restore panel size" : "Maximize panel"}
-              >
-                {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </button>
+              <>
+                <button
+                  onClick={newChat}
+                  className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                  title="New chat"
+                  aria-label="Start a new chat"
+                >
+                  <Plus size={16} />
+                </button>
+                <button
+                  onClick={() => setView((v) => (v === "history" ? "chat" : "history"))}
+                  className={`p-1.5 rounded-md hover:bg-surface-hover ${
+                    view === "history" ? "text-accent" : "text-text-secondary hover:text-text-primary"
+                  }`}
+                  title={view === "history" ? "Back to chat" : "History"}
+                  aria-label="Conversation history"
+                  aria-pressed={view === "history"}
+                >
+                  <History size={16} />
+                </button>
+                {messages.length > 0 && view === "chat" && (
+                  <div className="relative" ref={exportMenuRef}>
+                    <button
+                      onClick={() => setExportOpen((v) => !v)}
+                      disabled={exporting !== null}
+                      className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-hover disabled:opacity-50"
+                      title="Export conversation"
+                      aria-label="Export conversation"
+                      aria-haspopup="menu"
+                      aria-expanded={exportOpen}
+                    >
+                      {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                    </button>
+                    {exportOpen && (
+                      <div
+                        role="menu"
+                        className="absolute right-0 top-full mt-1 z-10 w-44 rounded-md border border-border bg-surface shadow-lg py-1"
+                      >
+                        <button
+                          role="menuitem"
+                          onClick={() => runExport("pdf")}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-surface-hover"
+                        >
+                          <FileText size={14} /> PDF (transcript)
+                        </button>
+                        <button
+                          role="menuitem"
+                          onClick={() => runExport("xlsx")}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-surface-hover"
+                        >
+                          <FileSpreadsheet size={14} /> Excel (.xlsx)
+                        </button>
+                        <button
+                          role="menuitem"
+                          onClick={() => runExport("csv")}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-surface-hover"
+                        >
+                          <Sheet size={14} /> CSV
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => setMaximized((m) => !m)}
+                  className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                  title={maximized ? "Restore size" : "Maximize"}
+                  aria-label={maximized ? "Restore panel size" : "Maximize panel"}
+                >
+                  {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </button>
+              </>
             )}
             <button
               onClick={() => setCollapsed(!collapsed)}
@@ -488,7 +678,14 @@ export function AiChatPanel() {
           </div>
         </div>
 
-        {!collapsed && (
+        {!collapsed && view === "history" && (
+          <AiHistoryView
+            currentConversationId={conversationId}
+            onSelect={loadConversation}
+          />
+        )}
+
+        {!collapsed && view === "chat" && (
           <>
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

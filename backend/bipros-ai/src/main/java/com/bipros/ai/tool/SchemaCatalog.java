@@ -16,6 +16,14 @@ public class SchemaCatalog {
             Every query MUST include a `project_id` filter — `= '<uuid>'` for a single
             project or `IN ('<uuid1>','<uuid2>',...)` for cross-project. Quote UUIDs.
 
+            PK column convention (READ THIS): every dim/fact has an explicit
+            `<entity>_id` column — `dim_resource.resource_id`,
+            `dim_activity.activity_id`, `dim_wbs.wbs_id`, `fact_dpr_logs.dpr_id`,
+            etc. There is NO plain `id` column on any analytics table. When
+            aliasing (e.g. `FROM bipros_analytics.dim_resource r`), still write
+            `r.resource_id`, never `r.id`. The first column of each table listed
+            below IS that PK. Don't carry `id` over from the OLTP catalog.
+
             Dimensions:
             - dim_project(project_id, code, name, status, portfolio_id, org_id, start_date, finish_date, currency, obs_node_id, updated_at)
             - dim_wbs(wbs_id, project_id, parent_wbs_id, code, name, level, weight, path)

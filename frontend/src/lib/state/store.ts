@@ -76,3 +76,35 @@ export const useAiStore = create<AiState>()(
     { name: "bipros-ai" }
   )
 );
+
+interface CommandPaletteState {
+  open: boolean;
+  query: string;
+  selectedIndex: number;
+  recentCommandIds: string[];
+  toggle: () => void;
+  setOpen: (v: boolean) => void;
+  setQuery: (q: string) => void;
+  setSelectedIndex: (i: number) => void;
+  pushRecent: (id: string) => void;
+}
+
+export const useCommandPaletteStore = create<CommandPaletteState>()(
+  persist(
+    (set) => ({
+      open: false,
+      query: "",
+      selectedIndex: 0,
+      recentCommandIds: [],
+      toggle: () => set((s) => ({ open: !s.open, selectedIndex: 0, query: s.open ? s.query : "" })),
+      setOpen: (v) => set((s) => ({ open: v, selectedIndex: 0, query: v ? "" : s.query })),
+      setQuery: (q) => set({ query: q, selectedIndex: 0 }),
+      setSelectedIndex: (i) => set({ selectedIndex: i }),
+      pushRecent: (id) =>
+        set((s) => ({
+          recentCommandIds: [id, ...s.recentCommandIds.filter((x) => x !== id)].slice(0, 5),
+        })),
+    }),
+    { name: "bipros-cmd-palette", partialize: (state) => ({ recentCommandIds: state.recentCommandIds }) }
+  )
+);

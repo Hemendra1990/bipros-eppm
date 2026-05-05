@@ -99,3 +99,5 @@ databaseChangeLog:
       file: db/changelog/060-wbs-ai-extraction-cache.yaml
   - include:
       file: db/changelog/061-resource-assignment-remaining-backfill.yaml
+  - include:
+      file: db/changelog/062-formula-master-tables.yaml

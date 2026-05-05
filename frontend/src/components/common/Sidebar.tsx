@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Award, Banknote, BarChart3, Briefcase, Building2, Calendar,
-  ChevronLeft, ChevronRight, CircleDollarSign, Contact, FileText, FolderTree, Gauge,
-  Grid, HardHat, LayoutDashboard, LayoutGrid, Layers, Library, ListChecks, LogOut,
+  Award, Banknote, BarChart3, Briefcase, Building2, Calculator, Calendar,
+  ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign, Contact, FileText, FolderTree, Gauge,
+  Grid, HardHat, Home, LayoutGrid, Layers, Library, ListChecks, LogOut,
   Network, Plug, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Tag,
   UserCog, Users, UsersRound, Workflow,
 } from "lucide-react";
@@ -15,6 +16,10 @@ import { useAppStore, useAuthStore } from "@/lib/state/store";
 import type { IcpmsModule } from "@/lib/types";
 import { useAccess } from "@/lib/auth/useAccess";
 import { useAuth } from "@/lib/auth/useAuth";
+import { useMostSeniorRole } from "@/hooks/useMostSeniorRole";
+import { defaultExpandedGroups } from "@/components/hub/hubConfig";
+
+const COLLAPSED_GROUPS_STORAGE_KEY = "bipros.sidebar.groups.v1";
 
 /**
  * Optional gating fields:
@@ -44,7 +49,7 @@ const groups: NavGroup[] = [
   {
     label: "Plan",
     items: [
-      { name: "Dashboard", href: "/", icon: LayoutDashboard },
+      { name: "Home", href: "/", icon: Home },
       { name: "Portfolios", href: "/portfolios", icon: Briefcase },
       { name: "Projects", href: "/projects", icon: FolderTree, module: "M1_WBS_GIS" },
       { name: "EPS", href: "/eps", icon: Layers, module: "M1_WBS_GIS" },
@@ -99,6 +104,7 @@ const groups: NavGroup[] = [
       { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
       { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
+      { name: "Formulas", href: "/admin/formulas", icon: Calculator, adminOnly: true },
     ],
   },
   {
@@ -188,17 +194,50 @@ export function Sidebar() {
     return [result];
   });
 
-  // Pick the most "senior" role to show beneath the user's name in the chip. Falls back to
-  // the raw first role string if none of the well-known roles match.
-  const roleHierarchy = [
-    "ROLE_ADMIN", "ROLE_EXECUTIVE", "ROLE_PMO", "ROLE_FINANCE",
-    "ROLE_PROJECT_MANAGER", "ROLE_SCHEDULER", "ROLE_RESOURCE_MANAGER",
-    "ROLE_TEAM_MEMBER", "ROLE_CLIENT", "ROLE_VIEWER",
-  ];
-  const norm = (r: string) => (r.startsWith("ROLE_") ? r : `ROLE_${r}`);
-  const userRoles = (user?.roles ?? []).map(norm);
-  const seniorRole = roleHierarchy.find((r) => userRoles.includes(r)) ?? userRoles[0];
-  const roleLabel = seniorRole ? seniorRole.replace(/^ROLE_/, "").replace(/_/g, " ").toLowerCase() : "user";
+  // Pick the most "senior" role for the user-chip role label and to seed default-expanded
+  // sidebar groups. Shared with the hub via useMostSeniorRole so both stay in sync.
+  const { role: seniorRole, label: roleLabelTitle } = useMostSeniorRole();
+  const roleLabel = roleLabelTitle.toLowerCase();
+
+  // Persist per-group collapsed state. Default-expanded set is derived from role on first
+  // visit; once the user toggles anything we trust localStorage and stop re-deriving.
+  const defaultExpanded = useMemo(
+    () => new Set(defaultExpandedGroups(seniorRole ?? null)),
+    [seniorRole],
+  );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const [hydratedGroups, setHydratedGroups] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(COLLAPSED_GROUPS_STORAGE_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        setCollapsedGroups(new Set(arr));
+      } else {
+        // First visit: collapse every group that isn't in the role-based default set.
+        const initial = new Set<string>();
+        for (const g of groups) if (!defaultExpanded.has(g.label)) initial.add(g.label);
+        setCollapsedGroups(initial);
+      }
+    } catch { /* localStorage unavailable */ }
+    setHydratedGroups(true);
+  }, [defaultExpanded]);
+
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      try {
+        window.localStorage.setItem(
+          COLLAPSED_GROUPS_STORAGE_KEY,
+          JSON.stringify(Array.from(next)),
+        );
+      } catch { /* localStorage unavailable */ }
+      return next;
+    });
+  };
 
   const displayName = user?.firstName ?? user?.username ?? "User";
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -263,28 +302,63 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2">
-        {visibleGroups.map((group) => (
-          <div key={group.label} className="mb-1">
-            {!sidebarCollapsed && (
-              <div className="px-2.5 pt-4 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-ash">
-                {group.label}
-              </div>
-            )}
-            {group.items.map((item) => renderNavItem(item, pathname, sidebarCollapsed))}
-            {(group.subGroups ?? []).map((sg) => (
-              <div key={sg.label} className="mt-1">
-                {!sidebarCollapsed && (
-                  <div className="ml-3 px-2.5 pt-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-ash/80">
-                    {sg.label}
-                  </div>
-                )}
-                <div className={sidebarCollapsed ? "" : "ml-3 border-l border-hairline pl-1"}>
-                  {sg.items.map((item) => renderNavItem(item, pathname, sidebarCollapsed))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
+        {visibleGroups.map((group) => {
+          // Collapse only kicks in when sidebar is full-width and we've hydrated from
+          // localStorage; before that everything renders open to avoid the initial-paint flash.
+          const isCollapsed =
+            !sidebarCollapsed && hydratedGroups && collapsedGroups.has(group.label);
+          const itemCount =
+            group.items.length +
+            (group.subGroups ?? []).reduce((s, sg) => s + sg.items.length, 0);
+          return (
+            <div key={group.label} className="mb-1">
+              {!sidebarCollapsed && (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  data-testid="sidebar-group-toggle"
+                  data-group={group.label}
+                  aria-expanded={!isCollapsed}
+                  className="flex w-full items-center justify-between rounded px-2.5 pt-4 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-ash hover:text-gold-deep"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ChevronDown
+                      size={10}
+                      strokeWidth={2.5}
+                      className={cn(
+                        "shrink-0 transition-transform duration-150",
+                        isCollapsed && "-rotate-90",
+                      )}
+                    />
+                    {group.label}
+                  </span>
+                  {isCollapsed && itemCount > 1 && (
+                    <span className="text-[9px] font-semibold tracking-wider text-ash">
+                      ({itemCount})
+                    </span>
+                  )}
+                </button>
+              )}
+              {!isCollapsed && (
+                <>
+                  {group.items.map((item) => renderNavItem(item, pathname, sidebarCollapsed))}
+                  {(group.subGroups ?? []).map((sg) => (
+                    <div key={sg.label} className="mt-1">
+                      {!sidebarCollapsed && (
+                        <div className="ml-3 px-2.5 pt-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-ash/80">
+                          {sg.label}
+                        </div>
+                      )}
+                      <div className={sidebarCollapsed ? "" : "ml-3 border-l border-hairline pl-1"}>
+                        {sg.items.map((item) => renderNavItem(item, pathname, sidebarCollapsed))}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* User chip */}

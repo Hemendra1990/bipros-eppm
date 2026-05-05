@@ -16,6 +16,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * @deprecated Prefer {@code query_dpr} for filterable row + rollup queries on
+ *     a single project, and {@code get_dpr_details} for single-record drill-down.
+ *     Kept here for back-compat with running chat sessions and for the
+ *     general-mode (no current project) cross-project rollup, which the JPA
+ *     tools intentionally don't expose.
+ */
+@Deprecated
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -31,9 +39,10 @@ public class ReadDprSummaryTool extends ProjectScopedTool {
 
     @Override
     public String description() {
-        return "Daily Progress Report summary: per-day rollup of qty executed, chainage, weather, "
-                + "supervisor and remarks. With a current project, groups by activity. With no current "
-                + "project (general mode), groups by project_id across the user's accessible scope.";
+        return "DEPRECATED — prefer query_dpr (filterable rows + rollups, single project) and "
+                + "get_dpr_details (single record). This tool still works for general-mode "
+                + "cross-project rollups (no current project). With a current project, groups by "
+                + "activity. With no current project, groups by project_id across the user's scope.";
     }
 
     @Override

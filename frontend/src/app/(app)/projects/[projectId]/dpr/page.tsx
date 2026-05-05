@@ -11,6 +11,7 @@ import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useStickyMeasure } from "@/hooks/useStickyMeasure";
 
 type WeatherOption = "" | "Clear" | "Cloudy" | "Rain" | "Hot" | "Cold";
 type UnitOption = "Cum" | "MT" | "Rm" | "Each" | "Sqm";
@@ -89,6 +90,8 @@ export default function DprPage() {
   const [error, setError] = useState<string | null>(null);
   const [chainageFromError, setChainageFromError] = useState<string | null>(null);
   const [chainageToError, setChainageToError] = useState<string | null>(null);
+  const { ref: stickyHeaderRef, height: upperH } = useStickyMeasure<HTMLDivElement>();
+  const stickyTheadTop = `calc(var(--tab-nav-h, 53px) + ${upperH}px)`;
 
   const {
     data: listData,
@@ -198,46 +201,51 @@ export default function DprPage() {
         description="Supervisor-level record of work executed each day by chainage — quantities, activity, weather, and remarks."
       />
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4 text-text-primary">Daily Progress Report</h1>
+        <div
+          ref={stickyHeaderRef}
+          className="sticky top-[var(--tab-nav-h,53px)] z-20 -mx-6 px-6 pt-2 pb-3 bg-ivory border-b border-border"
+        >
+          <h1 className="text-3xl font-bold mb-4 text-text-primary">Daily Progress Report</h1>
 
-        <form onSubmit={handleFilterSubmit} className="flex flex-wrap items-end gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-text-secondary">From</label>
-            <input
-              type="date"
-              value={fromInput}
-              onChange={(e) => setFromInput(e.target.value)}
-              className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-text-secondary">To</label>
-            <input
-              type="date"
-              value={toInput}
-              onChange={(e) => setToInput(e.target.value)}
-              className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-            />
-          </div>
+          <form onSubmit={handleFilterSubmit} className="flex flex-wrap items-end gap-4 mb-3">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">From</label>
+              <input
+                type="date"
+                value={fromInput}
+                onChange={(e) => setFromInput(e.target.value)}
+                className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-secondary">To</label>
+              <input
+                type="date"
+                value={toInput}
+                onChange={(e) => setToInput(e.target.value)}
+                className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+            >
+              {isFetching ? "Loading..." : "Refresh"}
+            </button>
+          </form>
+
           <button
-            type="submit"
+            onClick={() => setShowForm(!showForm)}
             className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
           >
-            {isFetching ? "Loading..." : "Refresh"}
+            {showForm ? "Cancel" : "Add DPR"}
           </button>
-        </form>
+        </div>
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
-        >
-          {showForm ? "Cancel" : "Add DPR"}
-        </button>
-
-        {error && <div className="text-danger mb-4">{error}</div>}
+        {error && <div className="text-danger mt-4 mb-4">{error}</div>}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl">
+          <form onSubmit={handleSubmit} className="bg-surface/50 p-4 rounded-lg border border-border mt-4 mb-6 shadow-xl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">Date</label>
@@ -382,20 +390,20 @@ export default function DprPage() {
         )}
 
         {/* DPR Table */}
-        <div className="overflow-x-auto">
+        <div className="mt-4">
           <table className="w-full border-collapse border border-border">
             <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Supervisor</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Chainage From</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Chainage To</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Activity</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Qty Executed</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Cumulative Qty</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Weather</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
+              <tr className="bg-surface">
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Date</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Supervisor</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Chainage From</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Chainage To</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Activity</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Qty Executed</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Unit</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Cumulative Qty</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Weather</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Remarks</th>
               </tr>
             </thead>
             <tbody>

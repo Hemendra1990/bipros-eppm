@@ -119,13 +119,13 @@ export default function ProjectDetailLayout({
   };
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" style={{ ["--tab-nav-h" as string]: "53px" }}>
       <div className="mb-6 px-6 pt-6">
         <h1 className="text-2xl font-bold text-text-primary">{project.name}</h1>
         <p className="text-sm text-text-secondary">{project.code}</p>
       </div>
 
-      <div className="border-b border-border px-6">
+      <div className="sticky top-0 z-30 border-b border-border bg-ivory px-6">
         <nav className="flex items-center gap-8" aria-label="Tabs">
           <div className="flex items-center gap-8 overflow-x-auto">
             {tabs.map((t) => {
@@ -245,7 +245,7 @@ export default function ProjectDetailLayout({
         </nav>
       </div>
 
-      <div className="mt-6 min-w-0 overflow-x-auto">{children}</div>
+      <div className="mt-6 min-w-0">{children}</div>
     </div>
   );
 }

@@ -25,6 +25,7 @@ import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
+import com.bipros.udf.application.service.FormulaEngine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,7 @@ public class EvmService {
     private final WbsNodeRepository wbsNodeRepository;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final FormulaEngine formulaEngine;
 
     @Transactional
     public EvmCalculationResponse calculateEvm(UUID projectId, CalculateEvmRequest request) {
@@ -95,7 +97,7 @@ public class EvmService {
         calculation.setEarnedValue(totalEv);
         calculation.setActualCost(totalAc);
 
-        EvmServiceHelper.calculateIndices(calculation);
+        EvmServiceHelper.calculateIndices(calculation, formulaEngine);
 
         var saved = evmCalculationRepository.save(calculation);
         auditService.logCreate("EvmCalculation", saved.getId(), EvmCalculationResponse.from(saved));
@@ -159,15 +161,23 @@ public class EvmService {
 
         BigDecimal ac = EvmRollupService.getActivityAc(activity, expensesByActivity, assignmentsByActivity);
 
-        BigDecimal cv = ev.subtract(ac);
-        BigDecimal sv = ev.subtract(pv);
+        Map<String, BigDecimal> ctx = Map.of(
+                "EV", nvl(ev),
+                "AC", nvl(ac),
+                "PV", nvl(pv)
+        );
 
-        Double cpi = ac.compareTo(BigDecimal.ZERO) != 0
-                ? ev.divide(ac, 4, RoundingMode.HALF_UP).doubleValue()
-                : null;
-        Double spi = pv.compareTo(BigDecimal.ZERO) != 0
-                ? ev.divide(pv, 4, RoundingMode.HALF_UP).doubleValue()
-                : null;
+        BigDecimal cv = safeEvalBigDecimal("EVM_CV", projectId, ctx, ev.subtract(ac));
+        BigDecimal sv = safeEvalBigDecimal("EVM_SV", projectId, ctx, ev.subtract(pv));
+
+        Double cpi = safeEvalDouble("EVM_CPI", projectId, ctx,
+                ac.compareTo(BigDecimal.ZERO) != 0
+                        ? ev.divide(ac, 4, RoundingMode.HALF_UP).doubleValue()
+                        : null);
+        Double spi = safeEvalDouble("EVM_SPI", projectId, ctx,
+                pv.compareTo(BigDecimal.ZERO) != 0
+                        ? ev.divide(pv, 4, RoundingMode.HALF_UP).doubleValue()
+                        : null);
 
         Double pct = activity.getPercentComplete();
 
@@ -178,6 +188,30 @@ public class EvmService {
                 pct,
                 technique.name()
         );
+    }
+
+    private BigDecimal safeEvalBigDecimal(String code, UUID projectId, Map<String, BigDecimal> ctx, BigDecimal fallback) {
+        if (formulaEngine == null) return fallback;
+        try {
+            var result = formulaEngine.evaluate(code, projectId, ctx);
+            return result.isError() ? fallback : result.getValue();
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    private Double safeEvalDouble(String code, UUID projectId, Map<String, BigDecimal> ctx, Double fallback) {
+        if (formulaEngine == null) return fallback;
+        try {
+            var result = formulaEngine.evaluate(code, projectId, ctx);
+            return result.isError() ? fallback : result.getValue().doubleValue();
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    private static BigDecimal nvl(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 
     private static EvmTechnique resolveEvmTechnique(PercentCompleteType type) {
@@ -295,13 +329,22 @@ public class EvmService {
             BigDecimal ac = bucketAc.get(caId);
             int count = bucketCount.get(caId);
 
-            BigDecimal cv = ev.subtract(ac);
-            BigDecimal sv = (pv != null) ? ev.subtract(pv) : null;
-            BigDecimal cpi = (ac.compareTo(BigDecimal.ZERO) != 0)
-                    ? ev.divide(ac, SCALE, RoundingMode.HALF_UP)
+            Map<String, BigDecimal> ctx = new HashMap<>();
+            ctx.put("EV", nvl(ev));
+            ctx.put("AC", nvl(ac));
+            if (pv != null) ctx.put("PV", pv);
+
+            BigDecimal cv = safeEvalBigDecimal("EVM_CV", projectId, ctx, ev.subtract(ac));
+            BigDecimal sv = pv != null
+                    ? safeEvalBigDecimal("EVM_SV", projectId, ctx, ev.subtract(pv))
                     : null;
+            BigDecimal cpi = safeEvalBigDecimal("EVM_CPI", projectId, ctx,
+                    ac.compareTo(BigDecimal.ZERO) != 0
+                            ? ev.divide(ac, SCALE, RoundingMode.HALF_UP)
+                            : null);
             BigDecimal spi = (pv != null && pv.compareTo(BigDecimal.ZERO) != 0)
-                    ? ev.divide(pv, SCALE, RoundingMode.HALF_UP)
+                    ? safeEvalBigDecimal("EVM_SPI", projectId, ctx,
+                            ev.divide(pv, SCALE, RoundingMode.HALF_UP))
                     : null;
 
             String code;

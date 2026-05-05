@@ -64,7 +64,16 @@ public class ConversationService {
 
         AiConversation conv = conversationRepository.findById(conversationId).orElseThrow();
         conv.setLastMessageAt(Instant.now());
+        if (seq == 0 && (conv.getTitle() == null || conv.getTitle().isBlank() || "Chat".equals(conv.getTitle()))) {
+            conv.setTitle(deriveTitle(content));
+        }
         conversationRepository.save(conv);
+    }
+
+    private static String deriveTitle(String firstMessage) {
+        String singleLine = firstMessage.replaceAll("\\s+", " ").trim();
+        if (singleLine.isEmpty()) return "Chat";
+        return singleLine.length() <= 60 ? singleLine : singleLine.substring(0, 57) + "...";
     }
 
     @Transactional

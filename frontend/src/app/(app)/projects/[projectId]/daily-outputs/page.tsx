@@ -14,6 +14,7 @@ import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useStickyMeasure } from "@/hooks/useStickyMeasure";
 
 interface OutputForm {
   outputDate: string;
@@ -53,6 +54,8 @@ export default function DailyOutputsPage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<OutputForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
+  const { ref: stickyHeaderRef, height: upperH } = useStickyMeasure<HTMLDivElement>();
+  const stickyTheadTop = `calc(var(--tab-nav-h, 53px) + ${upperH}px)`;
 
   const { data: outputsData, isLoading } = useQuery({
     queryKey: ["daily-outputs", projectId],
@@ -155,21 +158,26 @@ export default function DailyOutputsPage() {
         description="One row per (date × activity × resource): how much work the resource did on that activity that day. Feeds the Capacity Utilization report — actual productivity is computed from these rows against the planned norm."
       />
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4 text-text-primary">Daily Activity-Resource Outputs</h1>
-
-        <button
-          onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="mb-6 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+        <div
+          ref={stickyHeaderRef}
+          className="sticky top-[var(--tab-nav-h,53px)] z-20 -mx-6 px-6 pt-2 pb-3 bg-ivory border-b border-border"
         >
-          {showForm ? "Cancel" : "Add Output"}
-        </button>
+          <h1 className="text-3xl font-bold mb-4 text-text-primary">Daily Activity-Resource Outputs</h1>
 
-        {error && <div className="text-danger mb-4">{error}</div>}
+          <button
+            onClick={() => (showForm ? resetForm() : setShowForm(true))}
+            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+          >
+            {showForm ? "Cancel" : "Add Output"}
+          </button>
+        </div>
+
+        {error && <div className="text-danger mt-4 mb-4">{error}</div>}
 
         {showForm && (
           <form
             onSubmit={handleSubmit}
-            className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl"
+            className="bg-surface/50 p-4 rounded-lg border border-border mt-4 mb-6 shadow-xl"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -310,19 +318,19 @@ export default function DailyOutputsPage() {
           </form>
         )}
 
-        <div className="overflow-x-auto">
+        <div className="mt-4">
           <table className="w-full border-collapse border border-border">
             <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-3 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-3 py-2 text-left text-text-secondary">Activity</th>
-                <th className="border border-border px-3 py-2 text-left text-text-secondary">Resource</th>
-                <th className="border border-border px-3 py-2 text-right text-text-secondary">Qty</th>
-                <th className="border border-border px-3 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-3 py-2 text-right text-text-secondary">Hrs</th>
-                <th className="border border-border px-3 py-2 text-right text-text-secondary">Days</th>
-                <th className="border border-border px-3 py-2 text-right text-text-secondary">Actual / Day</th>
-                <th className="border border-border px-3 py-2 text-left text-text-secondary">Actions</th>
+              <tr className="bg-surface">
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Date</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Activity</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Resource</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Qty</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Unit</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Hrs</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Days</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Actual / Day</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-3 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Actions</th>
               </tr>
             </thead>
             <tbody>
