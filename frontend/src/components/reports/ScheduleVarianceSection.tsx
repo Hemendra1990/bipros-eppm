@@ -13,14 +13,13 @@ import {
   YAxis,
 } from "recharts";
 import {
-  ArrowDownUp,
-  ArrowDownWideNarrow,
-  ArrowUpNarrowWide,
   Download,
   Flag,
   Sparkles,
 } from "lucide-react";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { downloadCsv, toCsv } from "@/lib/utils/csvExport";
 import {
   varianceReportApi,
@@ -32,16 +31,6 @@ interface Props {
   projectId: string;
   baselineId?: string;
 }
-
-type SortKey =
-  | "code"
-  | "name"
-  | "finishVarianceDays"
-  | "startVarianceDays"
-  | "percentComplete"
-  | "totalFloat";
-
-type SortDir = "asc" | "desc";
 
 const STATUS_OPTIONS: ActivityStatusName[] = [
   "NOT_STARTED",
@@ -103,8 +92,6 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
   const [criticalOnly, setCriticalOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Set<ActivityStatusName>>(new Set());
   const [threshold, setThreshold] = useState<number>(0);
-  const [sortKey, setSortKey] = useState<SortKey>("finishVarianceDays");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const rows = useMemo(() => data?.data?.rows ?? [], [data]);
   const summary = data?.data?.summary;
@@ -126,13 +113,8 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
     if (threshold > 0) {
       r = r.filter((x) => Math.abs(x.finishVarianceDays) >= threshold);
     }
-    return [...r].sort((a, b) => {
-      const av = (a as unknown as Record<SortKey, unknown>)[sortKey];
-      const bv = (b as unknown as Record<SortKey, unknown>)[sortKey];
-      const cmp = compare(av, bv);
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [rows, showOnlyNonZero, milestonesOnly, criticalOnly, statusFilter, threshold, sortKey, sortDir]);
+    return r;
+  }, [rows, showOnlyNonZero, milestonesOnly, criticalOnly, statusFilter, threshold]);
 
   const distribution = useMemo(() => {
     const visible = filtered;
@@ -142,15 +124,6 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
       tone: b.label === "0" ? "slate" : b.label.startsWith("≤") || b.label === "−5..0" ? "emerald" : "burgundy",
     }));
   }, [filtered]);
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  };
 
   const toggleStatus = (s: ActivityStatusName) => {
     const next = new Set(statusFilter);
@@ -201,6 +174,196 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
     summary && summary.totalActivities > 0
       ? Math.round((summary.onTrackCount / summary.totalActivities) * 100)
       : 0;
+
+  const columns = useMemo<ColumnDef<ScheduleVarianceRow>[]>(
+    () => [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <span className="font-medium text-charcoal whitespace-nowrap">
+              {row.code}
+              {row.isMilestone && (
+                <Flag size={11} className="ml-1.5 inline text-gold-deep" />
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => (
+          <span className="max-w-[220px] truncate">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "activityType",
+        header: "Type",
+        cell: (info) => (
+          <span className="text-slate text-xs">
+            {formatActivityType(String(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <Badge variant={statusBadge(row.status)} withDot>
+              {formatActivityType(row.status)}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "percentComplete",
+        header: "% complete",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {info.getValue() != null
+              ? `${Number(info.getValue()).toFixed(0)}%`
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "baselineStart",
+        header: "BL start",
+        cell: (info) => (
+          <span className="block text-right text-slate tabular-nums">
+            {String(info.getValue() ?? "—")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "currentStart",
+        header: "Cur start",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {String(info.getValue() ?? "—")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "startVarianceDays",
+        header: "Var start",
+        cell: (info) => {
+          const val = Number(info.getValue());
+          return (
+            <span
+              className={`block text-right ${varianceClass(val)}`}
+            >
+              {val > 0 ? "+" : ""}
+              {val}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "baselineFinish",
+        header: "BL finish",
+        cell: (info) => (
+          <span className="block text-right text-slate tabular-nums">
+            {String(info.getValue() ?? "—")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "currentFinish",
+        header: "Cur finish",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {String(info.getValue() ?? "—")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "finishVarianceDays",
+        header: "Var finish",
+        cell: (info) => {
+          const val = Number(info.getValue());
+          return (
+            <span
+              className={`block text-right ${varianceClass(val)}`}
+            >
+              {val > 0 ? "+" : ""}
+              {val}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "baselineOriginalDuration",
+        header: "BL dur",
+        cell: (info) => (
+          <span className="block text-right text-slate tabular-nums">
+            {info.getValue() != null
+              ? Number(info.getValue()).toFixed(0)
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "currentOriginalDuration",
+        header: "Cur dur",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {info.getValue() != null
+              ? Number(info.getValue()).toFixed(0)
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "durationVarianceDays",
+        header: "Var dur",
+        cell: (info) => {
+          const val = Number(info.getValue());
+          return (
+            <span
+              className={`block text-right ${varianceClass(val)}`}
+            >
+              {val > 0 ? "+" : ""}
+              {val.toFixed(0)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "totalFloat",
+        header: "Float",
+        cell: (info) => (
+          <span className="block text-right text-slate tabular-nums">
+            {info.getValue() != null
+              ? Number(info.getValue()).toFixed(0)
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "isCritical",
+        header: "Critical",
+        cell: (info) => {
+          const val = info.getValue() as boolean | null;
+          return val ? (
+            <Badge variant="danger" withDot>
+              Critical
+            </Badge>
+          ) : (
+            <span className="text-xs text-ash">—</span>
+          );
+        },
+      },
+    ],
+    []
+  );
 
   return (
     <div className="space-y-6">
@@ -353,116 +516,19 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead className="border-b border-hairline bg-ivory">
-              <tr>
-                <Th>Code</Th>
-                <Th>Name</Th>
-                <Th>Type</Th>
-                <Th>Status</Th>
-                <Th onClick={() => handleSort("percentComplete")} sortDir={sortKey === "percentComplete" ? sortDir : null} className="text-right">% complete</Th>
-                <Th className="text-right">BL start</Th>
-                <Th className="text-right">Cur start</Th>
-                <Th onClick={() => handleSort("startVarianceDays")} sortDir={sortKey === "startVarianceDays" ? sortDir : null} className="text-right">Var start</Th>
-                <Th className="text-right">BL finish</Th>
-                <Th className="text-right">Cur finish</Th>
-                <Th onClick={() => handleSort("finishVarianceDays")} sortDir={sortKey === "finishVarianceDays" ? sortDir : null} className="text-right">Var finish</Th>
-                <Th className="text-right">BL dur</Th>
-                <Th className="text-right">Cur dur</Th>
-                <Th className="text-right">Var dur</Th>
-                <Th onClick={() => handleSort("totalFloat")} sortDir={sortKey === "totalFloat" ? sortDir : null} className="text-right">Float</Th>
-                <Th>Critical</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={16} className="px-5 py-8 text-center text-sm text-slate">
-                    No activities match the current filters.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((row) => (
-                  <tr
-                    key={row.activityId}
-                    className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory"
-                  >
-                    <td className="px-3 py-2.5 font-medium text-charcoal whitespace-nowrap">
-                      {row.code}
-                      {row.isMilestone && (
-                        <Flag size={11} className="ml-1.5 inline text-gold-deep" />
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-charcoal max-w-[220px] truncate">{row.name}</td>
-                    <td className="px-3 py-2.5 text-slate text-xs">{formatActivityType(row.activityType)}</td>
-                    <td className="px-3 py-2.5">
-                      <Badge variant={statusBadge(row.status)} withDot>
-                        {formatActivityType(row.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">
-                      {row.percentComplete != null ? `${row.percentComplete.toFixed(0)}%` : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-slate tabular-nums">{row.baselineStart ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{row.currentStart ?? "—"}</td>
-                    <td className={`px-3 py-2.5 text-right ${varianceClass(row.startVarianceDays)}`}>
-                      {row.startVarianceDays > 0 ? "+" : ""}
-                      {row.startVarianceDays}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-slate tabular-nums">{row.baselineFinish ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{row.currentFinish ?? "—"}</td>
-                    <td className={`px-3 py-2.5 text-right ${varianceClass(row.finishVarianceDays)}`}>
-                      {row.finishVarianceDays > 0 ? "+" : ""}
-                      {row.finishVarianceDays}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-slate tabular-nums">
-                      {row.baselineOriginalDuration != null
-                        ? row.baselineOriginalDuration.toFixed(0)
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">
-                      {row.currentOriginalDuration != null
-                        ? row.currentOriginalDuration.toFixed(0)
-                        : "—"}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right ${varianceClass(row.durationVarianceDays)}`}>
-                      {row.durationVarianceDays > 0 ? "+" : ""}
-                      {row.durationVarianceDays.toFixed(0)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-slate tabular-nums">
-                      {row.totalFloat != null ? row.totalFloat.toFixed(0) : "—"}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {row.isCritical ? (
-                        <Badge variant="danger" withDot>
-                          Critical
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-ash">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <VirtualDataTable
+        columns={columns}
+        data={filtered}
+        sortable
+        resizable
+        searchable={false}
+        emptyMessage="No activities match the current filters."
+      />
     </div>
   );
 }
 
 // ──────────────── helpers ────────────────
-
-function compare(a: unknown, b: unknown): number {
-  if (a == null && b == null) return 0;
-  if (a == null) return -1;
-  if (b == null) return 1;
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  return String(a).localeCompare(String(b));
-}
 
 function Kpi({
   label,
@@ -528,35 +594,6 @@ function Toggle({
       {icon}
       {label}
     </button>
-  );
-}
-
-function Th({
-  children,
-  className = "",
-  onClick,
-  sortDir,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  onClick?: () => void;
-  sortDir?: SortDir | null;
-}) {
-  const sortable = !!onClick;
-  return (
-    <th
-      onClick={onClick}
-      className={`px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep whitespace-nowrap ${sortable ? "cursor-pointer select-none hover:text-gold-ink" : ""} ${className}`}
-    >
-      <span className="inline-flex items-center gap-1">
-        {children}
-        {sortable && (sortDir == null
-          ? <ArrowDownUp size={10} className="opacity-40" />
-          : sortDir === "asc"
-            ? <ArrowUpNarrowWide size={10} />
-            : <ArrowDownWideNarrow size={10} />)}
-      </span>
-    </th>
   );
 }
 

@@ -3,12 +3,16 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { downloadCsv, toCsv } from "@/lib/utils/csvExport";
 import {
   varianceReportApi,
   type ActivityStatusName,
   type CostVarianceActivityRow,
+  type CostVarianceWbsRow,
 } from "@/lib/api/varianceReportApi";
 
 interface Props {
@@ -120,6 +124,188 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
     downloadCsv(`cost-variance-${projectCode}`, csv);
   };
 
+  const wbsColumns = useMemo<ColumnDef<CostVarianceWbsRow>[]>(
+    () => [
+      {
+        accessorKey: "wbsCode",
+        header: "Code",
+        cell: (info) => (
+          <span className="font-medium text-charcoal">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "wbsName",
+        header: "Name",
+        cell: (info) => (
+          <span className="text-charcoal">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "budget",
+        header: "Budget",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatRupees(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "earnedValue",
+        header: "Earned",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatRupees(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "actualCost",
+        header: "Actual",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatRupees(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "costVariance",
+        header: "CV",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span
+              className={`block text-right tabular-nums ${costToneClass(
+                val != null ? -val : null
+              )}`}
+            >
+              {formatRupees(val, { sign: true })}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "costPerformanceIndex",
+        header: "CPI",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            <CpiBadge value={Number(info.getValue())} />
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  const activityColumns = useMemo<ColumnDef<CostVarianceActivityRow>[]>(
+    () => [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: (info) => (
+          <span className="font-medium text-charcoal whitespace-nowrap">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => (
+          <span className="max-w-[260px] truncate">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <Badge variant={statusBadge(row.status)} withDot>
+              {row.status.replace(/_/g, " ").toLowerCase()}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "percentComplete",
+        header: "% complete",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {info.getValue() != null
+              ? `${Number(info.getValue()).toFixed(0)}%`
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "baselinePlannedCost",
+        header: "BL planned",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatRupees(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "currentPlannedCost",
+        header: "Cur planned",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatRupees(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "estimateVariance",
+        header: "Estimate var",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span
+              className={`block text-right tabular-nums ${costToneClass(
+                val
+              )}`}
+            >
+              {formatRupees(val, { sign: true })}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "actualCost",
+        header: "Actual",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatRupees(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "burnVariance",
+        header: "Burn var",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span
+              className={`block text-right tabular-nums ${costToneClass(
+                val
+              )}`}
+            >
+              {formatRupees(val, { sign: true })}
+            </span>
+          );
+        },
+      },
+    ],
+    []
+  );
+
   return (
     <div className="space-y-6">
       {/* Summary KPIs */}
@@ -165,38 +351,12 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
               No EVM rollup found per WBS — the EVM module has not been calculated yet for this project.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead className="border-b border-hairline bg-ivory">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Code</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Name</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Budget</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Earned</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Actual</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">CV</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">CPI</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wbsRows.map((row) => (
-                    <tr key={row.wbsNodeId} className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory">
-                      <td className="px-3 py-2.5 font-medium text-charcoal">{row.wbsCode}</td>
-                      <td className="px-3 py-2.5 text-charcoal">{row.wbsName}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.budget)}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.earnedValue)}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.actualCost)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${costToneClass(row.costVariance != null ? -row.costVariance : null)}`}>
-                        {formatRupees(row.costVariance, { sign: true })}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">
-                        <CpiBadge value={row.costPerformanceIndex} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SimpleTable
+              columns={wbsColumns}
+              data={wbsRows}
+              sortable={false}
+              className="border-0 rounded-none"
+            />
           )}
         </div>
       </div>
@@ -231,48 +391,14 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
                 : "No activities match the current filters."}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead className="border-b border-hairline bg-ivory">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Code</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Name</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Status</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">% complete</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">BL planned</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Cur planned</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Estimate var</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Actual</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Burn var</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((row) => (
-                    <tr key={row.activityId} className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory">
-                      <td className="px-3 py-2.5 font-medium text-charcoal whitespace-nowrap">{row.code}</td>
-                      <td className="px-3 py-2.5 text-charcoal max-w-[260px] truncate">{row.name}</td>
-                      <td className="px-3 py-2.5">
-                        <Badge variant={statusBadge(row.status)} withDot>
-                          {row.status.replace(/_/g, " ").toLowerCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">
-                        {row.percentComplete != null ? `${row.percentComplete.toFixed(0)}%` : "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.baselinePlannedCost)}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.currentPlannedCost)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${costToneClass(row.estimateVariance)}`}>
-                        {formatRupees(row.estimateVariance, { sign: true })}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.actualCost)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${costToneClass(row.burnVariance)}`}>
-                        {formatRupees(row.burnVariance, { sign: true })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <VirtualDataTable
+              columns={activityColumns}
+              data={filtered}
+              sortable
+              resizable
+              searchable={false}
+              className="border-0 rounded-none"
+            />
           )}
         </div>
       </div>

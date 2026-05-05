@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
@@ -104,6 +106,54 @@ export default function WbsTemplatesPage() {
   if (isLoading) {
     return <div className="text-center py-8 text-text-muted">Loading templates...</div>;
   }
+
+  const columns: ColumnDef<WbsTemplateResponse>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => <span className="text-sm font-medium text-text-primary">{row.original.code}</span>,
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span className="text-sm text-text-secondary">{row.original.name}</span>,
+    },
+    {
+      accessorKey: "assetClass",
+      header: "Asset Class",
+      cell: ({ row }) => <span className="text-sm text-text-secondary">{row.original.assetClass}</span>,
+    },
+    {
+      accessorKey: "isActive",
+      header: "Status",
+      cell: ({ row }) => (
+        <span
+          className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+            row.original.isActive
+              ? "bg-success/10 text-success"
+              : "bg-surface-hover/50 text-text-primary"
+          }`}
+        >
+          {row.original.isActive ? "Active" : "Inactive"}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <button
+          onClick={() => {
+            setSelectedTemplate(row.original);
+            setShowStructureViewer(true);
+          }}
+          className="text-sm text-accent hover:text-accent"
+        >
+          View Structure
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -247,70 +297,15 @@ export default function WbsTemplatesPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-border bg-surface/50 shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-border/50">
-          <thead className="bg-surface/80">
-            <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">
-                Code
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">
-                Asset Class
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {templates.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-sm text-text-muted">
-                  No templates found
-                </td>
-              </tr>
-            ) : (
-              templates.map((template) => (
-                <tr key={template.id} className="hover:bg-surface/80">
-                  <td className="px-6 py-4 text-sm font-medium text-text-primary">
-                    {template.code}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-text-secondary">{template.name}</td>
-                  <td className="px-6 py-4 text-sm text-text-secondary">{template.assetClass}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                        template.isActive
-                          ? "bg-success/10 text-success"
-                          : "bg-surface-hover/50 text-text-primary"
-                      }`}
-                    >
-                      {template.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    <button
-                      onClick={() => {
-                        setSelectedTemplate(template);
-                        setShowStructureViewer(true);
-                      }}
-                      className="text-accent hover:text-accent"
-                    >
-                      View Structure
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+
+      <VirtualDataTable
+        columns={columns}
+        data={templates}
+        sortable
+        resizable
+        searchable={false}
+        emptyMessage="No templates found"
+      />
 
       {showStructureViewer && selectedTemplate && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-background bg-opacity-50 flex items-center justify-center">

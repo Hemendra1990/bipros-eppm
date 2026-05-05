@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -114,6 +116,57 @@ export default function CostAccountsAdminPage() {
 
   const parentOptions = accounts.filter((a) => a.id !== editingId);
 
+  const columns: ColumnDef<CostAccount>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => <span className="font-mono text-sm">{row.original.code}</span>,
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span>{row.original.name}</span>,
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => <span className="text-text-secondary text-sm">{row.original.description ?? "—"}</span>,
+    },
+    {
+      accessorKey: "parentId",
+      header: "Parent",
+      cell: ({ row }) => (
+        <span className="text-sm">
+          {row.original.parentId
+            ? accountById.has(row.original.parentId)
+              ? `${accountById.get(row.original.parentId)!.code} — ${accountById.get(row.original.parentId)!.name}`
+              : row.original.parentId
+            : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="text-sm">
+          <button
+            onClick={() => openEdit(row.original)}
+            className="text-accent hover:underline mr-3"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => handleDelete(row.original)}
+            className="text-danger hover:underline"
+          >
+            Delete
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="p-6">
       <TabTip
@@ -227,71 +280,16 @@ export default function CostAccountsAdminPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse border border-border">
-          <thead>
-            <tr className="bg-surface/80">
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">Code</th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">Name</th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">Description</th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">Parent</th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="border border-border px-4 py-6 text-center text-text-muted"
-                >
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!isLoading && accounts.length === 0 && (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="border border-border px-4 py-6 text-center text-text-muted"
-                >
-                  No cost accounts defined.
-                </td>
-              </tr>
-            )}
-            {accounts.map((account) => (
-              <tr key={account.id} className="text-text-primary hover:bg-surface-hover/30">
-                <td className="border border-border px-4 py-2 font-mono text-sm">{account.code}</td>
-                <td className="border border-border px-4 py-2">{account.name}</td>
-                <td className="border border-border px-4 py-2 text-text-secondary text-sm">
-                  {account.description ?? "—"}
-                </td>
-                <td className="border border-border px-4 py-2 text-sm">
-                  {account.parentId
-                    ? accountById.has(account.parentId)
-                      ? `${accountById.get(account.parentId)!.code} — ${accountById.get(account.parentId)!.name}`
-                      : account.parentId
-                    : "—"}
-                </td>
-                <td className="border border-border px-4 py-2 text-sm">
-                  <button
-                    onClick={() => openEdit(account)}
-                    className="text-accent hover:underline mr-3"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(account)}
-                    className="text-danger hover:underline"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      <VirtualDataTable
+        columns={columns}
+        data={accounts}
+        sortable
+        resizable
+        searchable={false}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? "Loading…" : "No cost accounts defined."}
+      />
     </div>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { userApi } from "@/lib/api/userApi";
@@ -82,6 +84,53 @@ export default function UserAccessPage() {
   });
   const access = accessData?.data;
 
+  const columns: ColumnDef<UserResponse>[] = [
+    {
+      accessorKey: "username",
+      header: "User",
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium text-text-primary">{row.original.username}</div>
+          <div className="text-text-muted">{row.original.email}</div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "organisationId",
+      header: "Organisation",
+      cell: ({ row }) => {
+        const org = row.original.organisationId ? orgsById.get(row.original.organisationId) : null;
+        return <span className="text-text-secondary">{org ? org.shortName ?? org.code : "—"}</span>;
+      },
+    },
+    {
+      accessorKey: "designation",
+      header: "Designation",
+      cell: ({ row }) => <span className="text-text-secondary">{row.original.designation ?? "—"}</span>,
+    },
+    {
+      accessorKey: "primaryIcpmsRole",
+      header: "IC-PMS Role",
+      cell: ({ row }) => <span className="text-text-secondary">{row.original.primaryIcpmsRole ?? "—"}</span>,
+    },
+    {
+      accessorKey: "authMethods",
+      header: "Auth",
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {(row.original.authMethods ?? []).map((a) => (
+            <span
+              key={a}
+              className="rounded bg-surface-active/60 px-1.5 py-0.5 text-[10px] text-text-secondary"
+            >
+              {a.replace(/_/g, " ")}
+            </span>
+          ))}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -90,68 +139,20 @@ export default function UserAccessPage() {
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-xs">
-            <thead className="bg-surface-hover/60 text-text-secondary">
-              <tr>
-                <th className="px-3 py-2 text-left">User</th>
-                <th className="px-3 py-2 text-left">Organisation</th>
-                <th className="px-3 py-2 text-left">Designation</th>
-                <th className="px-3 py-2 text-left">IC-PMS Role</th>
-                <th className="px-3 py-2 text-left">Auth</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {usersLoading && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-text-muted">
-                    Loading users…
-                  </td>
-                </tr>
-              )}
-              {!usersLoading && users.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-text-muted">
-                    No users seeded.
-                  </td>
-                </tr>
-              )}
-              {users.map((u) => {
-                const org = u.organisationId ? orgsById.get(u.organisationId) : null;
-                const isSelected = selectedUserId === u.id;
-                return (
-                  <tr
-                    key={u.id}
-                    onClick={() => setSelectedUserId(u.id)}
-                    className={`cursor-pointer hover:bg-surface-hover/60 ${isSelected ? "bg-surface-hover/80" : ""}`}
-                  >
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-text-primary">{u.username}</div>
-                      <div className="text-text-muted">{u.email}</div>
-                    </td>
-                    <td className="px-3 py-2 text-text-secondary">
-                      {org ? org.shortName ?? org.code : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-text-secondary">{u.designation ?? "—"}</td>
-                    <td className="px-3 py-2 text-text-secondary">{u.primaryIcpmsRole ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {(u.authMethods ?? []).map((a) => (
-                          <span
-                            key={a}
-                            className="rounded bg-surface-active/60 px-1.5 py-0.5 text-[10px] text-text-secondary"
-                          >
-                            {a.replace(/_/g, " ")}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+
+        <VirtualDataTable
+          columns={columns}
+          data={users}
+          sortable
+          resizable
+          searchable={false}
+          isLoading={usersLoading}
+          emptyMessage={usersLoading ? "Loading users…" : "No users seeded."}
+          rowClassName={(row) =>
+            `cursor-pointer hover:bg-surface-hover/60 ${selectedUserId === row.id ? "bg-surface-hover/80" : ""}`
+          }
+          onRowClick={(row) => setSelectedUserId(row.id)}
+        />
 
         <aside className="rounded-lg border border-border bg-surface/40 p-4">
           <h3 className="mb-3 text-sm font-semibold text-text-primary">

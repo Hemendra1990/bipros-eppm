@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
@@ -197,6 +199,87 @@ export default function ResourceRolesPage() {
     { key: "MANPOWER", label: "Manpower" },
     { key: "EQUIPMENT", label: "Equipment" },
     { key: "MATERIAL", label: "Material" },
+  ];
+
+  const columns: ColumnDef<ResourceRole>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => (
+        <span className="font-mono text-[12px] font-medium text-gold-deep">
+          {row.original.code}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <div>
+          <span className="font-semibold text-charcoal">{row.original.name}</span>
+          {row.original.description && (
+            <div className="text-xs text-slate mt-0.5">{row.original.description}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "resourceTypeCode",
+      header: "Type",
+      cell: ({ row }) => (
+        <Badge variant={typeBadgeVariant(row.original.resourceTypeCode)} withDot>
+          {row.original.resourceTypeName ?? row.original.resourceTypeCode}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "productivityUnit",
+      header: "Productivity Unit",
+      cell: ({ row }) => (
+        <span className="text-slate">{row.original.productivityUnit ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "sortOrder",
+      header: "Sort",
+      cell: ({ row }) => (
+        <span className="text-right text-slate block">{row.original.sortOrder ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "active",
+      header: "Active",
+      cell: ({ row }) =>
+        row.original.active ? (
+          <span className="text-emerald font-medium text-xs">Active</span>
+        ) : (
+          <span className="text-slate text-xs">Inactive</span>
+        ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => openEdit(row.original)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            aria-label="Edit"
+            title="Edit"
+          >
+            <Pencil size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            onClick={() => handleDelete(row.original.id)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
+            aria-label="Delete"
+            title="Delete"
+          >
+            <Trash2 size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -423,90 +506,7 @@ export default function ResourceRolesPage() {
       )}
 
       {!rolesLoading && filteredRoles.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
-          <table className="w-full border-collapse text-sm">
-            <thead className="border-b border-hairline bg-ivory">
-              <tr>
-                {[
-                  "Code",
-                  "Name",
-                  "Type",
-                  "Productivity Unit",
-                  "Sort",
-                  "Active",
-                  "",
-                ].map((h, idx) => (
-                  <th
-                    key={`${h}-${idx}`}
-                    className={`px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep ${h === "" ? "text-right" : ""}`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRoles.map((role) => (
-                <tr key={role.id} className="border-b border-hairline last:border-b-0 hover:bg-ivory">
-                  <td className="px-4 py-3.5">
-                    <span className="font-mono text-[12px] font-medium text-gold-deep">
-                      {role.code}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className="font-semibold text-charcoal">{role.name}</span>
-                    {role.description && (
-                      <div className="text-xs text-slate mt-0.5">{role.description}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Badge variant={typeBadgeVariant(role.resourceTypeCode)} withDot>
-                      {role.resourceTypeName ?? role.resourceTypeCode}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3.5 text-slate">{role.productivityUnit ?? "—"}</td>
-                  <td className="px-4 py-3.5 text-right text-slate">{role.sortOrder ?? "—"}</td>
-                  <td className="px-4 py-3.5">
-                    {role.active ? (
-                      <span className="text-emerald font-medium text-xs">Active</span>
-                    ) : (
-                      <span className="text-slate text-xs">Inactive</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEdit(role)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
-                        aria-label="Edit"
-                        title="Edit"
-                      >
-                        <Pencil size={14} strokeWidth={1.5} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(role.id)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
-                        aria-label="Delete"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} strokeWidth={1.5} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {!rolesLoading && filteredRoles.length > 0 && (
-        <div className="pt-3 text-center text-xs text-slate">
-          Showing{" "}
-          <span className="font-semibold text-charcoal">
-            {filteredRoles.length} of {roles.length}
-          </span>
-        </div>
+        <VirtualDataTable columns={columns} data={filteredRoles} sortable resizable searchable={false} />
       )}
     </div>
   );

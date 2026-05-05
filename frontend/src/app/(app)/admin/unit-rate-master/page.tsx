@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -79,6 +81,61 @@ export default function UnitRateMasterPage() {
     return <div className="p-6 text-text-muted">Loading unit rate master...</div>;
   }
 
+  const columns: ColumnDef<UnitRateMasterRow>[] = [
+    {
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => (
+        <span className={`px-2 py-1 rounded text-sm ${categoryBadgeClass(row.original.category)}`}>
+          {row.original.category}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => <span>{row.original.description}</span>,
+    },
+    {
+      accessorKey: "unit",
+      header: "Unit",
+      cell: ({ row }) => <span>{row.original.unit ?? "—"}</span>,
+    },
+    {
+      accessorKey: "budgetedRate",
+      header: "Budgeted Rate (₹)",
+      cell: ({ row }) => <span className="text-right block">{formatCurrency(row.original.budgetedRate)}</span>,
+    },
+    {
+      accessorKey: "actualRate",
+      header: "Actual Rate (₹)",
+      cell: ({ row }) => <span className="text-right block">{formatCurrency(row.original.actualRate)}</span>,
+    },
+    {
+      accessorKey: "variance",
+      header: "Variance (₹)",
+      cell: ({ row }) => (
+        <span className={`text-right block ${varianceClass(row.original.variance)}`}>
+          {formatCurrency(row.original.variance)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "variancePercent",
+      header: "Variance %",
+      cell: ({ row }) => (
+        <span className={`text-right block ${varianceClass(row.original.variance)}`}>
+          {formatPercent(row.original.variancePercent)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "remarks",
+      header: "Remarks",
+      cell: ({ row }) => <span>{row.original.remarks ?? "—"}</span>,
+    },
+  ];
+
   return (
     <div className="p-6">
       <TabTip
@@ -134,59 +191,15 @@ export default function UnitRateMasterPage() {
           </div>
         )}
 
-        {/* Unit rate table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Category</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Description</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Rate (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Rate (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Variance (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Variance %</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">
-                    <span className={`px-2 py-1 rounded text-sm ${categoryBadgeClass(row.category)}`}>
-                      {row.category}
-                    </span>
-                  </td>
-                  <td className="border border-border px-4 py-2">{row.description}</td>
-                  <td className="border border-border px-4 py-2">{row.unit ?? "—"}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.budgetedRate)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.actualRate)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(row.variance)}`}>
-                    {formatCurrency(row.variance)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(row.variance)}`}>
-                    {formatPercent(row.variancePercent)}
-                  </td>
-                  <td className="border border-border px-4 py-2">{row.remarks ?? "—"}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && !isLoading && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="border border-border px-4 py-6 text-center text-text-muted"
-                  >
-                    No unit rate entries found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+
+        <VirtualDataTable
+          columns={columns}
+          data={rows}
+          sortable
+          resizable
+          searchable={false}
+          emptyMessage={isLoading ? "Loading…" : "No unit rate entries found."}
+        />
       </div>
     </div>
   );

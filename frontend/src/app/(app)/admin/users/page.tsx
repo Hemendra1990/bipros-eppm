@@ -8,7 +8,8 @@ import { Plus, ShieldCheck, UserCheck, UserX } from "lucide-react";
 import { profileApi } from "@/lib/api/profileApi";
 import { userApi } from "@/lib/api/userApi";
 import { PageHeader } from "@/components/common/PageHeader";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import type { UserResponse } from "@/lib/types";
 import { getErrorMessage } from "@/lib/utils/error";
 import { CreateUserDialog } from "./CreateUserDialog";
@@ -106,19 +107,23 @@ export default function UsersPage() {
   const users = data?.data?.content ?? [];
 
   const columns: ColumnDef<UserResponse>[] = [
-    { key: "username", label: "Username", sortable: true },
-    { key: "email", label: "Email", sortable: true },
+    { accessorKey: "username", header: "Username", enableSorting: true },
+    { accessorKey: "email", header: "Email", enableSorting: true },
     {
-      key: "firstName",
-      label: "Name",
-      sortable: true,
-      render: (_v, row) => `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "-",
+      accessorKey: "firstName",
+      header: "Name",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "-";
+      },
     },
     {
-      key: "profileName",
-      label: "Profile",
-      render: (_v, row) =>
-        editingProfileId === row.id ? (
+      accessorKey: "profileName",
+      header: "Profile",
+      cell: (info) => {
+        const row = info.row.original;
+        return editingProfileId === row.id ? (
           <ProfilePicker
             user={row}
             profiles={profiles}
@@ -133,38 +138,45 @@ export default function UsersPage() {
           >
             <ProfileBadge name={row.profileName} />
           </button>
-        ),
+        );
+      },
     },
     {
-      key: "enabled",
-      label: "Status",
-      render: (value) => (
-        <span
-          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-            value ? "bg-success/20 text-success" : "bg-red-500/20 text-danger"
-          }`}
-        >
-          {value ? <ShieldCheck size={12} /> : null}
-          {value ? "Active" : "Disabled"}
-        </span>
-      ),
+      accessorKey: "enabled",
+      header: "Status",
+      cell: (info) => {
+        const value = info.getValue<boolean>();
+        return (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+              value ? "bg-success/20 text-success" : "bg-red-500/20 text-danger"
+            }`}
+          >
+            {value ? <ShieldCheck size={12} /> : null}
+            {value ? "Active" : "Disabled"}
+          </span>
+        );
+      },
     },
     {
-      key: "id",
-      label: "Actions",
-      render: (_v, row) => (
-        <button
-          onClick={() => toggleMutation.mutate({ userId: row.id, enabled: !row.enabled })}
-          disabled={toggleMutation.isPending}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-            row.enabled ? "text-danger hover:bg-danger/10" : "text-success hover:bg-success/10"
-          }`}
-          title={row.enabled ? "Disable user" : "Enable user"}
-        >
-          {row.enabled ? <UserX size={14} /> : <UserCheck size={14} />}
-          {row.enabled ? "Disable" : "Enable"}
-        </button>
-      ),
+      accessorKey: "id",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <button
+            onClick={() => toggleMutation.mutate({ userId: row.id, enabled: !row.enabled })}
+            disabled={toggleMutation.isPending}
+            className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+              row.enabled ? "text-danger hover:bg-danger/10" : "text-success hover:bg-success/10"
+            }`}
+            title={row.enabled ? "Disable user" : "Enable user"}
+          >
+            {row.enabled ? <UserX size={14} /> : <UserCheck size={14} />}
+            {row.enabled ? "Disable" : "Enable"}
+          </button>
+        );
+      },
     },
   ];
 
@@ -194,7 +206,7 @@ export default function UsersPage() {
         {isLoading ? (
           <div className="p-8 text-center text-text-secondary">Loading users...</div>
         ) : (
-          <DataTable columns={columns} data={users} rowKey="id" />
+          <VirtualDataTable data={users} columns={columns} />
         )}
       </div>
 

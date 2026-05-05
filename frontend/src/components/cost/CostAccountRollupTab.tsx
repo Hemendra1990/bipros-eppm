@@ -3,6 +3,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DollarSign, TrendingUp, BarChart3, Wallet } from "lucide-react";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { evmApi, type CostAccountRollupRow } from "@/lib/api/evmApi";
 import { KpiTile } from "@/components/common/KpiTile";
 import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
@@ -53,6 +55,104 @@ export function CostAccountRollupTab({ projectId }: { projectId: string }) {
     const cpi = ac > 0 ? ev / ac : null;
     return { bac, ev, ac, cpi };
   }, [rows]);
+
+  const columns = useMemo<ColumnDef<CostAccountRollupRow>[]>(
+    () => [
+      {
+        accessorKey: "costAccountCode",
+        header: "Code",
+        cell: (info) => (
+          <span className="font-mono text-xs">
+            {String(info.getValue() ?? "—")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "costAccountName",
+        header: "Name",
+        cell: (info) => {
+          const row = info.row.original;
+          const isUnassigned = row.costAccountId === null;
+          return isUnassigned ? (
+            <span className="italic">{String(info.getValue())}</span>
+          ) : (
+            <span className="font-medium text-text-primary">
+              {String(info.getValue())}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "activityCount",
+        header: "Activities",
+        cell: (info) => (
+          <span className="block text-right tabular-nums">
+            {Number(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "bac",
+        header: "BAC",
+        cell: (info) => (
+          <span className="block text-right tabular-nums">
+            {formatCrores(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "ev",
+        header: "EV",
+        cell: (info) => (
+          <span className="block text-right tabular-nums">
+            {formatCrores(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "ac",
+        header: "AC",
+        cell: (info) => (
+          <span className="block text-right tabular-nums">
+            {formatCrores(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "cv",
+        header: "CV",
+        cell: (info) => {
+          const val = Number(info.getValue());
+          return (
+            <span
+              className={`block text-right tabular-nums ${cvTextClass(
+                val
+              )}`}
+            >
+              {formatCrores(val)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "cpi",
+        header: "CPI",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span
+              className={`block text-right tabular-nums ${cpiTextClass(
+                val
+              )}`}
+            >
+              {formatRatio(val)}
+            </span>
+          );
+        },
+      },
+    ],
+    []
+  );
 
   if (isLoading) {
     return (
@@ -134,95 +234,43 @@ export function CostAccountRollupTab({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-hover/60">
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Code
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Name
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Activities
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  BAC
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  EV
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  AC
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  CV
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  CPI
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const isUnassigned = r.costAccountId === null;
-                return (
-                  <tr
-                    key={r.costAccountId ?? "__unassigned__"}
-                    className={`border-b border-border last:border-0 ${
-                      isUnassigned ? "bg-surface-hover/30 text-text-muted" : "hover:bg-surface-hover/40"
-                    }`}
-                  >
-                    <td className="px-3 py-2.5 font-mono text-xs">
-                      {r.costAccountCode ?? "—"}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {isUnassigned ? (
-                        <span className="italic">{r.costAccountName}</span>
-                      ) : (
-                        <span className="font-medium text-text-primary">{r.costAccountName}</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{r.activityCount}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{formatCrores(r.bac)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{formatCrores(r.ev)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{formatCrores(r.ac)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${cvTextClass(r.cv)}`}>
-                      {formatCrores(r.cv)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${cpiTextClass(r.cpi)}`}>
-                      {formatRatio(r.cpi)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-border bg-surface-hover/40 font-semibold">
-                <td className="px-3 py-2.5 text-xs uppercase tracking-wide text-text-secondary" colSpan={2}>
-                  Total
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-text-primary">
-                  {rows.reduce((acc, r) => acc + r.activityCount, 0)}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-text-primary">
-                  {formatCrores(totals.bac)}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-text-primary">
-                  {formatCrores(totals.ev)}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-text-primary">
-                  {formatCrores(totals.ac)}
-                </td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${cvTextClass(totals.ev - totals.ac)}`}>
-                  {formatCrores(totals.ev - totals.ac)}
-                </td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${cpiTextClass(totals.cpi)}`}>
-                  {formatRatio(totals.cpi)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          <SimpleTable
+            columns={columns}
+            data={rows}
+            sortable={false}
+            className="border-0 rounded-none"
+          />
+          <div className="border-t-2 border-border bg-surface-hover/40 px-4 py-3 text-sm font-semibold grid grid-cols-[1fr_1fr_80px_80px_80px_80px_80px_60px] gap-2 items-center">
+            <span className="text-xs uppercase tracking-wide text-text-secondary col-span-2">
+              Total
+            </span>
+            <span className="text-right tabular-nums text-text-primary">
+              {rows.reduce((acc, r) => acc + r.activityCount, 0)}
+            </span>
+            <span className="text-right tabular-nums text-text-primary">
+              {formatCrores(totals.bac)}
+            </span>
+            <span className="text-right tabular-nums text-text-primary">
+              {formatCrores(totals.ev)}
+            </span>
+            <span className="text-right tabular-nums text-text-primary">
+              {formatCrores(totals.ac)}
+            </span>
+            <span
+              className={`text-right tabular-nums ${cvTextClass(
+                totals.ev - totals.ac
+              )}`}
+            >
+              {formatCrores(totals.ev - totals.ac)}
+            </span>
+            <span
+              className={`text-right tabular-nums ${cpiTextClass(
+                totals.cpi
+              )}`}
+            >
+              {formatRatio(totals.cpi)}
+            </span>
+          </div>
         </div>
       )}
       <p className="text-[11px] text-text-muted">

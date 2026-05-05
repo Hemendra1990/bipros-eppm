@@ -8,7 +8,8 @@ import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 
 import { profileApi } from "@/lib/api/profileApi";
 import { PageHeader } from "@/components/common/PageHeader";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { getErrorMessage } from "@/lib/utils/error";
 import type { ProfileResponse } from "@/lib/types";
 
@@ -36,84 +37,99 @@ export default function ProfilesPage() {
 
   const columns: ColumnDef<ProfileResponse>[] = [
     {
-      key: "name",
-      label: "Name",
-      sortable: true,
-      render: (_v, row) => (
-        <div className="flex flex-col">
-          <button
-            onClick={() => router.push(`/admin/profiles/${row.id}`)}
-            className="text-left font-medium text-text-primary hover:text-accent"
-          >
-            {row.name}
-          </button>
-          <span className="text-xs text-text-muted">{row.code}</span>
-        </div>
-      ),
+      accessorKey: "name",
+      header: "Name",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <div className="flex flex-col">
+            <button
+              onClick={() => router.push(`/admin/profiles/${row.id}`)}
+              className="text-left font-medium text-text-primary hover:text-accent"
+            >
+              {row.name}
+            </button>
+            <span className="text-xs text-text-muted">{row.code}</span>
+          </div>
+        );
+      },
     },
     {
-      key: "description",
-      label: "Description",
-      render: (_v, row) => (
-        <span className="text-sm text-text-secondary">{row.description ?? "—"}</span>
-      ),
+      accessorKey: "description",
+      header: "Description",
+      cell: (info) => {
+        const row = info.row.original;
+        return <span className="text-sm text-text-secondary">{row.description ?? "—"}</span>;
+      },
     },
     {
-      key: "permissions",
-      label: "Permissions",
-      render: (_v, row) => (
-        <span className="inline-block rounded-full bg-surface-active/40 px-2 py-0.5 text-xs text-text-secondary">
-          {row.permissions.length}
-        </span>
-      ),
+      accessorKey: "permissions",
+      header: "Permissions",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="inline-block rounded-full bg-surface-active/40 px-2 py-0.5 text-xs text-text-secondary">
+            {row.permissions.length}
+          </span>
+        );
+      },
     },
     {
-      key: "legacyRoleName",
-      label: "Maps to Role",
-      render: (_v, row) => (
-        <span className="inline-block rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-accent">
-          {row.legacyRoleName}
-        </span>
-      ),
+      accessorKey: "legacyRoleName",
+      header: "Maps to Role",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="inline-block rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-accent">
+            {row.legacyRoleName}
+          </span>
+        );
+      },
     },
     {
-      key: "systemDefault",
-      label: "System",
-      render: (value) =>
-        value ? (
+      accessorKey: "systemDefault",
+      header: "System",
+      cell: (info) => {
+        const value = info.getValue<boolean>();
+        return value ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
             <ShieldCheck size={12} /> Default
           </span>
         ) : (
           <span className="text-xs text-text-muted">Custom</span>
-        ),
+        );
+      },
     },
     {
-      key: "id",
-      label: "Actions",
-      render: (_v, row) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push(`/admin/profiles/${row.id}`)}
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10"
-            title="Edit profile"
-          >
-            <Pencil size={14} /> Edit
-          </button>
-          <button
-            disabled={row.systemDefault || deleteMutation.isPending}
-            onClick={() => {
-              if (window.confirm(`Delete profile "${row.name}"?`)) {
-                deleteMutation.mutate(row.id);
-              }
-            }}
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:text-text-muted disabled:hover:bg-transparent"
-            title={row.systemDefault ? "System defaults cannot be deleted" : "Delete profile"}
-          >
-            <Trash2 size={14} /> Delete
-          </button>
-        </div>
-      ),
+      accessorKey: "id",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push(`/admin/profiles/${row.id}`)}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10"
+              title="Edit profile"
+            >
+              <Pencil size={14} /> Edit
+            </button>
+            <button
+              disabled={row.systemDefault || deleteMutation.isPending}
+              onClick={() => {
+                if (window.confirm(`Delete profile "${row.name}"?`)) {
+                  deleteMutation.mutate(row.id);
+                }
+              }}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:text-text-muted disabled:hover:bg-transparent"
+              title={row.systemDefault ? "System defaults cannot be deleted" : "Delete profile"}
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -142,7 +158,7 @@ export default function ProfilesPage() {
         {isLoading ? (
           <div className="p-8 text-center text-text-secondary">Loading profiles…</div>
         ) : (
-          <DataTable columns={columns} data={profiles} rowKey="id" />
+          <VirtualDataTable columns={columns} data={profiles} />
         )}
       </div>
     </div>

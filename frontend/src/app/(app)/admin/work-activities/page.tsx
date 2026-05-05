@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -142,6 +144,59 @@ export default function WorkActivitiesPage() {
   if (isLoading && activities.length === 0) {
     return <div className="p-6 text-text-muted">Loading work activities...</div>;
   }
+
+  const columns: ColumnDef<WorkActivityResponse>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => <span className="font-mono text-sm">{row.original.code}</span>,
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span>{row.original.name}</span>,
+    },
+    {
+      accessorKey: "defaultUnit",
+      header: "Default Unit",
+      cell: ({ row }) => <span>{row.original.defaultUnit ?? "-"}</span>,
+    },
+    {
+      accessorKey: "discipline",
+      header: "Discipline",
+      cell: ({ row }) => <span>{row.original.discipline ?? "-"}</span>,
+    },
+    {
+      accessorKey: "sortOrder",
+      header: "Sort",
+      cell: ({ row }) => <span className="text-right block">{row.original.sortOrder ?? "-"}</span>,
+    },
+    {
+      accessorKey: "active",
+      header: "Active",
+      cell: ({ row }) => <span className="text-center block">{row.original.active ? "✓" : "—"}</span>,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleEdit(row.original)}
+            className="px-3 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded hover:bg-accent/20"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => handleDelete(row.original.id)}
+            className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
+          >
+            Delete
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="p-6">
@@ -323,58 +378,8 @@ export default function WorkActivitiesPage() {
           </form>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Code</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Name</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Default Unit</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Discipline</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Sort</th>
-                <th className="border border-border px-4 py-2 text-center text-text-secondary">Active</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activities.map((a) => (
-                <tr key={a.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2 font-mono text-sm">{a.code}</td>
-                  <td className="border border-border px-4 py-2">{a.name}</td>
-                  <td className="border border-border px-4 py-2">{a.defaultUnit ?? "-"}</td>
-                  <td className="border border-border px-4 py-2">{a.discipline ?? "-"}</td>
-                  <td className="border border-border px-4 py-2 text-right">{a.sortOrder ?? "-"}</td>
-                  <td className="border border-border px-4 py-2 text-center">
-                    {a.active ? "✓" : "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEdit(a)}
-                        className="px-3 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded hover:bg-accent/20"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(a.id)}
-                        className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {activities.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="border border-border px-4 py-8 text-center text-text-muted">
-                    No work activities yet — add one to start defining productivity norms.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+
+        <VirtualDataTable columns={columns} data={activities} sortable resizable searchable={false} />
       </div>
 
       <ConfirmDialog

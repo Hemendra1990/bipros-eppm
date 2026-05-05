@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   evmApi,
@@ -19,6 +19,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { KpiTile } from "@/components/common/KpiTile";
 import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 
@@ -56,43 +58,19 @@ const fmt = (v: number | null | undefined) => formatInrAsCrores(v);
 const fmtIdx = (v: number | null | undefined) => (v ?? 0).toFixed(2);
 const fmtPct = (v: number | null | undefined) => `${(v ?? 0).toFixed(1)}%`;
 
-function WbsEvmRow({ node, depth = 0 }: { node: WbsEvmNode; depth?: number }) {
-  const [expanded, setExpanded] = useState(depth < 1);
-  const hasChildren = node.children && node.children.length > 0;
-  const svColor = node.scheduleVariance >= 0 ? "text-success" : "text-danger";
-  const cvColor = node.costVariance >= 0 ? "text-success" : "text-danger";
-
-  return (
-    <>
-      <tr className="border-b border-border hover:bg-surface-hover/50">
-        <td className="px-3 py-2 text-sm" style={{ paddingLeft: `${depth * 20 + 12}px` }}>
-          {hasChildren && (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="mr-1 text-text-secondary hover:text-text-primary"
-            >
-              {expanded ? "\u25BC" : "\u25B6"}
-            </button>
-          )}
-          <span className="text-text-secondary">{node.code}</span>{" "}
-          <span className="text-text-primary">{node.name}</span>
-        </td>
-        <td className="px-3 py-2 text-right text-sm">{fmt(node.budgetAtCompletion)}</td>
-        <td className="px-3 py-2 text-right text-sm text-accent">{fmt(node.plannedValue)}</td>
-        <td className="px-3 py-2 text-right text-sm text-success">{fmt(node.earnedValue)}</td>
-        <td className="px-3 py-2 text-right text-sm text-danger">{fmt(node.actualCost)}</td>
-        <td className={`px-3 py-2 text-right text-sm ${svColor}`}>{fmt(node.scheduleVariance)}</td>
-        <td className={`px-3 py-2 text-right text-sm ${cvColor}`}>{fmt(node.costVariance)}</td>
-        <td className="px-3 py-2 text-right text-sm">{fmtIdx(node.schedulePerformanceIndex)}</td>
-        <td className="px-3 py-2 text-right text-sm">{fmtIdx(node.costPerformanceIndex)}</td>
-      </tr>
-      {expanded &&
-        hasChildren &&
-        node.children.map((child) => (
-          <WbsEvmRow key={child.wbsNodeId} node={child} depth={depth + 1} />
-        ))}
-    </>
-  );
+function getVisibleWbsNodes(
+  nodes: WbsEvmNode[],
+  expandedIds: Set<string>,
+  depth = 0
+): Array<WbsEvmNode & { depth: number }> {
+  return nodes.flatMap((node) => {
+    const row = { ...node, depth };
+    const children = node.children ?? [];
+    if (expandedIds.has(node.wbsNodeId) && children.length > 0) {
+      return [row, ...getVisibleWbsNodes(children, expandedIds, depth + 1)];
+    }
+    return [row];
+  });
 }
 
 export function EvmTab({ projectId }: { projectId: string }) {
@@ -100,6 +78,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
   const [technique, setTechnique] = useState<EvmTechnique>("ACTIVITY_PERCENT_COMPLETE");
   const [etcMethod, setEtcMethod] = useState<EtcMethod>("CPI_BASED");
   const [activeTab, setActiveTab] = useState<"summary" | "wbs">("summary");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const { data: metricsData, isLoading: isLoadingMetrics } = useQuery({
     queryKey: ["evm-metrics", projectId],
@@ -137,6 +116,131 @@ export function EvmTab({ projectId }: { projectId: string }) {
     })) ?? [];
 
   const wbsNodes = (wbsData?.data as WbsEvmNode[] | undefined) ?? [];
+
+  const visibleWbsNodes = useMemo(() => {
+    return getVisibleWbsNodes(wbsNodes, expandedIds);
+  }, [wbsNodes, expandedIds]);
+
+  const wbsColumns = useMemo<ColumnDef<WbsEvmNode & { depth: number }>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "WBS",
+        cell: (info) => {
+          const row = info.row.original;
+          const hasChildren = row.children && row.children.length > 0;
+          return (
+            <div
+              className="text-sm"
+              style={{ paddingLeft: `${row.depth * 20 + 12}px` }}
+            >
+              {hasChildren && (
+                <button
+                  onClick={() => {
+                    setExpandedIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(row.wbsNodeId)) {
+                        next.delete(row.wbsNodeId);
+                      } else {
+                        next.add(row.wbsNodeId);
+                      }
+                      return next;
+                    });
+                  }}
+                  className="mr-1 text-text-secondary hover:text-text-primary"
+                >
+                  {expandedIds.has(row.wbsNodeId) ? "\u25BC" : "\u25B6"}
+                </button>
+              )}
+              <span className="text-text-secondary">{row.code}</span>{" "}
+              <span className="text-text-primary">{row.name}</span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "budgetAtCompletion",
+        header: "BAC",
+        cell: (info) => (
+          <span className="block text-right text-sm">
+            {fmt(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "plannedValue",
+        header: "PV",
+        cell: (info) => (
+          <span className="block text-right text-sm text-accent">
+            {fmt(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "earnedValue",
+        header: "EV",
+        cell: (info) => (
+          <span className="block text-right text-sm text-success">
+            {fmt(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "actualCost",
+        header: "AC",
+        cell: (info) => (
+          <span className="block text-right text-sm text-danger">
+            {fmt(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "scheduleVariance",
+        header: "SV",
+        cell: (info) => {
+          const val = Number(info.getValue());
+          const color = val >= 0 ? "text-success" : "text-danger";
+          return (
+            <span className={`block text-right text-sm ${color}`}>
+              {fmt(val)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "costVariance",
+        header: "CV",
+        cell: (info) => {
+          const val = Number(info.getValue());
+          const color = val >= 0 ? "text-success" : "text-danger";
+          return (
+            <span className={`block text-right text-sm ${color}`}>
+              {fmt(val)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "schedulePerformanceIndex",
+        header: "SPI",
+        cell: (info) => (
+          <span className="block text-right text-sm">
+            {fmtIdx(Number(info.getValue()))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "costPerformanceIndex",
+        header: "CPI",
+        cell: (info) => (
+          <span className="block text-right text-sm">
+            {fmtIdx(Number(info.getValue()))}
+          </span>
+        ),
+      },
+    ],
+    [expandedIds]
+  );
 
   return (
     <div className="space-y-6">
@@ -334,47 +438,24 @@ export function EvmTab({ projectId }: { projectId: string }) {
 
       {activeTab === "wbs" && (
         <div className="rounded-lg border border-border bg-surface/50 shadow-sm">
-          <div className="overflow-x-auto">
-            {isLoadingWbs ? (
-              <div className="py-12 text-center text-text-secondary">Loading WBS EVM data...</div>
-            ) : wbsNodes.length === 0 ? (
-              <div className="py-12 text-center">
-                <h3 className="text-lg font-medium text-text-primary">No WBS Data</h3>
-                <p className="mt-2 text-text-secondary">
-                  Calculate EVM to generate WBS-level metrics.
-                </p>
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-border bg-surface-hover/50">
-                    <th className="px-3 py-3 text-xs font-semibold text-text-secondary">WBS</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
-                      BAC
-                    </th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">PV</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
-                      EV
-                    </th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">AC</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">SV</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">CV</th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
-                      SPI
-                    </th>
-                    <th className="px-3 py-3 text-right text-xs font-semibold text-text-secondary">
-                      CPI
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wbsNodes.map((node) => (
-                    <WbsEvmRow key={node.wbsNodeId} node={node} />
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {isLoadingWbs ? (
+            <div className="py-12 text-center text-text-secondary">Loading WBS EVM data...</div>
+          ) : wbsNodes.length === 0 ? (
+            <div className="py-12 text-center">
+              <h3 className="text-lg font-medium text-text-primary">No WBS Data</h3>
+              <p className="mt-2 text-text-secondary">
+                Calculate EVM to generate WBS-level metrics.
+              </p>
+            </div>
+          ) : (
+            <VirtualDataTable
+              columns={wbsColumns}
+              data={visibleWbsNodes}
+              sortable={false}
+              resizable
+              searchable={false}
+            />
+          )}
         </div>
       )}
     </div>
