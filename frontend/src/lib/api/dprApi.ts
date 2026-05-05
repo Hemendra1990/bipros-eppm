@@ -5,6 +5,7 @@ export interface DailyProgressReportResponse {
   id: string;
   projectId: string;
   reportDate: string;
+  supervisorResourceId: string | null;
   supervisorName: string;
   chainageFromM: number | null;
   chainageToM: number | null;
@@ -20,6 +21,7 @@ export interface DailyProgressReportResponse {
 
 export interface CreateDailyProgressReportRequest {
   reportDate: string;
+  supervisorResourceId?: string | null;
   supervisorName: string;
   chainageFromM?: number | null;
   chainageToM?: number | null;
@@ -31,6 +33,8 @@ export interface CreateDailyProgressReportRequest {
   weatherCondition?: string | null;
   remarks?: string | null;
 }
+
+export type UpdateDailyProgressReportRequest = CreateDailyProgressReportRequest;
 
 export interface DprListFilters {
   from?: string;
@@ -58,6 +62,11 @@ export const dprApi = {
   create: (projectId: string, request: CreateDailyProgressReportRequest) =>
     apiClient
       .post<ApiResponse<DailyProgressReportResponse>>(`/v1/projects/${projectId}/dpr`, request)
+      .then((r) => r.data),
+
+  update: (projectId: string, id: string, request: UpdateDailyProgressReportRequest) =>
+    apiClient
+      .put<ApiResponse<DailyProgressReportResponse>>(`/v1/projects/${projectId}/dpr/${id}`, request)
       .then((r) => r.data),
 
   delete: (projectId: string, id: string) =>

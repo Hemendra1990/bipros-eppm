@@ -37,7 +37,14 @@ public record ProjectResponse(
     String toLocation,
     BigDecimal totalLengthKm,
     UUID calendarId,
+    /** Deprecated mirror of {@link #primaryBaselineId}. Removed in a follow-up release. */
     UUID activeBaselineId,
+    /** Phase 3: P6-style PRIMARY baseline slot. Drives variance, Gantt overlay, and EVM by default. */
+    UUID primaryBaselineId,
+    /** Phase 3: SECONDARY slot. Independent of PRIMARY; used as a comparison reference. */
+    UUID secondaryBaselineId,
+    /** Phase 3: TERTIARY slot. Often a stable historical baseline kept alongside the live PRIMARY. */
+    UUID tertiaryBaselineId,
     boolean requiresRebaseline,
     ContractSummary contract,
     BigDecimal originalBudget,

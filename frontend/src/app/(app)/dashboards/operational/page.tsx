@@ -21,6 +21,9 @@ import {
 import type { ProjectResponse } from "@/lib/types";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { ManpowerKpiSection } from "@/components/dashboards/ManpowerKpiSection";
+import { EquipmentKpiSection } from "@/components/dashboards/EquipmentKpiSection";
+import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 
 interface RaBillRow {
   id: string;
@@ -232,6 +235,16 @@ export default function OperationalDashboardPage() {
 
       {selectedProjectId && (
         <>
+          {/* Role-based KPIs — Manpower + Equipment first, so the most actionable
+              metrics for Site Manager / PE / PM sit at the top of the dashboard. */}
+          <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
+            <ManpowerKpiSection projectId={selectedProjectId} density="full" />
+          </section>
+
+          <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
+            <EquipmentKpiSection projectId={selectedProjectId} density="full" />
+          </section>
+
           {/* KPI strip */}
           <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
             <KpiCard
@@ -434,6 +447,29 @@ export default function OperationalDashboardPage() {
               )}
             </div>
           </section>
+
+          {/* AI Insights — moved to the tail, default-collapsed. Optional narrative on top
+              of the KPI numbers; click to expand and Generate Insights to query the LLM. */}
+          {selectedProjectId && (
+            <section className="mt-7 rounded-xl border border-hairline bg-ivory p-5">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
+                Optional · Narrative analysis
+              </div>
+              <AiInsightsPanel
+                projectId={selectedProjectId}
+                endpoint={`/v1/projects/${selectedProjectId}/insights/manpower-kpi`}
+                autoLoad={false}
+                defaultCollapsed
+              />
+              <div className="h-4" />
+              <AiInsightsPanel
+                projectId={selectedProjectId}
+                endpoint={`/v1/projects/${selectedProjectId}/insights/equipment-kpi`}
+                autoLoad={false}
+                defaultCollapsed
+              />
+            </section>
+          )}
         </>
       )}
     </div>

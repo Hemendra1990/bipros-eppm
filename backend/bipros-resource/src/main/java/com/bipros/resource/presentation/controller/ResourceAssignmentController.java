@@ -167,6 +167,21 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(java.util.Map.of("updated", updated)));
   }
 
+  /**
+   * Re-budget action — explicit copy of current planned values into budgeted_units / budgeted_cost.
+   * Used when the planner deliberately re-baselines the resource commitment (e.g. after a Variation
+   * Order). Plan edits do not auto-update budgeted values; this endpoint is the only path.
+   */
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PostMapping("/{id}/rebudget")
+  public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> rebudget(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id) {
+    log.info("POST /v1/projects/{}/resource-assignments/{}/rebudget", projectId, id);
+    ResourceAssignmentResponse response = assignmentService.rebudgetAssignment(id);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
   @PreAuthorize("@projectAccess.canEdit(#projectId)")
   @PostMapping("/level-resources")
   public ResponseEntity<ApiResponse<LevelingResult>> levelResources(

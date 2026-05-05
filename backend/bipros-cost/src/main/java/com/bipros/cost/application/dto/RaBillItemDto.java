@@ -12,6 +12,7 @@ import java.util.UUID;
 public class RaBillItemDto {
     private UUID id;
     private UUID raBillId;
+    private UUID boqItemId;
     private String itemCode;
     private String description;
     private String unit;
@@ -25,6 +26,7 @@ public class RaBillItemDto {
         return RaBillItemDto.builder()
                 .id(entity.getId())
                 .raBillId(entity.getRaBillId())
+                .boqItemId(entity.getBoqItemId())
                 .itemCode(entity.getItemCode())
                 .description(entity.getDescription())
                 .unit(entity.getUnit())

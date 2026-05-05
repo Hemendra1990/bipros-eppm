@@ -46,6 +46,22 @@ public class ResourceAssignment extends BaseEntity {
   @Column(name = "project_id", nullable = false)
   private UUID projectId;
 
+  /**
+   * P6-style "Budgeted" units — the original commitment, frozen at assignment creation. Does not
+   * change when the planner re-plans {@link #plannedUnits}; only updated by an explicit
+   * "Re-budget" action so the variance dashboard can compare current planned vs. original budget.
+   * Backfilled on existing rows via Liquibase to {@code plannedUnits} for the migration.
+   */
+  @Column(name = "budgeted_units")
+  private Double budgetedUnits;
+
+  /**
+   * P6-style "Budgeted" cost — original committed value. See {@link #budgetedUnits} for the same
+   * semantics applied to monetary values.
+   */
+  @Column(name = "budgeted_cost", precision = 19, scale = 4)
+  private BigDecimal budgetedCost;
+
   @Column(name = "planned_units")
   private Double plannedUnits;
 

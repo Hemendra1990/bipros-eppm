@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { ArrowLeft, Pencil } from "lucide-react";
 import {
   resourceApi,
+  resourceDprSummaryApi,
   type EquipmentDetailsDto,
   type MaterialDetailsDto,
   type ManpowerDto,
@@ -136,6 +137,11 @@ export default function ResourceDetailPage() {
         </div>
         <StatusBadge status={resource.status} />
       </div>
+
+      {/* DPR-supervisor summary (Phase 7 / CC-5) */}
+      {kind === "MANPOWER" && (
+        <DprSupervisorSummaryPanel resourceId={resource.id} />
+      )}
 
       {/* Tabs by kind */}
       {kind === "EQUIPMENT" && (
@@ -1193,5 +1199,34 @@ function SelectField({
         ))}
       </select>
     </FieldWrap>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// CC-5 — supervised-DPR summary panel
+// ────────────────────────────────────────────────────────────────────────────
+
+function DprSupervisorSummaryPanel({ resourceId }: { resourceId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["resource-dpr-summary", resourceId],
+    queryFn: () => resourceDprSummaryApi.get(resourceId, 30),
+    enabled: !!resourceId,
+  });
+
+  if (isLoading) return null;
+  if (!data?.data) return null;
+  const summary = data.data;
+  if (summary.count === 0) {
+    return (
+      <div className="mb-6 rounded-xl border border-border bg-surface/30 px-4 py-3 text-sm text-text-muted">
+        Not yet recorded as supervisor on any DPR row in the last {summary.days} days.
+      </div>
+    );
+  }
+  return (
+    <div className="mb-6 rounded-xl border border-border bg-surface/40 px-4 py-3 text-sm text-text-secondary">
+      Acted as <strong className="text-text-primary">supervisor on {summary.count} DPR row{summary.count === 1 ? "" : "s"}</strong>{" "}
+      in the last {summary.days} days (since {summary.sinceInclusive}).
+    </div>
   );
 }

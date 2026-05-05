@@ -209,6 +209,18 @@ export const contractApi = {
       )
       .then((r) => r.data),
 
+  updateVariationOrderStatus: (
+    contractId: string,
+    id: string,
+    body: { status: "INITIATED" | "RECOMMENDED" | "APPROVED" | "REJECTED"; approvedBy?: string },
+  ) =>
+    apiClient
+      .put<ApiResponse<VariationOrderResponse>>(
+        `/v1/contracts/${contractId}/variation-orders/${id}/status`,
+        body,
+      )
+      .then((r) => r.data),
+
   deleteVariationOrder: (contractId: string, id: string) =>
     apiClient.delete(`/v1/contracts/${contractId}/variation-orders/${id}`),
 

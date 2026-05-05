@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   boqApi,
@@ -16,6 +16,14 @@ import { getErrorMessage } from "@/lib/utils/error";
 const UNIT_OPTIONS = ["Cum", "MT", "Rm", "Each", "Sqm", "LS"] as const;
 
 type EditableField = "qtyExecutedToDate" | "actualRate";
+
+function unbilledOverrunValue(item: BoqItemResponse): number {
+  const qty = item.qtyExecutedToDate ?? 0;
+  const boqQty = item.boqQty ?? 0;
+  const rate = item.boqRate ?? 0;
+  if (qty <= boqQty) return 0;
+  return (qty - boqQty) * rate;
+}
 
 interface BoqForm {
   itemNo: string;
@@ -51,6 +59,7 @@ function formatPercent(value: number | null | undefined): string {
 
 export default function BoqPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.projectId as string;
   const queryClient = useQueryClient();
 
@@ -59,6 +68,7 @@ export default function BoqPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ itemId: string; field: EditableField } | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
+  const [overrunOnly, setOverrunOnly] = useState(false);
 
   const {
     data: summaryResponse,
@@ -70,7 +80,11 @@ export default function BoqPage() {
   });
 
   const summary: BoqSummaryResponse | null | undefined = summaryResponse?.data;
-  const items: BoqItemResponse[] = summary?.items ?? [];
+  const allItems: BoqItemResponse[] = summary?.items ?? [];
+  const overrunItems = allItems.filter((i) => i.status === "OVERRUN");
+  const overrunCount = overrunItems.length;
+  const overrunUnbilled = overrunItems.reduce((sum, item) => sum + unbilledOverrunValue(item), 0);
+  const items = overrunOnly ? overrunItems : allItems;
 
   const updateMutation = useMutation({
     mutationFn: ({ itemId, request }: { itemId: string; request: UpdateBoqItemRequest }) =>
@@ -165,6 +179,36 @@ export default function BoqPage() {
       />
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-4 text-text-primary">Bill of Quantities</h1>
+
+        {overrunCount > 0 && (
+          <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-amber-200">
+                <strong>{overrunCount}</strong>{" "}
+                {overrunCount === 1 ? "item has" : "items have"} overrun their contracted
+                quantities.{" "}
+                <strong>₹{overrunUnbilled.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>{" "}
+                of work executed cannot be billed until a Variation Order is approved.
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOverrunOnly((v) => !v)}
+                  className="px-3 py-1.5 text-xs rounded border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-100"
+                >
+                  {overrunOnly ? "Show all items" : "Show only overrun"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/projects/${projectId}/variation-orders`)}
+                  className="px-3 py-1.5 text-xs rounded bg-amber-500 text-black font-medium hover:bg-amber-400"
+                >
+                  Create VO
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <button
           onClick={() => {
@@ -334,7 +378,9 @@ export default function BoqPage() {
                                 ? "bg-success/20 text-success"
                                 : item.status === "ON_HOLD"
                                   ? "bg-amber-500/20 text-warning"
-                                  : "bg-slate-500/20 text-slate-300"
+                                  : item.status === "OVERRUN"
+                                    ? "bg-red-500/30 text-red-200"
+                                    : "bg-slate-500/20 text-slate-300"
                           }`}
                         >
                           {item.status.replace("_", " ")}

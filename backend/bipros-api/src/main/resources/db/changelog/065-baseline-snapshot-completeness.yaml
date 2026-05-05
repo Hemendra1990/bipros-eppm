@@ -1,0 +1,115 @@
+databaseChangeLog:
+  - changeSet:
+      id: 065-baseline-wbs-table
+      author: bipros
+      comment: |
+        Phase 5.1: snapshot table for WbsNode rows. Lets variance answer "what was the WBS
+        like in this baseline" even after live nodes are reorganised.
+      changes:
+        - createTable:
+            schemaName: baseline
+            tableName: baseline_wbs
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: baseline_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: wbs_node_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: code, type: VARCHAR(20), constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: parent_id, type: UUID }
+              - column: { name: wbs_level, type: INTEGER }
+              - column: { name: sort_order, type: INTEGER }
+              - column: { name: planned_start, type: DATE }
+              - column: { name: planned_finish, type: DATE }
+              - column: { name: budget_crores, type: NUMERIC(14, 2) }
+              - column: { name: created_at, type: TIMESTAMP }
+              - column: { name: updated_at, type: TIMESTAMP }
+              - column: { name: created_by, type: VARCHAR(100) }
+              - column: { name: updated_by, type: VARCHAR(100) }
+        - addUniqueConstraint:
+            schemaName: baseline
+            tableName: baseline_wbs
+            columnNames: baseline_id, wbs_node_id
+            constraintName: uk_baseline_wbs_node
+        - createIndex:
+            schemaName: baseline
+            tableName: baseline_wbs
+            indexName: idx_baseline_wbs_baseline_id
+            columns:
+              - column: { name: baseline_id }
+
+  - changeSet:
+      id: 065-baseline-resource-assignments-table
+      author: bipros
+      comment: |
+        Phase 5.2: per-resource snapshot. The existing baseline_activities table only stores
+        the activity-level cost rollup, so we cannot answer "what was originally planned for
+        THIS resource on THIS activity?" — this table closes that gap.
+      changes:
+        - createTable:
+            schemaName: baseline
+            tableName: baseline_resource_assignments
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: baseline_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: assignment_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: activity_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: resource_id, type: UUID }
+              - column: { name: role_id, type: UUID }
+              - column: { name: budgeted_units, type: DOUBLE PRECISION }
+              - column: { name: budgeted_cost, type: NUMERIC(19, 4) }
+              - column: { name: planned_units, type: DOUBLE PRECISION }
+              - column: { name: planned_cost, type: NUMERIC(19, 4) }
+              - column: { name: rate_type, type: VARCHAR(50) }
+              - column: { name: created_at, type: TIMESTAMP }
+              - column: { name: updated_at, type: TIMESTAMP }
+              - column: { name: created_by, type: VARCHAR(100) }
+              - column: { name: updated_by, type: VARCHAR(100) }
+        - createIndex:
+            schemaName: baseline
+            tableName: baseline_resource_assignments
+            indexName: idx_bra_baseline_id
+            columns:
+              - column: { name: baseline_id }
+        - createIndex:
+            schemaName: baseline
+            tableName: baseline_resource_assignments
+            indexName: idx_bra_activity_id
+            columns:
+              - column: { name: activity_id }
+
+  - changeSet:
+      id: 065-baseline-expenses-table
+      author: bipros
+      comment: |
+        Phase 5.3: per-expense snapshot. Lets the variance dashboard show direct-expense
+        deltas (e.g. permit fee budgeted at 50k, actual 62k).
+      changes:
+        - createTable:
+            schemaName: baseline
+            tableName: baseline_expenses
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: baseline_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: expense_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: activity_id, type: UUID }
+              - column: { name: name, type: VARCHAR(200) }
+              - column: { name: expense_category, type: VARCHAR(100) }
+              - column: { name: budgeted_cost, type: NUMERIC(19, 2) }
+              - column: { name: planned_start_date, type: DATE }
+              - column: { name: planned_finish_date, type: DATE }
+              - column: { name: created_at, type: TIMESTAMP }
+              - column: { name: updated_at, type: TIMESTAMP }
+              - column: { name: created_by, type: VARCHAR(100) }
+              - column: { name: updated_by, type: VARCHAR(100) }
+        - createIndex:
+            schemaName: baseline
+            tableName: baseline_expenses
+            indexName: idx_be_baseline_id
+            columns:
+              - column: { name: baseline_id }
+        - createIndex:
+            schemaName: baseline
+            tableName: baseline_expenses
+            indexName: idx_be_activity_id
+            columns:
+              - column: { name: activity_id }

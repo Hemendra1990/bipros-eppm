@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 067-dpr-drop-cumulative-qty
+      author: bipros
+      comment: |
+        Phase 7.7 — drop the stored daily_progress_reports.cumulative_qty column. Cumulative
+        is now computed on read by DailyProgressReportService and DprSubmittedListener so
+        back-dated edits stay self-consistent without rewriting later rows.
+
+        Dev users on ddl-auto: update keep the orphan column harmlessly (Hibernate's update
+        mode never drops). This changeset only fires under the prod profile where Liquibase
+        is authoritative. The application stops reading the column starting with this release.
+      changes:
+        - dropColumn:
+            schemaName: project
+            tableName: daily_progress_reports
+            columnName: cumulative_qty

@@ -245,7 +245,7 @@ public class QueryDprTool implements Tool {
       row.put("boq_item_no", d.getBoqItemNo());
       row.put("unit", d.getUnit());
       row.put("qty_executed", d.getQtyExecuted() == null ? null : d.getQtyExecuted().doubleValue());
-      row.put("cumulative_qty", d.getCumulativeQty() == null ? null : d.getCumulativeQty().doubleValue());
+      // cumulative_qty dropped — see GetDprDetailsTool for rationale.
       row.put("chainage_from_m", d.getChainageFromM());
       row.put("chainage_to_m", d.getChainageToM());
       row.put("weather_condition", d.getWeatherCondition());

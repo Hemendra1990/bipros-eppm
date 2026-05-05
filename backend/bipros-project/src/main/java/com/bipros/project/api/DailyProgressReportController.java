@@ -3,6 +3,7 @@ package com.bipros.project.api;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.project.application.dto.CreateDailyProgressReportRequest;
 import com.bipros.project.application.dto.DailyProgressReportResponse;
+import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
 import com.bipros.project.application.service.DailyProgressReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -65,6 +67,16 @@ public class DailyProgressReportController {
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
     return ResponseEntity.ok(ApiResponse.ok(service.get(projectId, id)));
+  }
+
+  @PutMapping("/{id}")
+  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  public ResponseEntity<ApiResponse<DailyProgressReportResponse>> update(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateDailyProgressReportRequest request) {
+    log.info("PUT /v1/projects/{}/dpr/{} - date={}, qty={}", projectId, id, request.reportDate(), request.qtyExecuted());
+    return ResponseEntity.ok(ApiResponse.ok(service.update(projectId, id, request)));
   }
 
   @DeleteMapping("/{id}")

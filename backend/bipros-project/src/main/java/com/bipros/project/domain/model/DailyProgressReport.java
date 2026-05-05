@@ -17,9 +17,18 @@ import java.util.UUID;
 
 /**
  * Supervisor Daily Progress Report row: one entry per (project, date, chainage range, activity).
- * Captures what was physically executed that day. The service keeps cumulativeQty in step with
- * the sum of prior DPR rows for the same (projectId, activityName) pair, and if
- * {@link #boqItemNo} is set, also syncs qtyExecutedToDate on the matching BoqItem.
+ * Captures what was physically executed that day.
+ *
+ * <p>{@code supervisorResourceId} is a soft FK to the {@code resource} schema (Resources with
+ * role.code in {@code SUPERVISOR}/{@code FOREMAN}); {@code supervisorName} stays as a
+ * denormalised display snapshot, so legacy rows still render and resource renames don't
+ * rewrite history. When the FK is set the service overwrites {@code supervisorName} from the
+ * resource on save. Free-text entries (off-roster supervisors) leave the FK null.
+ *
+ * <p>Cumulative quantity per (project, activity) is computed on read (and on event publish)
+ * — there is no stored {@code cumulative_qty} column on the entity. This makes back-dated
+ * edits self-consistent without rewriting later rows. BOQ qty sync is event-based via
+ * {@code DprBoqSyncListener} listening for {@link com.bipros.common.event.DprSubmittedEvent}.
  */
 @Entity
 @Table(
@@ -42,6 +51,13 @@ public class DailyProgressReport extends BaseEntity {
 
   @Column(name = "report_date", nullable = false)
   private LocalDate reportDate;
+
+  /**
+   * Soft FK to {@code resource.resources.id}. When set, the service snapshots the resource's
+   * name into {@link #supervisorName} on save. Null for free-text "Other" entries.
+   */
+  @Column(name = "supervisor_resource_id")
+  private UUID supervisorResourceId;
 
   @Column(name = "supervisor_name", nullable = false, length = 150)
   private String supervisorName;
@@ -68,9 +84,9 @@ public class DailyProgressReport extends BaseEntity {
   @Column(name = "qty_executed", nullable = false, precision = 18, scale = 3)
   private BigDecimal qtyExecuted;
 
-  /** Running total of qtyExecuted for this (project, activityName) up to & including reportDate. */
-  @Column(name = "cumulative_qty", precision = 18, scale = 3)
-  private BigDecimal cumulativeQty;
+  // Cumulative qty is computed on read (see DailyProgressReportService.list) — the legacy
+  // cumulative_qty column lingers in dev because ddl-auto: update doesn't drop columns; the
+  // production migration drops it via a Liquibase changeset.
 
   @Column(name = "weather_condition", length = 100)
   private String weatherCondition;

@@ -55,6 +55,30 @@ export interface CreateBaselineRequest {
   name: string;
   baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY";
   description?: string;
+  /**
+   * Phase 4.3: P6's second creation option — pick another existing project as the snapshot
+   * source. Variance comparison only matches when activity IDs overlap (true for "saved as
+   * copy" workflows). Omit for the default "snapshot the current project" behaviour.
+   */
+  sourceProjectId?: string;
+}
+
+/**
+ * Phase 4.2 selective-update filter. Every field is optional; defaults are permissive on the
+ * server (everything updates unless the planner narrows the scope).
+ */
+export interface UpdateBaselineRequest {
+  activityIds?: string[];
+  criticalOnly?: boolean;
+  milestonesOnly?: boolean;
+  statuses?: string[];
+  plannedStartFrom?: string;
+  plannedStartTo?: string;
+  updateDates?: boolean;
+  updateDurations?: boolean;
+  updateRelationships?: boolean;
+  updateResourceCosts?: boolean;
+  updateExpenseCosts?: boolean;
 }
 
 export interface ScheduleComparisonRow {
@@ -113,6 +137,47 @@ export const baselineApi = {
     apiClient
       .post<ApiResponse<BaselineResponse>>(
         `/v1/projects/${projectId}/baselines/${baselineId}/activate`
+      )
+      .then((r) => r.data),
+
+  /**
+   * Phase 3: assign a baseline to one of three P6 slots (PRIMARY / SECONDARY / TERTIARY).
+   * Slots are independent — assigning to SECONDARY does not unset PRIMARY.
+   */
+  assignBaselineToSlot: (
+    projectId: string,
+    baselineId: string,
+    slot: "PRIMARY" | "SECONDARY" | "TERTIARY"
+  ) =>
+    apiClient
+      .post<ApiResponse<BaselineResponse>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}/assign/${slot}`
+      )
+      .then((r) => r.data),
+
+  /** Phase 3: detach the baseline currently in the given slot. Idempotent. */
+  clearBaselineSlot: (projectId: string, slot: "PRIMARY" | "SECONDARY" | "TERTIARY") =>
+    apiClient
+      .delete<ApiResponse<void>>(`/v1/projects/${projectId}/baselines/slots/${slot}`)
+      .then((r) => r.data),
+
+  /**
+   * Phase 4.1: P6-style "Restore Baseline". Overwrites planned dates, durations, and
+   * relationships on the live project from the snapshot. Actuals are preserved.
+   */
+  restoreBaseline: (projectId: string, baselineId: string) =>
+    apiClient
+      .post<ApiResponse<BaselineResponse>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}/restore`
+      )
+      .then((r) => r.data),
+
+  /** Phase 4.2: Selective Update Baseline with filters. */
+  updateBaseline: (projectId: string, baselineId: string, request: UpdateBaselineRequest) =>
+    apiClient
+      .put<ApiResponse<BaselineResponse>>(
+        `/v1/projects/${projectId}/baselines/${baselineId}/update`,
+        request
       )
       .then((r) => r.data),
 };

@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 066-dpr-add-supervisor-resource-id
+      author: bipros
+      comment: |
+        Phase 7 of the BOQ commercial chain & KPI roadmap. Promotes the DPR supervisor field
+        from a free-text string to a structured FK to resource.resources, while keeping
+        supervisor_name as a denormalised display snapshot. Soft FK (no @ManyToOne) — the
+        resource lives in a separate Postgres schema and we don't want cross-schema cascade
+        semantics.
+
+        Dev users on ddl-auto: update get the column automatically. No backfill: legacy rows
+        keep supervisor_name and leave supervisor_resource_id NULL; the planner uses an
+        admin-only CSV-export endpoint to backfill manually based on review.
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: daily_progress_reports
+            columns:
+              - column:
+                  name: supervisor_resource_id
+                  type: UUID
+        - createIndex:
+            schemaName: project
+            tableName: daily_progress_reports
+            indexName: idx_dpr_supervisor_resource_id
+            columns:
+              - column:
+                  name: supervisor_resource_id

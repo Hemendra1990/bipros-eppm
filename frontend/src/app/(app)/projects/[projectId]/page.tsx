@@ -21,7 +21,7 @@ import { EvmTab } from "@/components/evm/EvmTab";
 import { PeriodPerformanceTab } from "@/components/cost/PeriodPerformanceTab";
 import { CostAccountRollupTab } from "@/components/cost/CostAccountRollupTab";
 import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree, Sparkles } from "lucide-react";
+import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree, Sparkles, AlertTriangle } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { costApi } from "@/lib/api/costApi";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
@@ -119,7 +119,15 @@ export default function ProjectDetailPage() {
     enabled: ["baselines", "gantt"].includes(tab),
   });
 
-  const primaryBaseline = baselinesData?.data?.find((b) => b.baselineType === "PRIMARY");
+  // Phase 3: prefer the project's PRIMARY slot (project.primaryBaselineId) over scanning the
+  // baselines list for type === "PRIMARY". The slot is the source of truth — the type column
+  // is just a label set at creation. Fall back to the legacy activeBaselineId mirror for
+  // backwards compat with projects whose slot was never explicitly set.
+  const primaryBaselineId =
+    projectData?.data?.primaryBaselineId ?? projectData?.data?.activeBaselineId ?? null;
+  const primaryBaseline =
+    baselinesData?.data?.find((b) => b.id === primaryBaselineId)
+    ?? baselinesData?.data?.find((b) => b.baselineType === "PRIMARY");
 
   const { data: baselineDetailData, isLoading: isLoadingBaselineActivities } = useQuery({
     queryKey: ["baseline-detail", projectId, primaryBaseline?.id],
@@ -190,6 +198,38 @@ export default function ProjectDetailPage() {
     },
     onError: (err: unknown) => {
       toast.error(getErrorMessage(err, "Failed to delete baseline"));
+    },
+  });
+
+  // Phase 4.1: Restore Baseline. Destructive — overwrites planned dates / durations /
+  // relationships on the live project from the snapshot. Actuals are preserved.
+  const restoreBaselineMutation = useMutation({
+    mutationFn: (baselineId: string) => baselineApi.restoreBaseline(projectId, baselineId),
+    onSuccess: () => {
+      refetchBaselines();
+      queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["relationships", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["critical-path", projectId] });
+      toast.success("Project restored from baseline");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to restore baseline"));
+    },
+  });
+
+  // Phase 4.2: Selective Update Baseline. The button below runs with empty filters which
+  // refreshes every activity + relationship — equivalent to P6's "Update" with all defaults.
+  // The endpoint supports narrower scopes via UpdateBaselineRequest; a richer filter dialog
+  // can be wired in a follow-up round.
+  const updateBaselineMutation = useMutation({
+    mutationFn: (baselineId: string) => baselineApi.updateBaseline(projectId, baselineId, {}),
+    onSuccess: () => {
+      refetchBaselines();
+      queryClient.invalidateQueries({ queryKey: ["baseline-detail", projectId] });
+      toast.success("Baseline updated from current schedule");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to update baseline"));
     },
   });
 
@@ -348,12 +388,33 @@ export default function ProjectDetailPage() {
           { label: project.name, href: `/projects/${projectId}`, active: true },
         ]} />
       </div>
+
+      {/* CC-1: Re-baseline nudge. Set by VariationOrderApprovedListener (and any future listeners
+          that detect material plan changes). Cleared on the next createBaseline call. */}
+      {project.requiresRebaseline && (
+        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-warning">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span>
+              <strong>Approved scope changes have not been baselined yet.</strong> Take a fresh
+              baseline so variance reports reflect the new commitment.
+            </span>
+          </div>
+          <button
+            onClick={() => router.push(`/projects/${projectId}?tab=baselines`)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-warning/80"
+          >
+            Take new baseline
+          </button>
+        </div>
+      )}
+
       {currentTip && <TabTip title={currentTip.title} description={currentTip.description} steps={currentTip.steps} />}
       {tab === "overview" && <OverviewTab project={project} projectId={projectId} />}
       {tab === "wbs" && (
         <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} project={project} />
       )}
-      {tab === "gantt" && (
+      {tab === "gantt" && project && (
         <GanttTab
           activities={activities}
           isLoading={isLoadingActivities || isLoadingRelationships || isLoadingBaselineActivities}
@@ -364,6 +425,7 @@ export default function ProjectDetailPage() {
             baselineFinishDate: a.earlyFinish,
           }))}
           projectId={projectId}
+          project={project}
           onRunSchedule={() => scheduleMutation.mutate()}
           isRunningSchedule={scheduleMutation.isPending}
         />
@@ -389,6 +451,12 @@ export default function ProjectDetailPage() {
           onSetActiveBaseline={(baselineId) => setActiveBaselineMutation.mutate(baselineId)}
           isActivating={setActiveBaselineMutation.isPending}
           activatingBaselineId={setActiveBaselineMutation.variables ?? null}
+          onRestoreBaseline={(baselineId) => restoreBaselineMutation.mutate(baselineId)}
+          isRestoring={restoreBaselineMutation.isPending}
+          restoringBaselineId={restoreBaselineMutation.variables ?? null}
+          onUpdateBaseline={(baselineId) => updateBaselineMutation.mutate(baselineId)}
+          isUpdatingBaseline={updateBaselineMutation.isPending}
+          updatingBaselineId={updateBaselineMutation.variables ?? null}
         />
       )}
       {tab === "resources" && <ResourcesTab projectId={projectId} />}
@@ -950,6 +1018,7 @@ function GanttTab({
   relationships = [],
   baselineActivities = [],
   projectId,
+  project,
   onRunSchedule,
   isRunningSchedule = false,
 }: {
@@ -958,10 +1027,16 @@ function GanttTab({
   relationships?: Array<{ predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
   baselineActivities?: Array<{ activityId: string; baselineStartDate: string | null; baselineFinishDate: string | null }>;
   projectId: string;
+  project: ProjectResponse;
   onRunSchedule?: () => void;
   isRunningSchedule?: boolean;
 }) {
   const isStale = useScheduleStaleStore((s) => s.isScheduleStale(projectId));
+  // Progress Spotlight (Phase 1.4 of the baseline-progress roadmap). The Gantt already accepts
+  // spotlightStartDate / spotlightEndDate props; the toggle here just decides whether to feed
+  // them from the project's planned-start + data-date pair.
+  const [spotlightOn, setSpotlightOn] = useState(false);
+  const spotlightAvailable = !!project.dataDate;
 
   if (isLoading) {
     return <div className="text-center text-text-muted">Loading activities...</div>;
@@ -978,14 +1053,43 @@ function GanttTab({
   }
 
   return (
-    <GanttChart
-      activities={activities}
-      relationships={relationships}
-      baselineActivities={baselineActivities}
-      isStale={isStale}
-      onRunSchedule={onRunSchedule}
-      isRunningSchedule={isRunningSchedule}
-    />
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <label
+          className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface/60 px-3 py-1.5 text-xs font-medium ${
+            spotlightAvailable ? "cursor-pointer text-text-secondary hover:text-text-primary" : "cursor-not-allowed text-text-muted"
+          }`}
+          title={
+            spotlightAvailable
+              ? "Highlight activities between project start and data date"
+              : "Set Data Date on the project to enable Progress Spotlight"
+          }
+        >
+          <input
+            type="checkbox"
+            disabled={!spotlightAvailable}
+            checked={spotlightOn && spotlightAvailable}
+            onChange={(e) => setSpotlightOn(e.target.checked)}
+          />
+          Progress Spotlight
+        </label>
+        {spotlightOn && spotlightAvailable && (
+          <span className="text-xs text-text-muted">
+            Showing {project.plannedStartDate} → {project.dataDate}
+          </span>
+        )}
+      </div>
+      <GanttChart
+        activities={activities}
+        relationships={relationships}
+        baselineActivities={baselineActivities}
+        isStale={isStale}
+        onRunSchedule={onRunSchedule}
+        isRunningSchedule={isRunningSchedule}
+        spotlightStartDate={spotlightOn && spotlightAvailable ? project.plannedStartDate : undefined}
+        spotlightEndDate={spotlightOn && spotlightAvailable ? project.dataDate : undefined}
+      />
+    </div>
   );
 }
 
@@ -1534,22 +1638,34 @@ function BaselinesTab({
   onSetActiveBaseline,
   isActivating,
   activatingBaselineId,
+  onRestoreBaseline,
+  isRestoring,
+  restoringBaselineId,
+  onUpdateBaseline,
+  isUpdatingBaseline,
+  updatingBaselineId,
 }: {
   projectId: string;
   baselines: BaselineResponse[];
   activeBaselineId: string | null;
   isLoading: boolean;
-  onCreateBaseline: (data: { name: string; baselineType: string }) => void;
+  onCreateBaseline: (data: { name: string; baselineType: string; description?: string }) => void;
   isCreating: boolean;
   onDeleteBaseline: (baselineId: string) => void;
   isDeleting: boolean;
   onSetActiveBaseline: (baselineId: string) => void;
+  onRestoreBaseline: (baselineId: string) => void;
+  isRestoring: boolean;
+  restoringBaselineId: string | null;
+  onUpdateBaseline: (baselineId: string) => void;
+  isUpdatingBaseline: boolean;
+  updatingBaselineId: string | null;
   isActivating: boolean;
   activatingBaselineId: string | null;
 }) {
   const [varianceTab, setVarianceTab] = useState<"schedule" | "cost">("schedule");
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", baselineType: "PROJECT" });
+  const [formData, setFormData] = useState({ name: "", description: "", baselineType: "PROJECT" });
   const [expandedBaselineId, setExpandedBaselineId] = useState<string | null>(null);
   const [varianceData, setVarianceData] = useState<Record<string, BaselineVarianceRow[]>>({});
   const [loadingVarianceId, setLoadingVarianceId] = useState<string | null>(null);
@@ -1560,8 +1676,12 @@ function BaselinesTab({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.name.trim()) {
-      onCreateBaseline(formData);
-      setFormData({ name: "", baselineType: "PROJECT" });
+      onCreateBaseline({
+        name: formData.name,
+        baselineType: formData.baselineType,
+        description: formData.description.trim() || undefined,
+      });
+      setFormData({ name: "", description: "", baselineType: "PROJECT" });
       setShowForm(false);
     }
   };
@@ -1629,13 +1749,22 @@ function BaselinesTab({
   return (
     <div className="space-y-6">
       {!showForm && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-        >
-          <Plus size={16} />
-          Create Baseline
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+          >
+            <Plus size={16} />
+            Create Baseline
+          </button>
+          <Link
+            href={`/projects/${projectId}/baselines/assign`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface/60 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+            title="Assign baselines to PRIMARY / SECONDARY / TERTIARY slots (P6-style)"
+          >
+            Assign Baselines
+          </Link>
+        </div>
       )}
 
       {showForm && (
@@ -1651,6 +1780,16 @@ function BaselinesTab({
                 className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
                 placeholder="Baseline name"
                 required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Description</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
+                placeholder="Optional notes — e.g. 'after VO-12 approved', 'pre-monsoon plan'"
               />
             </div>
             <div>
@@ -1741,6 +1880,38 @@ function BaselinesTab({
                   >
                     <Eye size={16} />
                     {comparisonBaselineId === baseline.id ? "Hide Compare" : "Compare"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Refresh "${baseline.name}" with the current project's dates, durations, costs, and relationships?\n\nThis is the P6 "Update Baseline" action. Existing snapshot entries are overwritten; new activities are inserted.`
+                        )
+                      ) {
+                        onUpdateBaseline(baseline.id);
+                      }
+                    }}
+                    disabled={isUpdatingBaseline && updatingBaselineId === baseline.id}
+                    className="inline-flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent-hover/20 disabled:opacity-50"
+                    title="Update Baseline: re-snapshot the current project state into this baseline. Use the API directly for selective filters."
+                  >
+                    {isUpdatingBaseline && updatingBaselineId === baseline.id ? "Updating…" : "Update"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Restore the project's planned dates, durations, and relationships from "${baseline.name}"?\n\nActual progress (start/finish dates, % complete) will be preserved. This action is audit-logged but not undoable.`
+                        )
+                      ) {
+                        onRestoreBaseline(baseline.id);
+                      }
+                    }}
+                    disabled={isRestoring && restoringBaselineId === baseline.id}
+                    className="inline-flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm font-medium text-warning hover:bg-warning/20 disabled:opacity-50"
+                    title="Restore: overwrite planned dates / durations / relationships from this baseline. Actuals preserved."
+                  >
+                    {isRestoring && restoringBaselineId === baseline.id ? "Restoring…" : "Restore"}
                   </button>
                   <button
                     onClick={() => {

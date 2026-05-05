@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import type { ProjectResponse, ActivityResponse } from "@/lib/types";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { ManpowerKpiSection } from "@/components/dashboards/ManpowerKpiSection";
+import { EquipmentKpiSection } from "@/components/dashboards/EquipmentKpiSection";
 
 interface DailyWorklog {
   date: string;
@@ -281,6 +283,17 @@ export default function FieldDashboardPage() {
             />
           </div>
 
+          {/* Manpower + Equipment KPI sections — surfaced right after the live headline
+              strip so Site Manager sees the actionable metrics before drilling into the
+              shift detail. Compact density: cards only, no per-activity tables. */}
+          <section className="mb-6 rounded-xl border border-hairline bg-paper p-5">
+            <ManpowerKpiSection projectId={selectedProjectId} density="compact" />
+          </section>
+
+          <section className="mb-6 rounded-xl border border-hairline bg-paper p-5">
+            <EquipmentKpiSection projectId={selectedProjectId} density="compact" />
+          </section>
+
           {/* Daily Worklogs */}
           <section className="mb-6">
             <SectionHeading
@@ -467,6 +480,7 @@ export default function FieldDashboardPage() {
               )}
             </div>
           </section>
+
         </>
       )}
     </div>

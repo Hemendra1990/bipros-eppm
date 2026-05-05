@@ -131,7 +131,9 @@ export const activityApi = {
 
   triggerSchedule: (projectId: string, option: string) =>
     apiClient
-      .post<ApiResponse<{ success: boolean }>>(
+      // The backend returns a full ScheduleResultResponse including warnings + status breakdown;
+      // typing it as a generic object had been hiding fields the schedule-log panel needs.
+      .post<ApiResponse<import("./scheduleApi").ScheduleResultResponse>>(
         `/v1/projects/${projectId}/schedule`,
         { projectId, option }
       )

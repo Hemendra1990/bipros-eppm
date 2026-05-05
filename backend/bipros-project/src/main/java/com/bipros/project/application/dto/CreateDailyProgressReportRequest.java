@@ -12,6 +12,13 @@ import java.util.UUID;
 public record CreateDailyProgressReportRequest(
     @NotNull LocalDate reportDate,
 
+    /**
+     * Optional FK to {@code resource.resources.id} for the supervisor. When set, the service
+     * snapshots the resource's current name into {@code supervisorName}; when null,
+     * {@code supervisorName} is taken verbatim (free-text "Other" entry).
+     */
+    UUID supervisorResourceId,
+
     @NotBlank String supervisorName,
 
     @PositiveOrZero Long chainageFromM,

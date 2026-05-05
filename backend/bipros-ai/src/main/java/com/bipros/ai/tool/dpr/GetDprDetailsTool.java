@@ -156,7 +156,8 @@ public class GetDprDetailsTool implements Tool {
       row.put("boq_item_no", d.getBoqItemNo());
       row.put("unit", d.getUnit());
       row.put("qty_executed", d.getQtyExecuted() == null ? null : d.getQtyExecuted().doubleValue());
-      row.put("cumulative_qty", d.getCumulativeQty() == null ? null : d.getCumulativeQty().doubleValue());
+      // cumulative_qty dropped — it's computed on read by the user-facing list endpoint and
+      // adding a per-row repo lookup here would N+1 for AI context queries.
       row.put("chainage_from_m", d.getChainageFromM());
       row.put("chainage_to_m", d.getChainageToM());
       row.put("weather_condition", d.getWeatherCondition());

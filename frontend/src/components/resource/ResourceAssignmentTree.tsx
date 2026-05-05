@@ -16,6 +16,10 @@ export interface AssignmentRow {
   /** Productivity unit of the effective role (e.g. "Day", "Bag"). Null when role is unknown.
    * Used to decide whether activity / type rollups can sum units across mixed assignments. */
   unit: string | null;
+  /** Phase 2: original committed units, frozen unless an explicit Re-budget action runs. */
+  budgetedUnits: number | null;
+  /** Phase 2: original committed cost, frozen unless an explicit Re-budget action runs. */
+  budgetedCost: number | null;
   plannedUnits: number;
   actualUnits: number;
   remainingUnits: number;
@@ -34,9 +38,11 @@ export interface ResourceTypeInfo {
 interface RollupSums {
   childCount: number;
   /** null when units aren't comparable across children (e.g., an activity rolling up multiple roles). */
+  budgetedUnits: number | null;
   plannedUnits: number | null;
   actualUnits: number | null;
   remainingUnits: number | null;
+  budgetedCost: number;
   plannedCost: number;
   actualCost: number;
   remainingCost: number;
@@ -54,11 +60,22 @@ interface TreeNode {
 const UNASSIGNED_ROLE_KEY = "__unassigned__";
 
 function sumRows(rows: AssignmentRow[]): Omit<RollupSums, "childCount"> {
-  const acc = { plannedUnits: 0, actualUnits: 0, remainingUnits: 0, plannedCost: 0, actualCost: 0, remainingCost: 0 };
+  const acc = {
+    budgetedUnits: 0,
+    plannedUnits: 0,
+    actualUnits: 0,
+    remainingUnits: 0,
+    budgetedCost: 0,
+    plannedCost: 0,
+    actualCost: 0,
+    remainingCost: 0,
+  };
   for (const r of rows) {
+    acc.budgetedUnits += r.budgetedUnits ?? 0;
     acc.plannedUnits += r.plannedUnits ?? 0;
     acc.actualUnits += r.actualUnits ?? 0;
     acc.remainingUnits += r.remainingUnits ?? 0;
+    acc.budgetedCost += r.budgetedCost ?? 0;
     acc.plannedCost += r.plannedCost ?? 0;
     acc.actualCost += r.actualCost ?? 0;
     acc.remainingCost += r.remainingCost ?? 0;
@@ -161,9 +178,11 @@ function buildActivityTree(assignments: AssignmentRow[]): TreeNode[] {
       name: activityRows[0]?.activityName ?? activityId,
       rollup: {
         childCount: activityRows.length,
+        budgetedUnits: sameUnit ? activitySums.budgetedUnits : null,
         plannedUnits: sameUnit ? activitySums.plannedUnits : null,
         actualUnits: sameUnit ? activitySums.actualUnits : null,
         remainingUnits: sameUnit ? activitySums.remainingUnits : null,
+        budgetedCost: activitySums.budgetedCost,
         plannedCost: activitySums.plannedCost,
         actualCost: activitySums.actualCost,
         remainingCost: activitySums.remainingCost,
@@ -207,9 +226,11 @@ function buildResourceTypeTree(
       name: formatResourceType(type),
       rollup: {
         childCount: rows.length,
+        budgetedUnits: sameUnit ? sums.budgetedUnits : null,
         plannedUnits: sameUnit ? sums.plannedUnits : null,
         actualUnits: sameUnit ? sums.actualUnits : null,
         remainingUnits: sameUnit ? sums.remainingUnits : null,
+        budgetedCost: sums.budgetedCost,
         plannedCost: sums.plannedCost,
         actualCost: sums.actualCost,
         remainingCost: sums.remainingCost,
@@ -255,9 +276,11 @@ function TreeRow({
 
   // What to show in each numeric column. For a leaf, use the assignment row directly. For a
   // group, use its rollup — units may be null at the activity / type level (mixed-unit children).
+  const budgetedUnits = node.assignment?.budgetedUnits ?? node.rollup?.budgetedUnits ?? null;
   const plannedUnits = node.assignment?.plannedUnits ?? node.rollup?.plannedUnits ?? null;
   const actualUnits = node.assignment?.actualUnits ?? node.rollup?.actualUnits ?? null;
   const remainingUnits = node.assignment?.remainingUnits ?? node.rollup?.remainingUnits ?? null;
+  const budgetedCost = node.assignment?.budgetedCost ?? node.rollup?.budgetedCost ?? null;
   const plannedCost = node.assignment?.plannedCost ?? node.rollup?.plannedCost ?? null;
   const actualCost = node.assignment?.actualCost ?? node.rollup?.actualCost ?? null;
   const remainingCost = node.assignment?.remainingCost ?? node.rollup?.remainingCost ?? null;
@@ -265,7 +288,7 @@ function TreeRow({
   return (
     <div className="border-b border-border/50 last:border-b-0">
       <div
-        className={`grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_80px_110px_110px_110px] gap-2 items-center py-2.5 px-3 text-sm transition-colors ${
+        className={`grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_90px_80px_110px_110px_110px_110px] gap-2 items-center py-2.5 px-3 text-sm transition-colors ${
           isSelected
             ? "bg-accent/10"
             : !isGroup
@@ -314,6 +337,11 @@ function TreeRow({
           {node.assignment?.activityName ?? ""}
         </div>
 
+        {/* Budgeted Units (Phase 2) */}
+        <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
+          {num(budgetedUnits)}
+        </div>
+
         {/* Planned Units */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
           {num(plannedUnits)}
@@ -332,6 +360,11 @@ function TreeRow({
         {/* Rate Type */}
         <div className="text-center text-text-secondary">
           {node.assignment?.rateType ?? ""}
+        </div>
+
+        {/* Budgeted Cost (Phase 2) */}
+        <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
+          {budgetedCost != null ? formatDefaultCurrency(budgetedCost) : ""}
         </div>
 
         {/* Planned Cost */}
@@ -422,13 +455,15 @@ export function ResourceAssignmentTree({
   return (
     <div className="rounded-xl border border-border bg-surface/50 shadow-xl overflow-hidden">
       {/* Header */}
-      <div className="grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_80px_110px_110px_110px] gap-2 items-center py-3 px-3 text-xs font-semibold uppercase tracking-wider text-text-secondary bg-surface/80 border-b border-border/50">
+      <div className="grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_90px_80px_110px_110px_110px_110px] gap-2 items-center py-3 px-3 text-xs font-semibold uppercase tracking-wider text-text-secondary bg-surface/80 border-b border-border/50">
         <div className="pl-3">{firstColLabel}</div>
         <div>Activity</div>
+        <div className="text-right">Budgeted</div>
         <div className="text-right">Planned</div>
         <div className="text-right">Actual</div>
         <div className="text-right">Remaining</div>
         <div className="text-center">Rate</div>
+        <div className="text-right">Budgeted Cost</div>
         <div className="text-right">Planned Cost</div>
         <div className="text-right">Actual Cost</div>
         <div className="text-right">Remaining Cost</div>

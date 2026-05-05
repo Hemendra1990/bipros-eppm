@@ -174,6 +174,7 @@ public class SchedulingService {
       CPMScheduler.ScheduleOutput output = scheduler.scheduleWithWarnings(scheduleData);
       List<ScheduledActivity> scheduledActivities = output.activities();
       List<String> scheduleWarnings = output.warnings();
+      CPMScheduler.StatusBreakdown statusBreakdown = output.statusBreakdown();
 
       // Calculate project statistics
       LocalDate projectFinish = scheduledActivities.stream()
@@ -256,7 +257,12 @@ public class SchedulingService {
 
       log.info("Project scheduled successfully: id={}, duration={}s, warnings={}",
           projectId, saved.getDurationSeconds(), scheduleWarnings.size());
-      return ScheduleResultResponse.from(saved, scheduleWarnings);
+      return ScheduleResultResponse.from(
+          saved,
+          scheduleWarnings,
+          statusBreakdown.notStarted(),
+          statusBreakdown.inProgress(),
+          statusBreakdown.completed());
 
     } catch (Exception e) {
       log.error("Error scheduling project: id={}", projectId, e);

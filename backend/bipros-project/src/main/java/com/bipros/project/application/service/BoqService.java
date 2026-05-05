@@ -1,5 +1,6 @@
 package com.bipros.project.application.service;
 
+import com.bipros.common.event.VoLineItemPayload;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
@@ -126,9 +127,32 @@ public class BoqService {
   }
 
   /**
+   * Inverse of {@link #addExecutedQty}: used by the DPR mutation listener when a DPR row is
+   * deleted, edited to a smaller qty, or re-pointed to a different BOQ item. Floors at zero
+   * to defend against legacy data drift where stored qty would otherwise go negative.
+   */
+  public void subtractExecutedQty(UUID projectId, String itemNo, BigDecimal deltaQty) {
+    if (deltaQty == null || deltaQty.signum() == 0) {
+      return;
+    }
+    boqItemRepository.findByProjectIdAndItemNo(projectId, itemNo).ifPresent(item -> {
+      BigDecimal current = item.getQtyExecutedToDate() != null ? item.getQtyExecutedToDate() : BigDecimal.ZERO;
+      BigDecimal next = current.subtract(deltaQty);
+      if (next.signum() < 0) {
+        next = BigDecimal.ZERO;
+      }
+      item.setQtyExecutedToDate(next);
+      BoqCalculator.recompute(item);
+      applyAutoStatus(item);
+      boqItemRepository.save(item);
+    });
+  }
+
+  /**
    * Auto-transition BOQ status from progress:
    * <ul>
-   *   <li>percent ≥ 100% → COMPLETED</li>
+   *   <li>qtyExecutedToDate &gt; boqQty → OVERRUN (regardless of percent — the unbillable-without-VO state)</li>
+   *   <li>percent ≥ 100% AND qtyExecutedToDate ≤ boqQty → COMPLETED</li>
    *   <li>0 &lt; percent &lt; 100% → ACTIVE</li>
    *   <li>percent = 0 or null → PENDING</li>
    * </ul>
@@ -137,6 +161,13 @@ public class BoqService {
    */
   private static void applyAutoStatus(BoqItem item) {
     if (item.getStatus() == BoqStatus.ON_HOLD) return;
+    BigDecimal qty = item.getQtyExecutedToDate();
+    BigDecimal boqQty = item.getBoqQty();
+    boolean overrun = qty != null && boqQty != null && qty.compareTo(boqQty) > 0;
+    if (overrun) {
+      item.setStatus(BoqStatus.OVERRUN);
+      return;
+    }
     BigDecimal pct = item.getPercentComplete();
     if (pct == null || pct.signum() == 0) {
       item.setStatus(BoqStatus.PENDING);
@@ -151,6 +182,103 @@ public class BoqService {
     BoqItem item = find(projectId, itemId);
     boqItemRepository.delete(item);
     auditService.logDelete("BoqItem", itemId);
+  }
+
+  /**
+   * Apply a batch of {@link VoLineItemPayload} to BOQ rows for a project. Used by the VO
+   * approval listener to mutate {@code BoqItem} state transactionally with the VO approval.
+   * Returns the BoQ ids touched (incl. newly-created items) so the caller can audit-log them.
+   *
+   * <p>Each line is validated against the existing data — a REVISE_QTY/REVISE_RATE/DELETE_ITEM
+   * referencing an unknown BoqItem fails fast (the listener should have caught this earlier),
+   * and an ADD_ITEM with a duplicate {@code newItemNo} fails with the same "duplicate" error
+   * shape used by {@link #createItem}. The transaction rollback then unwinds the VO approval.
+   */
+  public List<UUID> applyVoLineItems(UUID projectId, List<VoLineItemPayload> lineItems) {
+    if (lineItems == null || lineItems.isEmpty()) return List.of();
+    java.util.List<UUID> impacted = new java.util.ArrayList<>(lineItems.size());
+    for (VoLineItemPayload li : lineItems) {
+      switch (li.action()) {
+        case ADD_ITEM -> impacted.add(applyAddItem(projectId, li));
+        case REVISE_QTY -> impacted.add(applyReviseQty(projectId, li));
+        case REVISE_RATE -> impacted.add(applyReviseRate(projectId, li));
+        case DELETE_ITEM -> impacted.add(applyDeleteItem(projectId, li));
+      }
+    }
+    return impacted;
+  }
+
+  private UUID applyAddItem(UUID projectId, VoLineItemPayload li) {
+    if (boqItemRepository.existsByProjectIdAndItemNo(projectId, li.newItemNo())) {
+      throw new BusinessRuleException("DUPLICATE_BOQ_ITEM",
+          "BOQ item " + li.newItemNo() + " already exists for project " + projectId
+              + " — VO ADD_ITEM cannot overwrite an existing row.");
+    }
+    BoqItem item = BoqItem.builder()
+        .projectId(projectId)
+        .itemNo(li.newItemNo())
+        .description(li.newItemDescription() != null ? li.newItemDescription() : li.newItemNo())
+        .unit(li.newItemUnit() != null ? li.newItemUnit() : "Each")
+        .boqQty(li.revisedQty())
+        .boqRate(li.revisedRate())
+        .build();
+    BoqCalculator.recompute(item);
+    applyAutoStatus(item);
+    BoqItem saved = boqItemRepository.save(item);
+    auditService.logCreate("BoqItem", saved.getId(), BoqItemResponse.from(saved));
+    // CC-6: tag the change as VO-applied so the audit log can be filtered.
+    auditService.logUpdate("BoqItem", saved.getId(), "VO_APPLIED", null, BoqItemResponse.from(saved));
+    return saved.getId();
+  }
+
+  private UUID applyReviseQty(UUID projectId, VoLineItemPayload li) {
+    BoqItem item = requireBoqItem(projectId, li.boqItemId(), "REVISE_QTY");
+    BoqItemResponse before = BoqItemResponse.from(item);
+    BigDecimal previous = item.getBoqQty();
+    item.setBoqQty(li.revisedQty());
+    BoqCalculator.recompute(item);
+    applyAutoStatus(item);
+    BoqItem saved = boqItemRepository.save(item);
+    auditService.logUpdate("BoqItem", item.getId(), "boqQty", previous, li.revisedQty());
+    auditService.logUpdate("BoqItem", item.getId(), "VO_APPLIED", before, BoqItemResponse.from(saved));
+    return saved.getId();
+  }
+
+  private UUID applyReviseRate(UUID projectId, VoLineItemPayload li) {
+    BoqItem item = requireBoqItem(projectId, li.boqItemId(), "REVISE_RATE");
+    BoqItemResponse before = BoqItemResponse.from(item);
+    BigDecimal previous = item.getBoqRate();
+    item.setBoqRate(li.revisedRate());
+    BoqCalculator.recompute(item);
+    applyAutoStatus(item);
+    BoqItem saved = boqItemRepository.save(item);
+    auditService.logUpdate("BoqItem", item.getId(), "boqRate", previous, li.revisedRate());
+    auditService.logUpdate("BoqItem", item.getId(), "VO_APPLIED", before, BoqItemResponse.from(saved));
+    return saved.getId();
+  }
+
+  private UUID applyDeleteItem(UUID projectId, VoLineItemPayload li) {
+    BoqItem item = requireBoqItem(projectId, li.boqItemId(), "DELETE_ITEM");
+    BoqItemResponse before = BoqItemResponse.from(item);
+    boqItemRepository.delete(item);
+    auditService.logDelete("BoqItem", item.getId());
+    // CC-6: full before-state snapshot so the deleted row is still recoverable from the audit log.
+    auditService.logUpdate("BoqItem", item.getId(), "VO_APPLIED", before, null);
+    return item.getId();
+  }
+
+  private BoqItem requireBoqItem(UUID projectId, UUID boqItemId, String actionForMessage) {
+    BoqItem item = boqItemRepository.findById(boqItemId)
+        .orElseThrow(() -> new BusinessRuleException(
+            "VO_LINE_BOQ_NOT_FOUND",
+            actionForMessage + " line item references unknown BoqItem " + boqItemId));
+    if (!item.getProjectId().equals(projectId)) {
+      throw new BusinessRuleException(
+          "VO_LINE_BOQ_PROJECT_MISMATCH",
+          actionForMessage + " line item references BoqItem " + boqItemId
+              + " from a different project (" + item.getProjectId() + " vs " + projectId + ")");
+    }
+    return item;
   }
 
   @Transactional(readOnly = true)

@@ -363,9 +363,11 @@ public class ReportDataService {
       // operatingHours doubles as "actualHours"; total of all three is the exposed time.
       // Each hour component can be NULL — coalesce per-row before summing so one NULL
       // doesn't null out the whole group.
+      // r.resource_type became r.resource_type_id (FK) after the resource rewrite —
+      // join through resource_types to surface the type code (EQUIPMENT / LABOR / MATERIAL).
       @SuppressWarnings("unchecked")
       List<Object> rows = em.createNativeQuery(
-              "SELECT r.code, r.name, COALESCE(r.resource_type, ''), " +
+              "SELECT r.code, r.name, COALESCE(rt.code, ''), " +
               "  SUM(COALESCE(l.operating_hours, 0) + COALESCE(l.idle_hours, 0) + COALESCE(l.breakdown_hours, 0)) AS planned, " +
               "  SUM(COALESCE(l.operating_hours, 0)) AS actual, " +
               "  CASE WHEN SUM(COALESCE(l.operating_hours, 0) + COALESCE(l.idle_hours, 0) + COALESCE(l.breakdown_hours, 0)) > 0 " +
@@ -374,8 +376,9 @@ public class ReportDataService {
               "    ELSE 0 END AS util_pct " +
               "FROM resource.equipment_logs l " +
               "JOIN resource.resources r ON l.resource_id = r.id " +
+              "LEFT JOIN resource.resource_types rt ON rt.id = r.resource_type_id " +
               "WHERE l.project_id = ?1 " +
-              "GROUP BY r.id, r.code, r.name, r.resource_type " +
+              "GROUP BY r.id, r.code, r.name, rt.code " +
               "ORDER BY util_pct DESC")
           .setParameter(1, projectId)
           .getResultList();
@@ -397,9 +400,10 @@ public class ReportDataService {
   private List<ResourceUtilizationData.ResourceUtilRow> getResourceUtilizationFromAssignments(
       UUID projectId) {
     try {
+      // Same fix as the equipment_logs roll-up: r.resource_type → rt.code via FK join.
       @SuppressWarnings("unchecked")
       List<Object> rows = em.createNativeQuery(
-              "SELECT r.code, r.name, COALESCE(r.resource_type, ''), " +
+              "SELECT r.code, r.name, COALESCE(rt.code, ''), " +
               "  COALESCE(SUM(a.planned_units), 0) AS planned_units, " +
               "  COALESCE(SUM(a.actual_units), 0) AS actual_units, " +
               "  CASE WHEN SUM(a.planned_units) > 0 " +
@@ -407,8 +411,9 @@ public class ReportDataService {
               "    ELSE 0 END AS util_pct " +
               "FROM resource.resources r " +
               "JOIN resource.resource_assignments a ON r.id = a.resource_id " +
+              "LEFT JOIN resource.resource_types rt ON rt.id = r.resource_type_id " +
               "WHERE a.project_id = ?1 " +
-              "GROUP BY r.id, r.code, r.name, r.resource_type " +
+              "GROUP BY r.id, r.code, r.name, rt.code " +
               "ORDER BY util_pct DESC")
           .setParameter(1, projectId)
           .getResultList();

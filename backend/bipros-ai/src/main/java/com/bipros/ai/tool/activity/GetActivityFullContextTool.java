@@ -278,7 +278,13 @@ public class GetActivityFullContextTool implements Tool {
       ArrayNode dprRows = objectMapper.createArrayNode();
       int matchedDpr = 0;
       BigDecimal qtySum = BigDecimal.ZERO;
+      // Running cumulative across ALL rows (incl. those before `from`) — that's the
+      // P6 cumulative semantics: total qty for this activity through the row's date.
+      BigDecimal runningCumulative = BigDecimal.ZERO;
       for (DailyProgressReport d : dprAll) {
+        if (d.getQtyExecuted() != null) {
+          runningCumulative = runningCumulative.add(d.getQtyExecuted());
+        }
         if (d.getReportDate() == null || d.getReportDate().isBefore(from)) continue;
         matchedDpr++;
         if (d.getQtyExecuted() != null) qtySum = qtySum.add(d.getQtyExecuted());
@@ -287,7 +293,7 @@ public class GetActivityFullContextTool implements Tool {
         n.put("supervisor_name", d.getSupervisorName());
         n.put("qty_executed", toDouble(d.getQtyExecuted()));
         n.put("unit", d.getUnit());
-        n.put("cumulative_qty", toDouble(d.getCumulativeQty()));
+        n.put("cumulative_qty", runningCumulative.doubleValue());
         n.put("weather", d.getWeatherCondition());
         dprRows.add(n);
       }

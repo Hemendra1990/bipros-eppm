@@ -4,6 +4,7 @@ import com.bipros.contract.domain.model.VariationOrderStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record VariationOrderResponse(
@@ -20,5 +21,6 @@ public record VariationOrderResponse(
     Instant approvedAt,
     long attachmentCount,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    List<VoLineItemResponse> lineItems
 ) {}

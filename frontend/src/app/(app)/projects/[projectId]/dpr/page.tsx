@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { dprApi, type CreateDailyProgressReportRequest, type DailyProgressReportResponse } from "@/lib/api/dprApi";
+import {
+  dprApi,
+  type CreateDailyProgressReportRequest,
+  type DailyProgressReportResponse,
+  type UpdateDailyProgressReportRequest,
+} from "@/lib/api/dprApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
+import { boqApi } from "@/lib/api/boqApi";
+import { resourceApi } from "@/lib/api/resourceApi";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
 import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
@@ -16,8 +23,11 @@ import { useStickyMeasure } from "@/hooks/useStickyMeasure";
 type WeatherOption = "" | "Clear" | "Cloudy" | "Rain" | "Hot" | "Cold";
 type UnitOption = "Cum" | "MT" | "Rm" | "Each" | "Sqm";
 
+const SUPERVISOR_OTHER = "__other__";
+
 interface DprForm {
   reportDate: string;
+  supervisorResourceId: string;
   supervisorName: string;
   chainageFromRaw: string;
   chainageFromM: number | null;
@@ -35,6 +45,7 @@ const today = () => new Date().toISOString().split("T")[0];
 
 const initialFormState: DprForm = {
   reportDate: today(),
+  supervisorResourceId: "",
   supervisorName: "",
   chainageFromRaw: "",
   chainageFromM: null,
@@ -68,6 +79,36 @@ export default function DprPage() {
   const activityOptions =
     activitiesData?.data?.content.map((a) => ({ value: a.name, label: a.name })) ?? [];
 
+  const { data: boqData } = useQuery({
+    queryKey: ["boq", projectId],
+    queryFn: () => boqApi.list(projectId),
+    enabled: !!projectId,
+  });
+  const boqOptions =
+    boqData?.data?.items
+      ?.slice()
+      .sort((a, b) =>
+        a.itemNo.localeCompare(b.itemNo, undefined, { numeric: true, sensitivity: "base" })
+      )
+      .map((i) => ({
+        value: i.itemNo,
+        label: `${i.itemNo} — ${i.description}${i.unit ? ` (${i.unit})` : ""}`,
+      })) ?? [];
+
+  const { data: supervisorData } = useQuery({
+    queryKey: ["eligibleSupervisors", projectId],
+    queryFn: () => resourceApi.getEligibleSupervisors(projectId),
+    enabled: !!projectId,
+  });
+  const supervisors = supervisorData?.data ?? [];
+  const supervisorOptions = [
+    ...supervisors.map((s) => ({
+      value: s.id,
+      label: s.roleName ? `${s.name} (${s.roleName})` : s.name,
+    })),
+    { value: SUPERVISOR_OTHER, label: "Other (free-text)" },
+  ];
+
   const [fromInput, setFromInput] = useState<string>("");
   const [toInput, setToInput] = useState<string>("");
   const [from, setFrom] = useState<string>("");
@@ -86,12 +127,14 @@ export default function DprPage() {
   }, [project, from, to]);
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<DprForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
   const [chainageFromError, setChainageFromError] = useState<string | null>(null);
   const [chainageToError, setChainageToError] = useState<string | null>(null);
   const { ref: stickyHeaderRef, height: upperH } = useStickyMeasure<HTMLDivElement>();
   const stickyTheadTop = `calc(var(--tab-nav-h, 53px) + ${upperH}px)`;
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const {
     data: listData,
@@ -143,12 +186,87 @@ export default function DprPage() {
     }
   };
 
+  const handleSupervisorChange = (value: string) => {
+    if (value === SUPERVISOR_OTHER) {
+      setFormData((f) => ({ ...f, supervisorResourceId: SUPERVISOR_OTHER, supervisorName: "" }));
+      return;
+    }
+    const match = supervisors.find((s) => s.id === value);
+    setFormData((f) => ({
+      ...f,
+      supervisorResourceId: value,
+      supervisorName: match?.name ?? "",
+    }));
+  };
+
+  const beginEdit = (row: DailyProgressReportResponse) => {
+    setEditingId(row.id);
+    const supervisorIdInOptions =
+      row.supervisorResourceId && supervisors.some((s) => s.id === row.supervisorResourceId)
+        ? row.supervisorResourceId
+        : row.supervisorResourceId
+          ? row.supervisorResourceId // unknown id — keep verbatim, dropdown shows blank but name preserved
+          : SUPERVISOR_OTHER;
+    setFormData({
+      reportDate: row.reportDate,
+      supervisorResourceId: supervisorIdInOptions ?? SUPERVISOR_OTHER,
+      supervisorName: row.supervisorName,
+      chainageFromRaw: row.chainageFromM != null ? chainageLabel(row.chainageFromM) : "",
+      chainageFromM: row.chainageFromM,
+      chainageToRaw: row.chainageToM != null ? chainageLabel(row.chainageToM) : "",
+      chainageToM: row.chainageToM,
+      activityName: row.activityName,
+      unit: (row.unit as UnitOption) ?? "Cum",
+      qtyExecuted: row.qtyExecuted,
+      boqItemNo: row.boqItemNo ?? "",
+      weatherCondition: (row.weatherCondition as WeatherOption) ?? "",
+      remarks: row.remarks ?? "",
+    });
+    setShowForm(true);
+    setChainageFromError(null);
+    setChainageToError(null);
+    setError(null);
+    // Scroll the form into view — page has a tall AI Insights panel above, so scrolling
+    // window-to-top would land on that and miss the form entirely.
+    if (typeof window !== "undefined") {
+      requestAnimationFrame(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  };
+
+  const cancelForm = () => {
+    setEditingId(null);
+    setShowForm(false);
+    setFormData(initialFormState);
+    setChainageFromError(null);
+    setChainageToError(null);
+    setError(null);
+  };
+
+  const handleDelete = async (row: DailyProgressReportResponse) => {
+    if (!confirm(`Delete DPR row dated ${row.reportDate} (${row.activityName})? BOQ qty will be rolled back.`)) {
+      return;
+    }
+    try {
+      await dprApi.delete(projectId, row.id);
+      queryClient.invalidateQueries({ queryKey: ["dpr", projectId, from, to] });
+      queryClient.invalidateQueries({ queryKey: ["boq", projectId] });
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to delete DPR"));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!formData.activityName.trim()) {
       setError("Activity Name is required.");
+      return;
+    }
+    if (!formData.supervisorName.trim()) {
+      setError("Supervisor name is required (pick from the list or choose Other and type a name).");
       return;
     }
     if (formData.chainageFromRaw && formData.chainageFromM === null) {
@@ -164,9 +282,15 @@ export default function DprPage() {
       return;
     }
 
+    const supervisorResourceId =
+      formData.supervisorResourceId && formData.supervisorResourceId !== SUPERVISOR_OTHER
+        ? formData.supervisorResourceId
+        : null;
+
     try {
-      const request: CreateDailyProgressReportRequest = {
+      const payload: CreateDailyProgressReportRequest | UpdateDailyProgressReportRequest = {
         reportDate: formData.reportDate,
+        supervisorResourceId,
         supervisorName: formData.supervisorName,
         chainageFromM: formData.chainageFromM ?? undefined,
         chainageToM: formData.chainageToM ?? undefined,
@@ -178,20 +302,25 @@ export default function DprPage() {
         remarks: formData.remarks || undefined,
       };
 
-      await dprApi.create(projectId, request);
-      setFormData(initialFormState);
-      setShowForm(false);
-      setChainageFromError(null);
-      setChainageToError(null);
+      if (editingId) {
+        await dprApi.update(projectId, editingId, payload);
+      } else {
+        await dprApi.create(projectId, payload);
+      }
+      cancelForm();
       queryClient.invalidateQueries({ queryKey: ["dpr", projectId, from, to] });
+      queryClient.invalidateQueries({ queryKey: ["boq", projectId] });
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to create DPR"));
+      setError(getErrorMessage(err, editingId ? "Failed to update DPR" : "Failed to create DPR"));
     }
   };
 
   if (isLoading) {
     return <div className="p-6 text-text-muted">Loading DPR...</div>;
   }
+
+  const supervisorPickerValue = formData.supervisorResourceId || "";
+  const supervisorIsOther = supervisorPickerValue === SUPERVISOR_OTHER;
 
   return (
     <div className="p-6">
@@ -235,7 +364,15 @@ export default function DprPage() {
           </form>
 
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (showForm) {
+                cancelForm();
+              } else {
+                setEditingId(null);
+                setFormData(initialFormState);
+                setShowForm(true);
+              }
+            }}
             className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
           >
             {showForm ? "Cancel" : "Add DPR"}
@@ -245,7 +382,10 @@ export default function DprPage() {
         {error && <div className="text-danger mt-4 mb-4">{error}</div>}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-surface/50 p-4 rounded-lg border border-border mt-4 mb-6 shadow-xl">
+          <form ref={formRef} onSubmit={handleSubmit} className="bg-surface/50 p-4 rounded-lg border border-border mt-4 mb-6 shadow-xl">
+            <div className="mb-3 text-sm text-text-secondary">
+              {editingId ? "Editing DPR row — saving will rebalance any BOQ qty deltas." : "Adding new DPR row."}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">Date</label>
@@ -258,14 +398,31 @@ export default function DprPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-text-secondary">Supervisor Name</label>
-                <input
-                  type="text"
-                  value={formData.supervisorName}
-                  onChange={(e) => setFormData({ ...formData, supervisorName: e.target.value })}
-                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  required
+                <label className="block text-sm font-medium mb-1 text-text-secondary">Supervisor</label>
+                <SearchableSelect
+                  options={supervisorOptions}
+                  value={supervisorPickerValue}
+                  onChange={handleSupervisorChange}
+                  placeholder={
+                    supervisorOptions.length === 1
+                      ? "No supervisors in roster — pick Other"
+                      : "Search supervisor…"
+                  }
+                  className="w-full"
                 />
+                {supervisorIsOther && (
+                  <input
+                    type="text"
+                    value={formData.supervisorName}
+                    onChange={(e) => setFormData({ ...formData, supervisorName: e.target.value })}
+                    placeholder="Type the supervisor's name"
+                    className="mt-2 w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                    required
+                  />
+                )}
+                {!supervisorIsOther && formData.supervisorName && (
+                  <p className="mt-1 text-xs text-text-muted">{formData.supervisorName}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">Chainage From</label>
@@ -337,13 +494,17 @@ export default function DprPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">BOQ Item No.</label>
-                <input
-                  type="text"
+                <SearchableSelect
+                  options={boqOptions}
                   value={formData.boqItemNo}
-                  onChange={(e) => setFormData({ ...formData, boqItemNo: e.target.value })}
-                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                  onChange={(value) => setFormData({ ...formData, boqItemNo: value })}
+                  placeholder={boqOptions.length ? "Search BOQ item…" : "No BOQ items defined for this project"}
+                  disabled={boqOptions.length === 0}
+                  className="w-full"
                 />
-                <p className="mt-1 text-xs text-text-muted">e.g. 3.1 — auto-syncs to BOQ on save</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  Optional — links the executed qty back to BOQ {"→"} % complete and RA bill.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">Weather</label>
@@ -372,15 +533,11 @@ export default function DprPage() {
             </div>
             <div className="flex gap-2 mt-4">
               <button type="submit" className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600">
-                Save DPR
+                {editingId ? "Save changes" : "Save DPR"}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setChainageFromError(null);
-                  setChainageToError(null);
-                }}
+                onClick={cancelForm}
                 className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded-lg hover:bg-border"
               >
                 Cancel
@@ -399,11 +556,13 @@ export default function DprPage() {
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Chainage From</th>
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Chainage To</th>
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Activity</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">BOQ Item</th>
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Qty Executed</th>
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Unit</th>
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-right text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Cumulative Qty</th>
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Weather</th>
                 <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Remarks</th>
+                <th style={{ top: stickyTheadTop }} className="sticky z-10 bg-surface border border-border px-4 py-2 text-left text-text-secondary shadow-[inset_0_-1px_0_var(--color-border)]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -414,6 +573,7 @@ export default function DprPage() {
                   <td className="border border-border px-4 py-2">{chainageLabel(row.chainageFromM)}</td>
                   <td className="border border-border px-4 py-2">{chainageLabel(row.chainageToM)}</td>
                   <td className="border border-border px-4 py-2">{row.activityName}</td>
+                  <td className="border border-border px-4 py-2">{row.boqItemNo || "-"}</td>
                   <td className="border border-border px-4 py-2 text-right">{row.qtyExecuted}</td>
                   <td className="border border-border px-4 py-2">{row.unit}</td>
                   <td className="border border-border px-4 py-2 text-right">
@@ -421,6 +581,24 @@ export default function DprPage() {
                   </td>
                   <td className="border border-border px-4 py-2">{row.weatherCondition || "-"}</td>
                   <td className="border border-border px-4 py-2">{row.remarks || "-"}</td>
+                  <td className="border border-border px-4 py-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(row)}
+                        className="px-2 py-1 text-xs bg-accent text-text-primary rounded hover:bg-accent-hover"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(row)}
+                        className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
