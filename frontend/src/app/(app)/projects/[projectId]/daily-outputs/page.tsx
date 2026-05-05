@@ -166,7 +166,7 @@ export default function DailyOutputsPage() {
 
           <button
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
           >
             {showForm ? "Cancel" : "Add Output"}
           </button>

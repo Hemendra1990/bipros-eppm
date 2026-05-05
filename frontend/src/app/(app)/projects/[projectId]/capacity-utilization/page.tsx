@@ -208,7 +208,7 @@ export default function CapacityUtilizationPage() {
               </button>
               <Link
                 href={`/projects/${projectId}/daily-outputs`}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover text-sm font-semibold"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover text-sm font-semibold"
               >
                 <PlusCircle size={16} />
                 Record Daily Output

@@ -98,7 +98,7 @@ export default function UnitRateMasterPage() {
                 onClick={() => setCategory(opt.value)}
                 className={`px-4 py-2 rounded-full text-sm transition-colors ${
                   isActive
-                    ? "bg-accent text-text-primary hover:bg-accent-hover"
+                    ? "bg-accent text-accent-foreground hover:bg-accent-hover"
                     : "bg-surface-active/50 text-text-secondary hover:bg-border"
                 }`}
               >

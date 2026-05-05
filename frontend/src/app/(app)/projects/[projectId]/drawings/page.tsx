@@ -127,7 +127,7 @@ export default function DrawingsPage() {
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
+          className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
         >
           + Add Drawing
         </button>
@@ -214,7 +214,7 @@ export default function DrawingsPage() {
               <button
                 type="submit"
                 disabled={createDrawingMutation.isPending}
-                className="flex-1 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors font-medium"
+                className="flex-1 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors font-medium"
               >
                 {createDrawingMutation.isPending ? "Creating..." : "Create Drawing"}
               </button>

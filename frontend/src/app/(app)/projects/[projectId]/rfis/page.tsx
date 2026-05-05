@@ -161,7 +161,7 @@ export default function RfisPage() {
         </div>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
+          className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
         >
           + Create RFI
         </button>
@@ -277,7 +277,7 @@ export default function RfisPage() {
               <button
                 type="submit"
                 disabled={createRfiMutation.isPending}
-                className="flex-1 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors font-medium"
+                className="flex-1 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors font-medium"
               >
                 {createRfiMutation.isPending ? "Creating..." : "Create RFI"}
               </button>

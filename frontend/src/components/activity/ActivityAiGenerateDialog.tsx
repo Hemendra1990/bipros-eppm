@@ -252,7 +252,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
                 <button
                   onClick={handleGenerate}
                   disabled={generateMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
                 >
                   <Sparkles size={16} />
                   Generate
@@ -261,7 +261,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
                 <button
                   onClick={handleGenerateFromDocument}
                   disabled={!docFile || generateFromDocumentMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
                 >
                   <Sparkles size={16} />
                   Generate from document
@@ -291,7 +291,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
               <button
                 onClick={() => applyMutation.mutate()}
                 disabled={applyMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {applyMutation.isPending
                   ? "Applying..."
@@ -305,7 +305,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
           {phase === "report" && (
             <button
               onClick={handleClose}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
             >
               Done
             </button>

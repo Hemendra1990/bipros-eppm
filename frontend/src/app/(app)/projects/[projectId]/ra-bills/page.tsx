@@ -363,7 +363,7 @@ export default function RaBillsPage() {
               <button
                 type="submit"
                 disabled={createBillMutation.isPending}
-                className="rounded-md bg-accent px-4 py-2 text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-4 py-2 text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {createBillMutation.isPending ? "Creating..." : "Create Bill"}
               </button>

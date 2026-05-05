@@ -122,7 +122,7 @@ export default function ActivityCodesPage() {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="rounded bg-accent px-4 py-2 text-text-primary hover:bg-accent-hover"
+            className="rounded bg-accent px-4 py-2 text-accent-foreground hover:bg-accent-hover"
           >
             New Activity Code
           </button>

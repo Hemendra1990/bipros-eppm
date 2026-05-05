@@ -189,7 +189,7 @@ export default function ActivitiesPage() {
             </button>
             <button
               onClick={() => router.push(`/projects/${projectId}/activities/new`)}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
             >
               New Activity
             </button>
@@ -241,7 +241,7 @@ export default function ActivitiesPage() {
             onClick={() => setLookAheadWeeks(null)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               lookAheadWeeks === null
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
             }`}
           >
@@ -251,7 +251,7 @@ export default function ActivitiesPage() {
             onClick={() => setLookAheadWeeks(4)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               lookAheadWeeks === 4
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
             }`}
           >
@@ -261,7 +261,7 @@ export default function ActivitiesPage() {
             onClick={() => setLookAheadWeeks(13)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               lookAheadWeeks === 13
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
             }`}
           >
@@ -275,7 +275,7 @@ export default function ActivitiesPage() {
             onClick={() => setViewMode("list")}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               viewMode === "list"
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
             }`}
           >
@@ -286,7 +286,7 @@ export default function ActivitiesPage() {
             onClick={() => setViewMode("tree")}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               viewMode === "tree"
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
             }`}
           >
@@ -539,7 +539,7 @@ function ActivitiesListTable({
                           type="button"
                           onClick={() => start(activity)}
                           disabled={busy}
-                          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-60"
+                          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
                           title="Record actual start date as today"
                         >
                           Start

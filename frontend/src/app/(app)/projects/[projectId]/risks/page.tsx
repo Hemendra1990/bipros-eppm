@@ -343,7 +343,7 @@ export default function ProjectRisksPage() {
             </button>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
             >
               <Plus size={16} />
               New Risk
@@ -523,7 +523,7 @@ export default function ProjectRisksPage() {
               <button
                 type="submit"
                 disabled={createMutation.isPending}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {createMutation.isPending ? "Creating..." : "Create Risk"}
               </button>
@@ -613,14 +613,14 @@ function LibraryModal({
           <button
             type="button"
             onClick={onToggleRecommendedOnly}
-            className={`rounded px-3 py-1 ${recommendedOnly ? "bg-accent text-text-primary" : "bg-surface-hover text-text-secondary"}`}
+            className={`rounded px-3 py-1 ${recommendedOnly ? "bg-accent text-accent-foreground" : "bg-surface-hover text-text-secondary"}`}
           >
             Recommended
           </button>
           <button
             type="button"
             onClick={onToggleRecommendedOnly}
-            className={`rounded px-3 py-1 ${!recommendedOnly ? "bg-accent text-text-primary" : "bg-surface-hover text-text-secondary"}`}
+            className={`rounded px-3 py-1 ${!recommendedOnly ? "bg-accent text-accent-foreground" : "bg-surface-hover text-text-secondary"}`}
           >
             All
           </button>
@@ -669,7 +669,7 @@ function LibraryModal({
             type="button"
             disabled={selectedIds.length === 0 || isCopying}
             onClick={onCopy}
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+            className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
           >
             {isCopying ? "Copying…" : selectedIds.length === 0 ? "Select risks to copy" : `Copy ${selectedIds.length} selected`}
           </button>

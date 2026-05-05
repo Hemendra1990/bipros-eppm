@@ -189,7 +189,7 @@ export default function ContractDetailPage() {
           </div>
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors text-sm"
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors text-sm"
           >
             {isEditing ? "Cancel" : "Edit"}
           </button>
@@ -373,7 +373,7 @@ function AttachmentsTab({
         </p>
         <button
           onClick={() => setShowUpload((s) => !s)}
-          className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
+          className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors"
         >
           {showUpload ? "Cancel" : "Upload"}
         </button>
@@ -553,7 +553,7 @@ function MilestonesTab({
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
+        className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Milestone"}
       </button>
@@ -669,7 +669,7 @@ function VariationOrdersTab({
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
+        className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Variation Order"}
       </button>
@@ -786,7 +786,7 @@ function PerformanceBondsTab({
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
+        className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Bond"}
       </button>
@@ -895,7 +895,7 @@ function ScorecardTab({ contractId, scorecards, isCreating, onCreate }: Scorecar
     <div className="space-y-4">
       <button
         onClick={() => setShowForm(!showForm)}
-        className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors"
+        className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors"
       >
         {showForm ? "Cancel" : "Add Scorecard"}
       </button>

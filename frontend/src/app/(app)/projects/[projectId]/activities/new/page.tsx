@@ -371,7 +371,7 @@ export default function NewActivityPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               {isSubmitting ? "Creating..." : "Create Activity"}
             </button>

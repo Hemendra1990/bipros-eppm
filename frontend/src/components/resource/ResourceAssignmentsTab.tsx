@@ -267,7 +267,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={16} />
           Assign Resource
@@ -302,7 +302,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
               onClick={() => setAssignMode("RESOURCE")}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                 assignMode === "RESOURCE"
-                  ? "bg-accent text-text-primary"
+                  ? "bg-accent text-accent-foreground"
                   : "border border-border text-text-secondary hover:bg-surface-hover"
               }`}
             >
@@ -313,7 +313,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
               onClick={() => setAssignMode("ROLE")}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                 assignMode === "ROLE"
-                  ? "bg-accent text-text-primary"
+                  ? "bg-accent text-accent-foreground"
                   : "border border-border text-text-secondary hover:bg-surface-hover"
               }`}
             >
@@ -406,7 +406,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
               <button
                 onClick={() => assignMutation.mutate()}
                 disabled={assignMutation.isPending || !canSubmit}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active"
               >
                 {assignMutation.isPending ? "Assigning..." : "Assign"}
               </button>

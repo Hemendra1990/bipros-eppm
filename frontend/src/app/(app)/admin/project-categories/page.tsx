@@ -159,7 +159,7 @@ export default function ProjectCategoriesAdminPage() {
         actions={
           <button
             onClick={openCreateForm}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
             <Plus size={16} />
             New Category
@@ -253,7 +253,7 @@ export default function ProjectCategoriesAdminPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               {saving ? "Saving..." : editingCategory ? "Update Category" : "Create Category"}
             </button>

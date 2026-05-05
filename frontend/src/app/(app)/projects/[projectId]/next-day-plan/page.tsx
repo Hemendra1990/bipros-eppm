@@ -223,7 +223,7 @@ export default function NextDayPlanPage() {
           </div>
           <button
             onClick={handleApply}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
           >
             Apply
           </button>
@@ -239,7 +239,7 @@ export default function NextDayPlanPage() {
               setShowForm(!showForm);
               setError(null);
             }}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
           >
             {showForm ? "Cancel" : "Add Plan"}
           </button>

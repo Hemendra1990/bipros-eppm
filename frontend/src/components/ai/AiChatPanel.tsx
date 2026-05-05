@@ -550,7 +550,7 @@ export function AiChatPanel() {
     return (
       <button
         onClick={toggle}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-medium text-text-primary shadow-lg hover:bg-accent-hover transition-colors"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-medium text-accent-foreground shadow-lg hover:bg-accent-hover transition-colors"
         title="Open AI chat (Ctrl+Shift+K)"
       >
         <Bot size={18} />
@@ -716,7 +716,7 @@ export function AiChatPanel() {
                   <div
                     className={`relative max-w-[90%] rounded-xl px-3 py-2 text-sm ${
                       msg.role === "user"
-                        ? "bg-accent text-text-primary"
+                        ? "bg-accent text-accent-foreground"
                         : msg.role === "tool_call"
                         ? "bg-info/10 text-info border border-info/20"
                         : msg.role === "tool_result"
@@ -870,7 +870,7 @@ export function AiChatPanel() {
                 <button
                   onClick={sendMessage}
                   disabled={(!input.trim() && !pendingImage) || isStreaming}
-                  className="rounded-lg bg-accent p-2 text-text-primary hover:bg-accent-hover disabled:bg-border disabled:text-text-muted transition-colors"
+                  className="rounded-lg bg-accent p-2 text-accent-foreground hover:bg-accent-hover disabled:bg-border disabled:text-text-muted transition-colors"
                 >
                   {isStreaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 </button>

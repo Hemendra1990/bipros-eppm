@@ -190,7 +190,7 @@ export function CommandPalette() {
                 className={cn(
                   "mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                   active
-                    ? "bg-accent text-text-primary"
+                    ? "bg-accent text-accent-foreground"
                     : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 )}
               >

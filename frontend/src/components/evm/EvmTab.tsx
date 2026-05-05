@@ -174,7 +174,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
         <button
           onClick={() => calculateMutation.mutate()}
           disabled={calculateMutation.isPending}
-          className="rounded-md bg-accent px-6 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
+          className="rounded-md bg-accent px-6 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active"
         >
           {calculateMutation.isPending ? "Calculating..." : "Calculate EVM"}
         </button>

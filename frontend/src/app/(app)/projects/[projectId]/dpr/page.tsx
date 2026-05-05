@@ -228,7 +228,7 @@ export default function DprPage() {
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+              className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
             >
               {isFetching ? "Loading..." : "Refresh"}
             </button>
@@ -236,7 +236,7 @@ export default function DprPage() {
 
           <button
             onClick={() => setShowForm(!showForm)}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
           >
             {showForm ? "Cancel" : "Add DPR"}
           </button>

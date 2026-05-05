@@ -146,7 +146,7 @@ export default function PortfolioDetailPage() {
             <h2 className="text-lg font-semibold text-text-primary">Portfolio Projects</h2>
             <button
               onClick={() => setShowAddProject(!showAddProject)}
-              className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+              className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
             >
               <Plus size={16} />
               Add Project
@@ -171,7 +171,7 @@ export default function PortfolioDetailPage() {
                 </div>
                 <button
                   onClick={handleAddProject}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
                 >
                   Add
                 </button>
@@ -412,7 +412,7 @@ export default function PortfolioDetailPage() {
                 <GitCompare size={16} />
                 Compare Scenarios
               </button>
-              <button className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover">
+              <button className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover">
                 <Plus size={16} />
                 New Scenario
               </button>

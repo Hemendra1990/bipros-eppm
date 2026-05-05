@@ -50,13 +50,17 @@ apiClient.interceptors.response.use(
             localStorage.removeItem("access_token");
             localStorage.removeItem("refresh_token");
             document.cookie = 'access_token=; path=/; max-age=0; Secure; SameSite=Strict';
-            window.location.href = "/auth/login";
+            if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth/")) {
+              window.location.href = "/auth/login";
+            }
           }
         } else {
-          // no refresh token, redirect to login
+          // no refresh token, redirect to login (but not if already on an auth page)
           localStorage.removeItem("access_token");
           document.cookie = 'access_token=; path=/; max-age=0; Secure; SameSite=Strict';
-          window.location.href = "/auth/login";
+          if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth/")) {
+            window.location.href = "/auth/login";
+          }
         }
       }
     }

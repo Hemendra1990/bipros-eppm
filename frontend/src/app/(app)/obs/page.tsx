@@ -128,7 +128,7 @@ export default function ObsPage() {
         <h1 className="text-3xl font-bold text-text-primary">OBS Management</h1>
         <button
           onClick={handleAddRoot}
-          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={18} />
           Add Root Node
@@ -279,7 +279,7 @@ export default function ObsPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                    className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
                   >
                     {submitting ? "Creating..." : "Create"}
                   </button>

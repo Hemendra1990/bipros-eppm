@@ -140,7 +140,7 @@ export default function EpsPage() {
         actions={
           <button
             onClick={handleAddRoot}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
             <Plus size={16} />
             Add Root Node
@@ -188,7 +188,7 @@ export default function EpsPage() {
               <button
                 type="submit"
                 disabled={createMutation.isPending}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {createMutation.isPending ? "Creating..." : "Create"}
               </button>

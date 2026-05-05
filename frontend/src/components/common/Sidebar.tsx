@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAppStore, useAuthStore } from "@/lib/state/store";
+import { useThemeStore } from "@/lib/state/themeStore";
 import type { IcpmsModule } from "@/lib/types";
 import { useAccess } from "@/lib/auth/useAccess";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -172,6 +173,7 @@ export function Sidebar() {
 
   const handleLogout = () => {
     document.cookie = "access_token=; path=/; max-age=0";
+    useThemeStore.getState().clearBackendIds();
     clearAuth();
     router.push("/auth/login");
   };
@@ -261,10 +263,10 @@ export function Sidebar() {
               className="h-8 w-8 rounded-lg object-contain"
             />
             <div className="flex flex-col leading-none">
-              <span className="font-display font-semibold text-lg text-charcoal tracking-tight">
+              <span className="font-display font-semibold text-lg text-logo-primary tracking-tight">
                 Bipros
               </span>
-              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-gold-deep mt-0.5">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-logo-secondary mt-0.5">
                 EPPM
               </span>
             </div>

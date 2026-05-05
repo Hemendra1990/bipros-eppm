@@ -235,7 +235,7 @@ function EquipmentTabs({
                 type="button"
                 disabled={mutation.isPending}
                 onClick={() => mutation.mutate(draft)}
-                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {mutation.isPending ? "Saving…" : "Save"}
               </button>
@@ -469,7 +469,7 @@ function MaterialTabs({
                 type="button"
                 disabled={mutation.isPending}
                 onClick={handleSave}
-                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {mutation.isPending ? "Saving…" : "Save"}
               </button>
@@ -650,7 +650,7 @@ function ManpowerTabs({
                 type="button"
                 disabled={mutation.isPending}
                 onClick={handleSave}
-                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {mutation.isPending ? "Saving…" : "Save"}
               </button>
@@ -1011,7 +1011,7 @@ function Tabs<T extends string>({
           onClick={() => onChange(item.key)}
           className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
             value === item.key
-              ? "bg-accent text-text-primary"
+              ? "bg-accent text-accent-foreground"
               : "text-text-secondary hover:bg-surface-hover/50"
           }`}
         >

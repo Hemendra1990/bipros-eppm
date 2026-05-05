@@ -210,78 +210,7 @@ export function LoginHero() {
             </figure>
           </div>
         </div>
-
-        {/* ── MIDDLE ─ Live programme pulse sidebar (desktop only) ────────── */}
-        <aside className="anim-rise delay-3 order-3 hidden lg:order-2 lg:block lg:w-[220px] lg:flex-shrink-0">
-          <div className="relative overflow-hidden rounded-2xl border border-hairline bg-paper/55 p-4 shadow-[0_12px_40px_rgba(28,28,28,0.06)] backdrop-blur-sm">
-            <div
-              aria-hidden
-              className="absolute inset-x-5 top-0 h-px"
-              style={{
-                background:
-                  "linear-gradient(90deg,transparent,#D4AF37,transparent)",
-              }}
-            />
-
-            <div className="flex items-center justify-between border-b border-hairline pb-3">
-              <div className="flex items-center gap-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.16em] text-emerald">
-                <span
-                  aria-hidden
-                  className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald"
-                />
-                Live now
-              </div>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.14em] text-ash">
-                14s ago
-              </span>
-            </div>
-
-            <ul className="divide-y divide-hairline/70">
-              {LIVE_STATS.map((s) => (
-                <li key={s.label} className="py-3.5 first:pt-3.5 last:pb-1">
-                  <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-ash">
-                    {s.label}
-                  </div>
-                  <div
-                    className="mt-1 font-display text-[26px] font-semibold leading-none tracking-[-0.015em] text-charcoal"
-                    style={{ fontVariationSettings: "'opsz' 144" }}
-                  >
-                    {s.value}
-                  </div>
-                  <div
-                    className={`mt-1.5 flex items-center gap-1 text-[10.5px] font-medium ${
-                      s.trend === "up"
-                        ? "text-emerald"
-                        : s.trend === "down"
-                          ? "text-burgundy"
-                          : "text-slate"
-                    }`}
-                  >
-                    {s.trend === "up" && <span aria-hidden>↑</span>}
-                    {s.trend === "down" && <span aria-hidden>↓</span>}
-                    {s.delta}
-                  </div>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-3 border-t border-hairline pt-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-slate">
-              Across <span className="text-charcoal">400+</span> delivery teams
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-xl border border-hairline bg-ivory/40 px-3.5 py-3">
-            <div className="flex items-center gap-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-gold-deep">
-              <ShieldCheck size={11} />
-              Protected
-            </div>
-            <p className="mt-1.5 text-[11.5px] leading-[1.4] text-slate">
-              SSO, MFA, and role-based access enforced on every session — your
-              programme data stays in your tenant.
-            </p>
-          </div>
-        </aside>
-
+        
         {/* ── RIGHT ─ Login card (mobile order: 1) ─────────────────────────── */}
         <div className="order-1 w-full lg:order-3 lg:w-[420px] lg:flex-shrink-0">
           <form
@@ -437,19 +366,11 @@ export function LoginHero() {
             <button
               type="submit"
               disabled={submitting}
-              className="group relative mt-5 inline-flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-charcoal px-4 text-[14.5px] font-semibold text-paper shadow-[0_10px_28px_rgba(28,28,28,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-[0_16px_36px_rgba(28,28,28,0.30)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:shadow-[0_10px_28px_rgba(0,0,0,0.55)] dark:hover:shadow-[0_16px_36px_rgba(0,0,0,0.65)]"
+              className="group relative mt-5 inline-flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-accent px-4 text-[14.5px] font-semibold text-accent-foreground shadow-[0_10px_28px_rgba(0,0,0,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
             >
-              <span
-                aria-hidden
-                className="absolute inset-x-0 -top-px h-px"
-                style={{
-                  background:
-                    "linear-gradient(90deg,transparent,rgba(212,175,55,0.6),transparent)",
-                }}
-              />
               {submitting ? (
                 <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-paper/30 border-t-paper" />
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent-foreground/30 border-t-accent-foreground" />
                   Signing in…
                 </>
               ) : (

@@ -179,7 +179,7 @@ export function SearchableSelect({
                 className={cn(
                   "cursor-pointer px-3 py-2 text-sm transition-colors",
                   index === highlightedIndex
-                    ? "bg-accent text-text-primary"
+                    ? "bg-accent text-accent-foreground"
                     : option.value === value
                       ? "bg-accent/10 text-accent"
                       : "text-text-secondary hover:bg-surface-active"

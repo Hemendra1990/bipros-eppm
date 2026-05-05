@@ -114,7 +114,7 @@ export default function PortfoliosPage() {
         <h1 className="text-3xl font-bold text-text-primary">Portfolios</h1>
         <button
           onClick={() => setShowNewForm(!showNewForm)}
-          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={18} />
           New Portfolio
@@ -175,7 +175,7 @@ export default function PortfoliosPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {submitting ? "Creating..." : "Create"}
               </button>
@@ -285,7 +285,7 @@ export default function PortfoliosPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
                 >
                   {submitting ? "Saving..." : "Save Changes"}
                 </button>

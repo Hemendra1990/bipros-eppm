@@ -407,7 +407,7 @@ export default function ProductivityNormsPage() {
           <h1 className="text-3xl font-bold text-text-primary">Productivity Norms</h1>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors font-medium"
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors font-medium"
           >
             {showForm ? "Cancel" : "Add Norm"}
           </button>
@@ -419,7 +419,7 @@ export default function ProductivityNormsPage() {
             onClick={() => handleTabChange("MANPOWER")}
             className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
               tab === "MANPOWER"
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-border"
             }`}
           >
@@ -429,7 +429,7 @@ export default function ProductivityNormsPage() {
             onClick={() => handleTabChange("EQUIPMENT")}
             className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
               tab === "EQUIPMENT"
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-border"
             }`}
           >
