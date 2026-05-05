@@ -46,13 +46,6 @@ export function DataTable<T = unknown>({
     [columns]
   );
 
-  const getRowId = useMemo(() => {
-    if (typeof rowKey === "function") {
-      return (row: T, index: number) => rowKey(row, index);
-    }
-    return (row: T) => String((row as Record<string, unknown>)[rowKey]);
-  }, [rowKey]);
-
   return (
     <VirtualDataTable
       data={data}

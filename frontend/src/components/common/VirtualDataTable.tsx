@@ -18,7 +18,6 @@ interface VirtualDataTableProps<TData> {
 
   // Features
   sortable?: boolean;
-  filterable?: boolean;
   resizable?: boolean;
   searchable?: boolean;
   selectable?: boolean;
@@ -48,7 +47,6 @@ export function VirtualDataTable<TData>({
   data,
   columns,
   sortable = true,
-  filterable = false,
   resizable = true,
   searchable = true,
   selectable = false,

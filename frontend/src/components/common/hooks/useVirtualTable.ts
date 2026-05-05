@@ -8,7 +8,6 @@ import {
   getFilteredRowModel,
   type ColumnDef,
   type TableOptions,
-  type SortingState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
