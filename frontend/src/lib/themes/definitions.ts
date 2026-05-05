@@ -30,6 +30,10 @@ export interface ThemeDefinition {
   fontFamily?: string;
   isCustom?: boolean;
   createdAt?: string;
+  logoLight?: string;
+  logoDark?: string;
+  appNamePrimary?: string;
+  appNameSecondary?: string;
 }
 
 export const DEFAULT_THEME_ID = "classic-gold";

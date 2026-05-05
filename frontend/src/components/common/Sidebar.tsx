@@ -18,6 +18,7 @@ import type { IcpmsModule } from "@/lib/types";
 import { useAccess } from "@/lib/auth/useAccess";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useMostSeniorRole } from "@/hooks/useMostSeniorRole";
+import { useActiveLogo, useAppName } from "@/hooks/useThemeManager";
 import { defaultExpandedGroups } from "@/components/hub/hubConfig";
 
 const COLLAPSED_GROUPS_STORAGE_KEY = "bipros.sidebar.groups.v1";
@@ -170,6 +171,8 @@ export function Sidebar() {
   const { isAdmin, hasAnyRole } = useAuth();
   const { canAccessModule } = useAccess();
   const router = useRouter();
+  const logoSrc = useActiveLogo();
+  const appName = useAppName();
 
   const handleLogout = () => {
     document.cookie = "access_token=; path=/; max-age=0";
@@ -256,26 +259,26 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2.5">
             <img
-              src="/bipros-logo.png"
-              alt="Bipros"
+              src={logoSrc}
+              alt={appName.primary}
               width={32}
               height={32}
               className="h-8 w-8 rounded-lg object-contain"
             />
             <div className="flex flex-col leading-none">
               <span className="font-display font-semibold text-lg text-logo-primary tracking-tight">
-                Bipros
+                {appName.primary}
               </span>
               <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-logo-secondary mt-0.5">
-                EPPM
+                {appName.secondary}
               </span>
             </div>
           </div>
         )}
         {sidebarCollapsed && (
           <img
-            src="/bipros-logo.png"
-            alt="Bipros"
+            src={logoSrc}
+            alt={appName.primary}
             width={32}
             height={32}
             className="mx-auto h-8 w-8 rounded-lg object-contain"

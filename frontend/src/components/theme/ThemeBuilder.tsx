@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { HexColorPicker } from "react-colorful";
-import { Shuffle } from "lucide-react";
+import { Shuffle, ImageIcon, X } from "lucide-react";
 import type { ThemeDefinition, PaletteValues } from "@/lib/themes/definitions";
 import { ThemePreview } from "./ThemePreview";
 
@@ -24,7 +24,7 @@ const COLOR_SECTIONS: { label: string; keys: ColorKey[] }[] = [
   { label: "Borders", keys: ["border", "borderSubtle"] },
   { label: "Status", keys: ["success", "warning", "danger", "info"] },
   { label: "Amber Flame", keys: ["amberFlame"] },
-  { label: "Logo", keys: ["logoPrimary", "logoSecondary"] },
+  { label: "Logo Text Colors", keys: ["logoPrimary", "logoSecondary"] },
 ];
 
 const FONT_OPTIONS = ["", "Fraunces", "Inter", "JetBrains Mono"];
@@ -293,7 +293,10 @@ export function ThemeBuilder({ initialTheme, onSave, onCancel, onPreview }: Them
   const [mode, setMode] = useState<Mode>("light");
   const [openPicker, setOpenPicker] = useState<ColorKey | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
+  const lightLogoInputRef = useRef<HTMLInputElement>(null);
+  const darkLogoInputRef = useRef<HTMLInputElement>(null);
   const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPreviewedRef = useRef(false);
 
@@ -335,6 +338,25 @@ export function ThemeBuilder({ initialTheme, onSave, onCancel, onPreview }: Them
       borderRadius: BORDER_OPTIONS[randomInt(0, BORDER_OPTIONS.length - 1)],
       fontFamily: FONT_OPTIONS[randomInt(0, FONT_OPTIONS.length - 1)] || undefined,
     }));
+  }
+
+  function handleLogoUpload(slot: "logoLight" | "logoDark", file: File) {
+    setLogoError(null);
+    if (file.size > 512 * 1024) {
+      setLogoError(`Logo too large (${(file.size / 1024).toFixed(0)} KB). Max 512 KB.`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setDraft((prev) => ({ ...prev, [slot]: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearLogo(slot: "logoLight" | "logoDark") {
+    setLogoError(null);
+    setDraft((prev) => ({ ...prev, [slot]: undefined }));
   }
 
   function handleSave() {
@@ -426,6 +448,98 @@ export function ThemeBuilder({ initialTheme, onSave, onCancel, onPreview }: Them
           {error && <p className="text-sm text-danger">{error}</p>}
         </div>
 
+        {/* App name */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">App Name</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-text-secondary mb-1">Primary name</label>
+              <input
+                type="text"
+                value={draft.appNamePrimary ?? ""}
+                onChange={(e) => setDraft((prev) => ({ ...prev, appNamePrimary: e.target.value || undefined }))}
+                placeholder="Bipros"
+                className="block w-full rounded-md border border-border bg-surface-hover px-3 py-1.5 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-text-secondary mb-1">Secondary name</label>
+              <input
+                type="text"
+                value={draft.appNameSecondary ?? ""}
+                onChange={(e) => setDraft((prev) => ({ ...prev, appNameSecondary: e.target.value || undefined }))}
+                placeholder="EPPM"
+                className="block w-full rounded-md border border-border bg-surface-hover px-3 py-1.5 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Logo upload */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">Logo Images</h4>
+          <div className="grid grid-cols-2 gap-3">
+            {(["logoLight", "logoDark"] as const).map((slot) => {
+              const label = slot === "logoLight" ? "Light Mode Logo" : "Dark Mode Logo";
+              const inputRef = slot === "logoLight" ? lightLogoInputRef : darkLogoInputRef;
+              const value = draft[slot];
+              const otherValue = slot === "logoLight" ? draft.logoDark : draft.logoLight;
+              const fallbackNote = !value && otherValue
+                ? (slot === "logoLight" ? "Dark logo used as fallback" : "Light logo used as fallback")
+                : null;
+              return (
+                <div key={slot} className="flex flex-col gap-1.5">
+                  <span className="text-xs text-text-secondary">{label}</span>
+                  <div className="rounded-md border border-dashed border-border bg-surface-hover p-2 flex flex-col items-center gap-2">
+                    {value ? (
+                      <img src={value} alt={label} className="h-10 w-10 rounded-md object-contain" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-md flex items-center justify-center bg-surface-active">
+                        <ImageIcon size={16} className="text-text-muted" />
+                      </div>
+                    )}
+                    <div className="flex gap-1.5 w-full">
+                      <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        className="flex-1 rounded px-2 py-1 text-[11px] font-medium bg-surface-active text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
+                      >
+                        {value ? "Change" : "Upload"}
+                      </button>
+                      {value && (
+                        <button
+                          type="button"
+                          onClick={() => clearLogo(slot)}
+                          className="rounded p-1 text-text-muted hover:text-danger hover:bg-surface-active transition-colors"
+                          title="Remove logo"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {fallbackNote && (
+                    <p className="text-[10px] text-text-muted leading-tight">{fallbackNote}</p>
+                  )}
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept="image/png,image/svg+xml,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleLogoUpload(slot, file);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {logoError && <p className="mt-1.5 text-xs text-danger">{logoError}</p>}
+          <p className="mt-1 text-[10px] text-text-muted">PNG · SVG · JPG · WebP · max 512 KB each</p>
+        </div>
+
         {/* Mode tabs */}
         <div className="flex rounded-md border border-border overflow-hidden">
           <button
@@ -505,7 +619,13 @@ export function ThemeBuilder({ initialTheme, onSave, onCancel, onPreview }: Them
       {/* Right: Preview */}
       <div className="space-y-3">
         <h4 className="text-sm font-semibold text-text-primary">Live Preview</h4>
-        <ThemePreview palette={palette} mode={mode} />
+        <ThemePreview
+          palette={palette}
+          mode={mode}
+          logoSrc={mode === "light" ? (draft.logoLight ?? draft.logoDark) : (draft.logoDark ?? draft.logoLight)}
+          appNamePrimary={draft.appNamePrimary}
+          appNameSecondary={draft.appNameSecondary}
+        />
       </div>
     </div>
   );

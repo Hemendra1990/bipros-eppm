@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/lib/state/store";
 import { useThemeStore } from "@/lib/state/themeStore";
@@ -183,6 +184,26 @@ export function useThemeManager() {
     previewTheme,
     cancelPreview,
   };
+}
+
+export function useAppName(): { primary: string; secondary: string } {
+  const { activeThemeId, customThemes } = useThemeStore();
+  const theme = getThemeById(activeThemeId, customThemes);
+  return {
+    primary: theme.appNamePrimary || "Bipros",
+    secondary: theme.appNameSecondary || "EPPM",
+  };
+}
+
+export function useActiveLogo(): string {
+  const { activeThemeId, customThemes } = useThemeStore();
+  const { resolvedTheme } = useTheme();
+  const theme = getThemeById(activeThemeId, customThemes);
+  const isDark = resolvedTheme === "dark";
+  if (isDark) {
+    return theme.logoDark ?? theme.logoLight ?? "/bipros-logo.png";
+  }
+  return theme.logoLight ?? theme.logoDark ?? "/bipros-logo.png";
 }
 
 export function initThemeFromCache(): void {
