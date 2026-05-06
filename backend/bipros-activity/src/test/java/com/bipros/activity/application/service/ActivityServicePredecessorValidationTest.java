@@ -106,7 +106,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           10.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       BusinessRuleException ex = assertThrows(BusinessRuleException.class,
           () -> service.updateActivity(successorId, req));
@@ -122,7 +122,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           25.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertThrows(BusinessRuleException.class, () -> service.updateActivity(successorId, req));
     }
@@ -141,7 +141,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           10.0, null, LocalDate.of(2026, 4, 12), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -160,7 +160,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           null, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertThrows(BusinessRuleException.class, () -> service.updateActivity(successorId, req));
     }
@@ -176,7 +176,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           null, null, LocalDate.of(2026, 4, 18), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -198,7 +198,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           100.0, null, null, LocalDate.of(2026, 4, 30),
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertThrows(BusinessRuleException.class, () -> service.updateActivity(successorId, req));
     }
@@ -212,7 +212,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           25.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -230,7 +230,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           50.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -246,7 +246,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           10.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -258,7 +258,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           "Renamed", null, null, null, null, null, null, null, null,
           null, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }

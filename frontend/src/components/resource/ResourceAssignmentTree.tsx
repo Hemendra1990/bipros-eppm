@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { ChevronRight, ChevronDown, List, FolderTree, Layers } from "lucide-react";
+import { ChevronRight, ChevronDown, List, FolderTree, Layers, UserCheck } from "lucide-react";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 
 export interface AssignmentRow {
@@ -27,6 +27,11 @@ export interface AssignmentRow {
   plannedCost: number;
   actualCost: number;
   remainingCost: number;
+  /** Supervisor on the parent activity — used by the "By Supervisor" view to group activities
+   * under their supervisor. Lives on Activity.responsibleResourceId; the tab populates it
+   * here so the tree builder doesn't need a second data source. Null when no supervisor set. */
+  activitySupervisorResourceId: string | null;
+  activitySupervisorName: string | null;
 }
 
 export interface ResourceTypeInfo {
@@ -93,7 +98,7 @@ function shareSameUnit(rows: AssignmentRow[]): boolean {
 
 interface Props {
   assignments: AssignmentRow[];
-  viewMode: "activity" | "resourceType";
+  viewMode: "activity" | "resourceType" | "supervisor";
   resources: ResourceTypeInfo[];
   onRowClick?: (row: AssignmentRow) => void;
   selectedId?: string | null;
@@ -248,6 +253,58 @@ function buildResourceTypeTree(
   });
 }
 
+/**
+ * Four-level tree: Supervisor → Activity → Role → Resource.
+ *
+ * Activities without a supervisor are NOT shown — this view is for organising work
+ * grouped by an actual supervisor. Un-supervised activities are visible elsewhere
+ * (Activities tab Supervisor column shows "—"; the Resources → Supervisor tab is the
+ * place to assign one). Reuses {@link buildActivityTree} for the per-supervisor
+ * sub-tree (Activity → Role → Resource).
+ */
+function buildSupervisorTree(assignments: AssignmentRow[]): TreeNode[] {
+  // Drop activities without a supervisor before bucketing.
+  const supervisedRows = assignments.filter((a) => a.activitySupervisorResourceId != null);
+
+  const bySupervisor = new Map<string, AssignmentRow[]>();
+  for (const a of supervisedRows) {
+    const key = a.activitySupervisorResourceId as string;
+    const list = bySupervisor.get(key) ?? [];
+    list.push(a);
+    bySupervisor.set(key, list);
+  }
+
+  const sorted = Array.from(bySupervisor.entries()).sort(([, rowsA], [, rowsB]) => {
+    const aName = rowsA[0].activitySupervisorName ?? "";
+    const bName = rowsB[0].activitySupervisorName ?? "";
+    return aName.localeCompare(bName);
+  });
+
+  return sorted.map(([supervisorKey, rows]) => {
+    const name = rows[0].activitySupervisorName ?? supervisorKey;
+    const sums = sumRows(rows);
+    const sameUnit = shareSameUnit(rows);
+    return {
+      id: `supervisor-${supervisorKey}`,
+      code: name,
+      name,
+      rollup: {
+        childCount: rows.length,
+        budgetedUnits: sameUnit ? sums.budgetedUnits : null,
+        plannedUnits: sameUnit ? sums.plannedUnits : null,
+        actualUnits: sameUnit ? sums.actualUnits : null,
+        remainingUnits: sameUnit ? sums.remainingUnits : null,
+        budgetedCost: sums.budgetedCost,
+        plannedCost: sums.plannedCost,
+        actualCost: sums.actualCost,
+        remainingCost: sums.remainingCost,
+      },
+      // Reuse the existing Activity → Role → Resource builder for the sub-tree.
+      children: buildActivityTree(rows),
+    };
+  });
+}
+
 function num(n: number | null | undefined): string {
   if (n == null) return "";
   return Number(n).toFixed(2);
@@ -268,7 +325,7 @@ function TreeRow({
   toggle: (id: string) => void;
   onRowClick?: (row: AssignmentRow) => void;
   selectedId?: string | null;
-  viewMode: "activity" | "resourceType";
+  viewMode: "activity" | "resourceType" | "supervisor";
 }) {
   const isGroup = !!node.children && node.children.length > 0;
   const isSelected = !isGroup && node.assignment && node.assignment.id === selectedId;
@@ -412,6 +469,9 @@ export function ResourceAssignmentTree({
     if (viewMode === "activity") {
       return buildActivityTree(assignments);
     }
+    if (viewMode === "supervisor") {
+      return buildSupervisorTree(assignments);
+    }
     return buildResourceTypeTree(assignments, resources);
   }, [assignments, viewMode, resources]);
 
@@ -449,8 +509,28 @@ export function ResourceAssignmentTree({
     );
   }
 
+  // Supervisor view filters out activities without a supervisor — if none qualify we
+  // show a tailored empty-state pointing the user to the bulk-assignment screen rather
+  // than the generic "No Assignments" copy.
+  if (viewMode === "supervisor" && tree.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border py-12 text-center">
+        <h3 className="text-lg font-medium text-text-primary">No supervisors set</h3>
+        <p className="mt-2 text-text-secondary max-w-md mx-auto">
+          No activities in this project have a supervisor assigned yet. Use the
+          <span className="text-accent"> Supervisor </span> sub-tab above to assign one
+          supervisor across many activities, or set per-activity from the activity edit form.
+        </p>
+      </div>
+    );
+  }
+
   const firstColLabel =
-    viewMode === "activity" ? "Activity / Role / Resource" : "Resource Type / Resource";
+    viewMode === "activity"
+      ? "Activity / Role / Resource"
+      : viewMode === "supervisor"
+        ? "Supervisor / Activity / Role / Resource"
+        : "Resource Type / Resource";
 
   return (
     <div className="rounded-xl border border-border bg-surface/50 shadow-xl overflow-hidden">
@@ -492,13 +572,14 @@ export function ViewModeToggle({
   viewMode,
   onChange,
 }: {
-  viewMode: "flat" | "activity" | "resourceType";
-  onChange: (mode: "flat" | "activity" | "resourceType") => void;
+  viewMode: "flat" | "activity" | "resourceType" | "supervisor";
+  onChange: (mode: "flat" | "activity" | "resourceType" | "supervisor") => void;
 }) {
-  const modes: { key: "flat" | "activity" | "resourceType"; label: string; icon: React.ReactNode }[] = [
+  const modes: { key: "flat" | "activity" | "resourceType" | "supervisor"; label: string; icon: React.ReactNode }[] = [
     { key: "flat", label: "Flat List", icon: <List size={14} /> },
     { key: "activity", label: "By Activity", icon: <FolderTree size={14} /> },
     { key: "resourceType", label: "By Type", icon: <Layers size={14} /> },
+    { key: "supervisor", label: "By Supervisor", icon: <UserCheck size={14} /> },
   ];
 
   return (

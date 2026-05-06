@@ -40,6 +40,9 @@ interface ResourceAssignmentRow {
   actualCost: number;
   remainingCost: number;
   staffed: boolean;
+  /** Supervisor on the parent activity — populates the "By Supervisor" view. */
+  activitySupervisorResourceId: string | null;
+  activitySupervisorName: string | null;
 }
 
 export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
@@ -56,7 +59,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [showLeveling, setShowLeveling] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<{ id: string; resourceName: string; activityName: string } | null>(null);
-  const [viewMode, setViewMode] = useState<"flat" | "activity" | "resourceType">("activity");
+  const [viewMode, setViewMode] = useState<"flat" | "activity" | "resourceType" | "supervisor">("activity");
 
   const { data: assignmentsData, isLoading: isLoadingAssignments } = useQuery({
     queryKey: ["resource-assignments", projectId],
@@ -198,6 +201,8 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
         actualCost,
         remainingCost,
         staffed: a.staffed ?? a.resourceId != null,
+        activitySupervisorResourceId: activity?.responsibleResourceId ?? null,
+        activitySupervisorName: activity?.responsibleResourceName ?? null,
       };
     });
   }, [assignments, pool, activities, projectId]);

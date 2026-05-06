@@ -352,7 +352,7 @@ class StretchAndDailyReportsIntegrationTest {
         @DisplayName("POST /dpr - create")
         void createDpr_returns201() {
             CreateDailyProgressReportRequest req = new CreateDailyProgressReportRequest(
-                    LocalDate.now(), "Supervisor Name", 0L, 500L,
+                    LocalDate.now(), null, "Supervisor Name", 0L, 500L,
                     "Earthwork", null, null, "M3", null, null, null);
             HttpEntity<CreateDailyProgressReportRequest> e = new HttpEntity<>(req, authJsonHeaders());
             ResponseEntity<ApiResponse> resp = restTemplate.exchange(

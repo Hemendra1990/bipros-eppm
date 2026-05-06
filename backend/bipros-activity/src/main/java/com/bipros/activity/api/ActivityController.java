@@ -120,4 +120,17 @@ public class ActivityController {
     java.util.Map<String, Object> result = java.util.Map.of("updatedCount", updatedCount);
     return ResponseEntity.ok(ApiResponse.ok(result));
   }
+
+  /**
+   * Bulk-assign one supervisor (a Resource) across many activities. Powers the
+   * Resources → Supervisor sub-tab.
+   */
+  @PostMapping("/supervisor-bulk")
+  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  public ResponseEntity<ApiResponse<java.util.Map<String, Integer>>> bulkSetSupervisor(
+      @PathVariable UUID projectId,
+      @Valid @RequestBody com.bipros.activity.application.dto.BulkSupervisorRequest request) {
+    int updated = activityService.bulkSetSupervisor(projectId, request);
+    return ResponseEntity.ok(ApiResponse.ok(java.util.Map.of("updated", updated)));
+  }
 }

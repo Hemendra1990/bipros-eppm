@@ -186,7 +186,11 @@ export default function DprPage() {
     }
   };
 
+  // Once the user manually picks a supervisor, we stop auto-pre-filling on activity change.
+  const [supervisorTouched, setSupervisorTouched] = useState(false);
+
   const handleSupervisorChange = (value: string) => {
+    setSupervisorTouched(true);
     if (value === SUPERVISOR_OTHER) {
       setFormData((f) => ({ ...f, supervisorResourceId: SUPERVISOR_OTHER, supervisorName: "" }));
       return;
@@ -196,6 +200,27 @@ export default function DprPage() {
       ...f,
       supervisorResourceId: value,
       supervisorName: match?.name ?? "",
+    }));
+  };
+
+  /**
+   * When the user selects an activity, default the Supervisor to the activity's cached
+   * responsibleResourceId — but only if (a) the user hasn't manually edited the field, and
+   * (b) the cached resource is in the eligible-supervisors list. Otherwise leave it alone.
+   */
+  const handleActivityChange = (value: string) => {
+    setFormData((f) => ({ ...f, activityName: value }));
+    if (supervisorTouched) return;
+    const activity = activitiesData?.data?.content.find((a) => a.name === value);
+    const cachedResourceId = activity?.responsibleResourceId ?? null;
+    if (!cachedResourceId) return;
+    const inEligibleList = supervisors.some((s) => s.id === cachedResourceId);
+    if (!inEligibleList) return;
+    const resource = supervisors.find((s) => s.id === cachedResourceId);
+    setFormData((f) => ({
+      ...f,
+      supervisorResourceId: cachedResourceId,
+      supervisorName: resource?.name ?? f.supervisorName,
     }));
   };
 
@@ -226,6 +251,10 @@ export default function DprPage() {
     setChainageFromError(null);
     setChainageToError(null);
     setError(null);
+    // Editing an existing row — the supervisor came from the saved data, so suppress auto pre-fill
+    // until the user changes the activity again. (Prevents an unrelated activity-change from
+    // overwriting an explicitly-saved supervisor.)
+    setSupervisorTouched(true);
     // Scroll the form into view — page has a tall AI Insights panel above, so scrolling
     // window-to-top would land on that and miss the form entirely.
     if (typeof window !== "undefined") {
@@ -242,6 +271,7 @@ export default function DprPage() {
     setChainageFromError(null);
     setChainageToError(null);
     setError(null);
+    setSupervisorTouched(false);
   };
 
   const handleDelete = async (row: DailyProgressReportResponse) => {
@@ -461,7 +491,7 @@ export default function DprPage() {
                 <SearchableSelect
                   options={activityOptions}
                   value={formData.activityName}
-                  onChange={(value) => setFormData({ ...formData, activityName: value })}
+                  onChange={handleActivityChange}
                   placeholder="Search activity..."
                   className="w-full"
                 />

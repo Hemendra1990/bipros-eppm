@@ -679,6 +679,7 @@ function ActivitiesListTable({
                   Budget Variance
                 </th>
               )}
+              <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap" title="Field-accountable LABOR resource set on the activity">Supervisor</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">Actions</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">Deps</th>
             </tr>
@@ -879,6 +880,9 @@ function ActivitiesListTable({
                       </td>
                     );
                   })()}
+                  <td className="px-4 py-4 text-sm whitespace-nowrap text-text-secondary">
+                    {activity.responsibleResourceName ?? <span className="text-text-muted">—</span>}
+                  </td>
                   <td className="px-4 py-4 text-sm whitespace-nowrap">
                     <div className="flex gap-2">
                       {canStart(activity) && (

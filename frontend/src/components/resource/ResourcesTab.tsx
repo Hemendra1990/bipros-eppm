@@ -6,8 +6,9 @@ import { projectResourceApi } from "@/lib/api/projectResourceApi";
 import { ProjectResourcePool } from "./ProjectResourcePool";
 import { ResourceAssignmentsTab } from "./ResourceAssignmentsTab";
 import { ResourceUsageTimePhased } from "./ResourceUsageTimePhased";
+import { SupervisorAssignmentTab } from "./SupervisorAssignmentTab";
 
-type SubTab = "pool" | "assignments" | "usage";
+type SubTab = "pool" | "assignments" | "supervisor" | "usage";
 
 export function ResourcesTab({ projectId }: { projectId: string }) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab | null>(null);
@@ -53,6 +54,17 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
           Assignments
         </button>
         <button
+          onClick={() => setActiveSubTab("supervisor")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            resolvedTab === "supervisor"
+              ? "border-accent text-text-primary"
+              : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
+          }`}
+          title="Bulk-assign one supervisor across many activities"
+        >
+          Supervisor
+        </button>
+        <button
           onClick={() => setActiveSubTab("usage")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             resolvedTab === "usage"
@@ -67,6 +79,7 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
 
       {resolvedTab === "pool" && <ProjectResourcePool projectId={projectId} />}
       {resolvedTab === "assignments" && <ResourceAssignmentsTab projectId={projectId} />}
+      {resolvedTab === "supervisor" && <SupervisorAssignmentTab projectId={projectId} />}
       {resolvedTab === "usage" && <ResourceUsageTimePhased projectId={projectId} />}
     </div>
   );

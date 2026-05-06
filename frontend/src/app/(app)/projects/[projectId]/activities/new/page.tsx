@@ -10,6 +10,7 @@ import { activityApi } from "@/lib/api/activityApi";
 import type { CreateActivityRequest } from "@/lib/api/activityApi";
 import { workActivityApi } from "@/lib/api/workActivityApi";
 import { calendarApi } from "@/lib/api/calendarApi";
+import { projectResourceApi } from "@/lib/api/projectResourceApi";
 import type { WbsNodeResponse } from "@/lib/types";
 import { getErrorMessage } from "@/lib/utils/error";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
@@ -33,6 +34,8 @@ export default function NewActivityPage() {
     plannedFinishDate: string;
     workActivityId: string;
     calendarId: string;
+    supervisorResourceId: string;
+    supervisorResourceName: string;
   }>({
     code: "",
     name: "",
@@ -45,6 +48,8 @@ export default function NewActivityPage() {
     plannedFinishDate: "",
     workActivityId: "",
     calendarId: "",
+    supervisorResourceId: "",
+    supervisorResourceName: "",
   });
 
   const [error, setError] = useState("");
@@ -75,6 +80,23 @@ export default function NewActivityPage() {
     queryFn: () => projectApi.getProject(projectId),
   });
   const projectCalendarId = projectData?.data?.calendarId;
+
+  // Project pool, filtered to LABOR/Manpower resources for the Supervisor picker. The
+  // resourceTypeName check is intentionally permissive (Labor / Labour / Manpower variants).
+  const { data: poolData, isLoading: isLoadingPool } = useQuery({
+    queryKey: ["resource-pool", projectId],
+    queryFn: () => projectResourceApi.listPool(projectId),
+    enabled: !!projectId,
+  });
+  const supervisorOptions = (poolData?.data ?? [])
+    .filter((p) => {
+      const t = (p.resourceTypeName ?? "").toLowerCase();
+      return t.includes("labor") || t.includes("labour") || t.includes("manpower");
+    })
+    .map((p) => ({
+      value: p.resourceId,
+      label: `${p.resourceCode ? p.resourceCode + " — " : ""}${p.resourceName ?? p.resourceId}`,
+    }));
 
   // Flatten WBS tree for dropdown
   const flattenedWbs = flattenWbsNodes(wbsNodes);
@@ -123,6 +145,8 @@ export default function NewActivityPage() {
         plannedFinishDate: formData.plannedFinishDate || undefined,
         workActivityId: formData.workActivityId || undefined,
         calendarId: formData.calendarId || undefined,
+        supervisorResourceId: formData.supervisorResourceId || undefined,
+        supervisorResourceName: formData.supervisorResourceName || undefined,
       };
 
       const result = await activityApi.createActivity(projectId, createRequest);
@@ -276,6 +300,37 @@ export default function NewActivityPage() {
                 disabled={isLoadingWbs}
               />
               {fieldErrors.wbsNodeId && <p className="mt-1 text-xs text-danger">{fieldErrors.wbsNodeId}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">
+                Supervisor (Manpower / Labor)
+              </label>
+              <SearchableSelect
+                value={formData.supervisorResourceId}
+                onChange={(val) => {
+                  const pooled = (poolData?.data ?? []).find((p) => p.resourceId === val);
+                  setFormData((prev) => ({
+                    ...prev,
+                    supervisorResourceId: val,
+                    supervisorResourceName: pooled?.resourceName ?? "",
+                  }));
+                }}
+                placeholder={
+                  isLoadingPool
+                    ? "Loading project pool..."
+                    : supervisorOptions.length
+                      ? "Search labor resources..."
+                      : "No labor resources in project pool"
+                }
+                options={[{ value: "", label: "— none —" }, ...supervisorOptions]}
+                disabled={isLoadingPool || supervisorOptions.length === 0}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Field-accountable supervisor. Picker shows only Labor resources from this project&apos;s pool. Leave empty if no supervisor.
+              </p>
             </div>
           </div>
 

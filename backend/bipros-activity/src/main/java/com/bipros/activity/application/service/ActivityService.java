@@ -104,6 +104,8 @@ public class ActivityService {
     activity.setChainageToM(request.chainageToM());
     activity.setWorkActivityId(request.workActivityId());
     activity.setCostAccountId(request.costAccountId());
+    activity.setResponsibleResourceId(request.supervisorResourceId());
+    activity.setResponsibleResourceName(request.supervisorResourceName());
     activity.setPercentComplete(0.0);
 
     Double duration;
@@ -260,6 +262,12 @@ public class ActivityService {
     // costAccountId: explicit null clears the value; non-null sets it
     if (request.costAccountId() != null) {
       activity.setCostAccountId(request.costAccountId());
+    }
+    // Supervisor: id+name come together from the frontend picker. Null means "no change" (same
+    // pattern as other update fields). To clear, future work — add an explicit Clear action.
+    if (request.supervisorResourceId() != null) {
+      activity.setResponsibleResourceId(request.supervisorResourceId());
+      activity.setResponsibleResourceName(request.supervisorResourceName());
     }
 
     // Enforce date-order across the planned window after any updates
@@ -423,6 +431,52 @@ public class ActivityService {
     }
 
     return ActivityResponse.from(updated);
+  }
+
+  /**
+   * Bulk-set the supervisor (a Resource) on every activity in {@code activityIds}.
+   * Each activity must belong to {@code projectId}; mismatches throw 400.
+   *
+   * <p>Re-uses the same columns as the per-activity supervisor field
+   * ({@code Activity.responsibleResourceId} / {@code responsibleResourceName}) so the
+   * Activities-grid Supervisor column, the By-Supervisor view, and the DPR pre-fill
+   * all reflect the change without any extra wiring.
+   *
+   * <p>Frontend filters the picker to LABOR/Manpower resources from the project pool;
+   * no LABOR validation is performed here (mirrors the single-activity update path).
+   *
+   * @return number of activities whose supervisor was set
+   */
+  public int bulkSetSupervisor(UUID projectId, com.bipros.activity.application.dto.BulkSupervisorRequest request) {
+    log.info("Bulk supervisor: projectId={}, supervisorResourceId={}, activityCount={}",
+        projectId, request.supervisorResourceId(), request.activityIds().size());
+
+    projectAccess.requireEdit(projectId);
+
+    int updated = 0;
+    for (UUID activityId : request.activityIds()) {
+      Activity activity = activityRepository.findById(activityId)
+          .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
+
+      if (!projectId.equals(activity.getProjectId())) {
+        throw new BusinessRuleException("ACTIVITY_PROJECT_MISMATCH",
+            "Activity " + activityId + " does not belong to project " + projectId);
+      }
+
+      UUID oldResourceId = activity.getResponsibleResourceId();
+      activity.setResponsibleResourceId(request.supervisorResourceId());
+      activity.setResponsibleResourceName(request.supervisorResourceName());
+      activityRepository.save(activity);
+
+      if (!java.util.Objects.equals(oldResourceId, request.supervisorResourceId())) {
+        auditService.logUpdate("Activity", activityId,
+            "responsibleResourceId", oldResourceId, request.supervisorResourceId());
+      }
+      updated++;
+    }
+
+    log.info("Bulk supervisor complete: updated={}", updated);
+    return updated;
   }
 
   public void applyActuals(UUID projectId, LocalDate dataDate) {

@@ -385,7 +385,7 @@ public class ActivityAiGenerationService {
                     null,  // chainageToM
                     null,  // workActivityId
                     null   // costAccountId
-            );
+            , null, null);
 
             try {
                 ActivityResponse saved = activityService.createActivity(createReq);
