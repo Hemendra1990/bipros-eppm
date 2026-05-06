@@ -6,7 +6,21 @@ description: Manage labour, equipment, and material resources
 
 # Resources
 
-The **Resources** module is the central repository for all labour, equipment, and material resources available to your projects. Resources defined here can be assigned to project activities for scheduling, cost tracking, and utilization analysis.
+The **Resources** module is the central repository for all labour, equipment, and material resources available to your projects. Resources defined here can be admitted into a project's pool and then assigned to project activities for scheduling, cost tracking, and utilisation analysis.
+
+## Three-Tier Resource Model
+
+Bipros EPPM separates resource definition, project reservation, and activity assignment into three explicit tiers:
+
+| Tier | Where it lives | Purpose |
+|---|---|---|
+| **1. Master Resource** | This screen (organisation-wide) | Code, name, type, role, calendar, default rate (`costPerUnit`), max units/day |
+| **2. Project Pool** (`ProjectResource`) | Inside a project's **Resources → Pool** tab | Admits a master resource into a specific project; carries optional rate / availability overrides for that project |
+| **3. Assignment** | On an activity | Planned units, dates, curve, planned/actual/remaining cost |
+
+A resource must be in the project pool before it can be assigned to an activity. The cost rate used on assignments resolves as `ProjectResource.rateOverride` → `Resource.costPerUnit`. Role-level rates (the legacy `ResourceRole.defaultRate`) are no longer used for cost rollups.
+
+For the full model, formulas, and use cases see the [Resource Management deep dive](../module-reference/resource-management/).
 
 ## Accessing Resources
 

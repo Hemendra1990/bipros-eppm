@@ -6,6 +6,10 @@ description: Technical reference for AI-powered insights, schedule health, and p
 
 # AI & Predictions — Deep Dive
 
+:::tip Looking for the conversational assistant?
+This page covers **predictive analytics** (schedule health scoring, cost forecasting, trend analysis). For the **chat-first AI assistant**, document-aware WBS / activity generation, MDX-narrated insight panels, agentic tools and cached insights, see **[AI Assistant — Deep Dive](../ai-assistant/)**.
+:::
+
 ## Overview
 
 The AI module provides predictive analytics including schedule health scoring, risk predictions, cost forecasting, and capacity utilisation insights.

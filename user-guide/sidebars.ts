@@ -2,6 +2,7 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
 const sidebars: SidebarsConfig = {
   guideSidebar: [
+    'whats-new',
     {
       type: 'category',
       label: '🚀 Getting Started',
@@ -107,6 +108,13 @@ const sidebars: SidebarsConfig = {
             'projects/risk-analysis',
             'module-reference/ai-predictions/index',
             'projects/predictions',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'AI Assistant',
+          items: [
+            'module-reference/ai-assistant/index',
           ],
         },
         {

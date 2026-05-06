@@ -6,7 +6,7 @@ description: RA bills, resource utilization, and WBS-level activity progress
 
 # Operational Dashboard
 
-The **Operational Dashboard** is tailored for Project Managers and Engineers who need day-to-day operational visibility into billing, resource usage, and activity-level progress.
+The **Operational Dashboard** is tailored for **Project Managers and Cost Engineers** who need day-to-day operational visibility into billing, resource usage, and activity-level progress. It renders the **full-density** Manpower and Equipment KPI sections — headline cards plus per-activity supporting tables.
 
 ![Operational Dashboard](/img/screenshots/13-dashboard-operational.png)
 
@@ -45,6 +45,30 @@ A hierarchical view of progress broken down by Work Breakdown Structure:
 | **Planned Progress** | Scheduled physical completion percentage |
 | **Actual Progress** | Actual physical completion percentage |
 | **Variance** | Difference between planned and actual — negative values indicate slippage |
+
+### Manpower KPIs
+
+Cards (with formula tooltips):
+
+| KPI Card | What It Measures |
+|---|---|
+| **Workforce Utilisation** | Σ logged hours ÷ Σ available hours; >100% indicates overtime or data-unit mismatch |
+| **Total Labour Cost** | Sum of labour cost over the selected window |
+| **Avg Productivity Factor** | Mean of (actual output per man-day ÷ ProductivityNorm) across activities with a defined norm; 1.0 = on norm |
+| **Under-Performing Activities** | Count of activities whose Productivity Factor < 0.8 |
+
+Supporting tables: bottom-5 Productivity Factor activities, top-5 **Labour Cost / Unit** BOQ items, bottom-5 **Crew Output vs Norm**.
+
+### Equipment KPIs
+
+| KPI Card | What It Measures |
+|---|---|
+| **Avg Utilisation %** | Operating hours / available hours, averaged across deployed equipment |
+| **Idle Alerts** | Equipment with idle hours above the configured threshold |
+| **Fuel / Output** | Litres per unit produced (e.g. fuel per cubic metre) |
+| **Availability vs Performance** | Two-axis chart isolating mechanical availability from operating productivity |
+| **Owned vs Rented** | Cost split for each category |
+| **Service Due (next 7 days)** | Equipment whose next planned service falls within the upcoming week |
 
 ### Cost and Schedule Metrics
 

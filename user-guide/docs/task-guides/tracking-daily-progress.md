@@ -18,8 +18,12 @@ The **Daily Progress Report (DPR)** captures daily site activities, resource dep
 
 1. Navigate to your project
 2. Click the **DPR** tab
-3. Click **New DPR**
+3. Click **New DPR** — a drawer slides in from the right with a header summary (project, report date, status) and the DPR form below it
 4. Select the **Report Date** (defaults to today)
+
+The DPR drawer keeps the Daily Outputs list visible behind it, so you can cross-check entries without losing your place.
+
+![DPR drawer](/img/release-notes/dpr-drawer.png)
 
 ## Step 2: Record Daily Weather
 
@@ -58,6 +62,18 @@ The **Daily Progress Report (DPR)** captures daily site activities, resource dep
 $$\text{Cumulative Quantity} = \sum_{i=1}^{n} \text{Actual Quantity}_i$$
 
 Where $n$ = number of DPR days for this activity.
+
+### Filtering Daily Outputs
+
+The Daily Outputs list above the DPR form has a per-column filter bar:
+
+- **Activity** — filter to a single activity to see only its history.
+- **Date range** — narrow the list to a specific reporting window.
+- **Status** — show only `DRAFT`, `SUBMITTED`, or `APPROVED` entries.
+
+Filters combine with the global search box. Use the **Clear all** control on the right of the filter bar to reset every column at once.
+
+![Daily Outputs filter bar](/img/release-notes/daily-outputs-filters.png)
 
 ## Step 5: Enter Next Day Plan
 

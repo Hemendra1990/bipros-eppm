@@ -26,8 +26,11 @@ Most lists in Bipros EPPM are presented as sortable, filterable tables:
 | Feature | How to Use |
 |---|---|
 | **Sort** | Click any column header to sort ascending/descending |
-| **Filter** | Use the search bar above the table for text filtering |
-| **Pagination** | Navigate using the pagination controls at the bottom |
+| **Sticky headers** | Column headers stay pinned at the top while you scroll |
+| **Resize columns** | Drag the right edge of a column header to widen or narrow it |
+| **Global search** | Use the search bar above the table for free-text filtering across all columns |
+| **Per-column filters** | Open the filter bar to filter individual columns (date ranges, status, dropdowns) — combines with global search |
+| **Virtual scrolling** | Long lists scroll smoothly without manual pagination; pagination is still offered where it makes sense |
 | **Row Actions** | Click the actions menu (⋮) on any row for edit, delete, view |
 | **Bulk Actions** | Select multiple rows via checkboxes for batch operations |
 
