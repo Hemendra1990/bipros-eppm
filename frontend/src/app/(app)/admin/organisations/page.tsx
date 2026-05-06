@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { organisationApi } from "@/lib/api/organisationApi";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
@@ -55,9 +55,9 @@ export default function OrganisationsPage() {
     },
   });
 
-  const orgs = data?.data ?? [];
+  const orgs = useMemo(() => data?.data ?? [], [data]);
 
-  const columns: ColumnDef<OrganisationResponse, unknown>[] = [
+  const columns = useMemo<ColumnDef<OrganisationResponse, unknown>[]>(() => [
     { accessorKey: "code", header: "Code", enableSorting: true },
     { accessorKey: "name", header: "Name", enableSorting: true },
     {
@@ -105,7 +105,7 @@ export default function OrganisationsPage() {
         </button>
       ),
     },
-  ];
+  ], []);
 
   return (
     <div>

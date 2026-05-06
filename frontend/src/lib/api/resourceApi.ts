@@ -234,43 +234,6 @@ export interface CreateResourceRequest {
   manpower?: ManpowerDto;
 }
 
-// === Hierarchy ===
-
-/**
- * Single subordinate from the two-tree union (Resource.parent_id ∪ ManpowerMaster.reporting_manager_id).
- * `linkSource` is "org" (parent_id only), "hr" (reporting_manager_id only), or "both".
- */
-export interface SubordinateView {
-  id: string;
-  code: string | null;
-  name: string | null;
-  roleName: string | null;
-  typeCategory: string | null;
-  fullName: string | null;
-  designation: string | null;
-  linkSource: "org" | "hr" | "both";
-}
-
-export interface AncestorView {
-  id: string;
-  code: string | null;
-  name: string | null;
-  typeCategory: string | null;
-  roleName: string | null;
-  depth: number;
-}
-
-export interface ResourceTreeNode {
-  id: string;
-  code: string | null;
-  name: string | null;
-  typeCategory: string | null;
-  roleName: string | null;
-  parentId: string | null;
-  depth: number;
-  children: ResourceTreeNode[];
-}
-
 // === Assignments / Leveling (unchanged wire shape) ===
 
 export type LevelingMode = "LEVEL_WITHIN_FLOAT" | "LEVEL_ALL" | "SMOOTH";
@@ -336,10 +299,6 @@ export interface ResourceAssignmentResponse {
   actualStartDate: string | null;
   actualFinishDate: string | null;
   staffed: boolean;
-  /** Set when this assignment was implied by deploying a crew to the activity. */
-  crewId?: string | null;
-  /** Optional per-assignment supervisor (typically the crew lead). */
-  supervisorResourceId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -439,28 +398,6 @@ export const resourceApi = {
     apiClient
       .get<ApiResponse<ResourceResponse[]>>(`/v1/resources/by-parent/${parentId}`)
       .then((r) => r.data),
-
-  getSubordinates: (id: string) =>
-    apiClient
-      .get<ApiResponse<SubordinateView[]>>(`/v1/resources/${id}/subordinates`)
-      .then((r) => r.data),
-
-  getAncestors: (id: string) =>
-    apiClient
-      .get<ApiResponse<AncestorView[]>>(`/v1/resources/${id}/ancestors`)
-      .then((r) => r.data),
-
-  getTree: (id: string, opts?: { depth?: number; typeCode?: string }) => {
-    const params = new URLSearchParams();
-    if (opts?.depth !== undefined) params.set("depth", String(opts.depth));
-    if (opts?.typeCode) params.set("typeCode", opts.typeCode);
-    const qs = params.toString();
-    return apiClient
-      .get<ApiResponse<ResourceTreeNode>>(
-        `/v1/resources/${id}/tree${qs ? `?${qs}` : ""}`,
-      )
-      .then((r) => r.data);
-  },
 
   listByStatus: (status: ResourceStatus) =>
     apiClient
@@ -566,27 +503,6 @@ export const resourceApi = {
         data
       )
       .then((r) => r.data),
-
-  /**
-   * Deploy a Crew to an activity. Each active crew member yields a separate
-   * ResourceAssignment row, all tagged with the crew id and the crew lead as
-   * supervisor. Members already assigned to the activity are skipped.
-   */
-  assignCrewToActivity: (
-    projectId: string,
-    params: { activityId: string; crewId: string; asOf?: string },
-  ) => {
-    const qs = new URLSearchParams({
-      activityId: params.activityId,
-      crewId: params.crewId,
-      ...(params.asOf ? { asOf: params.asOf } : {}),
-    }).toString();
-    return apiClient
-      .post<ApiResponse<ResourceAssignmentResponse[]>>(
-        `/v1/projects/${projectId}/resource-assignments/from-crew?${qs}`,
-      )
-      .then((r) => r.data);
-  },
 
   staffAssignment: (projectId: string, id: string, data: StaffAssignmentRequest) =>
     apiClient

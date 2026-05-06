@@ -137,7 +137,7 @@ export default function ManpowerCategoriesPage() {
       .map((r) => ({ value: r.id, label: r.name }));
   }, [topLevel, editingId]);
 
-  const columns: ColumnDef<ManpowerCategoryMaster>[] = [
+  const columns = useMemo<ColumnDef<ManpowerCategoryMaster>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -210,7 +210,7 @@ export default function ManpowerCategoriesPage() {
         </div>
       ),
     },
-  ];
+  ], [openEdit, handleDelete]);
 
   return (
     <div>

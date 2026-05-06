@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -90,7 +90,7 @@ export default function NextDayPlanPage() {
     enabled: !!projectId && !!appliedFrom && !!appliedTo,
   });
 
-  const plans: NextDayPlanResponse[] = data?.data ?? [];
+  const plans: NextDayPlanResponse[] = useMemo(() => data?.data ?? [], [data]);
 
   // Pull yesterday's daily outputs + the project's activities (for code↔name resolution).
   // This powers the "Carry forward from yesterday" button: clicking it pre-populates the form
@@ -194,7 +194,7 @@ export default function NextDayPlanPage() {
     }
   };
 
-  const columns: ColumnDef<NextDayPlanResponse>[] = [
+  const columns = useMemo<ColumnDef<NextDayPlanResponse>[]>(() => [
     { accessorKey: "reportDate", header: "Report Date" },
     { accessorKey: "nextDayActivity", header: "Next Day Activity" },
     {
@@ -249,7 +249,7 @@ export default function NextDayPlanPage() {
         </button>
       ),
     },
-  ];
+  ], [handleDelete]);
 
   return (
     <div className="p-6">

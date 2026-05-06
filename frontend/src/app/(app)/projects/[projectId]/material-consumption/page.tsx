@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -143,11 +143,7 @@ export default function MaterialConsumptionPage() {
     }
   };
 
-  if (isLoading && logs.length === 0) {
-    return <div className="p-6 text-text-muted">Loading material consumption...</div>;
-  }
-
-  const columns: ColumnDef<MaterialConsumptionLogResponse>[] = [
+  const columns = useMemo<ColumnDef<MaterialConsumptionLogResponse>[]>(() => [
     { accessorKey: "logDate", header: "Date" },
     { accessorKey: "materialName", header: "Material" },
     { accessorKey: "unit", header: "Unit" },
@@ -206,7 +202,14 @@ export default function MaterialConsumptionPage() {
         </button>
       ),
     },
-  ];
+    // handleDelete closes over stable values (projectId, queryClient, applied
+    // filter dates) — keep deps empty to preserve memoization.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []);
+
+  if (isLoading && logs.length === 0) {
+    return <div className="p-6 text-text-muted">Loading material consumption...</div>;
+  }
 
   return (
     <div className="p-6">

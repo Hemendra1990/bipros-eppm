@@ -290,7 +290,7 @@ export default function FormulasPage() {
     await navigator.clipboard.writeText(expr);
   };
 
-  const columns: ColumnDef<FormulaDto>[] = [
+  const columns = useMemo<ColumnDef<FormulaDto>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -377,7 +377,7 @@ export default function FormulasPage() {
         </div>
       ),
     },
-  ];
+  ], []);
 
   return (
     <div>

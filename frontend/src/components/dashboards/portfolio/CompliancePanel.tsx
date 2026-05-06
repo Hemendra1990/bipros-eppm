@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
@@ -49,29 +50,9 @@ export function CompliancePanel() {
     staleTime: 60_000,
   });
 
-  if (isLoading)
-    return (
-      <SectionCard title="Compliance Status">
-        <LoadingBlock />
-      </SectionCard>
-    );
-  if (isError)
-    return (
-      <SectionCard title="Compliance Status">
-        <EmptyBlock label="Unavailable" />
-      </SectionCard>
-    );
+  const rows = useMemo(() => (data ?? []) as Row[], [data]);
 
-  const rows = (data ?? []) as Row[];
-  if (rows.length === 0) {
-    return (
-      <SectionCard title="Compliance Status">
-        <EmptyBlock label="No projects" />
-      </SectionCard>
-    );
-  }
-
-  const columns: ColumnDef<Row>[] = [
+  const columns = useMemo<ColumnDef<Row>[]>(() => [
     {
       accessorKey: "projectName",
       header: "Project",
@@ -134,7 +115,28 @@ export function CompliancePanel() {
         </div>
       ),
     },
-  ];
+  ], []);
+
+  if (isLoading)
+    return (
+      <SectionCard title="Compliance Status">
+        <LoadingBlock />
+      </SectionCard>
+    );
+  if (isError)
+    return (
+      <SectionCard title="Compliance Status">
+        <EmptyBlock label="Unavailable" />
+      </SectionCard>
+    );
+
+  if (rows.length === 0) {
+    return (
+      <SectionCard title="Compliance Status">
+        <EmptyBlock label="No projects" />
+      </SectionCard>
+    );
+  }
 
   return (
     <SectionCard

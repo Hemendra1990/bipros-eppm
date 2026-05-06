@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { dailyCostReportApi, type DailyCostReportResponse, type DailyCostReportRow } from "@/lib/api/dailyCostReportApi";
@@ -63,18 +63,14 @@ export default function DailyCostReportPage() {
   });
 
   const report: DailyCostReportResponse | undefined = data?.data ?? undefined;
-  const rows = report?.rows ?? [];
+  const rows = useMemo(() => report?.rows ?? [], [report]);
 
   const handleApply = () => {
     setFrom(fromDraft);
     setTo(toDraft);
   };
 
-  if (isLoading && !report) {
-    return <div className="p-6 text-text-muted">Loading cost report...</div>;
-  }
-
-  const columns: ColumnDef<DailyCostReportRow>[] = [
+  const columns = useMemo<ColumnDef<DailyCostReportRow>[]>(() => [
     { accessorKey: "date", header: "Date" },
     { accessorKey: "activity", header: "Activity" },
     {
@@ -122,7 +118,11 @@ export default function DailyCostReportPage() {
       ),
     },
     { accessorKey: "supervisor", header: "Supervisor" },
-  ];
+  ], []);
+
+  if (isLoading && !report) {
+    return <div className="p-6 text-text-muted">Loading cost report...</div>;
+  }
 
   return (
     <div className="p-6">

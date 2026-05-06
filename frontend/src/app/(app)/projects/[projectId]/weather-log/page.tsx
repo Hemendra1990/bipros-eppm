@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -89,7 +89,7 @@ export default function WeatherLogPage() {
     enabled: !!projectId && !!appliedFrom && !!appliedTo,
   });
 
-  const entries: DailyWeatherResponse[] = data?.data ?? [];
+  const entries: DailyWeatherResponse[] = useMemo(() => data?.data ?? [], [data]);
 
   const handleApply = () => {
     setAppliedFrom(fromDate);
@@ -135,7 +135,7 @@ export default function WeatherLogPage() {
     }
   };
 
-  const columns: ColumnDef<DailyWeatherResponse>[] = [
+  const columns = useMemo<ColumnDef<DailyWeatherResponse>[]>(() => [
     { accessorKey: "logDate", header: "Date" },
     {
       accessorKey: "tempMaxC",
@@ -184,7 +184,7 @@ export default function WeatherLogPage() {
         </button>
       ),
     },
-  ];
+  ], [handleDelete]);
 
   return (
     <div className="p-6">

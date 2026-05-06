@@ -26,33 +26,6 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
     staleTime: 60_000,
   });
 
-  if (billsQuery.isLoading || vosQuery.isLoading)
-    return (
-      <SectionCard title="Bills & Variation Orders">
-        <LoadingBlock />
-      </SectionCard>
-    );
-
-  const bills = billsQuery.data;
-  const vos = vosQuery.data ?? [];
-
-  const hasBills =
-    bills &&
-    (bills.totalSubmittedCrores > 0 ||
-      bills.pendingApprovalCrores > 0 ||
-      bills.approvedCrores > 0 ||
-      bills.paidCrores > 0 ||
-      (bills.bills?.length ?? 0) > 0);
-  const hasVos = vos.length > 0;
-
-  if (!hasBills && !hasVos) {
-    return (
-      <SectionCard title="Bills & Variation Orders">
-        <EmptyBlock label="No bills or variation orders recorded" />
-      </SectionCard>
-    );
-  }
-
   const billColumns = useMemo<
     ColumnDef<NonNullable<typeof billsQuery.data>["bills"][number]>[]
   >(
@@ -119,7 +92,7 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
     []
   );
 
-  const voColumns = useMemo<ColumnDef<typeof vos[number]>[]>(
+  const voColumns = useMemo<ColumnDef<NonNullable<typeof vosQuery.data>[number]>[]>(
     () => [
       {
         accessorKey: "voNumber",
@@ -181,6 +154,33 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
     ],
     []
   );
+
+  if (billsQuery.isLoading || vosQuery.isLoading)
+    return (
+      <SectionCard title="Bills & Variation Orders">
+        <LoadingBlock />
+      </SectionCard>
+    );
+
+  const bills = billsQuery.data;
+  const vos = vosQuery.data ?? [];
+
+  const hasBills =
+    bills &&
+    (bills.totalSubmittedCrores > 0 ||
+      bills.pendingApprovalCrores > 0 ||
+      bills.approvedCrores > 0 ||
+      bills.paidCrores > 0 ||
+      (bills.bills?.length ?? 0) > 0);
+  const hasVos = vos.length > 0;
+
+  if (!hasBills && !hasVos) {
+    return (
+      <SectionCard title="Bills & Variation Orders">
+        <EmptyBlock label="No bills or variation orders recorded" />
+      </SectionCard>
+    );
+  }
 
   return (
     <SectionCard

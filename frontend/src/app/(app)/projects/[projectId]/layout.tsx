@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import { ChevronDown, Database } from "lucide-react";
 import { projectApi } from "@/lib/api/projectApi";
 import { cn } from "@/lib/utils/cn";
 
-export default function ProjectDetailLayout({
+function ProjectDetailLayoutInner({
   children,
 }: {
   children: React.ReactNode;
@@ -247,5 +247,17 @@ export default function ProjectDetailLayout({
 
       <div className="mt-6 min-w-0">{children}</div>
     </div>
+  );
+}
+
+export default function ProjectDetailLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-text-muted">Loading…</div>}>
+      <ProjectDetailLayoutInner>{children}</ProjectDetailLayoutInner>
+    </Suspense>
   );
 }

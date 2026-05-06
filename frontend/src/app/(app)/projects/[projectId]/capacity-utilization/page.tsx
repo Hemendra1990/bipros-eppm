@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -192,7 +192,7 @@ export default function CapacityUtilizationPage() {
 
   const rows: CapacityUtilizationRow[] = data?.data?.rows ?? [];
 
-  const tableRows: TableRow[] = (() => {
+  const tableRows: TableRow[] = useMemo(() => {
     const result: TableRow[] = [];
     const map = new Map<
       string,
@@ -225,9 +225,9 @@ export default function CapacityUtilizationPage() {
       }
     }
     return result;
-  })();
+  }, [rows]);
 
-  const columns: ColumnDef<TableRow>[] = [
+  const columns = useMemo<ColumnDef<TableRow>[]>(() => [
     {
       accessorKey: "sNo",
       header: "S.No.",
@@ -313,7 +313,7 @@ export default function CapacityUtilizationPage() {
         },
       ],
     },
-  ];
+  ], []);
 
   return (
     <div className="p-6">

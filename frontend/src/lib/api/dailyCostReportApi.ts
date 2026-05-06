@@ -32,17 +32,6 @@ export interface DailyCostReportFilters {
   to?: string;
 }
 
-export interface SupervisorCostSummary {
-  supervisorResourceId: string;
-  supervisorName: string | null;
-  dprCount: number;
-  totalQtyExecuted: number;
-  budgetedCost: number;
-  actualCost: number;
-  variance: number;
-  variancePercent: number | null;
-}
-
 export const dailyCostReportApi = {
   generate: (projectId: string, filters: DailyCostReportFilters = {}) => {
     const params = new URLSearchParams();
@@ -51,18 +40,6 @@ export const dailyCostReportApi = {
     const qs = params.toString() ? `?${params.toString()}` : "";
     return apiClient
       .get<ApiResponse<DailyCostReportResponse>>(`/v1/projects/${projectId}/daily-cost-report${qs}`)
-      .then((r) => r.data);
-  },
-
-  bySupervisor: (projectId: string, filters: DailyCostReportFilters = {}) => {
-    const params = new URLSearchParams();
-    if (filters.from) params.set("from", filters.from);
-    if (filters.to) params.set("to", filters.to);
-    const qs = params.toString() ? `?${params.toString()}` : "";
-    return apiClient
-      .get<ApiResponse<SupervisorCostSummary[]>>(
-        `/v1/projects/${projectId}/daily-cost-report/by-supervisor${qs}`,
-      )
       .then((r) => r.data);
   },
 };

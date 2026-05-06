@@ -75,7 +75,7 @@ export default function UserAccessPage() {
     return map;
   }, [orgsData]);
 
-  const users: UserResponse[] = usersData?.data?.content ?? [];
+  const users: UserResponse[] = useMemo(() => usersData?.data?.content ?? [], [usersData]);
 
   const { data: accessData, isLoading: accessLoading } = useQuery({
     queryKey: ["user-access", selectedUserId],
@@ -84,7 +84,7 @@ export default function UserAccessPage() {
   });
   const access = accessData?.data;
 
-  const columns: ColumnDef<UserResponse>[] = [
+  const columns = useMemo<ColumnDef<UserResponse>[]>(() => [
     {
       accessorKey: "username",
       header: "User",
@@ -129,7 +129,7 @@ export default function UserAccessPage() {
         </div>
       ),
     },
-  ];
+  ], [orgsById]);
 
   return (
     <div>

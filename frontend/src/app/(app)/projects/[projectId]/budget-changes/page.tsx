@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -105,10 +105,11 @@ export default function BudgetChangesPage() {
   });
 
   const budget = budgetData?.data;
-  const changes = changesData?.data ?? [];
+  const changes = useMemo(() => changesData?.data ?? [], [changesData]);
   const wbsNodes = wbsBudgetData?.data?.nodes ?? [];
 
-  const columns: ColumnDef<BudgetChangeLogResponse>[] = [
+  const columns = useMemo<ColumnDef<BudgetChangeLogResponse>[]>(() => {
+    const cols: ColumnDef<BudgetChangeLogResponse>[] = [
     {
       accessorKey: "requestedAt",
       header: "Date",
@@ -178,42 +179,45 @@ export default function BudgetChangesPage() {
         );
       },
     },
-  ];
+    ];
 
-  if (isAdmin) {
-    columns.push({
-      id: "actions",
-      header: "Actions",
-      cell: (info) => {
-        const row = info.row.original;
-        return row.status === "PENDING" ? (
-          <div className="flex gap-1">
-            <button
-              onClick={() => approveMutation.mutate(row.id)}
-              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-              title="Approve"
-            >
-              <Check className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                const reason = prompt("Rejection reason (optional):");
-                rejectMutation.mutate({ changeId: row.id, reason: reason ?? undefined });
-              }}
-              className="p-1 text-red-600 hover:bg-red-50 rounded"
-              title="Reject"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <span className="text-xs text-text-muted">
-            {row.decidedByName ?? (row.decidedBy ? row.decidedBy.slice(0, 8) : "")}
-          </span>
-        );
-      },
-    });
-  }
+    if (isAdmin) {
+      cols.push({
+        id: "actions",
+        header: "Actions",
+        cell: (info) => {
+          const row = info.row.original;
+          return row.status === "PENDING" ? (
+            <div className="flex gap-1">
+              <button
+                onClick={() => approveMutation.mutate(row.id)}
+                className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                title="Approve"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  const reason = prompt("Rejection reason (optional):");
+                  rejectMutation.mutate({ changeId: row.id, reason: reason ?? undefined });
+                }}
+                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                title="Reject"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <span className="text-xs text-text-muted">
+              {row.decidedByName ?? (row.decidedBy ? row.decidedBy.slice(0, 8) : "")}
+            </span>
+          );
+        },
+      });
+    }
+
+    return cols;
+  }, [isAdmin, approveMutation, rejectMutation]);
 
   return (
     <div className="space-y-6">

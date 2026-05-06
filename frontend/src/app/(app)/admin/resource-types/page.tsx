@@ -110,7 +110,7 @@ export default function ResourceTypesAdminPage() {
     }
   };
 
-  const columns: ColumnDef<ResourceType>[] = [
+  const columns = useMemo<ColumnDef<ResourceType>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -176,7 +176,7 @@ export default function ResourceTypesAdminPage() {
           <span className="text-text-muted">Locked</span>
         ),
     },
-  ];
+  ], []);
 
   return (
     <div className="p-6">

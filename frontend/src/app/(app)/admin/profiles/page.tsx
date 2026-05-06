@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
@@ -33,9 +34,9 @@ export default function ProfilesPage() {
     },
   });
 
-  const profiles = data?.data ?? [];
+  const profiles = useMemo(() => data?.data ?? [], [data]);
 
-  const columns: ColumnDef<ProfileResponse>[] = [
+  const columns = useMemo<ColumnDef<ProfileResponse>[]>(() => [
     {
       accessorKey: "name",
       header: "Name",
@@ -131,7 +132,7 @@ export default function ProfilesPage() {
         );
       },
     },
-  ];
+  ], [router, deleteMutation]);
 
   return (
     <div>

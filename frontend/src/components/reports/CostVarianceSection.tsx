@@ -97,33 +97,6 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
     return r;
   }, [activityRows, showOnlyNonZero, overrunOnly]);
 
-  if (error) {
-    return <ErrorState message="Could not load the cost variance report. The backend may be down or no baseline is set." />;
-  }
-  if (isLoading) return <LoadingState />;
-  if (!data?.data) return <EmptyBaselineState />;
-
-  const summary = data.data.summary;
-  const wbsRows = data.data.wbsRows;
-
-  const onExport = () => {
-    if (!data?.data) return;
-    const csv = toCsv<CostVarianceActivityRow>(filtered, [
-      { key: "code", header: "Activity code" },
-      { key: "name", header: "Activity name" },
-      { key: "activityType", header: "Type" },
-      { key: "status", header: "Status" },
-      { key: "percentComplete", header: "% complete" },
-      { key: "baselinePlannedCost", header: "BL planned (₹)" },
-      { key: "currentPlannedCost", header: "Cur planned (₹)" },
-      { key: "estimateVariance", header: "Estimate var (₹)" },
-      { key: "actualCost", header: "Actual (₹)" },
-      { key: "burnVariance", header: "Burn var (₹)" },
-    ]);
-    const projectCode = data.data.project.code.replace(/[^a-zA-Z0-9-]/g, "_");
-    downloadCsv(`cost-variance-${projectCode}`, csv);
-  };
-
   const wbsColumns = useMemo<ColumnDef<CostVarianceWbsRow>[]>(
     () => [
       {
@@ -149,7 +122,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         header: "Budget",
         cell: (info) => (
           <span className="block text-right text-charcoal tabular-nums">
-            {formatRupees(Number(info.getValue()))}
+            {formatRupees(info.getValue() as number | null)}
           </span>
         ),
       },
@@ -158,7 +131,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         header: "Earned",
         cell: (info) => (
           <span className="block text-right text-charcoal tabular-nums">
-            {formatRupees(Number(info.getValue()))}
+            {formatRupees(info.getValue() as number | null)}
           </span>
         ),
       },
@@ -167,7 +140,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         header: "Actual",
         cell: (info) => (
           <span className="block text-right text-charcoal tabular-nums">
-            {formatRupees(Number(info.getValue()))}
+            {formatRupees(info.getValue() as number | null)}
           </span>
         ),
       },
@@ -192,7 +165,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         header: "CPI",
         cell: (info) => (
           <span className="block text-right text-charcoal tabular-nums">
-            <CpiBadge value={Number(info.getValue())} />
+            <CpiBadge value={info.getValue() as number | null} />
           </span>
         ),
       },
@@ -248,7 +221,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         header: "BL planned",
         cell: (info) => (
           <span className="block text-right text-charcoal tabular-nums">
-            {formatRupees(Number(info.getValue()))}
+            {formatRupees(info.getValue() as number | null)}
           </span>
         ),
       },
@@ -257,7 +230,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         header: "Cur planned",
         cell: (info) => (
           <span className="block text-right text-charcoal tabular-nums">
-            {formatRupees(Number(info.getValue()))}
+            {formatRupees(info.getValue() as number | null)}
           </span>
         ),
       },
@@ -282,7 +255,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         header: "Actual",
         cell: (info) => (
           <span className="block text-right text-charcoal tabular-nums">
-            {formatRupees(Number(info.getValue()))}
+            {formatRupees(info.getValue() as number | null)}
           </span>
         ),
       },
@@ -305,6 +278,33 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
     ],
     []
   );
+
+  if (error) {
+    return <ErrorState message="Could not load the cost variance report. The backend may be down or no baseline is set." />;
+  }
+  if (isLoading) return <LoadingState />;
+  if (!data?.data) return <EmptyBaselineState />;
+
+  const summary = data.data.summary;
+  const wbsRows = data.data.wbsRows;
+
+  const onExport = () => {
+    if (!data?.data) return;
+    const csv = toCsv<CostVarianceActivityRow>(filtered, [
+      { key: "code", header: "Activity code" },
+      { key: "name", header: "Activity name" },
+      { key: "activityType", header: "Type" },
+      { key: "status", header: "Status" },
+      { key: "percentComplete", header: "% complete" },
+      { key: "baselinePlannedCost", header: "BL planned (₹)" },
+      { key: "currentPlannedCost", header: "Cur planned (₹)" },
+      { key: "estimateVariance", header: "Estimate var (₹)" },
+      { key: "actualCost", header: "Actual (₹)" },
+      { key: "burnVariance", header: "Burn var (₹)" },
+    ]);
+    const projectCode = data.data.project.code.replace(/[^a-zA-Z0-9-]/g, "_");
+    downloadCsv(`cost-variance-${projectCode}`, csv);
+  };
 
   return (
     <div className="space-y-6">

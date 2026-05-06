@@ -115,7 +115,7 @@ export default function NationalitiesPage() {
     }
   };
 
-  const columns: ColumnDef<NationalityMaster>[] = [
+  const columns = useMemo<ColumnDef<NationalityMaster>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -178,7 +178,7 @@ export default function NationalitiesPage() {
         </div>
       ),
     },
-  ];
+  ], [openEdit, handleDelete]);
 
   return (
     <div>

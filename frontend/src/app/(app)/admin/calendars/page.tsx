@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { calendarApi } from "@/lib/api/calendarApi";
@@ -27,9 +28,12 @@ export default function CalendarsPage() {
   });
 
   const rawData = calendarsData?.data;
-  const calendars = Array.isArray(rawData) ? rawData : (rawData as any)?.content ?? [];
+  const calendars = useMemo(
+    () => (Array.isArray(rawData) ? rawData : (rawData as any)?.content ?? []),
+    [rawData],
+  );
 
-  const columns: ColumnDef<CalendarResponse, unknown>[] = [
+  const columns = useMemo<ColumnDef<CalendarResponse, unknown>[]>(() => [
     { accessorKey: "name", header: "Name", enableSorting: true },
     {
       accessorKey: "calendarType",
@@ -49,7 +53,7 @@ export default function CalendarsPage() {
         return new Date(value as string).toLocaleDateString();
       },
     },
-  ];
+  ], []);
 
   return (
     <div>

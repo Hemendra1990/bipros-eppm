@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,7 +52,7 @@ export default function MaterialSourcesPage() {
 
   const rows = data?.data ?? [];
 
-  const columns: ColumnDef<MaterialSourceResponse>[] = [
+  const columns = useMemo<ColumnDef<MaterialSourceResponse>[]>(() => [
     { accessorKey: "sourceCode", header: "Source ID", enableSorting: true },
     { accessorKey: "name", header: "Name" },
     {
@@ -114,7 +114,7 @@ export default function MaterialSourcesPage() {
         );
       },
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

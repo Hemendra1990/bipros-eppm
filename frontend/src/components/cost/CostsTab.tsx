@@ -466,7 +466,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/cost/ai/insights`} />
+      {/* <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/cost/ai/insights`} /> */}
       {isLoadingSummary ? (
         <div className="text-center text-text-secondary">Loading cost summary...</div>
       ) : (

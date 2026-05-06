@@ -244,7 +244,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/evm/ai/insights`} />
+      {/* <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/evm/ai/insights`} /> */}
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4">
         <div>

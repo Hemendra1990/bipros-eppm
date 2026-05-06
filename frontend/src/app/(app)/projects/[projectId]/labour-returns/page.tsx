@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { labourApi, type LabourReturnResponse, type CreateLabourReturnRequest, type DeploymentSummary } from "@/lib/api/labourApi";
 import { TabTip } from "@/components/common/TabTip";
@@ -118,11 +118,7 @@ export default function LabourReturnsPage() {
     }
   };
 
-  if (isLoading && returns.length === 0) {
-    return <div className="p-6 text-text-muted">Loading labour returns...</div>;
-  }
-
-  const columns: ColumnDef<LabourReturnResponse>[] = [
+  const columns = useMemo<ColumnDef<LabourReturnResponse>[]>(() => [
     { accessorKey: "returnDate", header: "Date" },
     { accessorKey: "contractorName", header: "Contractor" },
     {
@@ -149,7 +145,11 @@ export default function LabourReturnsPage() {
       header: "Site Location",
       cell: ({ row }) => row.original.siteLocation || "-",
     },
-  ];
+  ], []);
+
+  if (isLoading && returns.length === 0) {
+    return <div className="p-6 text-text-muted">Loading labour returns...</div>;
+  }
 
   return (
     <div className="p-6">

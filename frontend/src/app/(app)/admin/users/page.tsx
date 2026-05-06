@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { Plus, ShieldCheck, UserCheck, UserX } from "lucide-react";
@@ -92,7 +92,10 @@ export default function UsersPage() {
     queryKey: ["profiles"],
     queryFn: () => profileApi.listProfiles(),
   });
-  const profiles = (profilesResponse?.data ?? []).map((p) => ({ id: p.id, name: p.name }));
+  const profiles = useMemo(
+    () => (profilesResponse?.data ?? []).map((p) => ({ id: p.id, name: p.name })),
+    [profilesResponse],
+  );
 
   const toggleMutation = useMutation({
     mutationFn: ({ userId, enabled }: { userId: string; enabled: boolean }) =>
@@ -104,9 +107,9 @@ export default function UsersPage() {
     onError: (err: unknown) => toast.error(getErrorMessage(err, "Failed to update user status")),
   });
 
-  const users = data?.data?.content ?? [];
+  const users = useMemo(() => data?.data?.content ?? [], [data]);
 
-  const columns: ColumnDef<UserResponse>[] = [
+  const columns = useMemo<ColumnDef<UserResponse>[]>(() => [
     { accessorKey: "username", header: "Username", enableSorting: true },
     { accessorKey: "email", header: "Email", enableSorting: true },
     {
@@ -178,7 +181,7 @@ export default function UsersPage() {
         );
       },
     },
-  ];
+  ], [editingProfileId, profiles, toggleMutation]);
 
   return (
     <div>

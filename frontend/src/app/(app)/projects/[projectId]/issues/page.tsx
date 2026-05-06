@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { materialCatalogueApi, materialIssueApi } from "@/lib/api/materialCatalogueApi";
@@ -30,7 +31,7 @@ export default function IssuesPage() {
 
   const rows = data?.data ?? [];
 
-  const columns: ColumnDef<MaterialIssueResponse>[] = [
+  const columns = useMemo<ColumnDef<MaterialIssueResponse>[]>(() => [
     { accessorKey: "challanNumber", header: "Challan #", enableSorting: true },
     { accessorKey: "issueDate", header: "Date" },
     {
@@ -41,7 +42,9 @@ export default function IssuesPage() {
     { accessorKey: "quantity", header: "Qty Issued" },
     { accessorKey: "wastageQuantity", header: "Wastage" },
     { accessorKey: "remarks", header: "Remarks" },
-  ];
+    // matName closes over `materials` — re-create when materials change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [materials]);
 
   return (
     <div className="space-y-6">

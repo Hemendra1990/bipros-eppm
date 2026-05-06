@@ -168,7 +168,26 @@ export default function ScheduleHealthPage() {
               { accessorKey: "category", header: "Category" },
               { accessorKey: "count", header: "Count" },
               { accessorKey: "percentage", header: "Percentage" },
-              { accessorKey: "status", header: "Status" },
+              {
+                accessorKey: "status",
+                header: "Status",
+                cell: ({ row }) => {
+                  const status = row.original.status as "Risk" | "Watch" | "Good";
+                  const tone =
+                    status === "Risk"
+                      ? "bg-danger/10 text-danger"
+                      : status === "Watch"
+                        ? "bg-warning/10 text-warning"
+                        : "bg-success/10 text-success";
+                  return (
+                    <span
+                      className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${tone}`}
+                    >
+                      {status}
+                    </span>
+                  );
+                },
+              },
             ]}
             data={[
               {

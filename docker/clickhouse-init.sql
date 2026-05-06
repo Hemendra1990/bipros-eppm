@@ -187,6 +187,9 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.fact_dpr_logs (
     activity_id UUID,
     dpr_id UUID,
     report_date Date,
+    -- Holds the supervisor's RESOURCE id (FK back to OLTP resources.id). Column
+    -- name predates the resource/user split. Join to resource.crews on
+    -- crew_lead_resource_id for crew-level rollups.
     supervisor_user_id UUID,
     supervisor_name String,
     chainage_from_m Nullable(Float64),

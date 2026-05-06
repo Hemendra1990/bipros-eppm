@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LabourCategorySummary } from "@/lib/api/labourMasterApi";
 import { SimpleTable } from "@/components/common/SimpleTable";
@@ -21,25 +22,26 @@ type Row =
 type Props = { rows: LabourCategorySummary[] };
 
 export function WorkforceSummaryTable({ rows }: Props) {
-  const totalDesigs = rows.reduce((a, r) => a + r.designationCount, 0);
-  const totalWorkers = rows.reduce((a, r) => a + r.workerCount, 0);
-  const totalCost = rows.reduce((a, r) => a + r.dailyCost, 0);
+  const data = useMemo<Row[]>(() => {
+    const totalDesigs = rows.reduce((a, r) => a + r.designationCount, 0);
+    const totalWorkers = rows.reduce((a, r) => a + r.workerCount, 0);
+    const totalCost = rows.reduce((a, r) => a + r.dailyCost, 0);
+    return [
+      ...rows,
+      {
+        category: "__TOTAL__",
+        categoryDisplay: "TOTAL",
+        designationCount: totalDesigs,
+        workerCount: totalWorkers,
+        gradeRange: "A – E",
+        dailyRateRange: "—",
+        dailyCost: totalCost,
+        keyRolesSummary: `${rows.length} categories`,
+      },
+    ];
+  }, [rows]);
 
-  const data: Row[] = [
-    ...rows,
-    {
-      category: "__TOTAL__",
-      categoryDisplay: "TOTAL",
-      designationCount: totalDesigs,
-      workerCount: totalWorkers,
-      gradeRange: "A – E",
-      dailyRateRange: "—",
-      dailyCost: totalCost,
-      keyRolesSummary: `${rows.length} categories`,
-    },
-  ];
-
-  const columns: ColumnDef<Row>[] = [
+  const columns = useMemo<ColumnDef<Row>[]>(() => [
     {
       accessorKey: "category",
       header: "Category",
@@ -113,7 +115,7 @@ export function WorkforceSummaryTable({ rows }: Props) {
         </span>
       ),
     },
-  ];
+  ], []);
 
   return (
     <div className="overflow-hidden rounded-xl border border-hairline bg-paper">

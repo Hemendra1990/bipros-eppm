@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { permitApi } from "@/lib/api/permitApi";
 import { PermitTypeBadge } from "@/components/permits";
@@ -29,7 +30,7 @@ export default function WorkflowReferencePage() {
     staleTime: 5 * 60_000,
   });
 
-  const columns: ColumnDef<(typeof types)[number]>[] = [
+  const columns = useMemo<ColumnDef<(typeof types)[number]>[]>(() => [
     {
       accessorKey: "code",
       header: "Permit Type",
@@ -66,7 +67,7 @@ export default function WorkflowReferencePage() {
         <span className="text-slate">{(row.original.minApprovalRole || "").replace("ROLE_", "").replace(/_/g, " ")}</span>
       ),
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6 p-6">

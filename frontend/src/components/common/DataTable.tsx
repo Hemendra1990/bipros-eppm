@@ -46,12 +46,21 @@ export function DataTable<T = unknown>({
     [columns]
   );
 
+  const getRowId = useMemo(() => {
+    if (typeof rowKey === "function") return rowKey;
+    return (row: T, index: number) => {
+      const value = (row as Record<string, unknown>)[rowKey];
+      return value != null ? String(value) : String(index);
+    };
+  }, [rowKey]);
+
   return (
     <VirtualDataTable
       data={data}
       columns={tanstackColumns}
       searchable={searchable}
       onRowClick={onRowClick}
+      getRowId={getRowId}
       sortable
       resizable
       maxHeight={600}

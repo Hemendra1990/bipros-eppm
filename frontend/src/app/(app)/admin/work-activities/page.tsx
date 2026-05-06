@@ -2,7 +2,7 @@
 
 import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   workActivityApi,
@@ -58,7 +58,7 @@ export default function WorkActivitiesPage() {
     queryFn: () => workActivityApi.list(),
   });
 
-  const activities: WorkActivityResponse[] = data?.data ?? [];
+  const activities: WorkActivityResponse[] = useMemo(() => data?.data ?? [], [data]);
 
   const resetForm = () => {
     setFormData(initialFormState);
@@ -141,11 +141,7 @@ export default function WorkActivitiesPage() {
     });
   };
 
-  if (isLoading && activities.length === 0) {
-    return <div className="p-6 text-text-muted">Loading work activities...</div>;
-  }
-
-  const columns: ColumnDef<WorkActivityResponse>[] = [
+  const columns = useMemo<ColumnDef<WorkActivityResponse>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -196,7 +192,11 @@ export default function WorkActivitiesPage() {
         </div>
       ),
     },
-  ];
+  ], [handleEdit, handleDelete]);
+
+  if (isLoading && activities.length === 0) {
+    return <div className="p-6 text-text-muted">Loading work activities...</div>;
+  }
 
   return (
     <div className="p-6">

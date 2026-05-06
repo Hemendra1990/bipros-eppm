@@ -2,7 +2,7 @@
 
 import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   unitRateMasterApi,
@@ -77,11 +77,7 @@ export default function UnitRateMasterPage() {
     }
   }
 
-  if (isLoading && rows.length === 0) {
-    return <div className="p-6 text-text-muted">Loading unit rate master...</div>;
-  }
-
-  const columns: ColumnDef<UnitRateMasterRow>[] = [
+  const columns = useMemo<ColumnDef<UnitRateMasterRow>[]>(() => [
     {
       accessorKey: "category",
       header: "Category",
@@ -134,7 +130,11 @@ export default function UnitRateMasterPage() {
       header: "Remarks",
       cell: ({ row }) => <span>{row.original.remarks ?? "—"}</span>,
     },
-  ];
+  ], []);
+
+  if (isLoading && rows.length === 0) {
+    return <div className="p-6 text-text-muted">Loading unit rate master...</div>;
+  }
 
   return (
     <div className="p-6">

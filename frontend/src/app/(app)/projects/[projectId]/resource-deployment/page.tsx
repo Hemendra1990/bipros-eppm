@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -95,9 +95,10 @@ export default function ResourceDeploymentPage() {
     enabled: !!projectId && !!appliedFrom && !!appliedTo,
   });
 
-  const logs: DailyResourceDeploymentResponse[] = Array.isArray(listResponse?.data)
-    ? (listResponse?.data ?? [])
-    : [];
+  const logs: DailyResourceDeploymentResponse[] = useMemo(
+    () => (Array.isArray(listResponse?.data) ? (listResponse?.data ?? []) : []),
+    [listResponse],
+  );
 
   const handleApply = () => {
     setAppliedFrom(from);
@@ -144,11 +145,7 @@ export default function ResourceDeploymentPage() {
     }
   };
 
-  if (isLoading && logs.length === 0) {
-    return <div className="p-6 text-text-muted">Loading resource deployment...</div>;
-  }
-
-  const columns: ColumnDef<DailyResourceDeploymentResponse>[] = [
+  const columns = useMemo<ColumnDef<DailyResourceDeploymentResponse>[]>(() => [
     { accessorKey: "logDate", header: "Date" },
     {
       accessorKey: "resourceType",
@@ -203,7 +200,11 @@ export default function ResourceDeploymentPage() {
         </button>
       ),
     },
-  ];
+  ], [handleDelete]);
+
+  if (isLoading && logs.length === 0) {
+    return <div className="p-6 text-text-muted">Loading resource deployment...</div>;
+  }
 
   return (
     <div className="p-6">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,9 +54,9 @@ export default function MaterialsPage() {
     },
   });
 
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data]);
 
-  const columns: ColumnDef<MaterialResponse>[] = [
+  const columns = useMemo<ColumnDef<MaterialResponse>[]>(() => [
     { accessorKey: "code", header: "Code", enableSorting: true },
     { accessorKey: "name", header: "Name" },
     {
@@ -105,7 +105,7 @@ export default function MaterialsPage() {
         );
       },
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

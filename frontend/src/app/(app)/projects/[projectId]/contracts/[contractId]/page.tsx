@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contractApi } from "@/lib/api/contractApi";
@@ -42,6 +42,14 @@ function saveBlob(blob: Blob, fileName: string) {
 }
 
 export default function ContractDetailPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-text-muted">Loading…</div>}>
+      <ContractDetailPageInner />
+    </Suspense>
+  );
+}
+
+function ContractDetailPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
   const projectId = params.projectId as string;

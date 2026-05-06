@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -193,148 +193,152 @@ export default function ProjectRisksPage() {
   const greenCount = risks.filter((r) => computeRag(r) === "GREEN").length;
   const opportunityCount = risks.filter((r) => computeRag(r) === "OPPORTUNITY").length;
 
-  const columns: ColumnDef<RiskResponse>[] = [
-    { accessorKey: "code", header: "Code", enableSorting: true },
-    {
-      accessorKey: "title",
-      header: "Title",
-      enableSorting: true,
-      cell: (info) => {
-        const row = info.row.original;
-        return (
-          <button
-            onClick={() => router.push(`/projects/${projectId}/risks/${row.id}`)}
-            className="text-accent hover:underline text-left font-medium"
-          >
-            {row.title}
-          </button>
-        );
-      },
-    },
-    {
-      accessorKey: "riskType",
-      header: "Type",
-      cell: (info) => {
-        const val = info.getValue();
-        return (
-          <span
-            className={`px-2 py-0.5 rounded text-xs font-medium ${
-              val === "OPPORTUNITY"
-                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
-                : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
-            }`}
-          >
-            {val === "OPPORTUNITY" ? "Opportunity" : "Threat"}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "category",
-      header: "Category",
-      enableSorting: true,
-      cell: (info) => {
-        const row = info.row.original;
-        const cat = row.category;
-        if (!cat) return <span className="text-text-muted">—</span>;
-        return (
-          <span title={cat.name} className="text-text-primary">
-            {cat.code}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "rag",
-      header: "RAG",
-      cell: (info) => {
-        const row = info.row.original;
-        const rag = computeRag(row);
-        if (!rag) return <span className="text-text-muted">—</span>;
-        return (
-          <span className={`px-2 py-1 rounded text-xs font-bold ${ragColors[rag] || ""}`}>
-            {rag}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "trend",
-      header: "Trend",
-      cell: (info) => {
-        const val = info.getValue();
-        const trend = String(val);
-        const Icon = trendIcons[trend as keyof typeof trendIcons] || Minus;
-        return (
-          <span className="flex items-center gap-1 text-sm">
-            <Icon className="w-4 h-4" />
-            {trend}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: (info) => {
-        const val = info.getValue();
-        const status = String(val).replace(/_/g, " ");
-        return <span className="text-xs">{status}</span>;
-      },
-    },
-    {
-      accessorKey: "id",
-      header: "Actions",
-      cell: (info) => {
-        const val = info.getValue();
-        return (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push(`/projects/${projectId}/risks/${String(val)}`)}
-              className="text-text-secondary hover:text-accent"
-              title="View details"
-            >
-              <Eye size={14} />
-            </button>
-            <button
-              onClick={() => {
-                if (window.confirm("Are you sure you want to delete this risk?")) {
-                  deleteMutation.mutate(String(val));
-                }
-              }}
-              disabled={deleteMutation.isPending}
-              className="text-danger hover:text-danger disabled:text-text-muted"
-              title="Delete"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        );
-      },
-    },
-  ];
-
-  if (canSeeRiskInternals) {
-    columns.splice(4, 0,
-      { accessorKey: "probability", header: "Probability", enableSorting: true },
-      { accessorKey: "impactCost", header: "IC", enableSorting: true },
-      { accessorKey: "impactSchedule", header: "IS", enableSorting: true },
+  const columns = useMemo<ColumnDef<RiskResponse>[]>(() => {
+    const baseColumns: ColumnDef<RiskResponse>[] = [
+      { accessorKey: "code", header: "Code", enableSorting: true },
       {
-        accessorKey: "riskScore",
-        header: "Score",
+        accessorKey: "title",
+        header: "Title",
         enableSorting: true,
         cell: (info) => {
-          const val = info.getValue();
-          const score = Number(String(val));
-          if (isNaN(score)) return <span className="text-text-muted">-</span>;
-          let color = "text-success";
-          if (score >= 15) color = "text-danger";
-          else if (score >= 8) color = "text-warning";
-          return <span className={`font-semibold ${color}`}>{score.toFixed(0)}</span>;
+          const row = info.row.original;
+          return (
+            <button
+              onClick={() => router.push(`/projects/${projectId}/risks/${row.id}`)}
+              className="text-accent hover:underline text-left font-medium"
+            >
+              {row.title}
+            </button>
+          );
         },
       },
-    );
-  }
+      {
+        accessorKey: "riskType",
+        header: "Type",
+        cell: (info) => {
+          const val = info.getValue();
+          return (
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium ${
+                val === "OPPORTUNITY"
+                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+                  : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+              }`}
+            >
+              {val === "OPPORTUNITY" ? "Opportunity" : "Threat"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "category",
+        header: "Category",
+        enableSorting: true,
+        cell: (info) => {
+          const row = info.row.original;
+          const cat = row.category;
+          if (!cat) return <span className="text-text-muted">—</span>;
+          return (
+            <span title={cat.name} className="text-text-primary">
+              {cat.code}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "rag",
+        header: "RAG",
+        cell: (info) => {
+          const row = info.row.original;
+          const rag = computeRag(row);
+          if (!rag) return <span className="text-text-muted">—</span>;
+          return (
+            <span className={`px-2 py-1 rounded text-xs font-bold ${ragColors[rag] || ""}`}>
+              {rag}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "trend",
+        header: "Trend",
+        cell: (info) => {
+          const val = info.getValue();
+          const trend = String(val);
+          const Icon = trendIcons[trend as keyof typeof trendIcons] || Minus;
+          return (
+            <span className="flex items-center gap-1 text-sm">
+              <Icon className="w-4 h-4" />
+              {trend}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => {
+          const val = info.getValue();
+          const status = String(val).replace(/_/g, " ");
+          return <span className="text-xs">{status}</span>;
+        },
+      },
+      {
+        accessorKey: "id",
+        header: "Actions",
+        cell: (info) => {
+          const val = info.getValue();
+          return (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push(`/projects/${projectId}/risks/${String(val)}`)}
+                className="text-text-secondary hover:text-accent"
+                title="View details"
+              >
+                <Eye size={14} />
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to delete this risk?")) {
+                    deleteMutation.mutate(String(val));
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="text-danger hover:text-danger disabled:text-text-muted"
+                title="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          );
+        },
+      },
+    ];
+
+    if (canSeeRiskInternals) {
+      baseColumns.splice(4, 0,
+        { accessorKey: "probability", header: "Probability", enableSorting: true },
+        { accessorKey: "impactCost", header: "IC", enableSorting: true },
+        { accessorKey: "impactSchedule", header: "IS", enableSorting: true },
+        {
+          accessorKey: "riskScore",
+          header: "Score",
+          enableSorting: true,
+          cell: (info) => {
+            const val = info.getValue();
+            const score = Number(String(val));
+            if (isNaN(score)) return <span className="text-text-muted">-</span>;
+            let color = "text-success";
+            if (score >= 15) color = "text-danger";
+            else if (score >= 8) color = "text-warning";
+            return <span className={`font-semibold ${color}`}>{score.toFixed(0)}</span>;
+          },
+        },
+      );
+    }
+
+    return baseColumns;
+  }, [router, projectId, deleteMutation, canSeeRiskInternals]);
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, X, Trash2, AlertTriangle, BookOpen } from "lucide-react";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -74,10 +74,12 @@ export default function RiskRegisterReportPage() {
     enabled: !!selectedProjectId,
   });
 
-  const rawRisks = risksData?.data;
-  const risks: RiskResponse[] = Array.isArray(rawRisks)
-    ? rawRisks
-    : ((rawRisks as { content?: RiskResponse[] } | undefined)?.content ?? []);
+  const risks: RiskResponse[] = useMemo(() => {
+    const rawRisks = risksData?.data;
+    return Array.isArray(rawRisks)
+      ? rawRisks
+      : ((rawRisks as { content?: RiskResponse[] } | undefined)?.content ?? []);
+  }, [risksData]);
 
   const projects: ProjectResponse[] = Array.isArray(projectsData) ? projectsData : [];
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
@@ -203,32 +205,37 @@ export default function RiskRegisterReportPage() {
     createMutation.mutate(formData);
   };
 
-  const internalColumns: ColumnDef<RiskResponse>[] = canSeeRiskInternals
-    ? [
-        { accessorKey: "probability", header: "Probability", enableSorting: true },
-        { accessorKey: "impact", header: "Impact", enableSorting: true },
-        {
-          accessorKey: "score",
-          header: "Score",
-          enableSorting: true,
-          cell: (info) => {
-            const value = info.getValue();
-            if (value === null || value === undefined) {
-              return <span className="text-text-muted">-</span>;
-            }
-            const score = Number(String(value));
-            if (isNaN(score)) {
-              return <span className="text-text-muted">-</span>;
-            }
-            let color = "text-success";
-            if (score >= 15) color = "text-danger";
-            else if (score >= 8) color = "text-warning";
-            return <span className={`font-semibold ${color}`}>{score.toFixed(1)}</span>;
-          },
-        },
-      ]
-    : [];
-  const columns: ColumnDef<RiskResponse>[] = [
+  const internalColumns = useMemo<ColumnDef<RiskResponse>[]>(
+    () =>
+      canSeeRiskInternals
+        ? [
+            { accessorKey: "probability", header: "Probability", enableSorting: true },
+            { accessorKey: "impact", header: "Impact", enableSorting: true },
+            {
+              accessorKey: "score",
+              header: "Score",
+              enableSorting: true,
+              cell: (info) => {
+                const value = info.getValue();
+                if (value === null || value === undefined) {
+                  return <span className="text-text-muted">-</span>;
+                }
+                const score = Number(String(value));
+                if (isNaN(score)) {
+                  return <span className="text-text-muted">-</span>;
+                }
+                let color = "text-success";
+                if (score >= 15) color = "text-danger";
+                else if (score >= 8) color = "text-warning";
+                return <span className={`font-semibold ${color}`}>{score.toFixed(1)}</span>;
+              },
+            },
+          ]
+        : [],
+    [canSeeRiskInternals]
+  );
+  const deleteIsPending = deleteMutation.isPending;
+  const columns = useMemo<ColumnDef<RiskResponse>[]>(() => [
     { accessorKey: "code", header: "Code", enableSorting: true },
     { accessorKey: "title", header: "Title", enableSorting: true },
     {
@@ -275,7 +282,7 @@ export default function RiskRegisterReportPage() {
                 deleteMutation.mutate(String(value));
               }
             }}
-            disabled={deleteMutation.isPending}
+            disabled={deleteIsPending}
             className="text-danger hover:text-danger disabled:text-text-muted"
           >
             <Trash2 size={16} />
@@ -283,7 +290,7 @@ export default function RiskRegisterReportPage() {
         );
       },
     },
-  ];
+  ], [internalColumns, deleteIsPending, deleteMutation]);
 
   return (
     <div>
@@ -752,61 +759,69 @@ function LibraryModal({
 }
 
 function RiskMatrix({ risks }: { risks: RiskResponse[] }) {
-  const matrix: number[][] = Array(5)
-    .fill(null)
-    .map(() => Array(5).fill(0));
+  const matrixData = useMemo(() => {
+    const matrix: number[][] = Array(5)
+      .fill(null)
+      .map(() => Array(5).fill(0));
 
-  const levelToIndex = (level: string | number): number => {
-    if (typeof level === 'number') return Math.min(Math.max(level - 1, 0), 4);
-    const map: Record<string, number> = { VERY_LOW: 0, LOW: 1, MEDIUM: 2, HIGH: 3, VERY_HIGH: 4 };
-    return map[level] ?? 2;
-  };
+    const levelToIndex = (level: string | number): number => {
+      if (typeof level === 'number') return Math.min(Math.max(level - 1, 0), 4);
+      const map: Record<string, number> = { VERY_LOW: 0, LOW: 1, MEDIUM: 2, HIGH: 3, VERY_HIGH: 4 };
+      return map[level] ?? 2;
+    };
 
-  risks.forEach((risk) => {
-    const probIndex = levelToIndex(risk.probability);
-    // Prefer the per-dimension impact, falling back to the legacy single-axis enum.
-    const impactSource = risk.impactCost ?? risk.impactSchedule ?? risk.impact ?? "MEDIUM";
-    const impactIndex = levelToIndex(impactSource);
-    matrix[4 - impactIndex][probIndex]++;
-  });
+    risks.forEach((risk) => {
+      const probIndex = levelToIndex(risk.probability);
+      // Prefer the per-dimension impact, falling back to the legacy single-axis enum.
+      const impactSource = risk.impactCost ?? risk.impactSchedule ?? risk.impact ?? "MEDIUM";
+      const impactIndex = levelToIndex(impactSource);
+      matrix[4 - impactIndex][probIndex]++;
+    });
 
-  const probLabels = ["Very Low", "Low", "Medium", "High", "Very High"];
-  const impactLabels = ["Very High", "High", "Medium", "Low", "Very Low"];
+    const impactLabels = ["Very High", "High", "Medium", "Low", "Very Low"];
 
-  const matrixData = matrix.map((row, rowIdx) => ({
-    impactLabel: impactLabels[rowIdx],
-    rowIdx,
-    counts: row,
-  }));
+    return matrix.map((row, rowIdx) => ({
+      impactLabel: impactLabels[rowIdx],
+      rowIdx,
+      counts: row,
+    }));
+  }, [risks]);
+
+  const matrixColumns = useMemo(() => {
+    const probLabels = ["Very Low", "Low", "Medium", "High", "Very High"];
+    return [
+      {
+        accessorKey: "impactLabel",
+        header: "Probability →",
+        cell: ({ row }: { row: { original: { rowIdx: number; counts: number[]; impactLabel: string } } }) => (
+          <span className="text-xs font-medium text-text-secondary">{row.original.impactLabel}</span>
+        ),
+      },
+      ...probLabels.map((label, colIdx) => ({
+        accessorKey: `col${colIdx}`,
+        header: label,
+        cell: ({ row }: { row: { original: { rowIdx: number; counts: number[] } } }) => {
+          const count = row.original.counts[colIdx];
+          let bgColor = "bg-success/10";
+          if (count > 0) {
+            const riskLevel = (4 - row.original.rowIdx) * (colIdx + 1);
+            if (riskLevel >= 15) bgColor = "bg-red-500/20";
+            else if (riskLevel >= 8) bgColor = "bg-amber-500/20";
+            else bgColor = "bg-success/20";
+          }
+          return (
+            <div className={`w-24 ${bgColor} p-2 text-center text-sm font-semibold text-text-secondary`}>
+              {count > 0 && count}
+            </div>
+          );
+        },
+      })),
+    ];
+  }, []);
 
   return (
     <SimpleTable
-      columns={[
-        {
-          accessorKey: "impactLabel",
-          header: "Probability →",
-          cell: ({ row }) => <span className="text-xs font-medium text-text-secondary">{row.original.impactLabel}</span>,
-        },
-        ...probLabels.map((label, colIdx) => ({
-          accessorKey: `col${colIdx}`,
-          header: label,
-          cell: ({ row }: { row: { original: { rowIdx: number; counts: number[] } } }) => {
-            const count = row.original.counts[colIdx];
-            let bgColor = "bg-success/10";
-            if (count > 0) {
-              const riskLevel = (4 - row.original.rowIdx) * (colIdx + 1);
-              if (riskLevel >= 15) bgColor = "bg-red-500/20";
-              else if (riskLevel >= 8) bgColor = "bg-amber-500/20";
-              else bgColor = "bg-success/20";
-            }
-            return (
-              <div className={`w-24 ${bgColor} p-2 text-center text-sm font-semibold text-text-secondary`}>
-                {count > 0 && count}
-              </div>
-            );
-          },
-        })),
-      ]}
+      columns={matrixColumns}
       data={matrixData}
       sortable={false}
     />

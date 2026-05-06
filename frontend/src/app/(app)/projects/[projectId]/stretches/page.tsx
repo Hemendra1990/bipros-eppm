@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { stretchApi, type StretchProgressResponse } from "@/lib/api/stretchApi";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
@@ -73,7 +73,7 @@ export default function StretchesPage() {
   });
   const progressMap = progressQueries.data ?? new Map<string, StretchProgressResponse>();
 
-  const columns: ColumnDef<StretchResponse>[] = [
+  const columns = useMemo<ColumnDef<StretchResponse>[]>(() => [
     { accessorKey: "stretchCode", header: "Stretch ID", enableSorting: true },
     { accessorKey: "name", header: "Name" },
     {
@@ -153,7 +153,7 @@ export default function StretchesPage() {
         );
       },
     },
-  ];
+  ], [progressMap]);
 
   return (
     <div className="space-y-6">

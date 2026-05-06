@@ -505,6 +505,7 @@ export default function CalendarDetailPage() {
               },
             ]}
             data={workWeek}
+            sortable={false}
           />
           <div className="mt-6 flex justify-end">
             <button

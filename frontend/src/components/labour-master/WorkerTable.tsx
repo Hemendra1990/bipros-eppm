@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LabourDesignationResponse } from "@/lib/api/labourMasterApi";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
@@ -11,7 +12,7 @@ type Props = {
 };
 
 export function WorkerTable({ rows, onRowClick }: Props) {
-  const columns: ColumnDef<LabourDesignationResponse>[] = [
+  const columns = useMemo<ColumnDef<LabourDesignationResponse>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -116,7 +117,7 @@ export function WorkerTable({ rows, onRowClick }: Props) {
         </span>
       ),
     },
-  ];
+  ], []);
 
   return (
     <VirtualDataTable

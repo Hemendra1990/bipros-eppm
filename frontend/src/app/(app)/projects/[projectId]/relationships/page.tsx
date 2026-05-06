@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { activityApi, type RelationshipResponse, type RelationshipType } from "@/lib/api/activityApi";
@@ -47,12 +47,18 @@ export default function RelationshipsPage() {
   const relationships = relationshipsData?.data ?? [];
   const activities = activitiesData?.data?.content ?? [];
 
-  const activityMap = new Map(activities.map((a) => [a.id, a]));
+  const activityMap = useMemo(
+    () => new Map(activities.map((a) => [a.id, a])),
+    [activities]
+  );
 
-  const getActivityLabel = (id: string) => {
-    const act = activityMap.get(id);
-    return act ? `${act.code} — ${act.name}` : id;
-  };
+  const getActivityLabel = useCallback(
+    (id: string) => {
+      const act = activityMap.get(id);
+      return act ? `${act.code} — ${act.name}` : id;
+    },
+    [activityMap]
+  );
 
   const deleteMutation = useMutation({
     mutationFn: (relationshipId: string) =>
@@ -66,13 +72,16 @@ export default function RelationshipsPage() {
     },
   });
 
-  const handleDelete = (rel: RelationshipResponse) => {
-    if (confirm(`Delete relationship: ${getActivityLabel(rel.predecessorActivityId)} → ${getActivityLabel(rel.successorActivityId)}?`)) {
-      deleteMutation.mutate(rel.id);
-    }
-  };
+  const handleDelete = useCallback(
+    (rel: RelationshipResponse) => {
+      if (confirm(`Delete relationship: ${getActivityLabel(rel.predecessorActivityId)} → ${getActivityLabel(rel.successorActivityId)}?`)) {
+        deleteMutation.mutate(rel.id);
+      }
+    },
+    [deleteMutation, getActivityLabel]
+  );
 
-  const columns: ColumnDef<RelationshipResponse>[] = [
+  const columns = useMemo<ColumnDef<RelationshipResponse>[]>(() => [
     {
       accessorKey: "predecessorActivityId",
       header: "Predecessor",
@@ -149,7 +158,7 @@ export default function RelationshipsPage() {
         );
       },
     },
-  ];
+  ], [getActivityLabel, handleDelete, deleteMutation.isPending]);
 
   const isLoading = isLoadingRels || isLoadingActs;
 

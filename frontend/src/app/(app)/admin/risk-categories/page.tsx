@@ -274,7 +274,7 @@ export default function RiskCategoriesAdminPage() {
 
   const selectedType = types.find((t) => t.id === selectedTypeId) ?? null;
 
-  const columns: ColumnDef<RiskCategoryMasterResponse>[] = [
+  const columns = useMemo<ColumnDef<RiskCategoryMasterResponse>[]>(() => [
               {
                 accessorKey: "code",
                 header: "Code",
@@ -327,7 +327,7 @@ export default function RiskCategoriesAdminPage() {
                   </div>
                 ),
               },
-            ];
+            ], [openEditCategory, deleteCategory]);
 
   return (
     <div className="space-y-6">

@@ -116,7 +116,7 @@ export default function CostAccountsAdminPage() {
 
   const parentOptions = accounts.filter((a) => a.id !== editingId);
 
-  const columns: ColumnDef<CostAccount>[] = [
+  const columns = useMemo<ColumnDef<CostAccount>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -165,7 +165,7 @@ export default function CostAccountsAdminPage() {
         </div>
       ),
     },
-  ];
+  ], [accountById, openEdit, handleDelete]);
 
   return (
     <div className="p-6">

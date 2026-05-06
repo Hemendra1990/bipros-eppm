@@ -30,6 +30,12 @@ interface OutputForm {
 
 const today = () => new Date().toISOString().split("T")[0];
 
+const daysAgo = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().split("T")[0];
+};
+
 const initialFormState: OutputForm = {
   outputDate: today(),
   activityId: "",
@@ -40,6 +46,8 @@ const initialFormState: OutputForm = {
   daysWorked: "",
   remarks: "",
 };
+
+const DEFAULT_FROM_DAYS = 30;
 
 const toNumberOrUndefined = (value: string): number | undefined => {
   if (value === "" || value === null || value === undefined) return undefined;
@@ -56,9 +64,16 @@ export default function DailyOutputsPage() {
   const [formData, setFormData] = useState<OutputForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: outputsData, isLoading } = useQuery({
-    queryKey: ["daily-outputs", projectId],
-    queryFn: () => dailyActivityResourceOutputApi.list(projectId),
+  const [fromDate, setFromDate] = useState<string>(() => daysAgo(DEFAULT_FROM_DAYS));
+  const [toDate, setToDate] = useState<string>(() => today());
+
+  const { data: outputsData, isLoading, isFetching } = useQuery({
+    queryKey: ["daily-outputs", projectId, fromDate, toDate],
+    queryFn: () =>
+      dailyActivityResourceOutputApi.list(projectId, {
+        from: fromDate || undefined,
+        to: toDate || undefined,
+      }),
   });
   const outputs: DailyActivityResourceOutputResponse[] = outputsData?.data ?? [];
 
@@ -145,11 +160,7 @@ export default function DailyOutputsPage() {
     }
   };
 
-  if (isLoading && outputs.length === 0) {
-    return <div className="p-6 text-text-muted">Loading daily outputs...</div>;
-  }
-
-  const columns: ColumnDef<DailyActivityResourceOutputResponse>[] = [
+  const columns = useMemo<ColumnDef<DailyActivityResourceOutputResponse>[]>(() => [
     {
       accessorKey: "outputDate",
       header: "Date",
@@ -223,7 +234,11 @@ export default function DailyOutputsPage() {
         </button>
       ),
     },
-  ];
+  ], [activityById, resourceById]);
+
+  if (isLoading && outputs.length === 0) {
+    return <div className="p-6 text-text-muted">Loading daily outputs...</div>;
+  }
 
   return (
     <div className="p-6">
@@ -390,13 +405,67 @@ export default function DailyOutputsPage() {
           </form>
         )}
 
+        <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface/50 p-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text-secondary">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="rounded-md border border-border bg-surface-hover px-2 py-1.5 text-sm text-text-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text-secondary">To</label>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className="rounded-md border border-border bg-surface-hover px-2 py-1.5 text-sm text-text-primary"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => {
+                  setFromDate(daysAgo(d));
+                  setToDate(today());
+                }}
+                className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-hover"
+              >
+                Last {d}d
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+              }}
+              className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-hover"
+              title="Load all rows — may be slow for large projects"
+            >
+              All time
+            </button>
+          </div>
+          <div className="ml-auto text-xs text-text-muted">
+            {isFetching
+              ? "Loading…"
+              : `${outputs.length.toLocaleString("en-IN")} ${outputs.length === 1 ? "row" : "rows"}`}
+          </div>
+        </div>
+
         <VirtualDataTable
           columns={columns}
           data={outputs}
           sortable
           resizable
           isLoading={isLoading}
-          emptyMessage="No outputs recorded yet — add one to start populating the Capacity Utilization report."
+          emptyMessage="No outputs in the selected date range."
         />
       </div>
     </div>

@@ -90,7 +90,7 @@ export default function ProjectsPage() {
     return { active, planned, completed };
   }, [allProjects]);
 
-  const columns: ColumnDef<(typeof allProjects)[number]>[] = [
+  const columns = useMemo<ColumnDef<(typeof allProjects)[number]>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -168,7 +168,7 @@ export default function ProjectsPage() {
         </div>
       ),
     },
-  ];
+  ], [archiveMutation.isPending]);
 
   return (
     <div>

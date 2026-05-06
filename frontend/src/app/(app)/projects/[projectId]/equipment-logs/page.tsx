@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { equipmentApi, type EquipmentLogResponse, type CreateEquipmentLogRequest, type EquipmentUtilizationSummary } from "@/lib/api/equipmentApi";
 import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
@@ -115,10 +115,13 @@ export default function EquipmentLogsPage() {
   }, [resourcesQueryData]);
 
   // Build a lookup so the Resource column can render `${code} — ${name}`.
-  const resourceById = new Map<string, { code: string; name: string }>();
-  for (const r of resources) {
-    resourceById.set(r.id, { code: r.code, name: r.name });
-  }
+  const resourceById = useMemo(() => {
+    const map = new Map<string, { code: string; name: string }>();
+    for (const r of resources) {
+      map.set(r.id, { code: r.code, name: r.name });
+    }
+    return map;
+  }, [resources]);
 
   useEffect(() => {
     loadEquipmentLogs();
@@ -152,11 +155,7 @@ export default function EquipmentLogsPage() {
     }
   };
 
-  if (isLoading && logs.length === 0) {
-    return <div className="p-6 text-text-muted">Loading equipment logs...</div>;
-  }
-
-  const columns: ColumnDef<EquipmentLogResponse>[] = [
+  const columns = useMemo<ColumnDef<EquipmentLogResponse>[]>(() => [
     {
       accessorKey: "logDate",
       header: "Date",
@@ -224,7 +223,11 @@ export default function EquipmentLogsPage() {
       header: "Remarks",
       cell: ({ row }) => row.original.remarks ?? "—",
     },
-  ];
+  ], [resourceById]);
+
+  if (isLoading && logs.length === 0) {
+    return <div className="p-6 text-text-muted">Loading equipment logs...</div>;
+  }
 
   return (
     <div className="p-6">

@@ -201,7 +201,7 @@ export default function ResourceRolesPage() {
     { key: "MATERIAL", label: "Material" },
   ];
 
-  const columns: ColumnDef<ResourceRole>[] = [
+  const columns = useMemo<ColumnDef<ResourceRole>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -280,7 +280,7 @@ export default function ResourceRolesPage() {
         </div>
       ),
     },
-  ];
+  ], [openEdit, handleDelete]);
 
   return (
     <div>

@@ -64,7 +64,7 @@ export default function ArchivedProjectsPage() {
     );
   }, [allProjects, searchQuery]);
 
-  const columns: ColumnDef<(typeof allProjects)[number]>[] = [
+  const columns = useMemo<ColumnDef<(typeof allProjects)[number]>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -102,7 +102,7 @@ export default function ArchivedProjectsPage() {
         </div>
       ),
     },
-  ];
+  ], [restoreMutation.isPending]);
 
   return (
     <div>

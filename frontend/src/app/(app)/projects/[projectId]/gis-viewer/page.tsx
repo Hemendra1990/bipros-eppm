@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import type Feature from "ol/Feature";
@@ -41,6 +41,14 @@ type TabId = "map" | "layers" | "satellite" | "progress";
 type FeatureJson = GeoJsonFeatureCollection["features"][number];
 
 export default function GisViewerPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-text-muted">Loading…</div>}>
+      <GisViewerPageInner />
+    </Suspense>
+  );
+}
+
+function GisViewerPageInner() {
   const params = useParams();
   const projectId = params.projectId as `${string}-${string}-${string}-${string}-${string}`;
   const router = useRouter();
@@ -432,11 +440,11 @@ export default function GisViewerPage() {
 
   return (
     <div className="flex flex-col h-full gap-4 p-4">
-      <AiInsightsPanel
+      {/* <AiInsightsPanel
         projectId={projectId}
         endpoint={`/v1/projects/${projectId}/gis/ai/insights`}
         defaultCollapsed
-      />
+      /> */}
       <TabTip
         title="GIS Map Viewer"
         description="View your project location on a map. Draw, edit, and delete WBS polygons; step through satellite scenes; track construction progress geographically."

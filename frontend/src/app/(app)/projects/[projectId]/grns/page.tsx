@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -28,9 +29,9 @@ export default function GrnsPage() {
   const matName = (id: string) =>
     materials?.data?.find((m) => m.id === id)?.name ?? id.slice(0, 8);
 
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data]);
 
-  const columns: ColumnDef<GoodsReceiptResponse>[] = [
+  const columns = useMemo<ColumnDef<GoodsReceiptResponse>[]>(() => [
     { accessorKey: "grnNumber", header: "GRN #", enableSorting: true },
     { accessorKey: "receivedDate", header: "Date" },
     {
@@ -57,7 +58,7 @@ export default function GrnsPage() {
     },
     { accessorKey: "poNumber", header: "PO #" },
     { accessorKey: "vehicleNumber", header: "Vehicle" },
-  ];
+  ], [materials]);
 
   return (
     <div className="space-y-6">

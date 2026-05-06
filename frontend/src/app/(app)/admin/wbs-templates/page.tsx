@@ -2,7 +2,7 @@
 
 import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -103,11 +103,7 @@ export default function WbsTemplatesPage() {
     createMutation.mutate(formData as CreateWbsTemplateRequest);
   };
 
-  if (isLoading) {
-    return <div className="text-center py-8 text-text-muted">Loading templates...</div>;
-  }
-
-  const columns: ColumnDef<WbsTemplateResponse>[] = [
+  const columns = useMemo<ColumnDef<WbsTemplateResponse>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -153,7 +149,11 @@ export default function WbsTemplatesPage() {
         </button>
       ),
     },
-  ];
+  ], []);
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-text-muted">Loading templates...</div>;
+  }
 
   return (
     <div>

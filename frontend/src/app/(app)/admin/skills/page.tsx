@@ -115,7 +115,7 @@ export default function SkillsPage() {
     }
   };
 
-  const columns: ColumnDef<SkillMaster>[] = [
+  const columns = useMemo<ColumnDef<SkillMaster>[]>(() => [
     {
       accessorKey: "code",
       header: "Code",
@@ -178,7 +178,7 @@ export default function SkillsPage() {
         </div>
       ),
     },
-  ];
+  ], [openEdit, handleDelete]);
 
   return (
     <div>

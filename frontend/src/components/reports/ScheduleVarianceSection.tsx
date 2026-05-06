@@ -156,25 +156,6 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
     downloadCsv(`schedule-variance-${projectCode}`, csv);
   };
 
-  if (error) {
-    return (
-      <ErrorState message="Could not load the schedule variance report. The backend may be down or no baseline is set." />
-    );
-  }
-
-  if (isLoading) {
-    return <LoadingState />;
-  }
-
-  if (!data?.data || rows.length === 0) {
-    return <EmptyBaselineState />;
-  }
-
-  const onTrackPct =
-    summary && summary.totalActivities > 0
-      ? Math.round((summary.onTrackCount / summary.totalActivities) * 100)
-      : 0;
-
   const columns = useMemo<ColumnDef<ScheduleVarianceRow>[]>(
     () => [
       {
@@ -364,6 +345,25 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
     ],
     []
   );
+
+  if (error) {
+    return (
+      <ErrorState message="Could not load the schedule variance report. The backend may be down or no baseline is set." />
+    );
+  }
+
+  if (isLoading) {
+    return <LoadingState />;
+  }
+
+  if (!data?.data || rows.length === 0) {
+    return <EmptyBaselineState />;
+  }
+
+  const onTrackPct =
+    summary && summary.totalActivities > 0
+      ? Math.round((summary.onTrackCount / summary.totalActivities) * 100)
+      : 0;
 
   return (
     <div className="space-y-6">

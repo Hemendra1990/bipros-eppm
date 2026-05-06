@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -282,7 +282,7 @@ export default function DocumentsPage() {
     );
   };
 
-  const columns: ColumnDef<Document>[] = [
+  const columns = useMemo<ColumnDef<Document>[]>(() => [
     { accessorKey: "title", header: "Title" },
     { accessorKey: "documentNumber", header: "Document #" },
     {
@@ -330,7 +330,10 @@ export default function DocumentsPage() {
         </button>
       ),
     },
-  ];
+    // handleDownload is recreated each render but only depends on stable
+    // values (projectId); leave it out so the table memo isn't invalidated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []);
 
   return (
     <div className="space-y-6">

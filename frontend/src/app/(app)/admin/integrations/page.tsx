@@ -2,6 +2,7 @@
 
 import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { integrationApi, type IntegrationConfig } from "@/lib/api/integrationApi";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -27,9 +28,9 @@ export default function IntegrationsPage() {
     retry: 0,
   });
 
-  const integrations = data ?? [];
+  const integrations = useMemo(() => data ?? [], [data]);
 
-  const columns: ColumnDef<IntegrationConfig>[] = [
+  const columns = useMemo<ColumnDef<IntegrationConfig>[]>(() => [
     {
       accessorKey: "systemCode",
       header: "Code",
@@ -85,7 +86,7 @@ export default function IntegrationsPage() {
         </span>
       ),
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-4 p-4">

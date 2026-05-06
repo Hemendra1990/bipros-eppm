@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -41,9 +41,9 @@ function PermitRegisterPageInner() {
       }),
   });
 
-  const rows = data?.content ?? [];
+  const rows = useMemo(() => data?.content ?? [], [data]);
 
-  const columns: ColumnDef<(typeof rows)[number]>[] = [
+  const columns = useMemo<ColumnDef<(typeof rows)[number]>[]>(() => [
     {
       accessorKey: "permitCode",
       header: "Permit ID",
@@ -115,7 +115,7 @@ function PermitRegisterPageInner() {
         </div>
       ),
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6 p-6">

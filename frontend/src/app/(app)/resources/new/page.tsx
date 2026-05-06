@@ -26,7 +26,6 @@ import { nationalityMasterApi } from "@/lib/api/nationalityMasterApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { MultiSelect } from "@/components/common/MultiSelect";
-import { SupervisorPicker } from "@/components/resources/SupervisorPicker";
 import toast from "react-hot-toast";
 
 type TypeKind = "MANPOWER" | "EQUIPMENT" | "MATERIAL" | "OTHER";
@@ -281,7 +280,7 @@ export default function NewResourcePage() {
         <span
           className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 ${
             step === 1
-              ? "bg-accent text-accent-foreground"
+              ? "bg-accent text-text-primary"
               : "bg-surface-hover text-text-secondary"
           }`}
         >
@@ -291,7 +290,7 @@ export default function NewResourcePage() {
         <span
           className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 ${
             step === 2
-              ? "bg-accent text-accent-foreground"
+              ? "bg-accent text-text-primary"
               : "bg-surface-hover text-text-secondary"
           }`}
         >
@@ -482,11 +481,13 @@ export default function NewResourcePage() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Parent / Supervisor</label>
-                  <SupervisorPicker
+                  <label className={labelCls}>Parent Resource ID</label>
+                  <input
+                    type="text"
                     value={common.parentId}
-                    onChange={(id) => setCommon({ ...common, parentId: id ?? "" })}
-                    placeholder="Optional — pick a parent or supervising resource"
+                    onChange={(e) => setCommon({ ...common, parentId: e.target.value })}
+                    placeholder="Optional — for hierarchical resources"
+                    className={inputCls}
                   />
                 </div>
               </div>
@@ -498,7 +499,7 @@ export default function NewResourcePage() {
               type="button"
               disabled={!canAdvanceToStep2}
               onClick={() => setStep(2)}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
             >
               Continue →
             </button>
@@ -547,7 +548,7 @@ export default function NewResourcePage() {
               type="button"
               disabled={isSubmitting}
               onClick={handleSubmit}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
             >
               {isSubmitting ? "Creating…" : "Create Resource"}
             </button>
@@ -916,7 +917,7 @@ function ManpowerForm({
             onClick={() => onActiveSectionChange(s.key)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               activeSection === s.key
-                ? "bg-accent text-accent-foreground"
+                ? "bg-accent text-text-primary"
                 : "border border-border text-text-secondary hover:bg-surface-hover/50"
             }`}
           >
@@ -1176,12 +1177,11 @@ function ManpowerMasterFields({
           onChange={(e) => set({ exitDate: e.target.value || null })}
         />
       </Field>
-      <Field label="Reporting Manager">
-        <SupervisorPicker
-          value={m.reportingManagerId}
-          onChange={(id) => set({ reportingManagerId: id })}
-          typeCode="LABOR"
-          placeholder="Pick a manpower supervisor..."
+      <Field label="Reporting Manager (UUID)">
+        <input
+          className={inputCls}
+          value={m.reportingManagerId ?? ""}
+          onChange={(e) => set({ reportingManagerId: e.target.value || null })}
         />
       </Field>
       <Field label="Company Name">

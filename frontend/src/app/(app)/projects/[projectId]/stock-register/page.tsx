@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -26,9 +27,9 @@ export default function StockRegisterPage() {
     enabled: !!projectId,
   });
 
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data]);
 
-  const columns: ColumnDef<MaterialStockRow>[] = [
+  const columns = useMemo<ColumnDef<MaterialStockRow>[]>(() => [
     { accessorKey: "materialCode", header: "Code", enableSorting: true },
     { accessorKey: "materialName", header: "Material" },
     { accessorKey: "openingStock", header: "Opening" },
@@ -80,7 +81,7 @@ export default function StockRegisterPage() {
         return v == null ? "—" : `${v}%`;
       },
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

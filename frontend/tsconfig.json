@@ -33,6 +33,6 @@
   "exclude": [
     "node_modules",
     ".next",
-    "vitest.config.ts"
+    "vitest.config.mts"
   ]
 }

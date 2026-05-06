@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { activityCodeApi, type ActivityCodeResponse } from "@/lib/api/activityCodeApi";
 import type { PagedResponse } from "@/lib/types";
@@ -108,7 +108,7 @@ export default function ActivityCodesPage() {
     setShowForm(false);
   };
 
-  const columns: ColumnDef<ActivityCodeResponse>[] = [
+  const columns = useMemo<ColumnDef<ActivityCodeResponse>[]>(() => [
     {
       accessorKey: "name",
       header: "Name",
@@ -142,7 +142,7 @@ export default function ActivityCodesPage() {
         </div>
       ),
     },
-  ];
+  ], [handleEdit, handleDelete]);
 
   if (isLoading && codes.length === 0) {
     return (

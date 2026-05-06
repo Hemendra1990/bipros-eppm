@@ -183,7 +183,7 @@ export function CostAccountRollupTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6 px-6 pb-8">
-      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/cost-accounts/ai/insights`} />
+      {/* <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/cost-accounts/ai/insights`} /> */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <KpiTile
           label="Total BAC"

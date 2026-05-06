@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LabourGradeReference } from "@/lib/api/labourMasterApi";
 import { SimpleTable } from "@/components/common/SimpleTable";
@@ -8,7 +9,7 @@ import { GRADE_BADGE } from "./labourMasterTokens";
 type Props = { rows: LabourGradeReference[]; regulatoryNotes: string[] };
 
 export function GradeReferenceTable({ rows, regulatoryNotes }: Props) {
-  const columns: ColumnDef<LabourGradeReference>[] = [
+  const columns = useMemo<ColumnDef<LabourGradeReference>[]>(() => [
     {
       accessorKey: "grade",
       header: "Grade",
@@ -45,7 +46,7 @@ export function GradeReferenceTable({ rows, regulatoryNotes }: Props) {
         <span className="text-slate">{row.original.description}</span>
       ),
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

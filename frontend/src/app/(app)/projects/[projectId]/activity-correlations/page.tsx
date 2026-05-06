@@ -61,7 +61,7 @@ export default function ActivityCorrelationsPage() {
 
   const canAdd = a && b && a !== b && Math.abs(coef) < 1 && !upsertMutation.isPending;
 
-  const columns: ColumnDef<ActivityCorrelation>[] = [
+  const columns = useMemo<ColumnDef<ActivityCorrelation>[]>(() => [
     {
       accessorKey: "activityAId",
       header: "Activity A",
@@ -93,7 +93,7 @@ export default function ActivityCorrelationsPage() {
         </div>
       ),
     },
-  ];
+  ], [labelOf, deleteMutation]);
 
   return (
     <div className="space-y-6">

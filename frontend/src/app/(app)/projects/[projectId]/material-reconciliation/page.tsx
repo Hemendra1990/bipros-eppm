@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { materialApi, type MaterialReconciliationResponse, type CreateMaterialReconciliationRequest } from "@/lib/api/materialApi";
 import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
@@ -109,11 +109,7 @@ export default function MaterialReconciliationPage() {
     return resource ? resource.name : resourceId.substring(0, 8);
   };
 
-  if (isLoading && reconciliations.length === 0) {
-    return <div className="p-6 text-text-muted">Loading material reconciliations...</div>;
-  }
-
-  const columns: ColumnDef<MaterialReconciliationResponse>[] = [
+  const columns = useMemo<ColumnDef<MaterialReconciliationResponse>[]>(() => [
     { accessorKey: "period", header: "Period" },
     {
       accessorKey: "resourceId",
@@ -154,7 +150,11 @@ export default function MaterialReconciliationPage() {
       ),
     },
     { accessorKey: "unit", header: "Unit" },
-  ];
+  ], [resources]);
+
+  if (isLoading && reconciliations.length === 0) {
+    return <div className="p-6 text-text-muted">Loading material reconciliations...</div>;
+  }
 
   return (
     <div className="p-6">
