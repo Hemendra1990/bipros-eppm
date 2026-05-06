@@ -45,12 +45,12 @@ interface DrawerProps {
 Behavior:
 
 - Renders into `document.body` via `createPortal` so it overlays the entire page (not clipped by the sticky header's stacking/transform context).
-- Always mounted while `open` is true; uses CSS transitions on `translate-x-full` ↔ `translate-x-0` for slide-in/out (200ms `ease-out`).
+- Stays mounted across open/close so the slide-out animation can play. Uses CSS transitions on `translate-x-full` ↔ `translate-x-0` for the panel (200ms `ease-out`) and `opacity-0` ↔ `opacity-100` for the backdrop. While closed, panel and backdrop set `pointer-events-none` so they don't block page interaction.
 - Backdrop: `fixed inset-0 bg-charcoal/40 z-40`, click is a no-op (strict close).
 - Panel: `fixed inset-y-0 right-0 z-50 w-full <widthClass> bg-paper shadow-xl flex flex-col`.
 - Header (sticky inside panel): title left, X close button right, `border-b border-hairline px-5 py-3`.
 - Body: `flex-1 overflow-y-auto`.
-- While `open`: sets `document.body.style.overflow = "hidden"` on mount, restores prior value on unmount.
+- Body scroll lock: `useEffect` on `open`. When `open` flips true, set `document.body.style.overflow = "hidden"`; when it flips false (or on unmount), restore the prior value. Tied to the prop, not to mount.
 - ESC key: no listener (intentional — strict close).
 - Visual style follows the existing `Dialog` component (`frontend/src/components/ui/dialog.tsx`): `bg-paper`, `text-charcoal`, hairline borders, gold accent on close hover.
 
@@ -59,7 +59,7 @@ Behavior:
 - Remove the outer `<Card variant="elevated" className="p-0">` wrapper (line 227) and its top header row containing the title + X close button (≈lines 228-249). The drawer now owns the title and X.
 - Keep all section dividers (`border-t border-hairline`) and section bodies as-is.
 - Keep the existing Save/Cancel button row at the bottom of the form, unchanged. (No move to a sticky footer; users scroll to submit, matching today's flow.)
-- Replace the outer wrapper with a plain `<form>` so its content fills the drawer body. Adjust horizontal padding so internal `px-5` sections still align (drawer body has no extra padding; form sections keep their `px-5 py-4`).
+- Replace the outer wrapper with a plain `<form>` so its content fills the drawer body. The drawer body adds no extra horizontal padding, so the form's existing per-section `px-5 py-4` continues to align as before.
 - Form `Props` interface, callbacks, and exported name remain unchanged. No call sites except the DPR page.
 
 ### 3. DPR page wiring — `frontend/src/app/(app)/projects/[projectId]/dpr/page.tsx`
@@ -96,7 +96,7 @@ Behavior:
   </Drawer>
   ```
 
-- The `Drawer` is always rendered so its enter/exit transition can run; `open` controls visibility. The `key` on the form forces a remount when switching between new and edit (or between two different rows being edited), preserving today's behavior of reseeding `useState` initializers.
+- The `Drawer` is rendered unconditionally (not gated by `showForm`) so the slide-out transition runs on close; the `open` prop drives visibility. The `key` on the form forces a remount when switching between new and edit (or between two different rows being edited), preserving today's behavior of reseeding `useState` initializers.
 
 ## Data flow
 
@@ -107,7 +107,7 @@ Unchanged. `DprActivityForm` calls `onSave(payload)` → page calls `dprApi.crea
 - **Long form**: drawer body is `overflow-y-auto`; the form's existing in-form error message at the top remains visible after scrolling back up.
 - **Switch from edit row A to edit row B**: clicking Edit on row B updates `editing` → the `key` changes → form remounts with row B's seeded state. Drawer stays open; no slide animation re-trigger because `open` stays true.
 - **Save error**: form keeps its existing error display; drawer stays open (no auto-close on failure since `closeForm()` is only called by `handleSave` after `await dprApi.create/update` resolves).
-- **Browser back/route change while drawer open**: the page unmounts; drawer cleanup restores body scroll via its unmount effect.
+- **Browser back/route change while drawer open**: the page unmounts; the drawer's `useEffect` cleanup restores body scroll.
 - **z-index**: drawer panel `z-50` and backdrop `z-40` sit above the existing sticky page header (`z-20`) and the AI insights panel.
 - **Mobile / narrow viewports**: panel is `w-full max-w-2xl`, so on screens narrower than 672px it occupies the full width — acceptable, matches drawer behavior in similar enterprise apps.
 
