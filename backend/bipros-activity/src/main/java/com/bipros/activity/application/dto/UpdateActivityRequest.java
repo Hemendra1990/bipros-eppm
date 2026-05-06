@@ -61,5 +61,15 @@ public record UpdateActivityRequest(
     UUID workActivityId,
 
     /** Soft FK to {@code cost.cost_accounts.id}; pass {@code null} to clear the assignment. */
-    UUID costAccountId
+    UUID costAccountId,
+
+    /**
+     * Soft FK to {@code resource.resources.id}. Pass to set/change the supervisor; pass
+     * {@code null} (with a sentinel call) to leave unchanged. To clear we currently rely on
+     * the controller passing both id + name as null and the service treating that as a clear.
+     */
+    UUID supervisorResourceId,
+
+    /** Display-snapshot of the supervisor Resource name from the frontend picker. */
+    String supervisorResourceName
 ) {}

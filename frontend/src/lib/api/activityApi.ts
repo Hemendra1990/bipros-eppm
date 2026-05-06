@@ -48,6 +48,10 @@ export interface ActivityResponse {
   percentCompleteType?: string | null;
   activityType?: string | null;
   durationType?: string | null;
+  /** Cached supervisor Resource id (mirror of ResourceAssignment with isSupervisor=true). */
+  responsibleResourceId?: string | null;
+  /** Snapshot of the supervisor Resource name at the time the flag was set. */
+  responsibleResourceName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +78,10 @@ export interface CreateActivityRequest {
   primaryConstraintDate?: string;
   secondaryConstraintType?: ConstraintType;
   secondaryConstraintDate?: string;
+  /** Supervisor: a LABOR Resource accountable for this activity. Optional. */
+  supervisorResourceId?: string | null;
+  /** Supervisor display-snapshot — frontend passes the picker option name. */
+  supervisorResourceName?: string | null;
 }
 
 export interface UpdateActivityRequest {
@@ -98,6 +106,9 @@ export interface UpdateActivityRequest {
   primaryConstraintDate?: string | null;
   secondaryConstraintType?: ConstraintType | null;
   secondaryConstraintDate?: string | null;
+  /** Pass to set/change supervisor; omit (null) to leave unchanged. */
+  supervisorResourceId?: string | null;
+  supervisorResourceName?: string | null;
 }
 
 export const activityApi = {
@@ -195,6 +206,25 @@ export const activityApi = {
       .post<ApiResponse<{ updatedCount: number }>>(
         `/v1/projects/${projectId}/activities/global-change`,
         request
+      )
+      .then((r) => r.data),
+
+  /**
+   * Bulk-assign one supervisor (a LABOR Resource) across many activities. Powers the
+   * Resources → Supervisor sub-tab. Returns count updated.
+   */
+  bulkSetSupervisor: (
+    projectId: string,
+    body: {
+      supervisorResourceId: string;
+      supervisorResourceName: string | null;
+      activityIds: string[];
+    }
+  ) =>
+    apiClient
+      .post<ApiResponse<{ updated: number }>>(
+        `/v1/projects/${projectId}/activities/supervisor-bulk`,
+        body
       )
       .then((r) => r.data),
 

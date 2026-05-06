@@ -122,6 +122,22 @@ export default function ActivityDetailPage() {
   });
   const projectCalendars = calendarsData?.data ?? [];
 
+  // Project pool, filtered to LABOR/Manpower for the Supervisor picker.
+  const { data: supervisorPoolData, isLoading: isLoadingSupervisorPool } = useQuery({
+    queryKey: ["resource-pool", projectId],
+    queryFn: () => projectResourceApi.listPool(projectId),
+    enabled: !!projectId,
+  });
+  const supervisorOptions = (supervisorPoolData?.data ?? [])
+    .filter((p) => {
+      const t = (p.resourceTypeName ?? "").toLowerCase();
+      return t.includes("labor") || t.includes("labour") || t.includes("manpower");
+    })
+    .map((p) => ({
+      value: p.resourceId,
+      label: `${p.resourceCode ? p.resourceCode + " — " : ""}${p.resourceName ?? p.resourceId}`,
+    }));
+
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectApi.getProject(projectId),
@@ -220,6 +236,8 @@ export default function ActivityDetailPage() {
         workActivityId: activity.workActivityId || "",
         calendarId: activity.calendarId || "",
         costAccountId: activity.costAccountId ?? null,
+        supervisorResourceId: activity.responsibleResourceId ?? null,
+        supervisorResourceName: activity.responsibleResourceName ?? null,
         primaryConstraintType: activity.primaryConstraintType ?? undefined,
         primaryConstraintDate: activity.primaryConstraintDate || "",
         secondaryConstraintType: activity.secondaryConstraintType ?? undefined,
@@ -231,6 +249,15 @@ export default function ActivityDetailPage() {
 
   const handleWorkActivityChange = (value: string) => {
     setEditData((prev) => ({ ...prev, workActivityId: value }));
+  };
+
+  const handleSupervisorChange = (value: string) => {
+    const pooled = (supervisorPoolData?.data ?? []).find((p) => p.resourceId === value);
+    setEditData((prev) => ({
+      ...prev,
+      supervisorResourceId: value || null,
+      supervisorResourceName: pooled?.resourceName ?? null,
+    }));
   };
 
   if (isLoading) {
@@ -279,6 +306,9 @@ export default function ActivityDetailPage() {
           projectCalendarId={projectCalendarId}
           costAccounts={costAccounts}
           percentCompleteType={activity.percentCompleteType}
+          supervisorOptions={supervisorOptions}
+          isLoadingSupervisorPool={isLoadingSupervisorPool}
+          onSupervisorChange={handleSupervisorChange}
         />
       ) : (
         <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} projectCalendars={projectCalendars} projectCalendarId={projectCalendarId} costAccounts={costAccounts} />
@@ -495,6 +525,16 @@ function ViewMode({
         {stat("Slack", `${activity.slack ?? 0} days`)}
         {stat("Free Float", `${activity.freeFloat ?? 0} days`)}
         {stat("Critical", activity.isCritical ? "Yes" : "No", activity.isCritical ? "danger" : "success")}
+      </div>
+
+      {/* Supervisor */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {stat(
+          "Supervisor",
+          activity.responsibleResourceName ?? (
+            <span className="text-text-muted text-sm">— not set —</span>
+          )
+        )}
       </div>
 
       {/* Dates Panel */}
@@ -998,6 +1038,9 @@ interface EditFormProps {
   projectCalendarId: string | null | undefined;
   costAccounts: CostAccount[];
   percentCompleteType?: string | null;
+  supervisorOptions: { value: string; label: string }[];
+  isLoadingSupervisorPool: boolean;
+  onSupervisorChange: (value: string) => void;
 }
 
 function EditForm({
@@ -1017,6 +1060,9 @@ function EditForm({
   projectCalendarId,
   costAccounts,
   percentCompleteType,
+  supervisorOptions,
+  isLoadingSupervisorPool,
+  onSupervisorChange,
 }: EditFormProps) {
   return (
     <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
@@ -1277,6 +1323,28 @@ function EditForm({
           </select>
           <p className="mt-1 text-xs text-text-muted">
             Leave empty to inherit the cost account from the WBS node.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary">
+            Supervisor (Manpower / Labor)
+          </label>
+          <SearchableSelect
+            value={data.supervisorResourceId ?? ""}
+            onChange={onSupervisorChange}
+            placeholder={
+              isLoadingSupervisorPool
+                ? "Loading project pool..."
+                : supervisorOptions.length
+                  ? "Search labor resources..."
+                  : "No labor resources in project pool"
+            }
+            options={[{ value: "", label: "— none —" }, ...supervisorOptions]}
+            disabled={isLoadingSupervisorPool || supervisorOptions.length === 0}
+          />
+          <p className="mt-1 text-xs text-text-muted">
+            Field-accountable supervisor. Picker shows only Labor resources from this project&apos;s pool.
           </p>
         </div>
 

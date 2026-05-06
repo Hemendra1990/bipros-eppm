@@ -153,9 +153,32 @@ public class Activity extends BaseEntity {
    * Soft FK to {@code public.users.id}. Higher-tier accountability (PM/PMO who signs off the
    * activity). Often populated from the project's {@code ownerId} but may differ for delegated
    * supervision.
+   *
+   * <p>Note: dormant — not currently wired into any UI or service flow. Reserved for a future
+   * PM-level approval / sign-off concept. The field-level accountable person is captured via
+   * {@link #responsibleResourceId} below (cached from {@code ResourceAssignment.isSupervisor}).
    */
   @Column(name = "responsible_user_id")
   private UUID responsibleUserId;
+
+  /**
+   * Soft FK to {@code resource.resources.id}. Cached mirror of the single
+   * {@code ResourceAssignment} on this activity that has {@code isSupervisor = true}. Updated
+   * by {@code ResourceAssignmentService} whenever the flag flips on any assignment for this
+   * activity. NEVER set directly via the activity create/update DTO path — the assignment is
+   * the source of truth, this column is a denormalised cache to keep the activity grid + DPR
+   * pre-fill fast.
+   */
+  @Column(name = "responsible_resource_id")
+  private UUID responsibleResourceId;
+
+  /**
+   * Display-snapshot of the supervisor Resource's name at the time the assignment flag was last
+   * flipped. Avoids a cross-module fetch every time the activity grid loads. Goes stale if the
+   * Resource is renamed — accepted limitation; mirrors {@code DailyProgressReport.supervisorName}.
+   */
+  @Column(name = "responsible_resource_name", length = 150)
+  private String responsibleResourceName;
 
   /**
    * Soft FK to {@code resource.work_activities.id} — the master / library activity this
