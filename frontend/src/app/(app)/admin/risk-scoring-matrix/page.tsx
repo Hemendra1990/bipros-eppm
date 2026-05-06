@@ -219,7 +219,7 @@ export default function RiskScoringMatrixAdminPage() {
                 <button
                   onClick={handleSave}
                   disabled={!hasChanges || updateMatrixMutation.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
                 >
                   <Save size={12} />
                   {updateMatrixMutation.isPending ? "Saving..." : "Save Matrix"}

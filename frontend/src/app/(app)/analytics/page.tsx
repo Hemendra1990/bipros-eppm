@@ -121,7 +121,7 @@ export default function AnalyticsPage() {
                 <div key={msg.id} className="space-y-2">
                   {/* User Query Bubble */}
                   <div className="flex justify-end">
-                    <div className="max-w-2xl bg-accent text-text-primary rounded-lg p-4 rounded-br-none">
+                    <div className="max-w-2xl bg-accent text-accent-foreground rounded-lg p-4 rounded-br-none">
                       <p className="text-sm">{msg.queryText}</p>
                       <p className="text-xs text-blue-100 mt-1">
                         {new Date(msg.createdAt).toLocaleTimeString()}
@@ -153,7 +153,7 @@ export default function AnalyticsPage() {
               {submitQueryMutation.isPending && (
                 <div className="space-y-2">
                   <div className="flex justify-end">
-                    <div className="max-w-2xl bg-accent text-text-primary rounded-lg p-4 rounded-br-none">
+                    <div className="max-w-2xl bg-accent text-accent-foreground rounded-lg p-4 rounded-br-none">
                       <p className="text-sm">{queryText}</p>
                     </div>
                   </div>

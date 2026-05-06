@@ -1,0 +1,294 @@
+databaseChangeLog:
+  - changeSet:
+      id: 062-1
+      author: opencode
+      changes:
+        - createTable:
+            schemaName: udf
+            tableName: formula_master
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: default_expression
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: input_variables
+                  type: TEXT
+              - column:
+                  name: output_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: scale
+                  type: INT
+                  defaultValueNumeric: 4
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rounding_mode
+                  type: VARCHAR(20)
+                  defaultValue: HALF_UP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: zero_default
+                  type: VARCHAR(50)
+                  defaultValue: '0'
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_editable
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sort_order
+                  type: INT
+              - column:
+                  name: module_source
+                  type: VARCHAR(100)
+              - column:
+                  name: formula_version
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+              - column:
+                  name: version
+                  type: BIGINT
+
+        - createIndex:
+            schemaName: udf
+            tableName: formula_master
+            indexName: idx_formula_master_code
+            unique: true
+            columns:
+              - column:
+                  name: code
+
+        - createIndex:
+            schemaName: udf
+            tableName: formula_master
+            indexName: idx_formula_master_category
+            columns:
+              - column:
+                  name: category
+
+  - changeSet:
+      id: 062-2
+      author: opencode
+      changes:
+        - createTable:
+            schemaName: udf
+            tableName: formula_override
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: formula_code
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: override_expression
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_from
+                  type: DATE
+              - column:
+                  name: effective_to
+                  type: DATE
+              - column:
+                  name: override_reason
+                  type: TEXT
+              - column:
+                  name: override_version
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+              - column:
+                  name: version
+                  type: BIGINT
+
+        - createIndex:
+            schemaName: udf
+            tableName: formula_override
+            indexName: idx_fo_formula_project
+            unique: true
+            columns:
+              - column:
+                  name: formula_code
+              - column:
+                  name: project_id
+
+        - createIndex:
+            schemaName: udf
+            tableName: formula_override
+            indexName: idx_fo_project
+            columns:
+              - column:
+                  name: project_id
+
+  - changeSet:
+      id: 062-3
+      author: opencode
+      changes:
+        - createTable:
+            schemaName: udf
+            tableName: formula_version
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: formula_code
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+              - column:
+                  name: version_number
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expression
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: change_reason
+                  type: TEXT
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_from
+                  type: DATE
+              - column:
+                  name: effective_to
+                  type: DATE
+              - column:
+                  name: reverted_by
+                  type: VARCHAR(100)
+              - column:
+                  name: reverted_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+
+        - createIndex:
+            schemaName: udf
+            tableName: formula_version
+            indexName: idx_fv_formula_project
+            columns:
+              - column:
+                  name: formula_code
+              - column:
+                  name: project_id
+
+        - createIndex:
+            schemaName: udf
+            tableName: formula_version
+            indexName: idx_fv_created
+            columns:
+              - column:
+                  name: created_at

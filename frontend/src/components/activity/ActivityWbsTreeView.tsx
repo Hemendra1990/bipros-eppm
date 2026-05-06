@@ -299,7 +299,7 @@ function TreeRow({
               type="button"
               onClick={() => onStartActivity(activity)}
               disabled={busy}
-              className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-60"
+              className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
               title="Record actual start date as today"
             >
               Start

@@ -171,7 +171,20 @@ export interface ProjectResponse {
   toLocation: string | null;
   totalLengthKm: number | null;
   calendarId: string | null;
+  /** Deprecated: read-only mirror of {@link primaryBaselineId}. */
   activeBaselineId: string | null;
+  /** Phase 3: P6-style PRIMARY baseline slot. Drives variance + Gantt overlay by default. */
+  primaryBaselineId: string | null;
+  /** Phase 3: SECONDARY slot. Independent of PRIMARY. */
+  secondaryBaselineId: string | null;
+  /** Phase 3: TERTIARY slot. */
+  tertiaryBaselineId: string | null;
+  /**
+   * Set by listeners (e.g. VariationOrderApprovedListener) when something material changed
+   * that should be reflected in a fresh baseline. Cleared on the next createBaseline call.
+   * Drives the CC-1 banner on the project page.
+   */
+  requiresRebaseline?: boolean;
   contract: {
     contractId: string | null;
     contractNumber: string | null;
@@ -828,6 +841,37 @@ export interface CreateContractMilestoneRequest {
   amount: number;
 }
 
+export type VoLineItemAction =
+  | "ADD_ITEM"
+  | "REVISE_QTY"
+  | "REVISE_RATE"
+  | "DELETE_ITEM";
+
+export interface VoLineItemResponse {
+  id: string;
+  variationOrderId: string;
+  action: VoLineItemAction;
+  boqItemId: string | null;
+  newItemNo: string | null;
+  newItemDescription: string | null;
+  newItemUnit: string | null;
+  revisedQty: number | null;
+  revisedRate: number | null;
+  lineImpactAmount: number | null;
+}
+
+export interface VoLineItemRequest {
+  id?: string | null;
+  action: VoLineItemAction;
+  boqItemId?: string | null;
+  newItemNo?: string | null;
+  newItemDescription?: string | null;
+  newItemUnit?: string | null;
+  revisedQty?: number | null;
+  revisedRate?: number | null;
+  lineImpactAmount?: number | null;
+}
+
 export interface VariationOrderResponse {
   id: string;
   contractId: string;
@@ -843,6 +887,7 @@ export interface VariationOrderResponse {
   attachmentCount: number;
   createdAt: string;
   updatedAt: string;
+  lineItems: VoLineItemResponse[];
 }
 
 export interface CreateVariationOrderRequest {
@@ -854,6 +899,7 @@ export interface CreateVariationOrderRequest {
   impactOnBudget: number;
   impactOnScheduleDays: number;
   approvedBy?: string;
+  lineItems?: VoLineItemRequest[];
 }
 
 export interface PerformanceBondResponse {

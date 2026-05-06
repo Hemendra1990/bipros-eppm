@@ -146,7 +146,7 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
           <button
             onClick={() => levelMutation.mutate()}
             disabled={levelMutation.isPending}
-            className="rounded-md bg-accent px-6 py-2.5 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active disabled:text-text-secondary"
+            className="rounded-md bg-accent px-6 py-2.5 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active disabled:text-text-secondary"
           >
             {levelMutation.isPending ? "Running..." : `Run ${selectedMode?.label ?? "Leveling"}`}
           </button>

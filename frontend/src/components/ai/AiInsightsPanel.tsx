@@ -137,7 +137,7 @@ export function AiInsightsPanel({
               </p>
               <button
                 onClick={handleGenerate}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-accent-hover"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover"
               >
                 <Sparkles size={16} />
                 Generate insights
@@ -162,7 +162,7 @@ export function AiInsightsPanel({
               </div>
               <button
                 onClick={handleGenerate}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-accent-hover"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover"
               >
                 Retry
               </button>
@@ -198,7 +198,7 @@ export function AiInsightsPanel({
                   </p>
                   <button
                     onClick={handleRefresh}
-                    className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-accent-hover"
+                    className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover"
                   >
                     <RefreshCw size={14} />
                     Try again

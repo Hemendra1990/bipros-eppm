@@ -213,7 +213,7 @@ export function MultiSelect({
                 className={cn(
                   "cursor-pointer px-3 py-2 text-sm transition-colors",
                   index === highlightedIndex
-                    ? "bg-accent text-text-primary"
+                    ? "bg-accent text-accent-foreground"
                     : "text-text-secondary hover:bg-surface-active",
                 )}
               >

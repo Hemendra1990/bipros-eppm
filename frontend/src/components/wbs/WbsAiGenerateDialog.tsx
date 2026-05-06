@@ -295,7 +295,7 @@ export function WbsAiGenerateDialog({ open, onOpenChange, project }: WbsAiGenera
                 <button
                   onClick={handleGenerate}
                   disabled={!assetClass || generateMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
                 >
                   <Sparkles size={16} />
                   Generate
@@ -304,7 +304,7 @@ export function WbsAiGenerateDialog({ open, onOpenChange, project }: WbsAiGenera
                 <button
                   onClick={handleGenerateFromDocument}
                   disabled={!docFile || generateFromDocumentMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
                 >
                   <Sparkles size={16} />
                   Generate from document
@@ -334,7 +334,7 @@ export function WbsAiGenerateDialog({ open, onOpenChange, project }: WbsAiGenera
               <button
                 onClick={() => applyMutation.mutate()}
                 disabled={applyMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {applyMutation.isPending ? "Applying..." : "Apply to Project"}
               </button>

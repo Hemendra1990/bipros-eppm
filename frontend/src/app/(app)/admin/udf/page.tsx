@@ -166,7 +166,7 @@ export default function UdfAdminPage() {
         actions={
           <button
             onClick={openCreateForm}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
             <Plus size={16} />
             New Field
@@ -188,7 +188,7 @@ export default function UdfAdminPage() {
             onClick={() => setSelectedSubject(subject)}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               selectedSubject === subject
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "text-text-secondary hover:text-text-primary"
             }`}
           >
@@ -206,7 +206,7 @@ export default function UdfAdminPage() {
               key={s}
               onClick={() => setScopeFilter(s)}
               className={`rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
-                scopeFilter === s ? "bg-accent text-text-primary" : "text-text-secondary hover:text-text-primary"
+                scopeFilter === s ? "bg-accent text-accent-foreground" : "text-text-secondary hover:text-text-primary"
               }`}
             >
               {s === "GLOBAL" ? "Global (org-wide)" : "Per-project"}
@@ -359,7 +359,7 @@ export default function UdfAdminPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               {saving
                 ? "Saving..."

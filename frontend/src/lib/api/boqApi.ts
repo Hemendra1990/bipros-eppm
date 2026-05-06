@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
-export type BoqStatus = "PENDING" | "ACTIVE" | "COMPLETED" | "ON_HOLD";
+export type BoqStatus = "PENDING" | "ACTIVE" | "COMPLETED" | "OVERRUN" | "ON_HOLD";
 
 export interface BoqItemResponse {
   id: string;

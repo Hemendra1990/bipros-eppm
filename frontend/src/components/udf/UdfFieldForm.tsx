@@ -210,7 +210,7 @@ export function UdfFieldForm({
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
         >
           {saving
             ? "Saving..."

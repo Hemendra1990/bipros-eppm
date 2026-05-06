@@ -243,7 +243,7 @@ export function ActivityAssignmentsByRole({ assignments, onStaff, onSwap }: Prop
                         {!a.staffed && a.roleId && (
                           <button
                             onClick={() => onStaff(a)}
-                            className="text-xs px-2 py-0.5 rounded bg-accent text-text-primary hover:bg-accent-hover"
+                            className="text-xs px-2 py-0.5 rounded bg-accent text-accent-foreground hover:bg-accent-hover"
                           >
                             Staff role
                           </button>

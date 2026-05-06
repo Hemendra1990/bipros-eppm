@@ -23,8 +23,22 @@ public class CPMScheduler {
   private final CalendarCalculator calendarCalculator;
   private final UUID defaultCalendarId;
 
-  /** Scheduling result containing scheduled activities and any warnings generated. */
-  public record ScheduleOutput(List<ScheduledActivity> activities, List<String> warnings) {}
+  /**
+   * Scheduling result containing scheduled activities, any warnings generated, and a
+   * status breakdown of the activities that were scheduled.
+   */
+  public record ScheduleOutput(
+      List<ScheduledActivity> activities,
+      List<String> warnings,
+      StatusBreakdown statusBreakdown
+  ) {}
+
+  /** Activity-status breakdown surfaced in the scheduling log. */
+  public record StatusBreakdown(int notStarted, int inProgress, int completed) {
+    public static StatusBreakdown empty() {
+      return new StatusBreakdown(0, 0, 0);
+    }
+  }
 
   public List<ScheduledActivity> schedule(ScheduleData data) {
     return scheduleWithWarnings(data).activities();
@@ -203,8 +217,30 @@ public class CPMScheduler {
       }
     }
 
+    StatusBreakdown breakdown = computeStatusBreakdown(data.activities());
+
     log.debug("CPM scheduling completed with {} warnings", warnings.size());
-    return new ScheduleOutput(new ArrayList<>(scheduledActivities.values()), warnings);
+    return new ScheduleOutput(new ArrayList<>(scheduledActivities.values()), warnings, breakdown);
+  }
+
+  /**
+   * Bucket activity statuses for the scheduling log. Anything not matching the standard
+   * P6 statuses (NOT_STARTED / IN_PROGRESS / COMPLETED) falls into notStarted by default —
+   * we never want to mis-claim an activity is done.
+   */
+  private StatusBreakdown computeStatusBreakdown(List<SchedulableActivity> activities) {
+    int notStarted = 0;
+    int inProgress = 0;
+    int completed = 0;
+    for (SchedulableActivity a : activities) {
+      String status = a.status() == null ? "" : a.status();
+      switch (status) {
+        case "COMPLETED" -> completed++;
+        case "IN_PROGRESS" -> inProgress++;
+        default -> notStarted++;
+      }
+    }
+    return new StatusBreakdown(notStarted, inProgress, completed);
   }
 
   private void forwardPass(

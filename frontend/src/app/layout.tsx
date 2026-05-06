@@ -40,6 +40,14 @@ export default function RootLayout({
       className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <script
+          id="bipros-theme-init"
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var c=localStorage.getItem('bipros-theme-cache');if(c){var e=document.createElement('style');e.id='bipros-theme-vars';document.head.appendChild(e);e.textContent=c;}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="h-full bg-background text-foreground">
         <ThemeProvider>
           <Providers>{children}</Providers>

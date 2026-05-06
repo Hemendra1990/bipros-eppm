@@ -194,7 +194,7 @@ export default function EquipmentLogsPage() {
 
         <button
           onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+          className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
         >
           {showForm ? "Cancel" : "Add Equipment Log"}
         </button>

@@ -42,7 +42,7 @@ export function RiskDescriptionTab({ label, value, onSave }: Props) {
           <div className="flex gap-2 mt-3">
             <button
               onClick={handleSave}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
             >
               Save
             </button>

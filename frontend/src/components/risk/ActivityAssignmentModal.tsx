@@ -245,7 +245,7 @@ export function ActivityAssignmentModal({ projectId, riskId, assignedActivityIds
             type="button"
             disabled={selectedIds.length === 0 || isAssigning}
             onClick={handleAssign}
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+            className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
           >
             {isAssigning
               ? "Assigning..."

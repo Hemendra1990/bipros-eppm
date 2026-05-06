@@ -178,7 +178,7 @@ export default function ResourcesPage() {
             </button>
             <Link
               href="/resources/new"
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
             >
               <Plus size={16} />
               New Resource
@@ -200,7 +200,7 @@ export default function ResourcesPage() {
             onClick={() => setTypeTab(t.key)}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               typeTab === t.key
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "border border-border bg-surface/50 text-text-secondary hover:bg-surface-hover/50"
             }`}
           >

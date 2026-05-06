@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: 063-resource-assignment-add-budgeted-columns
+      author: bipros
+      comment: |
+        Phase 2 of the baseline-progress-tracking roadmap. Adds the explicit "Budgeted"
+        columns to bring ResourceAssignment in line with ActivityExpense (which already
+        has a budgeted_cost field) and with P6, where Budgeted Units / Budgeted Cost are
+        first-class on every assignment. Today the only place a "frozen original commitment"
+        for a resource lives is inside the active baseline snapshot — which can't answer
+        "what was originally planned for THIS resource on THIS activity" without joining
+        through BaselineActivity totals.
+
+        Dev users on ddl-auto: update get the columns automatically; the backfill below
+        runs in both dev and prod via Liquibase to copy planned → budgeted on existing rows.
+      changes:
+        - addColumn:
+            schemaName: resource
+            tableName: resource_assignments
+            columns:
+              - column:
+                  name: budgeted_units
+                  type: DOUBLE PRECISION
+              - column:
+                  name: budgeted_cost
+                  type: NUMERIC(19, 4)
+
+  - changeSet:
+      id: 063-resource-assignment-budgeted-backfill
+      author: bipros
+      comment: |
+        Existing assignments have only planned_units / planned_cost. Treat the current planned
+        values as the original budget for backfill purposes — that's the only honest answer
+        we have, since no separate budget was ever recorded. New assignments created after
+        this changeset capture budgeted_* explicitly at creation time via
+        ResourceAssignmentService.
+      changes:
+        - sql:
+            comment: Backfill budgeted_units = planned_units where missing.
+            sql: >-
+              UPDATE resource.resource_assignments
+              SET budgeted_units = planned_units
+              WHERE budgeted_units IS NULL
+        - sql:
+            comment: Backfill budgeted_cost = planned_cost where missing.
+            sql: >-
+              UPDATE resource.resource_assignments
+              SET budgeted_cost = planned_cost
+              WHERE budgeted_cost IS NULL

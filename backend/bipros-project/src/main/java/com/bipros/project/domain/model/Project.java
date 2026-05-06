@@ -98,9 +98,33 @@ public class Project extends BaseEntity {
      * Variance reports default to this when no baselineId is supplied. Soft FK — it lives in
      * the {@code baseline} schema, so we deliberately don't declare a JPA relationship to
      * avoid coupling the {@code project} module to {@code bipros-baseline}.
+     *
+     * <p>Phase 3 of the baseline-progress roadmap: this column is now a <strong>read-only
+     * mirror of {@link #primaryBaselineId}</strong>. It stays for one release so AI tools,
+     * EVM, and event listeners that read {@code activeBaselineId} keep working. New code
+     * should read {@link #primaryBaselineId} directly. Both columns are kept in lockstep by
+     * {@code BaselineService.assignBaselineToSlot} when the PRIMARY slot changes.
      */
     @Column(name = "active_baseline_id")
     private UUID activeBaselineId;
+
+    /**
+     * Phase 3: P6-style three-slot baseline assignment. The Primary slot is what variance,
+     * Gantt overlay, and EVM all use by default. Secondary / Tertiary are additional
+     * comparison points the planner can switch to without losing the Primary.
+     *
+     * <p>Soft FK — same reasoning as {@link #activeBaselineId}.
+     */
+    @Column(name = "primary_baseline_id")
+    private UUID primaryBaselineId;
+
+    /** Secondary slot — see {@link #primaryBaselineId}. */
+    @Column(name = "secondary_baseline_id")
+    private UUID secondaryBaselineId;
+
+    /** Tertiary slot — see {@link #primaryBaselineId}. */
+    @Column(name = "tertiary_baseline_id")
+    private UUID tertiaryBaselineId;
 
     /**
      * Set to true by listeners (e.g. VariationOrderApprovedListener) when something material

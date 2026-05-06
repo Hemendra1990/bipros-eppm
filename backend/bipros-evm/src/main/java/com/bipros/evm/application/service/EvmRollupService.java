@@ -16,6 +16,7 @@ import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
+import com.bipros.udf.application.service.FormulaEngine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class EvmRollupService {
     private final ResourceAssignmentRepository resourceAssignmentRepository;
     private final WbsNodeRepository wbsNodeRepository;
     private final EvmCalculationRepository evmCalculationRepository;
+    private final FormulaEngine formulaEngine;
 
     private static final int SCALE = 4;
 
@@ -262,7 +264,7 @@ public class EvmRollupService {
         if (technique != null) calc.setEvmTechnique(technique);
         if (etcMethod != null) calc.setEtcMethod(etcMethod);
 
-        EvmServiceHelper.calculateIndices(calc);
+        EvmServiceHelper.calculateIndices(calc, formulaEngine);
 
         evmCalculationRepository.save(calc);
         return calc;

@@ -883,7 +883,7 @@ public class NhaiRoadProjectSeeder implements CommandLineRunner {
           .activityName(r.activity())
           .unit(r.unit())
           .qtyExecuted(qty)
-          .cumulativeQty(cumulative)
+          // cumulativeQty is computed on read — no longer stored.
           .boqItemNo(boqItemNo)
           .wbsNodeId(wbsKey != null ? wbs.get(wbsKey) : null)
           .remarks(r.remarks())

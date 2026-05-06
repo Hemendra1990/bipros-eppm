@@ -17,4 +17,6 @@ public interface EvmCalculationRepository extends JpaRepository<EvmCalculation, 
     List<EvmCalculation> findByProjectIdAndWbsNodeId(UUID projectId, UUID wbsNodeId);
     List<EvmCalculation> findByProjectIdAndWbsNodeIdOrderByDataDateDesc(UUID projectId, UUID wbsNodeId);
     Optional<EvmCalculation> findTopByProjectIdAndWbsNodeIdOrderByDataDateDesc(UUID projectId, UUID wbsNodeId);
+
+    Optional<EvmCalculation> findTopByProjectIdAndActivityIdOrderByDataDateDesc(UUID projectId, UUID activityId);
 }

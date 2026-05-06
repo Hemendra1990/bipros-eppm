@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -18,6 +18,14 @@ const TABS: Array<{ key: "ALL" | PermitStatus; label: string }> = [
 ];
 
 export default function PermitRegisterPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate">Loading…</div>}>
+      <PermitRegisterPageInner />
+    </Suspense>
+  );
+}
+
+function PermitRegisterPageInner() {
   const search = useSearchParams();
   const projectId = search.get("projectId") || undefined;
   const [active, setActive] = useState<"ALL" | PermitStatus>("ALL");

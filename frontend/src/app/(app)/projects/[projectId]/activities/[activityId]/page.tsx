@@ -237,7 +237,7 @@ export default function ActivityDetailPage() {
           <button
             onClick={handleStartEdit}
             disabled={isEditing}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
           >
             {isEditing ? "Editing..." : "Edit"}
           </button>
@@ -752,7 +752,7 @@ function ActivityStepsPanel({
         </div>
         <button
           onClick={() => setShowAdd(true)}
-          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover"
+          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
         >
           + Add Step
         </button>
@@ -788,7 +788,7 @@ function ActivityStepsPanel({
               createMutation.mutate(newStep);
             }}
             disabled={createMutation.isPending || !newStep.name}
-            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
           >
             {createMutation.isPending ? "Adding..." : "Add"}
           </button>
@@ -837,7 +837,7 @@ function ActivityStepsPanel({
                       updateMutation.mutate({ stepId: step.id, name: editingStep.name, weight: editingStep.weight as number, description: editingStep.description });
                     }}
                     disabled={updateMutation.isPending}
-                    className="text-xs px-2 py-1 rounded bg-accent text-text-primary hover:bg-accent-hover disabled:bg-border"
+                    className="text-xs px-2 py-1 rounded bg-accent text-accent-foreground hover:bg-accent-hover disabled:bg-border"
                   >
                     Save
                   </button>
@@ -1301,7 +1301,7 @@ function EditForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
           >
             {isSubmitting ? "Saving..." : "Save Changes"}
           </button>
@@ -1438,7 +1438,7 @@ function StaffSwapDialog({
                 mode === "staff" ? staffMutation.mutate() : swapMutation.mutate()
               }
               disabled={isPending || !canSubmit}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active"
             >
               {isPending ? "Saving..." : mode === "staff" ? "Staff" : "Swap"}
             </button>

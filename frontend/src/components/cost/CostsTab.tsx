@@ -614,7 +614,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
               }
               setShowExpenseForm(!showExpenseForm);
             }}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
             <Plus size={16} />
             Add Expense
@@ -705,7 +705,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
                 <button
                   type="submit"
                   disabled={createExpenseMutation.isPending || updateExpenseMutation.isPending}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
                 >
                   {editingExpenseId
                     ? (updateExpenseMutation.isPending ? "Updating..." : "Update Expense")

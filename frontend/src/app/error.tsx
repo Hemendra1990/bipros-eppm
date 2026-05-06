@@ -39,7 +39,7 @@ export default function Error({
 
         <button
           onClick={() => reset()}
-          className="mt-6 w-full rounded-lg bg-accent px-4 py-2 text-center font-medium text-text-primary transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
+          className="mt-6 w-full rounded-lg bg-accent px-4 py-2 text-center font-medium text-accent-foreground transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
         >
           Try Again
         </button>

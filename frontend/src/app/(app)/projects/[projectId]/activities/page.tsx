@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { List, FolderTree, Play, AlertTriangle, Sparkles } from "lucide-react";
+import { List, FolderTree, Play, AlertTriangle, Sparkles, Columns3 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
 import type { ActivityResponse } from "@/lib/api/activityApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { baselineApi } from "@/lib/api/baselineApi";
+import type { BaselineActivityResponse } from "@/lib/api/baselineApi";
+import { costApi } from "@/lib/api/costApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityWbsTreeView } from "@/components/activity/ActivityWbsTreeView";
 import { ActivityAiGenerateDialog } from "@/components/activity/ActivityAiGenerateDialog";
@@ -16,8 +19,36 @@ import { getErrorMessage } from "@/lib/utils/error";
 import { notificationHelpers } from "@/lib/notificationHelpers";
 import Link from "next/link";
 import { useScheduleStaleStore } from "@/lib/state/scheduleStaleStore";
+import {
+  schedulePercentComplete,
+  scheduleVarianceBucket,
+} from "@/lib/utils/schedulePercent";
+import { ScheduleLogPanel } from "@/components/schedule/ScheduleLogPanel";
+import type { ScheduleResultResponse } from "@/lib/api/scheduleApi";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Optional columns on the activities list grid (Phase 1.2 of the baseline-progress roadmap).
+ * Off by default so the existing grid layout doesn't shift on first load — the planner opts in
+ * via the Columns menu, and the choice persists in localStorage.
+ */
+type OptionalColumns = {
+  actualDates: boolean;
+  baselineDates: boolean;
+  schedulePct: boolean;
+  actualCost: boolean;
+  /** Phase 2: budget variance = actualCost - budgetedCost. Positive = overrun (red). */
+  budgetVariance: boolean;
+};
+const DEFAULT_OPTIONAL_COLS: OptionalColumns = {
+  actualDates: false,
+  baselineDates: false,
+  schedulePct: false,
+  actualCost: false,
+  budgetVariance: false,
+};
+const OPTIONAL_COLS_KEY = "activities-grid-optional-cols";
 
 export default function ActivitiesPage() {
   const router = useRouter();
@@ -56,18 +87,95 @@ export default function ActivitiesPage() {
     enabled: !!projectId,
   });
 
+  // Project provides dataDate (drives Schedule % calculation when rendering optional columns).
+  const { data: projectData } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => projectApi.getProject(projectId),
+    enabled: !!projectId,
+  });
+
+  // Baselines list — pick the first PRIMARY baseline for the BL Start / BL Finish columns
+  // and to feed the Schedule % calculation when present.
+  const { data: baselinesData } = useQuery({
+    queryKey: ["baselines", projectId],
+    queryFn: () => baselineApi.listBaselines(projectId),
+    enabled: !!projectId,
+  });
+  const primaryBaseline = baselinesData?.data?.find((b) => b.baselineType === "PRIMARY");
+
+  const { data: baselineDetail } = useQuery({
+    queryKey: ["baseline-detail", projectId, primaryBaseline?.id],
+    queryFn: () => baselineApi.getBaseline(projectId, primaryBaseline!.id),
+    enabled: !!projectId && !!primaryBaseline,
+  });
+
+  // Per-activity cost rollup. Backed by /v1/projects/{id}/activities/cost-summary which
+  // shares its math with the baseline snapshot (ActivityCostCalculator).
+  const { data: costSummaryData } = useQuery({
+    queryKey: ["activity-cost-summary", projectId],
+    queryFn: () => costApi.getActivityCostSummary(projectId),
+    enabled: !!projectId,
+  });
+
   const activities = (activitiesData?.data?.content || []) as ActivityResponse[];
   const wbsNodes = wbsData?.data ?? [];
   const relationships = relationshipsData?.data ?? [];
+  const project = projectData?.data ?? null;
+  const dataDate: string | null = project?.dataDate ?? null;
+
+  const baselineByActivity = new Map<string, BaselineActivityResponse>();
+  for (const ba of baselineDetail?.data?.activities ?? []) {
+    baselineByActivity.set(ba.activityId, ba);
+  }
+  const actualCostByActivity = new Map<string, number>();
+  const budgetedCostByActivity = new Map<string, number>();
+  for (const row of costSummaryData?.data ?? []) {
+    actualCostByActivity.set(row.activityId, row.actualCost);
+    budgetedCostByActivity.set(row.activityId, row.budgetedCost);
+  }
+
+  // Optional column visibility (Phase 1.2). Persisted in localStorage so the planner doesn't
+  // need to re-tick boxes every time they navigate back to the activities page.
+  const [optionalCols, setOptionalCols] = useState<OptionalColumns>(DEFAULT_OPTIONAL_COLS);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(OPTIONAL_COLS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<OptionalColumns>;
+        setOptionalCols({ ...DEFAULT_OPTIONAL_COLS, ...parsed });
+      }
+    } catch {
+      // ignore — fall back to defaults
+    }
+  }, []);
+  const updateOptionalCols = (next: OptionalColumns) => {
+    setOptionalCols(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(OPTIONAL_COLS_KEY, JSON.stringify(next));
+    }
+  };
+  const [showColumnsMenu, setShowColumnsMenu] = useState(false);
+
+  // Latest schedule result drives the schedule-log panel (Phase 1.5). Reset to null when the
+  // user dismisses the panel; replaced when Run Schedule resolves.
+  const [latestScheduleResult, setLatestScheduleResult] = useState<ScheduleResultResponse | null>(null);
 
   const scheduleMutation = useMutation({
     mutationFn: () => activityApi.triggerSchedule(projectId, "RETAINED_LOGIC"),
-    onSuccess: () => {
+    onSuccess: (resp) => {
       qc.invalidateQueries({ queryKey: ["activities", projectId] });
       qc.invalidateQueries({ queryKey: ["critical-path", projectId] });
       markScheduleFresh(projectId);
       setScheduleError("");
-      toast.success("Schedule calculated successfully");
+      const result = resp?.data;
+      if (result) setLatestScheduleResult(result);
+      const warningCount = result?.warnings?.length ?? 0;
+      toast.success(
+        warningCount > 0
+          ? `Schedule calculated — ${warningCount} warning${warningCount === 1 ? "" : "s"}`
+          : "Schedule calculated successfully"
+      );
     },
     onError: (err: unknown) => {
       const msg = getErrorMessage(err, "Failed to trigger schedule");
@@ -189,7 +297,7 @@ export default function ActivitiesPage() {
             </button>
             <button
               onClick={() => router.push(`/projects/${projectId}/activities/new`)}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
             >
               New Activity
             </button>
@@ -241,7 +349,7 @@ export default function ActivitiesPage() {
             onClick={() => setLookAheadWeeks(null)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               lookAheadWeeks === null
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
             }`}
           >
@@ -251,7 +359,7 @@ export default function ActivitiesPage() {
             onClick={() => setLookAheadWeeks(4)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               lookAheadWeeks === 4
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
             }`}
           >
@@ -261,7 +369,7 @@ export default function ActivitiesPage() {
             onClick={() => setLookAheadWeeks(13)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               lookAheadWeeks === 13
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "bg-surface-active/50 text-text-secondary hover:bg-surface-active"
             }`}
           >
@@ -275,7 +383,7 @@ export default function ActivitiesPage() {
             onClick={() => setViewMode("list")}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               viewMode === "list"
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
             }`}
           >
@@ -286,7 +394,7 @@ export default function ActivitiesPage() {
             onClick={() => setViewMode("tree")}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               viewMode === "tree"
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
             }`}
           >
@@ -294,11 +402,105 @@ export default function ActivitiesPage() {
             WBS Tree
           </button>
         </div>
+
+        {/* Columns picker — only meaningful in list mode */}
+        {viewMode === "list" && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowColumnsMenu((s) => !s)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface/60 px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+            >
+              <Columns3 size={14} />
+              Columns
+            </button>
+            {showColumnsMenu && (
+              <div
+                className="absolute right-0 z-20 mt-2 w-64 rounded-md border border-border bg-surface p-3 shadow-lg"
+                onMouseLeave={() => setShowColumnsMenu(false)}
+              >
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Optional columns
+                </div>
+                <label className="flex items-center gap-2 py-1 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={optionalCols.actualDates}
+                    onChange={(e) =>
+                      updateOptionalCols({ ...optionalCols, actualDates: e.target.checked })
+                    }
+                  />
+                  Actual Start / Actual Finish
+                </label>
+                <label className="flex items-center gap-2 py-1 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={optionalCols.baselineDates}
+                    onChange={(e) =>
+                      updateOptionalCols({ ...optionalCols, baselineDates: e.target.checked })
+                    }
+                    disabled={!primaryBaseline}
+                  />
+                  Baseline Start / Finish
+                  {!primaryBaseline && (
+                    <span className="text-xs text-text-muted">(no PRIMARY baseline)</span>
+                  )}
+                </label>
+                <label className="flex items-center gap-2 py-1 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={optionalCols.schedulePct}
+                    onChange={(e) =>
+                      updateOptionalCols({ ...optionalCols, schedulePct: e.target.checked })
+                    }
+                    disabled={!dataDate}
+                  />
+                  Schedule % Complete
+                  {!dataDate && (
+                    <span className="text-xs text-text-muted">(set Data Date first)</span>
+                  )}
+                </label>
+                <label className="flex items-center gap-2 py-1 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={optionalCols.actualCost}
+                    onChange={(e) =>
+                      updateOptionalCols({ ...optionalCols, actualCost: e.target.checked })
+                    }
+                  />
+                  Actual Total Cost
+                </label>
+                <label className="flex items-center gap-2 py-1 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={optionalCols.budgetVariance}
+                    onChange={(e) =>
+                      updateOptionalCols({ ...optionalCols, budgetVariance: e.target.checked })
+                    }
+                  />
+                  Budget Variance
+                  <span className="text-xs text-text-muted">(actual − budget)</span>
+                </label>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {scheduleError && (
         <div className="mb-4 rounded-md bg-danger/10 border border-danger/30 p-3 text-sm text-danger">
           {scheduleError}
+        </div>
+      )}
+
+      {latestScheduleResult && (
+        <div className="mb-4">
+          <ScheduleLogPanel
+            result={latestScheduleResult}
+            onDismiss={() => setLatestScheduleResult(null)}
+            onRerun={() => scheduleMutation.mutate()}
+            isRerunning={scheduleMutation.isPending}
+          />
         </div>
       )}
 
@@ -348,6 +550,11 @@ export default function ActivitiesPage() {
           complete={complete}
           canStart={canStart}
           canComplete={canComplete}
+          optionalCols={optionalCols}
+          dataDate={dataDate}
+          baselineByActivity={baselineByActivity}
+          actualCostByActivity={actualCostByActivity}
+          budgetedCostByActivity={budgetedCostByActivity}
         />
       )}
 
@@ -382,6 +589,11 @@ function ActivitiesListTable({
   complete,
   canStart,
   canComplete,
+  optionalCols,
+  dataDate,
+  baselineByActivity,
+  actualCostByActivity,
+  budgetedCostByActivity,
 }: {
   activities: ActivityResponse[];
   relationships: Array<{ id?: string; predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
@@ -395,6 +607,11 @@ function ActivitiesListTable({
   complete: (a: ActivityResponse) => void;
   canStart: (a: ActivityResponse) => boolean;
   canComplete: (a: ActivityResponse) => boolean;
+  optionalCols: OptionalColumns;
+  dataDate: string | null;
+  baselineByActivity: Map<string, BaselineActivityResponse>;
+  actualCostByActivity: Map<string, number>;
+  budgetedCostByActivity: Map<string, number>;
 }) {
   // Build dependency count map
   const predCountMap = new Map<string, number>();
@@ -408,6 +625,17 @@ function ActivitiesListTable({
     if (!value) return "—";
     const d = new Date(value);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  // Currency formatting follows the variance dashboard convention — Indian Rupee, no decimals
+  // for the grid cells. Caller may want a more elaborate format for hover tooltips later.
+  const formatCurrency = (value: number | null | undefined) => {
+    if (value == null) return "—";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(value);
   };
 
   return (
@@ -428,6 +656,29 @@ function ActivitiesListTable({
               <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">EF</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">LS</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">LF</th>
+              {optionalCols.actualDates && (
+                <>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">Actual Start</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">Actual Finish</th>
+                </>
+              )}
+              {optionalCols.baselineDates && (
+                <>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">BL Start</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">BL Finish</th>
+                </>
+              )}
+              {optionalCols.schedulePct && (
+                <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">Schedule %</th>
+              )}
+              {optionalCols.actualCost && (
+                <th className="px-4 py-3 text-right text-sm font-semibold text-text-secondary whitespace-nowrap">Actual Cost</th>
+              )}
+              {optionalCols.budgetVariance && (
+                <th className="px-4 py-3 text-right text-sm font-semibold text-text-secondary whitespace-nowrap" title="Actual cost minus original Budget. Positive = over budget.">
+                  Budget Variance
+                </th>
+              )}
               <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">Actions</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-text-secondary whitespace-nowrap">Deps</th>
             </tr>
@@ -532,6 +783,102 @@ function ActivitiesListTable({
                   <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.earlyFinishDate)}</td>
                   <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.lateStartDate)}</td>
                   <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.lateFinishDate)}</td>
+                  {optionalCols.actualDates && (
+                    <>
+                      <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.actualStartDate)}</td>
+                      <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.actualFinishDate)}</td>
+                    </>
+                  )}
+                  {optionalCols.baselineDates && (() => {
+                    const ba = baselineByActivity.get(activity.id);
+                    return (
+                      <>
+                        <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(ba?.earlyStart)}</td>
+                        <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(ba?.earlyFinish)}</td>
+                      </>
+                    );
+                  })()}
+                  {optionalCols.schedulePct && (() => {
+                    // Reference dates: prefer the active PRIMARY baseline's snapshot, fall back to
+                    // the activity's planned dates so this column still tells the planner something
+                    // useful on projects that haven't taken a baseline yet.
+                    const ba = baselineByActivity.get(activity.id);
+                    const refStart = ba?.earlyStart ?? activity.plannedStartDate ?? null;
+                    const refFinish = ba?.earlyFinish ?? activity.plannedFinishDate ?? null;
+                    const sched = schedulePercentComplete(refStart, refFinish, dataDate);
+                    const bucket = scheduleVarianceBucket(sched, activity.percentComplete ?? 0);
+                    const cls =
+                      bucket === "behind"
+                        ? "bg-danger/10 text-danger"
+                        : bucket === "ahead"
+                          ? "bg-success/10 text-success"
+                          : bucket === "on-track"
+                            ? "bg-surface-active/40 text-text-secondary"
+                            : "text-text-muted";
+                    return (
+                      <td className="px-4 py-4 text-sm whitespace-nowrap">
+                        {sched == null ? (
+                          <span className="text-text-muted">—</span>
+                        ) : (
+                          <span
+                            className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${cls}`}
+                            title={
+                              bucket === "behind"
+                                ? "Activity is behind schedule"
+                                : bucket === "ahead"
+                                  ? "Activity is ahead of schedule"
+                                  : bucket === "on-track"
+                                    ? "On track (within ±5%)"
+                                    : "Schedule % unavailable"
+                            }
+                          >
+                            {sched}%
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })()}
+                  {optionalCols.actualCost && (
+                    <td className="px-4 py-4 text-right text-sm text-text-secondary whitespace-nowrap">
+                      {formatCurrency(actualCostByActivity.get(activity.id))}
+                    </td>
+                  )}
+                  {optionalCols.budgetVariance && (() => {
+                    // Phase 2: budget variance = actualCost - budgetedCost.
+                    // Positive => over-budget (red). Negative => under-budget (green).
+                    // Threshold ±1 to swallow rounding noise.
+                    const actual = actualCostByActivity.get(activity.id);
+                    const budget = budgetedCostByActivity.get(activity.id);
+                    if (actual == null || budget == null) {
+                      return (
+                        <td className="px-4 py-4 text-right text-sm text-text-muted whitespace-nowrap">—</td>
+                      );
+                    }
+                    const variance = actual - budget;
+                    const cls =
+                      variance > 1
+                        ? "bg-danger/10 text-danger"
+                        : variance < -1
+                          ? "bg-success/10 text-success"
+                          : "bg-surface-active/40 text-text-secondary";
+                    const sign = variance > 0 ? "+" : "";
+                    return (
+                      <td className="px-4 py-4 text-right text-sm whitespace-nowrap">
+                        <span
+                          className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${cls}`}
+                          title={
+                            variance > 1
+                              ? `Over budget by ${formatCurrency(variance)}`
+                              : variance < -1
+                                ? `Under budget by ${formatCurrency(Math.abs(variance))}`
+                                : "On budget"
+                          }
+                        >
+                          {sign}{formatCurrency(variance)}
+                        </span>
+                      </td>
+                    );
+                  })()}
                   <td className="px-4 py-4 text-sm whitespace-nowrap">
                     <div className="flex gap-2">
                       {canStart(activity) && (
@@ -539,7 +886,7 @@ function ActivitiesListTable({
                           type="button"
                           onClick={() => start(activity)}
                           disabled={busy}
-                          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-60"
+                          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
                           title="Record actual start date as today"
                         >
                           Start

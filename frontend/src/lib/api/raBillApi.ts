@@ -49,6 +49,7 @@ export interface RaBill {
 export interface RaBillItem {
   id: string
   raBillId: string
+  boqItemId?: string | null
   itemCode: string
   description: string
   unit?: string
@@ -57,6 +58,14 @@ export interface RaBillItem {
   currentQuantity?: number
   cumulativeQuantity?: number
   amount: number
+}
+
+export interface DraftPreview {
+  bill: RaBill
+  items: RaBillItem[]
+  resolvedContractId: string
+  contractCount: number
+  projectContractIds: string[]
 }
 
 export interface CreateRaBillRequest {
@@ -109,4 +118,28 @@ export const raBillApi = {
 
   getRaBillItems: (raBillId: string) =>
     apiClient.get<ApiResponse<RaBillItem[]>>(`/v1/ra-bills/${raBillId}/items`).then(r => r.data),
+
+  /**
+   * Generate a draft from BOQ + DPR for the period. `save=false` returns a preview without
+   * persisting; `save=true` saves a DRAFT bill with its line items in a single transaction.
+   * `contractId` is auto-defaulted when the project has exactly one contract.
+   */
+  generateDraft: (
+    projectId: string,
+    params: { from: string; to: string; contractId?: string; save?: boolean },
+  ) =>
+    apiClient
+      .post<ApiResponse<DraftPreview>>(
+        `/v1/projects/${projectId}/ra-bills/generate-draft`,
+        null,
+        {
+          params: {
+            from: params.from,
+            to: params.to,
+            contractId: params.contractId,
+            save: params.save ?? false,
+          },
+        },
+      )
+      .then(r => r.data),
 }

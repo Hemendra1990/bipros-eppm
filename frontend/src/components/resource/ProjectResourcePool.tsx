@@ -233,7 +233,7 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
               <button
                 onClick={() => saveEdit(r.id)}
                 disabled={updateMutation.isPending}
-                className="rounded bg-accent px-2 py-1 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 Save
               </button>
@@ -277,7 +277,7 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
         </div>
         <button
           onClick={() => setShowPicker(!showPicker)}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={16} />
           Add Resources
@@ -360,7 +360,7 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             <button
               onClick={handleAdd}
               disabled={selectedIds.size === 0 || addMutation.isPending}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
             >
               {addMutation.isPending
                 ? "Adding..."

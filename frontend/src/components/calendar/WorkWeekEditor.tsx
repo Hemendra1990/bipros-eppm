@@ -208,7 +208,7 @@ export function WorkWeekEditor({
         type="button"
         onClick={handleSave}
         disabled={saving}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
       >
         {saving ? "Saving..." : "Save Work Week"}
       </button>

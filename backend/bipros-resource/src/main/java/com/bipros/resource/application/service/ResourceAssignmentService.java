@@ -240,6 +240,11 @@ public class ResourceAssignmentService {
         .projectId(request.projectId())
         .plannedUnits(request.plannedUnits())
         .remainingUnits(request.plannedUnits())
+        // Phase 2: capture the original commitment at assignment creation. budgeted_* stays
+        // frozen on subsequent re-plans; only the explicit "Re-budget" action below copies
+        // current planned → budgeted again.
+        .budgetedUnits(request.plannedUnits())
+        .budgetedCost(plannedCost)
         .rateType(effectiveRateType)
         .resourceCurveId(request.resourceCurveId())
         .plannedStartDate(plannedStart)
@@ -311,6 +316,16 @@ public class ResourceAssignmentService {
     BigDecimal plannedCost = computePlannedCost(assignment.getProjectId(), resourceId, assignment.getPlannedUnits());
     assignment.setPlannedCost(plannedCost);
     assignment.setRemainingCost(remainingFromPlanned(plannedCost, assignment.getActualCost()));
+    // Role-only assignments are created with null planned_cost (rate unknown until staffed).
+    // The first staffing event is therefore also when the budget is first computable, so
+    // capture it as budgeted_cost too. Subsequent swaps do NOT update budgeted (the original
+    // commitment is what's frozen).
+    if (assignment.getBudgetedUnits() == null) {
+      assignment.setBudgetedUnits(assignment.getPlannedUnits());
+    }
+    if (assignment.getBudgetedCost() == null) {
+      assignment.setBudgetedCost(plannedCost);
+    }
 
     ResourceAssignment saved = assignmentRepository.save(assignment);
     log.info("Assignment staffed: id={}, resourceId={}", saved.getId(), resourceId);
@@ -527,6 +542,36 @@ public class ResourceAssignmentService {
 
     Resource resource = resourceRepository.findById(resourceId).orElse(null);
     return resource == null ? null : resource.getCostPerUnit();
+  }
+
+  /**
+   * Phase 2 of the baseline-progress roadmap: explicit "Re-budget" action. Copies the current
+   * {@code plannedUnits} / {@code plannedCost} into {@code budgetedUnits} / {@code budgetedCost}.
+   * Audit-logged so the history of budget changes is queryable. Should only be invoked on a
+   * deliberate planner action — never as a side-effect of plan edits.
+   */
+  public ResourceAssignmentResponse rebudgetAssignment(UUID assignmentId) {
+    ResourceAssignment assignment = assignmentRepository.findById(assignmentId)
+        .orElseThrow(() -> new ResourceNotFoundException("ResourceAssignment", assignmentId));
+
+    Double oldBudgetedUnits = assignment.getBudgetedUnits();
+    BigDecimal oldBudgetedCost = assignment.getBudgetedCost();
+
+    assignment.setBudgetedUnits(assignment.getPlannedUnits());
+    assignment.setBudgetedCost(assignment.getPlannedCost());
+
+    ResourceAssignment saved = assignmentRepository.save(assignment);
+    log.info(
+        "Resource assignment re-budgeted: id={}, units {} -> {}, cost {} -> {}",
+        assignmentId,
+        oldBudgetedUnits,
+        saved.getBudgetedUnits(),
+        oldBudgetedCost,
+        saved.getBudgetedCost());
+
+    ResourceAssignmentResponse response = hydrate(saved);
+    auditService.logUpdate("ResourceAssignment", assignmentId, "rebudget", assignment, response);
+    return response;
   }
 
   public void removeAssignment(UUID assignmentId) {

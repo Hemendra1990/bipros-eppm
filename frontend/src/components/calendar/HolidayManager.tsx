@@ -79,7 +79,7 @@ export function HolidayManager({
         <button
           type="button"
           onClick={() => setShowAddForm(!showAddForm)}
-          className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover"
+          className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={14} />
           Add Holiday
@@ -132,7 +132,7 @@ export function HolidayManager({
             type="button"
             onClick={handleAdd}
             disabled={saving || !date}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
           >
             {saving ? "Adding..." : "Add"}
           </button>

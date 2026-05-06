@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: 070-boq-status-check-add-overrun
+      author: bipros
+      comment: |
+        Phase 8 follow-up — the original boq_items table was created by Hibernate at first
+        boot, and the CHECK constraint Postgres derived from the @Enumerated(EnumType.STRING)
+        column listed only PENDING/ACTIVE/COMPLETED/ON_HOLD. Adding OVERRUN to the Java enum
+        is not enough; ddl-auto: update never alters CHECK constraints. This drops the old
+        constraint and re-adds it with OVERRUN included so PATCH /boq/{id} succeeds when
+        qtyExecutedToDate > boqQty.
+
+        Dev users on ddl-auto: update need to run the same ALTER TABLE manually (the sql
+        block in this changeset is the prod migration — Liquibase is disabled in dev).
+      changes:
+        - sql:
+            comment: Drop the old check constraint that doesn't include OVERRUN.
+            sql: ALTER TABLE project.boq_items DROP CONSTRAINT IF EXISTS boq_items_status_check
+        - sql:
+            comment: Add the new check constraint with OVERRUN.
+            sql: >-
+              ALTER TABLE project.boq_items
+              ADD CONSTRAINT boq_items_status_check
+              CHECK (status IN ('PENDING','ACTIVE','COMPLETED','OVERRUN','ON_HOLD'))

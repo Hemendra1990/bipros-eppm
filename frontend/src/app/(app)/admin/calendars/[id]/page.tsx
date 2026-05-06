@@ -311,7 +311,7 @@ export default function CalendarDetailPage() {
             }}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "text-text-secondary hover:text-text-primary"
             }`}
           >
@@ -396,7 +396,7 @@ export default function CalendarDetailPage() {
             <button
               onClick={handleSaveDetails}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               <Save size={16} />
               {saving ? "Saving..." : "Save Details"}
@@ -496,7 +496,7 @@ export default function CalendarDetailPage() {
             <button
               onClick={handleSaveWorkWeek}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               <Save size={16} />
               {saving ? "Saving..." : "Save Work Week"}
@@ -608,7 +608,7 @@ export default function CalendarDetailPage() {
               <button
                 onClick={handleAddException}
                 disabled={saving}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
               >
                 <Plus size={16} />
                 {saving ? "Adding..." : "Add Exception"}

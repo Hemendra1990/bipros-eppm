@@ -322,7 +322,7 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
           .activityName(activityName)
           .unit(unit)
           .qtyExecuted(qty)
-          .cumulativeQty(cumulative)
+          // cumulativeQty is computed on read — no longer stored.
           .weatherCondition(weatherConditionForDay(day, i))
           .remarks("Section " + supervisor + " — " + approvalStatus)
           .build();

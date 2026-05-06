@@ -28,6 +28,10 @@ interface ResourceAssignmentRow {
   resourceName: string;
   roleName: string | null;
   activityName: string;
+  /** Phase 2: original committed units, frozen unless explicit Re-budget runs. */
+  budgetedUnits: number | null;
+  /** Phase 2: original committed cost, frozen unless explicit Re-budget runs. */
+  budgetedCost: number | null;
   plannedUnits: number;
   actualUnits: number;
   remainingUnits: number;
@@ -113,6 +117,15 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
     },
   });
 
+  // Re-budget: copy current planned values into budgeted_units / budgeted_cost. Only triggered
+  // by an explicit user action (the button in the selected-assignment panel below).
+  const rebudgetMutation = useMutation({
+    mutationFn: (assignmentId: string) => resourceApi.rebudgetAssignment(projectId, assignmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });
+    },
+  });
+
   const assignments = useMemo<ResourceAssignmentResponse[]>(() => {
     const raw = assignmentsData?.data as unknown;
     return Array.isArray(raw)
@@ -175,6 +188,8 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
         resourceName: poolEntry?.resourceName ?? a.resourceName ?? a.resourceId ?? "—",
         roleName: a.roleName ?? null,
         activityName: activity?.name ?? a.activityName ?? a.activityId,
+        budgetedUnits: (anyA.budgetedUnits as number | null | undefined) ?? null,
+        budgetedCost: (anyA.budgetedCost as number | null | undefined) ?? null,
         plannedUnits,
         actualUnits,
         remainingUnits,
@@ -207,6 +222,12 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
         ),
     },
     {
+      key: "budgetedUnits",
+      label: "Budgeted Units",
+      sortable: true,
+      render: (value) => (value == null ? "—" : Number(value).toFixed(2)),
+    },
+    {
       key: "plannedUnits",
       label: "Planned Units",
       sortable: true,
@@ -225,6 +246,12 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       render: (value) => Number(value).toFixed(2),
     },
     { key: "rateType", label: "Rate Type", sortable: true },
+    {
+      key: "budgetedCost",
+      label: "Budgeted Cost",
+      sortable: true,
+      render: (value) => (value == null ? "—" : formatDefaultCurrency(Number(value))),
+    },
     {
       key: "plannedCost",
       label: "Planned Cost",
@@ -267,7 +294,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={16} />
           Assign Resource
@@ -302,7 +329,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
               onClick={() => setAssignMode("RESOURCE")}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                 assignMode === "RESOURCE"
-                  ? "bg-accent text-text-primary"
+                  ? "bg-accent text-accent-foreground"
                   : "border border-border text-text-secondary hover:bg-surface-hover"
               }`}
             >
@@ -313,7 +340,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
               onClick={() => setAssignMode("ROLE")}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                 assignMode === "ROLE"
-                  ? "bg-accent text-text-primary"
+                  ? "bg-accent text-accent-foreground"
                   : "border border-border text-text-secondary hover:bg-surface-hover"
               }`}
             >
@@ -406,7 +433,7 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
               <button
                 onClick={() => assignMutation.mutate()}
                 disabled={assignMutation.isPending || !canSubmit}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-surface-active"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active"
               >
                 {assignMutation.isPending ? "Assigning..." : "Assign"}
               </button>
@@ -453,9 +480,20 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       </div>
 
       {selectedAssignment && (
-        <div className="space-y-2">
-          <div className="text-sm text-text-secondary">
-            Custom fields for: <span className="font-medium text-accent">{selectedAssignment.resourceName} &rarr; {selectedAssignment.activityName}</span>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-text-secondary">
+              Custom fields for: <span className="font-medium text-accent">{selectedAssignment.resourceName} &rarr; {selectedAssignment.activityName}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => rebudgetMutation.mutate(selectedAssignment.id)}
+              disabled={rebudgetMutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs font-medium text-warning hover:bg-warning/20 disabled:opacity-60"
+              title="Copy current planned units & cost into Budgeted, freezing them as the new commitment. Audit-logged."
+            >
+              {rebudgetMutation.isPending ? "Re-budgeting…" : "Re-budget"}
+            </button>
           </div>
           <UdfSection entityId={selectedAssignment.id} subject="RESOURCE_ASSIGNMENT" projectId={projectId} />
         </div>

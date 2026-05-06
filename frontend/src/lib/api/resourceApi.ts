@@ -281,6 +281,10 @@ export interface ResourceAssignmentResponse {
   effectiveRoleName: string | null;
   unit: string | null;
   projectId: string | null;
+  /** Phase 2: original committed units. Frozen unless an explicit Re-budget action runs. */
+  budgetedUnits: number | null;
+  /** Phase 2: original committed cost. Frozen unless an explicit Re-budget action runs. */
+  budgetedCost: number | null;
   plannedUnits: number;
   actualUnits: number;
   remainingUnits: number | null;
@@ -523,6 +527,17 @@ export const resourceApi = {
       )
       .then((r) => r.data),
 
+  /**
+   * Re-budget — copy current planned values into budgeted_units / budgeted_cost. Only triggered
+   * by deliberate user action; plan edits do NOT auto-update budgeted values.
+   */
+  rebudgetAssignment: (projectId: string, assignmentId: string) =>
+    apiClient
+      .post<ApiResponse<ResourceAssignmentResponse>>(
+        `/v1/projects/${projectId}/resource-assignments/${assignmentId}/rebudget`
+      )
+      .then((r) => r.data),
+
   levelResources: (projectId: string, request: ResourceLevelingRequest) =>
     apiClient
       .post<ApiResponse<ResourceLevelingResponse>>(
@@ -535,6 +550,44 @@ export const resourceApi = {
     apiClient
       .get<ApiResponse<UtilizationProfileEntry[]>>(
         `/v1/projects/${projectId}/resource-assignments/utilization-profile`
+      )
+      .then((r) => r.data),
+
+  /**
+   * Active LABOR resources whose role code is SUPERVISOR or FOREMAN, scoped to the project's
+   * resource pool (falls back to project-agnostic when the project has no allocations yet).
+   * Powers the DPR form's Supervisor dropdown — free-text "Other" entries on the form leave
+   * supervisorResourceId null.
+   */
+  getEligibleSupervisors: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<EligibleSupervisor[]>>(
+        `/v1/projects/${projectId}/eligible-supervisors`
+      )
+      .then((r) => r.data),
+};
+
+export interface EligibleSupervisor {
+  id: string;
+  code: string;
+  name: string;
+  roleCode: string | null;
+  roleName: string | null;
+}
+
+export interface ResourceDprSummary {
+  resourceId: string;
+  days: number;
+  sinceInclusive: string;
+  count: number;
+}
+
+export const resourceDprSummaryApi = {
+  get: (resourceId: string, days = 30) =>
+    apiClient
+      .get<ApiResponse<ResourceDprSummary>>(
+        `/v1/resources/${resourceId}/dpr-summary`,
+        { params: { days } },
       )
       .then((r) => r.data),
 };

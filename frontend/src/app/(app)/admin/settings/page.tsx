@@ -5,12 +5,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { settingsApi, type SettingResponse, type CurrencyResponse } from "@/lib/api/settingsApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
-import { Save, Plus, Trash2, Settings2, DollarSign, Bot } from "lucide-react";
+import { Save, Plus, Trash2, Settings2, DollarSign, Bot, Palette } from "lucide-react";
 import toast from "react-hot-toast";
+import { ThemesTab } from "./ThemesTab";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
-  const [activeSection, setActiveSection] = useState<"settings" | "currencies" | "ai">("settings");
+  const [activeSection, setActiveSection] = useState<"settings" | "currencies" | "ai" | "themes">("settings");
 
   return (
     <div>
@@ -30,7 +31,7 @@ export default function SettingsPage() {
           onClick={() => setActiveSection("settings")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             activeSection === "settings"
-              ? "bg-accent text-text-primary"
+              ? "bg-accent text-accent-foreground"
               : "bg-surface-hover/50 text-text-secondary hover:text-text-primary hover:bg-surface-hover"
           }`}
         >
@@ -41,7 +42,7 @@ export default function SettingsPage() {
           onClick={() => setActiveSection("currencies")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             activeSection === "currencies"
-              ? "bg-accent text-text-primary"
+              ? "bg-accent text-accent-foreground"
               : "bg-surface-hover/50 text-text-secondary hover:text-text-primary hover:bg-surface-hover"
           }`}
         >
@@ -52,18 +53,30 @@ export default function SettingsPage() {
           onClick={() => setActiveSection("ai")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             activeSection === "ai"
-              ? "bg-accent text-text-primary"
+              ? "bg-accent text-accent-foreground"
               : "bg-surface-hover/50 text-text-secondary hover:text-text-primary hover:bg-surface-hover"
           }`}
         >
           <Bot size={16} />
           AI Providers
         </button>
+        <button
+          onClick={() => setActiveSection("themes")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeSection === "themes"
+              ? "bg-accent text-accent-foreground"
+              : "bg-surface-hover/50 text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+          }`}
+        >
+          <Palette size={16} />
+          Themes
+        </button>
       </div>
 
       {activeSection === "settings" && <GlobalSettingsSection />}
       {activeSection === "currencies" && <CurrenciesSection />}
       {activeSection === "ai" && <AiProvidersSection />}
+      {activeSection === "themes" && <ThemesTab />}
     </div>
   );
 }
@@ -102,13 +115,15 @@ function GlobalSettingsSection() {
     return <div className="text-center text-text-muted py-12">Loading settings...</div>;
   }
 
-  // Group settings by category
-  const grouped = settings.reduce((acc: Record<string, SettingResponse[]>, s: SettingResponse) => {
-    const cat = s.category || "general";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(s);
-    return acc;
-  }, {});
+  // Group settings by category (exclude THEME keys — they have their own tab)
+  const grouped = settings
+    .filter((s) => s.category !== "THEME")
+    .reduce((acc: Record<string, SettingResponse[]>, s: SettingResponse) => {
+      const cat = s.category || "general";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(s);
+      return acc;
+    }, {});
 
   if (Object.keys(grouped).length === 0) {
     return (
@@ -144,7 +159,7 @@ function GlobalSettingsSection() {
                   <button
                     onClick={() => updateMutation.mutate({ id: setting.id, setting })}
                     disabled={updateMutation.isPending}
-                    className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border flex items-center gap-1"
+                    className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border flex items-center gap-1"
                   >
                     <Save size={14} />
                     Save
@@ -211,7 +226,7 @@ function CurrenciesSection() {
       <div className="flex justify-end">
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={16} />
           Add Currency
@@ -269,7 +284,7 @@ function CurrenciesSection() {
             <button
               onClick={() => createMutation.mutate()}
               disabled={!formData.code || !formData.name || !formData.symbol || createMutation.isPending}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               {createMutation.isPending ? "Adding..." : "Add Currency"}
             </button>
@@ -467,7 +482,7 @@ function AiProvidersSection() {
       <div className="flex justify-end">
         <button
           onClick={() => { setShowForm(!showForm); if (showForm) { setEditingId(null); resetForm(); } }}
-          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           <Plus size={16} />
           {showForm ? "Cancel" : "Add Provider"}
@@ -599,7 +614,7 @@ function AiProvidersSection() {
             <button
               onClick={handleSubmit}
               disabled={!formData.name || !formData.baseUrl || (!editingId && !formData.apiKey) || !formData.model || isSubmitting}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:bg-border"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               {isSubmitting ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Update Provider" : "Add Provider")}
             </button>

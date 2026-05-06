@@ -1,0 +1,100 @@
+databaseChangeLog:
+  - changeSet:
+      id: 068-vo-line-items-create-table
+      author: bipros
+      comment: |
+        Phase 9 of the BOQ commercial chain & KPI roadmap. Adds vo_line_items, the structured
+        BOQ-mutation rows attached to a VariationOrder. Each row tells the BOQ side to
+        ADD_ITEM / REVISE_QTY / REVISE_RATE / DELETE_ITEM when the parent VO is approved.
+
+        Dev users on ddl-auto: update get the table automatically. Existing VOs (header-only)
+        keep working untouched — line items are optional and applied only when present.
+      changes:
+        - createTable:
+            schemaName: contract
+            tableName: vo_line_items
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: variation_order_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: action
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: boq_item_id
+                  type: UUID
+              - column:
+                  name: new_item_no
+                  type: VARCHAR(20)
+              - column:
+                  name: new_item_description
+                  type: VARCHAR(500)
+              - column:
+                  name: new_item_unit
+                  type: VARCHAR(20)
+              - column:
+                  name: revised_qty
+                  type: NUMERIC(18, 3)
+              - column:
+                  name: revised_rate
+                  type: NUMERIC(18, 4)
+              - column:
+                  name: line_impact_amount
+                  type: NUMERIC(19, 2)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - createIndex:
+            schemaName: contract
+            tableName: vo_line_items
+            indexName: idx_vo_line_item_vo_id
+            columns:
+              - column:
+                  name: variation_order_id
+        - createIndex:
+            schemaName: contract
+            tableName: vo_line_items
+            indexName: idx_vo_line_item_boq_id
+            columns:
+              - column:
+                  name: boq_item_id
+        - addForeignKeyConstraint:
+            baseTableSchemaName: contract
+            baseTableName: vo_line_items
+            baseColumnNames: variation_order_id
+            referencedTableSchemaName: contract
+            referencedTableName: variation_orders
+            referencedColumnNames: id
+            constraintName: fk_vo_line_items_variation_order
+            onDelete: CASCADE

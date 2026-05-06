@@ -2,11 +2,12 @@ import { test, expect } from '@playwright/test';
 import { login } from '../fixtures/auth.fixture';
 
 test.describe('Authentication', () => {
-  test('login with valid credentials redirects to dashboard', async ({ page }) => {
+  test('login with valid credentials redirects to home', async ({ page }) => {
     await login(page);
     await expect(page).toHaveURL('/');
-    // Multiple "Dashboard" headings exist (h1 title + h4 sidebar link); match only the h1.
-    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+    // Home hub renders a time-aware greeting heading and a link to the programme dashboard.
+    await expect(page.getByTestId('hub-greeting')).toBeVisible();
+    await expect(page.getByTestId('hub-dashboard-link')).toBeVisible();
   });
 
   test('login with invalid credentials shows error', async ({ page }) => {

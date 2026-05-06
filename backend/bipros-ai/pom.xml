@@ -51,6 +51,39 @@
             <groupId>com.bipros</groupId>
             <artifactId>bipros-gis</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-cost</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-evm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-baseline</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-permit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-contract</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-scheduling</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-risk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-calendar</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

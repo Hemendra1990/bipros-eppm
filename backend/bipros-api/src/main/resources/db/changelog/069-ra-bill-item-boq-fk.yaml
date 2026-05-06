@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: 069-ra-bill-item-add-boq-fk
+      author: bipros
+      comment: |
+        Phase 10 — soft FK from cost.ra_bill_items.boq_item_id → project.boq_items.id. Lets
+        the RA bill detail UI link a generated line item back to its BOQ source for
+        traceability. Soft FK (no foreign-key constraint) because cost and project live in
+        separate Postgres schemas; cross-schema cascades surprise more than they help.
+
+        Dev users on ddl-auto: update get the column automatically. Existing rows have
+        NULL, which is correct — they were typed in by hand from free-text and don't have
+        a BOQ source.
+      changes:
+        - addColumn:
+            schemaName: cost
+            tableName: ra_bill_items
+            columns:
+              - column:
+                  name: boq_item_id
+                  type: UUID
+        - createIndex:
+            schemaName: cost
+            tableName: ra_bill_items
+            indexName: idx_ra_bill_item_boq_id
+            columns:
+              - column:
+                  name: boq_item_id

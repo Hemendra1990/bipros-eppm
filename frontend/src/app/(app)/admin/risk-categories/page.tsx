@@ -280,7 +280,7 @@ export default function RiskCategoriesAdminPage() {
         actions={
           <button
             onClick={openCreateType}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
             <Plus size={16} /> New Type
           </button>
@@ -492,7 +492,7 @@ export default function RiskCategoriesAdminPage() {
               <button
                 onClick={handleSaveType}
                 disabled={createType.isPending || updateType.isPending}
-                className="rounded bg-accent px-3 py-1.5 text-sm text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded bg-accent px-3 py-1.5 text-sm text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 Save
               </button>
@@ -600,7 +600,7 @@ export default function RiskCategoriesAdminPage() {
               <button
                 onClick={handleSaveCategory}
                 disabled={createCategory.isPending || updateCategory.isPending}
-                className="rounded bg-accent px-3 py-1.5 text-sm text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded bg-accent px-3 py-1.5 text-sm text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 Save
               </button>

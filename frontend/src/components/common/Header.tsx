@@ -31,10 +31,10 @@ function humanise(segment: string) {
  * the meaningful label always comes from the *last* segment, which is the active sub-route.
  */
 function useBreadcrumbs(pathname: string) {
-  if (pathname === "/") return [{ label: "Dashboard", href: "/" }];
+  if (pathname === "/") return [{ label: "Home", href: "/" }];
   const parts = pathname.split("/").filter(Boolean);
   const crumbs: { label: string; href: string }[] = [
-    { label: "Dashboard", href: "/" },
+    { label: "Home", href: "/" },
   ];
   let href = "";
   for (const part of parts) {

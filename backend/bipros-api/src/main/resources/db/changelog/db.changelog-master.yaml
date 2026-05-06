@@ -99,3 +99,23 @@ databaseChangeLog:
       file: db/changelog/060-wbs-ai-extraction-cache.yaml
   - include:
       file: db/changelog/061-resource-assignment-remaining-backfill.yaml
+  - include:
+      file: db/changelog/062-formula-master-tables.yaml
+  - include:
+      file: db/changelog/063-resource-assignment-budgeted-fields.yaml
+  - include:
+      file: db/changelog/064-project-baseline-slots.yaml
+  - include:
+      file: db/changelog/065-baseline-snapshot-completeness.yaml
+  - include:
+      file: db/changelog/066-dpr-supervisor-resource-id.yaml
+  - include:
+      file: db/changelog/067-dpr-drop-cumulative-qty.yaml
+  - include:
+      file: db/changelog/068-vo-line-items.yaml
+  - include:
+      file: db/changelog/069-ra-bill-item-boq-fk.yaml
+  - include:
+      file: db/changelog/070-boq-status-check-overrun.yaml
+  - include:
+      file: db/changelog/071-ra-bill-item-description-length.yaml

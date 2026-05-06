@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useSyncExternalStore } from "react";
 import { ArrowUpRight, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useActiveLogo, useAppName } from "@/hooks/useThemeManager";
 
 const NAV = ["Features", "Solutions", "Pricing", "About"] as const;
 
@@ -43,18 +43,20 @@ function ThemeToggle() {
 }
 
 export function LoginNav() {
+  const logoSrc = useActiveLogo();
+  const appName = useAppName();
+
   return (
     <header className="relative z-30 px-4 pt-5 sm:px-8">
       <div className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl border border-hairline bg-paper/80 px-3.5 py-2.5 shadow-[0_4px_22px_rgba(28,28,28,0.05)] backdrop-blur-md">
         <Link href="/" className="group flex items-center gap-2.5">
           <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl bg-paper shadow-[0_2px_10px_rgba(28,28,28,0.06)] ring-1 ring-hairline">
-            <Image
-              src="/bipros-logo.png"
-              alt="Bipros"
+            <img
+              src={logoSrc}
+              alt={appName.primary}
               width={28}
               height={28}
               className="h-7 w-7 object-contain"
-              priority
             />
             <span
               aria-hidden
@@ -66,10 +68,10 @@ export function LoginNav() {
             />
           </span>
           <span className="font-display text-[18px] font-semibold tracking-tight text-charcoal">
-            Bipros
+            {appName.primary}
           </span>
           <span className="ml-0.5 rounded border border-gold/30 bg-gold-tint/40 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-gold-ink">
-            EPPM
+            {appName.secondary}
           </span>
         </Link>
 

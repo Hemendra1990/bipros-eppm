@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 071-ra-bill-item-widen-description
+      author: bipros
+      comment: |
+        Phase 10 follow-up — widen ra_bill_items.description from VARCHAR(255) to
+        VARCHAR(500) so it can hold the full BoqItem.description (which is already 500 in
+        bipros-project's table). Without this, generating an RA bill draft from BOQ items
+        with long civil-works descriptions ("Fabricate and fix IPE 100 ... complete.",
+        ~270 chars) fails with SQLState 22001 / "value too long for type character varying".
+
+        Postgres widens VARCHAR length in place — no row rewrite, near-instant. Existing
+        rows are valid against the wider type.
+
+        Dev users on ddl-auto: update get this auto-applied by DevSchemaFixupRunner since
+        Hibernate's update mode does not widen column types; production runs Liquibase.
+      changes:
+        - modifyDataType:
+            schemaName: cost
+            tableName: ra_bill_items
+            columnName: description
+            newDataType: VARCHAR(500)

@@ -744,7 +744,7 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
                     .activityName(act)
                     .unit(unit)
                     .qtyExecuted(qty)
-                    .cumulativeQty(cumulative)
+                    // cumulativeQty is computed on read — no longer stored.
                     .boqItemNo(boqForActivity(act))
                     .wbsNodeId(wbsKey != null ? wbs.get(wbsKey) : null)
                     .remarks(remarksRotation[idx % remarksRotation.length])

@@ -21,6 +21,10 @@ public record ResourceAssignmentResponse(
      * decide whether activity-level rollups can sum units (only when all assignments share it). */
     String unit,
     UUID projectId,
+    /** Phase 2: original committed units, frozen unless an explicit Re-budget action runs. */
+    Double budgetedUnits,
+    /** Phase 2: original committed cost, frozen unless an explicit Re-budget action runs. */
+    BigDecimal budgetedCost,
     Double plannedUnits,
     Double actualUnits,
     Double remainingUnits,
@@ -66,6 +70,8 @@ public record ResourceAssignmentResponse(
         effectiveRoleName,
         unit,
         assignment.getProjectId(),
+        assignment.getBudgetedUnits(),
+        assignment.getBudgetedCost(),
         assignment.getPlannedUnits(),
         assignment.getActualUnits(),
         assignment.getRemainingUnits(),

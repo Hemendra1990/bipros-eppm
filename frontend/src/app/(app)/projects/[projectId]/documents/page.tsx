@@ -321,7 +321,7 @@ export default function DocumentsPage() {
               <h2 className="text-lg font-semibold text-text-primary">Documents</h2>
               <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
-                className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
+                className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
               >
                 + Upload Document
               </button>
@@ -387,7 +387,7 @@ export default function DocumentsPage() {
                       ref={fileInputRef}
                       type="file"
                       onChange={handleFileChange}
-                      className="block w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-accent file:text-text-primary file:text-sm file:font-medium hover:file:bg-blue-500 bg-surface-hover border border-border rounded-lg cursor-pointer"
+                      className="block w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-accent file:text-accent-foreground file:text-sm file:font-medium hover:file:bg-blue-500 bg-surface-hover border border-border rounded-lg cursor-pointer"
                     />
                     {file && (
                       <p className="mt-1 text-xs text-text-muted">
@@ -412,7 +412,7 @@ export default function DocumentsPage() {
                     <button
                       type="submit"
                       disabled={uploadDocumentMutation.isPending}
-                      className="flex-1 px-3 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors text-sm font-medium"
+                      className="flex-1 px-3 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover disabled:bg-border transition-colors text-sm font-medium"
                     >
                       {uploadDocumentMutation.isPending ? "Uploading..." : "Upload Document"}
                     </button>

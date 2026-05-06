@@ -6,13 +6,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   raBillApi,
   type CreateRaBillRequest,
+  type DraftPreview,
   type RaBill,
   type SatelliteGate,
 } from "@/lib/api/raBillApi";
 import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, FileText } from "lucide-react";
 import { TabTip } from "@/components/common/TabTip";
+import { contractApi } from "@/lib/api/contractApi";
+import { getErrorMessage } from "@/lib/utils/error";
 
 const gateBadge = (gate?: SatelliteGate | null) => {
   if (!gate) return "bg-surface-active/40 text-text-secondary";
@@ -49,12 +52,37 @@ const statusBadge = (status: string) => {
   }
 };
 
+function lastMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfLastMonth = new Date(startOfThisMonth.getTime() - 24 * 60 * 60 * 1000);
+  const startOfLastMonth = new Date(endOfLastMonth.getFullYear(), endOfLastMonth.getMonth(), 1);
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  return { from: fmt(startOfLastMonth), to: fmt(endOfLastMonth) };
+}
+
 export default function RaBillsPage() {
   const params = useParams();
   const projectId = params.projectId as string;
   const queryClient = useQueryClient();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
+
+  const initialRange = lastMonthRange();
+  const [showDraftDialog, setShowDraftDialog] = useState(false);
+  const [draftFrom, setDraftFrom] = useState(initialRange.from);
+  const [draftTo, setDraftTo] = useState(initialRange.to);
+  const [draftContractId, setDraftContractId] = useState<string>("");
+  const [draftPreview, setDraftPreview] = useState<DraftPreview | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
+
+  const { data: contractsData } = useQuery({
+    queryKey: ["contracts", projectId],
+    queryFn: () => contractApi.listContracts(projectId, 0, 200),
+    enabled: !!projectId,
+  });
+  const projectContracts = contractsData?.data?.content ?? [];
 
   const { data: billsData, isLoading: isLoadingBills } = useQuery({
     queryKey: ["ra-bills", projectId],
@@ -191,14 +219,220 @@ export default function RaBillsPage() {
       />
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-text-primary">RA Bills</h1>
-        <Button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="gap-2"
-        >
-          <Plus size={20} />
-          Create RA Bill
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => {
+              setDraftPreview(null);
+              setDraftError(null);
+              if (projectContracts.length === 1) {
+                setDraftContractId(projectContracts[0].id);
+              }
+              setShowDraftDialog(true);
+            }}
+            variant="secondary"
+            className="gap-2"
+          >
+            <FileText size={20} />
+            Generate Draft
+          </Button>
+          <Button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="gap-2"
+          >
+            <Plus size={20} />
+            Create RA Bill
+          </Button>
+        </div>
       </div>
+
+      {showDraftDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowDraftDialog(false)}>
+          <div
+            className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-border bg-surface p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">Generate RA Bill Draft</h2>
+              <button
+                type="button"
+                onClick={() => setShowDraftDialog(false)}
+                className="text-text-muted hover:text-text-primary"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm text-text-muted">
+              Builds line items from BOQ × DPR for the selected period. Rates are frozen at the
+              moment you save — a later VO that revises a rate will not change saved DRAFTs.
+            </p>
+
+            {draftError && <div className="mb-4 text-danger">{draftError}</div>}
+
+            {!draftPreview && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary">From</label>
+                    <input
+                      type="date"
+                      value={draftFrom}
+                      onChange={(e) => setDraftFrom(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary">To</label>
+                    <input
+                      type="date"
+                      value={draftTo}
+                      onChange={(e) => setDraftTo(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+                {projectContracts.length > 1 && (
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary">Contract</label>
+                    <select
+                      value={draftContractId}
+                      onChange={(e) => setDraftContractId(e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="">Select a contract…</option>
+                      {projectContracts.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.contractNumber} — {c.contractorName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={draftBusy}
+                    onClick={async () => {
+                      setDraftError(null);
+                      setDraftBusy(true);
+                      try {
+                        const res = await raBillApi.generateDraft(projectId, {
+                          from: draftFrom,
+                          to: draftTo,
+                          contractId: draftContractId || undefined,
+                          save: false,
+                        });
+                        if (res.data) setDraftPreview(res.data);
+                      } catch (err: unknown) {
+                        setDraftError(getErrorMessage(err, "Failed to generate draft"));
+                      } finally {
+                        setDraftBusy(false);
+                      }
+                    }}
+                    className="rounded-md bg-accent px-4 py-2 text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                  >
+                    {draftBusy ? "Generating…" : "Preview"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDraftDialog(false)}
+                    className="rounded-md bg-surface-active/50 px-4 py-2 text-text-secondary hover:bg-border"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {draftPreview && (
+              <div className="space-y-4">
+                <div className="rounded border border-border bg-surface-hover/30 p-3 text-sm">
+                  <div>Period: {draftPreview.bill.billPeriodFrom} → {draftPreview.bill.billPeriodTo}</div>
+                  <div>Gross: ₹{Number(draftPreview.bill.grossAmount).toLocaleString("en-IN")}</div>
+                  <div>Net: ₹{Number(draftPreview.bill.netAmount).toLocaleString("en-IN")} (after Mob/Retention/TDS/GST)</div>
+                  <div>Cumulative: ₹{Number(draftPreview.bill.cumulativeAmount).toLocaleString("en-IN")}</div>
+                  <div>Lines: {draftPreview.items.length}</div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-border text-sm">
+                    <thead>
+                      <tr className="bg-surface/80 text-text-secondary">
+                        <th className="border border-border px-3 py-1.5 text-left">Item</th>
+                        <th className="border border-border px-3 py-1.5 text-left">Description</th>
+                        <th className="border border-border px-3 py-1.5 text-right">Prev Qty</th>
+                        <th className="border border-border px-3 py-1.5 text-right">Cur Qty</th>
+                        <th className="border border-border px-3 py-1.5 text-right">Δ Qty</th>
+                        <th className="border border-border px-3 py-1.5 text-right">Rate</th>
+                        <th className="border border-border px-3 py-1.5 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {draftPreview.items.map((it) => {
+                        const delta = (it.currentQuantity ?? 0) - (it.previousQuantity ?? 0);
+                        return (
+                          <tr key={it.itemCode + (it.boqItemId ?? "")} className="text-text-primary">
+                            <td className="border border-border px-3 py-1.5">{it.itemCode}</td>
+                            <td className="border border-border px-3 py-1.5">{it.description}</td>
+                            <td className="border border-border px-3 py-1.5 text-right">{it.previousQuantity ?? "—"}</td>
+                            <td className="border border-border px-3 py-1.5 text-right">{it.currentQuantity ?? "—"}</td>
+                            <td className="border border-border px-3 py-1.5 text-right">{delta.toFixed(3)}</td>
+                            <td className="border border-border px-3 py-1.5 text-right">{it.rate ?? "—"}</td>
+                            <td className="border border-border px-3 py-1.5 text-right">
+                              ₹{Number(it.amount).toLocaleString("en-IN")}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {draftPreview.items.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="border border-border px-3 py-3 text-center text-text-muted">
+                            No new qty executed in this period — nothing to bill.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={draftBusy || draftPreview.items.length === 0}
+                    onClick={async () => {
+                      setDraftError(null);
+                      setDraftBusy(true);
+                      try {
+                        await raBillApi.generateDraft(projectId, {
+                          from: draftFrom,
+                          to: draftTo,
+                          contractId: draftPreview.resolvedContractId,
+                          save: true,
+                        });
+                        queryClient.invalidateQueries({ queryKey: ["ra-bills", projectId] });
+                        setShowDraftDialog(false);
+                        setDraftPreview(null);
+                      } catch (err: unknown) {
+                        setDraftError(getErrorMessage(err, "Failed to save draft"));
+                      } finally {
+                        setDraftBusy(false);
+                      }
+                    }}
+                    className="rounded-md bg-green-600 px-4 py-2 text-text-primary hover:bg-green-500 disabled:opacity-50"
+                  >
+                    {draftBusy ? "Saving…" : "Save as DRAFT"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftPreview(null)}
+                    className="rounded-md bg-surface-active/50 px-4 py-2 text-text-secondary hover:bg-border"
+                  >
+                    Discard preview
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showCreateForm && (
         <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-xl">
@@ -363,7 +597,7 @@ export default function RaBillsPage() {
               <button
                 type="submit"
                 disabled={createBillMutation.isPending}
-                className="rounded-md bg-accent px-4 py-2 text-text-primary hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-4 py-2 text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 {createBillMutation.isPending ? "Creating..." : "Create Bill"}
               </button>

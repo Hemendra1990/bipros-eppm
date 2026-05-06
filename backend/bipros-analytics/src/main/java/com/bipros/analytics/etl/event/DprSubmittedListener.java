@@ -4,6 +4,7 @@ import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.analytics.etl.AnalyticsEtlService;
 import com.bipros.analytics.etl.DeadLetterHandler;
+import com.bipros.common.event.DprMutationType;
 import com.bipros.common.event.DprSubmittedEvent;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -43,6 +45,13 @@ public class DprSubmittedListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDprSubmitted(DprSubmittedEvent event) {
         try {
+            // DELETED rows are gone from the OLTP store — analytics keeps the historical fact rows
+            // intact (a future fact_dpr_logs reaper can sweep them); skip ETL for the delete event.
+            if (event.eventType() == DprMutationType.DELETED) {
+                log.debug("Skipping ETL for deleted DPR: project={} dpr={}", event.projectId(), event.dprId());
+                return;
+            }
+
             DailyProgressReport dpr = dprRepository.findById(event.dprId()).orElse(null);
             if (dpr == null) {
                 log.warn("DPR not found for event: {}", event);
@@ -51,6 +60,12 @@ public class DprSubmittedListener {
 
             UUID activityId = resolveActivityId(event.projectId(), dpr.getActivityName());
 
+            // Cumulative qty is no longer stored on the entity — recompute through the
+            // event's reportDate so back-dated edits land with a correct cumulative.
+            BigDecimal cumulative = dprRepository.sumQtyExecutedThroughDate(
+                    event.projectId(), dpr.getActivityName(), dpr.getReportDate());
+            Double cumulativeDouble = cumulative != null ? cumulative.doubleValue() : null;
+
             etl.insertDprLog(
                     event.projectId(), activityId, dpr.getId(), dpr.getReportDate(),
                     new UUID(0L, 0L),
@@ -58,7 +73,7 @@ public class DprSubmittedListener {
                     dpr.getChainageFromM() != null ? dpr.getChainageFromM().doubleValue() : null,
                     dpr.getChainageToM() != null ? dpr.getChainageToM().doubleValue() : null,
                     event.qtyExecuted() != null ? event.qtyExecuted().doubleValue() : null,
-                    event.cumulativeQty() != null ? event.cumulativeQty().doubleValue() : null,
+                    cumulativeDouble,
                     dpr.getWeatherCondition(),
                     null,
                     sanitizeRemarks(dpr.getRemarks()));
@@ -67,12 +82,13 @@ public class DprSubmittedListener {
                     event.projectId(), activityId, dpr.getReportDate(),
                     null, null,
                     event.qtyExecuted() != null ? event.qtyExecuted().doubleValue() : null,
-                    event.cumulativeQty() != null ? event.cumulativeQty().doubleValue() : null,
+                    cumulativeDouble,
                     dpr.getChainageFromM() != null ? dpr.getChainageFromM().doubleValue() : null,
                     dpr.getChainageToM() != null ? dpr.getChainageToM().doubleValue() : null,
                     "dpr");
 
-            log.debug("ETL processed DprSubmittedEvent: project={} dpr={}", event.projectId(), event.dprId());
+            log.debug("ETL processed DprSubmittedEvent: project={} dpr={} type={}",
+                    event.projectId(), event.dprId(), event.eventType());
         } catch (Exception e) {
             log.error("ETL failed for DprSubmittedEvent: {}", event, e);
             meterRegistry.counter("bipros.analytics.etl.failures", "fact", "fact_dpr_logs").increment();

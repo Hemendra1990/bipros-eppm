@@ -52,7 +52,7 @@ export default function CalendarsPage() {
         actions={
           <button
             onClick={() => router.push("/admin/calendars/new")}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
             <Plus size={16} />
             New Calendar

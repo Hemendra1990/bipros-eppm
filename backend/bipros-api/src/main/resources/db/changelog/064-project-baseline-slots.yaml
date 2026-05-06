@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 064-project-add-baseline-slots
+      author: bipros
+      comment: |
+        Phase 3 of the baseline-progress-tracking roadmap. P6 supports up to three baseline
+        slots assigned to a project simultaneously (Project / Primary / Secondary / Tertiary
+        in newer terminology, often just Primary / Secondary / Tertiary). Today we have a
+        single active_baseline_id column on project.projects, which means activating one
+        baseline as PRIMARY blanks the previously-active reference even if the planner
+        wanted to keep it as Secondary for comparison.
+
+        This changeset adds three independent slot columns. The PRIMARY slot is initialised
+        from the existing active_baseline_id so no project loses its current variance baseline.
+        active_baseline_id is intentionally kept (deprecated) for one release so downstream
+        code that reads it keeps working — BaselineService.assignBaselineToSlot mirrors
+        primary_baseline_id back into active_baseline_id whenever the PRIMARY slot changes.
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: projects
+            columns:
+              - column:
+                  name: primary_baseline_id
+                  type: UUID
+              - column:
+                  name: secondary_baseline_id
+                  type: UUID
+              - column:
+                  name: tertiary_baseline_id
+                  type: UUID
+
+  - changeSet:
+      id: 064-project-baseline-slots-backfill-primary
+      author: bipros
+      comment: |
+        Copy each project's existing active_baseline_id into the new primary_baseline_id slot
+        so post-migration the variance dashboard / Gantt overlay continue to use the same
+        baseline they used pre-migration.
+      changes:
+        - sql:
+            comment: Backfill primary_baseline_id from active_baseline_id where the slot is empty.
+            sql: >-
+              UPDATE project.projects
+              SET primary_baseline_id = active_baseline_id
+              WHERE primary_baseline_id IS NULL
+                AND active_baseline_id IS NOT NULL

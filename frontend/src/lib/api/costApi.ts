@@ -21,6 +21,17 @@ export interface UpdateCostAccountRequest {
   description?: string;
 }
 
+export interface ActivityCostSummaryRow {
+  activityId: string;
+  /** Phase 2: original committed value, frozen at assignment creation. Falls back to planned
+   * for legacy assignments that pre-date the Phase 2 backfill. */
+  budgetedCost: number;
+  plannedCost: number;
+  actualCost: number;
+  remainingCost: number;
+  atCompletionCost: number;
+}
+
 export interface CostSummary {
   totalBudget: number;
   totalActual: number;
@@ -138,5 +149,18 @@ export const costApi = {
   deleteExpense: (projectId: string, expenseId: string) =>
     apiClient
       .delete<ApiResponse<void>>(`/v1/projects/${projectId}/expenses/${expenseId}`)
+      .then((r) => r.data),
+
+  /**
+   * Per-activity rollup of planned/actual/remaining/at-completion costs. One row per activity
+   * that has any cost contribution from expenses or resource assignments. Backed by
+   * {@code GET /v1/projects/{projectId}/activities/cost-summary} which uses the same
+   * ActivityCostCalculator as the baseline snapshot.
+   */
+  getActivityCostSummary: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<ActivityCostSummaryRow[]>>(
+        `/v1/projects/${projectId}/activities/cost-summary`
+      )
       .then((r) => r.data),
 };

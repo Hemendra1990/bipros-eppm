@@ -280,7 +280,7 @@ export default function NewResourcePage() {
         <span
           className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 ${
             step === 1
-              ? "bg-accent text-text-primary"
+              ? "bg-accent text-accent-foreground"
               : "bg-surface-hover text-text-secondary"
           }`}
         >
@@ -290,7 +290,7 @@ export default function NewResourcePage() {
         <span
           className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 ${
             step === 2
-              ? "bg-accent text-text-primary"
+              ? "bg-accent text-accent-foreground"
               : "bg-surface-hover text-text-secondary"
           }`}
         >
@@ -499,7 +499,7 @@ export default function NewResourcePage() {
               type="button"
               disabled={!canAdvanceToStep2}
               onClick={() => setStep(2)}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
             >
               Continue →
             </button>
@@ -548,7 +548,7 @@ export default function NewResourcePage() {
               type="button"
               disabled={isSubmitting}
               onClick={handleSubmit}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
             >
               {isSubmitting ? "Creating…" : "Create Resource"}
             </button>
@@ -917,7 +917,7 @@ function ManpowerForm({
             onClick={() => onActiveSectionChange(s.key)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               activeSection === s.key
-                ? "bg-accent text-text-primary"
+                ? "bg-accent text-accent-foreground"
                 : "border border-border text-text-secondary hover:bg-surface-hover/50"
             }`}
           >

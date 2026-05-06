@@ -56,6 +56,10 @@ public class AnalyticsBackfillService {
             for (DailyProgressReport dpr : dprs) {
                 try {
                     UUID activityId = resolveActivityId(projectId, dpr.getActivityName());
+                    // Cumulative is no longer stored on the entity (Phase 7.7); recompute on read.
+                    java.math.BigDecimal cumulative = dprRepository.sumQtyExecutedThroughDate(
+                            projectId, dpr.getActivityName(), dpr.getReportDate());
+                    Double cumulativeDouble = cumulative != null ? cumulative.doubleValue() : null;
                     etl.insertDprLog(
                             projectId, activityId, dpr.getId(), dpr.getReportDate(),
                             new UUID(0L, 0L),
@@ -63,7 +67,7 @@ public class AnalyticsBackfillService {
                             dpr.getChainageFromM() != null ? dpr.getChainageFromM().doubleValue() : null,
                             dpr.getChainageToM() != null ? dpr.getChainageToM().doubleValue() : null,
                             dpr.getQtyExecuted() != null ? dpr.getQtyExecuted().doubleValue() : null,
-                            dpr.getCumulativeQty() != null ? dpr.getCumulativeQty().doubleValue() : null,
+                            cumulativeDouble,
                             dpr.getWeatherCondition(),
                             null,
                             sanitizeRemarks(dpr.getRemarks()));
@@ -72,7 +76,7 @@ public class AnalyticsBackfillService {
                             projectId, activityId, dpr.getReportDate(),
                             null, null,
                             dpr.getQtyExecuted() != null ? dpr.getQtyExecuted().doubleValue() : null,
-                            dpr.getCumulativeQty() != null ? dpr.getCumulativeQty().doubleValue() : null,
+                            cumulativeDouble,
                             dpr.getChainageFromM() != null ? dpr.getChainageFromM().doubleValue() : null,
                             dpr.getChainageToM() != null ? dpr.getChainageToM().doubleValue() : null,
                             "dpr");

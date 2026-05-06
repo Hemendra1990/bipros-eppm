@@ -121,7 +121,7 @@ export default function ResourceTypesAdminPage() {
           <button
             type="button"
             onClick={openCreate}
-            className="px-4 py-2 bg-accent text-text-primary rounded-lg hover:bg-accent-hover"
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
           >
             + New Resource Type
           </button>
