@@ -13,6 +13,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 interface UseVirtualTableOptions<TData>
   extends Omit<TableOptions<TData>, "getCoreRowModel" | "columns" | "data"> {
+  // IMPORTANT: pass stable references for `data` and `columns` (useMemo at the
+  // call site, or define `columns` outside the component). TanStack rebuilds
+  // the row/sorted/filtered models whenever these references change; for
+  // 10k-row datasets that means re-sorting on every parent re-render.
   data: TData[];
   columns: ColumnDef<TData, unknown>[];
   estimateRowHeight?: number;
@@ -37,7 +41,8 @@ export function useVirtualTable<TData>({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     enableColumnResizing: true,
-    columnResizeMode: "onChange",
+    // onEnd avoids a re-render on every mousemove during a column-resize drag.
+    columnResizeMode: "onEnd",
     state,
     onSortingChange,
     ...options,
@@ -45,15 +50,18 @@ export function useVirtualTable<TData>({
 
   const { rows } = table.getRowModel();
 
+  // NOTE: do NOT pass `measureElement`. With variable-height cells (e.g. tree
+  // view's chevrons + indented labels) the resulting ResizeObserver-driven
+  // re-measurement loop produces a steady stream of high-priority state
+  // updates that starves out router transitions — clicking a <Link> queues
+  // router.push() but React 19 never gets idle time to apply it, so the page
+  // appears frozen until any other event flushes the queue. Fixed-row sizing
+  // (estimateSize only) sidesteps this.
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => estimateRowHeight,
     overscan,
-    measureElement:
-      typeof window !== "undefined" && "ResizeObserver" in window
-        ? (element) => element.getBoundingClientRect().height
-        : undefined,
   });
 
   const virtualRows = virtualizer.getVirtualItems();

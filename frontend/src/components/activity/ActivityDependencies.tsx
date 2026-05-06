@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { activityApi } from "@/lib/api/activityApi";
@@ -47,14 +47,26 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
     queryFn: () => activityApi.getSuccessors(projectId, activityId),
   });
 
+  // Share cache with the activities listing page (which uses ["activities",
+  // projectId]); avoids a duplicate 209-row fetch when the user clicks View
+  // from /activities and lands here.
   const { data: allActivitiesData } = useQuery({
-    queryKey: ["activities", projectId, "all"],
+    queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 500),
   });
 
-  const allActivities = allActivitiesData?.data?.content ?? [];
-  const predecessors = predecessorsData?.data ?? [];
-  const successors = successorsData?.data ?? [];
+  const allActivities = useMemo(
+    () => allActivitiesData?.data?.content ?? [],
+    [allActivitiesData]
+  );
+  const predecessors = useMemo(
+    () => predecessorsData?.data ?? [],
+    [predecessorsData]
+  );
+  const successors = useMemo(
+    () => successorsData?.data ?? [],
+    [successorsData]
+  );
 
   const deleteMutation = useMutation({
     mutationFn: (relationshipId: string) =>
@@ -70,12 +82,19 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
     },
   });
 
-  const getActivity = (id: string) => allActivities.find((a) => a.id === id);
+  const activityById = useMemo(() => {
+    const m = new Map<string, (typeof allActivities)[number]>();
+    for (const a of allActivities) m.set(a.id, a);
+    return m;
+  }, [allActivities]);
 
-  const getActivityName = (id: string) => {
-    const act = getActivity(id);
-    return act ? `${act.code} - ${act.name}` : id;
-  };
+  const getActivityName = useCallback(
+    (id: string) => {
+      const act = activityById.get(id);
+      return act ? `${act.code} - ${act.name}` : id;
+    },
+    [activityById]
+  );
 
   const handleOpenAdd = (direction: "predecessor" | "successor") => {
     setAddDirection(direction);

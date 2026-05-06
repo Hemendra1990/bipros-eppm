@@ -36,6 +36,13 @@ interface VirtualDataTableProps<TData> {
   onRowClick?: (row: TData) => void;
   onRowDoubleClick?: (row: TData) => void;
 
+  // Stable row identity (preserves selection/edit state across data changes)
+  getRowId?: (row: TData, index: number) => string;
+
+  // Footer slot — renders inside the same <table> so column widths align.
+  // Caller provides one or more <tr> elements with the leaf-column cell count.
+  footer?: React.ReactNode;
+
   // Empty state
   emptyMessage?: string;
 
@@ -58,6 +65,8 @@ export function VirtualDataTable<TData>({
   rowClassName,
   onRowClick,
   onRowDoubleClick,
+  getRowId,
+  footer,
   emptyMessage = "No data available",
   isLoading = false,
 }: VirtualDataTableProps<TData>) {
@@ -83,7 +92,7 @@ export function VirtualDataTable<TData>({
     [selectable, onRowClick]
   );
 
-  const { table, parentRef, virtualRows, rows, paddingTop, paddingBottom, virtualizer } =
+  const { table, parentRef, virtualRows, rows, paddingTop, paddingBottom } =
     useVirtualTable({
       data,
       columns,
@@ -98,6 +107,7 @@ export function VirtualDataTable<TData>({
       enableSorting: sortable,
       enableColumnResizing: resizable,
       enableRowSelection: selectable,
+      getRowId,
     });
 
   if (isLoading) {
@@ -158,11 +168,16 @@ export function VirtualDataTable<TData>({
           )}>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
+                {headerGroup.headers.map((header) => {
+                  const headerClassMeta = (header.column.columnDef.meta as { className?: string } | undefined)?.className;
+                  return (
                   <th
                     key={header.id}
                     colSpan={header.colSpan}
-                    className="relative px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.10em] text-slate dark:text-[#A1A1A6] whitespace-nowrap select-none"
+                    className={cn(
+                      "relative px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.10em] text-slate dark:text-[#A1A1A6] whitespace-nowrap select-none",
+                      headerClassMeta
+                    )}
                     style={{ width: header.getSize() }}
                   >
                     <div className="flex items-center gap-1.5">
@@ -202,7 +217,8 @@ export function VirtualDataTable<TData>({
                       />
                     )}
                   </th>
-                ))}
+                  );
+                })}
               </tr>
             ))}
           </thead>
@@ -210,7 +226,7 @@ export function VirtualDataTable<TData>({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={table.getVisibleLeafColumns().length}
                   className="px-6 py-8 text-center text-sm text-slate dark:text-[#A1A1A6]"
                 >
                   {emptyMessage}
@@ -221,7 +237,7 @@ export function VirtualDataTable<TData>({
                 {paddingTop > 0 && (
                   <tr>
                     <td
-                      colSpan={columns.length}
+                      colSpan={table.getVisibleLeafColumns().length}
                       style={{ height: `${paddingTop}px` }}
                     />
                   </tr>
@@ -238,7 +254,6 @@ export function VirtualDataTable<TData>({
                     <tr
                       key={row.id}
                       data-index={virtualRow.index}
-                      ref={virtualizer.measureElement}
                       className={cn(
                         "border-b border-hairline/50 transition-colors duration-[120ms]",
                         "hover:bg-gold-tint/10 dark:hover:bg-gold-tint/5",
@@ -249,25 +264,31 @@ export function VirtualDataTable<TData>({
                       onClick={() => handleRowClick(row.original, row.id)}
                       onDoubleClick={() => onRowDoubleClick?.(row.original)}
                     >
-                      {row.getVisibleCells().map((cell) => (
-                        <td
-                          key={cell.id}
-                          className="px-4 py-3 text-sm text-charcoal dark:text-[#F5F2E8] whitespace-nowrap align-middle"
-                          style={{ width: cell.column.getSize() }}
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </td>
-                      ))}
+                      {row.getVisibleCells().map((cell) => {
+                        const cellClassName = (cell.column.columnDef.meta as { className?: string } | undefined)?.className;
+                        return (
+                          <td
+                            key={cell.id}
+                            className={cn(
+                              "px-4 py-3 text-sm text-charcoal dark:text-[#F5F2E8] whitespace-nowrap align-middle",
+                              cellClassName
+                            )}
+                            style={{ width: cell.column.getSize() }}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   );
                 })}
                 {paddingBottom > 0 && (
                   <tr>
                     <td
-                      colSpan={columns.length}
+                      colSpan={table.getVisibleLeafColumns().length}
                       style={{ height: `${paddingBottom}px` }}
                     />
                   </tr>
@@ -275,6 +296,11 @@ export function VirtualDataTable<TData>({
               </>
             )}
           </tbody>
+          {footer && (
+            <tfoot className="sticky bottom-0 bg-ivory dark:bg-[#161616] border-t border-hairline">
+              {footer}
+            </tfoot>
+          )}
         </table>
       </div>
 

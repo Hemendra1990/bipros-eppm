@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Suspense, lazy, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -26,10 +26,21 @@ import { activityStepApi } from "@/lib/api/activityStepApi";
 import type { ActivityStepResponse, CreateActivityStepRequest } from "@/lib/api/activityStepApi";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
 import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
-import { UdfSection } from "@/components/udf/UdfSection";
 import type { ExpenseResponse } from "@/lib/types";
+
+// Heavy children deferred so the initial paint of the detail page is cheap —
+// when arriving here from /activities (especially WBS Tree view) the router
+// transition can starve out behind synchronous render of these subtrees, which
+// shows as Chrome's "Page Unresponsive" dialog.
+const ActivityDependencies = lazy(() =>
+  import("@/components/activity/ActivityDependencies").then((m) => ({
+    default: m.ActivityDependencies,
+  })),
+);
+const UdfSection = lazy(() =>
+  import("@/components/udf/UdfSection").then((m) => ({ default: m.UdfSection })),
+);
 
 const CONSTRAINT_TYPE_LABELS: Record<ConstraintType, string> = {
   START_ON: "Start On",
@@ -363,7 +374,10 @@ function ViewMode({
     queryKey: ["expenses", "activity", projectId, activity.id],
     queryFn: () => costApi.getActivityExpenses(projectId, activity.id),
   });
-  const activityExpenses: ExpenseResponse[] = expensesData?.data ?? [];
+  const activityExpenses: ExpenseResponse[] = useMemo(
+    () => expensesData?.data ?? [],
+    [expensesData]
+  );
 
   const { data: evmData, isLoading: isEvmLoading } = useQuery({
     queryKey: ["evm", "activity", projectId, activity.id],
@@ -388,7 +402,7 @@ function ViewMode({
         actualCost: number;
       };
 
-  const expenseColumns: ColumnDef<ExpenseRow>[] = [
+  const expenseColumns = useMemo<ColumnDef<ExpenseRow>[]>(() => [
     {
       accessorKey: "description",
       header: "Description",
@@ -429,7 +443,24 @@ function ViewMode({
         );
       },
     },
-  ];
+  ], []);
+
+  const expenseTableData = useMemo<ExpenseRow[]>(
+    () =>
+      activityExpenses.length > 0
+        ? [
+            ...activityExpenses,
+            {
+              id: "__TOTAL__",
+              description: "Total Expenses",
+              expenseCategory: "",
+              actualStartDate: null,
+              actualCost: totalExpenses,
+            } as ExpenseRow,
+          ]
+        : [],
+    [activityExpenses, totalExpenses]
+  );
 
   return (
     <div className="space-y-5">
@@ -555,16 +586,7 @@ function ViewMode({
           <div className="mb-4">
             <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Expenses</p>
             <SimpleTable
-              data={[
-                ...activityExpenses,
-                {
-                  id: "__TOTAL__",
-                  description: "Total Expenses",
-                  expenseCategory: "",
-                  actualStartDate: null,
-                  actualCost: totalExpenses,
-                } as ExpenseRow,
-              ]}
+              data={expenseTableData}
               columns={expenseColumns}
               sortable={false}
               className="border-0 rounded-none"
@@ -699,14 +721,18 @@ function ViewMode({
       </div>
 
       {/* Dependencies */}
-      <ActivityDependencies
-        projectId={projectId}
-        activityId={activity.id}
-        activityName={activity.name}
-      />
+      <Suspense fallback={<div className="rounded-lg border border-border bg-surface/50 p-4 text-sm text-text-muted">Loading dependencies…</div>}>
+        <ActivityDependencies
+          projectId={projectId}
+          activityId={activity.id}
+          activityName={activity.name}
+        />
+      </Suspense>
 
       {/* Custom Fields */}
-      <UdfSection entityId={activity.id} subject="ACTIVITY" projectId={projectId} />
+      <Suspense fallback={<div className="rounded-xl border border-border bg-surface/50 p-6 text-sm text-text-muted">Loading custom fields…</div>}>
+        <UdfSection entityId={activity.id} subject="ACTIVITY" projectId={projectId} />
+      </Suspense>
     </div>
   );
 }
