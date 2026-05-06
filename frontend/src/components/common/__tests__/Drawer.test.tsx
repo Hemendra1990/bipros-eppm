@@ -119,4 +119,22 @@ describe("Drawer", () => {
     );
     expect(screen.getByRole("dialog").className).toContain("max-w-3xl");
   });
+
+  it("marks the wrapper as inert when closed and not when open", () => {
+    const { rerender } = render(
+      <Drawer open onClose={() => {}} title="T">
+        <p>x</p>
+      </Drawer>
+    );
+    // When open, no element should have the inert attribute set.
+    expect(document.querySelector("[inert]")).toBeNull();
+
+    rerender(
+      <Drawer open={false} onClose={() => {}} title="T">
+        <p>x</p>
+      </Drawer>
+    );
+    // When closed, the wrapper around the dialog should be inert.
+    expect(document.querySelector("[inert]")).not.toBeNull();
+  });
 });

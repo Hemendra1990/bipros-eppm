@@ -69,7 +69,7 @@ export function Drawer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-slate transition-colors hover:bg-ivory hover:text-charcoal"
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-ivory hover:text-gold-deep"
           >
             <X className="h-4 w-4" />
           </button>
