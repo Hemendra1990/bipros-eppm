@@ -43,7 +43,7 @@ export function Drawer({
   if (typeof document === "undefined") return null;
 
   const node = (
-    <div>
+    <div inert={!open || undefined}>
       <div
         data-testid="drawer-backdrop"
         className={cn(
