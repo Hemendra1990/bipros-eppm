@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { Drawer } from "../Drawer";
 
@@ -45,6 +45,7 @@ describe("Drawer", () => {
     );
     const panelClosed = screen.getByRole("dialog");
     expect(panelClosed.className).toContain("translate-x-full");
+    expect(panelClosed.className).toContain("pointer-events-none");
   });
 
   it("calls onClose when the X close button is clicked", () => {
@@ -65,6 +66,7 @@ describe("Drawer", () => {
         <p>x</p>
       </Drawer>
     );
+    // Backdrop has no semantic role; data-testid is the agreed selector.
     fireEvent.click(screen.getByTestId("drawer-backdrop"));
     expect(onClose).not.toHaveBeenCalled();
   });
