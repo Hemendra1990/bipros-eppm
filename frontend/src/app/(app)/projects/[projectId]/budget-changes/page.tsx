@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { getErrorMessage } from "@/lib/utils/error";
 import { useAuth } from "@/lib/auth/useAuth";
+import { formatBudget, budgetUnit } from "@/lib/utils/format";
 
 const changeTypeConfig: Record<BudgetChangeType, { label: string; icon: typeof Plus; color: string }> = {
   ADDITION: { label: "Addition", icon: TrendingUp, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-300" },
@@ -29,11 +30,6 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   APPROVED: { label: "Approved", color: "text-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-300" },
   REJECTED: { label: "Rejected", color: "text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-300" },
 };
-
-function formatCrores(v: number | null | undefined): string {
-  if (v == null) return "\u2014";
-  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(v) + " cr";
-}
 
 function formatInstant(s: string | null | undefined): string {
   if (!s) return "\u2014";
@@ -55,6 +51,9 @@ export default function BudgetChangesPage() {
     fromWbsNodeId: null,
     toWbsNodeId: null,
   });
+
+  const [showInitForm, setShowInitForm] = useState(false);
+  const [initAmount, setInitAmount] = useState<string>("");
 
   const { data: budgetData } = useQuery({
     queryKey: ["project-budget", projectId],
@@ -93,6 +92,18 @@ export default function BudgetChangesPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const setInitMutation = useMutation({
+    mutationFn: (amount: number) => budgetApi.setInitialBudget(projectId, amount),
+    onSuccess: () => {
+      toast.success("Initial budget set");
+      queryClient.invalidateQueries({ queryKey: ["project-budget", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setShowInitForm(false);
+      setInitAmount("");
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
   const rejectMutation = useMutation({
     mutationFn: ({ changeId, reason }: { changeId: string; reason?: string }) =>
       budgetApi.rejectChange(projectId, changeId, reason),
@@ -105,6 +116,8 @@ export default function BudgetChangesPage() {
   });
 
   const budget = budgetData?.data;
+  const currency = budget?.budgetCurrency ?? "INR";
+  const unit = budgetUnit(currency);
   const changes = useMemo(() => changesData?.data ?? [], [changesData]);
   const wbsNodes = wbsBudgetData?.data?.nodes ?? [];
 
@@ -146,7 +159,7 @@ export default function BudgetChangesPage() {
       enableSorting: true,
       cell: (info) => {
         const row = info.row.original;
-        return <span className="font-mono font-medium">{formatCrores(row.amount)}</span>;
+        return <span className="font-mono font-medium">{formatBudget(row.amount, currency)}</span>;
       },
     },
     {
@@ -217,7 +230,7 @@ export default function BudgetChangesPage() {
     }
 
     return cols;
-  }, [isAdmin, approveMutation, rejectMutation]);
+  }, [isAdmin, approveMutation, rejectMutation, currency]);
 
   return (
     <div className="space-y-6">
@@ -233,29 +246,88 @@ export default function BudgetChangesPage() {
               <Plus className="w-4 h-4" />
               Request Change
             </button>
-          ) : undefined
+          ) : (
+            <button
+              onClick={() => setShowInitForm(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm"
+            >
+              <DollarSign className="w-4 h-4" />
+              Set Initial Budget
+            </button>
+          )
         }
       />
 
       {/* Budget Summary Cards */}
       {budget && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
             <div className="text-xs text-text-muted mb-1">Original Budget</div>
-            <div className="text-lg font-semibold">{formatCrores(budget.originalBudget)}</div>
+            <div className="text-lg font-semibold text-text-primary">{formatBudget(budget.originalBudget, currency)}</div>
           </div>
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
             <div className="text-xs text-text-muted mb-1">Current Budget</div>
-            <div className="text-lg font-semibold">{formatCrores(budget.currentBudget)}</div>
+            <div className="text-lg font-semibold text-text-primary">{formatBudget(budget.currentBudget, currency)}</div>
           </div>
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
             <div className="text-xs text-text-muted mb-1">Pending Changes</div>
-            <div className="text-lg font-semibold text-amber-600">{budget.pendingChangeCount}</div>
+            <div className="text-lg font-semibold text-amber-500">{budget.pendingChangeCount}</div>
           </div>
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
             <div className="text-xs text-text-muted mb-1">Approved Net</div>
-            <div className="text-lg font-semibold">
-              {formatCrores(budget.approvedAdditions - budget.approvedReductions)}
+            <div className="text-lg font-semibold text-text-primary">
+              {formatBudget(budget.approvedAdditions - budget.approvedReductions, currency)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Set Initial Budget Modal */}
+      {showInitForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-lg border border-border bg-surface p-6 shadow-2xl">
+            <div>
+              <h3 className="text-lg font-semibold text-text-primary">Set Initial Budget (BAC)</h3>
+              <p className="mt-1 text-xs text-text-muted">
+                The original Budget at Completion. This is set once and can only be modified later through approved budget change requests.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Amount ({unit.inputLabel})</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={initAmount}
+                onChange={(e) => setInitAmount(e.target.value)}
+                className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder={currency === "OMR" ? "e.g. 61.5" : "e.g. 250"}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setShowInitForm(false); setInitAmount(""); }}
+                className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover/50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const n = parseFloat(initAmount);
+                  if (!isFinite(n) || n <= 0) {
+                    toast.error(`Enter a positive amount in ${unit.inputLabel}`);
+                    return;
+                  }
+                  setInitMutation.mutate(n);
+                }}
+                disabled={setInitMutation.isPending || !initAmount}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+              >
+                {setInitMutation.isPending ? "Saving..." : "Set Budget"}
+              </button>
             </div>
           </div>
         </div>
@@ -263,16 +335,16 @@ export default function BudgetChangesPage() {
 
       {/* Request Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Request Budget Change</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-lg border border-border bg-surface p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-text-primary">Request Budget Change</h3>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Change Type</label>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Change Type</label>
               <select
                 value={form.changeType}
                 onChange={(e) => setForm({ ...form, changeType: e.target.value as BudgetChangeType })}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 <option value="ADDITION">Addition</option>
                 <option value="REDUCTION">Reduction</option>
@@ -282,11 +354,11 @@ export default function BudgetChangesPage() {
 
             {(form.changeType === "TRANSFER" || form.changeType === "REDUCTION") && (
               <div>
-                <label className="block text-sm font-medium mb-1">From WBS Node</label>
+                <label className="mb-1 block text-sm font-medium text-text-primary">From WBS Node</label>
                 <select
                   value={form.fromWbsNodeId ?? ""}
                   onChange={(e) => setForm({ ...form, fromWbsNodeId: e.target.value || null })}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 >
                   <option value="">Select WBS...</option>
                   {wbsNodes.map((n) => (
@@ -301,11 +373,11 @@ export default function BudgetChangesPage() {
 
             {(form.changeType === "TRANSFER" || form.changeType === "ADDITION") && (
               <div>
-                <label className="block text-sm font-medium mb-1">To WBS Node</label>
+                <label className="mb-1 block text-sm font-medium text-text-primary">To WBS Node</label>
                 <select
                   value={form.toWbsNodeId ?? ""}
                   onChange={(e) => setForm({ ...form, toWbsNodeId: e.target.value || null })}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 >
                   <option value="">Select WBS...</option>
                   {wbsNodes.map((n) => (
@@ -319,24 +391,24 @@ export default function BudgetChangesPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-1">Amount (crores)</label>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Amount ({unit.inputLabel})</label>
               <input
                 type="number"
                 min="0.01"
                 step="0.01"
                 value={form.amount || ""}
                 onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                placeholder="e.g. 500"
+                className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder={currency === "OMR" ? "e.g. 5" : "e.g. 50"}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Reason</label>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Reason</label>
               <textarea
                 value={form.reason}
                 onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 rows={3}
                 placeholder="Explain the reason for this budget change..."
               />
@@ -345,14 +417,14 @@ export default function BudgetChangesPage() {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-sm rounded-md border hover:bg-accent"
+                className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover/50"
               >
                 Cancel
               </button>
               <button
                 onClick={() => requestMutation.mutate(form)}
                 disabled={!form.amount || !form.reason}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
                 Submit
               </button>
@@ -364,6 +436,12 @@ export default function BudgetChangesPage() {
       {/* Changes Table */}
       {isLoading ? (
         <div className="text-center text-text-muted py-8">Loading...</div>
+      ) : budget?.originalBudget == null ? (
+        <EmptyState
+          icon={DollarSign}
+          title="No budget set yet"
+          description="Set the initial Budget at Completion (BAC) to start tracking budget changes and earned-value metrics."
+        />
       ) : changes.length === 0 ? (
         <EmptyState
           icon={DollarSign}

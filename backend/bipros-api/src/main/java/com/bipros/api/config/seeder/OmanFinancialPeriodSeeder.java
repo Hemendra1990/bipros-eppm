@@ -20,7 +20,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.UUID;
 
 @Slf4j
@@ -54,10 +53,9 @@ public class OmanFinancialPeriodSeeder implements CommandLineRunner {
         }
 
         log.info("[BNK-FINPERIOD] seeding financial periods for project '{}'", PROJECT_CODE);
-        Random rng = new Random(DETERMINISTIC_SEED);
 
         List<FinancialPeriod> periods = seedFinancialPeriods();
-        seedStorePeriodPerformances(projectId, periods, rng);
+        seedStorePeriodPerformances(projectId, periods);
 
         log.info("[BNK-FINPERIOD] financial period seeding completed");
     }
@@ -92,7 +90,7 @@ public class OmanFinancialPeriodSeeder implements CommandLineRunner {
         return periods;
     }
 
-    private void seedStorePeriodPerformances(UUID projectId, List<FinancialPeriod> periods, Random rng) {
+    private void seedStorePeriodPerformances(UUID projectId, List<FinancialPeriod> periods) {
         List<Activity> activities = activityRepository.findByProjectId(projectId);
         if (activities.isEmpty()) {
             log.warn("[BNK-FINPERIOD] no activities found — skipping store period performance");
@@ -114,10 +112,15 @@ public class OmanFinancialPeriodSeeder implements CommandLineRunner {
                     continue;
                 }
 
-                double baseLaborCost = 5000 + rng.nextInt(15000);
-                double baseMaterialCost = 8000 + rng.nextInt(20000);
-                double baseExpenseCost = 1000 + rng.nextInt(5000);
-                double baseNonlaborCost = 2000 + rng.nextInt(8000);
+                // Deterministic per-(activity, period) cost values from a stable hash —
+                // no RNG. Reruns produce identical numbers so EVM/cost reports are stable.
+                int actHash = Math.abs(activity.getId().hashCode());
+                int periodHash = Math.abs(period.getId().hashCode());
+                int seed = (actHash + periodHash * 17);
+                double baseLaborCost = 5000 + (seed % 15001);
+                double baseMaterialCost = 8000 + ((seed / 13) % 20001);
+                double baseExpenseCost = 1000 + ((seed / 7) % 5001);
+                double baseNonlaborCost = 2000 + ((seed / 5) % 8001);
 
                 double scale = 0.7 + (pi / 12.0) * 0.6;
 
@@ -129,9 +132,9 @@ public class OmanFinancialPeriodSeeder implements CommandLineRunner {
                 spp.setActualNonlaborCost(BigDecimal.valueOf(baseNonlaborCost * scale).setScale(2, RoundingMode.HALF_UP));
                 spp.setActualMaterialCost(BigDecimal.valueOf(baseMaterialCost * scale).setScale(2, RoundingMode.HALF_UP));
                 spp.setActualExpenseCost(BigDecimal.valueOf(baseExpenseCost * scale).setScale(2, RoundingMode.HALF_UP));
-                spp.setActualLaborUnits(round2(40 + rng.nextInt(80) * scale));
-                spp.setActualNonlaborUnits(round2(10 + rng.nextInt(30) * scale));
-                spp.setActualMaterialUnits(round2(20 + rng.nextInt(60) * scale));
+                spp.setActualLaborUnits(round2((40 + (seed % 81)) * scale));
+                spp.setActualNonlaborUnits(round2((10 + ((seed / 3) % 31)) * scale));
+                spp.setActualMaterialUnits(round2((20 + ((seed / 11) % 61)) * scale));
 
                 BigDecimal earnedValue = BigDecimal.valueOf((baseLaborCost + baseMaterialCost) * scale * 0.95)
                         .setScale(2, RoundingMode.HALF_UP);

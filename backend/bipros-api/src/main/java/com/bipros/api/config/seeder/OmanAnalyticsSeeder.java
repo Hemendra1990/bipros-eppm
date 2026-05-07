@@ -172,13 +172,15 @@ public class OmanAnalyticsSeeder implements CommandLineRunner {
             LocalDate periodEnd = LocalDate.of(2026, 1, 1).plusMonths(m).withDayOfMonth(
                 LocalDate.of(2026, 1, 1).plusMonths(m).lengthOfMonth());
 
-            double spendFactor = 0.6 + rng.nextDouble() * 0.8;
+            // Deterministic per-month factors — no RNG. Monte-Carlo cashflow buckets are
+            // direct cost projections; reseeds must produce identical numbers.
+            double spendFactor = 0.6 + ((m * 13) % 80) / 100.0;       // 0.60..1.39
             double monthBaseline = monthlyBaseline * spendFactor;
             cumulativeBaseline += monthBaseline;
-            cumulativeP10 += monthBaseline * (0.85 + rng.nextDouble() * 0.10);
-            cumulativeP50 += monthBaseline * (0.95 + rng.nextDouble() * 0.10);
-            cumulativeP80 += monthBaseline * (1.05 + rng.nextDouble() * 0.10);
-            cumulativeP90 += monthBaseline * (1.10 + rng.nextDouble() * 0.15);
+            cumulativeP10 += monthBaseline * (0.85 + ((m * 7) % 10) / 100.0);   // 0.85..0.94
+            cumulativeP50 += monthBaseline * (0.95 + ((m * 11) % 10) / 100.0);  // 0.95..1.04
+            cumulativeP80 += monthBaseline * (1.05 + ((m * 5) % 10) / 100.0);   // 1.05..1.14
+            cumulativeP90 += monthBaseline * (1.10 + ((m * 3) % 15) / 100.0);   // 1.10..1.24
 
             MonteCarloCashflowBucket bucket = MonteCarloCashflowBucket.builder()
                 .simulationId(simulationId)

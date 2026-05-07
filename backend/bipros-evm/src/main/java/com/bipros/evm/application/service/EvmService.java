@@ -22,6 +22,7 @@ import com.bipros.evm.domain.entity.EtcMethod;
 import com.bipros.evm.domain.entity.EvmTechnique;
 import com.bipros.evm.domain.repository.EvmCalculationRepository;
 import com.bipros.project.domain.model.WbsNode;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
@@ -49,6 +50,7 @@ public class EvmService {
     private final ResourceAssignmentRepository resourceAssignmentRepository;
     private final CostAccountRepository costAccountRepository;
     private final WbsNodeRepository wbsNodeRepository;
+    private final ProjectRepository projectRepository;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
     private final FormulaEngine formulaEngine;
@@ -85,6 +87,16 @@ public class EvmService {
             totalPv = totalPv.add(activityPv);
             totalEv = totalEv.add(activityEv);
             totalAc = totalAc.add(activityAc);
+        }
+
+        // Project-level BAC source of truth: Project.currentBudget (approved, change-controlled)
+        // when set. Activity rollup is the bottom-up forecast (still available via the
+        // CostAccountRollup endpoint for variance reporting).
+        BigDecimal projectBac = projectRepository.findById(projectId)
+                .map(p -> p.getCurrentBudget() != null ? p.getCurrentBudget() : p.getOriginalBudget())
+                .orElse(null);
+        if (projectBac != null && projectBac.signum() > 0) {
+            totalBac = projectBac;
         }
 
         var calculation = new EvmCalculation();

@@ -102,8 +102,11 @@ public class OmanRaBillSeeder implements CommandLineRunner {
                 status = RaBill.RaBillStatus.APPROVED;
             }
 
-            double claimedPct = Math.min(100.0, 5.0 + i * 7.5 + rng.nextDouble() * 3.0);
-            double aiPct = claimedPct - 1.0 - rng.nextDouble() * 3.0;
+            // Deterministic per-bill claimed/AI percentages — no RNG.
+            double claimPctOffset = (i % 6) / 2.0;        // 0.0..2.5
+            double aiPctOffset = ((i * 11) % 6) / 2.0;    // 0.0..2.5
+            double claimedPct = Math.min(100.0, 5.0 + i * 7.5 + claimPctOffset);
+            double aiPct = claimedPct - 1.0 - aiPctOffset;
             double variance = Math.abs(claimedPct - aiPct);
             SatelliteGate gate = variance <= 5.0 ? SatelliteGate.PASS
                     : (variance <= 10.0 ? SatelliteGate.HOLD_VARIANCE : SatelliteGate.RED_VARIANCE);
@@ -154,8 +157,10 @@ public class OmanRaBillSeeder implements CommandLineRunner {
         int itemCount = 3 + (billIndex % 3);
         for (int j = 0; j < itemCount; j++) {
             BoqItem boq = BOQ_ITEMS.get((billIndex + j) % BOQ_ITEMS.size());
-            double prevQty = billIndex > 0 ? (billIndex * 100.0 + rng.nextInt(50)) : 0.0;
-            double currentQty = 80.0 + rng.nextInt(60);
+            // Deterministic per-(bill, item) qty — no RNG.
+            int seed = billIndex * 47 + j * 13;
+            double prevQty = billIndex > 0 ? (billIndex * 100.0 + (seed % 50)) : 0.0;
+            double currentQty = 80.0 + ((seed * 7) % 60);
             double cumulativeQty = prevQty + currentQty;
             BigDecimal amount = boq.rate().multiply(BigDecimal.valueOf(currentQty))
                     .setScale(2, RoundingMode.HALF_UP);
@@ -176,7 +181,9 @@ public class OmanRaBillSeeder implements CommandLineRunner {
 
     private BigDecimal computeGrossAmount(int billIndex, BigDecimal totalContract, Random rng) {
         BigDecimal basePct = new BigDecimal("0.06");
-        double variation = 0.85 + rng.nextDouble() * 0.30;
+        // Deterministic variation factor 0.85..1.14 driven by bill index — no RNG. Bill
+        // gross amounts are critical and must reproduce.
+        double variation = 0.85 + ((billIndex * 17) % 30) / 100.0;
         BigDecimal amount = totalContract.multiply(basePct)
                 .multiply(BigDecimal.valueOf(variation))
                 .setScale(2, RoundingMode.HALF_UP);

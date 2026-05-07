@@ -31,3 +31,21 @@ export function getPriorityInfo(priority: number | null | undefined): { label: s
   if (p <= 80) return { label: "Low", color: "text-slate-400" };
   return { label: "Very Low", color: "text-slate-500" };
 }
+
+/**
+ * Project BAC is stored in the currency's "major scale" unit:
+ *   INR → crores (10^7),  OMR / others → millions.
+ * Returns the user-facing unit suffix and singular label for the input field.
+ */
+export function budgetUnit(currency: string | null | undefined): { suffix: string; inputLabel: string } {
+  const code = (currency ?? "INR").toUpperCase();
+  if (code === "INR") return { suffix: "cr", inputLabel: "crores" };
+  return { suffix: `M ${code}`, inputLabel: `millions ${code}` };
+}
+
+export function formatBudget(value: number | null | undefined, currency: string | null | undefined): string {
+  if (value == null) return "—";
+  const { suffix } = budgetUnit(currency);
+  const locale = (currency ?? "INR").toUpperCase() === "INR" ? "en-IN" : "en-US";
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value)} ${suffix}`;
+}

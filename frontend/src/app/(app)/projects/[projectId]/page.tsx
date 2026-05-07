@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
-import { formatDate, getPriorityInfo } from "@/lib/utils/format";
+import { formatDate, getPriorityInfo, formatBudget, budgetUnit } from "@/lib/utils/format";
 import { projectApi } from "@/lib/api/projectApi";
 import { projectCategoryApi } from "@/lib/api/projectCategoryApi";
 import { calendarApi } from "@/lib/api/calendarApi";
@@ -27,6 +27,7 @@ import { UdfSection } from "@/components/udf/UdfSection";
 import { costApi } from "@/lib/api/costApi";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
 import { projectResourceApi } from "@/lib/api/projectResourceApi";
+import { budgetApi } from "@/lib/api/budgetApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
@@ -615,6 +616,8 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         <DataDateCard project={project} />
       </div>
 
+      <BudgetCard projectId={projectId} />
+
       <ProjectDetailsSection project={project} projectId={projectId} />
 
       {/* KPI Mini-Dashboard */}
@@ -725,6 +728,146 @@ function DataDateCard({ project }: { project: ProjectResponse }) {
         </div>
       )}
     </div>
+  );
+}
+
+function BudgetCard({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
+  const [showInitForm, setShowInitForm] = useState(false);
+  const [initAmount, setInitAmount] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["project-budget", projectId],
+    queryFn: () => budgetApi.getBudgetSummary(projectId),
+  });
+
+  const setInitMutation = useMutation({
+    mutationFn: (amount: number) => budgetApi.setInitialBudget(projectId, amount),
+    onSuccess: () => {
+      toast.success("Initial budget set");
+      queryClient.invalidateQueries({ queryKey: ["project-budget", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setShowInitForm(false);
+      setInitAmount("");
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e, "Failed to set budget")),
+  });
+
+  const budget = data?.data;
+  const original = budget?.originalBudget ?? null;
+  const current = budget?.currentBudget ?? null;
+  const isSet = original != null;
+  const currency = budget?.budgetCurrency ?? "INR";
+  const unit = budgetUnit(currency);
+  const fmt = (v: number | null) => formatBudget(v, currency);
+
+  const submitInit = () => {
+    const n = parseFloat(initAmount);
+    if (!isFinite(n) || n <= 0) {
+      toast.error(`Enter a positive amount in ${unit.inputLabel}`);
+      return;
+    }
+    setInitMutation.mutate(n);
+  };
+
+  return (
+    <>
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-medium text-text-secondary">Budget at Completion (BAC)</h3>
+            {isLoading ? (
+              <div className="mt-2 h-6 w-32 animate-pulse rounded bg-surface-hover/50" />
+            ) : isSet ? (
+              <div className="mt-2 grid grid-cols-2 gap-6 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-text-muted">Original</p>
+                  <p className="mt-0.5 text-lg font-medium text-text-primary">{fmt(original)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Current</p>
+                  <p className="mt-0.5 text-lg font-medium text-text-primary">{fmt(current)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Approved Δ</p>
+                  <p className="mt-0.5 text-sm text-text-primary">
+                    +{fmt(budget?.approvedAdditions ?? 0)} / −{fmt(budget?.approvedReductions ?? 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Pending</p>
+                  <p className="mt-0.5 text-sm text-text-primary">
+                    {budget?.pendingChangeCount ?? 0} request{(budget?.pendingChangeCount ?? 0) === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-lg text-text-muted">Not set</p>
+            )}
+          </div>
+          {isSet ? (
+            <Link
+              href={`/projects/${projectId}/budget-changes`}
+              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Manage
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowInitForm(true)}
+              className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              Set Budget
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showInitForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-lg border border-border bg-surface p-6 shadow-2xl">
+            <div>
+              <h3 className="text-lg font-semibold text-text-primary">Set Initial Budget (BAC)</h3>
+              <p className="mt-1 text-xs text-text-muted">
+                The approved Budget at Completion. This is set once; later changes go through the budget-change-request workflow.
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Amount ({unit.inputLabel})</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={initAmount}
+                onChange={(e) => setInitAmount(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitInit(); }}
+                className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder={currency === "OMR" ? "e.g. 61.5" : "e.g. 250"}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowInitForm(false); setInitAmount(""); }}
+                className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover/50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitInit}
+                disabled={setInitMutation.isPending || !initAmount}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+              >
+                {setInitMutation.isPending ? "Saving..." : "Set Budget"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
