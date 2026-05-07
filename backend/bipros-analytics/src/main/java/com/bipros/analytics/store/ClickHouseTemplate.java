@@ -1,7 +1,7 @@
 package com.bipros.analytics.store;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -13,11 +13,17 @@ import java.util.Map;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ClickHouseTemplate {
 
     private final JdbcTemplate clickHouseJdbcTemplate;
     private final NamedParameterJdbcTemplate clickHouseNamedParameterJdbcTemplate;
+
+    public ClickHouseTemplate(
+            @Qualifier("clickHouseJdbcTemplate") JdbcTemplate clickHouseJdbcTemplate,
+            @Qualifier("clickHouseNamedParameterJdbcTemplate") NamedParameterJdbcTemplate clickHouseNamedParameterJdbcTemplate) {
+        this.clickHouseJdbcTemplate = clickHouseJdbcTemplate;
+        this.clickHouseNamedParameterJdbcTemplate = clickHouseNamedParameterJdbcTemplate;
+    }
 
     public <T> List<T> query(String sql, RowMapper<T> rowMapper) throws DataAccessException {
         log.debug("ClickHouse query: {}", sql);
