@@ -6,7 +6,14 @@ import { cn } from "@/lib/utils/cn";
 export interface RowGridColumn<R> {
   key: string;
   label: string;
-  width?: string;
+  /**
+   * Per-column minimum width in px. Drives both the &lt;th&gt; min-width and the table's overall
+   * min-width so cells don't squeeze inputs to the point of unreadability. The table scrolls
+   * horizontally inside its container when the sum exceeds the available drawer width.
+   */
+  minWidth?: number;
+  /** Optional flex-grow weight for "elastic" columns (e.g. Remarks). 0 = fixed at minWidth. */
+  grow?: number;
   align?: "left" | "right" | "center";
   render: (row: R, idx: number, update: (patch: Partial<R>) => void) => React.ReactNode;
 }
@@ -62,24 +69,38 @@ export function RowGrid<R>({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table
+            className="w-full text-sm"
+            style={{ minWidth: tableMinWidth(columns) }}
+          >
+            <colgroup>
+              {columns.map((c) => (
+                <col
+                  key={c.key}
+                  style={{
+                    minWidth: c.minWidth ? `${c.minWidth}px` : undefined,
+                    width: c.grow && c.grow > 0 ? "auto" : c.minWidth ? `${c.minWidth}px` : undefined,
+                  }}
+                />
+              ))}
+              <col style={{ width: "44px" }} />
+            </colgroup>
             <thead className="bg-ivory/60">
               <tr>
                 {columns.map((c) => (
                   <th
                     key={c.key}
                     className={cn(
-                      "px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate",
+                      "px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate whitespace-nowrap",
                       c.align === "right" && "text-right",
                       c.align === "center" && "text-center",
                       c.align !== "right" && c.align !== "center" && "text-left"
                     )}
-                    style={c.width ? { width: c.width } : undefined}
                   >
                     {c.label}
                   </th>
                 ))}
-                <th className="w-10" />
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -89,7 +110,7 @@ export function RowGrid<R>({
                     <td
                       key={c.key}
                       className={cn(
-                        "px-2 py-1.5",
+                        "px-3 py-2",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center"
                       )}
@@ -115,6 +136,11 @@ export function RowGrid<R>({
       )}
     </div>
   );
+}
+
+/** Sum of column min-widths + the trash-button column, so columns don't get squeezed. */
+function tableMinWidth<R>(columns: RowGridColumn<R>[]): number {
+  return columns.reduce((acc, c) => acc + (c.minWidth ?? 80), 0) + 44;
 }
 
 /** Inline cell editors used by the grids. */
@@ -144,7 +170,7 @@ export function CellInput({
       step={step}
       min={min}
       className={cn(
-        "w-full rounded border border-hairline bg-paper px-2 py-1 text-sm text-charcoal",
+        "w-full rounded border border-hairline bg-paper px-2.5 py-1.5 text-[0.95rem] text-charcoal",
         "focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40",
         type === "number" && "text-right tabular-nums",
         className
@@ -169,7 +195,7 @@ export function CellSelect({
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "w-full rounded border border-hairline bg-paper px-2 py-1 text-sm text-charcoal",
+        "w-full rounded border border-hairline bg-paper px-2.5 py-1.5 text-[0.95rem] text-charcoal",
         "focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40",
         className
       )}

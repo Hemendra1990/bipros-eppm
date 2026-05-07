@@ -84,7 +84,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "trade",
       label: "Trade",
-      width: "26%",
+      minWidth: 240,
       render: (r, i) => (
         <SearchableSelect
           options={options.map((o) => ({
@@ -103,7 +103,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "category",
       label: "Category",
-      width: "12%",
+      minWidth: 140,
       render: (r, _i, u) => (
         <CellSelect
           value={r.category}
@@ -115,7 +115,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "nos",
       label: "Nos",
-      width: "7%",
+      minWidth: 90,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -129,7 +129,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "workingHours",
       label: "Hours",
-      width: "9%",
+      minWidth: 100,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -144,7 +144,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "otHours",
       label: "OT",
-      width: "7%",
+      minWidth: 90,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -159,7 +159,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "rate",
       label: "Rate",
-      width: "10%",
+      minWidth: 110,
       align: "right",
       render: (r) => {
         const suffix = rateBasisSuffix(r.unitRateBasis);
@@ -174,13 +174,15 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "cost",
       label: "Cost",
-      width: "10%",
+      minWidth: 110,
       align: "right",
       render: (r) => <span className="tabular-nums">{fmtMoney(manpowerLineCost(r, r.unitRateBasis))}</span>,
     },
     {
       key: "remarks",
       label: "Remarks",
+      minWidth: 220,
+      grow: 1,
       render: (r, _i, u) => (
         <CellInput
           value={r.remarks ?? ""}

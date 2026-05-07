@@ -93,7 +93,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "equipmentType",
       label: "Equipment",
-      width: "20%",
+      minWidth: 220,
       render: (r, i) => (
         <SearchableSelect
           options={options.map((o) => ({
@@ -112,7 +112,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "fleetNo",
       label: "Fleet #",
-      width: "9%",
+      minWidth: 120,
       render: (r, _i, u) => (
         <CellInput
           value={r.fleetNo ?? ""}
@@ -124,7 +124,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "ownership",
       label: "Type",
-      width: "9%",
+      minWidth: 140,
       render: (r, _i, u) => (
         <CellSelect
           value={r.ownership}
@@ -136,7 +136,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "nos",
       label: "Nos",
-      width: "5%",
+      minWidth: 90,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -150,7 +150,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "workingHours",
       label: "Hrs",
-      width: "6%",
+      minWidth: 95,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -165,7 +165,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "idleHours",
       label: "Idle",
-      width: "6%",
+      minWidth: 95,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -180,7 +180,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "breakdownHours",
       label: "B/D",
-      width: "6%",
+      minWidth: 95,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -195,7 +195,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "fuelLitres",
       label: "Fuel (L)",
-      width: "7%",
+      minWidth: 105,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -210,21 +210,21 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "rate",
       label: "Rate",
-      width: "8%",
+      minWidth: 100,
       align: "right",
       render: (r) => <span className="tabular-nums text-slate">{fmtRate(r.unitRate)}</span>,
     },
     {
       key: "cost",
       label: "Cost",
-      width: "9%",
+      minWidth: 110,
       align: "right",
       render: (r) => <span className="tabular-nums">{fmtMoney(equipmentLineCost(r, "HOUR"))}</span>,
     },
     {
       key: "availabilityStatus",
       label: "Status",
-      width: "9%",
+      minWidth: 140,
       render: (r, _i, u) => (
         <CellSelect
           value={r.availabilityStatus}
@@ -238,6 +238,8 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
     {
       key: "operatorName",
       label: "Operator",
+      minWidth: 160,
+      grow: 1,
       render: (r, _i, u) => (
         <CellInput
           value={r.operatorName ?? ""}

@@ -48,6 +48,9 @@ export default function DprPage() {
     const opts: SelectOption[] = [];
     const byName = new Map<string, string>();
     const byId = new Map<string, string>();
+    // activityId → assigned supervisor (from Activity.responsibleResourceId snapshot). Used by
+    // the form to cross-filter the supervisor/activity pickers and auto-fill on activity pick.
+    const supervisorByActivityId = new Map<string, { id: string; name: string } | null>();
     const seen = new Set<string>();
     for (const a of activitiesData?.data?.content ?? []) {
       if (seen.has(a.id)) continue;
@@ -55,8 +58,14 @@ export default function DprPage() {
       opts.push({ value: a.id, label: a.name });
       if (!byName.has(a.name.toLowerCase())) byName.set(a.name.toLowerCase(), a.id);
       byId.set(a.id, a.name);
+      supervisorByActivityId.set(
+        a.id,
+        a.responsibleResourceId
+          ? { id: a.responsibleResourceId, name: a.responsibleResourceName ?? "" }
+          : null
+      );
     }
-    return { opts, byName, byId };
+    return { opts, byName, byId, supervisorByActivityId };
   }, [activitiesData]);
   const activityOptions = activityIndex.opts;
 
@@ -240,7 +249,7 @@ export default function DprPage() {
           open={showForm}
           onClose={closeForm}
           title={editing ? "Edit Activity" : "Add Activity"}
-          widthClass="max-w-5xl"
+          widthClass="max-w-7xl"
         >
           <DprActivityForm
             // Re-mount when switching between edit targets (or new vs. edit) so the form's
@@ -254,6 +263,7 @@ export default function DprPage() {
             activityOptions={activityOptions}
             activityNameById={activityIndex.byId}
             activityIdByName={activityIndex.byName}
+            supervisorByActivityId={activityIndex.supervisorByActivityId}
             boqOptions={boqOptions}
             onCancel={closeForm}
             onSave={handleSave}

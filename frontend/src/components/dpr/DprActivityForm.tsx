@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Briefcase, HardHat, Package, Save } from "lucide-react";
+import { useMemo, useState, type FormEvent } from "react";
+import { Briefcase, HardHat, Info, Package, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
@@ -39,6 +39,12 @@ interface Props {
   activityNameById: Map<string, string>;
   /** lowercased name → id, used for legacy DPRs whose server payload only carries activityName. */
   activityIdByName: Map<string, string>;
+  /**
+   * activityId → its assigned supervisor (from `Activity.responsibleResourceId`). Powers the
+   * cross-filter / auto-fill between the Supervisor and Activity pickers. `null` means the
+   * activity has no supervisor assigned yet.
+   */
+  supervisorByActivityId: Map<string, { id: string; name: string } | null>;
   boqOptions: SelectOption[];
   onCancel: () => void;
   onSave: (payload: DprBaseFields) => Promise<void>;
@@ -142,6 +148,7 @@ export function DprActivityForm({
   activityOptions,
   activityNameById,
   activityIdByName,
+  supervisorByActivityId,
   boqOptions,
   onCancel,
   onSave,
@@ -161,10 +168,67 @@ export function DprActivityForm({
 
   const patch = (delta: Partial<FormState>) => setState((s) => ({ ...s, ...delta }));
 
+  const supervisorPickerValue = state.supervisorResourceId || "";
+  const supervisorIsOther = supervisorPickerValue === SUPERVISOR_OTHER;
+
+  /**
+   * Activities owned by the currently selected supervisor (per `Activity.responsibleResourceId`).
+   * If the user hasn't picked a supervisor — or picked the free-text "Other" — show the full list.
+   * If the picked supervisor has zero assigned activities, fall back to showing all activities
+   * (the user explicitly asked for "do nothing" in that case; surfacing all is the closest
+   * reasonable behavior so the form stays usable).
+   */
+  const filteredActivityOptions = useMemo(() => {
+    if (!state.supervisorResourceId || supervisorIsOther) return activityOptions;
+    const filtered = activityOptions.filter((a) => {
+      const sup = supervisorByActivityId.get(a.value);
+      return sup?.id === state.supervisorResourceId;
+    });
+    return filtered.length === 0 ? activityOptions : filtered;
+  }, [activityOptions, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+
+  const supervisorHasNoActivities = useMemo(() => {
+    if (!state.supervisorResourceId || supervisorIsOther) return false;
+    return !activityOptions.some(
+      (a) => supervisorByActivityId.get(a.value)?.id === state.supervisorResourceId
+    );
+  }, [activityOptions, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+
+  /** Inline mismatch when the picked supervisor isn't the activity's owner. */
+  const activitySupervisorMismatch = useMemo(() => {
+    if (!state.activityId || !state.supervisorResourceId || supervisorIsOther) return null;
+    const sup = supervisorByActivityId.get(state.activityId);
+    if (!sup || sup.id === state.supervisorResourceId) return null;
+    return sup.name || "another supervisor";
+  }, [state.activityId, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+
+  /** Tab counters reflect rows that will actually be saved (FK picker filled). */
+  const manpowerFilledCount = useMemo(
+    () => (state.manpower ?? []).filter((r) => !!r.resourceAssignmentId).length,
+    [state.manpower]
+  );
+  const equipmentFilledCount = useMemo(
+    () => (state.equipment ?? []).filter((r) => !!r.resourceAssignmentId).length,
+    [state.equipment]
+  );
+  const materialsFilledCount = useMemo(
+    () => (state.materials ?? []).filter((r) => !!r.resourceAssignmentId).length,
+    [state.materials]
+  );
+
+  const supervisorAutoFilled = useMemo(() => {
+    if (!state.activityId || !state.supervisorResourceId || supervisorIsOther) return false;
+    const sup = supervisorByActivityId.get(state.activityId);
+    return sup?.id === state.supervisorResourceId;
+  }, [state.activityId, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+
   /**
    * Activity dropdown change: when rows already exist for the previous activity, prompt to clear
    * them — they reference assignments scoped to the old activity and would fail server validation
-   * after a switch. Cancelling the prompt reverts the picker.
+   * after a switch. Cancelling the prompt reverts the picker. When the new activity carries an
+   * assigned supervisor and the form's supervisor is empty (or "Other"), auto-fill the supervisor
+   * — saves a click and surfaces the activity→supervisor relationship that already exists in the
+   * domain model.
    */
   const handleActivityChange = (newActivityId: string) => {
     const existingRows =
@@ -179,17 +243,27 @@ export function DprActivityForm({
       if (!ok) return;
     }
     const name = activityNameById.get(newActivityId) ?? "";
-    patch({
+    const delta: Partial<FormState> = {
       activityId: newActivityId || null,
       activityName: name,
       manpower: [],
       equipment: [],
       materials: [],
-    });
+    };
+    const sup = newActivityId ? supervisorByActivityId.get(newActivityId) : null;
+    const supervisorEmpty = !state.supervisorResourceId || supervisorIsOther;
+    if (sup && supervisorEmpty) {
+      // Verify the supervisor actually exists in the eligible list before auto-filling — if the
+      // activity's snapshot points at someone no longer eligible (e.g. role changed), fall back
+      // to leaving the supervisor untouched rather than silently picking an invalid value.
+      const match = supervisorOptions.find((s) => s.value === sup.id);
+      if (match) {
+        delta.supervisorResourceId = sup.id;
+        delta.supervisorName = match.label.split(" (")[0];
+      }
+    }
+    patch(delta);
   };
-
-  const supervisorPickerValue = state.supervisorResourceId || "";
-  const supervisorIsOther = supervisorPickerValue === SUPERVISOR_OTHER;
 
   const handleSupervisorChange = (value: string) => {
     if (value === SUPERVISOR_OTHER) {
@@ -228,6 +302,13 @@ export function DprActivityForm({
         ? state.supervisorResourceId
         : null;
 
+    // Drop skeleton rows where the user opened the tab but never picked a resource. The backend
+    // rejects them with `@NotNull resourceAssignmentId`. Partially-filled rows (FK picked, some
+    // numeric fields blank) are kept so backend validation can give a clear error.
+    const manpower = (state.manpower ?? []).filter((r) => !!r.resourceAssignmentId);
+    const equipment = (state.equipment ?? []).filter((r) => !!r.resourceAssignmentId);
+    const materials = (state.materials ?? []).filter((r) => !!r.resourceAssignmentId);
+
     const payload: DprBaseFields = {
       reportDate: state.reportDate,
       supervisorResourceId,
@@ -252,9 +333,9 @@ export function DprActivityForm({
       delayReason: state.delayReason || null,
       safetyObservation: state.safetyObservation || null,
       safetyIncidentType: state.safetyIncidentType,
-      manpower: state.manpower ?? [],
-      equipment: state.equipment ?? [],
-      materials: state.materials ?? [],
+      manpower,
+      equipment,
+      materials,
     };
 
     setSubmitting(true);
@@ -279,8 +360,57 @@ export function DprActivityForm({
         )}
       </div>
 
-        {/* Header */}
-        <div className="grid gap-4 px-5 py-4 md:grid-cols-3">
+        {/* Anchoring row: Supervisor + Activity drive everything below, so they lead. */}
+        <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
+          <Field label="Supervisor">
+            <SearchableSelect
+              options={[...supervisorOptions, { value: SUPERVISOR_OTHER, label: "Other (free-text)" }]}
+              value={supervisorPickerValue}
+              onChange={handleSupervisorChange}
+              placeholder="Search supervisor…"
+            />
+            {supervisorIsOther && (
+              <input
+                type="text"
+                value={state.supervisorName}
+                onChange={(e) => patch({ supervisorName: e.target.value })}
+                placeholder="Supervisor name"
+                className={`mt-2 ${inputCls}`}
+                required
+              />
+            )}
+            {supervisorHasNoActivities && (
+              <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
+                <Info className="h-3 w-3" />
+                No activities assigned to this supervisor — showing all.
+              </p>
+            )}
+          </Field>
+          <Field label="Activity name">
+            <SearchableSelect
+              options={filteredActivityOptions}
+              value={state.activityId ?? ""}
+              onChange={handleActivityChange}
+              placeholder="Search activity…"
+              selectedLabel={state.activityName || undefined}
+            />
+            {supervisorAutoFilled && (
+              <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
+                <Info className="h-3 w-3" />
+                Supervisor auto-filled from this activity.
+              </p>
+            )}
+            {activitySupervisorMismatch && (
+              <p className="mt-1 inline-flex items-center gap-1 text-xs text-burgundy">
+                <Info className="h-3 w-3" />
+                Activity is supervised by {activitySupervisorMismatch}, not the selected supervisor.
+              </p>
+            )}
+          </Field>
+        </div>
+
+        {/* Header: timing + state + logistics */}
+        <div className="grid gap-4 border-t border-hairline px-5 py-4 md:grid-cols-3">
           <Field label="Date">
             <input
               type="date"
@@ -318,24 +448,6 @@ export function DprActivityForm({
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Supervisor" className="md:col-span-2">
-            <SearchableSelect
-              options={[...supervisorOptions, { value: SUPERVISOR_OTHER, label: "Other (free-text)" }]}
-              value={supervisorPickerValue}
-              onChange={handleSupervisorChange}
-              placeholder="Search supervisor…"
-            />
-            {supervisorIsOther && (
-              <input
-                type="text"
-                value={state.supervisorName}
-                onChange={(e) => patch({ supervisorName: e.target.value })}
-                placeholder="Supervisor name"
-                className={`mt-2 ${inputCls}`}
-                required
-              />
-            )}
           </Field>
           <Field label="Contractor">
             <input
@@ -378,22 +490,13 @@ export function DprActivityForm({
           </Field>
         </div>
 
-        {/* Activity */}
+        {/* Activity details */}
         <div className="border-t border-hairline px-5 py-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-charcoal">
             <Briefcase className="h-4 w-4 text-gold-deep" />
-            Activity
+            Activity details
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Activity name" className="md:col-span-2">
-              <SearchableSelect
-                options={activityOptions}
-                value={state.activityId ?? ""}
-                onChange={handleActivityChange}
-                placeholder="Search activity…"
-                selectedLabel={state.activityName || undefined}
-              />
-            </Field>
             <Field label="BOQ item">
               <SearchableSelect
                 options={boqOptions}
@@ -488,13 +591,13 @@ export function DprActivityForm({
         <div className="border-t border-hairline">
           <div className="flex gap-1 border-b border-hairline px-5 pt-3">
             <TabButton active={tab === "manpower"} onClick={() => setTab("manpower")}>
-              <HardHat className="h-4 w-4" /> Manpower ({state.manpower?.length ?? 0})
+              <HardHat className="h-4 w-4" /> Manpower ({manpowerFilledCount})
             </TabButton>
             <TabButton active={tab === "equipment"} onClick={() => setTab("equipment")}>
-              <Briefcase className="h-4 w-4" /> Equipment ({state.equipment?.length ?? 0})
+              <Briefcase className="h-4 w-4" /> Equipment ({equipmentFilledCount})
             </TabButton>
             <TabButton active={tab === "material"} onClick={() => setTab("material")}>
-              <Package className="h-4 w-4" /> Material ({state.materials?.length ?? 0})
+              <Package className="h-4 w-4" /> Material ({materialsFilledCount})
             </TabButton>
           </div>
           <div className="px-5 py-4">

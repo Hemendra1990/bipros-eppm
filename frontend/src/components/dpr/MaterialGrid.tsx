@@ -73,7 +73,7 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "materialName",
       label: "Material",
-      width: "26%",
+      minWidth: 240,
       render: (r, i) => (
         <SearchableSelect
           options={options.map((o) => ({
@@ -92,7 +92,7 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "quantity",
       label: "Qty",
-      width: "10%",
+      minWidth: 110,
       align: "right",
       render: (r, _i, u) => (
         <CellInput
@@ -107,27 +107,27 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "unit",
       label: "Unit",
-      width: "8%",
+      minWidth: 80,
       render: (r) => <span className="text-slate">{r.unit ?? "—"}</span>,
     },
     {
       key: "rate",
       label: "Rate",
-      width: "10%",
+      minWidth: 110,
       align: "right",
       render: (r) => <span className="tabular-nums text-slate">{fmtRate(r.unitRate)}</span>,
     },
     {
       key: "cost",
       label: "Cost",
-      width: "10%",
+      minWidth: 110,
       align: "right",
       render: (r) => <span className="tabular-nums">{fmtMoney(materialLineCost(r))}</span>,
     },
     {
       key: "source",
       label: "Source",
-      width: "12%",
+      minWidth: 150,
       render: (r, _i, u) => (
         <CellInput
           value={r.source ?? ""}
@@ -139,7 +139,7 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "vendorName",
       label: "Vendor",
-      width: "12%",
+      minWidth: 150,
       render: (r, _i, u) => (
         <CellInput
           value={r.vendorName ?? ""}
@@ -150,7 +150,7 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "batchNo",
       label: "Batch #",
-      width: "8%",
+      minWidth: 120,
       render: (r, _i, u) => (
         <CellInput
           value={r.batchNo ?? ""}
@@ -161,6 +161,8 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
     {
       key: "remarks",
       label: "Remarks",
+      minWidth: 200,
+      grow: 1,
       render: (r, _i, u) => (
         <CellInput
           value={r.remarks ?? ""}
