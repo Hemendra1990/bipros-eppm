@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Briefcase, HardHat, Info, Package, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
+import { dprApi, type DprVoicePatch } from "@/lib/api/dprApi";
 import type {
   DailyProgressReportResponse,
   DprApprovalStatus,
+  DprAttachment,
   DprBaseFields,
   DprEquipmentRow,
   DprManpowerRow,
@@ -20,6 +22,8 @@ import { EquipmentGrid } from "./EquipmentGrid";
 import { MaterialGrid } from "./MaterialGrid";
 import { SafetyDelaySection } from "./SafetyDelaySection";
 import { DprTotalsBar } from "./DprTotalsBar";
+import { DprPhotosSection, type PendingPhoto } from "./DprPhotosSection";
+import { DprVoiceAssistant } from "./DprVoiceAssistant";
 
 type Tab = "manpower" | "equipment" | "material";
 
@@ -47,7 +51,12 @@ interface Props {
   supervisorByActivityId: Map<string, { id: string; name: string } | null>;
   boqOptions: SelectOption[];
   onCancel: () => void;
-  onSave: (payload: DprBaseFields) => Promise<void>;
+  /**
+   * Saves the DPR and returns the persisted record so the form can chain photo uploads against
+   * the freshly-minted id. The legacy {@code Promise<void>} contract is still acceptable: when no
+   * record is returned, photos are simply skipped (with an inline notice for the user).
+   */
+  onSave: (payload: DprBaseFields) => Promise<DailyProgressReportResponse | void>;
 }
 
 const todayIso = () => new Date().toISOString().split("T")[0];
@@ -165,6 +174,111 @@ export function DprActivityForm({
   const [tab, setTab] = useState<Tab>("manpower");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [photoUploadStatus, setPhotoUploadStatus] = useState<string | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [existingPhotos, setExistingPhotos] = useState<DprAttachment[]>(
+    () => editing?.attachments ?? []
+  );
+
+  // Voice fill needs to read fresh form state from inside async callbacks. Closures captured at
+  // render time would go stale across recordings, so we mirror state into a ref instead.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const getVoiceState = useCallback(() => {
+    const s = stateRef.current;
+    return {
+      reportDate: s.reportDate,
+      supervisorResourceId:
+        s.supervisorResourceId === SUPERVISOR_OTHER ? null : s.supervisorResourceId,
+      supervisorName: s.supervisorName,
+      activityId: s.activityId,
+      activityName: s.activityName,
+      contractorName: s.contractorName,
+      weatherCondition: s.weatherCondition,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      shift: s.shift,
+      side: s.side,
+      landmark: s.landmark,
+      chainageFromM: s.chainageFromM,
+      chainageToM: s.chainageToM,
+      boqItemNo: s.boqItemNo,
+      unit: s.unit,
+      qtyExecuted: s.qtyExecuted,
+      remarks: s.remarks,
+      delayReason: s.delayReason,
+      safetyObservation: s.safetyObservation,
+      safetyIncidentType: s.safetyIncidentType,
+      manpower: s.manpower ?? [],
+      equipment: s.equipment ?? [],
+      materials: s.materials ?? [],
+    };
+  }, []);
+
+  /**
+   * Merge a backend-returned patch into form state. Non-array fields override only when the patch
+   * carries a non-null value. Row arrays (manpower/equipment/material) APPEND — the LLM is told
+   * to never re-emit rows the user already typed, so we trust it on append semantics.
+   */
+  const applyVoicePatch = useCallback((patch: DprVoicePatch) => {
+    setState((current) => {
+      const next: FormState = { ...current };
+      const setIfPresent = <K extends keyof FormState>(key: K, value: FormState[K] | null | undefined) => {
+        if (value !== undefined && value !== null) next[key] = value as FormState[K];
+      };
+      setIfPresent("reportDate", patch.reportDate);
+      setIfPresent("supervisorResourceId", patch.supervisorResourceId);
+      setIfPresent("supervisorName", patch.supervisorName);
+      setIfPresent("activityId", patch.activityId);
+      setIfPresent("activityName", patch.activityName);
+      setIfPresent("contractorName", patch.contractorName);
+      setIfPresent("weatherCondition", patch.weatherCondition);
+      setIfPresent("startTime", patch.startTime);
+      setIfPresent("endTime", patch.endTime);
+      setIfPresent("shift", patch.shift);
+      setIfPresent("approvalStatus", patch.approvalStatus);
+      setIfPresent("side", patch.side);
+      setIfPresent("landmark", patch.landmark);
+      setIfPresent("boqItemNo", patch.boqItemNo);
+      setIfPresent("unit", patch.unit);
+      setIfPresent("qtyExecuted", patch.qtyExecuted);
+      setIfPresent("remarks", patch.remarks);
+      setIfPresent("delayReason", patch.delayReason);
+      setIfPresent("safetyObservation", patch.safetyObservation);
+      setIfPresent("safetyIncidentType", patch.safetyIncidentType);
+      // Chainage: when the numeric updates, refresh the raw string so the input shows the same.
+      if (patch.chainageFromM !== undefined && patch.chainageFromM !== null) {
+        next.chainageFromM = patch.chainageFromM;
+        next.chainageFromRaw = chainageLabel(patch.chainageFromM);
+      }
+      if (patch.chainageToM !== undefined && patch.chainageToM !== null) {
+        next.chainageToM = patch.chainageToM;
+        next.chainageToRaw = chainageLabel(patch.chainageToM);
+      }
+      if (Array.isArray(patch.manpower) && patch.manpower.length > 0) {
+        next.manpower = [
+          ...(current.manpower ?? []),
+          ...(patch.manpower as unknown as DprManpowerRow[]),
+        ];
+      }
+      if (Array.isArray(patch.equipment) && patch.equipment.length > 0) {
+        next.equipment = [
+          ...(current.equipment ?? []),
+          ...(patch.equipment as unknown as DprEquipmentRow[]),
+        ];
+      }
+      if (Array.isArray(patch.materials) && patch.materials.length > 0) {
+        next.materials = [
+          ...(current.materials ?? []),
+          ...(patch.materials as unknown as DprMaterialRow[]),
+        ];
+      }
+      return next;
+    });
+  }, []);
 
   const patch = (delta: Partial<FormState>) => setState((s) => ({ ...s, ...delta }));
 
@@ -339,8 +453,44 @@ export function DprActivityForm({
     };
 
     setSubmitting(true);
+    setPhotoUploadStatus(null);
     try {
-      await onSave(payload);
+      const saved = await onSave(payload);
+      // Two-step upload: DPR is now persisted (either freshly-created or updated). If the user
+      // queued any photos in the drawer, ship them against the saved id. The drawer is closed by
+      // calling onCancel() — only after the upload step so the form stays mounted in the meantime.
+      let uploadFailed = false;
+      if (pendingPhotos.length > 0) {
+        const dprId = saved?.id ?? editing?.id ?? null;
+        if (!dprId) {
+          setPhotoUploadStatus(
+            "DPR saved, but the server did not return an id — photos were not uploaded."
+          );
+          uploadFailed = true;
+        } else {
+          setPhotoUploadStatus(`Uploading ${pendingPhotos.length} photo(s)…`);
+          try {
+            await dprApi.uploadPhotos(
+              projectId,
+              dprId,
+              pendingPhotos.map((p) => p.file),
+              pendingPhotos.map((p) => p.caption || null)
+            );
+            pendingPhotos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+            setPendingPhotos([]);
+            setPhotoUploadStatus(null);
+          } catch (uploadErr: unknown) {
+            const msg = uploadErr instanceof Error ? uploadErr.message : "photo upload failed";
+            setPhotoUploadStatus(`DPR saved, but photo upload failed: ${msg}. You can retry.`);
+            uploadFailed = true;
+          }
+        }
+      }
+      // Keep the drawer open if the photo upload failed so the user can retry without re-typing
+      // the row. Otherwise close — the parent already invalidated the list query inside onSave.
+      if (!uploadFailed) {
+        onCancel();
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save DPR.";
       setError(msg);
@@ -358,6 +508,14 @@ export function DprActivityForm({
         {state.shift && (
           <Badge variant="neutral">{state.shift === "DAY" ? "Day shift" : "Night shift"}</Badge>
         )}
+        <div className="ml-auto">
+          <DprVoiceAssistant
+            projectId={projectId}
+            dprId={editing?.id ?? null}
+            getState={getVoiceState}
+            applyPatch={applyVoicePatch}
+          />
+        </div>
       </div>
 
         {/* Anchoring row: Supervisor + Activity drive everything below, so they lead. */}
@@ -639,6 +797,21 @@ export function DprActivityForm({
             safetyIncidentType={state.safetyIncidentType}
             onChange={patch}
           />
+        </div>
+
+        {/* Photos */}
+        <div className="border-t border-hairline px-5 py-4">
+          <DprPhotosSection
+            projectId={projectId}
+            dprId={editing?.id ?? null}
+            pending={pendingPhotos}
+            existing={existingPhotos}
+            onPendingChange={setPendingPhotos}
+            onExistingChange={setExistingPhotos}
+          />
+          {photoUploadStatus && (
+            <div className="mt-2 text-xs text-slate">{photoUploadStatus}</div>
+          )}
         </div>
 
       {/* Sticky footer: totals + save */}

@@ -115,6 +115,23 @@ export interface DprBaseFields {
   materials?: DprMaterialRow[];
 }
 
+/**
+ * Photo attached to a DPR row. Mirrors the backend {@code DprAttachmentResponse} record. The
+ * binary itself is fetched from {@code GET /v1/projects/{projectId}/dpr/{dprId}/photos/{id}},
+ * which is JWT-protected — see {@code dprApi.fetchPhotoBlobUrl} for the auth-aware blob loader
+ * used to feed {@code <img src>}.
+ */
+export interface DprAttachment {
+  id: string;
+  dprId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  caption: string | null;
+  capturedAt: string | null;
+  createdAt: string;
+}
+
 export interface DailyProgressReportResponse extends DprBaseFields {
   id: string;
   projectId: string;
@@ -122,6 +139,7 @@ export interface DailyProgressReportResponse extends DprBaseFields {
   manpower: DprManpowerRow[];
   equipment: DprEquipmentRow[];
   materials: DprMaterialRow[];
+  attachments?: DprAttachment[];
   /** Server-side warnings (e.g. rate-missing:trade-name, assignment-not-found:uuid). */
   warnings?: string[];
 }

@@ -62,6 +62,8 @@ class DailyProgressReportServiceChildrenTest {
   @Mock private DprManpowerRepository manpowerRepository;
   @Mock private DprEquipmentRepository equipmentRepository;
   @Mock private DprMaterialRepository materialRepository;
+  @Mock private com.bipros.project.domain.repository.DprAttachmentRepository attachmentRepository;
+  @Mock private com.bipros.project.infrastructure.storage.DprAttachmentStorageService attachmentStorage;
   @Mock private ProjectRepository projectRepository;
   @Mock private DailyActivityResourceOutputService ledgerService;
   @Mock private AuditService auditService;
@@ -80,7 +82,10 @@ class DailyProgressReportServiceChildrenTest {
   void setUp() {
     service = new DailyProgressReportService(
         dprRepository, manpowerRepository, equipmentRepository, materialRepository,
+        attachmentRepository, attachmentStorage,
         projectRepository, ledgerService, auditService, eventPublisher);
+    lenient().when(attachmentRepository.findByDprIdOrderByCreatedAtAsc(any())).thenReturn(java.util.List.of());
+    lenient().when(attachmentRepository.findByDprIdIn(any())).thenReturn(java.util.List.of());
     lenient().when(projectRepository.existsById(projectId)).thenReturn(true);
     lenient().when(dprRepository.sumQtyExecutedThroughDate(any(), any(), any()))
         .thenReturn(BigDecimal.ZERO);

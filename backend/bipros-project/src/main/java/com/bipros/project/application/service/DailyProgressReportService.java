@@ -7,16 +7,19 @@ import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateDailyProgressReportRequest;
 import com.bipros.project.application.dto.DailyProgressReportResponse;
+import com.bipros.project.application.dto.DprAttachmentResponse;
 import com.bipros.project.application.dto.DprEquipmentRow;
 import com.bipros.project.application.dto.DprManpowerRow;
 import com.bipros.project.application.dto.DprMaterialRow;
 import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
 import com.bipros.project.application.util.DprCostFormulas;
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprAttachment;
 import com.bipros.project.domain.model.DprEquipment;
 import com.bipros.project.domain.model.DprManpower;
 import com.bipros.project.domain.model.DprMaterial;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprAttachmentRepository;
 import com.bipros.project.domain.repository.DprEquipmentRepository;
 import com.bipros.project.domain.repository.DprManpowerRepository;
 import com.bipros.project.domain.repository.DprMaterialRepository;
@@ -68,6 +71,8 @@ public class DailyProgressReportService {
   private final DprManpowerRepository manpowerRepository;
   private final DprEquipmentRepository equipmentRepository;
   private final DprMaterialRepository materialRepository;
+  private final DprAttachmentRepository attachmentRepository;
+  private final com.bipros.project.infrastructure.storage.DprAttachmentStorageService attachmentStorage;
   private final ProjectRepository projectRepository;
   private final DailyActivityResourceOutputService ledgerService;
   private final AuditService auditService;
@@ -130,6 +135,7 @@ public class DailyProgressReportService {
         savedManpower.stream().map(DprManpowerRow::from).toList(),
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
+        List.of(),
         warnings);
 
     auditService.logCreate("DailyProgressReport", saved.getId(), response);
@@ -196,11 +202,14 @@ public class DailyProgressReportService {
     reconcileLedger(saved, savedManpower, savedEquipment, savedMaterial);
 
     BigDecimal cumulative = computeCumulative(saved.getProjectId(), saved.getActivityName(), saved.getReportDate());
+    List<DprAttachmentResponse> attachments = attachmentRepository.findByDprIdOrderByCreatedAtAsc(saved.getId())
+        .stream().map(DprAttachmentResponse::from).toList();
     DailyProgressReportResponse after = DailyProgressReportResponse.from(
         saved, cumulative,
         savedManpower.stream().map(DprManpowerRow::from).toList(),
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
+        attachments,
         warnings);
 
     auditService.logUpdate("DailyProgressReport", saved.getId(), "row", before, after);
@@ -231,7 +240,8 @@ public class DailyProgressReportService {
         dpr, cumulative,
         manpowerRepository.findByDprIdOrderByTradeAsc(id).stream().map(DprManpowerRow::from).toList(),
         equipmentRepository.findByDprIdOrderByEquipmentTypeAsc(id).stream().map(DprEquipmentRow::from).toList(),
-        materialRepository.findByDprIdOrderByMaterialNameAsc(id).stream().map(DprMaterialRow::from).toList()
+        materialRepository.findByDprIdOrderByMaterialNameAsc(id).stream().map(DprMaterialRow::from).toList(),
+        attachmentRepository.findByDprIdOrderByCreatedAtAsc(id).stream().map(DprAttachmentResponse::from).toList()
     );
   }
 
@@ -250,6 +260,12 @@ public class DailyProgressReportService {
     manpowerRepository.deleteByDprId(dprId);
     equipmentRepository.deleteByDprId(dprId);
     materialRepository.deleteByDprId(dprId);
+    // Photos: collect paths before the DB rows are removed, then drop binaries best-effort.
+    List<DprAttachment> attachments = attachmentRepository.findByDprIdOrderByCreatedAtAsc(dprId);
+    attachmentRepository.deleteByDprId(dprId);
+    for (DprAttachment a : attachments) {
+      attachmentStorage.deleteQuietly(a.getStoragePath());
+    }
     dprRepository.delete(dpr);
     auditService.logDelete("DailyProgressReport", id);
 
@@ -284,6 +300,9 @@ public class DailyProgressReportService {
     Map<UUID, List<DprMaterialRow>> materialByDpr = materialRepository.findByDprIdIn(ids).stream()
         .collect(Collectors.groupingBy(DprMaterial::getDprId,
             Collectors.mapping(DprMaterialRow::from, Collectors.toList())));
+    Map<UUID, List<DprAttachmentResponse>> attachmentsByDpr = attachmentRepository.findByDprIdIn(ids).stream()
+        .collect(Collectors.groupingBy(DprAttachment::getDprId,
+            Collectors.mapping(DprAttachmentResponse::from, Collectors.toList())));
 
     Map<String, BigDecimal> running = new HashMap<>();
     List<DailyProgressReportResponse> out = new ArrayList<>(rows.size());
@@ -301,7 +320,8 @@ public class DailyProgressReportService {
           out.add(DailyProgressReportResponse.from(r, cumulative,
               manpowerByDpr.getOrDefault(r.getId(), List.of()),
               equipmentByDpr.getOrDefault(r.getId(), List.of()),
-              materialByDpr.getOrDefault(r.getId(), List.of())));
+              materialByDpr.getOrDefault(r.getId(), List.of()),
+              attachmentsByDpr.getOrDefault(r.getId(), List.of())));
         });
     return out;
   }

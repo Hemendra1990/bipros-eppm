@@ -44,30 +44,31 @@ public record DailyProgressReportResponse(
     List<DprManpowerRow> manpower,
     List<DprEquipmentRow> equipment,
     List<DprMaterialRow> materials,
+    List<DprAttachmentResponse> attachments,
     List<String> warnings
 ) {
   /**
-   * Convenience constructor for the legacy call sites (audit logging) that don't have a
-   * computed cumulative or child rows on hand. Sets cumulativeQty to the row's qtyExecuted as
-   * a placeholder; the list endpoint always computes the real cumulative via the service. Child
-   * collections default to {@link List#of()}.
+   * Convenience constructor for legacy call sites (audit logging) that don't have computed
+   * cumulative, child rows, or attachments on hand. Sets cumulativeQty to the row's qtyExecuted
+   * as a placeholder; the list endpoint always computes the real cumulative via the service.
    */
   public static DailyProgressReportResponse from(DailyProgressReport r) {
-    return from(r, r.getQtyExecuted(), List.of(), List.of(), List.of(), List.of());
+    return from(r, r.getQtyExecuted(), List.of(), List.of(), List.of(), List.of(), List.of());
   }
 
   public static DailyProgressReportResponse from(DailyProgressReport r, BigDecimal cumulativeQty) {
-    return from(r, cumulativeQty, List.of(), List.of(), List.of(), List.of());
+    return from(r, cumulativeQty, List.of(), List.of(), List.of(), List.of(), List.of());
   }
 
-  /** 5-arg overload — read paths that don't surface warnings. */
+  /** Read-path overload — children + attachments, no warnings. */
   public static DailyProgressReportResponse from(
       DailyProgressReport r,
       BigDecimal cumulativeQty,
       List<DprManpowerRow> manpower,
       List<DprEquipmentRow> equipment,
-      List<DprMaterialRow> materials) {
-    return from(r, cumulativeQty, manpower, equipment, materials, List.of());
+      List<DprMaterialRow> materials,
+      List<DprAttachmentResponse> attachments) {
+    return from(r, cumulativeQty, manpower, equipment, materials, attachments, List.of());
   }
 
   public static DailyProgressReportResponse from(
@@ -76,6 +77,7 @@ public record DailyProgressReportResponse(
       List<DprManpowerRow> manpower,
       List<DprEquipmentRow> equipment,
       List<DprMaterialRow> materials,
+      List<DprAttachmentResponse> attachments,
       List<String> warnings) {
     return new DailyProgressReportResponse(
         r.getId(),
@@ -107,6 +109,7 @@ public record DailyProgressReportResponse(
         manpower,
         equipment,
         materials,
+        attachments,
         warnings
     );
   }

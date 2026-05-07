@@ -24,6 +24,16 @@ import { useStickyMeasure } from "@/hooks/useStickyMeasure";
 
 const todayIso = () => new Date().toISOString().split("T")[0];
 
+// Filter window defaults to "last 30 days" so freshly-saved rows (typically reportDate = today
+// or very recent) are visible without the user touching the date inputs. Decoupled from the
+// project's plannedStartDate, which was prone to hiding new entries when the project hadn't
+// officially started yet (or had started more than a month ago).
+const oneMonthAgoIso = () => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return d.toISOString().split("T")[0];
+};
+
 export default function DprPage() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -102,22 +112,18 @@ export default function DprPage() {
     [supervisorData]
   );
 
-  const [fromInput, setFromInput] = useState<string>("");
+  const [fromInput, setFromInput] = useState<string>(() => oneMonthAgoIso());
   const [toInput, setToInput] = useState<string>("");
-  const [from, setFrom] = useState<string>("");
+  const [from, setFrom] = useState<string>(() => oneMonthAgoIso());
   const [to, setTo] = useState<string>("");
 
   useEffect(() => {
     if (!project) return;
-    if (from === "" && project.plannedStartDate) {
-      setFromInput(project.plannedStartDate);
-      setFrom(project.plannedStartDate);
-    }
     if (to === "" && project.plannedFinishDate) {
       setToInput(project.plannedFinishDate);
       setTo(project.plannedFinishDate);
     }
-  }, [project, from, to]);
+  }, [project, to]);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DailyProgressReportResponse | null>(null);
@@ -156,14 +162,16 @@ export default function DprPage() {
   };
 
   const handleSave = async (payload: DprBaseFields) => {
-    if (editing) {
-      await dprApi.update(projectId, editing.id, payload);
-    } else {
-      await dprApi.create(projectId, payload);
-    }
-    closeForm();
+    // Return the persisted record so DprActivityForm can chain photo uploads against the new id
+    // when this is a create. We do NOT close the drawer here — the form runs its photo upload
+    // step after onSave resolves, and then calls onCancel() itself to close. Closing here would
+    // unmount the form mid-flight and drop the upload.
+    const saved = editing
+      ? await dprApi.update(projectId, editing.id, payload)
+      : await dprApi.create(projectId, payload);
     queryClient.invalidateQueries({ queryKey: ["dpr", projectId, from, to] });
     queryClient.invalidateQueries({ queryKey: ["boq", projectId] });
+    return saved.data ?? undefined;
   };
 
   const handleDelete = async (row: DailyProgressReportResponse) => {
@@ -258,7 +266,7 @@ export default function DprPage() {
             key={editing?.id ?? "new"}
             projectId={projectId}
             editing={editing}
-            defaultDate={editing?.reportDate ?? from ?? todayIso()}
+            defaultDate={editing?.reportDate ?? todayIso()}
             supervisorOptions={supervisorOptions}
             activityOptions={activityOptions}
             activityNameById={activityIndex.byId}

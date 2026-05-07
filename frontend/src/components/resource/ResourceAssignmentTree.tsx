@@ -329,6 +329,8 @@ function TreeRow({
 }) {
   const isGroup = !!node.children && node.children.length > 0;
   const isSelected = !isGroup && node.assignment && node.assignment.id === selectedId;
+  // Indent the name column's content only — applying it to the grid container would shift every
+  // numeric column right by `indent`, breaking alignment with the (un-indented) header row.
   const indent = level * 20;
 
   // What to show in each numeric column. For a leaf, use the assignment row directly. For a
@@ -352,7 +354,6 @@ function TreeRow({
               ? "hover:bg-surface-hover/30 cursor-pointer"
               : "hover:bg-surface-hover/20"
         }`}
-        style={{ paddingLeft: `${indent + 12}px` }}
         onClick={() => {
           if (!isGroup && node.assignment) {
             onRowClick?.(node.assignment);
@@ -360,7 +361,7 @@ function TreeRow({
         }}
       >
         {/* Name column */}
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0" style={{ paddingLeft: `${indent}px` }}>
           {isGroup ? (
             <button
               onClick={(e) => {
@@ -534,35 +535,39 @@ export function ResourceAssignmentTree({
 
   return (
     <div className="rounded-xl border border-border bg-surface/50 shadow-xl overflow-hidden">
-      {/* Header */}
-      <div className="grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_90px_80px_110px_110px_110px_110px] gap-2 items-center py-3 px-3 text-xs font-semibold uppercase tracking-wider text-text-secondary bg-surface/80 border-b border-border/50">
-        <div className="pl-3">{firstColLabel}</div>
-        <div>Activity</div>
-        <div className="text-right">Budgeted</div>
-        <div className="text-right">Planned</div>
-        <div className="text-right">Actual</div>
-        <div className="text-right">Remaining</div>
-        <div className="text-center">Rate</div>
-        <div className="text-right">Budgeted Cost</div>
-        <div className="text-right">Planned Cost</div>
-        <div className="text-right">Actual Cost</div>
-        <div className="text-right">Remaining Cost</div>
-      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[1360px]">
+          {/* Header */}
+          <div className="grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_90px_80px_110px_110px_110px_110px] gap-2 items-center py-3 px-3 text-xs font-semibold uppercase tracking-wider text-text-secondary bg-surface/80 border-b border-border/50">
+            <div className="pl-3">{firstColLabel}</div>
+            <div>Activity</div>
+            <div className="text-right">Budgeted</div>
+            <div className="text-right">Planned</div>
+            <div className="text-right">Actual</div>
+            <div className="text-right">Remaining</div>
+            <div className="text-center">Rate</div>
+            <div className="text-right">Budgeted Cost</div>
+            <div className="text-right">Planned Cost</div>
+            <div className="text-right">Actual Cost</div>
+            <div className="text-right">Remaining Cost</div>
+          </div>
 
-      {/* Rows */}
-      <div>
-        {tree.map((node) => (
-          <TreeRow
-            key={node.id}
-            node={node}
-            level={0}
-            expanded={expanded}
-            toggle={toggle}
-            onRowClick={onRowClick}
-            selectedId={selectedId}
-            viewMode={viewMode}
-          />
-        ))}
+          {/* Rows */}
+          <div>
+            {tree.map((node) => (
+              <TreeRow
+                key={node.id}
+                node={node}
+                level={0}
+                expanded={expanded}
+                toggle={toggle}
+                onRowClick={onRowClick}
+                selectedId={selectedId}
+                viewMode={viewMode}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

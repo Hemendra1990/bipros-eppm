@@ -1,0 +1,38 @@
+databaseChangeLog:
+  # Photos / image attachments associated with a DPR row. Soft FK (dpr_id) to
+  # project.daily_progress_reports.id; binaries live on disk under bipros.dpr.storage.path.
+  - changeSet:
+      id: 075-create-dpr-attachments
+      author: bipros
+      comment: |
+        Multi-image upload per DPR activity. Photos are uploaded after the DPR is saved
+        (two-step flow); deletion of the row triggers binary cleanup in the service layer.
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: dpr_attachments
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints: { primaryKey: true, nullable: false }
+              # Soft FK to project.daily_progress_reports.id; lifecycle owned by the service.
+              - column: { name: dpr_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: file_name, type: VARCHAR(255), constraints: { nullable: false } }
+              - column: { name: mime_type, type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: file_size, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: storage_path, type: VARCHAR(500), constraints: { nullable: false } }
+              - column: { name: caption, type: VARCHAR(500) }
+              - column: { name: captured_at, type: TIMESTAMP }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_attachments
+            indexName: idx_dpr_attachments_dpr
+            columns:
+              - column: { name: dpr_id }

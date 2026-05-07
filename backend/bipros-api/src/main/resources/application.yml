@@ -88,6 +88,13 @@ bipros:
       path: ./storage/contracts
       max-file-size: 52428800   # 50 MB in bytes; must match spring.servlet.multipart.max-file-size
 
+  # DPR photo attachments — local-disk storage; per-DPR subdirectories (one folder per DPR id).
+  # Images only (jpeg/png/webp/heic), 15 MB cap per file enforced in DprAttachmentStorageService.
+  dpr:
+    storage:
+      path: ${BIPROS_DPR_STORAGE_PATH:./storage/dpr-photos}
+      max-file-size: 15728640   # 15 MB
+
   # Error responses — include exception class + message + top stack frame in 500 bodies.
   # Default is OFF so production never leaks internals; default profile (dev) turns it ON below.
   errors:

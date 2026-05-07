@@ -3,13 +3,18 @@ package com.bipros.project.api;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.project.application.dto.CreateDailyProgressReportRequest;
 import com.bipros.project.application.dto.DailyProgressReportResponse;
+import com.bipros.project.application.dto.DprAttachmentResponse;
 import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
 import com.bipros.project.application.service.DailyProgressReportService;
+import com.bipros.project.application.service.DprAttachmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,9 +25,12 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,6 +41,7 @@ import java.util.UUID;
 public class DailyProgressReportController {
 
   private final DailyProgressReportService service;
+  private final DprAttachmentService attachmentService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
@@ -85,6 +94,61 @@ public class DailyProgressReportController {
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
     service.delete(projectId, id);
+    return ResponseEntity.ok(ApiResponse.ok(null));
+  }
+
+  // ─── Photo attachments ──────────────────────────────────────────────────────────
+
+  /**
+   * Upload one or more photos against a DPR row. {@code captions} is parallel to {@code files}
+   * and each entry is optional; pass empty strings or omit indices to leave a caption blank.
+   *
+   * <p>{@code captions} uses {@link RequestParam} (not {@link RequestPart}) so plain-text parts
+   * are read as strings without invoking JSON message conversion (which would fail when the
+   * part has no Content-Type — the default for {@code FormData.append('captions','…')} and
+   * {@code curl -F 'captions=…'}).
+   */
+  @PostMapping(value = "/{id}/photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  public ResponseEntity<ApiResponse<List<DprAttachmentResponse>>> uploadPhotos(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id,
+      @RequestPart("files") MultipartFile[] files,
+      @RequestParam(value = "captions", required = false) String[] captions) {
+    log.info("POST /v1/projects/{}/dpr/{}/photos - {} file(s)", projectId, id, files == null ? 0 : files.length);
+    List<MultipartFile> fileList = files == null ? List.of() : Arrays.asList(files);
+    List<String> captionList = captions == null ? List.of() : Arrays.asList(captions);
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(ApiResponse.ok(attachmentService.addAll(projectId, id, fileList, captionList)));
+  }
+
+  @GetMapping("/{id}/photos")
+  public ResponseEntity<ApiResponse<List<DprAttachmentResponse>>> listPhotos(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id) {
+    return ResponseEntity.ok(ApiResponse.ok(attachmentService.list(projectId, id)));
+  }
+
+  @GetMapping("/{id}/photos/{photoId}")
+  public ResponseEntity<Resource> getPhoto(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id,
+      @PathVariable UUID photoId) {
+    DprAttachmentService.LoadedPhoto loaded = attachmentService.load(projectId, id, photoId);
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(loaded.mimeType()))
+        .contentLength(loaded.fileSize())
+        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + loaded.fileName() + "\"")
+        .body(loaded.resource());
+  }
+
+  @DeleteMapping("/{id}/photos/{photoId}")
+  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  public ResponseEntity<ApiResponse<Void>> deletePhoto(
+      @PathVariable UUID projectId,
+      @PathVariable UUID id,
+      @PathVariable UUID photoId) {
+    attachmentService.delete(projectId, id, photoId);
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
 }
