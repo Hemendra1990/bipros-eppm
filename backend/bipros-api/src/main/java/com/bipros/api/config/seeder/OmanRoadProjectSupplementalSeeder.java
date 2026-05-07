@@ -163,7 +163,10 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
         seedActivityCodes(projectId);
         seedEvmCalculations(projectId);
         seedDailyActivityResourceOutput(projectId);
-        seedDailyActivityResourceOutputs(projectId);
+        // seedDailyActivityResourceOutputs(projectId): writes qty_executed = ProductivityNorm
+        // output (Cum/LS) to per-resource ledger rows, which the assignment rollup blindly sums
+        // as labor units — inflates ResourceAssignment.actualUnits. Disabled until the seeder
+        // is rewritten to emit semantically-correct labor day-equivalents.
         seedManpowerOperationalWiring(projectId);
 
         log.info("[BNK-SUPP] supplemental seeding completed");

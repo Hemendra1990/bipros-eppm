@@ -81,6 +81,9 @@ public class DprEquipment extends BaseEntity {
     @Column(name = "unit_rate", precision = 19, scale = 4)
     private java.math.BigDecimal unitRate;
 
+    @Column(name = "unit_rate_basis", length = 20)
+    private String unitRateBasis;
+
     @Column(name = "line_cost", precision = 19, scale = 2)
     private java.math.BigDecimal lineCost;
 

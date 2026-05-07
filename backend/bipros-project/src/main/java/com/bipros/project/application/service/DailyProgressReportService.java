@@ -422,11 +422,18 @@ public class DailyProgressReportService {
         AssignmentSnapshot snap = lookupAssignmentSnapshot(row.resourceAssignmentId(), reportDate);
         if (canValidate) requireKind(row.resourceAssignmentId(), snap, "EQUIPMENT", activityId, warnings);
         BigDecimal unitRate = pickUnitRate(row.unitRate(), snap);
-        String basis = snap == null ? "HOUR" : (snap.basis() != null ? snap.basis() : "HOUR");
+        // Equipment defaults to HOUR — most equipment is hourly-billed. The snapshot's basis
+        // (derived from resource.unit) is intentionally NOT used here: resource.unit is often
+        // a productivity unit like "PER_DAY" that doesn't match the actual rate basis. Clients
+        // can override by sending unitRateBasis explicitly when day-billing equipment.
+        String basis = row.unitRateBasis() != null && !row.unitRateBasis().isBlank()
+            ? row.unitRateBasis()
+            : "HOUR";
         if (unitRate == null) warnings.add("rate-missing:equipment:" + safeName(snap, row.equipmentType()));
         DprEquipment entity = row.toEntity(dprId);
         entity.setResourceId(pickResourceId(row.resourceId(), snap));
         entity.setUnitRate(unitRate);
+        entity.setUnitRateBasis(basis);
         entity.setLineCost(DprCostFormulas.equipmentLineCost(entity, unitRate, basis));
         equipment.add(entity);
       }
@@ -603,14 +610,13 @@ public class DailyProgressReportService {
     }
     for (DprEquipment row : equipment) {
       if (row.getResourceId() == null) continue;
-      // Equipment rate basis isn't snapshotted on the row — use HOUR by default (most equipment
-      // is hourly-billed). DAY-billed equipment will roll up by nos × 1 day-equivalent.
-      BigDecimal units = DprCostFormulas.equipmentUnits(row, "HOUR");
+      String basis = row.getUnitRateBasis() != null ? row.getUnitRateBasis() : "HOUR";
+      BigDecimal units = DprCostFormulas.equipmentUnits(row, basis);
       unitsByResource.merge(row.getResourceId(), units, BigDecimal::add);
       double hrs = (row.getWorkingHours() == null ? 0d : row.getWorkingHours().doubleValue())
           * (row.getNos() == null ? 1 : row.getNos());
       hoursByResource.merge(row.getResourceId(), hrs, Double::sum);
-      unitByResource.putIfAbsent(row.getResourceId(), "HR");
+      unitByResource.putIfAbsent(row.getResourceId(), basis.equalsIgnoreCase("HOUR") ? "HR" : "DAY");
     }
     for (DprMaterial row : material) {
       if (row.getResourceId() == null) continue;

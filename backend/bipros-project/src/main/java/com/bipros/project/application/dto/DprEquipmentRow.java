@@ -23,6 +23,7 @@ public record DprEquipmentRow(
     @PositiveOrZero BigDecimal breakdownHours,
     @PositiveOrZero BigDecimal fuelLitres,
     BigDecimal unitRate,
+    String unitRateBasis,
     BigDecimal lineCost,
     String operatorName,
     EquipmentAvailability availabilityStatus,
@@ -42,6 +43,7 @@ public record DprEquipmentRow(
             e.getBreakdownHours(),
             e.getFuelLitres(),
             e.getUnitRate(),
+            e.getUnitRateBasis(),
             e.getLineCost(),
             e.getOperatorName(),
             e.getAvailabilityStatus(),
@@ -62,6 +64,7 @@ public record DprEquipmentRow(
             .breakdownHours(breakdownHours)
             .fuelLitres(fuelLitres)
             .unitRate(unitRate)
+            .unitRateBasis(unitRateBasis)
             .lineCost(lineCost)
             .operatorName(operatorName)
             .availabilityStatus(availabilityStatus)

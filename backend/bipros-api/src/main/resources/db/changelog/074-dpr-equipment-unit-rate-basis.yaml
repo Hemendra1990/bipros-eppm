@@ -1,0 +1,13 @@
+databaseChangeLog:
+  # Persist the rate basis (HOUR / DAY / EACH) on equipment DPR rows so the ledger
+  # reconciliation knows whether to roll up units as nos × hours or just nos.
+  # Mirrors dpr_manpower.unit_rate_basis added in 073-dpr-manpower-resource-link.
+  - changeSet:
+      id: 074-dpr-equipment-unit-rate-basis
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_equipment
+            columns:
+              - column: { name: unit_rate_basis, type: VARCHAR(20) }

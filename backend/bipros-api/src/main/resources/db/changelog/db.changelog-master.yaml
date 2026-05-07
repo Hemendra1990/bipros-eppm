@@ -123,3 +123,5 @@ databaseChangeLog:
       file: db/changelog/072-dpr-resource-detail.yaml
   - include:
       file: db/changelog/073-dpr-resource-link.yaml
+  - include:
+      file: db/changelog/074-dpr-equipment-unit-rate-basis.yaml

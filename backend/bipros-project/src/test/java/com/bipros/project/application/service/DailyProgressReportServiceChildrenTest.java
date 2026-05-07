@@ -252,7 +252,7 @@ class DailyProgressReportServiceChildrenTest {
     return new DprEquipmentRow(
         null, assignmentEqId, null, type, fleet, EquipmentOwnership.OWNED, nos,
         BigDecimal.valueOf(hours), BigDecimal.ZERO, BigDecimal.ZERO,
-        BigDecimal.valueOf(fuel), null, null, null, EquipmentAvailability.UTILIZED, null);
+        BigDecimal.valueOf(fuel), null, null, null, null, EquipmentAvailability.UTILIZED, null);
   }
 
   private DprMaterialRow matRow(String name, String unit, double qty) {
