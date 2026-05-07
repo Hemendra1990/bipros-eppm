@@ -34,12 +34,19 @@ public class ClickHouseDataSourceConfig {
         return new HikariDataSource(config);
     }
 
-    @Bean
+    // defaultCandidate = false: this template must be opted-into by name (e.g. via @Qualifier or
+    // a constructor parameter named clickHouseJdbcTemplate). Without this, an unqualified
+    // `JdbcTemplate` autowire site sees two ambiguous candidates (the Spring-Boot auto-configured
+    // Postgres one + this one) and silently picks the wrong target — sending Postgres-only SQL
+    // (e.g. `pg_constraint`, `information_schema.columns`) to ClickHouse, which fails with
+    // "Unknown table expression identifier". Keep the matching flag on the named-parameter
+    // variant for symmetry.
+    @Bean(defaultCandidate = false)
     public JdbcTemplate clickHouseJdbcTemplate(@Qualifier("clickHouseDataSource") DataSource clickHouseDataSource) {
         return new JdbcTemplate(clickHouseDataSource);
     }
 
-    @Bean
+    @Bean(defaultCandidate = false)
     public NamedParameterJdbcTemplate clickHouseNamedParameterJdbcTemplate(@Qualifier("clickHouseDataSource") DataSource clickHouseDataSource) {
         return new NamedParameterJdbcTemplate(clickHouseDataSource);
     }
