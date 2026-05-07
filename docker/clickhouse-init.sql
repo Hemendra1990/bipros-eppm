@@ -216,6 +216,69 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.fact_dpr_logs (
   ORDER BY (project_id, activity_id, report_date, dpr_id)
   TTL report_date + INTERVAL 7 YEAR;
 
+-- DPR resource line items: manpower, equipment, material. One row per DPR child row,
+-- ingested by AnalyticsEtlService.insertDpr{Manpower,Equipment,Material}Daily.
+CREATE TABLE IF NOT EXISTS bipros_analytics.fact_dpr_manpower_daily (
+    project_id UUID,
+    activity_id UUID,
+    dpr_id UUID,
+    manpower_row_id UUID,
+    report_date Date,
+    trade String,
+    category String,
+    contractor_name String,
+    nos UInt16,
+    working_hours Float32,
+    ot_hours Float32,
+    event_ts DateTime64(3),
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+  PARTITION BY toYYYYMM(report_date)
+  ORDER BY (project_id, dpr_id, manpower_row_id)
+  TTL report_date + INTERVAL 7 YEAR;
+
+CREATE TABLE IF NOT EXISTS bipros_analytics.fact_dpr_equipment_daily (
+    project_id UUID,
+    activity_id UUID,
+    dpr_id UUID,
+    equipment_row_id UUID,
+    report_date Date,
+    equipment_type String,
+    fleet_no String,
+    ownership String,
+    nos UInt16,
+    working_hours Float32,
+    idle_hours Float32,
+    breakdown_hours Float32,
+    fuel_litres Float32,
+    operator_name String,
+    availability_status String,
+    event_ts DateTime64(3),
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+  PARTITION BY toYYYYMM(report_date)
+  ORDER BY (project_id, dpr_id, equipment_row_id)
+  TTL report_date + INTERVAL 7 YEAR;
+
+CREATE TABLE IF NOT EXISTS bipros_analytics.fact_dpr_material_daily (
+    project_id UUID,
+    activity_id UUID,
+    dpr_id UUID,
+    material_row_id UUID,
+    report_date Date,
+    material_name String,
+    unit String,
+    quantity Float64,
+    source String,
+    vendor_name String,
+    batch_no String,
+    event_ts DateTime64(3),
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+  PARTITION BY toYYYYMM(report_date)
+  ORDER BY (project_id, dpr_id, material_row_id)
+  TTL report_date + INTERVAL 7 YEAR;
+
 CREATE TABLE IF NOT EXISTS bipros_analytics.fact_risk_snapshot_daily (
     project_id UUID,
     risk_id UUID,
