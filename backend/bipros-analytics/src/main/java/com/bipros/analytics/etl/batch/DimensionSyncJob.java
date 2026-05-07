@@ -141,9 +141,11 @@ public class DimensionSyncJob {
         String sql = """
             INSERT INTO bipros_analytics.dim_activity
             (activity_id, project_id, wbs_id, code, name, activity_type, uom, bq_quantity, planned_start, planned_finish,
-             chainage_from_m, chainage_to_m, is_critical, _version)
+             chainage_from_m, chainage_to_m, is_critical,
+             responsible_resource_id, responsible_resource_name, _version)
             VALUES (:activityId, :projectId, :wbsId, :code, :name, :activityType, :uom, :bqQty,
-                    :plannedStart, :plannedFinish, :chainageFrom, :chainageTo, :isCritical, :version)
+                    :plannedStart, :plannedFinish, :chainageFrom, :chainageTo, :isCritical,
+                    :responsibleResourceId, :responsibleResourceName, :version)
             """;
         for (Activity a : activities) {
             Map<String, Object> params = new HashMap<>();
@@ -160,6 +162,9 @@ public class DimensionSyncJob {
             params.put("chainageFrom", a.getChainageFromM() != null ? a.getChainageFromM().doubleValue() : null);
             params.put("chainageTo", a.getChainageToM() != null ? a.getChainageToM().doubleValue() : null);
             params.put("isCritical", a.getIsCritical() != null && a.getIsCritical() ? 1 : 0);
+            params.put("responsibleResourceId", a.getResponsibleResourceId());
+            params.put("responsibleResourceName",
+                    a.getResponsibleResourceName() != null ? a.getResponsibleResourceName() : "");
             params.put("version", VERSION);
             clickHouse.execute(sql, params);
         }

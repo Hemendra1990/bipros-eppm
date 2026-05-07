@@ -1,6 +1,7 @@
 package com.bipros.resource.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.resource.application.dto.AssignedResourcePickerOption;
 import com.bipros.resource.application.dto.CreateResourceAssignmentRequest;
 import com.bipros.resource.application.dto.ResourceAssignmentResponse;
 import com.bipros.resource.application.dto.ResourceLevelingRequest;
@@ -82,6 +83,25 @@ public class ResourceAssignmentController {
     log.info("GET /v1/projects/{}/resource-assignments/activity/{} - Listing assignments by activity",
         projectId, activityId);
     List<ResourceAssignmentResponse> response = assignmentService.getAssignmentsByActivity(activityId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  /**
+   * Picker-mode lookup powering the DPR drawer's Manpower / Equipment / Material searchable
+   * dropdowns. Returns leaner {@link AssignedResourcePickerOption} rows enriched with a unit-rate
+   * snapshot resolved at {@code reportDate}; filter the result client-side or via {@code kind}.
+   */
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  @GetMapping("/activity/{activityId}/picker")
+  public ResponseEntity<ApiResponse<List<AssignedResourcePickerOption>>> listPickerOptionsByActivity(
+      @PathVariable UUID projectId,
+      @PathVariable UUID activityId,
+      @RequestParam(required = false) String kind,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate reportDate) {
+    log.info("GET /v1/projects/{}/resource-assignments/activity/{}/picker kind={} reportDate={}",
+        projectId, activityId, kind, reportDate);
+    List<AssignedResourcePickerOption> response = assignmentService.getPickerOptionsByActivity(
+        activityId, kind, reportDate);
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 

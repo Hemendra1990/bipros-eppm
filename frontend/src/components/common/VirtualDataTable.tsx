@@ -27,6 +27,9 @@ interface VirtualDataTableProps<TData> {
   overscan?: number;
   maxHeight?: number | string;
 
+  // Layout
+  fullHeight?: boolean;
+
   // Styling
   className?: string;
   headerClassName?: string;
@@ -60,6 +63,7 @@ export function VirtualDataTable<TData>({
   estimateRowHeight = 48,
   overscan = 5,
   maxHeight = 600,
+  fullHeight = false,
   className,
   headerClassName,
   rowClassName,
@@ -155,12 +159,12 @@ export function VirtualDataTable<TData>({
       {/* Table */}
       <div
         ref={parentRef}
-        className="overflow-auto"
-        style={{ maxHeight }}
+        className={cn("overflow-auto", fullHeight && "flex-1")}
+        style={!fullHeight ? { maxHeight } : undefined}
       >
         <table
           className="w-full border-collapse text-sm"
-          style={{ width: table.getTotalSize() }}
+          style={{ minWidth: table.getTotalSize() }}
         >
           <thead className={cn(
             "bg-ivory dark:bg-[#161616] border-b border-hairline sticky top-0 z-10",

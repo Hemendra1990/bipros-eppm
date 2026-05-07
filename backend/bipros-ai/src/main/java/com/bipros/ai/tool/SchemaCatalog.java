@@ -27,7 +27,8 @@ public class SchemaCatalog {
             Dimensions:
             - dim_project(project_id, code, name, status, portfolio_id, org_id, start_date, finish_date, currency, obs_node_id, updated_at)
             - dim_wbs(wbs_id, project_id, parent_wbs_id, code, name, level, weight, path)
-            - dim_activity(activity_id, project_id, wbs_id, code, name, activity_type, uom, bq_quantity, planned_start, planned_finish, chainage_from_m, chainage_to_m, is_critical)
+            - dim_activity(activity_id, project_id, wbs_id, code, name, activity_type, uom, bq_quantity, planned_start, planned_finish, chainage_from_m, chainage_to_m, is_critical, responsible_resource_id, responsible_resource_name)
+              -- responsible_resource_id = supervisor (Labor Resource) managing the activity. Soft FK to dim_resource.resource_id.
             - dim_resource(resource_id, project_id, resource_type, code, name, uom, unit_rate, is_subcontractor)
             - dim_cost_account(cost_account_id, project_id, code, name, parent_id, category)
             - dim_calendar(date, year, quarter, month, week, iso_week, day_of_week, is_business_day, fiscal_period)
@@ -42,6 +43,10 @@ public class SchemaCatalog {
             - fact_cost_daily(project_id, wbs_id, activity_id, date, cost_account_id, labor_cost, material_cost, equipment_cost, expense_cost, total_actual, total_planned, total_earned, event_ts)
             - fact_evm_daily(project_id, wbs_id, activity_id, date, bac, pv, ev, ac, cv, sv, cpi, spi, tcpi, eac, etc_cost, vac, period_source, interpolation, event_ts)
             - fact_dpr_logs(project_id, activity_id, dpr_id, report_date, supervisor_user_id, supervisor_name, chainage_from_m, chainage_to_m, qty_executed, cumulative_qty, weather, temperature_c, remarks_text, event_ts)
+              -- WARNING: column name supervisor_user_id is legacy; the value is the supervisor's RESOURCE id (FK to dim_resource.resource_id). Filter by it for "DPRs filed by supervisor X". Equality compare to a UUID literal.
+            - fact_dpr_manpower_daily(project_id, activity_id, dpr_id, manpower_row_id, report_date, trade, category, contractor_name, nos, working_hours, ot_hours, event_ts)
+            - fact_dpr_equipment_daily(project_id, activity_id, dpr_id, equipment_row_id, report_date, equipment_type, fleet_no, ownership, nos, working_hours, idle_hours, breakdown_hours, fuel_litres, operator_name, availability_status, event_ts)
+            - fact_dpr_material_daily(project_id, activity_id, dpr_id, material_row_id, report_date, material_name, unit, quantity, source, vendor_name, batch_no, event_ts)
             - fact_risk_snapshot_daily(project_id, risk_id, date, probability, impact_cost, impact_days, rag, status, monte_carlo_p50, monte_carlo_p80, monte_carlo_p95, risk_score, residual_risk_score, risk_type, owner_id, category_id, post_response_probability, post_response_impact_cost, post_response_impact_schedule, pre_response_exposure_cost, post_response_exposure_cost, exposure_start_date, exposure_finish_date, response_type, trend, identified_date, identified_by_id, event_ts)
             - fact_permit_lifecycle(project_id, permit_id, permit_type_template_id, event_type, occurred_at, occurred_date, actor_user_id, risk_level, permit_status, payload_json, duration_hours_to_event, event_ts)
             - fact_labour_daily(project_id, labour_return_id, deployment_id, designation_id, skill_category, contractor_name, contractor_org_id, wbs_id, site_location, date, head_count, man_days, planned_head_count, daily_rate, daily_cost, source, event_ts)

@@ -119,3 +119,7 @@ databaseChangeLog:
       file: db/changelog/070-boq-status-check-overrun.yaml
   - include:
       file: db/changelog/071-ra-bill-item-description-length.yaml
+  - include:
+      file: db/changelog/072-dpr-resource-detail.yaml
+  - include:
+      file: db/changelog/073-dpr-resource-link.yaml

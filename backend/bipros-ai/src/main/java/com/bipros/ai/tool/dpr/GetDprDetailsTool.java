@@ -6,8 +6,14 @@ import com.bipros.ai.context.AiContext;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolResult;
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprEquipment;
+import com.bipros.project.domain.model.DprManpower;
+import com.bipros.project.domain.model.DprMaterial;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprEquipmentRepository;
+import com.bipros.project.domain.repository.DprManpowerRepository;
+import com.bipros.project.domain.repository.DprMaterialRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +50,9 @@ public class GetDprDetailsTool implements Tool {
   private final DailyProgressReportRepository dprRepository;
   private final ActivityRepository activityRepository;
   private final WbsNodeRepository wbsRepository;
+  private final DprManpowerRepository manpowerRepository;
+  private final DprEquipmentRepository equipmentRepository;
+  private final DprMaterialRepository materialRepository;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -109,13 +118,17 @@ public class GetDprDetailsTool implements Tool {
 
     Map<String, Activity> activityByName = new HashMap<>();
     Map<UUID, WbsNode> wbsById = new HashMap<>();
+    // Hoist the project-wide activity list out of the loop — was per-row, now once.
+    List<Activity> projectActivities = null;
     for (DailyProgressReport d : matches) {
       if (d.getActivityName() != null && !activityByName.containsKey(d.getActivityName())) {
         activityRepository.findByProjectIdAndCode(projectId, d.getActivityName())
             .ifPresent(a -> activityByName.put(d.getActivityName(), a));
-        // also try name match if code lookup failed
         if (!activityByName.containsKey(d.getActivityName())) {
-          for (Activity a : activityRepository.findByProjectId(projectId)) {
+          if (projectActivities == null) {
+            projectActivities = activityRepository.findByProjectId(projectId);
+          }
+          for (Activity a : projectActivities) {
             if (d.getActivityName().equalsIgnoreCase(a.getName())) {
               activityByName.put(d.getActivityName(), a);
               break;
@@ -127,6 +140,15 @@ public class GetDprDetailsTool implements Tool {
         wbsRepository.findById(d.getWbsNodeId()).ifPresent(w -> wbsById.put(d.getWbsNodeId(), w));
       }
     }
+
+    // Batch-fetch all child rows for every matched DPR — one query per child table, not per DPR.
+    List<UUID> matchedIds = matches.stream().map(DailyProgressReport::getId).toList();
+    Map<UUID, List<DprManpower>> manpowerByDpr = manpowerRepository.findByDprIdIn(matchedIds).stream()
+        .collect(java.util.stream.Collectors.groupingBy(DprManpower::getDprId));
+    Map<UUID, List<DprEquipment>> equipmentByDpr = equipmentRepository.findByDprIdIn(matchedIds).stream()
+        .collect(java.util.stream.Collectors.groupingBy(DprEquipment::getDprId));
+    Map<UUID, List<DprMaterial>> materialByDpr = materialRepository.findByDprIdIn(matchedIds).stream()
+        .collect(java.util.stream.Collectors.groupingBy(DprMaterial::getDprId));
 
     ArrayNode rows = objectMapper.createArrayNode();
     java.util.Set<UUID> linkedActivities = new java.util.LinkedHashSet<>();
@@ -162,6 +184,59 @@ public class GetDprDetailsTool implements Tool {
       row.put("chainage_to_m", d.getChainageToM());
       row.put("weather_condition", d.getWeatherCondition());
       row.put("remarks", d.getRemarks());
+      if (d.getSide() != null) row.put("side", d.getSide().name());
+      if (d.getShift() != null) row.put("shift", d.getShift().name());
+      if (d.getApprovalStatus() != null) row.put("approval_status", d.getApprovalStatus().name());
+      if (d.getContractorName() != null) row.put("contractor_name", d.getContractorName());
+      if (d.getLandmark() != null) row.put("landmark", d.getLandmark());
+      if (d.getDelayReason() != null) row.put("delay_reason", d.getDelayReason());
+      if (d.getSafetyObservation() != null) row.put("safety_observation", d.getSafetyObservation());
+      if (d.getSafetyIncidentType() != null) row.put("safety_incident_type", d.getSafetyIncidentType().name());
+
+      // Per-resource child arrays — sourced from the batch maps above (one query per table).
+      ArrayNode mp = objectMapper.createArrayNode();
+      for (DprManpower m : manpowerByDpr.getOrDefault(d.getId(), List.of())) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("trade", m.getTrade());
+        n.put("category", m.getCategory() == null ? null : m.getCategory().name());
+        n.put("nos", m.getNos());
+        n.put("working_hours", m.getWorkingHours() == null ? null : m.getWorkingHours().doubleValue());
+        n.put("ot_hours", m.getOtHours() == null ? null : m.getOtHours().doubleValue());
+        n.put("contractor_name", m.getContractorName());
+        mp.add(n);
+      }
+      row.set("manpower", mp);
+
+      ArrayNode eq = objectMapper.createArrayNode();
+      for (DprEquipment e : equipmentByDpr.getOrDefault(d.getId(), List.of())) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("equipment_type", e.getEquipmentType());
+        n.put("fleet_no", e.getFleetNo());
+        n.put("ownership", e.getOwnership() == null ? null : e.getOwnership().name());
+        n.put("nos", e.getNos());
+        n.put("working_hours", e.getWorkingHours() == null ? null : e.getWorkingHours().doubleValue());
+        n.put("idle_hours", e.getIdleHours() == null ? null : e.getIdleHours().doubleValue());
+        n.put("breakdown_hours", e.getBreakdownHours() == null ? null : e.getBreakdownHours().doubleValue());
+        n.put("fuel_litres", e.getFuelLitres() == null ? null : e.getFuelLitres().doubleValue());
+        n.put("operator_name", e.getOperatorName());
+        n.put("availability_status", e.getAvailabilityStatus() == null ? null : e.getAvailabilityStatus().name());
+        eq.add(n);
+      }
+      row.set("equipment", eq);
+
+      ArrayNode mat = objectMapper.createArrayNode();
+      for (DprMaterial m : materialByDpr.getOrDefault(d.getId(), List.of())) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("material_name", m.getMaterialName());
+        n.put("quantity", m.getQuantity() == null ? null : m.getQuantity().doubleValue());
+        n.put("unit", m.getUnit());
+        n.put("source", m.getSource());
+        n.put("vendor_name", m.getVendorName());
+        n.put("batch_no", m.getBatchNo());
+        mat.add(n);
+      }
+      row.set("materials", mat);
+
       rows.add(row);
     }
 

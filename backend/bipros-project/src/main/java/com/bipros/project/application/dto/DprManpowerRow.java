@@ -1,0 +1,66 @@
+package com.bipros.project.application.dto;
+
+import com.bipros.project.domain.model.DprManpower;
+import com.bipros.project.domain.model.ManpowerCategory;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+/**
+ * Manpower line item under a DPR row. {@code id} is null on create / non-null on update so the
+ * client can preserve audit fields if it wants to — but the service treats every save as a full
+ * replacement (delete-by-dprId then re-insert), so {@code id} is informational only.
+ */
+public record DprManpowerRow(
+    UUID id,
+    @NotNull UUID resourceAssignmentId,
+    UUID resourceId,
+    @NotBlank String trade,
+    ManpowerCategory category,
+    @PositiveOrZero Integer nos,
+    @PositiveOrZero BigDecimal workingHours,
+    @PositiveOrZero BigDecimal otHours,
+    BigDecimal unitRate,
+    String unitRateBasis,
+    BigDecimal lineCost,
+    String contractorName,
+    String remarks
+) {
+    public static DprManpowerRow from(DprManpower e) {
+        return new DprManpowerRow(
+            e.getId(),
+            e.getResourceAssignmentId(),
+            e.getResourceId(),
+            e.getTrade(),
+            e.getCategory(),
+            e.getNos(),
+            e.getWorkingHours(),
+            e.getOtHours(),
+            e.getUnitRate(),
+            e.getUnitRateBasis(),
+            e.getLineCost(),
+            e.getContractorName(),
+            e.getRemarks());
+    }
+
+    public DprManpower toEntity(UUID dprId) {
+        return DprManpower.builder()
+            .dprId(dprId)
+            .resourceAssignmentId(resourceAssignmentId)
+            .resourceId(resourceId)
+            .trade(trade)
+            .category(category)
+            .nos(nos)
+            .workingHours(workingHours)
+            .otHours(otHours)
+            .unitRate(unitRate)
+            .unitRateBasis(unitRateBasis)
+            .lineCost(lineCost)
+            .contractorName(contractorName)
+            .remarks(remarks)
+            .build();
+    }
+}

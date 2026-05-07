@@ -11,6 +11,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -77,6 +78,21 @@ public class DailyActivityResourceOutput extends BaseEntity {
    */
   @Column(name = "days_worked")
   private Double daysWorked;
+
+  /** Owning DPR when this row was written by the DPR path. Nullable for MANUAL entries. */
+  @Column(name = "dpr_id")
+  private UUID dprId;
+
+  /**
+   * {@code MANUAL} for direct CRUD on the ledger; {@code DPR} for rows owned by DPR writes.
+   *
+   * <p>{@link ColumnDefault} so {@code ddl-auto: update} emits {@code DEFAULT 'MANUAL'} when
+   * adding the column to an already-populated dev table — without it, the ALTER fails because
+   * the existing rows can't satisfy {@code NOT NULL}.
+   */
+  @Column(name = "source", nullable = false, length = 20)
+  @ColumnDefault("'MANUAL'")
+  private String source = "MANUAL";
 
   @Column(name = "remarks", length = 1000)
   private String remarks;

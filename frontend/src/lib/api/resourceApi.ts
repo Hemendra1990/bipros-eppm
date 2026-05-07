@@ -474,6 +474,25 @@ export const resourceApi = {
       )
       .then((r) => r.data),
 
+  /**
+   * Picker-mode lookup for the DPR drawer's Manpower / Equipment / Material searchable
+   * dropdowns. {@code kind} narrows by ResourceType (LABOR mapped to MANPOWER); {@code reportDate}
+   * picks the rate that was effective on that date. Result rows already carry the snapshotted
+   * {@code unitRate} so the row preview can compute cost without an extra round trip.
+   */
+  getAssignedResourcesByKind: (
+    projectId: string,
+    activityId: string,
+    kind: "MANPOWER" | "EQUIPMENT" | "MATERIAL",
+    reportDate?: string
+  ) =>
+    apiClient
+      .get<ApiResponse<import("../types/dpr").AssignedResourceOption[]>>(
+        `/v1/projects/${projectId}/resource-assignments/activity/${activityId}/picker`,
+        { params: { kind, reportDate } }
+      )
+      .then((r) => r.data),
+
   getTimePhasedUsage: (
     projectId: string,
     params?: { from?: string; to?: string }

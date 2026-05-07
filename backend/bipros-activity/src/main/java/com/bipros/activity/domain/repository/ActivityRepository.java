@@ -23,6 +23,8 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
 
   List<Activity> findByProjectIdAndIsCritical(UUID projectId, Boolean isCritical);
 
+  List<Activity> findByProjectIdAndResponsibleResourceId(UUID projectId, UUID responsibleResourceId);
+
   long countByProjectId(UUID projectId);
 
   long countByWbsNodeId(UUID wbsNodeId);

@@ -3,6 +3,8 @@ package com.bipros.project.domain.model;
 import com.bipros.common.model.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -13,6 +15,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
 /**
@@ -68,6 +71,10 @@ public class DailyProgressReport extends BaseEntity {
   @Column(name = "chainage_to_m")
   private Long chainageToM;
 
+  /** Soft FK to {@code activity.activities.id}. Nullable during phase-1 migration. */
+  @Column(name = "activity_id")
+  private UUID activityId;
+
   @Column(name = "activity_name", nullable = false, length = 150)
   private String activityName;
 
@@ -93,4 +100,45 @@ public class DailyProgressReport extends BaseEntity {
 
   @Column(name = "remarks", length = 1000)
   private String remarks;
+
+  /** Carriageway side for road / highway DPRs (LHS / RHS / CENTER). Optional. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "side", length = 10)
+  private Side side;
+
+  /** Free-text location landmark, e.g. "near Main Road junction". Optional. */
+  @Column(name = "landmark", length = 255)
+  private String landmark;
+
+  @Column(name = "start_time")
+  private LocalTime startTime;
+
+  @Column(name = "end_time")
+  private LocalTime endTime;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "shift", length = 10)
+  private Shift shift;
+
+  /**
+   * Approval state for the row. Workflow transitions are not enforced server-side yet — the
+   * column is stored as the client sends it and surfaced for filtering / display.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "approval_status", length = 20)
+  private DprApprovalStatus approvalStatus;
+
+  /** Top-level contractor name on the activity (subcontractor crews go on the manpower row). */
+  @Column(name = "contractor_name", length = 150)
+  private String contractorName;
+
+  @Column(name = "delay_reason", length = 500)
+  private String delayReason;
+
+  @Column(name = "safety_observation", length = 500)
+  private String safetyObservation;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "safety_incident_type", length = 20)
+  private SafetyIncidentType safetyIncidentType;
 }

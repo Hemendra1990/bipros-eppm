@@ -1,0 +1,71 @@
+package com.bipros.project.application.dto;
+
+import com.bipros.project.domain.model.DprEquipment;
+import com.bipros.project.domain.model.EquipmentAvailability;
+import com.bipros.project.domain.model.EquipmentOwnership;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+public record DprEquipmentRow(
+    UUID id,
+    @NotNull UUID resourceAssignmentId,
+    UUID resourceId,
+    @NotBlank String equipmentType,
+    String fleetNo,
+    EquipmentOwnership ownership,
+    @PositiveOrZero Integer nos,
+    @PositiveOrZero BigDecimal workingHours,
+    @PositiveOrZero BigDecimal idleHours,
+    @PositiveOrZero BigDecimal breakdownHours,
+    @PositiveOrZero BigDecimal fuelLitres,
+    BigDecimal unitRate,
+    BigDecimal lineCost,
+    String operatorName,
+    EquipmentAvailability availabilityStatus,
+    String remarks
+) {
+    public static DprEquipmentRow from(DprEquipment e) {
+        return new DprEquipmentRow(
+            e.getId(),
+            e.getResourceAssignmentId(),
+            e.getResourceId(),
+            e.getEquipmentType(),
+            e.getFleetNo(),
+            e.getOwnership(),
+            e.getNos(),
+            e.getWorkingHours(),
+            e.getIdleHours(),
+            e.getBreakdownHours(),
+            e.getFuelLitres(),
+            e.getUnitRate(),
+            e.getLineCost(),
+            e.getOperatorName(),
+            e.getAvailabilityStatus(),
+            e.getRemarks());
+    }
+
+    public DprEquipment toEntity(UUID dprId) {
+        return DprEquipment.builder()
+            .dprId(dprId)
+            .resourceAssignmentId(resourceAssignmentId)
+            .resourceId(resourceId)
+            .equipmentType(equipmentType)
+            .fleetNo(fleetNo)
+            .ownership(ownership)
+            .nos(nos)
+            .workingHours(workingHours)
+            .idleHours(idleHours)
+            .breakdownHours(breakdownHours)
+            .fuelLitres(fuelLitres)
+            .unitRate(unitRate)
+            .lineCost(lineCost)
+            .operatorName(operatorName)
+            .availabilityStatus(availabilityStatus)
+            .remarks(remarks)
+            .build();
+    }
+}

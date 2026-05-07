@@ -16,7 +16,7 @@ export default function AppLayout({
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
           <main className="flex-1 overflow-y-auto bg-ivory">
-            <div className="px-6 py-6">
+            <div className="px-6 py-6 h-full">
               {children}
             </div>
           </main>

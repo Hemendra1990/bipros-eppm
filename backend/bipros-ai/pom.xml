@@ -61,6 +61,10 @@
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
+            <artifactId>bipros-udf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
             <artifactId>bipros-baseline</artifactId>
         </dependency>
         <dependency>

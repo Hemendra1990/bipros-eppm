@@ -1,0 +1,109 @@
+databaseChangeLog:
+  # Phase 1 — link DPR to activity by UUID (soft FK), keep activity_name as snapshot.
+  - changeSet:
+      id: 073-dpr-add-activity-id
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: daily_progress_reports
+            columns:
+              - column: { name: activity_id, type: UUID }
+        - createIndex:
+            schemaName: project
+            tableName: daily_progress_reports
+            indexName: idx_dpr_activity_id
+            columns:
+              - column: { name: project_id }
+              - column: { name: activity_id }
+
+  # Phase 2 — manpower row: link to resource assignment, snapshot rate / cost.
+  - changeSet:
+      id: 073-dpr-manpower-resource-link
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_manpower
+            columns:
+              - column: { name: resource_assignment_id, type: UUID }
+              - column: { name: resource_id, type: UUID }
+              - column: { name: unit_rate, type: DECIMAL(19,4) }
+              - column: { name: unit_rate_basis, type: VARCHAR(20) }
+              - column: { name: line_cost, type: DECIMAL(19,2) }
+
+  # Phase 3 — equipment row: link to resource assignment, snapshot rate / cost.
+  - changeSet:
+      id: 073-dpr-equipment-resource-link
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_equipment
+            columns:
+              - column: { name: resource_assignment_id, type: UUID }
+              - column: { name: resource_id, type: UUID }
+              - column: { name: unit_rate, type: DECIMAL(19,4) }
+              - column: { name: line_cost, type: DECIMAL(19,2) }
+
+  # Phase 4 — material row: link to resource assignment, snapshot rate / cost.
+  - changeSet:
+      id: 073-dpr-material-resource-link
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_material
+            columns:
+              - column: { name: resource_assignment_id, type: UUID }
+              - column: { name: material_id, type: UUID }
+              - column: { name: resource_id, type: UUID }
+              - column: { name: unit_rate, type: DECIMAL(19,4) }
+              - column: { name: line_cost, type: DECIMAL(19,2) }
+
+  # Phase 5 — daily_activity_resource_outputs: source tracking + dpr ownership.
+  - changeSet:
+      id: 073-dar-output-source-and-dpr-id
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            columns:
+              - column: { name: dpr_id, type: UUID }
+              - column:
+                  name: source
+                  type: VARCHAR(20)
+                  defaultValue: MANUAL
+                  constraints: { nullable: false }
+        - createIndex:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            indexName: idx_dar_dpr_id
+            columns:
+              - column: { name: dpr_id }
+        - createIndex:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            indexName: idx_dar_source
+            columns:
+              - column: { name: source }
+
+  # Phase 6 — relax uk_dar_unique so DPR-owned rows can coexist for the same
+  # (project, date, activity, resource) key (e.g. day shift + night shift). MANUAL CRUD
+  # still rejects duplicates via a partial unique index.
+  - changeSet:
+      id: 073-dar-relax-unique-to-manual
+      author: bipros
+      changes:
+        - dropUniqueConstraint:
+            schemaName: project
+            tableName: daily_activity_resource_outputs
+            constraintName: uk_dar_unique
+        - sql:
+            dbms: postgresql
+            sql: >-
+              CREATE UNIQUE INDEX IF NOT EXISTS uk_dar_unique_manual
+              ON project.daily_activity_resource_outputs(project_id, output_date, activity_id, resource_id)
+              WHERE source = 'MANUAL';
+            rollback: DROP INDEX IF EXISTS project.uk_dar_unique_manual;

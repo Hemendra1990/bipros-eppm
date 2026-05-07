@@ -1,40 +1,17 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
+import type {
+  CreateDailyProgressReportRequest,
+  DailyProgressReportResponse,
+  UpdateDailyProgressReportRequest,
+} from "../types/dpr";
 
-export interface DailyProgressReportResponse {
-  id: string;
-  projectId: string;
-  reportDate: string;
-  supervisorResourceId: string | null;
-  supervisorName: string;
-  chainageFromM: number | null;
-  chainageToM: number | null;
-  activityName: string;
-  wbsNodeId: string | null;
-  boqItemNo: string | null;
-  unit: string;
-  qtyExecuted: number;
-  cumulativeQty: number | null;
-  weatherCondition: string | null;
-  remarks: string | null;
-}
-
-export interface CreateDailyProgressReportRequest {
-  reportDate: string;
-  supervisorResourceId?: string | null;
-  supervisorName: string;
-  chainageFromM?: number | null;
-  chainageToM?: number | null;
-  activityName: string;
-  wbsNodeId?: string | null;
-  boqItemNo?: string | null;
-  unit: string;
-  qtyExecuted: number;
-  weatherCondition?: string | null;
-  remarks?: string | null;
-}
-
-export type UpdateDailyProgressReportRequest = CreateDailyProgressReportRequest;
+// Re-export so existing call sites (`import ... from "@/lib/api/dprApi"`) keep working.
+export type {
+  CreateDailyProgressReportRequest,
+  DailyProgressReportResponse,
+  UpdateDailyProgressReportRequest,
+} from "../types/dpr";
 
 export interface DprListFilters {
   from?: string;

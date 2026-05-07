@@ -1,0 +1,148 @@
+databaseChangeLog:
+  # Phase 1 — extend daily_progress_reports with multi-section enrichment columns.
+  - changeSet:
+      id: 072-dpr-add-multi-section-columns
+      author: bipros
+      comment: |
+        Add the supplementary fields supervisors capture on the handwritten DPR sheet but the
+        flat row was missing: side (LHS/RHS/CENTER), shift, start/end time, landmark, top-level
+        contractor, approval status, and safety/delay observations.
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: daily_progress_reports
+            columns:
+              - column: { name: side, type: VARCHAR(10) }
+              - column: { name: landmark, type: VARCHAR(255) }
+              - column: { name: start_time, type: TIME }
+              - column: { name: end_time, type: TIME }
+              - column: { name: shift, type: VARCHAR(10) }
+              - column:
+                  name: approval_status
+                  type: VARCHAR(20)
+                  defaultValue: DRAFT
+              - column: { name: contractor_name, type: VARCHAR(150) }
+              - column: { name: delay_reason, type: VARCHAR(500) }
+              - column: { name: safety_observation, type: VARCHAR(500) }
+              - column:
+                  name: safety_incident_type
+                  type: VARCHAR(20)
+                  defaultValue: NONE
+
+  # Phase 1b — backfill existing rows so DRAFT/NONE filters don't silently drop legacy data.
+  - changeSet:
+      id: 072-dpr-backfill-defaults
+      author: bipros
+      changes:
+        - sql:
+            sql: >-
+              UPDATE project.daily_progress_reports
+                 SET approval_status = 'DRAFT'
+               WHERE approval_status IS NULL;
+              UPDATE project.daily_progress_reports
+                 SET safety_incident_type = 'NONE'
+               WHERE safety_incident_type IS NULL;
+
+  # Phase 2 — manpower line items per DPR row.
+  - changeSet:
+      id: 072-create-dpr-manpower
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: dpr_manpower
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints: { primaryKey: true, nullable: false }
+              # Soft FK to project.daily_progress_reports.id; lifecycle owned by the service.
+              - column: { name: dpr_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: trade, type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: category, type: VARCHAR(20) }
+              - column: { name: nos, type: INT }
+              - column: { name: working_hours, type: DECIMAL(6,2) }
+              - column: { name: ot_hours, type: DECIMAL(6,2) }
+              - column: { name: contractor_name, type: VARCHAR(150) }
+              - column: { name: remarks, type: VARCHAR(500) }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_manpower
+            indexName: idx_dpr_manpower_dpr
+            columns:
+              - column: { name: dpr_id }
+
+  # Phase 3 — equipment / PMV line items per DPR row.
+  - changeSet:
+      id: 072-create-dpr-equipment
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: dpr_equipment
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints: { primaryKey: true, nullable: false }
+              - column: { name: dpr_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: equipment_type, type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: fleet_no, type: VARCHAR(50) }
+              - column: { name: ownership, type: VARCHAR(20) }
+              - column: { name: nos, type: INT }
+              - column: { name: working_hours, type: DECIMAL(6,2) }
+              - column: { name: idle_hours, type: DECIMAL(6,2) }
+              - column: { name: breakdown_hours, type: DECIMAL(6,2) }
+              - column: { name: fuel_litres, type: DECIMAL(10,2) }
+              - column: { name: operator_name, type: VARCHAR(150) }
+              - column: { name: availability_status, type: VARCHAR(20) }
+              - column: { name: remarks, type: VARCHAR(500) }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_equipment
+            indexName: idx_dpr_equipment_dpr
+            columns:
+              - column: { name: dpr_id }
+
+  # Phase 4 — material consumption line items per DPR row.
+  - changeSet:
+      id: 072-create-dpr-material
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: dpr_material
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints: { primaryKey: true, nullable: false }
+              - column: { name: dpr_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: material_name, type: VARCHAR(150), constraints: { nullable: false } }
+              - column: { name: quantity, type: DECIMAL(18,3) }
+              - column: { name: unit, type: VARCHAR(20) }
+              - column: { name: source, type: VARCHAR(150) }
+              - column: { name: batch_no, type: VARCHAR(60) }
+              - column: { name: vendor_name, type: VARCHAR(150) }
+              - column: { name: remarks, type: VARCHAR(500) }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_material
+            indexName: idx_dpr_material_dpr
+            columns:
+              - column: { name: dpr_id }

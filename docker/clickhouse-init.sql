@@ -46,9 +46,18 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.dim_activity (
     chainage_from_m Nullable(Float64),
     chainage_to_m Nullable(Float64),
     is_critical UInt8,
+    -- Cached supervisor of this activity. Soft FK to OLTP resource.resources.id.
+    -- Populated by DimensionSyncJob from Activity.responsibleResourceId.
+    responsible_resource_id Nullable(UUID),
+    responsible_resource_name String DEFAULT '',
     _version UInt64
 ) ENGINE = ReplacingMergeTree(_version)
   ORDER BY (project_id, activity_id);
+
+-- Idempotent for existing deployments: bring dim_activity up to schema with supervisor cols.
+ALTER TABLE bipros_analytics.dim_activity
+    ADD COLUMN IF NOT EXISTS responsible_resource_id Nullable(UUID),
+    ADD COLUMN IF NOT EXISTS responsible_resource_name String DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS bipros_analytics.dim_resource (
     resource_id UUID,

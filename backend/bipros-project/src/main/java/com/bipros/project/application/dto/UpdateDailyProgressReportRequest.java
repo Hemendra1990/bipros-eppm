@@ -1,5 +1,10 @@
 package com.bipros.project.application.dto;
 
+import com.bipros.project.domain.model.DprApprovalStatus;
+import com.bipros.project.domain.model.SafetyIncidentType;
+import com.bipros.project.domain.model.Shift;
+import com.bipros.project.domain.model.Side;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -7,12 +12,14 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * All fields except chainage, BOQ link, weather, and remarks are required — full replacement
- * of the row, not a sparse patch. Keeps the BOQ delta math unambiguous (old row → new row in
- * one transactional write).
+ * Full replacement of the row, not a sparse patch — the BOQ delta math depends on the old vs.
+ * new qty in one transactional write. Child collections are also fully replaced (delete-by-dprId
+ * then re-insert) so a missing list ⇒ no children.
  */
 public record UpdateDailyProgressReportRequest(
     @NotNull LocalDate reportDate,
@@ -23,6 +30,8 @@ public record UpdateDailyProgressReportRequest(
 
     @PositiveOrZero Long chainageFromM,
     @PositiveOrZero Long chainageToM,
+
+    UUID activityId,
 
     @NotBlank String activityName,
 
@@ -36,5 +45,20 @@ public record UpdateDailyProgressReportRequest(
 
     String weatherCondition,
 
-    String remarks
+    String remarks,
+
+    Side side,
+    String landmark,
+    LocalTime startTime,
+    LocalTime endTime,
+    Shift shift,
+    DprApprovalStatus approvalStatus,
+    String contractorName,
+    String delayReason,
+    String safetyObservation,
+    SafetyIncidentType safetyIncidentType,
+
+    @Valid List<DprManpowerRow> manpower,
+    @Valid List<DprEquipmentRow> equipment,
+    @Valid List<DprMaterialRow> materials
 ) {}

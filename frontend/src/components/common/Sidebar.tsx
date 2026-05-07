@@ -55,6 +55,7 @@ const groups: NavGroup[] = [
       { name: "Portfolios", href: "/portfolios", icon: Briefcase },
       { name: "Projects", href: "/projects", icon: FolderTree, module: "M1_WBS_GIS" },
       { name: "EPS", href: "/eps", icon: Layers, module: "M1_WBS_GIS" },
+      { name: "OBS", href: "/obs", icon: Network, module: "M1_WBS_GIS" },
       { name: "Dashboards", href: "/dashboards", icon: LayoutGrid, module: "M9_REPORTS" },
     ],
   },
@@ -68,7 +69,6 @@ const groups: NavGroup[] = [
     label: "Control",
     items: [
       { name: "Reports", href: "/reports", icon: BarChart3, module: "M9_REPORTS" },
-      { name: "OBS", href: "/obs", icon: Network, module: "M1_WBS_GIS" },
       { name: "Analytics", href: "/analytics", icon: Sparkles, module: "M9_REPORTS" },
     ],
   },

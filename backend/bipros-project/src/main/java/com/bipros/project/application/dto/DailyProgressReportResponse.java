@@ -1,9 +1,15 @@
 package com.bipros.project.application.dto;
 
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprApprovalStatus;
+import com.bipros.project.domain.model.SafetyIncidentType;
+import com.bipros.project.domain.model.Shift;
+import com.bipros.project.domain.model.Side;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 public record DailyProgressReportResponse(
@@ -14,6 +20,7 @@ public record DailyProgressReportResponse(
     String supervisorName,
     Long chainageFromM,
     Long chainageToM,
+    UUID activityId,
     String activityName,
     UUID wbsNodeId,
     String boqItemNo,
@@ -21,18 +28,55 @@ public record DailyProgressReportResponse(
     BigDecimal qtyExecuted,
     BigDecimal cumulativeQty,
     String weatherCondition,
-    String remarks
+    String remarks,
+
+    Side side,
+    String landmark,
+    LocalTime startTime,
+    LocalTime endTime,
+    Shift shift,
+    DprApprovalStatus approvalStatus,
+    String contractorName,
+    String delayReason,
+    String safetyObservation,
+    SafetyIncidentType safetyIncidentType,
+
+    List<DprManpowerRow> manpower,
+    List<DprEquipmentRow> equipment,
+    List<DprMaterialRow> materials,
+    List<String> warnings
 ) {
   /**
    * Convenience constructor for the legacy call sites (audit logging) that don't have a
-   * computed cumulative on hand. Sets cumulativeQty to the row's qtyExecuted as a placeholder
-   * — the list endpoint always computes the real cumulative via the service.
+   * computed cumulative or child rows on hand. Sets cumulativeQty to the row's qtyExecuted as
+   * a placeholder; the list endpoint always computes the real cumulative via the service. Child
+   * collections default to {@link List#of()}.
    */
   public static DailyProgressReportResponse from(DailyProgressReport r) {
-    return from(r, r.getQtyExecuted());
+    return from(r, r.getQtyExecuted(), List.of(), List.of(), List.of(), List.of());
   }
 
   public static DailyProgressReportResponse from(DailyProgressReport r, BigDecimal cumulativeQty) {
+    return from(r, cumulativeQty, List.of(), List.of(), List.of(), List.of());
+  }
+
+  /** 5-arg overload — read paths that don't surface warnings. */
+  public static DailyProgressReportResponse from(
+      DailyProgressReport r,
+      BigDecimal cumulativeQty,
+      List<DprManpowerRow> manpower,
+      List<DprEquipmentRow> equipment,
+      List<DprMaterialRow> materials) {
+    return from(r, cumulativeQty, manpower, equipment, materials, List.of());
+  }
+
+  public static DailyProgressReportResponse from(
+      DailyProgressReport r,
+      BigDecimal cumulativeQty,
+      List<DprManpowerRow> manpower,
+      List<DprEquipmentRow> equipment,
+      List<DprMaterialRow> materials,
+      List<String> warnings) {
     return new DailyProgressReportResponse(
         r.getId(),
         r.getProjectId(),
@@ -41,6 +85,7 @@ public record DailyProgressReportResponse(
         r.getSupervisorName(),
         r.getChainageFromM(),
         r.getChainageToM(),
+        r.getActivityId(),
         r.getActivityName(),
         r.getWbsNodeId(),
         r.getBoqItemNo(),
@@ -48,7 +93,21 @@ public record DailyProgressReportResponse(
         r.getQtyExecuted(),
         cumulativeQty,
         r.getWeatherCondition(),
-        r.getRemarks()
+        r.getRemarks(),
+        r.getSide(),
+        r.getLandmark(),
+        r.getStartTime(),
+        r.getEndTime(),
+        r.getShift(),
+        r.getApprovalStatus(),
+        r.getContractorName(),
+        r.getDelayReason(),
+        r.getSafetyObservation(),
+        r.getSafetyIncidentType(),
+        manpower,
+        equipment,
+        materials,
+        warnings
     );
   }
 }

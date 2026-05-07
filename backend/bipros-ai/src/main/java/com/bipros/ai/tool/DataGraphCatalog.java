@@ -42,8 +42,13 @@ public class DataGraphCatalog {
                 planned_start_date, planned_finish_date, early_/late_/actual_dates,
                 total_float, free_float, percent_complete, is_critical,
                 chainage_from_m, chainage_to_m, assigned_to, responsible_user_id,
+                responsible_resource_id→resource.resources, responsible_resource_name,
                 work_activity_id→resource.work_activities, cost_account_id)
               the spine. DPRs join by activity_name, ResourceAssignments by id.
+              responsible_resource_id = the SUPERVISOR (Labor Resource) managing this
+              activity — written by the bulk-supervisor-assignment flow. PRIMARY way
+              to enumerate "activities supervised by X". responsible_user_id is the
+              older user-based owner field, separate concept.
 
             activity.activity_relationships(id, project_id, predecessor_activity_id→activities,
                 successor_activity_id→activities, relationship_type∈{FF,FS,SS,SF}, lag_days)
@@ -80,11 +85,13 @@ public class DataGraphCatalog {
                 resource_id→resources, resource_type_id→resource_types, norm_type, output_per_day, unit)
               budgeted output for a (work_activity × resource_type) tuple.
 
-            project.daily_progress_reports(id, project_id, report_date, supervisor_name,
+            project.daily_progress_reports(id, project_id, report_date,
+                supervisor_resource_id→resource.resources, supervisor_name,
                 activity_name (string match to activities.name — NO FK), wbs_node_id→wbs_nodes,
                 qty_executed, cumulative_qty, unit, boq_item_no→boq_items.item_no,
                 weather_condition, remarks, chainage_from_m, chainage_to_m)
-              field-level work record. Filter by date range, supervisor, activity name, WBS.
+              field-level work record. Filter by date range, supervisor_resource_id
+              (preferred — stable FK), supervisor_name (string fallback), activity, WBS.
 
             project.daily_activity_resource_outputs(id, project_id, output_date, activity_id,
                 resource_id, qty_executed, unit, hours_worked, days_worked, remarks)
@@ -134,6 +141,10 @@ public class DataGraphCatalog {
             ───── SHORTHAND PATTERNS (the LLM uses these for tool routing) ─────
             • WBS→Activity→Resource chain: WbsNode.id → Activity.wbs_node_id;
               Activity.id → ResourceAssignment.activity_id; ResourceAssignment.resource_id → Resource.id
+            • Supervisor→Activity (DIRECT, PREFERRED): Activity.responsible_resource_id
+              → Resource.id. The bulk-supervisor-assignment flow writes this; use it
+              first for "which activities does X supervise". Fall back to DPR
+              supervisor_name string-match only when responsible_resource_id is null.
             • Supervisor→Manpower (TWO links): walk Resource.parent_id (ORG) AND
               ManpowerMaster.reporting_manager_id (HR). Some teams use one, some both.
             • DPR→Activity: string match daily_progress_reports.activity_name to

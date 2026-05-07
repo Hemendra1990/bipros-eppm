@@ -5,6 +5,7 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
+import com.bipros.resource.application.dto.AssignedResourcePickerOption;
 import com.bipros.resource.application.dto.CreateResourceAssignmentRequest;
 import com.bipros.resource.application.dto.ResourceAssignmentResponse;
 import com.bipros.resource.application.dto.ResourceUsageEntry;
@@ -40,6 +41,7 @@ public class ResourceAssignmentService {
   private final ResourceRoleRepository roleRepository;
   private final ActivityRepository activityRepository;
   private final ProjectResourceService projectResourceService;
+  private final RateSnapshotService rateSnapshotService;
   private final AuditService auditService;
 
   /**
@@ -406,6 +408,81 @@ public class ResourceAssignmentService {
 
   public List<ResourceAssignmentResponse> getAssignmentsByActivity(UUID activityId) {
     return hydrate(assignmentRepository.findByActivityId(activityId));
+  }
+
+  /**
+   * Picker-mode lookup for the DPR drawer. Returns one option per staffed resource assigned to
+   * {@code activityId}, optionally filtered by {@code kind} (MANPOWER / EQUIPMENT / MATERIAL),
+   * with a rate snapshot resolved at {@code reportDate}.
+   *
+   * <p>Role-only assignments (no {@code resource_id}) are excluded — the supervisor needs to pick
+   * a concrete resource for the cost snapshot to make sense.
+   *
+   * <p>{@code MANPOWER} maps to the seeded resource type code {@code LABOR}.
+   */
+  @Transactional(readOnly = true)
+  public List<AssignedResourcePickerOption> getPickerOptionsByActivity(
+      UUID activityId, String kind, LocalDate reportDate) {
+    List<ResourceAssignment> assignments = assignmentRepository.findByActivityId(activityId);
+    if (assignments.isEmpty()) return List.of();
+
+    var resourceIds = assignments.stream()
+        .map(ResourceAssignment::getResourceId)
+        .filter(Objects::nonNull)
+        .distinct()
+        .toList();
+    if (resourceIds.isEmpty()) return List.of();
+
+    Map<UUID, Resource> resourceMap = resourceRepository.findAllById(resourceIds).stream()
+        .collect(Collectors.toMap(Resource::getId, r -> r));
+
+    String requestedTypeCode = mapKindToResourceTypeCode(kind);
+    LocalDate effectiveOn = reportDate != null ? reportDate : LocalDate.now();
+
+    return assignments.stream()
+        .filter(a -> a.getResourceId() != null)
+        .map(a -> {
+          Resource resource = resourceMap.get(a.getResourceId());
+          if (resource == null) return null;
+          String typeCode = resource.getResourceType() == null ? null : resource.getResourceType().getCode();
+          if (requestedTypeCode != null && !requestedTypeCode.equalsIgnoreCase(typeCode)) {
+            return null;
+          }
+          RateSnapshotService.RateSnapshot snap = rateSnapshotService.resolve(a, effectiveOn);
+          return new AssignedResourcePickerOption(
+              a.getId(),
+              resource.getId(),
+              resource.getName(),
+              resource.getCode(),
+              resource.getUnit(),
+              snap.unitRateBasis(),
+              snap.unitRate(),
+              a.getRateType(),
+              a.getPlannedUnits(),
+              a.getActualUnits(),
+              a.getPlannedCost(),
+              a.getActualCost(),
+              resourceTypeCodeToKind(typeCode));
+        })
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  /** UI-facing kind ↔ seeded ResourceType code mapping. {@code MANPOWER} ↔ {@code LABOR}. */
+  static String mapKindToResourceTypeCode(String kind) {
+    if (kind == null || kind.isBlank()) return null;
+    String k = kind.trim().toUpperCase();
+    return switch (k) {
+      case "MANPOWER", "LABOR", "LABOUR" -> "LABOR";
+      case "EQUIPMENT" -> "EQUIPMENT";
+      case "MATERIAL" -> "MATERIAL";
+      default -> k;
+    };
+  }
+
+  static String resourceTypeCodeToKind(String typeCode) {
+    if (typeCode == null) return null;
+    return "LABOR".equalsIgnoreCase(typeCode) ? "MANPOWER" : typeCode.toUpperCase();
   }
 
   public List<ResourceAssignmentResponse> getAssignmentsByResource(UUID resourceId) {

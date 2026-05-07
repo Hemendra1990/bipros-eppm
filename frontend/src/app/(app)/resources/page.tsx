@@ -169,7 +169,7 @@ export default function ResourcesPage() {
   }, [typeTab, deleteMutation]);
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <PageHeader
         title="Resources"
         description="Manpower, equipment and material resources used across projects"
@@ -257,6 +257,8 @@ export default function ResourcesPage() {
           searchable
           sortable
           resizable
+          fullHeight
+          className="flex-1 min-h-0"
         />
       )}
     </div>

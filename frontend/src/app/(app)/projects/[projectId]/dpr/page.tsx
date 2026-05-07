@@ -41,16 +41,24 @@ export default function DprPage() {
     queryFn: () => activityApi.listActivities(projectId, 0, 1000),
     enabled: !!projectId,
   });
-  const activityOptions = useMemo(() => {
-    const seen = new Set<string>();
+  // value=id so the form has a deterministic FK to fetch the activity's resource assignments;
+  // label still shows the activity name. Build a side index name→id so we can resolve the id
+  // for legacy DPRs whose payload only carries activityName.
+  const activityIndex = useMemo(() => {
     const opts: SelectOption[] = [];
+    const byName = new Map<string, string>();
+    const byId = new Map<string, string>();
+    const seen = new Set<string>();
     for (const a of activitiesData?.data?.content ?? []) {
-      if (seen.has(a.name)) continue;
-      seen.add(a.name);
-      opts.push({ value: a.name, label: a.name });
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      opts.push({ value: a.id, label: a.name });
+      if (!byName.has(a.name.toLowerCase())) byName.set(a.name.toLowerCase(), a.id);
+      byId.set(a.id, a.name);
     }
-    return opts;
+    return { opts, byName, byId };
   }, [activitiesData]);
+  const activityOptions = activityIndex.opts;
 
   const { data: boqData } = useQuery({
     queryKey: ["boq", projectId],
@@ -232,16 +240,20 @@ export default function DprPage() {
           open={showForm}
           onClose={closeForm}
           title={editing ? "Edit Activity" : "Add Activity"}
+          widthClass="max-w-5xl"
         >
           <DprActivityForm
             // Re-mount when switching between edit targets (or new vs. edit) so the form's
             // lazy useState initializer reseeds. Without this, clicking Edit on row B while
             // the form for row A is open would keep A's children visible.
             key={editing?.id ?? "new"}
+            projectId={projectId}
             editing={editing}
             defaultDate={editing?.reportDate ?? from ?? todayIso()}
             supervisorOptions={supervisorOptions}
             activityOptions={activityOptions}
+            activityNameById={activityIndex.byId}
+            activityIdByName={activityIndex.byName}
             boqOptions={boqOptions}
             onCancel={closeForm}
             onSave={handleSave}

@@ -1,16 +1,12 @@
 package com.bipros.ai.tool.supervisor;
 
-import com.bipros.activity.domain.model.Activity;
-import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
 import com.bipros.ai.query.ResourceContextFacade;
 import com.bipros.ai.query.ResourceProfile;
+import com.bipros.ai.query.SupervisorPerformance;
+import com.bipros.ai.query.SupervisorPerformanceCalculator;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolResult;
-import com.bipros.project.domain.model.DailyActivityResourceOutput;
-import com.bipros.project.domain.model.DailyProgressReport;
-import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
-import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,29 +22,25 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
- * Supervisor view: team enumeration + performance aggregates. Merged into one
- * tool because both anchor on the same supervisor identity — splitting them
- * would force the LLM to pick a tool before knowing whether the user wants
- * roster or numbers, and the most common question ("Who reports to John and
- * how are they performing?") needs both.
+ * Supervisor view: team enumeration + performance rollup. Merged into one tool
+ * because both anchor on the same supervisor identity — splitting them would
+ * force the LLM to pick a tool before knowing whether the user wants roster or
+ * numbers, and the most common question ("Who reports to John and how are they
+ * performing?") needs both.
  *
  * <p>{@code op} controls what gets returned:
  * <ul>
  *   <li>{@code team} — subordinate roster (org-tree + HR-tree union)</li>
- *   <li>{@code performance} — DPRs filed by the supervisor + output rows logged
- *     for the team's resources, aggregated over the date window</li>
+ *   <li>{@code performance} — supervised activities + cost / EVM (CPI/SPI) /
+ *     schedule rollup, plus DPRs and team output for the date window</li>
  *   <li>{@code both} (default) — both blocks</li>
  * </ul>
  */
@@ -59,9 +51,7 @@ public class SupervisorTool implements Tool {
 
   private final ResourceContextFacade facade;
   private final ResourceRepository resourceRepository;
-  private final DailyProgressReportRepository dprRepository;
-  private final DailyActivityResourceOutputRepository outputRepository;
-  private final ActivityRepository activityRepository;
+  private final SupervisorPerformanceCalculator calculator;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -72,14 +62,16 @@ public class SupervisorTool implements Tool {
   @Override
   public String description() {
     return "Supervisor / foreman / lead view. Returns the team roster (everyone under this "
-        + "supervisor via org-tree OR HR-tree) and/or their performance over a date window "
-        + "(DPRs filed, qty executed, hours / days worked, activities touched). Identify the "
-        + "supervisor by supervisor_resource_id (preferred) OR by supervisor_name (case-"
-        + "insensitive substring; ambiguous names → run resolve_entity first). "
-        + "op=\"team\" → roster only. op=\"performance\" → numbers only. op=\"both\" (default) "
-        + "→ both blocks. Use this for: \"Who reports to Foreman John?\", \"How is Site "
-        + "Engineer Sandeep's team performing?\", \"What did Supervisor Patel's crew deliver "
-        + "in March?\". Project-scoped.";
+        + "supervisor via org-tree OR HR-tree) and a full performance rollup for the supervised "
+        + "activities: count + status (not-started / in-progress / completed / delayed), planned vs "
+        + "actual cost + variance %, EVM (BAC, PV, EV, AC, CPI, SPI, CV, SV), DPR cadence, qty "
+        + "executed, and team hours/days worked over a date window. Identify the supervisor by "
+        + "supervisor_resource_id (preferred) OR by supervisor_name (case-insensitive substring; "
+        + "ambiguous names → run resolve_entity first). op=\"team\" → roster only. "
+        + "op=\"performance\" → numbers only. op=\"both\" (default) → both blocks. Use this for: "
+        + "\"Who reports to Foreman John?\", \"How is Site Engineer Sandeep's team performing on "
+        + "cost?\", \"What's Patel's CPI / SPI this month?\". For comparing two or more "
+        + "supervisors side-by-side, use compare_supervisors instead. Project-scoped.";
   }
 
   @Override
@@ -142,7 +134,13 @@ public class SupervisorTool implements Tool {
 
     UUID supervisorId = resolveSupervisorId(input);
     Resource supervisor = supervisorId == null ? null : resourceRepository.findById(supervisorId).orElse(null);
-    String supervisorName = orNull(input.path("supervisor_name").asText(null));
+    String supervisorNameInput = orNull(input.path("supervisor_name").asText(null));
+
+    if (supervisor == null && supervisorNameInput == null) {
+      return ToolResult.error(
+          "Provide either supervisor_resource_id or supervisor_name. Use resolve_entity to convert a name into a UUID.");
+    }
+
     Optional<ResourceProfile> profileOpt =
         supervisor != null
             ? facade.loadProfile(
@@ -153,12 +151,7 @@ public class SupervisorTool implements Tool {
     String resolvedName =
         profile != null && profile.manpower() != null && profile.manpower().fullName() != null
             ? profile.manpower().fullName()
-            : (supervisor != null ? supervisor.getName() : supervisorName);
-
-    if (supervisor == null && supervisorName == null) {
-      return ToolResult.error(
-          "Provide either supervisor_resource_id or supervisor_name. Use resolve_entity to convert a name into a UUID.");
-    }
+            : (supervisor != null ? supervisor.getName() : supervisorNameInput);
 
     ObjectNode wrapper = objectMapper.createObjectNode();
     wrapper.put("op", op);
@@ -176,7 +169,7 @@ public class SupervisorTool implements Tool {
         wrapper.put("role", profile.roleName());
       }
     } else {
-      wrapper.put("supervisor_name", supervisorName);
+      wrapper.put("supervisor_name", supervisorNameInput);
     }
 
     if (op.equals("team") || op.equals("both")) {
@@ -199,135 +192,144 @@ public class SupervisorTool implements Tool {
       wrapper.put("team_size", teamRows.size());
     }
 
-    Set<UUID> teamResourceIds = new HashSet<>();
-    if (profile != null) {
-      for (ResourceProfile.Subordinate s : profile.subordinates()) teamResourceIds.add(s.resourceId());
-    }
-
-    if (op.equals("performance") || op.equals("both")) {
-      String filterName = resolvedName != null ? resolvedName : supervisorName;
-      List<DailyProgressReport> dprAll =
-          dprRepository.findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(
-              projectId, dateFrom, dateTo);
-      int dprCount = 0;
-      Set<String> activitiesTouched = new HashSet<>();
-      Set<LocalDate> reportDates = new HashSet<>();
-      BigDecimal totalQty = BigDecimal.ZERO;
-      Map<String, ActivityRollup> activityRoll = new LinkedHashMap<>();
-      for (DailyProgressReport d : dprAll) {
-        if (filterName == null) continue;
-        if (d.getSupervisorName() == null) continue;
-        if (!d.getSupervisorName().equalsIgnoreCase(filterName)
-            && !d.getSupervisorName().toLowerCase().contains(filterName.toLowerCase())) continue;
-        dprCount++;
-        if (d.getActivityName() != null) activitiesTouched.add(d.getActivityName());
-        if (d.getReportDate() != null) reportDates.add(d.getReportDate());
-        if (d.getQtyExecuted() != null) totalQty = totalQty.add(d.getQtyExecuted());
-        if (d.getActivityName() != null) {
-          activityRoll
-              .computeIfAbsent(d.getActivityName(), k -> new ActivityRollup(k))
-              .addDpr(d);
-        }
-      }
-
-      double totalHours = 0;
-      double totalDays = 0;
-      Map<UUID, MemberRollup> memberRoll = new LinkedHashMap<>();
-      if (!teamResourceIds.isEmpty()) {
-        List<DailyActivityResourceOutput> outputs =
-            outputRepository.findByProjectIdAndOutputDateBetweenOrderByOutputDateDescIdAsc(
-                projectId, dateFrom, dateTo);
-        for (DailyActivityResourceOutput o : outputs) {
-          if (o.getResourceId() == null || !teamResourceIds.contains(o.getResourceId())) continue;
-          if (o.getHoursWorked() != null) totalHours += o.getHoursWorked();
-          if (o.getDaysWorked() != null) totalDays += o.getDaysWorked();
-          memberRoll
-              .computeIfAbsent(o.getResourceId(), k -> new MemberRollup(k))
-              .addOutput(o);
-        }
-      }
-
-      ObjectNode perf = objectMapper.createObjectNode();
-      perf.put("dpr_count", dprCount);
-      perf.put("activities_touched", activitiesTouched.size());
-      perf.put("report_dates", reportDates.size());
-      perf.put("total_qty_executed", totalQty.doubleValue());
-      perf.put("total_hours_worked_by_team", totalHours);
-      perf.put("total_days_worked_by_team", totalDays);
-
-      ArrayNode topActivities = objectMapper.createArrayNode();
-      activityRoll.values().stream()
-          .sorted(Comparator.comparingDouble(ActivityRollup::qty).reversed())
-          .limit(10)
-          .forEach(
-              ar -> {
-                ObjectNode n = objectMapper.createObjectNode();
-                n.put("activity_name", ar.activityName);
-                n.put("dpr_count", ar.count);
-                n.put("qty_executed", ar.qty);
-                topActivities.add(n);
-              });
-      perf.set("top_activities", topActivities);
-
-      ArrayNode topMembers = objectMapper.createArrayNode();
-      Map<UUID, Resource> resourceById = new HashMap<>();
-      if (!memberRoll.isEmpty()) {
-        resourceRepository.findAllById(memberRoll.keySet()).forEach(r -> resourceById.put(r.getId(), r));
-      }
-      memberRoll.values().stream()
-          .sorted(Comparator.comparingDouble(MemberRollup::days).reversed())
-          .limit(15)
-          .forEach(
-              mr -> {
-                Resource r = resourceById.get(mr.resourceId);
-                ObjectNode n = objectMapper.createObjectNode();
-                n.put("resource_id", mr.resourceId.toString());
-                n.put("code", r != null ? r.getCode() : null);
-                n.put("name", r != null ? r.getName() : null);
-                n.put("hours_worked", mr.hours);
-                n.put("days_worked", mr.days);
-                n.put("qty_executed", mr.qty);
-                n.put("activities_touched", mr.activityIds.size());
-                topMembers.add(n);
-              });
-      perf.set("top_members", topMembers);
-
-      wrapper.set("performance", perf);
+    SupervisorPerformance perf = null;
+    if ((op.equals("performance") || op.equals("both")) && supervisor != null) {
+      perf = calculator.compute(projectId, supervisor.getId(), dateFrom, dateTo);
+      wrapper.set("performance", renderPerformance(perf));
+    } else if (op.equals("performance") || op.equals("both")) {
+      ObjectNode err = objectMapper.createObjectNode();
+      err.put("error", "performance requires a resolved supervisor_resource_id");
+      wrapper.set("performance", err);
     }
 
     Map<String, List<UUID>> links = new HashMap<>();
     if (supervisor != null) links.put("supervisor", List.of(supervisor.getId()));
-    if (!teamResourceIds.isEmpty()) links.put("team_resources", new ArrayList<>(teamResourceIds));
+    if (profile != null && !profile.subordinates().isEmpty()) {
+      List<UUID> teamIds = new ArrayList<>();
+      for (ResourceProfile.Subordinate s : profile.subordinates()) teamIds.add(s.resourceId());
+      links.put("team_resources", teamIds);
+    }
     ToolResult.attachLinks(wrapper, links);
 
     String header =
         supervisor != null
             ? (resolvedName != null ? resolvedName : supervisor.getName()) + " (" + supervisor.getCode() + ")"
-            : supervisorName;
+            : supervisorNameInput;
     String summary;
     if (op.equals("team")) {
       summary = header + " — " + (profile == null ? 0 : profile.subordinates().size()) + " on team";
     } else if (op.equals("performance")) {
-      summary =
-          header
-              + " — "
-              + wrapper.path("performance").path("dpr_count").asInt()
-              + " DPRs, "
-              + wrapper.path("performance").path("activities_touched").asInt()
-              + " activities, qty "
-              + wrapper.path("performance").path("total_qty_executed").asDouble();
+      summary = perf == null ? header + " — no performance (no resource id)" : performanceSummary(header, perf);
     } else {
+      int teamSize = profile == null ? 0 : profile.subordinates().size();
       summary =
-          header
-              + " — team "
-              + (profile == null ? 0 : profile.subordinates().size())
-              + ", "
-              + wrapper.path("performance").path("dpr_count").asInt()
-              + " DPRs, "
-              + wrapper.path("performance").path("activities_touched").asInt()
-              + " activities";
+          perf == null
+              ? header + " — team " + teamSize + ", no performance (no resource id)"
+              : performanceSummary(header, perf) + ", team " + teamSize;
     }
     return ToolResult.ok(summary, wrapper);
+  }
+
+  private ObjectNode renderPerformance(SupervisorPerformance p) {
+    ObjectNode out = objectMapper.createObjectNode();
+
+    ObjectNode scope = objectMapper.createObjectNode();
+    scope.put("supervised_activity_count", p.activityScope().total());
+    scope.put("not_started", p.activityScope().notStarted());
+    scope.put("in_progress", p.activityScope().inProgress());
+    scope.put("completed", p.activityScope().completed());
+    scope.put("delayed", p.activityScope().delayed());
+    if (p.activityScope().avgPctComplete() != null) {
+      scope.put("avg_pct_complete", p.activityScope().avgPctComplete());
+    }
+    ArrayNode codes = objectMapper.createArrayNode();
+    for (String c : p.activityScope().topCodes()) codes.add(c);
+    scope.set("top_activity_codes", codes);
+    out.set("activity_scope", scope);
+
+    ObjectNode cost = objectMapper.createObjectNode();
+    cost.put("planned", p.costRollup().planned().toPlainString());
+    cost.put("actual", p.costRollup().actual().toPlainString());
+    cost.put("remaining", p.costRollup().remaining().toPlainString());
+    cost.put("at_completion", p.costRollup().atCompletion().toPlainString());
+    cost.put("variance", p.costRollup().variance().toPlainString());
+    if (p.costRollup().variancePct() != null) cost.put("variance_pct", p.costRollup().variancePct());
+    if (!p.costRollup().overriddenFormulaCodes().isEmpty()) {
+      ArrayNode overrides = objectMapper.createArrayNode();
+      for (String code : p.costRollup().overriddenFormulaCodes()) overrides.add(code);
+      cost.set("formula_overrides", overrides);
+    }
+    out.set("cost", cost);
+
+    ObjectNode evm = objectMapper.createObjectNode();
+    evm.put("bac", p.evmRollup().bac().toPlainString());
+    evm.put("pv", p.evmRollup().pv().toPlainString());
+    evm.put("ev", p.evmRollup().ev().toPlainString());
+    evm.put("ac", p.evmRollup().ac().toPlainString());
+    if (p.evmRollup().cpi() != null) evm.put("cpi", p.evmRollup().cpi());
+    if (p.evmRollup().spi() != null) evm.put("spi", p.evmRollup().spi());
+    evm.put("cv", p.evmRollup().cv().toPlainString());
+    evm.put("sv", p.evmRollup().sv().toPlainString());
+    evm.put("activity_count_with_evm", p.evmRollup().activityCountWithEvm());
+    evm.put("ev_source", p.evmRollup().evSource());
+    out.set("evm", evm);
+
+    ObjectNode dpr = objectMapper.createObjectNode();
+    dpr.put("dpr_count", p.dprRollup().dprCount());
+    dpr.put("distinct_report_dates", p.dprRollup().distinctReportDates());
+    dpr.put("activities_touched", p.dprRollup().distinctActivitiesTouched());
+    dpr.put("total_qty_executed", p.dprRollup().totalQtyExecuted().toPlainString());
+    dpr.put("team_hours_worked", p.dprRollup().totalHoursWorkedByTeam().toPlainString());
+    dpr.put("team_days_worked", p.dprRollup().totalDaysWorkedByTeam().toPlainString());
+    dpr.put("match_source", p.dprRollup().matchSource());
+    out.set("dpr", dpr);
+
+    ArrayNode topActs = objectMapper.createArrayNode();
+    for (SupervisorPerformance.ActivityTopRollup r : p.topActivities()) {
+      ObjectNode n = objectMapper.createObjectNode();
+      if (r.activityId() != null) n.put("activity_id", r.activityId().toString());
+      n.put("activity_name", r.activityName());
+      if (r.qtyExecuted() != null) n.put("qty_executed", r.qtyExecuted().toPlainString());
+      if (r.dprCount() != null) n.put("dpr_count", r.dprCount());
+      topActs.add(n);
+    }
+    out.set("top_activities", topActs);
+
+    ArrayNode topMembers = objectMapper.createArrayNode();
+    for (SupervisorPerformance.MemberRollup m : p.topMembers()) {
+      ObjectNode n = objectMapper.createObjectNode();
+      n.put("resource_id", m.resourceId().toString());
+      n.put("code", m.resourceCode());
+      n.put("name", m.resourceName());
+      if (m.qtyExecuted() != null) n.put("qty_executed", m.qtyExecuted().toPlainString());
+      if (m.hoursWorked() != null) n.put("hours_worked", m.hoursWorked().toPlainString());
+      if (m.daysWorked() != null) n.put("days_worked", m.daysWorked().toPlainString());
+      if (m.activitiesTouched() != null) n.put("activities_touched", m.activitiesTouched());
+      topMembers.add(n);
+    }
+    out.set("top_members", topMembers);
+
+    return out;
+  }
+
+  private static String performanceSummary(String header, SupervisorPerformance p) {
+    String cpi = p.evmRollup().cpi() == null ? "n/a" : String.format("%.2f", p.evmRollup().cpi());
+    String spi = p.evmRollup().spi() == null ? "n/a" : String.format("%.2f", p.evmRollup().spi());
+    BigDecimal varPlain = p.costRollup().variance();
+    return header
+        + " — "
+        + p.activityScope().total()
+        + " activities ("
+        + p.activityScope().delayed()
+        + " delayed), CPI "
+        + cpi
+        + ", SPI "
+        + spi
+        + ", cost variance "
+        + varPlain.toPlainString()
+        + ", "
+        + p.dprRollup().dprCount()
+        + " DPRs";
   }
 
   private UUID resolveSupervisorId(JsonNode input) {
@@ -355,47 +357,5 @@ public class SupervisorTool implements Tool {
 
   private static String orNull(String s) {
     return s == null || s.isBlank() ? null : s.trim();
-  }
-
-  private static class ActivityRollup {
-    final String activityName;
-    int count = 0;
-    double qty = 0;
-
-    ActivityRollup(String activityName) {
-      this.activityName = activityName;
-    }
-
-    void addDpr(DailyProgressReport d) {
-      count++;
-      if (d.getQtyExecuted() != null) qty += d.getQtyExecuted().doubleValue();
-    }
-
-    double qty() {
-      return qty;
-    }
-  }
-
-  private static class MemberRollup {
-    final UUID resourceId;
-    double hours = 0;
-    double days = 0;
-    double qty = 0;
-    Set<UUID> activityIds = new HashSet<>();
-
-    MemberRollup(UUID resourceId) {
-      this.resourceId = resourceId;
-    }
-
-    void addOutput(DailyActivityResourceOutput o) {
-      if (o.getHoursWorked() != null) hours += o.getHoursWorked();
-      if (o.getDaysWorked() != null) days += o.getDaysWorked();
-      if (o.getQtyExecuted() != null) qty += o.getQtyExecuted().doubleValue();
-      if (o.getActivityId() != null) activityIds.add(o.getActivityId());
-    }
-
-    double days() {
-      return days;
-    }
   }
 }

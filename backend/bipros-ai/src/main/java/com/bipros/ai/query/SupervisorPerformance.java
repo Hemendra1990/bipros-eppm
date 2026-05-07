@@ -6,10 +6,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Aggregated performance picture for one supervisor over a date window.
- * Combines DPR submissions (where {@code supervisor_name} matches the
- * supervisor's name) with daily resource outputs (when the supervisor's
- * subordinates appear as the resource on {@code daily_activity_resource_outputs}).
+ * Aggregated performance picture for one supervisor over a date window. Covers
+ * activity scope (what they manage), cost rollups, EVM (CPI/SPI), and the DPR /
+ * resource-output activity captured during the window.
+ *
+ * <p>Computed by {@code SupervisorPerformanceCalculator}. Consumed by both
+ * {@code SupervisorTool} (single supervisor) and {@code CompareSupervisorsTool}
+ * (multi-supervisor table). The metric definitions live in one place so the
+ * two tools can never drift.
  */
 public record SupervisorPerformance(
     UUID supervisorResourceId,
@@ -18,19 +22,66 @@ public record SupervisorPerformance(
     LocalDate dateFrom,
     LocalDate dateTo,
     int teamSize,
-    int dprCount,
-    int distinctActivities,
-    int distinctReportDates,
-    BigDecimal totalQtyExecuted,
-    BigDecimal totalHoursWorked,
-    BigDecimal totalDaysWorked,
-    BigDecimal plannedCostByTeam,
-    BigDecimal actualCostByTeam,
-    BigDecimal costVarianceByTeam,
-    List<ActivityRollup> topActivities,
+    ActivityScope activityScope,
+    CostRollup costRollup,
+    EvmRollup evmRollup,
+    DprRollup dprRollup,
+    List<ActivityTopRollup> topActivities,
     List<MemberRollup> topMembers) {
 
-  public record ActivityRollup(
+  public record ActivityScope(
+      int total,
+      int notStarted,
+      int inProgress,
+      int completed,
+      int delayed,
+      Double avgPctComplete,
+      List<String> topCodes) {}
+
+  /**
+   * Cost rollup for the supervisor's activities. {@code overriddenFormulaCodes} lists
+   * any formula codes (e.g. {@code RES_ACTUAL_COST}, {@code SUP_COST_VARIANCE_PCT}) that
+   * have an active project-level override applied for this project at compute time. Empty
+   * — never null — when all values came from default master formulas. The AI tools surface
+   * this list so the model can disclose the override to the user.
+   */
+  public record CostRollup(
+      BigDecimal planned,
+      BigDecimal actual,
+      BigDecimal remaining,
+      BigDecimal atCompletion,
+      BigDecimal variance,
+      Double variancePct,
+      List<String> overriddenFormulaCodes) {}
+
+  /**
+   * EV source: {@code "evm"} when populated from {@code evm_calculations} (latest
+   * per activity), {@code "expense"} when fallen back to {@code cost.activity_expenses}
+   * (EV proxy = budgeted_cost × percent_complete/100), {@code "mixed"} when both,
+   * {@code "none"} when neither was available.
+   */
+  public record EvmRollup(
+      BigDecimal bac,
+      BigDecimal pv,
+      BigDecimal ev,
+      BigDecimal ac,
+      Double cpi,
+      Double spi,
+      BigDecimal cv,
+      BigDecimal sv,
+      int activityCountWithEvm,
+      String evSource) {}
+
+  public record DprRollup(
+      int dprCount,
+      int distinctReportDates,
+      int distinctActivitiesTouched,
+      BigDecimal totalQtyExecuted,
+      BigDecimal totalHoursWorkedByTeam,
+      BigDecimal totalDaysWorkedByTeam,
+      String matchSource /* "activity_id" or "name" or "mixed" */) {}
+
+  public record ActivityTopRollup(
       UUID activityId,
       String activityCode,
       String activityName,

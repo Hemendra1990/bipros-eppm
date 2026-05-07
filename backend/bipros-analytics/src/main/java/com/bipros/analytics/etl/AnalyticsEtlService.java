@@ -165,9 +165,15 @@ public class AnalyticsEtlService {
         log.debug("Inserted evm_daily: project={} date={}", projectId, date);
     }
 
+    /**
+     * The {@code supervisor_user_id} ClickHouse column name predates the resource/user
+     * split — the value written here is the supervisor's RESOURCE id (FK to OLTP
+     * resource.resources.id). Renaming the column would break replication; we keep
+     * the legacy name and populate it correctly. See clickhouse-init.sql.
+     */
     public void insertDprLog(
             UUID projectId, UUID activityId, UUID dprId, LocalDate reportDate,
-            UUID supervisorUserId, String supervisorName,
+            UUID supervisorResourceId, String supervisorName,
             Double chainageFromM, Double chainageToM,
             Double qtyExecuted, Double cumulativeQty,
             String weather, Float temperatureC, String remarksText) {
@@ -177,7 +183,7 @@ public class AnalyticsEtlService {
             (project_id, activity_id, dpr_id, report_date, supervisor_user_id, supervisor_name,
              chainage_from_m, chainage_to_m, qty_executed, cumulative_qty,
              weather, temperature_c, remarks_text, remarks_embedding, event_ts, _version)
-            VALUES (:projectId, :activityId, :dprId, :reportDate, :supervisorUserId, :supervisorName,
+            VALUES (:projectId, :activityId, :dprId, :reportDate, :supervisorResourceId, :supervisorName,
                     :chainageFrom, :chainageTo, :qtyExecuted, :cumulativeQty,
                     :weather, :temperatureC, :remarksText, [], now64(3), :version)
             """;
@@ -187,7 +193,7 @@ public class AnalyticsEtlService {
         params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
         params.put("dprId", dprId);
         params.put("reportDate", reportDate);
-        params.put("supervisorUserId", supervisorUserId != null ? supervisorUserId : new UUID(0L, 0L));
+        params.put("supervisorResourceId", supervisorResourceId != null ? supervisorResourceId : new UUID(0L, 0L));
         params.put("supervisorName", supervisorName != null ? supervisorName : "");
         params.put("chainageFrom", chainageFromM);
         params.put("chainageTo", chainageToM);
@@ -200,6 +206,147 @@ public class AnalyticsEtlService {
 
         clickHouse.execute(sql, params);
         log.debug("Inserted dpr_log: project={} dpr={} date={}", projectId, dprId, reportDate);
+    }
+
+    /**
+     * Manpower line items deployed under a single DPR row, denormalised into one fact row per
+     * (dpr, trade-row). Expected ClickHouse DDL:
+     * <pre>
+     * CREATE TABLE bipros_analytics.fact_dpr_manpower_daily (
+     *   project_id UUID, activity_id UUID, dpr_id UUID, manpower_row_id UUID,
+     *   report_date Date, trade String, category String, contractor_name String,
+     *   nos UInt16, working_hours Float32, ot_hours Float32,
+     *   event_ts DateTime64(3), _version UInt64
+     * ) ENGINE = ReplacingMergeTree(_version)
+     * PARTITION BY toYYYYMM(report_date) ORDER BY (project_id, dpr_id, manpower_row_id);
+     * </pre>
+     */
+    public void insertDprManpowerDaily(
+            UUID projectId, UUID activityId, UUID dprId, UUID manpowerRowId, LocalDate reportDate,
+            String trade, String category, String contractorName,
+            Integer nos, Double workingHours, Double otHours) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_manpower_daily
+            (project_id, activity_id, dpr_id, manpower_row_id, report_date,
+             trade, category, contractor_name, nos, working_hours, ot_hours,
+             event_ts, _version)
+            VALUES (:projectId, :activityId, :dprId, :manpowerRowId, :reportDate,
+                    :trade, :category, :contractorName, :nos, :workingHours, :otHours,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
+        params.put("dprId", dprId);
+        params.put("manpowerRowId", manpowerRowId);
+        params.put("reportDate", reportDate);
+        params.put("trade", emptyIfNull(trade));
+        params.put("category", emptyIfNull(category));
+        params.put("contractorName", emptyIfNull(contractorName));
+        params.put("nos", nos != null ? nos : 0);
+        params.put("workingHours", workingHours);
+        params.put("otHours", otHours);
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
+    }
+
+    /**
+     * Equipment / PMV line items under a DPR row. Expected ClickHouse DDL:
+     * <pre>
+     * CREATE TABLE bipros_analytics.fact_dpr_equipment_daily (
+     *   project_id UUID, activity_id UUID, dpr_id UUID, equipment_row_id UUID,
+     *   report_date Date, equipment_type String, fleet_no String, ownership String,
+     *   nos UInt16, working_hours Float32, idle_hours Float32, breakdown_hours Float32,
+     *   fuel_litres Float32, operator_name String, availability_status String,
+     *   event_ts DateTime64(3), _version UInt64
+     * ) ENGINE = ReplacingMergeTree(_version)
+     * PARTITION BY toYYYYMM(report_date) ORDER BY (project_id, dpr_id, equipment_row_id);
+     * </pre>
+     */
+    public void insertDprEquipmentDaily(
+            UUID projectId, UUID activityId, UUID dprId, UUID equipmentRowId, LocalDate reportDate,
+            String equipmentType, String fleetNo, String ownership, Integer nos,
+            Double workingHours, Double idleHours, Double breakdownHours,
+            Double fuelLitres, String operatorName, String availabilityStatus) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_equipment_daily
+            (project_id, activity_id, dpr_id, equipment_row_id, report_date,
+             equipment_type, fleet_no, ownership, nos, working_hours, idle_hours,
+             breakdown_hours, fuel_litres, operator_name, availability_status,
+             event_ts, _version)
+            VALUES (:projectId, :activityId, :dprId, :equipmentRowId, :reportDate,
+                    :equipmentType, :fleetNo, :ownership, :nos, :workingHours, :idleHours,
+                    :breakdownHours, :fuelLitres, :operatorName, :availabilityStatus,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
+        params.put("dprId", dprId);
+        params.put("equipmentRowId", equipmentRowId);
+        params.put("reportDate", reportDate);
+        params.put("equipmentType", emptyIfNull(equipmentType));
+        params.put("fleetNo", emptyIfNull(fleetNo));
+        params.put("ownership", emptyIfNull(ownership));
+        params.put("nos", nos != null ? nos : 0);
+        params.put("workingHours", workingHours);
+        params.put("idleHours", idleHours);
+        params.put("breakdownHours", breakdownHours);
+        params.put("fuelLitres", fuelLitres);
+        params.put("operatorName", emptyIfNull(operatorName));
+        params.put("availabilityStatus", emptyIfNull(availabilityStatus));
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
+    }
+
+    /**
+     * Material consumption line items under a DPR row. Expected ClickHouse DDL:
+     * <pre>
+     * CREATE TABLE bipros_analytics.fact_dpr_material_daily (
+     *   project_id UUID, activity_id UUID, dpr_id UUID, material_row_id UUID,
+     *   report_date Date, material_name String, unit String, quantity Float64,
+     *   source String, vendor_name String, batch_no String,
+     *   event_ts DateTime64(3), _version UInt64
+     * ) ENGINE = ReplacingMergeTree(_version)
+     * PARTITION BY toYYYYMM(report_date) ORDER BY (project_id, dpr_id, material_row_id);
+     * </pre>
+     */
+    public void insertDprMaterialDaily(
+            UUID projectId, UUID activityId, UUID dprId, UUID materialRowId, LocalDate reportDate,
+            String materialName, String unit, Double quantity,
+            String source, String vendorName, String batchNo) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_material_daily
+            (project_id, activity_id, dpr_id, material_row_id, report_date,
+             material_name, unit, quantity, source, vendor_name, batch_no,
+             event_ts, _version)
+            VALUES (:projectId, :activityId, :dprId, :materialRowId, :reportDate,
+                    :materialName, :unit, :quantity, :source, :vendorName, :batchNo,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
+        params.put("dprId", dprId);
+        params.put("materialRowId", materialRowId);
+        params.put("reportDate", reportDate);
+        params.put("materialName", emptyIfNull(materialName));
+        params.put("unit", emptyIfNull(unit));
+        params.put("quantity", quantity);
+        params.put("source", emptyIfNull(source));
+        params.put("vendorName", emptyIfNull(vendorName));
+        params.put("batchNo", emptyIfNull(batchNo));
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
     }
 
     public void insertRiskSnapshotDaily(

@@ -29,10 +29,16 @@ interface FormState extends DprBaseFields {
 }
 
 interface Props {
+  projectId: string;
   editing: DailyProgressReportResponse | null;
   defaultDate: string;
   supervisorOptions: SelectOption[];
+  /** {@code value=activityId, label=name} so we can hand the id down to the resource picker. */
   activityOptions: SelectOption[];
+  /** id → name lookup used when rehydrating an editing DPR (server stores activityId; UI shows name). */
+  activityNameById: Map<string, string>;
+  /** lowercased name → id, used for legacy DPRs whose server payload only carries activityName. */
+  activityIdByName: Map<string, string>;
   boqOptions: SelectOption[];
   onCancel: () => void;
   onSave: (payload: DprBaseFields) => Promise<void>;
@@ -73,6 +79,7 @@ const initialState = (
       chainageToM: editing.chainageToM,
       chainageFromRaw: editing.chainageFromM != null ? chainageLabel(editing.chainageFromM) : "",
       chainageToRaw: editing.chainageToM != null ? chainageLabel(editing.chainageToM) : "",
+      activityId: editing.activityId ?? null,
       activityName: editing.activityName,
       wbsNodeId: editing.wbsNodeId,
       boqItemNo: editing.boqItemNo,
@@ -103,6 +110,7 @@ const initialState = (
     chainageToM: null,
     chainageFromRaw: "",
     chainageToRaw: "",
+    activityId: null,
     activityName: "",
     wbsNodeId: null,
     boqItemNo: null,
@@ -127,20 +135,58 @@ const initialState = (
 };
 
 export function DprActivityForm({
+  projectId,
   editing,
   defaultDate,
   supervisorOptions,
   activityOptions,
+  activityNameById,
+  activityIdByName,
   boqOptions,
   onCancel,
   onSave,
 }: Props) {
-  const [state, setState] = useState<FormState>(() => initialState(editing, defaultDate));
+  const [state, setState] = useState<FormState>(() => {
+    const s = initialState(editing, defaultDate);
+    // Editing path: backend may not yet carry activityId on legacy rows. Resolve from name.
+    if (editing && !s.activityId && editing.activityName) {
+      const id = activityIdByName.get(editing.activityName.toLowerCase());
+      if (id) s.activityId = id;
+    }
+    return s;
+  });
   const [tab, setTab] = useState<Tab>("manpower");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const patch = (delta: Partial<FormState>) => setState((s) => ({ ...s, ...delta }));
+
+  /**
+   * Activity dropdown change: when rows already exist for the previous activity, prompt to clear
+   * them — they reference assignments scoped to the old activity and would fail server validation
+   * after a switch. Cancelling the prompt reverts the picker.
+   */
+  const handleActivityChange = (newActivityId: string) => {
+    const existingRows =
+      (state.manpower?.length ?? 0) +
+      (state.equipment?.length ?? 0) +
+      (state.materials?.length ?? 0);
+    if (newActivityId === state.activityId) return;
+    if (existingRows > 0 && state.activityId !== null) {
+      const ok = window.confirm(
+        `Switching the activity will clear all ${existingRows} manpower / equipment / material row(s). Continue?`
+      );
+      if (!ok) return;
+    }
+    const name = activityNameById.get(newActivityId) ?? "";
+    patch({
+      activityId: newActivityId || null,
+      activityName: name,
+      manpower: [],
+      equipment: [],
+      materials: [],
+    });
+  };
 
   const supervisorPickerValue = state.supervisorResourceId || "";
   const supervisorIsOther = supervisorPickerValue === SUPERVISOR_OTHER;
@@ -188,6 +234,7 @@ export function DprActivityForm({
       supervisorName: state.supervisorName,
       chainageFromM: state.chainageFromM,
       chainageToM: state.chainageToM,
+      activityId: state.activityId ?? null,
       activityName: state.activityName,
       wbsNodeId: state.wbsNodeId,
       boqItemNo: state.boqItemNo || null,
@@ -341,9 +388,10 @@ export function DprActivityForm({
             <Field label="Activity name" className="md:col-span-2">
               <SearchableSelect
                 options={activityOptions}
-                value={state.activityName}
-                onChange={(v) => patch({ activityName: v })}
+                value={state.activityId ?? ""}
+                onChange={handleActivityChange}
                 placeholder="Search activity…"
+                selectedLabel={state.activityName || undefined}
               />
             </Field>
             <Field label="BOQ item">
@@ -452,18 +500,27 @@ export function DprActivityForm({
           <div className="px-5 py-4">
             {tab === "manpower" && (
               <ManpowerGrid
+                projectId={projectId}
+                activityId={state.activityId ?? null}
+                reportDate={state.reportDate}
                 rows={state.manpower ?? []}
                 onChange={(rows: DprManpowerRow[]) => patch({ manpower: rows })}
               />
             )}
             {tab === "equipment" && (
               <EquipmentGrid
+                projectId={projectId}
+                activityId={state.activityId ?? null}
+                reportDate={state.reportDate}
                 rows={state.equipment ?? []}
                 onChange={(rows: DprEquipmentRow[]) => patch({ equipment: rows })}
               />
             )}
             {tab === "material" && (
               <MaterialGrid
+                projectId={projectId}
+                activityId={state.activityId ?? null}
+                reportDate={state.reportDate}
                 rows={state.materials ?? []}
                 onChange={(rows: DprMaterialRow[]) => patch({ materials: rows })}
               />
