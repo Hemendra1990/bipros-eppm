@@ -24,7 +24,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { ApiResponse, ProjectResponse } from "@/lib/types";
-import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
+// import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { useAuth } from "@/lib/auth/useAuth";
 
 const RISK_INTERNAL_ROLES = ["ROLE_PMO", "ROLE_PROJECT_MANAGER", "ROLE_ADMIN", "ROLE_FINANCE"] as const;
@@ -342,10 +342,10 @@ export default function ProjectRisksPage() {
 
   return (
     <div className="space-y-6">
-      <AiInsightsPanel
+      {/* <AiInsightsPanel
         projectId={projectId}
         endpoint={`/v1/projects/${projectId}/risks/ai/insights`}
-      />
+      /> */}
       <PageHeader
         title="Risk Register"
         description="Manage project risks, probabilities, and mitigation strategies"

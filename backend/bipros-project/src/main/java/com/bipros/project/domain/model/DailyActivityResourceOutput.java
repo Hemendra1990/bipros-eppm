@@ -92,6 +92,7 @@ public class DailyActivityResourceOutput extends BaseEntity {
    */
   @Column(name = "source", nullable = false, length = 20)
   @ColumnDefault("'MANUAL'")
+  @Builder.Default
   private String source = "MANUAL";
 
   @Column(name = "remarks", length = 1000)

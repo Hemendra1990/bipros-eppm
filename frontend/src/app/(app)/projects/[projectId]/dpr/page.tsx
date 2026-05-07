@@ -13,7 +13,7 @@ import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { boqApi } from "@/lib/api/boqApi";
 import { resourceApi } from "@/lib/api/resourceApi";
-import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
+// import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { Drawer } from "@/components/common/Drawer";
 import { TabTip } from "@/components/common/TabTip";
 import { DprActivityForm } from "@/components/dpr/DprActivityForm";
@@ -189,10 +189,10 @@ export default function DprPage() {
 
   return (
     <div className="p-6">
-      <AiInsightsPanel
+      {/* <AiInsightsPanel
         projectId={projectId}
         endpoint={`/v1/projects/${projectId}/dpr/ai/insights`}
-      />
+      /> */}
       <TabTip
         title="Daily Progress Report"
         description="Activity-level record of work executed each day — chainage, executed quantity, deployed manpower / equipment / material, weather, and remarks."

@@ -19,7 +19,7 @@ import {
 } from "@/components/gis/DrawReviewPanel";
 import { PolygonEditPanel } from "@/components/gis/PolygonEditPanel";
 import { TabTip } from "@/components/common/TabTip";
-import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
+// import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { Button } from "@/components/ui/button";
 import {
   gisApi,

@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 import { getErrorMessage } from "@/lib/utils/error";
 import { documentApi } from "@/lib/api/documentApi";
 import { TabTip } from "@/components/common/TabTip";
-import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
+// import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { NewFolderDialog, type NewFolderFormValues } from "@/components/document/NewFolderDialog";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -337,10 +337,10 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6">
-      <AiInsightsPanel
+      {/* <AiInsightsPanel
         projectId={projectId}
         endpoint={`/v1/projects/${projectId}/documents/ai/insights`}
-      />
+      /> */}
       <TabTip
         title="Document Management"
         description="Organize project documents in folders. Track versions, create transmittals for formal document issue to stakeholders."
