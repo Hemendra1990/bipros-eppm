@@ -607,4 +607,51 @@ class ObjectFormulaVisitorTest {
             assertThat(eval("PERCENTILE(10, 20, 30, 0.25)")).isEqualTo("15.0");
         }
     }
+
+    @Nested
+    @DisplayName("Conditional Aggregation")
+    class ConditionalAggregationTests {
+
+        @Test
+        @DisplayName("SUMIF(5, 5, 3, 5, 2) = 10.0")
+        void sumif() {
+            assertThat(eval("SUMIF(5, 5, 3, 5, 2)")).isEqualTo("10.0");
+        }
+
+        @Test
+        @DisplayName("SUMIF(5, 1, 2, 3) = 0.0")
+        void sumifNoMatches() {
+            assertThat(eval("SUMIF(5, 1, 2, 3)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("COUNTIF(5, 5, 3, 5, 2) = 2.0")
+        void countif() {
+            assertThat(eval("COUNTIF(5, 5, 3, 5, 2)")).isEqualTo("2.0");
+        }
+
+        @Test
+        @DisplayName("COUNTIF(5, 1, 2, 3) = 0.0")
+        void countifNoMatches() {
+            assertThat(eval("COUNTIF(5, 1, 2, 3)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("AVERAGEIF(10, 10, 20, 10) = 10.0")
+        void averageif() {
+            assertThat(eval("AVERAGEIF(10, 10, 20, 10)")).isEqualTo("10.0");
+        }
+
+        @Test
+        @DisplayName("AVERAGEIF(5, 1, 2, 3) = 0.0")
+        void averageifNoMatches() {
+            assertThat(eval("AVERAGEIF(5, 1, 2, 3)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("COUNTIF with string criteria (case-insensitive)")
+        void countifString() {
+            assertThat(eval("COUNTIF(\"A\", \"A\", \"B\", \"a\")")).isEqualTo("2.0");
+        }
+    }
 }
