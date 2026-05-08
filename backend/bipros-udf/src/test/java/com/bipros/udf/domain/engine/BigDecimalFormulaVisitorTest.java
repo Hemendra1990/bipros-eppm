@@ -396,6 +396,61 @@ class BigDecimalFormulaVisitorTest {
         }
     }
 
+    @Nested
+    @DisplayName("Conditional Aggregation")
+    class ConditionalAggregationTests {
+
+        @Test
+        @DisplayName("SUMIF(5, 5, 3, 5, 2) = 10")
+        void sumif() {
+            assertThat(eval("SUMIF(5, 5, 3, 5, 2)", Map.of()))
+                    .isEqualByComparingTo(bd(10));
+        }
+
+        @Test
+        @DisplayName("SUMIF(5, 1, 2, 3) = 0")
+        void sumifNoMatches() {
+            assertThat(eval("SUMIF(5, 1, 2, 3)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("COUNTIF(5, 5, 3, 5, 2) = 2")
+        void countif() {
+            assertThat(eval("COUNTIF(5, 5, 3, 5, 2)", Map.of()))
+                    .isEqualByComparingTo(bd(2));
+        }
+
+        @Test
+        @DisplayName("COUNTIF(5, 1, 2, 3) = 0")
+        void countifNoMatches() {
+            assertThat(eval("COUNTIF(5, 1, 2, 3)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("AVERAGEIF(10, 10, 20, 10) = 10")
+        void averageif() {
+            assertThat(eval("AVERAGEIF(10, 10, 20, 10)", Map.of()))
+                    .isEqualByComparingTo(bd(10));
+        }
+
+        @Test
+        @DisplayName("AVERAGEIF(5, 1, 2, 3) returns zero default")
+        void averageifNoMatches() {
+            assertThat(eval("AVERAGEIF(5, 1, 2, 3)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("SUMIF with variable criteria")
+        void sumifWithVariable() {
+            Map<String, BigDecimal> ctx = Map.of("threshold", bd(5), "a", bd(5), "b", bd(3), "c", bd(5));
+            assertThat(eval("SUMIF($threshold, $a, $b, $c)", ctx))
+                    .isEqualByComparingTo(bd(10));
+        }
+    }
+
     private static BigDecimal bd(String val) {
         return new BigDecimal(val);
     }
