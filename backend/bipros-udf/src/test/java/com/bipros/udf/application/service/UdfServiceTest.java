@@ -610,6 +610,7 @@ class UdfServiceTest {
             when(userDefinedFieldRepository.findById(fieldId)).thenReturn(Optional.of(formulaField));
             when(udfValueRepository.findByEntityId(entityId)).thenReturn(List.of(costValue));
             when(userDefinedFieldRepository.findById(refFieldId)).thenReturn(Optional.of(refField));
+            when(formulaAstCache.get("[Cost] * 1.1")).thenReturn(new FormulaAstCache().get("[Cost] * 1.1"));
 
             String result = udfService.evaluateFormula(fieldId, entityId);
 
