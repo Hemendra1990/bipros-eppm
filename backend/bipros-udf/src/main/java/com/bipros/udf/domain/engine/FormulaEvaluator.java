@@ -6,6 +6,10 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * @deprecated Use {@link ObjectFormulaVisitor} with {@link FormulaAstCache} instead.
+ */
+@Deprecated(since = "0.1.0-SNAPSHOT", forRemoval = true)
 @Slf4j
 public class FormulaEvaluator {
 

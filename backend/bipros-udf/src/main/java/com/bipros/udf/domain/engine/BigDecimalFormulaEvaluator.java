@@ -8,6 +8,10 @@ import java.math.RoundingMode;
 import java.util.*;
 
 /**
+ * @deprecated Use {@link BigDecimalFormulaVisitor} with {@link FormulaAstCache} instead.
+ */
+@Deprecated(since = "0.1.0-SNAPSHOT", forRemoval = true)
+/**
  * BigDecimal-aware formula evaluator for financial and project-management calculations.
  * <p>
  * Supports:
