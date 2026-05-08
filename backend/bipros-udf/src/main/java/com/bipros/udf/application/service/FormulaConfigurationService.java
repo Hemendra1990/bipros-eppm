@@ -3,6 +3,7 @@ package com.bipros.udf.application.service;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.udf.application.dto.*;
+import com.bipros.udf.domain.engine.FormulaAstCache;
 import com.bipros.udf.domain.model.FormulaCategory;
 import com.bipros.udf.domain.model.FormulaMaster;
 import com.bipros.udf.domain.model.FormulaOutputType;
@@ -28,6 +29,15 @@ public class FormulaConfigurationService {
     private final FormulaMasterRepository formulaMasterRepository;
     private final FormulaOverrideRepository formulaOverrideRepository;
     private final FormulaVersionRepository formulaVersionRepository;
+    private final FormulaAstCache formulaAstCache;
+
+    private void validateExpression(String expression, String fieldName) {
+        if (expression == null || expression.isBlank()) {
+            throw new BusinessRuleException("FORMULA_EXPRESSION_EMPTY",
+                    fieldName + " cannot be empty");
+        }
+        formulaAstCache.validate(expression);
+    }
 
     // ---- Master Formulas ----
 
@@ -37,6 +47,7 @@ public class FormulaConfigurationService {
             throw new BusinessRuleException("FORMULA_CODE_EXISTS",
                     "Formula code already exists: " + request.getCode());
         }
+        validateExpression(request.getDefaultExpression(), "defaultExpression");
         FormulaMaster master = mapToEntity(request);
         FormulaMaster saved = formulaMasterRepository.save(master);
         log.info("Created formula master: {} ({})" , saved.getCode(), saved.getName());
@@ -52,6 +63,8 @@ public class FormulaConfigurationService {
             throw new BusinessRuleException("FORMULA_CODE_EXISTS",
                     "Formula code already exists: " + request.getCode());
         }
+
+        validateExpression(request.getDefaultExpression(), "defaultExpression");
 
         // Save a version snapshot before update
         saveVersion(master, null);
@@ -140,6 +153,8 @@ public class FormulaConfigurationService {
                     "Override already exists for formula " + request.getFormulaCode() + " on project " + request.getProjectId());
         }
 
+        validateExpression(request.getOverrideExpression(), "overrideExpression");
+
         FormulaOverride override = new FormulaOverride();
         override.setFormulaCode(request.getFormulaCode());
         override.setProjectId(request.getProjectId());
@@ -165,6 +180,8 @@ public class FormulaConfigurationService {
 
         FormulaMaster master = formulaMasterRepository.findByCode(override.getFormulaCode())
                 .orElseThrow(() -> new ResourceNotFoundException("FormulaMaster", override.getFormulaCode()));
+
+        validateExpression(request.getOverrideExpression(), "overrideExpression");
 
         // Save version before update
         saveVersion(master, override);
