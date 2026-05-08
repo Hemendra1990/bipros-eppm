@@ -122,6 +122,7 @@ public class DailyProgressReportService {
 
     List<String> warnings = new ArrayList<>();
     SnapshottedChildren snap = snapshotChildren(saved, request.manpower(), request.equipment(), request.materials(), warnings);
+    addUnitMismatchWarning(saved, warnings);
 
     List<DprManpower> savedManpower = snap.manpower.isEmpty() ? List.of() : manpowerRepository.saveAll(snap.manpower);
     List<DprEquipment> savedEquipment = snap.equipment.isEmpty() ? List.of() : equipmentRepository.saveAll(snap.equipment);
@@ -194,6 +195,7 @@ public class DailyProgressReportService {
 
     List<String> warnings = new ArrayList<>();
     SnapshottedChildren snap = snapshotChildren(saved, request.manpower(), request.equipment(), request.materials(), warnings);
+    addUnitMismatchWarning(saved, warnings);
 
     List<DprManpower> savedManpower = snap.manpower.isEmpty() ? List.of() : manpowerRepository.saveAll(snap.manpower);
     List<DprEquipment> savedEquipment = snap.equipment.isEmpty() ? List.of() : equipmentRepository.saveAll(snap.equipment);
@@ -323,6 +325,42 @@ public class DailyProgressReportService {
               materialByDpr.getOrDefault(r.getId(), List.of()),
               attachmentsByDpr.getOrDefault(r.getId(), List.of())));
         });
+    return out;
+  }
+
+  /**
+   * Distinct supervisors who actually filed a DPR in the optional date window. Used by the
+   * Capacity Utilization page's supervisor filter so the dropdown only shows people with data.
+   */
+  @Transactional(readOnly = true)
+  public List<com.bipros.project.application.dto.SupervisorOption> listSupervisorsUsed(
+      UUID projectId, LocalDate fromDate, LocalDate toDate) {
+    ensureProjectExists(projectId);
+
+    @SuppressWarnings("unchecked")
+    List<Object[]> raw = em.createNativeQuery(
+            "SELECT d.supervisor_resource_id, "
+                + "       COALESCE(r.code, '')                               AS supervisor_code, "
+                + "       MAX(d.supervisor_name)                              AS supervisor_name, "
+                + "       COUNT(*)                                            AS dpr_count "
+                + "FROM project.daily_progress_reports d "
+                + "LEFT JOIN resource.resources r ON r.id = d.supervisor_resource_id "
+                + "WHERE d.project_id = :projectId "
+                + "  AND d.supervisor_resource_id IS NOT NULL "
+                + "  AND (CAST(:fromDate AS date) IS NULL OR d.report_date >= CAST(:fromDate AS date)) "
+                + "  AND (CAST(:toDate AS date) IS NULL OR d.report_date <= CAST(:toDate AS date)) "
+                + "GROUP BY d.supervisor_resource_id, r.code "
+                + "ORDER BY dpr_count DESC, supervisor_name")
+        .setParameter("projectId", projectId)
+        .setParameter("fromDate", fromDate)
+        .setParameter("toDate", toDate)
+        .getResultList();
+
+    List<com.bipros.project.application.dto.SupervisorOption> out = new ArrayList<>(raw.size());
+    for (Object[] r : raw) {
+      out.add(new com.bipros.project.application.dto.SupervisorOption(
+          (UUID) r[0], (String) r[1], (String) r[2], ((Number) r[3]).longValue()));
+    }
     return out;
   }
 
@@ -594,6 +632,45 @@ public class DailyProgressReportService {
     if (!ok) {
       throw new BusinessRuleException("INVALID_DPR_RESOURCE_KIND",
           "Resource assignment kind " + typeCode + " does not match row kind " + requiredKind);
+    }
+  }
+
+  /**
+   * Soft check: if the DPR's {@code unit} doesn't match the picked activity's
+   * {@code WorkActivity.default_unit}, append a {@code unit-mismatch:expected=…:actual=…}
+   * warning to the response. Doesn't throw — frontend renders a banner so the user can decide
+   * whether to fix the DPR or accept the override. Comparing two units lexically would be naive,
+   * so we trim + uppercase to ignore whitespace / case differences but otherwise leave the
+   * codes alone (the unit master is plain strings, no synonyms).
+   */
+  private void addUnitMismatchWarning(DailyProgressReport saved, List<String> warnings) {
+    if (saved == null || warnings == null) return;
+    if (saved.getActivityId() == null || saved.getUnit() == null) return;
+    String activityUnit = resolveActivityDefaultUnit(saved.getActivityId());
+    if (activityUnit == null || activityUnit.isBlank()) return;
+    String dprUnit = saved.getUnit().trim();
+    if (!activityUnit.trim().equalsIgnoreCase(dprUnit)) {
+      warnings.add("unit-mismatch:expected=" + activityUnit.trim() + ":actual=" + dprUnit);
+    }
+  }
+
+  /**
+   * Cross-schema lookup: {@code activity.activities → resource.work_activities.default_unit}.
+   * Mirrors the precedent in {@code DailyActivityResourceOutputService.resolveUnitFromActivity}.
+   * Returns null when the activity has no master link or the link doesn't resolve.
+   */
+  private String resolveActivityDefaultUnit(UUID activityId) {
+    if (activityId == null || em == null) return null;
+    try {
+      Object result = em.createNativeQuery(
+              "SELECT wa.default_unit FROM activity.activities a "
+                  + "JOIN resource.work_activities wa ON wa.id = a.work_activity_id "
+                  + "WHERE a.id = :activityId")
+          .setParameter("activityId", activityId)
+          .getSingleResult();
+      return result == null ? null : result.toString();
+    } catch (Exception ignored) {
+      return null;
     }
   }
 

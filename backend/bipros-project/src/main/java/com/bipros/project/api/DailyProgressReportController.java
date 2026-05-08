@@ -4,6 +4,7 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.project.application.dto.CreateDailyProgressReportRequest;
 import com.bipros.project.application.dto.DailyProgressReportResponse;
 import com.bipros.project.application.dto.DprAttachmentResponse;
+import com.bipros.project.application.dto.SupervisorOption;
 import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
 import com.bipros.project.application.service.DailyProgressReportService;
 import com.bipros.project.application.service.DprAttachmentService;
@@ -76,6 +77,19 @@ public class DailyProgressReportController {
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
     return ResponseEntity.ok(ApiResponse.ok(service.get(projectId, id)));
+  }
+
+  /**
+   * Distinct supervisors who actually filed at least one DPR in the optional date window.
+   * Powers the Supervisor filter dropdown on the Capacity Utilization page so only people with
+   * data are listed.
+   */
+  @GetMapping("/supervisors-used")
+  public ResponseEntity<ApiResponse<List<SupervisorOption>>> supervisorsUsed(
+      @PathVariable UUID projectId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+    return ResponseEntity.ok(ApiResponse.ok(service.listSupervisorsUsed(projectId, fromDate, toDate)));
   }
 
   @PutMapping("/{id}")

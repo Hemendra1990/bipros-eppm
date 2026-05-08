@@ -6,6 +6,7 @@ import com.bipros.reporting.application.service.CapacityUtilizationReportService
 import com.bipros.reporting.application.service.DailyDeploymentReportService;
 import com.bipros.reporting.application.service.DprReportService;
 import com.bipros.reporting.application.service.ReportService;
+import com.bipros.reporting.application.service.SupervisorPerformanceReportService;
 import com.bipros.reporting.domain.model.ReportFormat;
 import com.bipros.reporting.domain.model.ReportType;
 import com.bipros.reporting.infrastructure.export.CapacityUtilizationExcelWriter;
@@ -38,6 +39,7 @@ public class ReportController {
   private final DailyDeploymentReportService dailyDeploymentReportService;
   private final DprReportService dprReportService;
   private final CapacityUtilizationExcelWriter capacityUtilizationExcelWriter;
+  private final SupervisorPerformanceReportService supervisorPerformanceReportService;
 
   @PersistenceContext private EntityManager em;
 
@@ -169,9 +171,43 @@ public class ReportController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "RESOURCE_TYPE") String groupBy,
-      @RequestParam(required = false) String normType) {
+      @RequestParam(required = false) String normType,
+      @RequestParam(required = false) UUID supervisorResourceId) {
     return ApiResponse.ok(
-        capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType));
+        capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType,
+            supervisorResourceId));
+  }
+
+  /**
+   * Per-supervisor (or project-wide when {@code supervisorResourceId} is null) productivity
+   * rollup mirroring the SC180 Resource Productivity Report — Manpower Utilization by trade,
+   * Equipment Utilization by equipment-type, and a per-activity drill-down with productivity
+   * norms. Reads {@code project.dpr_manpower}/{@code project.dpr_equipment} directly.
+   */
+  @GetMapping("/supervisor-performance")
+  public ApiResponse<SupervisorPerformanceReport> getSupervisorPerformance(
+      @RequestParam UUID projectId,
+      @RequestParam(required = false) UUID supervisorResourceId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+      @RequestParam(required = false, defaultValue = "26") int workDays) {
+    return ApiResponse.ok(supervisorPerformanceReportService.build(
+        projectId, supervisorResourceId, fromDate, toDate, workDays));
+  }
+
+  /**
+   * Side-by-side comparison of N supervisors over the same window. Returns each supervisor's
+   * full report plus pivoted trade/equipment deltas.
+   */
+  @GetMapping("/supervisor-performance/compare")
+  public ApiResponse<SupervisorPerformanceComparison> compareSupervisorPerformance(
+      @RequestParam UUID projectId,
+      @RequestParam List<UUID> supervisorResourceIds,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+      @RequestParam(required = false, defaultValue = "26") int workDays) {
+    return ApiResponse.ok(supervisorPerformanceReportService.compare(
+        projectId, supervisorResourceIds, fromDate, toDate, workDays));
   }
 
   /**
@@ -184,12 +220,15 @@ public class ReportController {
   public ResponseEntity<byte[]> downloadCapacityUtilizationExcel(
       @RequestParam UUID projectId,
       @RequestParam String month,
-      @RequestParam(required = false, defaultValue = "26") int workDays) {
+      @RequestParam(required = false, defaultValue = "26") int workDays,
+      @RequestParam(required = false) UUID supervisorResourceId) {
     YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
     LocalDate from = ym.atDay(1);
     LocalDate to = ym.atEndOfMonth();
-    var plant = capacityUtilizationReportService.build(projectId, from, to, "RESOURCE_TYPE", "EQUIPMENT");
-    var manpower = capacityUtilizationReportService.build(projectId, from, to, "RESOURCE_TYPE", "MANPOWER");
+    var plant = capacityUtilizationReportService.build(
+        projectId, from, to, "RESOURCE_TYPE", "EQUIPMENT", supervisorResourceId);
+    var manpower = capacityUtilizationReportService.build(
+        projectId, from, to, "RESOURCE_TYPE", "MANPOWER", supervisorResourceId);
     var daily = dailyDeploymentReportService.build(projectId, ym);
     var dpr = dprReportService.build(projectId, ym);
     String projectName = lookupProjectName(projectId);

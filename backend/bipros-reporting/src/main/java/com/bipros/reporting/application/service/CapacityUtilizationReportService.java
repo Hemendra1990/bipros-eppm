@@ -45,9 +45,23 @@ public class CapacityUtilizationReportService {
 
   @PersistenceContext private EntityManager em;
 
+  private final ProductivityNormResolver normResolver;
+
   @Transactional(readOnly = true)
   public CapacityUtilizationReport build(
       UUID projectId, LocalDate fromDate, LocalDate toDate, String groupBy, String normType) {
+    return build(projectId, fromDate, toDate, groupBy, normType, null);
+  }
+
+  /**
+   * Supervisor-aware overload. When {@code supervisorResourceId} is non-null only daily-output
+   * rows linked to that supervisor (via the parent DPR) are counted. MANUAL ledger rows
+   * ({@code dpr_id IS NULL}) are filtered out automatically — they have no supervisor.
+   */
+  @Transactional(readOnly = true)
+  public CapacityUtilizationReport build(
+      UUID projectId, LocalDate fromDate, LocalDate toDate,
+      String groupBy, String normType, UUID supervisorResourceId) {
 
     LocalDate today = LocalDate.now();
     LocalDate effectiveTo = toDate == null ? today : toDate;
@@ -80,12 +94,17 @@ public class CapacityUtilizationReportService {
                 + "JOIN resource.work_activities wa ON wa.id = a.work_activity_id "
                 + "JOIN resource.resources r ON r.id = o.resource_id "
                 + "LEFT JOIN resource.resource_types rt ON rt.id = r.resource_type_id "
+                + "LEFT JOIN project.daily_progress_reports d ON d.id = o.dpr_id "
                 + "WHERE o.project_id = :projectId "
                 + "  AND o.output_date BETWEEN :fromDate AND :toDate "
-                + "  AND a.work_activity_id IS NOT NULL")
+                + "  AND a.work_activity_id IS NOT NULL "
+                + "  AND (CAST(:supervisorResourceId AS uuid) IS NULL "
+                + "       OR d.supervisor_resource_id = CAST(:supervisorResourceId AS uuid))")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", effectiveFrom)
         .setParameter("toDate", effectiveTo)
+        .setParameter("supervisorResourceId",
+            supervisorResourceId != null ? supervisorResourceId.toString() : null)
         .getResultList();
 
     // 2. Aggregate by (workActivity, group-key). Group key = resourceTypeId or resourceId.
@@ -140,7 +159,7 @@ public class CapacityUtilizationReportService {
     // 3. Resolve budgeted norm per bucket and assemble rows.
     List<Row> rows = new ArrayList<>(byBucket.size());
     for (Aggregate agg : byBucket.values()) {
-      Budgeted budgeted = resolveBudgeted(agg.workActivity.id(), agg.representativeResourceId);
+      Budgeted budgeted = normResolver.resolveByResource(agg.workActivity.id(), agg.representativeResourceId);
       Period day = period(agg.dayQty, agg.dayDays, budgeted);
       Period month = period(agg.monthQty, agg.monthDays, budgeted);
       Period cum = period(agg.cumQty, agg.cumDays, budgeted);
@@ -155,55 +174,6 @@ public class CapacityUtilizationReportService {
     }
 
     return new CapacityUtilizationReport(projectId, effectiveFrom, effectiveTo, resolvedGroupBy, normType, rows);
-  }
-
-  // ─── Norm resolution (native SQL — same fallback as ProductivityNormLookupService) ──────────
-  // Per-day rate semantics:
-  //   For Manpower norms we prefer output_per_man_per_day so the rate is "per person per day",
-  //   matching the unit captured in daily_activity_resource_outputs.days_worked (each row is one
-  //   person on one date). Comparing person-days against a gang's combined daily output would
-  //   under-state utilization by a factor of crew size — see issue notes.
-  //   Equipment norms don't populate output_per_man_per_day; COALESCE falls through to
-  //   output_per_day, which is the equipment's per-machine-per-day rate (matches daily outputs
-  //   for equipment).
-  private Budgeted resolveBudgeted(UUID workActivityId, UUID resourceId) {
-    if (workActivityId == null || resourceId == null) {
-      return new Budgeted(null, "NONE");
-    }
-    // 1) specific-resource norm
-    BigDecimal specific = singleBigDecimal(
-        "SELECT COALESCE(n.output_per_man_per_day, n.output_per_day) "
-            + "FROM resource.productivity_norms n "
-            + "WHERE n.work_activity_id = :wa AND n.resource_id = :res",
-        Map.of("wa", workActivityId, "res", resourceId));
-    if (specific != null) {
-      return new Budgeted(specific, "SPECIFIC_RESOURCE");
-    }
-    // 2) type-level norm — joined via the resource's resource_type_id (post 3-tier rewrite).
-    //    Productivity_norms keeps both legacy (resource_type_def_id) and new (resource_type_id)
-    //    columns; resources only has the new one. Match on the new column on both sides.
-    BigDecimal typeLevel = singleBigDecimal(
-        "SELECT COALESCE(n.output_per_man_per_day, n.output_per_day) "
-            + "FROM resource.productivity_norms n "
-            + "JOIN resource.resources r ON r.resource_type_id = n.resource_type_id "
-            + "WHERE n.work_activity_id = :wa AND n.resource_id IS NULL "
-            + "  AND r.id = :res",
-        Map.of("wa", workActivityId, "res", resourceId));
-    if (typeLevel != null) {
-      return new Budgeted(typeLevel, "RESOURCE_TYPE");
-    }
-    // 3) legacy Resource.standardOutputPerDay — column was moved to
-    //    resource_equipment_details.standard_output_per_day in the 3-tier rewrite.
-    //    Only equipment-typed resources have it; manpower/material don't, so this fallback
-    //    only fires for equipment.
-    BigDecimal legacy = singleBigDecimal(
-        "SELECT d.standard_output_per_day FROM resource.resource_equipment_details d "
-            + "WHERE d.resource_id = :res",
-        Map.of("res", resourceId));
-    if (legacy != null) {
-      return new Budgeted(legacy, "RESOURCE_LEGACY");
-    }
-    return new Budgeted(null, "NONE");
   }
 
   private boolean matchesNormType(Row row, String normTypeUpper) {
@@ -256,18 +226,6 @@ public class CapacityUtilizationReportService {
 
   private static String nullSafe(UUID id) {
     return id == null ? "—" : id.toString();
-  }
-
-  @SuppressWarnings("unchecked")
-  private BigDecimal singleBigDecimal(String sql, Map<String, Object> params) {
-    var query = em.createNativeQuery(sql);
-    params.forEach(query::setParameter);
-    List<Object> rows = query.setMaxResults(1).getResultList();
-    if (rows.isEmpty() || rows.get(0) == null) return null;
-    Object o = rows.get(0);
-    if (o instanceof BigDecimal bd) return bd;
-    if (o instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
-    return null;
   }
 
   /** Mutable accumulator scoped to a single (workActivity × group-key) bucket. */

@@ -51,12 +51,21 @@ public record ActivityResponse(
     /** Supervisor cache: cached from the assignment with {@code isSupervisor=true}. */
     UUID responsibleResourceId,
     String responsibleResourceName,
+    /** Mirror of {@code resource.work_activities.default_unit} for the linked WorkActivity.
+     *  Lets the DPR form auto-fill {@code DPR.unit} when an activity is picked. Null when the
+     *  activity has no work-activity link, or when the list path didn't bulk-load default units. */
+    String workActivityDefaultUnit,
     Instant createdAt,
     Instant updatedAt,
     String createdBy,
     String updatedBy
 ) {
   public static ActivityResponse from(Activity activity) {
+    return from(activity, (String) null);
+  }
+
+  /** Overload used by list paths that bulk-fetch {@code WorkActivity.default_unit}. */
+  public static ActivityResponse from(Activity activity, String workActivityDefaultUnit) {
     return new ActivityResponse(
         activity.getId(),
         activity.getCode(),
@@ -101,6 +110,7 @@ public record ActivityResponse(
         activity.getCostAccountId(),
         activity.getResponsibleResourceId(),
         activity.getResponsibleResourceName(),
+        workActivityDefaultUnit,
         activity.getCreatedAt(),
         activity.getUpdatedAt(),
         activity.getCreatedBy(),
@@ -167,6 +177,7 @@ public record ActivityResponse(
         activity.getCostAccountId(),
         activity.getResponsibleResourceId(),
         activity.getResponsibleResourceName(),
+        null,
         activity.getCreatedAt(),
         activity.getUpdatedAt(),
         activity.getCreatedBy(),

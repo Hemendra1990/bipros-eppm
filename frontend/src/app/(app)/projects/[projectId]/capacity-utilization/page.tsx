@@ -17,6 +17,16 @@ import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 // import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { TabTip } from "@/components/common/TabTip";
 import { useStickyMeasure } from "@/hooks/useStickyMeasure";
+import { SupervisorPerformanceSections } from "@/components/capacity-utilization/SupervisorPerformanceSections";
+import { SupervisorComparisonSections } from "@/components/capacity-utilization/SupervisorComparisonSections";
+
+// ─── DIAGNOSTIC KILL SWITCH ─────────────────────────────────────────────────
+// Flip to `false` to disable EVERY addition from the SC180 / supervisor-performance
+// work and run only the original capacity-utilization grid. If `false` is fast and
+// `true` freezes, my new code is the cause. If `false` ALSO freezes, something
+// outside my code is the issue (project layout, browser extension, etc.).
+const SC180_ENABLED = true;
+// ─────────────────────────────────────────────────────────────────────────────
 
 const today = () => new Date().toISOString().split("T")[0];
 const startOfMonth = () => {
@@ -168,8 +178,23 @@ export default function CapacityUtilizationPage() {
   const [toDate, setToDate] = useState(today());
   const [groupBy, setGroupBy] = useState<CapacityGroupBy>("RESOURCE_TYPE");
   const [normType, setNormType] = useState<CapacityNormType | "">("");
+  const [supervisorResourceId, setSupervisorResourceId] = useState<string>("");
+  const [workDays, setWorkDays] = useState<number>(26);
+  const [compareMode, setCompareMode] = useState<boolean>(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
   const { ref: stickyHeaderRef, height: upperH } =
     useStickyMeasure<HTMLDivElement>();
+
+  const { data: supervisorOptions } = useQuery({
+    queryKey: ["supervisors-used", projectId, fromDate, toDate],
+    queryFn: () =>
+      capacityUtilizationApi.getSupervisorsUsed({
+        projectId,
+        fromDate,
+        toDate,
+      }),
+    enabled: SC180_ENABLED,
+  });
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: [
@@ -179,6 +204,7 @@ export default function CapacityUtilizationPage() {
       toDate,
       groupBy,
       normType,
+      supervisorResourceId,
     ],
     queryFn: () =>
       capacityUtilizationApi.get({
@@ -187,7 +213,54 @@ export default function CapacityUtilizationPage() {
         toDate,
         groupBy,
         normType: normType || undefined,
+        // Skip the supervisor join when SC180 is disabled — gives the API a chance
+        // to return the original (pre-my-changes) result shape and timing.
+        supervisorResourceId: SC180_ENABLED ? supervisorResourceId || undefined : undefined,
       }),
+  });
+
+  const { data: supervisorPerf } = useQuery({
+    queryKey: [
+      "supervisor-performance",
+      projectId,
+      fromDate,
+      toDate,
+      supervisorResourceId,
+      workDays,
+    ],
+    queryFn: () =>
+      capacityUtilizationApi.getSupervisorPerformance({
+        projectId,
+        supervisorResourceId: supervisorResourceId || undefined,
+        fromDate,
+        toDate,
+        workDays,
+      }),
+    // Only fetch + render the SC180-style sections when a specific supervisor is picked or
+    // Compare mode is active. Project-wide data can be many hundreds of (activity × resource)
+    // cells which freezes the browser on render. The existing per-activity grid above still
+    // covers project-wide; SC180 is supervisor-scoped on purpose.
+    enabled: SC180_ENABLED && !compareMode && !!supervisorResourceId,
+  });
+
+  const { data: comparisonData } = useQuery({
+    queryKey: [
+      "supervisor-performance-compare",
+      projectId,
+      fromDate,
+      toDate,
+      compareIds.join(","),
+      workDays,
+    ],
+    queryFn: () =>
+      capacityUtilizationApi.compareSupervisorPerformance({
+        projectId,
+        supervisorResourceIds: compareIds,
+        fromDate,
+        toDate,
+        workDays,
+      }),
+    enabled: SC180_ENABLED && compareMode && compareIds.length >= 2,
   });
 
   const rows: CapacityUtilizationRow[] = data?.data?.rows ?? [];
@@ -367,7 +440,7 @@ export default function CapacityUtilizationPage() {
             <em>Admin → Productivity Norms</em>.
           </p>
 
-          <div className="bg-surface/50 p-4 rounded-lg border border-border grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className={`bg-surface/50 p-4 rounded-lg border border-border grid grid-cols-1 ${SC180_ENABLED ? "md:grid-cols-6" : "md:grid-cols-4"} gap-3`}>
             <div>
               <label className="block text-xs font-medium mb-1 text-text-secondary">
                 From
@@ -419,12 +492,87 @@ export default function CapacityUtilizationPage() {
                 <option value="MANPOWER">Manpower</option>
               </select>
             </div>
-            <div className="flex items-end">
-              <span className="text-xs text-text-muted">
-                Color band: ≥100% green · 80–99% yellow · &lt;80% red · no norm
-                grey
-              </span>
+            {SC180_ENABLED && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-text-secondary">
+                Supervisor
+              </label>
+              {compareMode ? (
+                <select
+                  multiple
+                  value={compareIds}
+                  onChange={(e) => {
+                    const opts = Array.from(e.target.selectedOptions).map(
+                      (o) => o.value,
+                    );
+                    setCompareIds(opts.slice(0, 6));
+                  }}
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg h-24"
+                >
+                  {(supervisorOptions?.data ?? []).map((s) => (
+                    <option key={s.supervisorResourceId} value={s.supervisorResourceId}>
+                      {s.supervisorName} ({s.dprCount})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={supervisorResourceId}
+                  onChange={(e) => setSupervisorResourceId(e.target.value)}
+                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                >
+                  <option value="">All supervisors (project-wide)</option>
+                  {(supervisorOptions?.data ?? []).map((s) => (
+                    <option key={s.supervisorResourceId} value={s.supervisorResourceId}>
+                      {s.supervisorName} ({s.dprCount} DPRs)
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
+            )}
+            {SC180_ENABLED && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-text-secondary">
+                Work days / Compare
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={workDays}
+                  onChange={(e) => setWorkDays(Number(e.target.value) || 26)}
+                  className="w-20 px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                  title="Work days in the period — used to derive Nos from Days"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompareMode((m) => !m);
+                    if (!compareMode) setSupervisorResourceId("");
+                    else setCompareIds([]);
+                  }}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold ${
+                    compareMode
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-surface-hover text-text-primary border border-border"
+                  }`}
+                  title="Compare 2–6 supervisors side by side"
+                >
+                  {compareMode ? "Compare ON" : "Compare"}
+                </button>
+              </div>
+            </div>
+            )}
+          </div>
+          <div className="mt-2 text-xs text-text-muted">
+            Color band: ≥100% green · 80–99% yellow · &lt;80% red · no norm grey
+            {compareMode && compareIds.length < 2 && (
+              <span className="ml-3 text-warning">
+                Pick at least 2 supervisors to compare.
+              </span>
+            )}
           </div>
         </div>
 
@@ -437,7 +585,7 @@ export default function CapacityUtilizationPage() {
           </div>
         )}
 
-        {!isLoading && !isError && (
+        {!isLoading && !isError && !compareMode && (
           <div className="mt-4">
             <VirtualDataTable
               data={tableRows}
@@ -453,6 +601,14 @@ export default function CapacityUtilizationPage() {
               className="border-0 rounded-none"
             />
           </div>
+        )}
+
+        {SC180_ENABLED && !compareMode && supervisorResourceId && supervisorPerf?.data && (
+          <SupervisorPerformanceSections report={supervisorPerf.data} />
+        )}
+
+        {SC180_ENABLED && compareMode && comparisonData?.data && (
+          <SupervisorComparisonSections comparison={comparisonData.data} />
         )}
       </div>
     </div>

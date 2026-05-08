@@ -52,6 +52,9 @@ export interface ActivityResponse {
   responsibleResourceId?: string | null;
   /** Snapshot of the supervisor Resource name at the time the flag was set. */
   responsibleResourceName?: string | null;
+  /** Default unit from the linked WorkActivity. Lets the DPR form auto-fill the unit field
+   *  when the user picks an activity. Null when no work-activity link exists. */
+  workActivityDefaultUnit?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -49,6 +49,12 @@ interface Props {
    * activity has no supervisor assigned yet.
    */
   supervisorByActivityId: Map<string, { id: string; name: string } | null>;
+  /**
+   * activityId → the linked WorkActivity's `default_unit`. The form auto-fills the unit
+   * dropdown when an activity is picked so DPRs default to the activity's unit instead of
+   * the hardcoded "Cum". When the user manually overrides, an inline warning appears.
+   */
+  defaultUnitByActivityId: Map<string, string | null>;
   boqOptions: SelectOption[];
   onCancel: () => void;
   /**
@@ -78,7 +84,8 @@ const STATUS_OPTS: Array<{ value: DprApprovalStatus; label: string }> = [
   { value: "APPROVED", label: "Approved" },
   { value: "REJECTED", label: "Rejected" },
 ];
-const UNIT_OPTS = ["Cum", "MT", "Sqm", "Rm", "Each", "R/mtr", "Nr"];
+import { STANDARD_UNITS, unitOptionsWithFallback } from "@/lib/constants/units";
+const UNIT_OPTS = STANDARD_UNITS;
 const WEATHER_OPTS = ["Clear", "Cloudy", "Rain", "Hot", "Cold", "Windy"];
 
 const initialState = (
@@ -158,6 +165,7 @@ export function DprActivityForm({
   activityNameById,
   activityIdByName,
   supervisorByActivityId,
+  defaultUnitByActivityId,
   boqOptions,
   onCancel,
   onSave,
@@ -364,6 +372,15 @@ export function DprActivityForm({
       equipment: [],
       materials: [],
     };
+    // Auto-fill the unit from the activity's WorkActivity.default_unit. Without this, the form
+    // sticks to its hardcoded "Cum" default and DPRs end up with units that don't match the
+    // productivity norm — which is exactly what makes Capacity Utilization show 999%.
+    const activityUnit = newActivityId
+      ? defaultUnitByActivityId.get(newActivityId) ?? null
+      : null;
+    if (activityUnit && activityUnit.trim().length > 0) {
+      delta.unit = activityUnit.trim();
+    }
     const sup = newActivityId ? supervisorByActivityId.get(newActivityId) : null;
     const supervisorEmpty = !state.supervisorResourceId || supervisorIsOther;
     if (sup && supervisorEmpty) {
@@ -727,12 +744,34 @@ export function DprActivityForm({
                 className={inputCls}
                 required
               >
-                {UNIT_OPTS.map((u) => (
+                {unitOptionsWithFallback(state.unit).map((u) => (
                   <option key={u} value={u}>
                     {u}
+                    {!(UNIT_OPTS as readonly string[]).includes(u) ? " (legacy)" : ""}
                   </option>
                 ))}
               </select>
+              {(() => {
+                const activityUnit = state.activityId
+                  ? defaultUnitByActivityId.get(state.activityId) ?? null
+                  : null;
+                if (
+                  activityUnit &&
+                  activityUnit.trim().length > 0 &&
+                  state.unit &&
+                  state.unit.trim().toLowerCase() !== activityUnit.trim().toLowerCase()
+                ) {
+                  return (
+                    <p className="mt-1 text-xs text-warning">
+                      ⚠️ This activity is normally measured in{" "}
+                      <strong>{activityUnit}</strong>. Saving with{" "}
+                      <strong>{state.unit}</strong> will make the productivity-norm comparison
+                      meaningless on the Capacity Utilization page.
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </Field>
             <Field label="Remarks" className="md:col-span-3">
               <textarea

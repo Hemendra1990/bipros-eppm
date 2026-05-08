@@ -20,6 +20,8 @@ import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.ProjectRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -30,8 +32,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -46,6 +52,11 @@ public class ActivityService {
   private final ProjectRepository projectRepository;
   private final PercentCompleteCalculator percentCompleteCalculator;
   private final ActivityStepRepository stepRepository;
+
+  /** Cross-schema lookup of {@code resource.work_activities.default_unit} — keeps this module
+   *  free of a Maven dep on {@code bipros-resource}, mirroring the precedent in
+   *  {@code DailyActivityResourceOutputService}. Used only by list paths that bulk-resolve. */
+  @PersistenceContext private EntityManager em;
 
   public ActivityResponse createActivity(CreateActivityRequest request) {
     log.info("Creating activity: code={}, name={}, projectId={}", request.code(), request.name(),
@@ -353,13 +364,43 @@ public class ActivityService {
     projectAccess.requireRead(projectId);
 
     Page<Activity> page = activityRepository.findByProjectIdOrderBySortOrder(projectId, pageable);
+    Map<UUID, String> defaultUnitsByWorkActivity =
+        bulkResolveWorkActivityDefaultUnits(page.getContent());
     return PagedResponse.of(
-        page.getContent().stream().map(ActivityResponse::from).toList(),
+        page.getContent().stream()
+            .map(a -> ActivityResponse.from(a,
+                a.getWorkActivityId() == null ? null : defaultUnitsByWorkActivity.get(a.getWorkActivityId())))
+            .toList(),
         page.getTotalElements(),
         page.getTotalPages(),
         page.getNumber(),
         page.getSize()
     );
+  }
+
+  /**
+   * One-shot lookup of {@code work_activities.default_unit} for every distinct work_activity_id
+   * referenced by the page. Avoids N+1 queries when the page has many activities.
+   */
+  @SuppressWarnings("unchecked")
+  private Map<UUID, String> bulkResolveWorkActivityDefaultUnits(List<Activity> activities) {
+    if (em == null) return Map.of();
+    Set<UUID> ids = activities.stream()
+        .map(Activity::getWorkActivityId)
+        .filter(java.util.Objects::nonNull)
+        .collect(Collectors.toSet());
+    if (ids.isEmpty()) return Map.of();
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT id, default_unit FROM resource.work_activities WHERE id IN (:ids)")
+        .setParameter("ids", ids)
+        .getResultList();
+    Map<UUID, String> out = new HashMap<>(rows.size());
+    for (Object[] r : rows) {
+      UUID id = (UUID) r[0];
+      String unit = r[1] == null ? null : r[1].toString();
+      out.put(id, unit);
+    }
+    return out;
   }
 
   public java.util.List<ActivityResponse> getActivitiesByWbs(UUID wbsNodeId) {

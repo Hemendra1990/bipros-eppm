@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   productivityNormApi,
   type ProductivityNormResponse,
@@ -16,8 +16,9 @@ import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { unitOptionsWithFallback, STANDARD_UNITS } from "@/lib/constants/units";
 
-type Scope = "TYPE" | "RESOURCE";
+type Scope = "TYPE" | "RESOURCE" | "UNSCOPED";
 
 interface NormForm {
   workActivityId: string;
@@ -112,6 +113,7 @@ function ScopeBadge({ norm }: { norm: ProductivityNormResponse }) {
 export default function ProductivityNormsPage() {
   const [tab, setTab] = useState<ProductivityNormType>("MANPOWER");
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<NormForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -167,6 +169,45 @@ export default function ProductivityNormsPage() {
   const handleTabChange = (nextTab: ProductivityNormType) => {
     setTab(nextTab);
     setShowForm(false);
+    setEditingId(null);
+    setFormData(initialFormState);
+    setError(null);
+    setFieldErrors({});
+  };
+
+  const handleEdit = useCallback((norm: ProductivityNormResponse) => {
+    setEditingId(norm.id);
+    setShowForm(true);
+    setError(null);
+    setFieldErrors({});
+    const editScope: Scope = norm.resourceId
+      ? "RESOURCE"
+      : norm.resourceTypeId
+      ? "TYPE"
+      : "UNSCOPED";
+    setFormData({
+      workActivityId: norm.workActivityId ?? "",
+      scope: editScope,
+      resourceTypeId: norm.resourceTypeId ?? "",
+      resourceId: norm.resourceId ?? "",
+      equipmentSpec: norm.equipmentSpec ?? "",
+      unit: norm.unit ?? "",
+      outputPerManPerDay: norm.outputPerManPerDay?.toString() ?? "",
+      outputPerHour: norm.outputPerHour?.toString() ?? "",
+      crewSize: norm.crewSize?.toString() ?? "",
+      outputPerDay: norm.outputPerDay?.toString() ?? "",
+      workingHoursPerDay: norm.workingHoursPerDay?.toString() ?? "",
+      fuelLitresPerHour: norm.fuelLitresPerHour?.toString() ?? "",
+      remarks: norm.remarks ?? "",
+    });
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
     setFormData(initialFormState);
     setError(null);
     setFieldErrors({});
@@ -189,6 +230,7 @@ export default function ProductivityNormsPage() {
     if (formData.scope === "RESOURCE" && !formData.resourceId) {
       errors.resourceId = "Pick a specific Resource for the override scope";
     }
+    // UNSCOPED: no scope-required validation — applies to any resource of any type for this work activity.
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setError("Fix the highlighted fields and try again");
@@ -206,6 +248,8 @@ export default function ProductivityNormsPage() {
         remarks: formData.remarks || undefined,
         outputPerDay: toNumberOrUndefined(formData.outputPerDay),
       };
+      // For scope=UNSCOPED both resourceTypeId and resourceId stay null (already the default
+      // since the ternaries above land on the "else" branch).
 
       const request: CreateProductivityNormRequest =
         tab === "MANPOWER"
@@ -222,13 +266,20 @@ export default function ProductivityNormsPage() {
               fuelLitresPerHour: toNumberOrUndefined(formData.fuelLitresPerHour),
             };
 
-      await productivityNormApi.create(request);
+      if (editingId) {
+        await productivityNormApi.update(editingId, request);
+      } else {
+        await productivityNormApi.create(request);
+      }
       setFormData(initialFormState);
       setShowForm(false);
+      setEditingId(null);
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["productivity-norms", tab] });
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to create productivity norm"));
+      setError(getErrorMessage(err, editingId
+          ? "Failed to update productivity norm"
+          : "Failed to create productivity norm"));
     }
   };
 
@@ -318,19 +369,29 @@ export default function ProductivityNormsPage() {
         cell: (info) => {
           const row = info.row.original;
           return (
-            <button
-              onClick={() => handleDelete(row.id)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
-              title="Delete"
-            >
-              <Trash2 size={14} />
-              <span className="hidden sm:inline">Delete</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleEdit(row)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-info bg-info/10 ring-1 ring-info/20 rounded-lg hover:bg-info/20 transition-colors"
+                title="Edit"
+              >
+                <Pencil size={14} />
+                <span className="hidden sm:inline">Edit</span>
+              </button>
+              <button
+                onClick={() => handleDelete(row.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
+                title="Delete"
+              >
+                <Trash2 size={14} />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            </div>
           );
         },
       },
     ],
-    [handleDelete]
+    [handleDelete, handleEdit]
   );
 
   const equipmentColumns: ColumnDef<ProductivityNormResponse>[] = useMemo(
@@ -415,19 +476,29 @@ export default function ProductivityNormsPage() {
         cell: (info) => {
           const row = info.row.original;
           return (
-            <button
-              onClick={() => handleDelete(row.id)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
-              title="Delete"
-            >
-              <Trash2 size={14} />
-              <span className="hidden sm:inline">Delete</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleEdit(row)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-info bg-info/10 ring-1 ring-info/20 rounded-lg hover:bg-info/20 transition-colors"
+                title="Edit"
+              >
+                <Pencil size={14} />
+                <span className="hidden sm:inline">Edit</span>
+              </button>
+              <button
+                onClick={() => handleDelete(row.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-danger bg-danger/10 ring-1 ring-danger/20 rounded-lg hover:bg-danger/20 transition-colors"
+                title="Delete"
+              >
+                <Trash2 size={14} />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            </div>
           );
         },
       },
     ],
-    [handleDelete]
+    [handleDelete, handleEdit]
   );
 
   if (isLoading && norms.length === 0) {
@@ -446,7 +517,15 @@ export default function ProductivityNormsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h1 className="text-3xl font-bold text-text-primary">Productivity Norms</h1>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (showForm) {
+                cancelForm();
+              } else {
+                setEditingId(null);
+                setFormData(initialFormState);
+                setShowForm(true);
+              }
+            }}
             className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover transition-colors font-medium"
           >
             {showForm ? "Cancel" : "Add Norm"}
@@ -530,7 +609,7 @@ export default function ProductivityNormsPage() {
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
                   Scope <span className="text-danger">*</span>
                 </label>
-                <div className="flex gap-4 mb-2">
+                <div className="flex flex-wrap gap-4 mb-2">
                   <label className="inline-flex items-center gap-2 text-text-secondary">
                     <input
                       type="radio"
@@ -551,6 +630,17 @@ export default function ProductivityNormsPage() {
                     />
                     Specific resource (override)
                   </label>
+                  <label className="inline-flex items-center gap-2 text-text-secondary">
+                    <input
+                      type="radio"
+                      name="scope"
+                      checked={formData.scope === "UNSCOPED"}
+                      onChange={() =>
+                        setFormData({ ...formData, scope: "UNSCOPED", resourceTypeId: "", resourceId: "" })
+                      }
+                    />
+                    Unscoped (any resource on this activity)
+                  </label>
                 </div>
                 <p className="text-xs text-text-muted mb-2">
                   <strong>Type-level</strong> norms become the default for every resource of that
@@ -559,7 +649,7 @@ export default function ProductivityNormsPage() {
                   outperforms or underperforms the standard. At runtime the lookup tries Specific
                   first, then falls back to Type-level.
                 </p>
-                {formData.scope === "TYPE" ? (
+                {formData.scope === "TYPE" && (
                   <>
                     <select
                       value={formData.resourceTypeId}
@@ -583,7 +673,8 @@ export default function ProductivityNormsPage() {
                       <p className="mt-1 text-xs text-danger">{fieldErrors.resourceTypeId}</p>
                     )}
                   </>
-                ) : (
+                )}
+                {formData.scope === "RESOURCE" && (
                   <>
                     <select
                       value={formData.resourceId}
@@ -607,6 +698,13 @@ export default function ProductivityNormsPage() {
                       <p className="mt-1 text-xs text-danger">{fieldErrors.resourceId}</p>
                     )}
                   </>
+                )}
+                {formData.scope === "UNSCOPED" && (
+                  <p className="text-xs text-text-muted italic">
+                    No specific scope — this norm applies to any {tab.toLowerCase()} resource on this work activity.
+                    Useful for legacy entries; switch to <strong>All resources of type</strong> when you have data
+                    bound to a specific Labor / Equipment type.
+                  </p>
                 )}
               </div>
 
@@ -632,8 +730,7 @@ export default function ProductivityNormsPage() {
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
                   Unit <span className="text-danger">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.unit}
                   onChange={(e) => {
                     setFormData({ ...formData, unit: e.target.value });
@@ -643,13 +740,22 @@ export default function ProductivityNormsPage() {
                     fieldErrors.unit ? "border-danger" : "border-border"
                   }`}
                   aria-invalid={!!fieldErrors.unit}
-                />
+                >
+                  <option value="">— select a unit —</option>
+                  {unitOptionsWithFallback(formData.unit).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                      {!(STANDARD_UNITS as readonly string[]).includes(u) ? " (legacy)" : ""}
+                    </option>
+                  ))}
+                </select>
                 {fieldErrors.unit && (
                   <p className="mt-1 text-xs text-danger">{fieldErrors.unit}</p>
                 )}
                 <p className="text-xs text-text-muted mt-1">
-                  Auto-fills from the selected Work Activity. Override only if this norm uses a
-                  different unit.
+                  Auto-fills from the selected Work Activity. Same dropdown the DPR form uses, so
+                  the values stay consistent. Override only if this norm uses a different unit
+                  from the activity master.
                 </p>
               </div>
 
@@ -798,11 +904,11 @@ export default function ProductivityNormsPage() {
                 type="submit"
                 className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600"
               >
-                Save Norm
+                {editingId ? "Update Norm" : "Save Norm"}
               </button>
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={cancelForm}
                 className="px-4 py-2 bg-surface-active/50 text-text-secondary rounded-lg hover:bg-border"
               >
                 Cancel

@@ -12,6 +12,7 @@ import {
 import { TabTip } from "@/components/common/TabTip";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { getErrorMessage } from "@/lib/utils/error";
+import { unitOptionsWithFallback, STANDARD_UNITS } from "@/lib/constants/units";
 
 interface ActivityForm {
   code: string;
@@ -44,6 +45,7 @@ export default function WorkActivitiesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ActivityForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -59,6 +61,19 @@ export default function WorkActivitiesPage() {
   });
 
   const activities: WorkActivityResponse[] = useMemo(() => data?.data ?? [], [data]);
+
+  // Filter on code + name + discipline. Case-insensitive substring match — the dataset is small
+  // enough (≤ a few thousand entries) that client-side filtering is fine without debouncing.
+  const filteredActivities = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return activities;
+    return activities.filter((a) => {
+      const haystack = [a.code, a.name, a.discipline ?? "", a.defaultUnit ?? ""]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [activities, searchQuery]);
 
   const resetForm = () => {
     setFormData(initialFormState);
@@ -277,18 +292,23 @@ export default function WorkActivitiesPage() {
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
                   Default Unit
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.defaultUnit}
                   onChange={(e) => setFormData({ ...formData, defaultUnit: e.target.value })}
                   className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  placeholder="e.g. Sqm, Cum, MT"
-                  maxLength={20}
-                />
+                >
+                  <option value="">— select a unit —</option>
+                  {unitOptionsWithFallback(formData.defaultUnit).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                      {!(STANDARD_UNITS as readonly string[]).includes(u) ? " (legacy)" : ""}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-text-muted mt-1">
-                  Pre-fills the <em>Unit</em> field on the Productivity Norms form when this
-                  activity is selected. Use the unit you most often measure this work in (Sqm for
-                  plastering, Cum for excavation, MT for steel).
+                  Pre-fills the <em>Unit</em> field on the DPR form and the Productivity Norms
+                  form when this activity is selected. Same dropdown the DPR form uses, so the
+                  values stay consistent. Sqm for plastering, Cum for excavation, MT for steel.
                 </p>
               </div>
               <div>
@@ -379,7 +399,39 @@ export default function WorkActivitiesPage() {
         )}
 
 
-        <VirtualDataTable columns={columns} data={activities} sortable resizable searchable={false} />
+        <div className="mb-3 flex items-center gap-3">
+          <div className="relative flex-1 max-w-md">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by code, name, unit, or discipline…"
+              className="w-full px-3 py-2 pl-9 border border-border bg-surface-hover text-text-primary rounded-lg"
+            />
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </div>
+          <span className="text-xs text-text-muted">
+            {searchQuery
+              ? `${filteredActivities.length} of ${activities.length} matching`
+              : `${activities.length} activities`}
+          </span>
+        </div>
+
+        <VirtualDataTable columns={columns} data={filteredActivities} sortable resizable searchable={false} />
       </div>
 
       <ConfirmDialog

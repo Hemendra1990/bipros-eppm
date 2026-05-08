@@ -61,6 +61,10 @@ export default function DprPage() {
     // activityId → assigned supervisor (from Activity.responsibleResourceId snapshot). Used by
     // the form to cross-filter the supervisor/activity pickers and auto-fill on activity pick.
     const supervisorByActivityId = new Map<string, { id: string; name: string } | null>();
+    // activityId → the linked WorkActivity's default_unit. Drives the DPR form's unit auto-fill
+    // when the user picks an activity, so DPRs default to the right unit and the Capacity
+    // Utilization math doesn't divide Cum by nr.
+    const defaultUnitByActivityId = new Map<string, string | null>();
     const seen = new Set<string>();
     for (const a of activitiesData?.data?.content ?? []) {
       if (seen.has(a.id)) continue;
@@ -74,8 +78,9 @@ export default function DprPage() {
           ? { id: a.responsibleResourceId, name: a.responsibleResourceName ?? "" }
           : null
       );
+      defaultUnitByActivityId.set(a.id, a.workActivityDefaultUnit ?? null);
     }
-    return { opts, byName, byId, supervisorByActivityId };
+    return { opts, byName, byId, supervisorByActivityId, defaultUnitByActivityId };
   }, [activitiesData]);
   const activityOptions = activityIndex.opts;
 
@@ -272,6 +277,7 @@ export default function DprPage() {
             activityNameById={activityIndex.byId}
             activityIdByName={activityIndex.byName}
             supervisorByActivityId={activityIndex.supervisorByActivityId}
+            defaultUnitByActivityId={activityIndex.defaultUnitByActivityId}
             boqOptions={boqOptions}
             onCancel={closeForm}
             onSave={handleSave}
