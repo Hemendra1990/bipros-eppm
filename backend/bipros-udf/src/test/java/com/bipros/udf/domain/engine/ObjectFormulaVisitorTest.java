@@ -536,4 +536,75 @@ class ObjectFormulaVisitorTest {
             assertThat(eval("IF(FALSE, \"yes\", \"no\")")).isEqualTo("no");
         }
     }
+
+    @Nested
+    @DisplayName("Statistical Functions")
+    class StatisticalFunctionsTests {
+
+        @Test
+        @DisplayName("AVERAGE(10, 20, 30) = 20.0")
+        void average() {
+            assertThat(eval("AVERAGE(10, 20, 30)")).isEqualTo("20.0");
+        }
+
+        @Test
+        @DisplayName("AVERAGE(10) = 10.0")
+        void averageSingle() {
+            assertThat(eval("AVERAGE(10)")).isEqualTo("10.0");
+        }
+
+        @Test
+        @DisplayName("COUNT(10, 20, 30) = 3.0")
+        void count() {
+            assertThat(eval("COUNT(10, 20, 30)")).isEqualTo("3.0");
+        }
+
+        @Test
+        @DisplayName("STDEV(2, 4, 4, 4, 5, 5, 7, 9) = 2.0")
+        void stdev() {
+            assertThat(eval("STDEV(2, 4, 4, 4, 5, 5, 7, 9)")).isEqualTo("2.0");
+        }
+
+        @Test
+        @DisplayName("STDEV(10) = 0.0")
+        void stdevSingle() {
+            assertThat(eval("STDEV(10)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("MEDIAN(10, 20, 30) = 20.0")
+        void medianOdd() {
+            assertThat(eval("MEDIAN(10, 20, 30)")).isEqualTo("20.0");
+        }
+
+        @Test
+        @DisplayName("MEDIAN(10, 20, 30, 40) = 25.0")
+        void medianEven() {
+            assertThat(eval("MEDIAN(10, 20, 30, 40)")).isEqualTo("25.0");
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 40, 50, 0.5) = 30.0")
+        void percentileMedian() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 40, 50, 0.5)")).isEqualTo("30.0");
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 0.0) = 10.0")
+        void percentileZero() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 0.0)")).isEqualTo("10.0");
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 1.0) = 30.0")
+        void percentileHundred() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 1.0)")).isEqualTo("30.0");
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 0.25) = 15.0")
+        void percentileQuarter() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 0.25)")).isEqualTo("15.0");
+        }
+    }
 }
