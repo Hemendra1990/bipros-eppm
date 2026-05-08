@@ -84,6 +84,9 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
      */
     @Override
     public Object visitAdditiveExpr(FormulaParser.AdditiveExprContext ctx) {
+        if (ctx.multiplicativeExpr().size() == 1) {
+            return visit(ctx.multiplicativeExpr(0));
+        }
         double result = toDouble(visit(ctx.multiplicativeExpr(0)));
         for (int i = 1; i < ctx.multiplicativeExpr().size(); i++) {
             if (ctx.PLUS(i - 1) != null) {
@@ -104,6 +107,9 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
      */
     @Override
     public Object visitMultiplicativeExpr(FormulaParser.MultiplicativeExprContext ctx) {
+        if (ctx.unaryExpr().size() == 1) {
+            return visit(ctx.unaryExpr(0));
+        }
         double result = toDouble(visit(ctx.unaryExpr(0)));
         for (int i = 1; i < ctx.unaryExpr().size(); i++) {
             if (ctx.MUL(i - 1) != null) {
@@ -300,6 +306,9 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
     public Object visitNumberLiteral(FormulaParser.NumberLiteralContext ctx) {
         String text = ctx.getText();
         if (text.contains(".")) {
+            return Double.parseDouble(text);
+        }
+        if (text.startsWith("-")) {
             return Double.parseDouble(text);
         }
         try {
