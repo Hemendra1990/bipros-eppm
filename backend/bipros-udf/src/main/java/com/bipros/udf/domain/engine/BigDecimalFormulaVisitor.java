@@ -377,6 +377,37 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
                     .multiply(BigDecimal.valueOf(fraction)))
                     .setScale(scale, roundingMode);
         }
+        if (ctx.SUMIF() != null) {
+            if (ctx.expression().size() < 2) return zeroDefault;
+            BigDecimal criteria = visit(ctx.expression(0));
+            return ctx.expression().stream()
+                    .skip(1)
+                    .map(this::visit)
+                    .filter(v -> v.compareTo(criteria) == 0)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+        if (ctx.COUNTIF() != null) {
+            if (ctx.expression().size() < 2) return BigDecimal.ZERO;
+            BigDecimal criteria = visit(ctx.expression(0));
+            long count = ctx.expression().stream()
+                    .skip(1)
+                    .map(this::visit)
+                    .filter(v -> v.compareTo(criteria) == 0)
+                    .count();
+            return BigDecimal.valueOf(count);
+        }
+        if (ctx.AVERAGEIF() != null) {
+            if (ctx.expression().size() < 2) return zeroDefault;
+            BigDecimal criteria = visit(ctx.expression(0));
+            var matches = ctx.expression().stream()
+                    .skip(1)
+                    .map(this::visit)
+                    .filter(v -> v.compareTo(criteria) == 0)
+                    .toList();
+            if (matches.isEmpty()) return zeroDefault;
+            BigDecimal sum = matches.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+            return sum.divide(BigDecimal.valueOf(matches.size()), scale, roundingMode);
+        }
         return BigDecimal.ZERO;
     }
 
