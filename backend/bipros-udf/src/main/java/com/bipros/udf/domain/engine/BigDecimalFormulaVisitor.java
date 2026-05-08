@@ -323,7 +323,67 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
             return BigDecimal.valueOf(Math.cos(visit(ctx.expression(0)).doubleValue()))
                     .setScale(scale, roundingMode);
         }
+        if (ctx.AVERAGE() != null) {
+            var args = collectArguments(ctx);
+            if (args.isEmpty()) return zeroDefault;
+            BigDecimal sum = args.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+            return sum.divide(BigDecimal.valueOf(args.size()), scale, roundingMode);
+        }
+        if (ctx.COUNT() != null) {
+            return BigDecimal.valueOf(ctx.expression().size());
+        }
+        if (ctx.STDEV() != null) {
+            var args = collectArguments(ctx);
+            if (args.size() < 2) return zeroDefault;
+            BigDecimal mean = args.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(args.size()), scale, roundingMode);
+            BigDecimal sumSqDiff = args.stream()
+                    .map(v -> v.subtract(mean).pow(2))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal variance = sumSqDiff.divide(BigDecimal.valueOf(args.size()), scale, roundingMode);
+            return BigDecimal.valueOf(Math.sqrt(variance.doubleValue()))
+                    .setScale(scale, roundingMode);
+        }
+        if (ctx.MEDIAN() != null) {
+            var args = collectArguments(ctx);
+            if (args.isEmpty()) return zeroDefault;
+            var sorted = args.stream().sorted().toList();
+            int n = sorted.size();
+            if (n % 2 == 1) {
+                return sorted.get(n / 2);
+            }
+            BigDecimal a = sorted.get(n / 2 - 1);
+            BigDecimal b = sorted.get(n / 2);
+            return a.add(b).divide(BigDecimal.valueOf(2), scale, roundingMode);
+        }
+        if (ctx.PERCENTILE() != null) {
+            var args = collectArguments(ctx);
+            if (args.size() < 2) return zeroDefault;
+            BigDecimal rank = args.get(args.size() - 1);
+            var data = args.subList(0, args.size() - 1);
+            if (data.isEmpty()) return zeroDefault;
+            var sorted = data.stream().sorted().toList();
+            int n = sorted.size();
+            double idx = rank.doubleValue() * (n - 1);
+            int lower = (int) Math.floor(idx);
+            int upper = (int) Math.ceil(idx);
+            if (lower == upper) {
+                return sorted.get(lower);
+            }
+            double fraction = idx - lower;
+            BigDecimal valLower = sorted.get(lower);
+            BigDecimal valUpper = sorted.get(upper);
+            return valLower.add(valUpper.subtract(valLower)
+                    .multiply(BigDecimal.valueOf(fraction)))
+                    .setScale(scale, roundingMode);
+        }
         return BigDecimal.ZERO;
+    }
+
+    private java.util.List<BigDecimal> collectArguments(FormulaParser.FunctionCallContext ctx) {
+        return ctx.expression().stream()
+                .map(this::visit)
+                .toList();
     }
 
     /**
