@@ -654,4 +654,68 @@ class ObjectFormulaVisitorTest {
             assertThat(eval("COUNTIF(\"A\", \"A\", \"B\", \"a\")")).isEqualTo("2.0");
         }
     }
+
+    @Nested
+    @DisplayName("Date/Time Functions")
+    class DateTimeFunctionsTests {
+
+        @Test
+        @DisplayName("TODAY returns days since epoch")
+        void today() {
+            assertThat(eval("TODAY()")).isNotEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("DATEDIFF with string dates = 9.0")
+        void datediffString() {
+            assertThat(eval("DATEDIFF(\"2024-01-01\", \"2024-01-10\")")).isEqualTo("9.0");
+        }
+
+        @Test
+        @DisplayName("DAYSOFMONTH for Feb 2024 = 29.0")
+        void daysofmonthLeap() {
+            assertThat(eval("DAYSOFMONTH(\"2024-02-15\")")).isEqualTo("29.0");
+        }
+
+        @Test
+        @DisplayName("YEAR(\"2024-06-15\") = 2024.0")
+        void year() {
+            assertThat(eval("YEAR(\"2024-06-15\")")).isEqualTo("2024.0");
+        }
+
+        @Test
+        @DisplayName("MONTH(\"2024-06-15\") = 6.0")
+        void month() {
+            assertThat(eval("MONTH(\"2024-06-15\")")).isEqualTo("6.0");
+        }
+    }
+
+    @Nested
+    @DisplayName("Lookup Functions")
+    class LookupFunctionsTests {
+
+        @Test
+        @DisplayName("LOOKUP(5, 1, 10, 5, 50, 3, 30) = 50")
+        void lookup() {
+            assertThat(eval("LOOKUP(5, 1, 10, 5, 50, 3, 30)")).isEqualTo("50");
+        }
+
+        @Test
+        @DisplayName("LOOKUP(99, 1, 10, 5, 50) = 0.0")
+        void lookupNotFound() {
+            assertThat(eval("LOOKUP(99, 1, 10, 5, 50)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("INDEX(10, 20, 30, 2) = 20")
+        void index() {
+            assertThat(eval("INDEX(10, 20, 30, 2)")).isEqualTo("20");
+        }
+
+        @Test
+        @DisplayName("INDEX with string values")
+        void indexStrings() {
+            assertThat(eval("INDEX(\"A\", \"B\", \"C\", 2)")).isEqualTo("B");
+        }
+    }
 }
