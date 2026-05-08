@@ -6,7 +6,8 @@ import com.bipros.udf.application.dto.CreateUserDefinedFieldRequest;
 import com.bipros.udf.application.dto.SetUdfValueRequest;
 import com.bipros.udf.application.dto.UdfValueResponse;
 import com.bipros.udf.application.dto.UserDefinedFieldDto;
-import com.bipros.udf.domain.engine.FormulaEvaluator;
+import com.bipros.udf.domain.engine.FormulaAstCache;
+import com.bipros.udf.domain.engine.ObjectFormulaVisitor;
 import com.bipros.udf.domain.model.UdfDataType;
 import com.bipros.udf.domain.model.UdfScope;
 import com.bipros.udf.domain.model.UdfSubject;
@@ -17,6 +18,8 @@ import com.bipros.udf.domain.repository.UdfValueRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +34,7 @@ public class UdfService {
 
     private final UserDefinedFieldRepository userDefinedFieldRepository;
     private final UdfValueRepository udfValueRepository;
+    private final FormulaAstCache formulaAstCache;
 
     private static final int MAX_FIELDS_PER_TYPE_SUBJECT = 100;
     private static final int MAX_INDICATOR_FIELDS = 20;
@@ -156,8 +160,14 @@ public class UdfService {
         }
 
         Map<String, Object> context = buildContext(entityId);
-        FormulaEvaluator evaluator = new FormulaEvaluator(expression, context);
-        return evaluator.evaluate();
+        ParseTree tree = formulaAstCache.get(expression);
+        if (tree == null) {
+            return "";
+        }
+
+        ObjectFormulaVisitor visitor = new ObjectFormulaVisitor(context);
+        Object result = visitor.visit(tree);
+        return result != null ? String.valueOf(result) : "";
     }
 
     private Map<String, Object> buildContext(UUID entityId) {
