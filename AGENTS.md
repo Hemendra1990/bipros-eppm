@@ -119,6 +119,13 @@ pnpm test:e2e:headed             # Run headed
 - SpringDoc OpenAPI (Swagger at `/swagger-ui.html`)
 - Liquibase (migrations, currently disabled in dev profile)
 
+### Formula Engine
+- ANTLR4 grammar (`Formula.g4`) — single source of truth for expression syntax
+- Two visitors: `BigDecimalFormulaVisitor` (financial calculations), `ObjectFormulaVisitor` (legacy UDF string support)
+- `FormulaAstCache` (Caffeine) — caches parsed ASTs keyed by expression string
+- Save-time validation via `FormulaConfigurationService` — rejects malformed expressions at API layer
+- Hand-written evaluators (`BigDecimalFormulaEvaluator`, `FormulaEvaluator`) are deprecated
+
 ---
 
 ## Code Style — Frontend (TypeScript/React)
