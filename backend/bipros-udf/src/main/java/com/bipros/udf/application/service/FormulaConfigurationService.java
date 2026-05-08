@@ -18,7 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,7 +53,7 @@ public class FormulaConfigurationService {
         validateExpression(request.getDefaultExpression(), "defaultExpression");
         FormulaMaster master = mapToEntity(request);
         FormulaMaster saved = formulaMasterRepository.save(master);
-        log.info("Created formula master: {} ({})" , saved.getCode(), saved.getName());
+        log.info("Created formula master: {} ({})", saved.getCode(), saved.getName());
         return mapToDto(saved);
     }
 
@@ -293,7 +296,7 @@ public class FormulaConfigurationService {
         master.setSortOrder(sortOrder);
         master.setModuleSource(moduleSource);
         formulaMasterRepository.save(master);
-        log.info("Seeded formula master: {} ({})" , code, name);
+        log.info("Seeded formula master: {} ({})", code, name);
     }
 
     // ---- Internal helpers ----
