@@ -319,4 +319,15 @@ public class QueryDailyOutputsTool implements Tool {
       return qty;
     }
   }
+
+  @Override
+  public java.util.Set<String> allowedRoles() {
+    return java.util.Set.of(
+            "PROJECT_MANAGER", "PORTFOLIO_MANAGER",
+            "SITE_MANAGER", "PROJECT_ENGINEER", "QC_MANAGER",
+            "BIM_DATA_COORDINATOR",
+            "SITE_ENGINEER", "RESOURCE_MANAGER", "SCHEDULER",
+            "EXECUTIVE_VIEWER"
+    );
+  }
 }

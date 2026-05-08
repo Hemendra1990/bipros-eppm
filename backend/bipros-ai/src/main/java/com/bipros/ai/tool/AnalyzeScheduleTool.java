@@ -168,4 +168,15 @@ public class AnalyzeScheduleTool extends ProjectScopedTool {
                 new String[]{"id", "code", "name", "type", "float", "percent_complete",
                         "planned_start", "planned_finish", "actual_start"});
     }
+
+    @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of(
+                "PROJECT_MANAGER",
+                "PORTFOLIO_MANAGER",
+                "RISK_MANAGER",
+                "COST_CONTROLLER",
+                "EXECUTIVE_VIEWER"
+        );
+    }
 }

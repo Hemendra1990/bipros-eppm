@@ -118,4 +118,15 @@ public class AnalyzeCostTool extends ProjectScopedTool {
         return ToolResult.table(summary, arr,
                 new String[]{"group_key", "actual", "planned", "earned", "variance"});
     }
+
+    @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of(
+                "PROJECT_MANAGER",
+                "PORTFOLIO_MANAGER",
+                "RISK_MANAGER",
+                "COST_CONTROLLER",
+                "EXECUTIVE_VIEWER"
+        );
+    }
 }

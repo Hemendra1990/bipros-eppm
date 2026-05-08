@@ -157,4 +157,15 @@ public class AnalyzeRiskTool extends ProjectScopedTool {
                         "sum_pre_exposure_cost", "sum_post_exposure_cost",
                         "avg_risk_score", "max_residual_score", "total_impact_days"});
     }
+
+    @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of(
+                "PROJECT_MANAGER",
+                "PORTFOLIO_MANAGER",
+                "RISK_MANAGER",
+                "COST_CONTROLLER",
+                "EXECUTIVE_VIEWER"
+        );
+    }
 }
