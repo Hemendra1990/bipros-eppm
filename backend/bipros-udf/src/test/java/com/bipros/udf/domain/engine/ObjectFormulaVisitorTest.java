@@ -365,4 +365,175 @@ class ObjectFormulaVisitorTest {
             assertThat(eval("[Status] = \"Active\"", ctx)).isEqualTo("true");
         }
     }
+
+    @Nested
+    @DisplayName("String Functions")
+    class StringFunctionsTests {
+
+        @Test
+        @DisplayName("LEFT(\"hello\", 2) = \"he\"")
+        void left() {
+            assertThat(eval("LEFT(\"hello\", 2)")).isEqualTo("he");
+        }
+
+        @Test
+        @DisplayName("LEFT(\"hi\", 10) = \"hi\"")
+        void leftOverflow() {
+            assertThat(eval("LEFT(\"hi\", 10)")).isEqualTo("hi");
+        }
+
+        @Test
+        @DisplayName("RIGHT(\"hello\", 2) = \"lo\"")
+        void right() {
+            assertThat(eval("RIGHT(\"hello\", 2)")).isEqualTo("lo");
+        }
+
+        @Test
+        @DisplayName("RIGHT(\"hi\", 10) = \"hi\"")
+        void rightOverflow() {
+            assertThat(eval("RIGHT(\"hi\", 10)")).isEqualTo("hi");
+        }
+
+        @Test
+        @DisplayName("MID(\"hello\", 2, 2) = \"el\"")
+        void mid() {
+            assertThat(eval("MID(\"hello\", 2, 2)")).isEqualTo("el");
+        }
+
+        @Test
+        @DisplayName("MID(\"hi\", 5, 2) = \"\"")
+        void midOutOfRange() {
+            assertThat(eval("MID(\"hi\", 5, 2)")).isEqualTo("");
+        }
+
+        @Test
+        @DisplayName("LENGTH(\"hello\") = 5")
+        void length() {
+            assertThat(eval("LENGTH(\"hello\")")).isEqualTo("5");
+        }
+
+        @Test
+        @DisplayName("UPPER(\"hello\") = \"HELLO\"")
+        void upper() {
+            assertThat(eval("UPPER(\"hello\")")).isEqualTo("HELLO");
+        }
+
+        @Test
+        @DisplayName("LOWER(\"HELLO\") = \"hello\"")
+        void lower() {
+            assertThat(eval("LOWER(\"HELLO\")")).isEqualTo("hello");
+        }
+
+        @Test
+        @DisplayName("TRIM(\"  hello  \") = \"hello\"")
+        void trim() {
+            assertThat(eval("TRIM(\"  hello  \")")).isEqualTo("hello");
+        }
+
+        @Test
+        @DisplayName("SUBSTITUTE(\"a,b,c\", \",\", \"-\") = \"a-b-c\"")
+        void substitute() {
+            assertThat(eval("SUBSTITUTE(\"a,b,c\", \",\", \"-\")")).isEqualTo("a-b-c");
+        }
+
+        @Test
+        @DisplayName("SUBSTITUTE(\"abc\", \"x\", \"y\") = \"abc\"")
+        void substituteNotFound() {
+            assertThat(eval("SUBSTITUTE(\"abc\", \"x\", \"y\")")).isEqualTo("abc");
+        }
+    }
+
+    @Nested
+    @DisplayName("Math Functions")
+    class MathFunctionsTests {
+
+        @Test
+        @DisplayName("MOD(17, 5) = 2.0")
+        void mod() {
+            assertThat(eval("MOD(17, 5)")).isEqualTo("2.0");
+        }
+
+        @Test
+        @DisplayName("MOD(10, 0) = 0.0")
+        void modByZero() {
+            assertThat(eval("MOD(10, 0)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("FLOOR(3.7) = 3.0")
+        void floor() {
+            assertThat(eval("FLOOR(3.7)")).isEqualTo("3.0");
+        }
+
+        @Test
+        @DisplayName("CEILING(3.2) = 4.0")
+        void ceiling() {
+            assertThat(eval("CEILING(3.2)")).isEqualTo("4.0");
+        }
+
+        @Test
+        @DisplayName("LOG(1) = 0.0")
+        void log() {
+            assertThat(eval("LOG(1)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("EXP(0) = 1.0")
+        void exp() {
+            assertThat(eval("EXP(0)")).isEqualTo("1.0");
+        }
+
+        @Test
+        @DisplayName("SIN(0) = 0.0")
+        void sin() {
+            assertThat(eval("SIN(0)")).isEqualTo("0.0");
+        }
+
+        @Test
+        @DisplayName("COS(0) = 1.0")
+        void cos() {
+            assertThat(eval("COS(0)")).isEqualTo("1.0");
+        }
+    }
+
+    @Nested
+    @DisplayName("Constants")
+    class ConstantsTests {
+
+        @Test
+        @DisplayName("PI = Math.PI")
+        void pi() {
+            assertThat(eval("PI")).isEqualTo(String.valueOf(Math.PI));
+        }
+
+        @Test
+        @DisplayName("E = Math.E")
+        void euler() {
+            assertThat(eval("E")).isEqualTo(String.valueOf(Math.E));
+        }
+
+        @Test
+        @DisplayName("TRUE = true")
+        void trueConstant() {
+            assertThat(eval("TRUE")).isEqualTo("true");
+        }
+
+        @Test
+        @DisplayName("FALSE = false")
+        void falseConstant() {
+            assertThat(eval("FALSE")).isEqualTo("false");
+        }
+
+        @Test
+        @DisplayName("IF(TRUE, \"yes\", \"no\") = \"yes\"")
+        void ifWithTrue() {
+            assertThat(eval("IF(TRUE, \"yes\", \"no\")")).isEqualTo("yes");
+        }
+
+        @Test
+        @DisplayName("IF(FALSE, \"yes\", \"no\") = \"no\"")
+        void ifWithFalse() {
+            assertThat(eval("IF(FALSE, \"yes\", \"no\")")).isEqualTo("no");
+        }
+    }
 }
