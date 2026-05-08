@@ -19,6 +19,9 @@ public final class PermissionCatalog {
     private static final String DELETE = "DELETE";
     private static final String EXPORT = "EXPORT";
     private static final String APPROVE = "APPROVE";
+    private static final String ANNOTATE = "ANNOTATE";
+    private static final String AUDIT = "AUDIT";
+    private static final String WRITE = "WRITE";
 
     public static final List<Permission> ALL = List.of(
             // Project
@@ -124,16 +127,16 @@ public final class PermissionCatalog {
 
             // Data quality (used by BIM_DATA_COORDINATOR profile)
             new Permission("DATA_QUALITY.READ",  "DATA_QUALITY", READ,  "View data-quality and DPR audit reports"),
-            new Permission("DATA_QUALITY.AUDIT", "DATA_QUALITY", "AUDIT", "Run DPR completeness audits"),
+            new Permission("DATA_QUALITY.AUDIT", "DATA_QUALITY", AUDIT, "Run DPR completeness audits"),
 
             // DPR QC annotations (used by QC_MANAGER profile)
-            new Permission("DPR.QC_ANNOTATE", "DPR", "ANNOTATE", "Add QC observations / annotations to DPRs"),
+            new Permission("DPR.QC_ANNOTATE", "DPR", ANNOTATE, "Add QC observations / annotations to DPRs"),
 
             // Yield variance (used by PROJECT_ENGINEER profile and analyze_yield_variance tool)
             new Permission("YIELD_VARIANCE.READ", "YIELD_VARIANCE", READ, "View material yield variance reports"),
 
             // AI write (lets a profile both run the AI and use write-capable AI tools when added)
-            new Permission("AI.WRITE", "AI", "WRITE", "Run AI tools that write back to the system")
+            new Permission("AI.WRITE", "AI", WRITE, "Run AI tools that write back to the system")
     );
 
     public static final Set<String> ALL_CODES = ALL.stream()
