@@ -331,7 +331,58 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
             if (ctx.expression().isEmpty()) return 0.0;
             return Math.cos(toDouble(visit(ctx.expression(0))));
         }
+        if (ctx.AVERAGE() != null) {
+            var args = collectDoubleArguments(ctx);
+            if (args.isEmpty()) return 0.0;
+            return args.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        }
+        if (ctx.COUNT() != null) {
+            return (double) ctx.expression().size();
+        }
+        if (ctx.STDEV() != null) {
+            var args = collectDoubleArguments(ctx);
+            if (args.size() < 2) return 0.0;
+            double mean = args.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+            double sumSqDiff = args.stream()
+                    .mapToDouble(v -> Math.pow(v - mean, 2))
+                    .sum();
+            double variance = sumSqDiff / args.size();
+            return Math.sqrt(variance);
+        }
+        if (ctx.MEDIAN() != null) {
+            var args = collectDoubleArguments(ctx);
+            if (args.isEmpty()) return 0.0;
+            var sorted = args.stream().sorted().toList();
+            int n = sorted.size();
+            if (n % 2 == 1) {
+                return sorted.get(n / 2);
+            }
+            return (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2.0;
+        }
+        if (ctx.PERCENTILE() != null) {
+            var args = collectDoubleArguments(ctx);
+            if (args.size() < 2) return 0.0;
+            double rank = args.get(args.size() - 1);
+            var data = args.subList(0, args.size() - 1);
+            if (data.isEmpty()) return 0.0;
+            var sorted = data.stream().sorted().toList();
+            int n = sorted.size();
+            double idx = rank * (n - 1);
+            int lower = (int) Math.floor(idx);
+            int upper = (int) Math.ceil(idx);
+            if (lower == upper) {
+                return sorted.get(lower);
+            }
+            double fraction = idx - lower;
+            return sorted.get(lower) + fraction * (sorted.get(upper) - sorted.get(lower));
+        }
         return 0;
+    }
+
+    private java.util.List<Double> collectDoubleArguments(FormulaParser.FunctionCallContext ctx) {
+        return ctx.expression().stream()
+                .map(e -> toDouble(visit(e)))
+                .toList();
     }
 
     /**
