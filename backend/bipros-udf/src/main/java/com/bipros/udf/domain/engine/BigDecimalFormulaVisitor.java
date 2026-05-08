@@ -408,7 +408,74 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
             BigDecimal sum = matches.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
             return sum.divide(BigDecimal.valueOf(matches.size()), scale, roundingMode);
         }
+        if (ctx.TODAY() != null) {
+            return BigDecimal.valueOf(java.time.LocalDate.now().toEpochDay());
+        }
+        if (ctx.DATEDIFF() != null) {
+            if (ctx.expression().size() < 2) return zeroDefault;
+            java.time.LocalDate start = resolveDate(ctx.expression(0));
+            java.time.LocalDate end = resolveDate(ctx.expression(1));
+            if (start == null || end == null) return zeroDefault;
+            return BigDecimal.valueOf(java.time.temporal.ChronoUnit.DAYS.between(start, end));
+        }
+        if (ctx.DAYSOFMONTH() != null) {
+            if (ctx.expression().isEmpty()) return zeroDefault;
+            java.time.LocalDate date = resolveDate(ctx.expression(0));
+            if (date == null) return zeroDefault;
+            return BigDecimal.valueOf(date.lengthOfMonth());
+        }
+        if (ctx.YEAR() != null) {
+            if (ctx.expression().isEmpty()) return zeroDefault;
+            java.time.LocalDate date = resolveDate(ctx.expression(0));
+            if (date == null) return zeroDefault;
+            return BigDecimal.valueOf(date.getYear());
+        }
+        if (ctx.MONTH() != null) {
+            if (ctx.expression().isEmpty()) return zeroDefault;
+            java.time.LocalDate date = resolveDate(ctx.expression(0));
+            if (date == null) return zeroDefault;
+            return BigDecimal.valueOf(date.getMonthValue());
+        }
+        if (ctx.LOOKUP() != null) {
+            if (ctx.expression().size() < 3) return zeroDefault;
+            BigDecimal criteria = visit(ctx.expression(0));
+            var values = ctx.expression().stream().skip(1).map(this::visit).toList();
+            for (int i = 0; i + 1 < values.size(); i += 2) {
+                if (values.get(i).compareTo(criteria) == 0) {
+                    return values.get(i + 1);
+                }
+            }
+            return zeroDefault;
+        }
+        if (ctx.INDEX() != null) {
+            if (ctx.expression().size() < 2) return zeroDefault;
+            var values = ctx.expression().stream()
+                    .limit(ctx.expression().size() - 1)
+                    .map(this::visit)
+                    .toList();
+            int pos = visit(ctx.expression(ctx.expression().size() - 1)).intValue();
+            if (pos < 1 || pos > values.size()) return zeroDefault;
+            return values.get(pos - 1);
+        }
         return BigDecimal.ZERO;
+    }
+
+    private java.time.LocalDate resolveDate(FormulaParser.ExpressionContext ctx) {
+        String text = ctx.getText();
+        if (text.length() >= 2 && ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'")))) {
+            text = text.substring(1, text.length() - 1);
+            try {
+                return java.time.LocalDate.parse(text.trim());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        BigDecimal val = visit(ctx);
+        try {
+            return java.time.LocalDate.ofEpochDay(val.longValue());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private java.util.List<BigDecimal> collectArguments(FormulaParser.FunctionCallContext ctx) {
