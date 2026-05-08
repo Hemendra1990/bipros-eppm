@@ -407,7 +407,72 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
             if (matches.isEmpty()) return 0.0;
             return matches.stream().mapToDouble(this::toDouble).average().orElse(0.0);
         }
+        if (ctx.TODAY() != null) {
+            return (double) java.time.LocalDate.now().toEpochDay();
+        }
+        if (ctx.DATEDIFF() != null) {
+            if (ctx.expression().size() < 2) return 0.0;
+            java.time.LocalDate start = resolveDate(visit(ctx.expression(0)));
+            java.time.LocalDate end = resolveDate(visit(ctx.expression(1)));
+            if (start == null || end == null) return 0.0;
+            return (double) java.time.temporal.ChronoUnit.DAYS.between(start, end);
+        }
+        if (ctx.DAYSOFMONTH() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            java.time.LocalDate date = resolveDate(visit(ctx.expression(0)));
+            if (date == null) return 0.0;
+            return (double) date.lengthOfMonth();
+        }
+        if (ctx.YEAR() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            java.time.LocalDate date = resolveDate(visit(ctx.expression(0)));
+            if (date == null) return 0.0;
+            return (double) date.getYear();
+        }
+        if (ctx.MONTH() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            java.time.LocalDate date = resolveDate(visit(ctx.expression(0)));
+            if (date == null) return 0.0;
+            return (double) date.getMonthValue();
+        }
+        if (ctx.LOOKUP() != null) {
+            if (ctx.expression().size() < 3) return 0.0;
+            Object criteria = visit(ctx.expression(0));
+            var values = ctx.expression().stream().skip(1).map(this::visit).toList();
+            for (int i = 0; i + 1 < values.size(); i += 2) {
+                if (compareEquals(values.get(i), criteria)) {
+                    return values.get(i + 1);
+                }
+            }
+            return 0.0;
+        }
+        if (ctx.INDEX() != null) {
+            if (ctx.expression().size() < 2) return 0.0;
+            var values = ctx.expression().stream()
+                    .limit(ctx.expression().size() - 1)
+                    .map(this::visit)
+                    .toList();
+            int pos = (int) toDouble(visit(ctx.expression(ctx.expression().size() - 1)));
+            if (pos < 1 || pos > values.size()) return 0.0;
+            return values.get(pos - 1);
+        }
         return 0;
+    }
+
+    private java.time.LocalDate resolveDate(Object value) {
+        if (value instanceof Number) {
+            try {
+                return java.time.LocalDate.ofEpochDay(((Number) value).longValue());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        String text = String.valueOf(value).trim();
+        try {
+            return java.time.LocalDate.parse(text);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private java.util.List<Double> collectDoubleArguments(FormulaParser.FunctionCallContext ctx) {
