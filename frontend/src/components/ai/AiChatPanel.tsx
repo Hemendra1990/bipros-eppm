@@ -81,6 +81,26 @@ const TOOL_PROGRESS_LABELS: Record<string, string> = {
   read_dpr_summary: "Reading daily progress",
   query_clickhouse: "Querying analytics",
   describe_schema: "Inspecting data shape",
+  // Site Manager
+  analyze_labour_utilization: "Reading crew utilization",
+  analyze_machine_idle_time: "Checking machine idle time",
+  analyze_material_wastage: "Reading material wastage",
+  check_stockpile_vs_plan: "Comparing stockpile vs plan",
+  // Project Engineer
+  analyze_productivity_factor: "Reading productivity vs norm",
+  analyze_yield_variance: "Reading yield variance",
+  analyze_equipment_cycle_time: "Reading equipment cycle times",
+  // QC Manager
+  analyze_ncr_trends: "Reading NCR trends",
+  audit_traceability: "Auditing traceability",
+  analyze_quality_data_gaps: "Looking for quality data gaps",
+  // Project Manager
+  analyze_labour_cost_per_unit: "Reading labour cost per unit",
+  analyze_material_burn_rate: "Reading material burn rate",
+  analyze_equipment_utilization_cost: "Reading equipment utilization cost",
+  // BIM / Data Coordinator
+  audit_dpr_data_quality: "Auditing DPR data quality",
+  report_data_lag: "Reading data entry lag",
 };
 function friendlyToolLabel(name: string): string {
   return TOOL_PROGRESS_LABELS[name] ?? "Working";
