@@ -376,6 +376,37 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
             double fraction = idx - lower;
             return sorted.get(lower) + fraction * (sorted.get(upper) - sorted.get(lower));
         }
+        if (ctx.SUMIF() != null) {
+            if (ctx.expression().size() < 2) return 0.0;
+            Object criteria = visit(ctx.expression(0));
+            return ctx.expression().stream()
+                    .skip(1)
+                    .map(this::visit)
+                    .filter(v -> compareEquals(v, criteria))
+                    .mapToDouble(this::toDouble)
+                    .sum();
+        }
+        if (ctx.COUNTIF() != null) {
+            if (ctx.expression().size() < 2) return 0.0;
+            Object criteria = visit(ctx.expression(0));
+            long count = ctx.expression().stream()
+                    .skip(1)
+                    .map(this::visit)
+                    .filter(v -> compareEquals(v, criteria))
+                    .count();
+            return (double) count;
+        }
+        if (ctx.AVERAGEIF() != null) {
+            if (ctx.expression().size() < 2) return 0.0;
+            Object criteria = visit(ctx.expression(0));
+            var matches = ctx.expression().stream()
+                    .skip(1)
+                    .map(this::visit)
+                    .filter(v -> compareEquals(v, criteria))
+                    .toList();
+            if (matches.isEmpty()) return 0.0;
+            return matches.stream().mapToDouble(this::toDouble).average().orElse(0.0);
+        }
         return 0;
     }
 
