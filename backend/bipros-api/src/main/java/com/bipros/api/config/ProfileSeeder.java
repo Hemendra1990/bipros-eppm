@@ -84,7 +84,7 @@ public class ProfileSeeder {
                             "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE",
                             "CONTRACT.READ", "CONTRACT.UPDATE",
                             "REPORT.READ", "REPORT.EXPORT",
-                            "AI.READ"
+                            "AI.READ", "AI.WRITE"
                     )
             ),
             new DefaultProfile(
@@ -181,6 +181,73 @@ public class ProfileSeeder {
                     union(
                             readOnly(),
                             of("REPORT.EXPORT", "EVM.EXPORT")
+                    )
+            ),
+            new DefaultProfile(
+                    "SITE_MANAGER",
+                    "Site Manager",
+                    "Daily site execution: crew & machine deployment, materials, DPR ownership.",
+                    "SITE_MANAGER",
+                    of(
+                            "PROJECT.READ",
+                            "ACTIVITY.READ", "ACTIVITY.UPDATE",
+                            "SCHEDULE.READ",
+                            "RESOURCE.READ", "RESOURCE.UPDATE",
+                            "COST.READ",
+                            "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE",
+                            "REPORT.READ",
+                            "AI.READ"
+                    )
+            ),
+            new DefaultProfile(
+                    "PROJECT_ENGINEER",
+                    "Project Engineer",
+                    "Design–execution bridge: activity & DPR review, yield variance, output norms.",
+                    "PROJECT_ENGINEER",
+                    of(
+                            "PROJECT.READ",
+                            "ACTIVITY.READ", "ACTIVITY.UPDATE",
+                            "SCHEDULE.READ",
+                            "RESOURCE.READ",
+                            "COST.READ",
+                            "EVM.READ",
+                            "DOCUMENT.READ",
+                            "YIELD_VARIANCE.READ",
+                            "REPORT.READ",
+                            "AI.READ"
+                    )
+            ),
+            new DefaultProfile(
+                    "QC_MANAGER",
+                    "Quality Control Manager",
+                    "Process adherence and traceability: NCRs, QC annotations on DPRs, audit trails.",
+                    "QC_MANAGER",
+                    of(
+                            "PROJECT.READ",
+                            "ACTIVITY.READ",
+                            "RESOURCE.READ",
+                            "DOCUMENT.READ",
+                            "RISK.READ",
+                            "NCR.CREATE", "NCR.READ", "NCR.UPDATE", "NCR.APPROVE",
+                            "DPR.QC_ANNOTATE",
+                            "REPORT.READ",
+                            "AI.READ"
+                    )
+            ),
+            new DefaultProfile(
+                    "BIM_DATA_COORDINATOR",
+                    "BIM / Data Coordinator",
+                    "Data-integrity steward: DPR completeness audits, model linkage, data lag.",
+                    "BIM_DATA_COORDINATOR",
+                    of(
+                            "PROJECT.READ",
+                            "ACTIVITY.READ",
+                            "RESOURCE.READ",
+                            "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE",
+                            "ADMIN_MASTER.READ",
+                            "DATA_QUALITY.READ", "DATA_QUALITY.AUDIT",
+                            "REPORT.READ",
+                            "AI.READ"
                     )
             )
     );
