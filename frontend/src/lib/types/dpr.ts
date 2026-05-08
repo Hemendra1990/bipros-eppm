@@ -24,6 +24,8 @@ export interface DprManpowerRow {
   nos?: number | null;
   workingHours?: number | null;
   otHours?: number | null;
+  /** Idle hours (per crew member). Feeds KPI 1.2 Idle Time Ratio. */
+  idleHours?: number | null;
   unitRate?: number | null;
   unitRateBasis?: RateBasis | null;
   lineCost?: number | null;

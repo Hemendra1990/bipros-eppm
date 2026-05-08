@@ -23,6 +23,7 @@ public record DprManpowerRow(
     @PositiveOrZero Integer nos,
     @PositiveOrZero BigDecimal workingHours,
     @PositiveOrZero BigDecimal otHours,
+    @PositiveOrZero BigDecimal idleHours,
     BigDecimal unitRate,
     String unitRateBasis,
     BigDecimal lineCost,
@@ -39,6 +40,7 @@ public record DprManpowerRow(
             e.getNos(),
             e.getWorkingHours(),
             e.getOtHours(),
+            e.getIdleHours(),
             e.getUnitRate(),
             e.getUnitRateBasis(),
             e.getLineCost(),
@@ -56,6 +58,7 @@ public record DprManpowerRow(
             .nos(nos)
             .workingHours(workingHours)
             .otHours(otHours)
+            .idleHours(idleHours)
             .unitRate(unitRate)
             .unitRateBasis(unitRateBasis)
             .lineCost(lineCost)

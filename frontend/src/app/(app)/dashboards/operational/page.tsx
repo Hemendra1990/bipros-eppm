@@ -23,6 +23,8 @@ import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { ManpowerKpiSection } from "@/components/dashboards/ManpowerKpiSection";
 import { EquipmentKpiSection } from "@/components/dashboards/EquipmentKpiSection";
+import { EvmKpiSection } from "@/components/dashboards/EvmKpiSection";
+import { MaterialKpiSection } from "@/components/dashboards/MaterialKpiSection";
 import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 
 interface RaBillRow {
@@ -144,14 +146,12 @@ export default function OperationalDashboardPage() {
     0
   );
   const paidBills = raBills.filter((b: RaBillRow) => b.status === "PAID").length;
-  const wbsAvgPlanned =
-    wbsRows.length > 0
-      ? wbsRows.reduce((s, r) => s + r.plannedPct, 0) / wbsRows.length
-      : 0;
-  const wbsAvgActual =
-    wbsRows.length > 0
-      ? wbsRows.reduce((s, r) => s + r.actualPct, 0) / wbsRows.length
-      : 0;
+  // Project-wide progress = the root WBS node's already-weighted rollup (level === 1).
+  // Falling back to the simple mean across rows distorts the number because the response
+  // contains overlapping hierarchy levels — averaging them double-counts descendants.
+  const rootWbs = wbsRows.find((r) => r.level === 1) ?? wbsRows[0];
+  const wbsAvgPlanned = rootWbs?.plannedPct ?? 0;
+  const wbsAvgActual = rootWbs?.actualPct ?? 0;
 
   if (isLoadingConfig) {
     return (
@@ -243,6 +243,14 @@ export default function OperationalDashboardPage() {
 
           <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
             <EquipmentKpiSection projectId={selectedProjectId} density="full" />
+          </section>
+
+          <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
+            <MaterialKpiSection projectId={selectedProjectId} density="full" />
+          </section>
+
+          <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
+            <EvmKpiSection projectId={selectedProjectId} density="full" />
           </section>
 
           {/* KPI strip */}

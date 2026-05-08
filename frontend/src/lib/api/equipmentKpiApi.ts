@@ -9,6 +9,7 @@ export interface UtilizationRow {
   idleHours: number;
   breakdownHours: number;
   utilizationPct: number;
+  mechanicalAvailabilityPct: number;
 }
 
 export interface IdleAlertRow {
@@ -60,6 +61,8 @@ export interface EquipmentKpiResponse {
   availabilityPerformance: AvailabilityPerformanceRow[];
   ownedVsRented: OwnedRentedSlice[];
   serviceDue: ServiceDueRow[];
+  mechanicalAvailabilityPct: number;
+  equipmentProductivityIndexPct: number;
 }
 
 export const equipmentKpiApi = {

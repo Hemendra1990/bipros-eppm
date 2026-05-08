@@ -28,6 +28,7 @@ const blank = (): DprManpowerRow => ({
   nos: null,
   workingHours: null,
   otHours: null,
+  idleHours: null,
   unitRate: null,
   unitRateBasis: null,
   lineCost: null,
@@ -153,6 +154,21 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
           min="0"
           value={r.otHours}
           onChange={(v) => u({ otHours: v === "" ? null : Number(v) })}
+        />
+      ),
+    },
+    {
+      key: "idleHours",
+      label: "Idle",
+      minWidth: 90,
+      align: "right",
+      render: (r, _i, u) => (
+        <CellInput
+          type="number"
+          step="0.25"
+          min="0"
+          value={r.idleHours}
+          onChange={(v) => u({ idleHours: v === "" ? null : Number(v) })}
         />
       ),
     },

@@ -5,15 +5,22 @@ export interface WorkforceUtilization {
   actualHours: number;
   availableHours: number;
   utilizationPct: number;
+  rawUtilizationPct: number;
+  overflow: boolean;
   laborResourceCount: number;
+  activeResourceCount: number;
+  missingAttendanceCount: number;
 }
 
 export interface ProductivityFactorRow {
   activityId: string;
   activityName: string;
+  darUnit: string | null;
+  normUnit: string | null;
   actualOutputPerManPerDay: number;
   normOutputPerManPerDay: number;
   factor: number;
+  unitMismatch: boolean;
 }
 
 export interface LabourCostPerUnitRow {
@@ -35,14 +42,38 @@ export interface CrewOutputRow {
   deviationPct: number;
 }
 
+export interface OutputAchievementRow {
+  activityId: string;
+  activityName: string;
+  actualDailyOutput: number;
+  plannedDailyOutput: number;
+  achievementPct: number;
+}
+
+export interface ManpowerDataQuality {
+  missingRateResourceCount: number;
+  missingRateResourceCodes: string[];
+  missingAttendanceResourceCount: number;
+  missingAttendanceResourceCodes: string[];
+  unitMismatchActivityCount: number;
+  noNormActivityCount: number;
+  noBoqBaselineActivityCount: number;
+}
+
 export interface ManpowerKpiResponse {
   projectId: string;
   from: string;
   to: string;
   workforceUtilization: WorkforceUtilization;
   productivityFactor: ProductivityFactorRow[];
+  headlineProductivityFactor: number;
   labourCostPerUnit: LabourCostPerUnitRow[];
+  weightedAvgCostPerUnit: number;
   crewOutput: CrewOutputRow[];
+  idleTimeRatioPct: number;
+  overtimeRatioPct: number;
+  outputAchievement: OutputAchievementRow[];
+  dataQuality: ManpowerDataQuality;
 }
 
 export const manpowerKpiApi = {

@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { dashboardApi } from "@/lib/api/dashboardApi";
+import { dashboardApi, type FieldSummary } from "@/lib/api/dashboardApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { projectApi } from "@/lib/api/projectApi";
-import { labourApi, type LabourReturnResponse } from "@/lib/api/labourApi";
-import { equipmentApi, type EquipmentLogResponse } from "@/lib/api/equipmentApi";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -22,23 +20,6 @@ import type { ProjectResponse, ActivityResponse } from "@/lib/types";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { ManpowerKpiSection } from "@/components/dashboards/ManpowerKpiSection";
 import { EquipmentKpiSection } from "@/components/dashboards/EquipmentKpiSection";
-
-interface DailyWorklog {
-  date: string;
-  logs: number;
-  operatingHours: number;
-  headCount: number;
-}
-
-interface SpringPage<T> {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  number: number;
-  size: number;
-}
-
-const FIELD_DASHBOARD_ANCHOR_DATE = "2026-04-14";
 
 function activityBadge(status: string): BadgeVariant {
   switch (status) {
@@ -84,99 +65,30 @@ export default function FieldDashboardPage() {
     enabled: !!selectedProjectId,
   });
 
-  const { data: labourData, isLoading: isLoadingLabour } = useQuery({
-    queryKey: ["labour-returns", selectedProjectId],
+  const { data: fieldSummaryData, isLoading: isLoadingFieldSummary } = useQuery({
+    queryKey: ["field-summary", selectedProjectId],
     queryFn: () =>
-      selectedProjectId
-        ? labourApi.getReturnsByProject(selectedProjectId, 0, 200)
-        : null,
+      selectedProjectId ? dashboardApi.getFieldSummary(selectedProjectId) : null,
     enabled: !!selectedProjectId,
     retry: 1,
   });
 
-  const { data: equipmentLogsData, isLoading: isLoadingEquipmentLogs } = useQuery({
-    queryKey: ["equipment-logs", selectedProjectId],
-    queryFn: () =>
-      selectedProjectId
-        ? equipmentApi.getLogsByProject(selectedProjectId, 0, 200)
-        : null,
-    enabled: !!selectedProjectId,
-    retry: 1,
-  });
+  const fieldSummary: FieldSummary | null =
+    (fieldSummaryData?.data as FieldSummary | undefined) ?? null;
 
   const projects = projectsData?.data?.content ?? [];
   const activities = activitiesData?.data?.content ?? [];
-  const labourReturns: LabourReturnResponse[] =
-    (labourData?.data as unknown as SpringPage<LabourReturnResponse> | undefined)
-      ?.content ?? [];
-  const equipmentLogs: EquipmentLogResponse[] =
-    (
-      equipmentLogsData?.data as unknown as
-        | SpringPage<EquipmentLogResponse>
-        | undefined
-    )?.content ?? [];
 
-  const lastSevenDates: string[] = Array.from({ length: 7 }, (_, i) => {
-    const anchor = new Date(FIELD_DASHBOARD_ANCHOR_DATE + "T00:00:00Z");
-    anchor.setUTCDate(anchor.getUTCDate() - (6 - i));
-    return anchor.toISOString().split("T")[0];
-  });
-
-  const dailyWorklogs: DailyWorklog[] = lastSevenDates.slice(-4).map((dateStr) => {
-    const dayLogs = equipmentLogs.filter((l) => l.logDate === dateStr);
-    const dayLabour = labourReturns.filter((l) => l.returnDate === dateStr);
-    const operatingHours = dayLogs.reduce(
-      (sum, l) => sum + (l.operatingHours ?? 0),
-      0
-    );
-    const headCount = dayLabour.reduce((sum, l) => sum + (l.headCount ?? 0), 0);
-    return {
-      date: dateStr,
-      logs: dayLogs.length,
-      operatingHours,
-      headCount,
-    };
-  });
-
+  const dailyWorklogs = fieldSummary?.dailyWorklogs ?? [];
   const hasAnyWorklogData = dailyWorklogs.some(
-    (d) => d.logs > 0 || d.headCount > 0
+    (d) => d.equipmentCount > 0 || d.headCount > 0,
   );
 
-  const mockActiveSites = [
-    {
-      id: "1",
-      name: "Foundation Excavation",
-      workers: labourReturns.length > 0 ? 25 : 25,
-      equipment: 8,
-      safetyIncidents: 0,
-    },
-    {
-      id: "2",
-      name: "Structural Steel Erection",
-      workers: 18,
-      equipment: 12,
-      safetyIncidents: 0,
-    },
-    {
-      id: "3",
-      name: "Concrete Pouring",
-      workers: 32,
-      equipment: 6,
-      safetyIncidents: 1,
-    },
-  ];
-
-  // Aggregate KPI strip
-  const totalWorkers = mockActiveSites.reduce((s, x) => s + x.workers, 0);
-  const totalEquipment = mockActiveSites.reduce((s, x) => s + x.equipment, 0);
-  const totalIncidents = mockActiveSites.reduce(
-    (s, x) => s + x.safetyIncidents,
-    0
-  );
-  const totalOperatingHours = dailyWorklogs.reduce(
-    (s, d) => s + d.operatingHours,
-    0
-  );
+  const activeSites = fieldSummary?.activeSites ?? [];
+  const totalWorkers = fieldSummary?.workersOnSite ?? 0;
+  const totalEquipment = fieldSummary?.equipmentDeployed ?? 0;
+  const totalIncidents = fieldSummary?.safetyIncidents ?? 0;
+  const totalOperatingHours = fieldSummary?.operatingHours4d ?? 0;
 
   if (isLoadingConfig) {
     return (
@@ -302,7 +214,7 @@ export default function FieldDashboardPage() {
               icon={<Clock size={14} strokeWidth={1.75} />}
             />
             <div className="rounded-2xl border border-hairline bg-paper p-5">
-              {isLoadingLabour || isLoadingEquipmentLogs ? (
+              {isLoadingFieldSummary ? (
                 <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
                   {[...Array(4)].map((_, i) => (
                     <div
@@ -341,7 +253,7 @@ export default function FieldDashboardPage() {
                       <DailyMetric
                         icon={<Truck size={12} />}
                         label="Equipment"
-                        value={log.logs}
+                        value={log.equipmentCount}
                       />
                       <DailyMetric
                         icon={<Clock size={12} />}
@@ -364,40 +276,57 @@ export default function FieldDashboardPage() {
           {/* Active Sites */}
           <section className="mb-6">
             <SectionHeading
-              kicker="Live"
+              kicker={
+                fieldSummary?.asOfDate
+                  ? `As of ${fieldSummary.asOfDate}`
+                  : "Live"
+              }
               title="Active sites"
               icon={<HardHat size={14} strokeWidth={1.75} />}
             />
-            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-              {mockActiveSites.map((site) => (
-                <div
-                  key={site.id}
-                  className="rounded-2xl border border-hairline bg-paper p-5"
-                >
-                  <div className="mb-4 flex items-start justify-between gap-2">
-                    <h3 className="font-display text-base font-semibold leading-snug tracking-tight text-charcoal">
-                      {site.name}
-                    </h3>
-                    <Badge
-                      variant={site.safetyIncidents > 0 ? "danger" : "success"}
-                      withDot
-                    >
-                      {site.safetyIncidents > 0 ? "Incident" : "All clear"}
-                    </Badge>
+            {isLoadingFieldSummary ? (
+              <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+                {[...Array(3)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-32 animate-pulse rounded-2xl bg-parchment/60"
+                  />
+                ))}
+              </div>
+            ) : activeSites.length === 0 ? (
+              <EmptyState label="No DPRs in the last 7 days for this project. Active site cards will appear once supervisors submit daily progress reports." />
+            ) : (
+              <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+                {activeSites.map((site) => (
+                  <div
+                    key={site.activityId}
+                    className="rounded-2xl border border-hairline bg-paper p-5"
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-2">
+                      <h3 className="font-display text-base font-semibold leading-snug tracking-tight text-charcoal">
+                        {site.activityName}
+                      </h3>
+                      <Badge
+                        variant={site.safetyIncidents > 0 ? "danger" : "success"}
+                        withDot
+                      >
+                        {site.safetyIncidents > 0 ? "Incident" : "All clear"}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <SiteStat icon={<Users size={14} />} label="Workers" value={site.workers} />
+                      <SiteStat icon={<Truck size={14} />} label="Equipment" value={site.equipment} />
+                      <SiteStat
+                        icon={<ShieldCheck size={14} />}
+                        label="Incidents"
+                        value={site.safetyIncidents}
+                        tone={site.safetyIncidents > 0 ? "burgundy" : "emerald"}
+                      />
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <SiteStat icon={<Users size={14} />} label="Workers" value={site.workers} />
-                    <SiteStat icon={<Truck size={14} />} label="Equipment" value={site.equipment} />
-                    <SiteStat
-                      icon={<ShieldCheck size={14} />}
-                      label="Incidents"
-                      value={site.safetyIncidents}
-                      tone={site.safetyIncidents > 0 ? "burgundy" : "emerald"}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Site Activities */}

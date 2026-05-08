@@ -136,6 +136,44 @@ export function EquipmentKpiSection({ projectId, from, to, density = "compact" }
         </div>
       </div>
 
+      {/* New NH-48 KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Mechanical Availability</div>
+          <div
+            className={`mt-1 text-2xl font-semibold ${
+              kpis.mechanicalAvailabilityPct < 0.85
+                ? "text-warning"
+                : "text-success"
+            }`}
+          >
+            {formatPct(kpis.mechanicalAvailabilityPct)}
+          </div>
+          <div className="mt-1 text-xs text-text-secondary" title="KPI 4.1 — (Avail Hrs − Breakdown Hrs) ÷ Avail Hrs × 100. Target ≥ 85%.">
+            (op + idle) ÷ (op + idle + breakdown)
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Equipment Productivity Index</div>
+          <div
+            className={`mt-1 text-2xl font-semibold ${
+              kpis.equipmentProductivityIndexPct < 0.8
+                ? "text-danger"
+                : kpis.equipmentProductivityIndexPct > 1.0
+                  ? "text-success"
+                  : "text-text-primary"
+            }`}
+          >
+            {kpis.equipmentProductivityIndexPct > 0
+              ? formatPct(kpis.equipmentProductivityIndexPct)
+              : "—"}
+          </div>
+          <div className="mt-1 text-xs text-text-secondary" title="KPI 6.1 — Actual Output ÷ IRC Norm Output × 100, averaged across machines.">
+            actual ÷ standard output
+          </div>
+        </div>
+      </div>
+
       {density === "full" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="rounded-lg border border-border bg-surface/40 p-4">

@@ -1,5 +1,7 @@
 package com.bipros.reporting.presentation.controller;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.evm.domain.entity.EvmCalculation;
 import com.bipros.evm.domain.repository.EvmCalculationRepository;
@@ -62,6 +64,7 @@ public class ProjectInsightsController {
   private final ProjectRepository projectRepository;
   private final WbsNodeRepository wbsNodeRepository;
   private final EvmCalculationRepository evmCalculationRepository;
+  private final ActivityRepository activityRepository;
 
   @PersistenceContext private EntityManager em;
 
@@ -75,18 +78,96 @@ public class ProjectInsightsController {
       double actualPct,
       double variancePct) {}
 
+  /**
+   * WBS progress is a derived view, not a stored value. We deliberately do NOT read
+   * {@code wbs_nodes.summary_percent_complete} — that column has no writer in the system
+   * today and would always return 0%. Instead we walk the WBS tree bottom-up and weight
+   * each descendant activity by its {@code original_duration} (fallback weight = 1):
+   *
+   * <pre>
+   *   actualPct(node)  = Σ (activity.percent_complete × duration) ÷ Σ duration
+   *   plannedPct(node) = Σ (linearPlannedPct(today, planned_start, planned_finish) × duration) ÷ Σ duration
+   * </pre>
+   *
+   * Activities with null planned dates are excluded from the planned-pct numerator only;
+   * they still contribute their actual %. This matches the standard "duration-weighted
+   * earned schedule" approach used by Primavera / MS Project rollups.
+   */
   @GetMapping("/wbs-progress")
   public ApiResponse<List<WbsProgressRow>> getWbsProgress(@PathVariable UUID projectId) {
     List<WbsNode> nodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId);
+    if (nodes.isEmpty()) return ApiResponse.ok(List.of());
+
+    List<Activity> activities = activityRepository.findByProjectId(projectId);
     LocalDate today = LocalDate.now();
-    List<WbsProgressRow> rows = new ArrayList<>(nodes.size());
+
+    // Build node-id → direct-children map and node-id → activities-directly-under map.
+    Map<UUID, List<WbsNode>> childrenByParent = new HashMap<>();
     for (WbsNode n : nodes) {
-      double planned = computePlannedPct(today, n.getPlannedStart(), n.getPlannedFinish());
-      double actual = n.getSummaryPercentComplete() != null ? n.getSummaryPercentComplete() : 0.0;
-      rows.add(
-          new WbsProgressRow(n.getCode(), n.getName(), n.getWbsLevel(), planned, actual, actual - planned));
+      if (n.getParentId() != null) {
+        childrenByParent.computeIfAbsent(n.getParentId(), k -> new ArrayList<>()).add(n);
+      }
     }
-    return ApiResponse.ok(rows);
+    Map<UUID, List<Activity>> activitiesByWbs = new HashMap<>();
+    for (Activity a : activities) {
+      if (a.getWbsNodeId() == null) continue;
+      activitiesByWbs.computeIfAbsent(a.getWbsNodeId(), k -> new ArrayList<>()).add(a);
+    }
+
+    // Weighted aggregator returns [actualWeightedSum, plannedWeightedSum, weightSum, plannedWeightSum].
+    Map<UUID, double[]> rollup = new HashMap<>();
+    for (WbsNode n : nodes) rollup.put(n.getId(), aggregate(n, childrenByParent, activitiesByWbs, today));
+
+    List<WbsProgressRow> result = new ArrayList<>(nodes.size());
+    for (WbsNode n : nodes) {
+      double[] agg = rollup.get(n.getId());
+      double actual = agg[2] > 0d ? agg[0] / agg[2] : 0d;
+      double planned = agg[3] > 0d ? agg[1] / agg[3] : 0d;
+      result.add(new WbsProgressRow(
+          n.getCode(), n.getName(), n.getWbsLevel(),
+          round2(planned), round2(actual), round2(actual - planned)));
+    }
+    return ApiResponse.ok(result);
+  }
+
+  private double[] aggregate(
+      WbsNode node,
+      Map<UUID, List<WbsNode>> childrenByParent,
+      Map<UUID, List<Activity>> activitiesByWbs,
+      LocalDate today) {
+    double actualSum = 0d;
+    double plannedSum = 0d;
+    double weight = 0d;
+    double plannedWeight = 0d;
+
+    // Activities directly under this node
+    for (Activity a : activitiesByWbs.getOrDefault(node.getId(), List.of())) {
+      double w = a.getOriginalDuration() != null && a.getOriginalDuration() > 0
+          ? a.getOriginalDuration()
+          : 1d;
+      double pc = a.getPercentComplete() != null ? a.getPercentComplete() : 0d;
+      actualSum += pc * w;
+      weight += w;
+      if (a.getPlannedStartDate() != null && a.getPlannedFinishDate() != null) {
+        plannedSum += computePlannedPct(today, a.getPlannedStartDate(), a.getPlannedFinishDate()) * w;
+        plannedWeight += w;
+      }
+    }
+
+    // Recurse into child WBS nodes
+    for (WbsNode child : childrenByParent.getOrDefault(node.getId(), List.of())) {
+      double[] childAgg = aggregate(child, childrenByParent, activitiesByWbs, today);
+      actualSum += childAgg[0];
+      plannedSum += childAgg[1];
+      weight += childAgg[2];
+      plannedWeight += childAgg[3];
+    }
+
+    return new double[] {actualSum, plannedSum, weight, plannedWeight};
+  }
+
+  private static double round2(double v) {
+    return BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP).doubleValue();
   }
 
   // ─────────────── J1 — Status snapshot ───────────────

@@ -249,7 +249,7 @@ class DailyProgressReportServiceChildrenTest {
   private DprManpowerRow mp(String trade, ManpowerCategory cat, int nos, double hours, double ot) {
     return new DprManpowerRow(
         null, assignmentMpId, null, trade, cat, nos,
-        BigDecimal.valueOf(hours), BigDecimal.valueOf(ot),
+        BigDecimal.valueOf(hours), BigDecimal.valueOf(ot), null,
         null, null, null, null, null);
   }
 

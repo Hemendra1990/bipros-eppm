@@ -3,15 +3,18 @@ package com.bipros.api.service;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.project.domain.model.BoqItem;
-import com.bipros.project.domain.model.DailyActivityResourceOutput;
+import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprManpower;
 import com.bipros.project.domain.repository.BoqItemRepository;
-import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
+import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprManpowerRepository;
+import com.bipros.resource.domain.model.ProductivityNorm;
+import com.bipros.resource.domain.model.ProductivityNormType;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceType;
-import com.bipros.resource.domain.model.ProductivityNorm;
+import com.bipros.resource.domain.model.enums.SalaryType;
 import com.bipros.resource.domain.model.manpower.ManpowerAttendance;
 import com.bipros.resource.domain.model.manpower.ManpowerFinancials;
-import com.bipros.resource.domain.model.enums.SalaryType;
 import com.bipros.resource.domain.repository.ManpowerAttendanceRepository;
 import com.bipros.resource.domain.repository.ManpowerFinancialsRepository;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
@@ -27,6 +30,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,18 +38,14 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Aggregator KPI service for manpower metrics. Lives in {@code bipros-api} (the only module
- * that depends on every domain module) so it can read both DPR/DAR (in {@code bipros-project})
- * and Manpower* + ProductivityNorm + Resource (in {@code bipros-resource}) without inverting
- * the domain dependency graph.
+ * Aggregator KPI service for manpower metrics. Reads exclusively from DPR + child rows
+ * (daily_progress_reports, dpr_manpower) — Daily Outputs (DAR) is being deprecated and is no
+ * longer consulted here. The framework's "qty per activity per day" comes from DPR.qty_executed
+ * and "man-hours" comes from dpr_manpower (Σ nos × working_hours).
  *
- * <p>All metrics are computed in-memory from pre-fetched data so dashboard response time is
- * single-query bound. Cost normalisation uses pre-answer #5 from the source plan: salaries
- * are converted to a per-day rate via PERMANENT/30, CONTRACT/26, DAILY_WAGE direct.
- *
- * <p>Methods that require StorePeriodPerformance (labour CPI, overtime ROI) are deferred to
- * a follow-up phase — the current data shape is enough for the four headline cards on the
- * Field, Operational, and Executive dashboards.
+ * <p>Cost normalisation prefers {@code dpr_manpower.line_cost} when set (the supervisor entered
+ * it directly during DPR save) and falls back to {@code nos × working_hours × hourlyRate} from
+ * {@code manpower_financials} otherwise.
  */
 @Service
 @RequiredArgsConstructor
@@ -53,16 +53,18 @@ import java.util.stream.Collectors;
 public class ManpowerKpiService {
 
   private static final String LABOR_TYPE_CODE = "LABOR";
+  private static final double DEFAULT_HOURS_PER_DAY = 8d;
 
-  private final DailyActivityResourceOutputRepository darRepository;
   private final BoqItemRepository boqItemRepository;
   private final ActivityRepository activityRepository;
   private final ResourceRepository resourceRepository;
   private final ManpowerAttendanceRepository attendanceRepository;
   private final ManpowerFinancialsRepository financialsRepository;
   private final ProductivityNormRepository productivityNormRepository;
+  private final DailyProgressReportRepository dprRepository;
+  private final DprManpowerRepository dprManpowerRepository;
 
-  // ---------- Response records (shape matches what the dashboards consume) ----------
+  // ---------- Response records (shape unchanged so frontend keeps rendering) ----------
 
   public record ManpowerKpiResponse(
       UUID projectId,
@@ -70,23 +72,36 @@ public class ManpowerKpiService {
       LocalDate to,
       WorkforceUtilization workforceUtilization,
       List<ProductivityFactorRow> productivityFactor,
+      double headlineProductivityFactor,
       List<LabourCostPerUnitRow> labourCostPerUnit,
-      List<CrewOutputRow> crewOutput
+      double weightedAvgCostPerUnit,
+      List<CrewOutputRow> crewOutput,
+      double idleTimeRatioPct,
+      double overtimeRatioPct,
+      List<OutputAchievementRow> outputAchievement,
+      DataQuality dataQuality
   ) {}
 
   public record WorkforceUtilization(
       double actualHours,
       double availableHours,
       double utilizationPct,
-      int laborResourceCount
+      double rawUtilizationPct,
+      boolean overflow,
+      int laborResourceCount,
+      int activeResourceCount,
+      int missingAttendanceCount
   ) {}
 
   public record ProductivityFactorRow(
       UUID activityId,
       String activityName,
+      String darUnit,
+      String normUnit,
       double actualOutputPerManPerDay,
       double normOutputPerManPerDay,
-      double factor
+      double factor,
+      boolean unitMismatch
   ) {}
 
   public record LabourCostPerUnitRow(
@@ -108,18 +123,62 @@ public class ManpowerKpiService {
       double deviationPct
   ) {}
 
+  public record OutputAchievementRow(
+      UUID activityId,
+      String activityName,
+      double actualDailyOutput,
+      double plannedDailyOutput,
+      double achievementPct
+  ) {}
+
+  public record DataQuality(
+      int missingRateResourceCount,
+      List<String> missingRateResourceCodes,
+      int missingAttendanceResourceCount,
+      List<String> missingAttendanceResourceCodes,
+      int unitMismatchActivityCount,
+      int noNormActivityCount,
+      int noBoqBaselineActivityCount
+  ) {}
+
+  // ---------- Internal aggregation helper ----------
+
+  /**
+   * Per-DPR manpower roll-up: total man-hours, OT hours, idle hours, labour cost.
+   */
+  private record DprManpowerAgg(double manHours, double otHours, double idleHours, double cost) {}
+
+  /**
+   * Per-activity aggregation across all DPRs in the window.
+   */
+  private record ActivityAgg(
+      String activityName,
+      String dprUnit,
+      double qtyExecuted,
+      double manHours,
+      Set<LocalDate> daysSeen) {}
+
   // ---------- Public API ----------
 
   @Transactional(readOnly = true)
   public ManpowerKpiResponse compute(UUID projectId, LocalDate from, LocalDate to) {
-    List<DailyActivityResourceOutput> dar = darRepository
-        .findByProjectIdAndOutputDateBetweenOrderByOutputDateDescIdAsc(projectId, from, to);
+    List<DailyProgressReport> dprs = dprRepository
+        .findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(projectId, from, to);
 
-    Set<UUID> resourceIds = dar.stream()
-        .map(DailyActivityResourceOutput::getResourceId)
+    if (dprs.isEmpty()) {
+      return emptyResponse(projectId, from, to);
+    }
+
+    Set<UUID> dprIds = dprs.stream().map(DailyProgressReport::getId).collect(Collectors.toSet());
+    List<DprManpower> manpowerRows = dprManpowerRepository.findByDprIdIn(dprIds);
+    Map<UUID, List<DprManpower>> manpowerByDpr = manpowerRows.stream()
+        .collect(Collectors.groupingBy(DprManpower::getDprId));
+
+    // Resolve resources once for both labour-filter and resource-master lookups.
+    Set<UUID> resourceIds = manpowerRows.stream()
+        .map(DprManpower::getResourceId)
         .filter(java.util.Objects::nonNull)
         .collect(Collectors.toSet());
-
     Map<UUID, Resource> resourcesById = resourceRepository.findAllById(resourceIds).stream()
         .collect(Collectors.toMap(Resource::getId, r -> r, (a, b) -> a));
     Set<UUID> labourResourceIds = resourcesById.values().stream()
@@ -127,146 +186,250 @@ public class ManpowerKpiService {
         .map(Resource::getId)
         .collect(Collectors.toSet());
 
-    List<DailyActivityResourceOutput> labourDar = dar.stream()
-        .filter(d -> d.getResourceId() != null && labourResourceIds.contains(d.getResourceId()))
-        .toList();
+    Map<UUID, ManpowerAttendance> attendanceById = attendanceRepository.findAllById(labourResourceIds).stream()
+        .collect(Collectors.toMap(ManpowerAttendance::getResourceId, a -> a, (a, b) -> a));
+    Map<UUID, ManpowerFinancials> financialsById = financialsRepository.findAllById(resourceIds).stream()
+        .collect(Collectors.toMap(ManpowerFinancials::getResourceId, f -> f, (a, b) -> a));
 
-    WorkforceUtilization workforce = computeWorkforceUtilization(labourDar, labourResourceIds, from, to);
-    List<ProductivityFactorRow> productivity = computeProductivityFactor(labourDar);
-    List<LabourCostPerUnitRow> labourCost = computeLabourCostPerUnit(projectId, labourDar, resourcesById);
-    List<CrewOutputRow> crews = computeCrewOutput(labourDar);
+    // Pre-compute per-DPR roll-up so each downstream KPI can pull from one place.
+    Map<UUID, DprManpowerAgg> aggByDpr = computeAggByDpr(manpowerByDpr, financialsById);
 
-    return new ManpowerKpiResponse(projectId, from, to, workforce, productivity, labourCost, crews);
+    // Per-activity aggregation: qty from DPR parent, man-hours from rolled-up children.
+    Map<String, ActivityAgg> aggByActivity = computeAggByActivity(dprs, aggByDpr);
+    Map<String, UUID> activityIdsByKey = aggByActivity.keySet().stream()
+        .filter(k -> k.startsWith("id:"))
+        .collect(Collectors.toMap(k -> k, k -> UUID.fromString(k.substring(3))));
+    Map<UUID, Activity> activitiesById = activityRepository
+        .findAllById(activityIdsByKey.values()).stream()
+        .collect(Collectors.toMap(Activity::getId, a -> a, (a, b) -> a));
+
+    // BOQ list — shared by Labour Cost / Unit and Output Achievement % (planned-daily baseline).
+    List<BoqItem> boqItems = boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId);
+
+    // KPI computations
+    WorkforceUtilization workforce = computeWorkforceUtilization(
+        dprs, manpowerByDpr, labourResourceIds, attendanceById);
+    List<ProductivityFactorRow> productivity =
+        computeProductivityFactor(aggByActivity, activitiesById);
+    double headlineFactor = computeHeadlineProductivityFactor(productivity);
+    List<LabourCostPerUnitRow> labourCost =
+        computeLabourCostPerUnit(boqItems, dprs, aggByDpr);
+    double weightedCpu = computeWeightedAvgCostPerUnit(labourCost);
+    List<CrewOutputRow> crews = computeCrewOutput(aggByActivity, activitiesById);
+    double idleRatio = computeIdleTimeRatioPct(aggByDpr);
+    double otRatio = computeOvertimeRatioPct(aggByDpr);
+
+    int[] noBoqBaselineCount = new int[1];
+    List<OutputAchievementRow> achievement =
+        computeOutputAchievement(aggByActivity, activitiesById, boqItems, noBoqBaselineCount);
+
+    int noNormCount = (int) productivity.stream()
+        .filter(r -> r.normOutputPerManPerDay() <= 0d)
+        .count();
+
+    DataQuality dq = buildDataQuality(
+        labourResourceIds, resourcesById, attendanceById, financialsById,
+        productivity, noNormCount, noBoqBaselineCount[0]);
+
+    return new ManpowerKpiResponse(
+        projectId,
+        from,
+        to,
+        workforce,
+        productivity,
+        round4(headlineFactor),
+        labourCost,
+        round2(weightedCpu),
+        crews,
+        round4(idleRatio),
+        round4(otRatio),
+        achievement,
+        dq);
   }
 
-  // ---------- Workforce utilisation ----------
+  // ---------- Aggregation helpers ----------
+
+  private Map<UUID, DprManpowerAgg> computeAggByDpr(
+      Map<UUID, List<DprManpower>> manpowerByDpr,
+      Map<UUID, ManpowerFinancials> financialsById) {
+    Map<UUID, DprManpowerAgg> out = new HashMap<>(manpowerByDpr.size());
+    for (Map.Entry<UUID, List<DprManpower>> e : manpowerByDpr.entrySet()) {
+      double manHours = 0d;
+      double otHours = 0d;
+      double idleHours = 0d;
+      double cost = 0d;
+      for (DprManpower m : e.getValue()) {
+        int nos = m.getNos() != null ? m.getNos() : 0;
+        double wh = m.getWorkingHours() != null ? m.getWorkingHours().doubleValue() : 0d;
+        double oh = m.getOtHours() != null ? m.getOtHours().doubleValue() : 0d;
+        double ih = m.getIdleHours() != null ? m.getIdleHours().doubleValue() : 0d;
+        manHours += nos * wh;
+        otHours += nos * oh;
+        idleHours += nos * ih;
+        if (m.getLineCost() != null) {
+          cost += m.getLineCost().doubleValue();
+        } else {
+          // Fallback when supervisor didn't enter line_cost: nos × hours × hourlyRate.
+          double hourly = effectiveHourlyRate(financialsById.get(m.getResourceId()));
+          cost += nos * wh * hourly;
+        }
+      }
+      out.put(e.getKey(), new DprManpowerAgg(manHours, otHours, idleHours, cost));
+    }
+    return out;
+  }
+
+  /**
+   * Group DPRs by activity and roll up qty + man-hours + days-seen. Keys are prefixed
+   * {@code "id:<uuid>"} when the DPR has a real activity_id, otherwise {@code "name:<name>"}
+   * to keep legacy free-text rows from collapsing into the same bucket as a real activity.
+   */
+  private Map<String, ActivityAgg> computeAggByActivity(
+      List<DailyProgressReport> dprs,
+      Map<UUID, DprManpowerAgg> aggByDpr) {
+    Map<String, ActivityAgg> out = new HashMap<>();
+    for (DailyProgressReport d : dprs) {
+      String key = d.getActivityId() != null
+          ? "id:" + d.getActivityId()
+          : "name:" + (d.getActivityName() != null ? d.getActivityName().toLowerCase() : "");
+      double qty = d.getQtyExecuted() != null ? d.getQtyExecuted().doubleValue() : 0d;
+      double manHours = aggByDpr.getOrDefault(d.getId(), new DprManpowerAgg(0, 0, 0, 0)).manHours();
+      ActivityAgg existing = out.get(key);
+      if (existing == null) {
+        Set<LocalDate> days = new HashSet<>();
+        if (d.getReportDate() != null) days.add(d.getReportDate());
+        out.put(key, new ActivityAgg(d.getActivityName(), d.getUnit(), qty, manHours, days));
+      } else {
+        existing.daysSeen().add(d.getReportDate());
+        out.put(key, new ActivityAgg(
+            existing.activityName(),
+            existing.dprUnit() != null ? existing.dprUnit() : d.getUnit(),
+            existing.qtyExecuted() + qty,
+            existing.manHours() + manHours,
+            existing.daysSeen()));
+      }
+    }
+    return out;
+  }
+
+  // ---------- Workforce utilisation (KPI 1.1) ----------
 
   private WorkforceUtilization computeWorkforceUtilization(
-      List<DailyActivityResourceOutput> labourDar,
+      List<DailyProgressReport> dprs,
+      Map<UUID, List<DprManpower>> manpowerByDpr,
       Set<UUID> labourResourceIds,
-      LocalDate from,
-      LocalDate to) {
-    double actualHours = labourDar.stream()
-        .map(DailyActivityResourceOutput::getHoursWorked)
-        .filter(java.util.Objects::nonNull)
-        .mapToDouble(Double::doubleValue)
-        .sum();
+      Map<UUID, ManpowerAttendance> attendanceById) {
 
-    long workingDays = Math.max(1L, from.until(to).getDays() + 1L);
-    Map<UUID, ManpowerAttendance> attendanceById = attendanceRepository
-        .findAllById(labourResourceIds).stream()
-        .collect(Collectors.toMap(ManpowerAttendance::getResourceId, a -> a, (a, b) -> a));
-
-    double availableHours = 0d;
-    for (UUID rid : labourResourceIds) {
-      ManpowerAttendance a = attendanceById.get(rid);
-      double hpd = a != null && a.getWorkingHoursPerDay() != null
-          ? a.getWorkingHoursPerDay().doubleValue()
-          : 8d; // Sensible default when attendance master row is missing.
-      availableHours += hpd * workingDays;
+    // Productive man-hours: Σ nos × working_hours across all dpr_manpower rows. We treat
+    // every dpr_manpower entry as labour (the table is for manpower deployment by trade) —
+    // a row carrying a non-LABOR resource_id is a data-quality issue, not a count adjustment.
+    double actualHours = 0d;
+    Map<UUID, Set<LocalDate>> daysByResource = new HashMap<>();
+    Map<DailyProgressReport, List<DprManpower>> dprWithManpower = new HashMap<>();
+    for (DailyProgressReport d : dprs) {
+      List<DprManpower> rows = manpowerByDpr.getOrDefault(d.getId(), List.of());
+      dprWithManpower.put(d, rows);
+      for (DprManpower m : rows) {
+        int nos = m.getNos() != null ? m.getNos() : 0;
+        double wh = m.getWorkingHours() != null ? m.getWorkingHours().doubleValue() : 0d;
+        actualHours += nos * wh;
+        if (m.getResourceId() != null && labourResourceIds.contains(m.getResourceId())
+            && d.getReportDate() != null) {
+          daysByResource.computeIfAbsent(m.getResourceId(), k -> new HashSet<>())
+              .add(d.getReportDate());
+        }
+      }
     }
 
-    double pct = availableHours > 0 ? actualHours / availableHours : 0d;
+    int missingAttendance = 0;
+    double availableHours = 0d;
+    for (Map.Entry<UUID, Set<LocalDate>> e : daysByResource.entrySet()) {
+      ManpowerAttendance a = attendanceById.get(e.getKey());
+      double hpd = a != null && a.getWorkingHoursPerDay() != null
+          ? a.getWorkingHoursPerDay().doubleValue()
+          : DEFAULT_HOURS_PER_DAY;
+      if (a == null || a.getWorkingHoursPerDay() == null) missingAttendance++;
+      availableHours += hpd * e.getValue().size();
+    }
+
+    double rawPct = availableHours > 0 ? actualHours / availableHours : 0d;
+    boolean overflow = rawPct > 1.0d;
+    double cappedPct = Math.min(rawPct, 1.0d);
+
     return new WorkforceUtilization(
         roundHours(actualHours),
         roundHours(availableHours),
-        round4(pct),
-        labourResourceIds.size());
+        round4(cappedPct),
+        round4(rawPct),
+        overflow,
+        labourResourceIds.size(),
+        daysByResource.size(),
+        missingAttendance);
   }
 
-  // ---------- Productivity factor by activity ----------
+  // ---------- Productivity factor by activity (KPI 2.1 / 2.3) ----------
 
-  private List<ProductivityFactorRow> computeProductivityFactor(List<DailyActivityResourceOutput> labourDar) {
-    // Aggregate per activity.
-    Map<UUID, double[]> byActivity = new HashMap<>(); // [qty, hours]
-    for (DailyActivityResourceOutput d : labourDar) {
-      if (d.getActivityId() == null) continue;
-      double[] acc = byActivity.computeIfAbsent(d.getActivityId(), k -> new double[2]);
-      if (d.getQtyExecuted() != null) acc[0] += d.getQtyExecuted().doubleValue();
-      if (d.getHoursWorked() != null) acc[1] += d.getHoursWorked();
-    }
-    if (byActivity.isEmpty()) return List.of();
+  private List<ProductivityFactorRow> computeProductivityFactor(
+      Map<String, ActivityAgg> aggByActivity,
+      Map<UUID, Activity> activitiesById) {
+    List<ProductivityFactorRow> rows = new ArrayList<>(aggByActivity.size());
+    for (Map.Entry<String, ActivityAgg> e : aggByActivity.entrySet()) {
+      ActivityAgg a = e.getValue();
+      if (a.manHours() <= 0d) continue;
+      Activity activity = resolveActivity(e.getKey(), activitiesById);
+      double daysEquivalent = a.manHours() / DEFAULT_HOURS_PER_DAY;
+      double actualPerManPerDay = daysEquivalent > 0 ? a.qtyExecuted() / daysEquivalent : 0d;
 
-    Map<UUID, Activity> activitiesById = activityRepository.findAllById(byActivity.keySet()).stream()
-        .collect(Collectors.toMap(Activity::getId, a -> a, (a, b) -> a));
+      ProductivityNorm norm = lookupManpowerNorm(activity);
+      double normValue = norm != null && norm.getOutputPerManPerDay() != null
+          ? norm.getOutputPerManPerDay().doubleValue() : 0d;
+      double factor = normValue > 0 ? actualPerManPerDay / normValue : 0d;
 
-    List<ProductivityFactorRow> rows = new ArrayList<>(byActivity.size());
-    for (Map.Entry<UUID, double[]> e : byActivity.entrySet()) {
-      Activity activity = activitiesById.get(e.getKey());
-      double qty = e.getValue()[0];
-      double hours = e.getValue()[1];
-      double daysEquivalent = hours > 0 ? hours / 8d : 0d;
-      double actualPerManPerDay = daysEquivalent > 0 ? qty / daysEquivalent : 0d;
-
-      double norm = lookupProductivityNormPerManPerDay(activity);
-      double factor = norm > 0 ? actualPerManPerDay / norm : 0d;
+      String dprUnit = a.dprUnit();
+      String normUnit = norm != null ? norm.getUnit() : null;
+      boolean mismatch = dprUnit != null && normUnit != null
+          && !dprUnit.equalsIgnoreCase(normUnit);
 
       rows.add(new ProductivityFactorRow(
-          e.getKey(),
-          activity != null ? activity.getName() : "Unknown",
+          activity != null ? activity.getId() : null,
+          activity != null ? activity.getName() : a.activityName(),
+          dprUnit,
+          normUnit,
           round4(actualPerManPerDay),
-          round4(norm),
-          round4(factor)));
+          round4(normValue),
+          round4(factor),
+          mismatch));
     }
     rows.sort(Comparator.comparingDouble(ProductivityFactorRow::factor));
     return rows;
   }
 
-  private double lookupProductivityNormPerManPerDay(Activity activity) {
-    if (activity == null || activity.getName() == null) return 0d;
-    List<ProductivityNorm> matches = productivityNormRepository.findByActivityNameIgnoreCase(activity.getName());
-    return matches.stream()
-        .map(ProductivityNorm::getOutputPerManPerDay)
-        .filter(java.util.Objects::nonNull)
-        .map(BigDecimal::doubleValue)
-        .findFirst()
-        .orElse(0d);
+  private double computeHeadlineProductivityFactor(List<ProductivityFactorRow> rows) {
+    List<ProductivityFactorRow> usable = rows.stream()
+        .filter(r -> !r.unitMismatch())
+        .filter(r -> r.normOutputPerManPerDay() > 0d)
+        .toList();
+    if (usable.isEmpty()) return 0d;
+    return usable.stream().mapToDouble(ProductivityFactorRow::factor).average().orElse(0d);
   }
 
-  // ---------- Labour cost per unit (by BoqItem) ----------
+  // ---------- Labour cost per BOQ item (KPI 3.5) ----------
 
   private List<LabourCostPerUnitRow> computeLabourCostPerUnit(
-      UUID projectId,
-      List<DailyActivityResourceOutput> labourDar,
-      Map<UUID, Resource> resourcesById) {
+      List<BoqItem> boq,
+      List<DailyProgressReport> dprs,
+      Map<UUID, DprManpowerAgg> aggByDpr) {
 
-    if (labourDar.isEmpty()) return List.of();
+    if (dprs.isEmpty()) return List.of();
 
-    Map<UUID, ManpowerFinancials> financialsById = financialsRepository.findAllById(resourcesById.keySet()).stream()
-        .collect(Collectors.toMap(ManpowerFinancials::getResourceId, f -> f, (a, b) -> a));
-
-    // Map activityId → labourCost (Σ hours × hourlyRate-equivalent across labour resources for that activity)
-    Map<UUID, Double> labourCostByActivity = new HashMap<>();
-    for (DailyActivityResourceOutput d : labourDar) {
-      if (d.getActivityId() == null || d.getResourceId() == null) continue;
-      double hours = d.getHoursWorked() != null ? d.getHoursWorked() : 0d;
-      if (hours <= 0d) continue;
-      double hourlyRate = effectiveHourlyRate(financialsById.get(d.getResourceId()));
-      labourCostByActivity.merge(d.getActivityId(), hours * hourlyRate, Double::sum);
-    }
-
-    // Map activityId → activityName for BOQ matching by name (fallback when activity_code is BOQ-keyed).
-    Map<UUID, Activity> activitiesById = activityRepository.findAllById(labourCostByActivity.keySet()).stream()
-        .collect(Collectors.toMap(Activity::getId, a -> a, (a, b) -> a));
-
-    // BOQ rows for the project — match by itemNo present in the activity name (prefix match) OR by exact name.
-    List<BoqItem> boq = boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId);
     Map<UUID, double[]> aggByBoq = new HashMap<>(); // [labourCost, qtyExecuted]
-    for (Map.Entry<UUID, Double> e : labourCostByActivity.entrySet()) {
-      Activity a = activitiesById.get(e.getKey());
-      if (a == null) continue;
-      BoqItem match = matchBoqByActivityName(boq, a.getName());
+
+    for (DailyProgressReport d : dprs) {
+      BoqItem match = matchBoqByActivityName(boq, d.getActivityName());
       if (match == null) continue;
       double[] acc = aggByBoq.computeIfAbsent(match.getId(), k -> new double[2]);
-      acc[0] += e.getValue();
-    }
-    // Qty executed: sum DAR qty whose activity matched a BOQ.
-    for (DailyActivityResourceOutput d : labourDar) {
-      Activity a = activitiesById.get(d.getActivityId());
-      if (a == null) continue;
-      BoqItem match = matchBoqByActivityName(boq, a.getName());
-      if (match == null) continue;
-      double[] acc = aggByBoq.computeIfAbsent(match.getId(), k -> new double[2]);
+      DprManpowerAgg agg = aggByDpr.getOrDefault(d.getId(), new DprManpowerAgg(0, 0, 0, 0));
+      acc[0] += agg.cost();
       if (d.getQtyExecuted() != null) acc[1] += d.getQtyExecuted().doubleValue();
     }
 
@@ -290,9 +453,19 @@ public class ManpowerKpiService {
     return rows;
   }
 
+  private double computeWeightedAvgCostPerUnit(List<LabourCostPerUnitRow> rows) {
+    double totalCost = 0d;
+    double totalQty = 0d;
+    for (LabourCostPerUnitRow r : rows) {
+      totalCost += r.labourCost();
+      totalQty += r.qtyExecuted();
+    }
+    return totalQty > 0d ? totalCost / totalQty : 0d;
+  }
+
   /**
-   * Pre-answer #5 normalisation: PERMANENT salary → /30/8 hourly, CONTRACT → /26/8 hourly,
-   * DAILY_WAGE → daily/8 hourly, HOURLY → hourlyRate directly.
+   * Salary normalisation: HOURLY → direct hourlyRate; otherwise fallback via salary type
+   * (PERMANENT-equivalent /30/8, CONTRACT-equivalent /26/8, DAILY /8).
    */
   private static double effectiveHourlyRate(ManpowerFinancials f) {
     if (f == null) return 0d;
@@ -309,11 +482,6 @@ public class ManpowerKpiService {
     };
   }
 
-  /**
-   * Best-effort BOQ ↔ activity match by name. Uses the same exact + substring strategy as
-   * {@code DailyCostReportService} so the numbers reconcile across pages. Returns the first
-   * match, or null.
-   */
   private static BoqItem matchBoqByActivityName(List<BoqItem> boq, String activityName) {
     if (activityName == null || activityName.isBlank()) return null;
     String needle = activityName.toLowerCase();
@@ -328,33 +496,23 @@ public class ManpowerKpiService {
 
   // ---------- Crew output rows ----------
 
-  private List<CrewOutputRow> computeCrewOutput(List<DailyActivityResourceOutput> labourDar) {
-    Map<UUID, double[]> byActivity = new HashMap<>(); // [qty, daysEquivalent]
-    for (DailyActivityResourceOutput d : labourDar) {
-      if (d.getActivityId() == null) continue;
-      double[] acc = byActivity.computeIfAbsent(d.getActivityId(), k -> new double[2]);
-      if (d.getQtyExecuted() != null) acc[0] += d.getQtyExecuted().doubleValue();
-      double hours = d.getHoursWorked() != null ? d.getHoursWorked() : 0d;
-      acc[1] += hours / 8d;
-    }
-    Map<UUID, Activity> activitiesById = activityRepository.findAllById(byActivity.keySet()).stream()
-        .collect(Collectors.toMap(Activity::getId, a -> a, (a, b) -> a));
-
-    List<CrewOutputRow> rows = new ArrayList<>(byActivity.size());
-    for (Map.Entry<UUID, double[]> e : byActivity.entrySet()) {
-      Activity a = activitiesById.get(e.getKey());
-      double qty = e.getValue()[0];
-      double daysEq = e.getValue()[1];
-      double actualPerDay = daysEq > 0 ? qty / daysEq : 0d;
-      ProductivityNorm norm = lookupProductivityNormForActivity(a);
+  private List<CrewOutputRow> computeCrewOutput(
+      Map<String, ActivityAgg> aggByActivity,
+      Map<UUID, Activity> activitiesById) {
+    List<CrewOutputRow> rows = new ArrayList<>(aggByActivity.size());
+    for (Map.Entry<String, ActivityAgg> e : aggByActivity.entrySet()) {
+      ActivityAgg agg = e.getValue();
+      Activity activity = resolveActivity(e.getKey(), activitiesById);
+      int days = agg.daysSeen().size();
+      double actualPerDay = days > 0 ? agg.qtyExecuted() / days : 0d;
+      ProductivityNorm norm = lookupManpowerNorm(activity);
       Integer crewSize = norm != null ? norm.getCrewSize() : null;
       double normPerDay = norm != null && norm.getOutputPerDay() != null
           ? norm.getOutputPerDay().doubleValue() : 0d;
       double dev = normPerDay > 0 ? (actualPerDay - normPerDay) / normPerDay : 0d;
-
       rows.add(new CrewOutputRow(
-          e.getKey(),
-          a != null ? a.getName() : "Unknown",
+          activity != null ? activity.getId() : null,
+          activity != null ? activity.getName() : agg.activityName(),
           crewSize,
           round4(actualPerDay),
           round4(normPerDay),
@@ -364,10 +522,154 @@ public class ManpowerKpiService {
     return rows;
   }
 
-  private ProductivityNorm lookupProductivityNormForActivity(Activity activity) {
-    if (activity == null || activity.getName() == null) return null;
-    return productivityNormRepository.findByActivityNameIgnoreCase(activity.getName())
-        .stream().findFirst().orElse(null);
+  // ---------- Idle Time Ratio (KPI 1.2) ----------
+
+  private double computeIdleTimeRatioPct(Map<UUID, DprManpowerAgg> aggByDpr) {
+    double idle = 0d;
+    double productive = 0d;
+    for (DprManpowerAgg a : aggByDpr.values()) {
+      idle += a.idleHours();
+      productive += a.manHours();
+    }
+    double total = idle + productive;
+    return total > 0 ? idle / total : 0d;
+  }
+
+  // ---------- Overtime Ratio (KPI 1.3) ----------
+
+  private double computeOvertimeRatioPct(Map<UUID, DprManpowerAgg> aggByDpr) {
+    double regular = 0d;
+    double ot = 0d;
+    for (DprManpowerAgg a : aggByDpr.values()) {
+      regular += a.manHours();
+      ot += a.otHours();
+    }
+    double total = regular + ot;
+    return total > 0 ? ot / total : 0d;
+  }
+
+  // ---------- Output Achievement % (KPI 2.2) ----------
+
+  /**
+   * KPI 2.2 — Output Achievement % = Actual Output ÷ Planned Daily Output × 100. Both arms
+   * must be in the same physical unit (Cum, Sqm, MT). Planned daily output is derived from
+   * the matched BOQ row: {@code boq_qty ÷ activity.original_duration}. The previous
+   * implementation divided by {@code resource_assignments.planned_units} (man-hours) and
+   * compared against DPR qty (Cum/Sqm) — a unit-category mismatch that produced 900–2272%.
+   *
+   * <p>Activities with no BOQ match are skipped from the result list and counted into
+   * {@code noBoqBaselineCount} so the data-quality banner can surface the gap.
+   */
+  private List<OutputAchievementRow> computeOutputAchievement(
+      Map<String, ActivityAgg> aggByActivity,
+      Map<UUID, Activity> activitiesById,
+      List<BoqItem> boqItems,
+      int[] noBoqBaselineCount) {
+    if (aggByActivity.isEmpty()) return List.of();
+
+    List<OutputAchievementRow> rows = new ArrayList<>(aggByActivity.size());
+    for (Map.Entry<String, ActivityAgg> e : aggByActivity.entrySet()) {
+      Activity activity = resolveActivity(e.getKey(), activitiesById);
+      if (activity == null) continue;
+      ActivityAgg agg = e.getValue();
+      Double duration = activity.getOriginalDuration();
+      if (duration == null || duration <= 0d) continue;
+      int observedDays = agg.daysSeen().size();
+      if (observedDays == 0) continue;
+
+      BoqItem boq = matchBoqByActivityName(boqItems, activity.getName());
+      if (boq == null || boq.getBoqQty() == null || boq.getBoqQty().signum() <= 0) {
+        noBoqBaselineCount[0]++;
+        continue;
+      }
+
+      double actualDaily = agg.qtyExecuted() / observedDays;
+      double plannedDaily = boq.getBoqQty().doubleValue() / duration;
+      double pct = plannedDaily > 0 ? actualDaily / plannedDaily : 0d;
+
+      rows.add(new OutputAchievementRow(
+          activity.getId(),
+          activity.getName(),
+          round4(actualDaily),
+          round4(plannedDaily),
+          round4(pct)));
+    }
+    rows.sort(Comparator.comparingDouble(OutputAchievementRow::achievementPct));
+    return rows;
+  }
+
+  // ---------- Data quality ----------
+
+  private DataQuality buildDataQuality(
+      Set<UUID> labourResourceIds,
+      Map<UUID, Resource> resourcesById,
+      Map<UUID, ManpowerAttendance> attendanceById,
+      Map<UUID, ManpowerFinancials> financialsById,
+      List<ProductivityFactorRow> productivityRows,
+      int noNormActivityCount,
+      int noBoqBaselineActivityCount) {
+    List<String> missingRate = new ArrayList<>();
+    List<String> missingAttendance = new ArrayList<>();
+    for (UUID rid : labourResourceIds) {
+      Resource r = resourcesById.get(rid);
+      String code = r != null ? (r.getCode() != null ? r.getCode() : r.getName()) : rid.toString();
+      ManpowerFinancials f = financialsById.get(rid);
+      if (f == null
+          || ((f.getHourlyRate() == null || f.getHourlyRate().signum() <= 0)
+              && (f.getBaseSalary() == null || f.getBaseSalary().signum() <= 0))) {
+        missingRate.add(code);
+      }
+      ManpowerAttendance a = attendanceById.get(rid);
+      if (a == null || a.getWorkingHoursPerDay() == null) {
+        missingAttendance.add(code);
+      }
+    }
+    int mismatches = (int) productivityRows.stream().filter(ProductivityFactorRow::unitMismatch).count();
+    return new DataQuality(
+        missingRate.size(),
+        missingRate.stream().sorted().limit(20).toList(),
+        missingAttendance.size(),
+        missingAttendance.stream().sorted().limit(20).toList(),
+        mismatches,
+        noNormActivityCount,
+        noBoqBaselineActivityCount);
+  }
+
+  // ---------- Lookup helpers ----------
+
+  private Activity resolveActivity(String key, Map<UUID, Activity> activitiesById) {
+    if (key.startsWith("id:")) {
+      return activitiesById.get(UUID.fromString(key.substring(3)));
+    }
+    return null;
+  }
+
+  /**
+   * Resolve the manpower productivity norm for an activity via {@code work_activity_id}.
+   * The legacy name-match (findByActivityNameIgnoreCase) hit only ~4% of activities because
+   * BOQ-derived activity names rarely equal the master productivity_norms.activity_name; the
+   * FK link is populated for 100% of activities and gives correct coverage.
+   */
+  private ProductivityNorm lookupManpowerNorm(Activity activity) {
+    if (activity == null || activity.getWorkActivityId() == null) return null;
+    return productivityNormRepository.findByWorkActivityId(activity.getWorkActivityId()).stream()
+        .filter(n -> n.getNormType() == ProductivityNormType.MANPOWER)
+        .findFirst()
+        .orElse(null);
+  }
+
+  // ---------- Empty response ----------
+
+  private ManpowerKpiResponse emptyResponse(UUID projectId, LocalDate from, LocalDate to) {
+    return new ManpowerKpiResponse(
+        projectId, from, to,
+        new WorkforceUtilization(0, 0, 0, 0, false, 0, 0, 0),
+        List.of(), 0d,
+        List.of(), 0d,
+        List.of(),
+        0d, 0d,
+        List.of(),
+        new DataQuality(0, List.of(), 0, List.of(), 0, 0, 0));
   }
 
   // ---------- Misc ----------
@@ -388,7 +690,6 @@ public class ManpowerKpiService {
     return BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP).doubleValue();
   }
 
-  // Imports may flag ResourceType unused at compile time but we need the import for the typed lambda.
   @SuppressWarnings("unused")
   private void __referenceForImportSanity(ResourceType t) {}
 }

@@ -62,6 +62,10 @@ public class DprManpower extends BaseEntity {
     @Column(name = "ot_hours", precision = 6, scale = 2)
     private BigDecimal otHours;
 
+    /** Per-row idle hours. Feeds KPI 1.2 (Idle Time Ratio) directly from DPR. */
+    @Column(name = "idle_hours", precision = 6, scale = 2)
+    private BigDecimal idleHours;
+
     @Column(name = "contractor_name", length = 150)
     private String contractorName;
 
