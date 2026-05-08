@@ -307,6 +307,95 @@ class BigDecimalFormulaVisitorTest {
         }
     }
 
+    @Nested
+    @DisplayName("Statistical Functions")
+    class StatisticalFunctionsTests {
+
+        @Test
+        @DisplayName("AVERAGE(10, 20, 30) = 20")
+        void average() {
+            assertThat(eval("AVERAGE(10, 20, 30)", Map.of()))
+                    .isEqualByComparingTo(bd(20));
+        }
+
+        @Test
+        @DisplayName("AVERAGE(10) = 10")
+        void averageSingle() {
+            assertThat(eval("AVERAGE(10)", Map.of()))
+                    .isEqualByComparingTo(bd(10));
+        }
+
+        @Test
+        @DisplayName("COUNT(10, 20, 30) = 3")
+        void count() {
+            assertThat(eval("COUNT(10, 20, 30)", Map.of()))
+                    .isEqualByComparingTo(bd(3));
+        }
+
+        @Test
+        @DisplayName("STDEV(2, 4, 4, 4, 5, 5, 7, 9) = 2")
+        void stdev() {
+            assertThat(eval("STDEV(2, 4, 4, 4, 5, 5, 7, 9)", Map.of()))
+                    .isEqualByComparingTo(bd(2));
+        }
+
+        @Test
+        @DisplayName("STDEV(10) = 0")
+        void stdevSingle() {
+            assertThat(eval("STDEV(10)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("MEDIAN(10, 20, 30) = 20")
+        void medianOdd() {
+            assertThat(eval("MEDIAN(10, 20, 30)", Map.of()))
+                    .isEqualByComparingTo(bd(20));
+        }
+
+        @Test
+        @DisplayName("MEDIAN(10, 20, 30, 40) = 25")
+        void medianEven() {
+            assertThat(eval("MEDIAN(10, 20, 30, 40)", Map.of()))
+                    .isEqualByComparingTo(bd(25));
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 40, 50, 0.5) = 30")
+        void percentileMedian() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 40, 50, 0.5)", Map.of()))
+                    .isEqualByComparingTo(bd(30));
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 0.0) = 10")
+        void percentileZero() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 0.0)", Map.of()))
+                    .isEqualByComparingTo(bd(10));
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 1.0) = 30")
+        void percentileHundred() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 1.0)", Map.of()))
+                    .isEqualByComparingTo(bd(30));
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10, 20, 30, 0.25) = 15")
+        void percentileQuarter() {
+            assertThat(eval("PERCENTILE(10, 20, 30, 0.25)", Map.of()))
+                    .isEqualByComparingTo(bd(15));
+        }
+
+        @Test
+        @DisplayName("PERCENTILE(10) returns zero default")
+        void percentileNoRank() {
+            assertThat(eval("PERCENTILE(10)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+    }
+
     private static BigDecimal bd(String val) {
         return new BigDecimal(val);
     }
