@@ -114,7 +114,26 @@ public final class PermissionCatalog {
             new Permission("ADMIN_MASTER.UPDATE", "ADMIN_MASTER", UPDATE, "Edit master data"),
 
             new Permission("ADMIN_SETTINGS.READ",   "ADMIN_SETTINGS", READ,   "View global settings"),
-            new Permission("ADMIN_SETTINGS.UPDATE", "ADMIN_SETTINGS", UPDATE, "Edit global settings and integrations")
+            new Permission("ADMIN_SETTINGS.UPDATE", "ADMIN_SETTINGS", UPDATE, "Edit global settings and integrations"),
+
+            // Quality / NCR (used by QC_MANAGER profile and analyze_ncr_trends tool)
+            new Permission("NCR.CREATE",  "NCR", CREATE, "Create non-conformance reports"),
+            new Permission("NCR.READ",    "NCR", READ,   "View non-conformance reports"),
+            new Permission("NCR.UPDATE",  "NCR", UPDATE, "Update / close NCRs"),
+            new Permission("NCR.APPROVE", "NCR", APPROVE, "Approve NCR closure"),
+
+            // Data quality (used by BIM_DATA_COORDINATOR profile)
+            new Permission("DATA_QUALITY.READ",  "DATA_QUALITY", READ,  "View data-quality and DPR audit reports"),
+            new Permission("DATA_QUALITY.AUDIT", "DATA_QUALITY", "AUDIT", "Run DPR completeness audits"),
+
+            // DPR QC annotations (used by QC_MANAGER profile)
+            new Permission("DPR.QC_ANNOTATE", "DPR", "ANNOTATE", "Add QC observations / annotations to DPRs"),
+
+            // Yield variance (used by PROJECT_ENGINEER profile and analyze_yield_variance tool)
+            new Permission("YIELD_VARIANCE.READ", "YIELD_VARIANCE", READ, "View material yield variance reports"),
+
+            // AI write (lets a profile both run the AI and use write-capable AI tools when added)
+            new Permission("AI.WRITE", "AI", "WRITE", "Run AI tools that write back to the system")
     );
 
     public static final Set<String> ALL_CODES = ALL.stream()
