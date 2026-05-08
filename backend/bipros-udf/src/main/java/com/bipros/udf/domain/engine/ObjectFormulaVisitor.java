@@ -12,10 +12,21 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
 
     private final Map<String, Object> context;
 
+    /**
+     * Creates a new visitor with the given variable context.
+     *
+     * @param context map of variable names to their values; may be null
+     */
     public ObjectFormulaVisitor(Map<String, Object> context) {
         this.context = context != null ? context : Collections.emptyMap();
     }
 
+    /**
+     * Evaluates a logical OR expression.
+     *
+     * @param ctx the OR expression context
+     * @return the boolean result of the OR operation
+     */
     @Override
     public Object visitOrExpr(FormulaParser.OrExprContext ctx) {
         Object left = visit(ctx.andExpr(0));
@@ -26,6 +37,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return left;
     }
 
+    /**
+     * Evaluates a logical AND expression.
+     *
+     * @param ctx the AND expression context
+     * @return the boolean result of the AND operation
+     */
     @Override
     public Object visitAndExpr(FormulaParser.AndExprContext ctx) {
         Object left = visit(ctx.comparisonExpr(0));
@@ -36,6 +53,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return left;
     }
 
+    /**
+     * Evaluates a comparison expression (equality, inequality, less-than, etc.).
+     *
+     * @param ctx the comparison expression context
+     * @return the boolean result of the comparison, or the left operand if no operator
+     */
     @Override
     public Object visitComparisonExpr(FormulaParser.ComparisonExprContext ctx) {
         Object left = visit(ctx.additiveExpr(0));
@@ -53,6 +76,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return left;
     }
 
+    /**
+     * Evaluates an additive expression (addition or subtraction).
+     *
+     * @param ctx the additive expression context
+     * @return the numeric result as a {@link Double}
+     */
     @Override
     public Object visitAdditiveExpr(FormulaParser.AdditiveExprContext ctx) {
         double result = toDouble(visit(ctx.multiplicativeExpr(0)));
@@ -66,6 +95,13 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return result;
     }
 
+    /**
+     * Evaluates a multiplicative expression (multiplication or division).
+     *
+     * @param ctx the multiplicative expression context
+     * @return the numeric result as a {@link Double}
+     * @throws FormulaEvaluationException if division by zero occurs
+     */
     @Override
     public Object visitMultiplicativeExpr(FormulaParser.MultiplicativeExprContext ctx) {
         double result = toDouble(visit(ctx.unaryExpr(0)));
@@ -83,6 +119,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return result;
     }
 
+    /**
+     * Evaluates a unary expression (negation, plus, or logical NOT).
+     *
+     * @param ctx the unary expression context
+     * @return the result of the unary operation
+     */
     @Override
     public Object visitUnaryExpr(FormulaParser.UnaryExprContext ctx) {
         if (ctx.MINUS() != null) {
@@ -97,6 +139,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return visit(ctx.primary());
     }
 
+    /**
+     * Evaluates a primary expression (function call, sub-expression, variable, etc.).
+     *
+     * @param ctx the primary expression context
+     * @return the evaluated result
+     */
     @Override
     public Object visitPrimary(FormulaParser.PrimaryContext ctx) {
         if (ctx.functionCall() != null) {
@@ -120,6 +168,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return 0;
     }
 
+    /**
+     * Evaluates a built-in function call (IF, MAX, MIN, ABS, ROUND, POWER, SQRT, SUM, CONCAT).
+     *
+     * @param ctx the function call context
+     * @return the function result
+     */
     @Override
     public Object visitFunctionCall(FormulaParser.FunctionCallContext ctx) {
         if (ctx.IF() != null) {
@@ -185,6 +239,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return 0;
     }
 
+    /**
+     * Resolves a variable reference (prefixed with '$') from the context.
+     *
+     * @param ctx the variable reference context
+     * @return the variable value, or an empty string if not found
+     */
     @Override
     public Object visitVariableRef(FormulaParser.VariableRefContext ctx) {
         String name = ctx.getText();
@@ -195,6 +255,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return value != null ? value : "";
     }
 
+    /**
+     * Resolves a bracketed variable reference from the context.
+     *
+     * @param ctx the bracket reference context
+     * @return the variable value, or an empty string if not found
+     */
     @Override
     public Object visitBracketRef(FormulaParser.BracketRefContext ctx) {
         String name = ctx.getText();
@@ -205,17 +271,31 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return value != null ? value : "";
     }
 
+    /**
+     * Evaluates a string literal, stripping surrounding quotes if present.
+     *
+     * @param ctx the string literal context
+     * @return the unquoted string value
+     */
     @Override
     public Object visitStringLiteral(FormulaParser.StringLiteralContext ctx) {
         String text = ctx.getText();
-        // Strip quotes
-        if ((text.startsWith("\"") && text.endsWith("\"")) ||
-            (text.startsWith("'") && text.endsWith("'"))) {
-            return text.substring(1, text.length() - 1);
+        if (text.length() >= 2) {
+            if ((text.startsWith("\"") && text.endsWith("\"")) ||
+                (text.startsWith("'") && text.endsWith("'"))) {
+                return text.substring(1, text.length() - 1);
+            }
         }
         return text;
     }
 
+    /**
+     * Evaluates a number literal, parsing as {@link Long} or {@link Double}
+     * depending on presence of a decimal point.
+     *
+     * @param ctx the number literal context
+     * @return the parsed numeric value ({@link Long} or {@link Double})
+     */
     @Override
     public Object visitNumberLiteral(FormulaParser.NumberLiteralContext ctx) {
         String text = ctx.getText();
@@ -229,16 +309,36 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         }
     }
 
+    /**
+     * Compares two objects for equality using case-insensitive string comparison.
+     *
+     * @param left  the left operand
+     * @param right the right operand
+     * @return true if both are null or equal ignoring case, false otherwise
+     */
     private boolean compareEquals(Object left, Object right) {
         if (left == null && right == null) return true;
         if (left == null || right == null) return false;
         return String.valueOf(left).equalsIgnoreCase(String.valueOf(right));
     }
 
+    /**
+     * Compares two objects numerically.
+     *
+     * @param left  the left operand
+     * @param right the right operand
+     * @return negative, zero, or positive as left is less than, equal to, or greater than right
+     */
     private int compareNumeric(Object left, Object right) {
         return Double.compare(toDouble(left), toDouble(right));
     }
 
+    /**
+     * Converts an object to a boolean value.
+     *
+     * @param value the value to convert
+     * @return the boolean representation; non-zero numbers and non-empty strings are true
+     */
     private boolean toBoolean(Object value) {
         if (value instanceof Boolean) return (Boolean) value;
         if (value instanceof Number) return ((Number) value).doubleValue() != 0;
@@ -246,6 +346,12 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         return !str.isEmpty() && !str.equals("0") && !str.equals("false") && !str.equals("null");
     }
 
+    /**
+     * Converts an object to a double value.
+     *
+     * @param value the value to convert
+     * @return the double representation, or 0.0 if parsing fails
+     */
     private double toDouble(Object value) {
         if (value instanceof Number) return ((Number) value).doubleValue();
         String str = String.valueOf(value).trim();
