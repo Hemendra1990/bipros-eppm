@@ -39,6 +39,10 @@ primary
     | bracketRef
     | stringLiteral
     | numberLiteral
+    | PI
+    | EULER
+    | TRUE
+    | FALSE
     ;
 
 functionCall
@@ -51,14 +55,29 @@ functionCall
     | SQRT LPAREN expression RPAREN
     | SUM LPAREN expression (COMMA expression)* RPAREN
     | CONCAT LPAREN expression (COMMA expression)* RPAREN
+    | LEFT LPAREN expression COMMA expression RPAREN
+    | RIGHT LPAREN expression COMMA expression RPAREN
+    | MID LPAREN expression COMMA expression COMMA expression RPAREN
+    | LENGTH LPAREN expression RPAREN
+    | UPPER LPAREN expression RPAREN
+    | LOWER LPAREN expression RPAREN
+    | TRIM LPAREN expression RPAREN
+    | SUBSTITUTE LPAREN expression COMMA expression COMMA expression RPAREN
+    | MOD LPAREN expression COMMA expression RPAREN
+    | FLOOR LPAREN expression RPAREN
+    | CEILING LPAREN expression RPAREN
+    | LOG LPAREN expression RPAREN
+    | EXP LPAREN expression RPAREN
+    | SIN LPAREN expression RPAREN
+    | COS LPAREN expression RPAREN
     ;
 
 variableRef
-    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT)
+    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE)
     ;
 
 bracketRef
-    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT) RBRACKET
+    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE) RBRACKET
     ;
 
 stringLiteral
@@ -82,6 +101,31 @@ CONCAT  : [Cc][Oo][Nn][Cc][Aa][Tt] ;
 AND     : [Aa][Nn][Dd] ;
 OR      : [Oo][Rr] ;
 NOT     : [Nn][Oo][Tt] ;
+
+// String functions
+LEFT       : [Ll][Ee][Ff][Tt] ;
+RIGHT      : [Rr][Ii][Gg][Hh][Tt] ;
+MID        : [Mm][Ii][Dd] ;
+LENGTH     : [Ll][Ee][Nn][Gg][Tt][Hh] ;
+UPPER      : [Uu][Pp][Pp][Ee][Rr] ;
+LOWER      : [Ll][Oo][Ww][Ee][Rr] ;
+TRIM       : [Tt][Rr][Ii][Mm] ;
+SUBSTITUTE : [Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Tt][Ee] ;
+
+// Math functions
+MOD        : [Mm][Oo][Dd] ;
+FLOOR      : [Ff][Ll][Oo][Oo][Rr] ;
+CEILING    : [Cc][Ee][Ii][Ll][Ii][Nn][Gg] ;
+LOG        : [Ll][Oo][Gg] ;
+EXP        : [Ee][Xx][Pp] ;
+SIN        : [Ss][Ii][Nn] ;
+COS        : [Cc][Oo][Ss] ;
+
+// Constants
+PI         : [Pp][Ii] ;
+EULER      : [Ee] ;
+TRUE       : [Tt][Rr][Uu][Ee] ;
+FALSE      : [Ff][Aa][Ll][Ss][Ee] ;
 
 LPAREN  : '(' ;
 RPAREN  : ')' ;
