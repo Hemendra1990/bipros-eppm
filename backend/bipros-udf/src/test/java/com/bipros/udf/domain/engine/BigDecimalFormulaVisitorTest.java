@@ -451,6 +451,114 @@ class BigDecimalFormulaVisitorTest {
         }
     }
 
+    @Nested
+    @DisplayName("Date/Time Functions")
+    class DateTimeFunctionsTests {
+
+        @Test
+        @DisplayName("TODAY returns days since epoch > 20000")
+        void today() {
+            assertThat(eval("TODAY()", Map.of()))
+                    .isGreaterThan(bd(20000));
+        }
+
+        @Test
+        @DisplayName("DATEDIFF with string dates = 9")
+        void datediffString() {
+            assertThat(eval("DATEDIFF(\"2024-01-01\", \"2024-01-10\")", Map.of()))
+                    .isEqualByComparingTo(bd(9));
+        }
+
+        @Test
+        @DisplayName("DATEDIFF with epoch days = 9")
+        void datediffEpoch() {
+            assertThat(eval("DATEDIFF(19723, 19732)", Map.of()))
+                    .isEqualByComparingTo(bd(9));
+        }
+
+        @Test
+        @DisplayName("DATEDIFF with invalid date returns zero")
+        void datediffInvalid() {
+            assertThat(eval("DATEDIFF(\"invalid\", \"2024-01-10\")", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("DAYSOFMONTH for Feb 2024 (leap) = 29")
+        void daysofmonthLeap() {
+            assertThat(eval("DAYSOFMONTH(\"2024-02-15\")", Map.of()))
+                    .isEqualByComparingTo(bd(29));
+        }
+
+        @Test
+        @DisplayName("DAYSOFMONTH for Feb 2023 = 28")
+        void daysofmonthNonLeap() {
+            assertThat(eval("DAYSOFMONTH(\"2023-02-15\")", Map.of()))
+                    .isEqualByComparingTo(bd(28));
+        }
+
+        @Test
+        @DisplayName("DAYSOFMONTH for April = 30")
+        void daysofmonthApril() {
+            assertThat(eval("DAYSOFMONTH(\"2024-04-15\")", Map.of()))
+                    .isEqualByComparingTo(bd(30));
+        }
+
+        @Test
+        @DisplayName("YEAR(\"2024-06-15\") = 2024")
+        void year() {
+            assertThat(eval("YEAR(\"2024-06-15\")", Map.of()))
+                    .isEqualByComparingTo(bd(2024));
+        }
+
+        @Test
+        @DisplayName("MONTH(\"2024-06-15\") = 6")
+        void month() {
+            assertThat(eval("MONTH(\"2024-06-15\")", Map.of()))
+                    .isEqualByComparingTo(bd(6));
+        }
+    }
+
+    @Nested
+    @DisplayName("Lookup Functions")
+    class LookupFunctionsTests {
+
+        @Test
+        @DisplayName("LOOKUP(5, 1, 10, 5, 50, 3, 30) = 50")
+        void lookup() {
+            assertThat(eval("LOOKUP(5, 1, 10, 5, 50, 3, 30)", Map.of()))
+                    .isEqualByComparingTo(bd(50));
+        }
+
+        @Test
+        @DisplayName("LOOKUP(99, 1, 10, 5, 50) returns zero")
+        void lookupNotFound() {
+            assertThat(eval("LOOKUP(99, 1, 10, 5, 50)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("LOOKUP with odd pairs ignores last")
+        void lookupOddPairs() {
+            assertThat(eval("LOOKUP(1, 1, 10, 5)", Map.of()))
+                    .isEqualByComparingTo(bd(10));
+        }
+
+        @Test
+        @DisplayName("INDEX(10, 20, 30, 2) = 20")
+        void index() {
+            assertThat(eval("INDEX(10, 20, 30, 2)", Map.of()))
+                    .isEqualByComparingTo(bd(20));
+        }
+
+        @Test
+        @DisplayName("INDEX out of bounds returns zero")
+        void indexOutOfBounds() {
+            assertThat(eval("INDEX(10, 20, 30, 5)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+    }
+
     private static BigDecimal bd(String val) {
         return new BigDecimal(val);
     }
