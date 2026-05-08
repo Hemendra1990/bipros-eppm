@@ -35,6 +35,6 @@ public class AiContextResolver {
             effectiveProjectId = scoped.get(0);
         }
 
-        return new AiContext(userId, effectiveProjectId, module, role, scoped);
+        return new AiContext(userId, effectiveProjectId, module, role, null, scoped);
     }
 }
