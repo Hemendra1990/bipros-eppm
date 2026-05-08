@@ -171,6 +171,18 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
         if (ctx.numberLiteral() != null) {
             return visit(ctx.numberLiteral());
         }
+        if (ctx.PI() != null) {
+            return Math.PI;
+        }
+        if (ctx.EULER() != null) {
+            return Math.E;
+        }
+        if (ctx.TRUE() != null) {
+            return Boolean.TRUE;
+        }
+        if (ctx.FALSE() != null) {
+            return Boolean.FALSE;
+        }
         return 0;
     }
 
@@ -241,6 +253,83 @@ public class ObjectFormulaVisitor extends FormulaBaseVisitor<Object> {
                 sb.append(visit(expr));
             }
             return sb.toString();
+        }
+        if (ctx.LEFT() != null) {
+            if (ctx.expression().size() < 2) return "";
+            String text = String.valueOf(visit(ctx.expression(0)));
+            int n = (int) toDouble(visit(ctx.expression(1)));
+            if (n <= 0) return "";
+            return text.substring(0, Math.min(n, text.length()));
+        }
+        if (ctx.RIGHT() != null) {
+            if (ctx.expression().size() < 2) return "";
+            String text = String.valueOf(visit(ctx.expression(0)));
+            int n = (int) toDouble(visit(ctx.expression(1)));
+            if (n <= 0) return "";
+            return text.substring(Math.max(0, text.length() - n));
+        }
+        if (ctx.MID() != null) {
+            if (ctx.expression().size() < 3) return "";
+            String text = String.valueOf(visit(ctx.expression(0)));
+            int start = (int) toDouble(visit(ctx.expression(1))) - 1; // 1-based to 0-based
+            int len = (int) toDouble(visit(ctx.expression(2)));
+            if (start < 0) start = 0;
+            if (start >= text.length() || len <= 0) return "";
+            return text.substring(start, Math.min(start + len, text.length()));
+        }
+        if (ctx.LENGTH() != null) {
+            if (ctx.expression().isEmpty()) return 0L;
+            return (long) String.valueOf(visit(ctx.expression(0))).length();
+        }
+        if (ctx.UPPER() != null) {
+            if (ctx.expression().isEmpty()) return "";
+            return String.valueOf(visit(ctx.expression(0))).toUpperCase();
+        }
+        if (ctx.LOWER() != null) {
+            if (ctx.expression().isEmpty()) return "";
+            return String.valueOf(visit(ctx.expression(0))).toLowerCase();
+        }
+        if (ctx.TRIM() != null) {
+            if (ctx.expression().isEmpty()) return "";
+            return String.valueOf(visit(ctx.expression(0))).trim();
+        }
+        if (ctx.SUBSTITUTE() != null) {
+            if (ctx.expression().size() < 3) return "";
+            String text = String.valueOf(visit(ctx.expression(0)));
+            String oldStr = String.valueOf(visit(ctx.expression(1)));
+            String newStr = String.valueOf(visit(ctx.expression(2)));
+            return text.replace(oldStr, newStr);
+        }
+        if (ctx.MOD() != null) {
+            if (ctx.expression().size() < 2) return 0.0;
+            double dividend = toDouble(visit(ctx.expression(0)));
+            double divisor = toDouble(visit(ctx.expression(1)));
+            if (divisor == 0) return 0.0;
+            return dividend % divisor;
+        }
+        if (ctx.FLOOR() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            return Math.floor(toDouble(visit(ctx.expression(0))));
+        }
+        if (ctx.CEILING() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            return Math.ceil(toDouble(visit(ctx.expression(0))));
+        }
+        if (ctx.LOG() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            return Math.log(toDouble(visit(ctx.expression(0))));
+        }
+        if (ctx.EXP() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            return Math.exp(toDouble(visit(ctx.expression(0))));
+        }
+        if (ctx.SIN() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            return Math.sin(toDouble(visit(ctx.expression(0))));
+        }
+        if (ctx.COS() != null) {
+            if (ctx.expression().isEmpty()) return 0.0;
+            return Math.cos(toDouble(visit(ctx.expression(0))));
         }
         return 0;
     }

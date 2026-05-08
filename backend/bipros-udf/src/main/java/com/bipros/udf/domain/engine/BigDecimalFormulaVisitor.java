@@ -193,6 +193,18 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         if (ctx.numberLiteral() != null) {
             return visit(ctx.numberLiteral());
         }
+        if (ctx.PI() != null) {
+            return BigDecimal.valueOf(Math.PI);
+        }
+        if (ctx.EULER() != null) {
+            return BigDecimal.valueOf(Math.E);
+        }
+        if (ctx.TRUE() != null) {
+            return BigDecimal.ONE;
+        }
+        if (ctx.FALSE() != null) {
+            return BigDecimal.ZERO;
+        }
         return BigDecimal.ZERO;
     }
 
@@ -259,6 +271,57 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
             return ctx.expression().stream()
                     .map(this::visit)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+        if (ctx.MOD() != null) {
+            if (ctx.expression().size() < 2) {
+                return BigDecimal.ZERO;
+            }
+            BigDecimal dividend = visit(ctx.expression(0));
+            BigDecimal divisor = visit(ctx.expression(1));
+            if (divisor.compareTo(BigDecimal.ZERO) == 0) {
+                return zeroDefault;
+            }
+            return dividend.remainder(divisor);
+        }
+        if (ctx.FLOOR() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            return visit(ctx.expression(0)).setScale(0, RoundingMode.FLOOR);
+        }
+        if (ctx.CEILING() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            return visit(ctx.expression(0)).setScale(0, RoundingMode.CEILING);
+        }
+        if (ctx.LOG() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            return BigDecimal.valueOf(Math.log(visit(ctx.expression(0)).doubleValue()))
+                    .setScale(scale, roundingMode);
+        }
+        if (ctx.EXP() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            return BigDecimal.valueOf(Math.exp(visit(ctx.expression(0)).doubleValue()))
+                    .setScale(scale, roundingMode);
+        }
+        if (ctx.SIN() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            return BigDecimal.valueOf(Math.sin(visit(ctx.expression(0)).doubleValue()))
+                    .setScale(scale, roundingMode);
+        }
+        if (ctx.COS() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            return BigDecimal.valueOf(Math.cos(visit(ctx.expression(0)).doubleValue()))
+                    .setScale(scale, roundingMode);
         }
         return BigDecimal.ZERO;
     }

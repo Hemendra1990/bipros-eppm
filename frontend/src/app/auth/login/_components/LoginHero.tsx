@@ -96,7 +96,7 @@ export function LoginHero() {
 
   return (
     <section className="relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-y-10 lg:flex-row lg:items-start lg:justify-between lg:gap-x-10">
+      <div className="mx-auto flex max-w-7xl flex-col gap-y-10 lg:flex-row lg:items-start lg:justify-between lg:gap-x-10">
         {/* ── LEFT ─ headline + body + CTAs (mobile order: 2) ─────────────── */}
         <div className="order-2 w-full lg:order-1 lg:max-w-[600px] lg:flex-1">
           <div>
