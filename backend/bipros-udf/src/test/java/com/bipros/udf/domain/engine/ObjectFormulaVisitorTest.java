@@ -55,6 +55,12 @@ class ObjectFormulaVisitorTest {
         }
 
         @Test
+        @DisplayName("binary subtraction")
+        void binarySubtraction() {
+            assertThat(eval("10 - 4")).isEqualTo("6.0");
+        }
+
+        @Test
         @DisplayName("subtraction with no spaces around operator")
         void subtractionNoSpaces() {
             assertThat(eval("10+(-4)")).isEqualTo("6.0");
@@ -335,9 +341,9 @@ class ObjectFormulaVisitorTest {
         }
 
         @Test
-        @DisplayName("null expression handled by cache")
+        @DisplayName("null expression returns empty string")
         void nullExpression() {
-            assertThat(cache.get(null)).isNull();
+            assertThat(eval(null, Map.of())).isEmpty();
         }
 
         @Test
