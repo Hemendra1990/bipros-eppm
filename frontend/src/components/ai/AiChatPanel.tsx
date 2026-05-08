@@ -67,7 +67,7 @@ const markdownComponents: Components = {
 
 // Friendly progress labels — keep tool-name plumbing out of the UI while still
 // telling the user what's underway. Unknown tools fall back to "Working".
-const TOOL_PROGRESS_LABELS: Record<string, string> = {
+export const TOOL_PROGRESS_LABELS: Record<string, string> = {
   list_projects: "Looking up projects",
   list_activities: "Checking activities",
   list_activity_resources: "Checking activity resources",
@@ -102,7 +102,7 @@ const TOOL_PROGRESS_LABELS: Record<string, string> = {
   audit_dpr_data_quality: "Auditing DPR data quality",
   report_data_lag: "Reading data entry lag",
 };
-function friendlyToolLabel(name: string): string {
+export function friendlyToolLabel(name: string): string {
   return TOOL_PROGRESS_LABELS[name] ?? "Working";
 }
 

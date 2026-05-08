@@ -1,4 +1,7 @@
 import { test as base, expect, Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+import { TEST_USERS_FILE, type ProvisionedFixture } from './test-users';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -75,5 +78,40 @@ export const test = base.extend<{ authenticatedPage: Page }>({
     await use(page);
   },
 });
+
+/**
+ * Log in as the e2e test user provisioned for the given profile code.
+ * Reads credentials from the JSON globalSetup wrote; throws with a clear
+ * message if globalSetup didn't run or the requested profile isn't there.
+ */
+export async function loginAs(page: Page, profileCode: string): Promise<void> {
+  const filePath = path.resolve(TEST_USERS_FILE);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      `[loginAs] ${TEST_USERS_FILE} not found. Did Playwright globalSetup run? ` +
+        `Backend must be reachable at ${API_BASE} before tests start.`,
+    );
+  }
+  const fixture = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as ProvisionedFixture;
+  const user = fixture.users.find((u) => u.profileCode === profileCode);
+  if (!user) {
+    throw new Error(
+      `[loginAs] No e2e user provisioned for profile "${profileCode}". ` +
+        `Available: ${fixture.users.map((u) => u.profileCode).join(', ')}`,
+    );
+  }
+  await login(page, user.username, user.password);
+}
+
+/**
+ * Returns the project ID that globalSetup enrolled the e2e test users into.
+ * Tests that hit role-aware AI need this so AiAccessGuard.canChat() passes.
+ */
+export function getE2eProjectId(): string | null {
+  const filePath = path.resolve(TEST_USERS_FILE);
+  if (!fs.existsSync(filePath)) return null;
+  const fixture = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as ProvisionedFixture;
+  return fixture.projectId;
+}
 
 export { expect };
