@@ -55,4 +55,28 @@ class ProfileSeederNewProfilesTest {
         assertTrue(p.getPermissions().contains("AI.WRITE"),
                 "PROJECT_MANAGER must now include AI.WRITE");
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    com.bipros.api.config.ProfileSeeder seeder;
+
+    @Test
+    void selfHealsSystemDefaultProfileWithNewPermission() {
+        // SITE_MANAGER was just seeded — strip a permission, re-run seeder, expect it back.
+        com.bipros.security.domain.model.Profile p =
+                profileRepository.findByCode("SITE_MANAGER").orElseThrow();
+        assertTrue(p.isSystemDefault());
+        p.getPermissions().remove("AI.READ");
+        profileRepository.save(p);
+
+        com.bipros.security.domain.model.Profile after1 =
+                profileRepository.findByCode("SITE_MANAGER").orElseThrow();
+        assertTrue(!after1.getPermissions().contains("AI.READ"));
+
+        seeder.seed();
+
+        com.bipros.security.domain.model.Profile after2 =
+                profileRepository.findByCode("SITE_MANAGER").orElseThrow();
+        assertTrue(after2.getPermissions().contains("AI.READ"),
+                "Self-heal must restore missing permission on system-default profile");
+    }
 }

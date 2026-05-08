@@ -33,15 +33,31 @@ public class ProfileSeeder {
 
     public void seed() {
         int created = 0;
+        int healed = 0;
         for (DefaultProfile dp : DEFAULTS) {
-            if (profileRepository.existsByCode(dp.code)) continue;
-            Profile p = new Profile(dp.code, dp.name, dp.description, dp.legacyRole,
-                    true, dp.permissions);
-            profileRepository.save(p);
-            log.debug("Seeded profile {} ({} permissions)", dp.code, dp.permissions.size());
-            created++;
+            java.util.Optional<Profile> existing = profileRepository.findByCode(dp.code);
+            if (existing.isEmpty()) {
+                Profile p = new Profile(dp.code, dp.name, dp.description, dp.legacyRole,
+                        true, dp.permissions);
+                profileRepository.save(p);
+                log.debug("Seeded profile {} ({} permissions)", dp.code, dp.permissions.size());
+                created++;
+                continue;
+            }
+            Profile p = existing.get();
+            if (!p.isSystemDefault()) continue;  // admin-customised — leave alone
+            java.util.Set<String> missing = new java.util.HashSet<>(dp.permissions);
+            missing.removeAll(p.getPermissions());
+            if (!missing.isEmpty()) {
+                p.getPermissions().addAll(missing);
+                profileRepository.save(p);
+                log.info("Self-healed system profile {} — added {} missing permission(s): {}",
+                        dp.code, missing.size(), missing);
+                healed++;
+            }
         }
         if (created > 0) log.info("Seeded {} new default profiles", created);
+        if (healed > 0) log.info("Self-healed {} existing system profiles with new permissions", healed);
     }
 
     private record DefaultProfile(String code, String name, String description,
