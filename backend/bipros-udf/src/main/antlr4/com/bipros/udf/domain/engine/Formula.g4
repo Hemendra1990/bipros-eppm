@@ -54,11 +54,11 @@ functionCall
     ;
 
 variableRef
-    : DOLLAR IDENTIFIER
+    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT)
     ;
 
 bracketRef
-    : LBRACKET IDENTIFIER RBRACKET
+    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT) RBRACKET
     ;
 
 stringLiteral
@@ -70,18 +70,18 @@ numberLiteral
     ;
 
 // Lexer rules
-IF      : 'IF' | 'if' ;
-MAX     : 'MAX' | 'max' ;
-MIN     : 'MIN' | 'min' ;
-ABS     : 'ABS' | 'abs' ;
-ROUND   : 'ROUND' | 'round' ;
-POWER   : 'POWER' | 'power' ;
-SQRT    : 'SQRT' | 'sqrt' ;
-SUM     : 'SUM' | 'sum' ;
-CONCAT  : 'CONCAT' | 'concat' ;
-AND     : 'AND' | 'and' ;
-OR      : 'OR' | 'or' ;
-NOT     : 'NOT' | 'not' ;
+IF      : [Ii][Ff] ;
+MAX     : [Mm][Aa][Xx] ;
+MIN     : [Mm][Ii][Nn] ;
+ABS     : [Aa][Bb][Ss] ;
+ROUND   : [Rr][Oo][Uu][Nn][Dd] ;
+POWER   : [Pp][Oo][Ww][Ee][Rr] ;
+SQRT    : [Ss][Qq][Rr][Tt] ;
+SUM     : [Ss][Uu][Mm] ;
+CONCAT  : [Cc][Oo][Nn][Cc][Aa][Tt] ;
+AND     : [Aa][Nn][Dd] ;
+OR      : [Oo][Rr] ;
+NOT     : [Nn][Oo][Tt] ;
 
 LPAREN  : '(' ;
 RPAREN  : ')' ;
@@ -105,8 +105,8 @@ NUMBER
     ;
 
 STRING
-    : '"' (~["\r\n])* '"'
-    | '\'' (~['\r\n])* '\''
+    : '"' (~["\\\r\n] | '\\' .)* '"'
+    | '\'' (~['\\\r\n] | '\\' .)* '\''
     ;
 
 IDENTIFIER

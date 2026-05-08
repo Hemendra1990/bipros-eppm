@@ -434,26 +434,56 @@ public class ActivityService {
   }
 
   /**
-   * Bulk-set the supervisor (a Resource) on every activity in {@code activityIds}.
-   * Each activity must belong to {@code projectId}; mismatches throw 400.
+   * Sync the set of activities supervised by {@code supervisorResourceId} in {@code projectId}
+   * to exactly the activities in {@code activityIds}. Each activity in the list must belong
+   * to {@code projectId}; mismatches throw 400.
+   *
+   * <p>Behaviour:
+   * <ul>
+   *   <li>Activities in the list that don't already have this supervisor → set supervisor
+   *       (replacing any prior supervisor).</li>
+   *   <li>Activities currently supervised by this supervisor in this project but NOT in the
+   *       list → supervisor cleared. This is what makes "uncheck and save" persist.</li>
+   * </ul>
    *
    * <p>Re-uses the same columns as the per-activity supervisor field
    * ({@code Activity.responsibleResourceId} / {@code responsibleResourceName}) so the
-   * Activities-grid Supervisor column, the By-Supervisor view, and the DPR pre-fill
-   * all reflect the change without any extra wiring.
+   * Activities-grid Supervisor column, the By-Supervisor view, and the DPR pre-fill all
+   * reflect the change without any extra wiring.
    *
    * <p>Frontend filters the picker to LABOR/Manpower resources from the project pool;
    * no LABOR validation is performed here (mirrors the single-activity update path).
    *
-   * @return number of activities whose supervisor was set
+   * @return number of activities whose supervisor changed (sets + clears)
    */
   public int bulkSetSupervisor(UUID projectId, com.bipros.activity.application.dto.BulkSupervisorRequest request) {
-    log.info("Bulk supervisor: projectId={}, supervisorResourceId={}, activityCount={}",
+    log.info("Bulk supervisor sync: projectId={}, supervisorResourceId={}, activityCount={}",
         projectId, request.supervisorResourceId(), request.activityIds().size());
 
     projectAccess.requireEdit(projectId);
 
-    int updated = 0;
+    UUID supervisorId = request.supervisorResourceId();
+    java.util.Set<UUID> requested = new java.util.HashSet<>(request.activityIds());
+
+    int changed = 0;
+
+    // 1. Clear supervisor on activities currently assigned to this supervisor that are
+    //    no longer in the requested set (i.e. unchecked by the user).
+    java.util.List<Activity> currentlyAssigned =
+        activityRepository.findByProjectIdAndResponsibleResourceId(projectId, supervisorId);
+    for (Activity activity : currentlyAssigned) {
+      if (!requested.contains(activity.getId())) {
+        UUID oldResourceId = activity.getResponsibleResourceId();
+        activity.setResponsibleResourceId(null);
+        activity.setResponsibleResourceName(null);
+        activityRepository.save(activity);
+        auditService.logUpdate("Activity", activity.getId(),
+            "responsibleResourceId", oldResourceId, null);
+        changed++;
+      }
+    }
+
+    // 2. Set supervisor on every requested activity (no-op when already matches).
     for (UUID activityId : request.activityIds()) {
       Activity activity = activityRepository.findById(activityId)
           .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
@@ -464,19 +494,19 @@ public class ActivityService {
       }
 
       UUID oldResourceId = activity.getResponsibleResourceId();
-      activity.setResponsibleResourceId(request.supervisorResourceId());
+      if (java.util.Objects.equals(oldResourceId, supervisorId)) {
+        continue;
+      }
+      activity.setResponsibleResourceId(supervisorId);
       activity.setResponsibleResourceName(request.supervisorResourceName());
       activityRepository.save(activity);
-
-      if (!java.util.Objects.equals(oldResourceId, request.supervisorResourceId())) {
-        auditService.logUpdate("Activity", activityId,
-            "responsibleResourceId", oldResourceId, request.supervisorResourceId());
-      }
-      updated++;
+      auditService.logUpdate("Activity", activityId,
+          "responsibleResourceId", oldResourceId, supervisorId);
+      changed++;
     }
 
-    log.info("Bulk supervisor complete: updated={}", updated);
-    return updated;
+    log.info("Bulk supervisor sync complete: changed={}", changed);
+    return changed;
   }
 
   public void applyActuals(UUID projectId, LocalDate dataDate) {
