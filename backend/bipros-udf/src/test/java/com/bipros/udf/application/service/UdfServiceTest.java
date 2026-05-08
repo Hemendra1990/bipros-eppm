@@ -7,6 +7,7 @@ import com.bipros.udf.application.dto.SetUdfValueRequest;
 import com.bipros.udf.application.dto.UdfValueResponse;
 import com.bipros.udf.application.dto.UserDefinedFieldDto;
 import com.bipros.udf.domain.model.*;
+import com.bipros.udf.domain.engine.FormulaAstCache;
 import com.bipros.udf.domain.repository.UdfValueRepository;
 import com.bipros.udf.domain.repository.UserDefinedFieldRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,11 +40,14 @@ class UdfServiceTest {
     @Mock
     private UdfValueRepository udfValueRepository;
 
+    @Mock
+    private FormulaAstCache formulaAstCache;
+
     private UdfService udfService;
 
     @BeforeEach
     void setUp() {
-        udfService = new UdfService(userDefinedFieldRepository, udfValueRepository);
+        udfService = new UdfService(userDefinedFieldRepository, udfValueRepository, formulaAstCache);
     }
 
     private UserDefinedField buildField(UUID id, String name, UdfDataType dataType,
