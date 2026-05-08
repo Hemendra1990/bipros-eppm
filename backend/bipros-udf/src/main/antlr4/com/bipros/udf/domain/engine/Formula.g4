@@ -75,14 +75,17 @@ functionCall
     | STDEV LPAREN expression (COMMA expression)* RPAREN
     | MEDIAN LPAREN expression (COMMA expression)* RPAREN
     | PERCENTILE LPAREN expression (COMMA expression)* RPAREN
+    | SUMIF LPAREN expression (COMMA expression)+ RPAREN
+    | COUNTIF LPAREN expression (COMMA expression)+ RPAREN
+    | AVERAGEIF LPAREN expression (COMMA expression)+ RPAREN
     ;
 
 variableRef
-    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE)
+    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE | SUMIF | COUNTIF | AVERAGEIF)
     ;
 
 bracketRef
-    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE) RBRACKET
+    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE | SUMIF | COUNTIF | AVERAGEIF) RBRACKET
     ;
 
 stringLiteral
@@ -138,6 +141,11 @@ COUNT      : [Cc][Oo][Uu][Nn][Tt] ;
 STDEV      : [Ss][Tt][Dd][Ee][Vv] ;
 MEDIAN     : [Mm][Ee][Dd][Ii][Aa][Nn] ;
 PERCENTILE : [Pp][Ee][Rr][Cc][Ee][Nn][Tt][Ii][Ll][Ee] ;
+
+// Conditional aggregation functions
+SUMIF     : [Ss][Uu][Mm][Ii][Ff] ;
+COUNTIF   : [Cc][Oo][Uu][Nn][Tt][Ii][Ff] ;
+AVERAGEIF : [Aa][Vv][Ee][Rr][Aa][Gg][Ee][Ii][Ff] ;
 
 LPAREN  : '(' ;
 RPAREN  : ')' ;
