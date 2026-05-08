@@ -105,7 +105,11 @@ public class DataSeeder implements CommandLineRunner {
       {"VIEWER", "Viewer with read-only access"},
       {"FOREMAN", "Foreman; raises Permit-to-Work applications"},
       {"SITE_ENGINEER", "Site Engineer; reviews permits in their assigned zones"},
-      {"HSE_OFFICER", "HSE Officer; performs safety clearance and closes permits"}
+      {"HSE_OFFICER", "HSE Officer; performs safety clearance and closes permits"},
+      {"SITE_MANAGER", "Site Manager; owns daily execution, crew & machine deployment"},
+      {"PROJECT_ENGINEER", "Project Engineer; bridges design and execution, technical sign-off"},
+      {"QC_MANAGER", "Quality Control Manager; process adherence, NCR ownership"},
+      {"BIM_DATA_COORDINATOR", "BIM / Data Coordinator; data integrity and model linkage"}
     };
     int created = 0;
     for (String[] r : roles) {
