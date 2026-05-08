@@ -66,13 +66,11 @@ export const dprApi = {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
     if (captions) {
-      // Send captions as text/plain Blobs (not raw strings). FormData.append(key, string)
-      // produces a part with no Content-Type, which Spring's @RequestPart String[] resolver
-      // can't deserialize without registering a custom converter. Tagging as text/plain makes
-      // both @RequestPart and @RequestParam variants accept the value.
-      captions.forEach((c) =>
-        form.append("captions", new Blob([c ?? ""], { type: "text/plain" }))
-      );
+      // Append as plain strings so each caption becomes a regular form field that the backend's
+      // @RequestParam String[] resolver can read. Appending Blobs here would make the browser
+      // emit file-typed parts, which Spring's MultipartResolver routes to MultipartFile and then
+      // fails to coerce into String[].
+      captions.forEach((c) => form.append("captions", c ?? ""));
     }
     return apiClient
       .post<ApiResponse<DprAttachment[]>>(

@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
-import { ChevronDown, Database } from "lucide-react";
+import { BarChart3, ChevronDown, Database } from "lucide-react";
 import { projectApi } from "@/lib/api/projectApi";
 import { cn } from "@/lib/utils/cn";
 
@@ -22,6 +22,7 @@ function ProjectDetailLayoutInner({
   const activeTab = isOnSubRoute ? null : (searchParams.get("tab") || "overview");
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
   const [masterDataOpen, setMasterDataOpen] = useState(false);
+  const [insightsHeaderOpen, setInsightsHeaderOpen] = useState(false);
 
   const { data: projectData, isLoading } = useQuery({
     queryKey: ["project", projectId],
@@ -53,6 +54,7 @@ function ProjectDetailLayoutInner({
     { id: "cost-accounts", label: "Cost Accounts", href: null },
     { id: "dpr", label: "DPR", href: `/projects/${projectId}/dpr` },
     { id: "daily-outputs", label: "Daily Outputs", href: `/projects/${projectId}/daily-outputs` },
+    { id: "insights", label: "Insights", href: `/projects/${projectId}/insights` },
     { id: "capacity", label: "Capacity Util.", href: `/projects/${projectId}/capacity-utilization` },
     { id: "risks", label: "Risks", href: `/projects/${projectId}/risks` },
     // These navigate to separate route pages:
@@ -120,9 +122,65 @@ function ProjectDetailLayoutInner({
 
   return (
     <div className="min-w-0" style={{ ["--tab-nav-h" as string]: "53px" }}>
-      <div className="mb-6 px-6 pt-6">
-        <h1 className="text-2xl font-bold text-text-primary">{project.name}</h1>
-        <p className="text-sm text-text-secondary">{project.code}</p>
+      <div className="mb-6 flex items-start justify-between gap-4 px-6 pt-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-text-primary">{project.name}</h1>
+          <p className="text-sm text-text-secondary">{project.code}</p>
+        </div>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setInsightsHeaderOpen(!insightsHeaderOpen);
+              setMasterDataOpen(false);
+              setMoreDropdownOpen(false);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/45 bg-gold-tint/40 px-3 py-2 text-sm font-semibold text-gold-deep transition-colors hover:border-gold hover:bg-gold-tint"
+            aria-haspopup="menu"
+            aria-expanded={insightsHeaderOpen}
+          >
+            <BarChart3 size={15} strokeWidth={1.75} />
+            Open dashboards
+            <ChevronDown
+              size={14}
+              className={cn("transition-transform duration-200", insightsHeaderOpen && "rotate-180")}
+            />
+          </button>
+          {insightsHeaderOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 rounded-md border border-border bg-surface shadow-lg z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/projects/${projectId}/insights/operational`);
+                  setInsightsHeaderOpen(false);
+                }}
+                className="block w-full rounded-t-md px-4 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover/50 hover:text-text-primary"
+              >
+                Operational
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/projects/${projectId}/insights/field`);
+                  setInsightsHeaderOpen(false);
+                }}
+                className="block w-full px-4 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover/50 hover:text-text-primary"
+              >
+                Field
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/projects/${projectId}/capacity-utilization`);
+                  setInsightsHeaderOpen(false);
+                }}
+                className="block w-full rounded-b-md border-t border-border px-4 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover/50 hover:text-text-primary"
+              >
+                Capacity Utilisation
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="sticky top-0 z-30 border-b border-border bg-ivory px-6">
