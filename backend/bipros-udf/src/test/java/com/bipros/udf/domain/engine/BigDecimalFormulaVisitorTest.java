@@ -2,6 +2,7 @@ package com.bipros.udf.domain.engine;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -164,6 +165,146 @@ class BigDecimalFormulaVisitorTest {
     @DisplayName("String literal returns zero in numeric context")
     void stringLiteralNumericContext() {
         assertThat(eval("\"hello\" + 5", Map.of())).isEqualByComparingTo(bd("5"));
+    }
+
+    @Nested
+    @DisplayName("Math Functions")
+    class MathFunctionsTests {
+
+        @Test
+        @DisplayName("MOD(17, 5) = 2")
+        void mod() {
+            assertThat(eval("MOD(17, 5)", Map.of()))
+                    .isEqualByComparingTo(bd(2));
+        }
+
+        @Test
+        @DisplayName("MOD(10, 0) returns zero default")
+        void modByZero() {
+            assertThat(eval("MOD(10, 0)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("FLOOR(3.7) = 3")
+        void floor() {
+            assertThat(eval("FLOOR(3.7)", Map.of()))
+                    .isEqualByComparingTo(bd(3));
+        }
+
+        @Test
+        @DisplayName("FLOOR(-3.7) = -4")
+        void floorNegative() {
+            assertThat(eval("FLOOR(-3.7)", Map.of()))
+                    .isEqualByComparingTo(bd(-4));
+        }
+
+        @Test
+        @DisplayName("CEILING(3.2) = 4")
+        void ceiling() {
+            assertThat(eval("CEILING(3.2)", Map.of()))
+                    .isEqualByComparingTo(bd(4));
+        }
+
+        @Test
+        @DisplayName("CEILING(-3.2) = -3")
+        void ceilingNegative() {
+            assertThat(eval("CEILING(-3.2)", Map.of()))
+                    .isEqualByComparingTo(bd(-3));
+        }
+
+        @Test
+        @DisplayName("LOG(1) = 0")
+        void log() {
+            assertThat(eval("LOG(1)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("EXP(0) = 1")
+        void exp() {
+            assertThat(eval("EXP(0)", Map.of()))
+                    .isEqualByComparingTo(bd(1));
+        }
+
+        @Test
+        @DisplayName("SIN(0) = 0")
+        void sin() {
+            assertThat(eval("SIN(0)", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("COS(0) = 1")
+        void cos() {
+            assertThat(eval("COS(0)", Map.of()))
+                    .isEqualByComparingTo(bd(1));
+        }
+    }
+
+    @Nested
+    @DisplayName("Constants")
+    class ConstantsTests {
+
+        @Test
+        @DisplayName("PI ≈ 3.14159...")
+        void pi() {
+            assertThat(eval("PI", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.valueOf(Math.PI));
+        }
+
+        @Test
+        @DisplayName("E ≈ 2.71828...")
+        void euler() {
+            assertThat(eval("E", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.valueOf(Math.E));
+        }
+
+        @Test
+        @DisplayName("TRUE = 1")
+        void trueConstant() {
+            assertThat(eval("TRUE", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ONE);
+        }
+
+        @Test
+        @DisplayName("FALSE = 0")
+        void falseConstant() {
+            assertThat(eval("FALSE", Map.of()))
+                    .isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("IF(TRUE, 10, 20) = 10")
+        void ifWithTrue() {
+            assertThat(eval("IF(TRUE, 10, 20)", Map.of()))
+                    .isEqualByComparingTo(bd(10));
+        }
+
+        @Test
+        @DisplayName("IF(FALSE, 10, 20) = 20")
+        void ifWithFalse() {
+            assertThat(eval("IF(FALSE, 10, 20)", Map.of()))
+                    .isEqualByComparingTo(bd(20));
+        }
+    }
+
+    @Nested
+    @DisplayName("String Functions in Numeric Context")
+    class StringFunctionsZeroTests {
+
+        @Test
+        @DisplayName("String functions return 0 in BigDecimal context")
+        void stringFunctionsReturnZero() {
+            assertThat(eval("LEFT(\"hello\", 2)", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(eval("RIGHT(\"hello\", 2)", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(eval("MID(\"hello\", 2, 2)", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(eval("LENGTH(\"hello\")", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(eval("UPPER(\"hello\")", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(eval("LOWER(\"HELLO\")", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(eval("TRIM(\" hello \")", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(eval("SUBSTITUTE(\"a\", \"a\", \"b\")", Map.of())).isEqualByComparingTo(BigDecimal.ZERO);
+        }
     }
 
     private static BigDecimal bd(String val) {
