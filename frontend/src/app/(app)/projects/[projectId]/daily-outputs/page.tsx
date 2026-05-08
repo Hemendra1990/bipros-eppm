@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   dailyActivityResourceOutputApi,
   type CreateDailyActivityResourceOutputRequest,
@@ -74,18 +74,21 @@ export default function DailyOutputsPage() {
         from: fromDate || undefined,
         to: toDate || undefined,
       }),
+    placeholderData: keepPreviousData,
   });
   const outputs: DailyActivityResourceOutputResponse[] = outputsData?.data ?? [];
 
   const { data: activitiesData } = useQuery({
     queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 500),
+    placeholderData: keepPreviousData,
   });
   const activities = activitiesData?.data?.content ?? [];
 
   const { data: resourcesData } = useQuery({
     queryKey: ["resources", "all"],
     queryFn: () => resourceApi.listResources(),
+    placeholderData: keepPreviousData,
   });
   const allResources = resourcesData?.data ?? [];
 

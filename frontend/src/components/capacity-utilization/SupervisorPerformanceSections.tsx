@@ -50,7 +50,9 @@ interface SectionsProps {
   report: SupervisorPerformanceReport;
 }
 
-export function ManpowerUtilizationTable({ rows }: { rows: TradeRollup[] }) {
+const MAX_ROLLUP_ROWS = 50;
+
+function ManpowerUtilizationTableInner({ rows }: { rows: TradeRollup[] }) {
   if (rows.length === 0) {
     return (
       <div className="text-text-muted text-sm py-6 text-center">
@@ -58,8 +60,15 @@ export function ManpowerUtilizationTable({ rows }: { rows: TradeRollup[] }) {
       </div>
     );
   }
+  const visible = rows.slice(0, MAX_ROLLUP_ROWS);
+  const overflow = rows.length - visible.length;
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
+      {overflow > 0 && (
+        <div className="px-3 py-2 bg-warning/10 border-b border-warning/30 text-xs text-warning">
+          Showing first {MAX_ROLLUP_ROWS} of {rows.length} trades. Narrow the date range or pick a supervisor to focus.
+        </div>
+      )}
       <table className="min-w-full text-sm">
         <thead className="bg-surface/50 text-text-secondary text-xs uppercase tracking-wide">
           <tr>
@@ -75,7 +84,7 @@ export function ManpowerUtilizationTable({ rows }: { rows: TradeRollup[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
+          {visible.map((r, i) => (
             <tr
               key={r.tradeKey}
               className="border-t border-border hover:bg-surface/30"
@@ -116,7 +125,9 @@ export function ManpowerUtilizationTable({ rows }: { rows: TradeRollup[] }) {
   );
 }
 
-export function EquipmentUtilizationTable({
+export const ManpowerUtilizationTable = memo(ManpowerUtilizationTableInner);
+
+function EquipmentUtilizationTableInner({
   rows,
 }: {
   rows: EquipmentRollup[];
@@ -128,8 +139,15 @@ export function EquipmentUtilizationTable({
       </div>
     );
   }
+  const visible = rows.slice(0, MAX_ROLLUP_ROWS);
+  const overflow = rows.length - visible.length;
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
+      {overflow > 0 && (
+        <div className="px-3 py-2 bg-warning/10 border-b border-warning/30 text-xs text-warning">
+          Showing first {MAX_ROLLUP_ROWS} of {rows.length} equipment rows. Narrow the date range or pick a supervisor to focus.
+        </div>
+      )}
       <table className="min-w-full text-sm">
         <thead className="bg-surface/50 text-text-secondary text-xs uppercase tracking-wide">
           <tr>
@@ -145,7 +163,7 @@ export function EquipmentUtilizationTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
+          {visible.map((r, i) => (
             <tr
               key={r.equipmentKey}
               className="border-t border-border hover:bg-surface/30"
@@ -185,6 +203,8 @@ export function EquipmentUtilizationTable({
     </div>
   );
 }
+
+export const EquipmentUtilizationTable = memo(EquipmentUtilizationTableInner);
 
 function NormsCell({ norms }: { norms: ProductivityNorms }) {
   return (
