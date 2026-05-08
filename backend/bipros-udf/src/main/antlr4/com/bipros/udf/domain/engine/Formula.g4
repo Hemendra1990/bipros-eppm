@@ -70,14 +70,19 @@ functionCall
     | EXP LPAREN expression RPAREN
     | SIN LPAREN expression RPAREN
     | COS LPAREN expression RPAREN
+    | AVERAGE LPAREN expression (COMMA expression)* RPAREN
+    | COUNT LPAREN expression (COMMA expression)* RPAREN
+    | STDEV LPAREN expression (COMMA expression)* RPAREN
+    | MEDIAN LPAREN expression (COMMA expression)* RPAREN
+    | PERCENTILE LPAREN expression (COMMA expression)* RPAREN
     ;
 
 variableRef
-    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE)
+    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE)
     ;
 
 bracketRef
-    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE) RBRACKET
+    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE) RBRACKET
     ;
 
 stringLiteral
@@ -126,6 +131,13 @@ PI         : [Pp][Ii] ;
 EULER      : [Ee] ;
 TRUE       : [Tt][Rr][Uu][Ee] ;
 FALSE      : [Ff][Aa][Ll][Ss][Ee] ;
+
+// Statistical functions
+AVERAGE    : [Aa][Vv][Ee][Rr][Aa][Gg][Ee] ;
+COUNT      : [Cc][Oo][Uu][Nn][Tt] ;
+STDEV      : [Ss][Tt][Dd][Ee][Vv] ;
+MEDIAN     : [Mm][Ee][Dd][Ii][Aa][Nn] ;
+PERCENTILE : [Pp][Ee][Rr][Cc][Ee][Nn][Tt][Ii][Ll][Ee] ;
 
 LPAREN  : '(' ;
 RPAREN  : ')' ;
