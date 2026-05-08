@@ -16,6 +16,16 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
     private final RoundingMode roundingMode;
     private final BigDecimal zeroDefault;
 
+    /**
+     * Creates a new visitor with the given evaluation context and arithmetic settings.
+     *
+     * @param context     map of variable names to their {@link BigDecimal} values;
+     *                    may be {@code null}, in which case an empty map is used
+     * @param scale       the scale to use for division and power results
+     * @param roundingMode the rounding mode to apply for division and power results
+     * @param zeroDefault the value to return on division by zero;
+     *                    may be {@code null}, in which case {@link BigDecimal#ZERO} is used
+     */
     public BigDecimalFormulaVisitor(Map<String, BigDecimal> context,
                                      int scale, RoundingMode roundingMode,
                                      BigDecimal zeroDefault) {
@@ -25,6 +35,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         this.zeroDefault = zeroDefault != null ? zeroDefault : BigDecimal.ZERO;
     }
 
+    /**
+     * Evaluates a logical OR expression.
+     *
+     * @param ctx the parse tree context
+     * @return {@link BigDecimal#ONE} if any operand is true, otherwise {@link BigDecimal#ZERO}
+     */
     @Override
     public BigDecimal visitOrExpr(FormulaParser.OrExprContext ctx) {
         BigDecimal left = visit(ctx.andExpr(0));
@@ -35,6 +51,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return left;
     }
 
+    /**
+     * Evaluates a logical AND expression.
+     *
+     * @param ctx the parse tree context
+     * @return {@link BigDecimal#ONE} if all operands are true, otherwise {@link BigDecimal#ZERO}
+     */
     @Override
     public BigDecimal visitAndExpr(FormulaParser.AndExprContext ctx) {
         BigDecimal left = visit(ctx.comparisonExpr(0));
@@ -45,6 +67,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return left;
     }
 
+    /**
+     * Evaluates a comparison expression (==, !=, &lt;, &gt;, &lt;=, &gt;=).
+     *
+     * @param ctx the parse tree context
+     * @return {@link BigDecimal#ONE} if the comparison holds, otherwise {@link BigDecimal#ZERO}
+     */
     @Override
     public BigDecimal visitComparisonExpr(FormulaParser.ComparisonExprContext ctx) {
         if (ctx.EQ() != null) {
@@ -74,6 +102,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return visit(ctx.additiveExpr(0));
     }
 
+    /**
+     * Evaluates an additive expression (+ or -).
+     *
+     * @param ctx the parse tree context
+     * @return the result of the addition or subtraction
+     */
     @Override
     public BigDecimal visitAdditiveExpr(FormulaParser.AdditiveExprContext ctx) {
         BigDecimal result = visit(ctx.multiplicativeExpr(0));
@@ -87,12 +121,19 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return result;
     }
 
+    /**
+     * Evaluates a multiplicative expression (* or /).
+     *
+     * @param ctx the parse tree context
+     * @return the result of the multiplication or division
+     */
     @Override
     public BigDecimal visitMultiplicativeExpr(FormulaParser.MultiplicativeExprContext ctx) {
         BigDecimal result = visit(ctx.unaryExpr(0));
         for (int i = 1; i < ctx.unaryExpr().size(); i++) {
             if (ctx.MUL(i - 1) != null) {
-                result = result.multiply(visit(ctx.unaryExpr(i)));
+                result = result.multiply(visit(ctx.unaryExpr(i)))
+                        .setScale(scale, roundingMode);
             } else {
                 BigDecimal divisor = visit(ctx.unaryExpr(i));
                 if (divisor.compareTo(BigDecimal.ZERO) == 0) {
@@ -105,6 +146,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return result;
     }
 
+    /**
+     * Evaluates a unary expression (+, -, or NOT).
+     *
+     * @param ctx the parse tree context
+     * @return the negated, identity, or boolean-inverted value
+     */
     @Override
     public BigDecimal visitUnaryExpr(FormulaParser.UnaryExprContext ctx) {
         if (ctx.MINUS() != null) {
@@ -119,6 +166,13 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return visit(ctx.primary());
     }
 
+    /**
+     * Evaluates a primary expression (function call, nested expression, variable,
+     * bracket reference, string literal, or number literal).
+     *
+     * @param ctx the parse tree context
+     * @return the evaluated {@link BigDecimal} value
+     */
     @Override
     public BigDecimal visitPrimary(FormulaParser.PrimaryContext ctx) {
         if (ctx.functionCall() != null) {
@@ -142,9 +196,18 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return BigDecimal.ZERO;
     }
 
+    /**
+     * Evaluates a built-in function call (IF, MAX, MIN, ABS, ROUND, POWER, SQRT, SUM).
+     *
+     * @param ctx the parse tree context
+     * @return the function result, or {@link BigDecimal#ZERO} if arguments are missing
+     */
     @Override
     public BigDecimal visitFunctionCall(FormulaParser.FunctionCallContext ctx) {
         if (ctx.IF() != null) {
+            if (ctx.expression().size() < 3) {
+                return BigDecimal.ZERO;
+            }
             return toBoolean(visit(ctx.expression(0)))
                     ? visit(ctx.expression(1))
                     : visit(ctx.expression(2));
@@ -162,20 +225,32 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
                     .orElse(BigDecimal.ZERO);
         }
         if (ctx.ABS() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
             return visit(ctx.expression(0)).abs();
         }
         if (ctx.ROUND() != null) {
+            if (ctx.expression().size() < 2) {
+                return BigDecimal.ZERO;
+            }
             BigDecimal val = visit(ctx.expression(0));
             int places = visit(ctx.expression(1)).intValue();
             return val.setScale(places, roundingMode);
         }
         if (ctx.POWER() != null) {
+            if (ctx.expression().size() < 2) {
+                return BigDecimal.ZERO;
+            }
             BigDecimal base = visit(ctx.expression(0));
             BigDecimal exp = visit(ctx.expression(1));
             return BigDecimal.valueOf(Math.pow(base.doubleValue(), exp.doubleValue()))
                     .setScale(scale, roundingMode);
         }
         if (ctx.SQRT() != null) {
+            if (ctx.expression().isEmpty()) {
+                return BigDecimal.ZERO;
+            }
             BigDecimal val = visit(ctx.expression(0));
             return BigDecimal.valueOf(Math.sqrt(val.doubleValue()))
                     .setScale(scale, roundingMode);
@@ -188,6 +263,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return BigDecimal.ZERO;
     }
 
+    /**
+     * Resolves a variable reference (e.g. {@code $var}).
+     *
+     * @param ctx the parse tree context
+     * @return the variable value, or {@link BigDecimal#ZERO} if not found
+     */
     @Override
     public BigDecimal visitVariableRef(FormulaParser.VariableRefContext ctx) {
         String name = ctx.getText(); // This includes the $ prefix
@@ -198,6 +279,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    /**
+     * Resolves a bracket reference (e.g. {@code [var]}).
+     *
+     * @param ctx the parse tree context
+     * @return the referenced value, or {@link BigDecimal#ZERO} if not found
+     */
     @Override
     public BigDecimal visitBracketRef(FormulaParser.BracketRefContext ctx) {
         String name = ctx.getText();
@@ -208,6 +295,13 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    /**
+     * Parses a numeric literal.
+     *
+     * @param ctx the parse tree context
+     * @return the {@link BigDecimal} value of the literal, or {@link BigDecimal#ZERO}
+     *         if parsing fails
+     */
     @Override
     public BigDecimal visitNumberLiteral(FormulaParser.NumberLiteralContext ctx) {
         String text = ctx.getText();
@@ -218,6 +312,12 @@ public class BigDecimalFormulaVisitor extends FormulaBaseVisitor<BigDecimal> {
         }
     }
 
+    /**
+     * Converts a {@link BigDecimal} to a boolean.
+     *
+     * @param value the value to convert; may be {@code null}
+     * @return {@code true} if the value is non-null and non-zero, otherwise {@code false}
+     */
     private boolean toBoolean(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) != 0;
     }
