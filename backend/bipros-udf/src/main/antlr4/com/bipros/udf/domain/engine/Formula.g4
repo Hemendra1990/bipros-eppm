@@ -78,14 +78,21 @@ functionCall
     | SUMIF LPAREN expression (COMMA expression)+ RPAREN
     | COUNTIF LPAREN expression (COMMA expression)+ RPAREN
     | AVERAGEIF LPAREN expression (COMMA expression)+ RPAREN
+    | TODAY LPAREN RPAREN
+    | DATEDIFF LPAREN expression COMMA expression RPAREN
+    | DAYSOFMONTH LPAREN expression RPAREN
+    | YEAR LPAREN expression RPAREN
+    | MONTH LPAREN expression RPAREN
+    | LOOKUP LPAREN expression (COMMA expression)+ RPAREN
+    | INDEX LPAREN expression (COMMA expression)+ RPAREN
     ;
 
 variableRef
-    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE | SUMIF | COUNTIF | AVERAGEIF)
+    : DOLLAR (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE | SUMIF | COUNTIF | AVERAGEIF | TODAY | DATEDIFF | DAYSOFMONTH | YEAR | MONTH | LOOKUP | INDEX)
     ;
 
 bracketRef
-    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE | SUMIF | COUNTIF | AVERAGEIF) RBRACKET
+    : LBRACKET (IDENTIFIER | IF | MAX | MIN | ABS | ROUND | POWER | SQRT | SUM | CONCAT | AND | OR | NOT | LEFT | RIGHT | MID | LENGTH | UPPER | LOWER | TRIM | SUBSTITUTE | MOD | FLOOR | CEILING | LOG | EXP | SIN | COS | PI | EULER | TRUE | FALSE | AVERAGE | COUNT | STDEV | MEDIAN | PERCENTILE | SUMIF | COUNTIF | AVERAGEIF | TODAY | DATEDIFF | DAYSOFMONTH | YEAR | MONTH | LOOKUP | INDEX) RBRACKET
     ;
 
 stringLiteral
@@ -146,6 +153,17 @@ PERCENTILE : [Pp][Ee][Rr][Cc][Ee][Nn][Tt][Ii][Ll][Ee] ;
 SUMIF     : [Ss][Uu][Mm][Ii][Ff] ;
 COUNTIF   : [Cc][Oo][Uu][Nn][Tt][Ii][Ff] ;
 AVERAGEIF : [Aa][Vv][Ee][Rr][Aa][Gg][Ee][Ii][Ff] ;
+
+// Date/Time functions
+TODAY      : [Tt][Oo][Dd][Aa][Yy] ;
+DATEDIFF   : [Dd][Aa][Tt][Ee][Dd][Ii][Ff][Ff] ;
+DAYSOFMONTH: [Dd][Aa][Yy][Ss][Oo][Ff][Mm][Oo][Nn][Tt][Hh] ;
+YEAR       : [Yy][Ee][Aa][Rr] ;
+MONTH      : [Mm][Oo][Nn][Tt][Hh] ;
+
+// Lookup/Reference functions
+LOOKUP     : [Ll][Oo][Oo][Kk][Uu][Pp] ;
+INDEX      : [Ii][Nn][Dd][Ee][Xx] ;
 
 LPAREN  : '(' ;
 RPAREN  : ')' ;
