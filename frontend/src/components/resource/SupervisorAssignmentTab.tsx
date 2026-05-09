@@ -8,6 +8,14 @@ import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
 import { projectResourceApi } from "@/lib/api/projectResourceApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getErrorMessage } from "@/lib/utils/error";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 /**
  * Bulk-assign one supervisor (Manpower / Labor) across many activities. Sister to the
@@ -30,6 +38,7 @@ export function SupervisorAssignmentTab({ projectId }: { projectId: string }) {
   const [checkedActivityIds, setCheckedActivityIds] = useState<Set<string>>(new Set());
   // Once the user manually changes checkboxes, we stop auto-resetting on supervisor change.
   const [userTouched, setUserTouched] = useState(false);
+  const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false);
 
   const { data: poolData, isLoading: isLoadingPool } = useQuery({
     queryKey: ["resource-pool", projectId],
@@ -151,12 +160,8 @@ export function SupervisorAssignmentTab({ projectId }: { projectId: string }) {
 
   const handleSave = () => {
     if (replaceConflicts.length > 0) {
-      const msg = `${replaceConflicts.length} ${
-        replaceConflicts.length === 1 ? "activity has" : "activities have"
-      } a different supervisor already. Saving will replace ${
-        replaceConflicts.length === 1 ? "it" : "them"
-      }. Continue?`;
-      if (!window.confirm(msg)) return;
+      setConfirmReplaceOpen(true);
+      return;
     }
     saveMutation.mutate();
   };
@@ -310,6 +315,45 @@ export function SupervisorAssignmentTab({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={confirmReplaceOpen}
+        onOpenChange={(next) => setConfirmReplaceOpen(next)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Replace existing supervisor?</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <p>
+              {replaceConflicts.length}{" "}
+              {replaceConflicts.length === 1 ? "activity has" : "activities have"} a
+              different supervisor already. Saving will replace{" "}
+              {replaceConflicts.length === 1 ? "it" : "them"} with{" "}
+              <span className="font-semibold text-charcoal">{supervisorName}</span>.
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setConfirmReplaceOpen(false)}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmReplaceOpen(false);
+                saveMutation.mutate();
+              }}
+              className="rounded-md bg-warning px-4 py-2 text-sm font-medium text-text-primary hover:bg-warning/80"
+            >
+              Replace &amp; save
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* RIGHT panel — activities table */}
       <div className="rounded-lg border border-border bg-surface/50 shadow-sm">

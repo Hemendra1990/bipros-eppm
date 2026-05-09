@@ -9,6 +9,7 @@ import { resourceApi, type ResourceAssignmentResponse } from "@/lib/api/resource
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
 import { ResourceAssignmentForm } from "@/components/resource/ResourceAssignmentForm";
+import { SetSupervisorDialog } from "@/components/activity/SetSupervisorDialog";
 
 interface Props {
   open: boolean;
@@ -96,6 +97,7 @@ function DrawerInner({
   onClose: () => void;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [supervisorOpen, setSupervisorOpen] = useState(false);
 
   return (
     <>
@@ -169,10 +171,17 @@ function DrawerInner({
                 </div>
                 <div>
                   <dt className="text-text-muted">Supervisor</dt>
-                  <dd className="text-text-primary">
-                    {activity.responsibleResourceName ?? (
-                      <span className="text-text-muted">—</span>
-                    )}
+                  <dd>
+                    <button
+                      type="button"
+                      onClick={() => setSupervisorOpen(true)}
+                      className="rounded-md border border-border px-2 py-0.5 text-sm text-text-primary hover:bg-surface-hover"
+                      title="Click to set or change supervisor"
+                    >
+                      {activity.responsibleResourceName ?? (
+                        <span className="text-text-muted">— Set —</span>
+                      )}
+                    </button>
                   </dd>
                 </div>
               </dl>
@@ -235,6 +244,13 @@ function DrawerInner({
           <ExternalLink size={14} />
         </Link>
       </footer>
+
+      <SetSupervisorDialog
+        open={supervisorOpen}
+        onClose={() => setSupervisorOpen(false)}
+        projectId={projectId}
+        activity={activity}
+      />
     </>
   );
 }

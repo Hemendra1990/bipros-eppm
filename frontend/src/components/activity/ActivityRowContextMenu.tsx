@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Pencil,
   Trash2,
+  UserCheck,
 } from "lucide-react";
 import type { ActivityResponse } from "@/lib/api/activityApi";
 import type { ResourceKind } from "./QuickAssignResourceDialog";
@@ -32,6 +33,7 @@ interface Props {
   onComplete: (activity: ActivityResponse) => void;
   onEdit: (activity: ActivityResponse) => void;
   onDelete: (activity: ActivityResponse) => void;
+  onSetSupervisor: (activity: ActivityResponse) => void;
 }
 
 const MENU_WIDTH = 220;
@@ -51,6 +53,7 @@ export function ActivityRowContextMenu({
   onComplete,
   onEdit,
   onDelete,
+  onSetSupervisor,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +123,12 @@ export function ActivityRowContextMenu({
       label: "Assign Equipment",
       icon: <Wrench size={14} />,
       onClick: () => onAssign(activity, "EQUIPMENT"),
+    },
+    {
+      key: "set-supervisor",
+      label: "Set supervisor",
+      icon: <UserCheck size={14} />,
+      onClick: () => onSetSupervisor(activity),
     },
     { key: "d2", divider: true },
     {

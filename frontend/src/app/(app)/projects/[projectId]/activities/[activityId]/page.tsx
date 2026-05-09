@@ -28,6 +28,7 @@ import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
 import { ResourceAssignmentForm } from "@/components/resource/ResourceAssignmentForm";
+import { SetSupervisorDialog } from "@/components/activity/SetSupervisorDialog";
 import type { ExpenseResponse } from "@/lib/types";
 
 // Heavy children deferred so the initial paint of the detail page is cheap —
@@ -389,6 +390,7 @@ function ViewMode({
   const [dialogAssignment, setDialogAssignment] = useState<ResourceAssignmentResponse | null>(null);
   const [dialogMode, setDialogMode] = useState<"staff" | "swap">("staff");
   const [showAssignForm, setShowAssignForm] = useState(false);
+  const [supervisorDialogOpen, setSupervisorDialogOpen] = useState(false);
 
   const openStaffDialog = (assignment: ResourceAssignmentResponse) => {
     setDialogAssignment(assignment);
@@ -533,11 +535,29 @@ function ViewMode({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         {stat(
           "Supervisor",
-          activity.responsibleResourceName ?? (
-            <span className="text-text-muted text-sm">— not set —</span>
-          )
+          <span className="flex items-center gap-2">
+            <span className="truncate">
+              {activity.responsibleResourceName ?? (
+                <span className="text-text-muted text-sm font-normal">— not set —</span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSupervisorDialogOpen(true)}
+              className="rounded-md border border-border px-2 py-0.5 text-xs font-medium text-text-secondary hover:bg-surface-hover"
+            >
+              Change
+            </button>
+          </span>
         )}
       </div>
+
+      <SetSupervisorDialog
+        open={supervisorDialogOpen}
+        onClose={() => setSupervisorDialogOpen(false)}
+        projectId={projectId}
+        activity={activity}
+      />
 
       {/* Dates Panel */}
       <div className="rounded-lg border border-border bg-surface/50 p-4">

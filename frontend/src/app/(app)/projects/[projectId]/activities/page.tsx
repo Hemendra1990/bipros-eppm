@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { List, FolderTree, Play, AlertTriangle, Sparkles, Columns3 } from "lucide-react";
+import { List, FolderTree, Play, AlertTriangle, Sparkles, Columns3, UserCheck } from "lucide-react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
@@ -24,6 +24,8 @@ import {
   QuickAssignResourceDialog,
   type ResourceKind,
 } from "@/components/activity/QuickAssignResourceDialog";
+import { SetSupervisorDialog } from "@/components/activity/SetSupervisorDialog";
+import { AssignSupervisorDrawer } from "@/components/activity/AssignSupervisorDrawer";
 import {
   Dialog,
   DialogContent,
@@ -91,6 +93,8 @@ export default function ActivitiesPage() {
     { activity: ActivityResponse; kind: ResourceKind } | null
   >(null);
   const [deleteTarget, setDeleteTarget] = useState<ActivityResponse | null>(null);
+  const [supervisorTarget, setSupervisorTarget] = useState<ActivityResponse | null>(null);
+  const [bulkSupervisorOpen, setBulkSupervisorOpen] = useState(false);
 
   const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
   const markScheduleFresh = useScheduleStaleStore((s) => s.markScheduleFresh);
@@ -350,6 +354,14 @@ export default function ActivitiesPage() {
         description="View and manage project activities"
         actions={
           <div className="flex gap-2">
+            <button
+              onClick={() => setBulkSupervisorOpen(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-active"
+              title="Bulk-assign one supervisor across many activities"
+            >
+              <UserCheck size={16} />
+              Assign Supervisor
+            </button>
             <button
               onClick={() => setShowAiDialog(true)}
               className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
@@ -623,6 +635,7 @@ export default function ActivitiesPage() {
           selectedActivityId={selectedActivityId}
           onRowClick={handleRowClick}
           onRowContextMenu={handleRowContextMenu}
+          onSetSupervisor={(a) => setSupervisorTarget(a)}
         />
       )}
 
@@ -661,8 +674,22 @@ export default function ActivitiesPage() {
           onComplete={complete}
           onEdit={handleEditFromMenu}
           onDelete={(a) => setDeleteTarget(a)}
+          onSetSupervisor={(a) => setSupervisorTarget(a)}
         />
       )}
+
+      <SetSupervisorDialog
+        open={!!supervisorTarget}
+        onClose={() => setSupervisorTarget(null)}
+        projectId={projectId}
+        activity={supervisorTarget}
+      />
+
+      <AssignSupervisorDrawer
+        open={bulkSupervisorOpen}
+        onClose={() => setBulkSupervisorOpen(false)}
+        projectId={projectId}
+      />
 
       {quickAssign && (
         <QuickAssignResourceDialog
@@ -739,6 +766,7 @@ function ActivitiesListTable({
   selectedActivityId,
   onRowClick,
   onRowContextMenu,
+  onSetSupervisor,
 }: {
   activities: ActivityResponse[];
   relationships: Array<{ id?: string; predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
@@ -760,6 +788,7 @@ function ActivitiesListTable({
   selectedActivityId: string | null;
   onRowClick: (a: ActivityResponse) => void;
   onRowContextMenu: (a: ActivityResponse, x: number, y: number) => void;
+  onSetSupervisor: (a: ActivityResponse) => void;
 }) {
   // Build dependency count map
   const predCountMap = new Map<string, number>();
@@ -1042,8 +1071,20 @@ function ActivitiesListTable({
                       </td>
                     );
                   })()}
-                  <td className="px-4 py-4 text-sm whitespace-nowrap text-text-secondary">
-                    {activity.responsibleResourceName ?? <span className="text-text-muted">—</span>}
+                  <td
+                    className="px-4 py-4 text-sm whitespace-nowrap"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onSetSupervisor(activity)}
+                      className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-surface-hover"
+                      title="Click to set or change supervisor"
+                    >
+                      {activity.responsibleResourceName ?? (
+                        <span className="text-text-muted">— Set —</span>
+                      )}
+                    </button>
                   </td>
                   <td
                     className="px-4 py-4 text-sm whitespace-nowrap"
