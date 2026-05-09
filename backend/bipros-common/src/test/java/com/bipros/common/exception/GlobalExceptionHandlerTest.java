@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.http.MockHttpInputMessage;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -156,7 +157,7 @@ class GlobalExceptionHandlerTest {
             ReflectionTestUtils.setField(handler, "includeExceptionDetail", false);
             RuntimeException ex = new IllegalStateException("something deep broke");
 
-            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex);
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex, new MockHttpServletResponse());
 
             assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             ApiError err = resp.getBody().error();
@@ -173,13 +174,28 @@ class GlobalExceptionHandlerTest {
             ReflectionTestUtils.setField(handler, "includeExceptionDetail", true);
             RuntimeException ex = new IllegalStateException("something deep broke");
 
-            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex);
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex, new MockHttpServletResponse());
 
             assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             ApiError err = resp.getBody().error();
             assertThat(err.code()).isEqualTo("INTERNAL_ERROR");
             assertThat(err.message()).contains("IllegalStateException");
             assertThat(err.message()).contains("something deep broke");
+        }
+
+        @Test
+        @DisplayName("response already committed: returns null to suppress body write")
+        void committedResponse_suppressesBody() {
+            ReflectionTestUtils.setField(handler, "includeExceptionDetail", true);
+            MockHttpServletResponse committed = new MockHttpServletResponse();
+            committed.setCommitted(true);
+
+            ResponseEntity<ApiResponse<Void>> resp =
+                    handler.handleGeneral(new IllegalStateException("late SSE failure"), committed);
+
+            // null return → @RestControllerAdvice skips body negotiation, which
+            // is the only safe behavior once an SSE stream is mid-flight.
+            assertThat(resp).isNull();
         }
     }
 }

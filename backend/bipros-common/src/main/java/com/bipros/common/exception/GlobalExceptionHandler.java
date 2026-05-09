@@ -16,8 +16,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
 @Slf4j
@@ -185,8 +187,38 @@ public class GlobalExceptionHandler {
                 "HTTP method '" + ex.getMethod() + "' is not supported for this endpoint"));
     }
 
+    /**
+     * Client closed the SSE / async response mid-stream (browser tab closed,
+     * Playwright killed, network drop, server-side timeout). Spring wraps the
+     * underlying Tomcat ClientAbortException in AsyncRequestNotUsableException
+     * and re-enters the dispatcher; if we let that propagate to {@link
+     * #handleGeneral} it tries to write an {@code ApiResponse} JSON body to a
+     * response whose Content-Type is already {@code text/event-stream}, which
+     * fails with {@code HttpMessageNotWritableException} and pollutes the log
+     * with two stack traces per disconnect.
+     *
+     * Returning {@code void} from a handler skips response-body negotiation
+     * entirely. The TCP connection is gone — there is no client to write to.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncResponseClosed(AsyncRequestNotUsableException ex) {
+        if (log.isDebugEnabled()) {
+            log.debug("SSE/async client disconnected before stream completed: {}", ex.getMessage());
+        }
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex, HttpServletResponse response) {
+        // If the response is already committed (e.g. SSE has flushed
+        // headers + some events) we can't change the status or write a JSON
+        // body — the underlying socket has half-written content. Trying
+        // would produce "HttpMessageNotWritableException: No converter for
+        // [class ApiResponse] with preset Content-Type 'text/event-stream'".
+        // Log once and bail.
+        if (response.isCommitted()) {
+            log.warn("Unexpected error after response committed (suppressing body write): {}", ex.toString());
+            return null;
+        }
         log.error("Unexpected error", ex);
         String message = "An unexpected error occurred";
         if (includeExceptionDetail) {
