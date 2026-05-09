@@ -187,25 +187,38 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       key: "budgetedUnits",
       label: "Budgeted Units",
       sortable: true,
-      render: (value) => (value == null ? "—" : Number(value).toFixed(2)),
+      render: (value, row) => {
+        if (value == null) return "—";
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     {
       key: "plannedUnits",
       label: "Planned Units",
       sortable: true,
-      render: (value) => Number(value).toFixed(2),
+      render: (value, row) => {
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     {
       key: "actualUnits",
       label: "Actual Units",
       sortable: true,
-      render: (value) => Number(value).toFixed(2),
+      render: (value, row) => {
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     {
       key: "remainingUnits",
       label: "Remaining Units",
       sortable: true,
-      render: (value) => Number(value).toFixed(2),
+      render: (value, row) => {
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     { key: "rateType", label: "Rate Type", sortable: true },
     {

@@ -164,7 +164,12 @@ public class ResourceAssignmentService {
         ? null
         : roleRepository.findById(effectiveRoleId).orElse(null);
     String effectiveRoleName = effectiveRole == null ? null : effectiveRole.getName();
-    String unit = effectiveRole == null ? null : effectiveRole.getProductivityUnit();
+    // Prefer the resource's own unit (snapshotted from its rate master). This way the assignment
+    // grid auto-reflects rate-master unit changes via the existing Phase 3 sync chain. Fall back
+    // to the role's productivityUnit only when there's no resource (role-only / unstaffed slots).
+    String unit = (resource != null && resource.getUnit() != null && !resource.getUnit().isBlank())
+        ? resource.getUnit()
+        : (effectiveRole == null ? null : effectiveRole.getProductivityUnit());
 
     return ResourceAssignmentResponse.from(a, rn, an, ron, effectiveRoleId, effectiveRoleName, unit);
   }
@@ -568,6 +573,53 @@ public class ResourceAssignmentService {
     ResourceAssignmentResponse response = hydrate(updated);
     auditService.logUpdate("ResourceAssignment", id, "assignment", assignment, response);
     return response;
+  }
+
+  /**
+   * Recomputes planned/actual/remaining/at-completion cost on every {@link ResourceAssignment}
+   * referencing a given resource, across every project. Called after a Resource's
+   * {@code costPerUnit} or {@code unit} changes — directly, or via {@code RateMasterSyncService}
+   * when an upstream rate-master row is edited.
+   *
+   * <p>The two-tier resolution chain in {@link #computePlannedCost} is honoured: assignments
+   * whose project pool entry has a {@code rateOverride} keep that override (the recompute
+   * resolves to the same value). Only assignments that fall back to {@code Resource.costPerUnit}
+   * actually change.
+   */
+  public int recomputeAssignmentsForResource(UUID resourceId) {
+    if (resourceId == null) return 0;
+    List<ResourceAssignment> assignments = assignmentRepository.findByResourceId(resourceId);
+    int updated = 0;
+    for (ResourceAssignment a : assignments) {
+      BigDecimal newPlanned = computePlannedCost(a.getProjectId(), resourceId, a.getPlannedUnits());
+      BigDecimal actualRate = resolveActualRate(a.getProjectId(), resourceId);
+      BigDecimal newActual = (actualRate != null && a.getActualUnits() != null)
+          ? actualRate.multiply(BigDecimal.valueOf(a.getActualUnits()))
+          : null;
+      BigDecimal newRemaining = (actualRate != null && a.getRemainingUnits() != null)
+          ? actualRate.multiply(BigDecimal.valueOf(a.getRemainingUnits()))
+          : null;
+      BigDecimal newEac = (newActual != null && newRemaining != null)
+          ? newActual.add(newRemaining)
+          : newActual != null ? newActual : newRemaining;
+
+      boolean changed = !Objects.equals(newPlanned, a.getPlannedCost())
+          || !Objects.equals(newActual, a.getActualCost())
+          || !Objects.equals(newRemaining, a.getRemainingCost())
+          || !Objects.equals(newEac, a.getAtCompletionCost());
+      if (changed) {
+        a.setPlannedCost(newPlanned);
+        a.setActualCost(newActual);
+        a.setRemainingCost(newRemaining);
+        a.setAtCompletionCost(newEac);
+        assignmentRepository.save(a);
+        updated++;
+      }
+    }
+    if (updated > 0) {
+      log.info("Resource cost recompute: resourceId={}, assignmentsUpdated={}", resourceId, updated);
+    }
+    return updated;
   }
 
   public int recomputeProjectCosts(UUID projectId) {

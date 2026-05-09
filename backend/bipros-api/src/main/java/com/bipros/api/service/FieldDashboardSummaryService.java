@@ -9,6 +9,9 @@ import com.bipros.project.domain.model.DprManpower;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.DprEquipmentRepository;
 import com.bipros.project.domain.repository.DprManpowerRepository;
+import com.bipros.resource.domain.model.MaterialStock;
+import com.bipros.resource.domain.model.StockStatusTag;
+import com.bipros.resource.domain.repository.MaterialStockRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,6 +52,7 @@ public class FieldDashboardSummaryService {
   private final DprManpowerRepository dprManpowerRepository;
   private final DprEquipmentRepository dprEquipmentRepository;
   private final ActivityRepository activityRepository;
+  private final MaterialStockRepository materialStockRepository;
 
   // ---------- Response shapes ----------
 
@@ -60,7 +64,10 @@ public class FieldDashboardSummaryService {
       double operatingHours4d,
       int safetyIncidents,
       List<ActiveSite> activeSites,
-      List<DailyWorklog> dailyWorklogs
+      List<DailyWorklog> dailyWorklogs,
+      double stockAvailabilityPct,
+      int reorderBreachCount,
+      int stockTrackedMaterialCount
   ) {}
 
   public record ActiveSite(
@@ -90,7 +97,8 @@ public class FieldDashboardSummaryService {
   public FieldSummaryResponse getSummary(UUID projectId, LocalDate asOfDateParam) {
     LocalDate asOfDate = resolveAsOfDate(projectId, asOfDateParam);
     if (asOfDate == null) {
-      return new FieldSummaryResponse(projectId, null, 0, 0, 0d, 0, List.of(), List.of());
+      return new FieldSummaryResponse(
+          projectId, null, 0, 0, 0d, 0, List.of(), List.of(), 0d, 0, 0);
     }
 
     // ---- Top-strip: workers + equipment counts on the as-of date ----
@@ -129,6 +137,9 @@ public class FieldDashboardSummaryService {
     // ---- Per-day worklogs (trailing 4 days, oldest → newest) ----
     List<DailyWorklog> dailyWorklogs = computeDailyWorklogs(asOfDate, dprsWindow);
 
+    // ---- Stock availability + re-order breach (KPI quick wins) ----
+    StockSnapshot stock = computeStockSnapshot(projectId);
+
     return new FieldSummaryResponse(
         projectId,
         asOfDate,
@@ -137,7 +148,37 @@ public class FieldDashboardSummaryService {
         round2(operatingHours4d),
         safetyIncidents,
         activeSites,
-        dailyWorklogs);
+        dailyWorklogs,
+        stock.availabilityPct(),
+        stock.breachCount(),
+        stock.totalTracked());
+  }
+
+  /**
+   * Roll up {@code material_stock} status tags for the project.
+   * <ul>
+   *   <li>Stock Availability % = OK rows ÷ total tracked × 100</li>
+   *   <li>Re-Order Breach Count = LOW + CRITICAL rows</li>
+   * </ul>
+   */
+  private record StockSnapshot(double availabilityPct, int breachCount, int totalTracked) {}
+
+  private StockSnapshot computeStockSnapshot(UUID projectId) {
+    List<MaterialStock> stocks = materialStockRepository.findByProjectId(projectId);
+    if (stocks.isEmpty()) return new StockSnapshot(0d, 0, 0);
+    int ok = 0;
+    int breach = 0;
+    for (MaterialStock s : stocks) {
+      StockStatusTag tag = s.getStockStatusTag();
+      if (tag == null) continue;
+      switch (tag) {
+        case OK -> ok++;
+        case LOW, CRITICAL -> breach++;
+      }
+    }
+    int total = stocks.size();
+    double pct = total > 0 ? (double) ok / total : 0d;
+    return new StockSnapshot(round4(pct), breach, total);
   }
 
   /**
@@ -303,5 +344,9 @@ public class FieldDashboardSummaryService {
 
   private static double round2(double v) {
     return BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP).doubleValue();
+  }
+
+  private static double round4(double v) {
+    return BigDecimal.valueOf(v).setScale(4, RoundingMode.HALF_UP).doubleValue();
   }
 }

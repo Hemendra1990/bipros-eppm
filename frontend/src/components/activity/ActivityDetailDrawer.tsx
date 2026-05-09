@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { X, ExternalLink, Plus } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { X, ExternalLink, Plus, RefreshCw } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { activityApi } from "@/lib/api/activityApi";
 import { resourceApi, type ResourceAssignmentResponse } from "@/lib/api/resourceApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
 import { ResourceAssignmentForm } from "@/components/resource/ResourceAssignmentForm";
 import { SetSupervisorDialog } from "@/components/activity/SetSupervisorDialog";
+import { getErrorMessage } from "@/lib/utils/error";
 
 interface Props {
   open: boolean;
@@ -98,6 +100,25 @@ function DrawerInner({
 }) {
   const [showForm, setShowForm] = useState(false);
   const [supervisorOpen, setSupervisorOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const recomputeMutation = useMutation({
+    mutationFn: () => resourceApi.recomputeProjectAssignmentCosts(projectId),
+    onSuccess: (resp) => {
+      const updated = resp.data?.updated ?? 0;
+      toast.success(
+        updated > 0
+          ? `Recomputed costs — ${updated} assignment${updated === 1 ? "" : "s"} updated`
+          : "Recompute complete — every assignment was already in sync",
+      );
+      queryClient.invalidateQueries({ queryKey: ["activity-assignments", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to recompute costs"));
+    },
+  });
 
   return (
     <>
@@ -192,14 +213,26 @@ function DrawerInner({
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
                   Resource Assignments
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowForm((v) => !v)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
-                >
-                  <Plus size={14} />
-                  Assign resource
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => recomputeMutation.mutate()}
+                    disabled={recomputeMutation.isPending}
+                    title="Recompute planned/actual/remaining costs from current resource rates and project pool overrides. Use this when a rate has changed and the existing assignment costs are stale."
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-hover px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-active disabled:opacity-60"
+                  >
+                    <RefreshCw size={14} className={recomputeMutation.isPending ? "animate-spin" : ""} />
+                    {recomputeMutation.isPending ? "Recomputing…" : "Recompute"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowForm((v) => !v)}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
+                  >
+                    <Plus size={14} />
+                    Assign resource
+                  </button>
+                </div>
               </div>
 
               {showForm && (

@@ -13,11 +13,13 @@ import com.bipros.resource.domain.model.ProductivityNormType;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceType;
 import com.bipros.resource.domain.model.enums.SalaryType;
+import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.manpower.ManpowerAttendance;
 import com.bipros.resource.domain.model.manpower.ManpowerFinancials;
 import com.bipros.resource.domain.repository.ManpowerAttendanceRepository;
 import com.bipros.resource.domain.repository.ManpowerFinancialsRepository;
 import com.bipros.resource.domain.repository.ProductivityNormRepository;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +56,8 @@ public class ManpowerKpiService {
 
   private static final String LABOR_TYPE_CODE = "LABOR";
   private static final double DEFAULT_HOURS_PER_DAY = 8d;
+  /** Indian Factories Act §59 — minimum 2× base rate for overtime. */
+  private static final double OT_MULTIPLIER = 2.0d;
 
   private final BoqItemRepository boqItemRepository;
   private final ActivityRepository activityRepository;
@@ -61,6 +65,7 @@ public class ManpowerKpiService {
   private final ManpowerAttendanceRepository attendanceRepository;
   private final ManpowerFinancialsRepository financialsRepository;
   private final ProductivityNormRepository productivityNormRepository;
+  private final ResourceAssignmentRepository resourceAssignmentRepository;
   private final DailyProgressReportRepository dprRepository;
   private final DprManpowerRepository dprManpowerRepository;
 
@@ -79,7 +84,25 @@ public class ManpowerKpiService {
       double idleTimeRatioPct,
       double overtimeRatioPct,
       List<OutputAchievementRow> outputAchievement,
+      LabourCostSummary labourCostSummary,
+      double cumulativeProgressPct,
       DataQuality dataQuality
+  ) {}
+
+  /**
+   * KPI 3.1–3.4 + 3.7 cost block. PLC = Σ over LABOR resource_assignments of
+   * (planned_units × hourly_rate × overlap_with_window/duration). ALC = Σ DPR labour cost
+   * (line_cost when set, fallback nos × (regular_hrs + ot_hrs × 2.0) × hourly_rate). LCV
+   * positive = under budget. LCPI ≥ 1.0 = on budget. OT Cost % = OT premium pay / total wage bill.
+   */
+  public record LabourCostSummary(
+      double plannedLabourCost,
+      double actualLabourCost,
+      double labourCostVariance,
+      double lcpi,
+      double otCostPct,
+      int activityCoverageCount,
+      int missingPlanCount
   ) {}
 
   public record WorkforceUtilization(
@@ -227,6 +250,12 @@ public class ManpowerKpiService {
         .filter(r -> r.normOutputPerManPerDay() <= 0d)
         .count();
 
+    LabourCostSummary costSummary = computeLabourCostSummary(
+        projectId, from, to, resourcesById, financialsById, aggByDpr, manpowerByDpr);
+
+    double cumulativePct = computeCumulativeProgressPct(
+        projectId, from, to, dprs, activitiesById, boqItems);
+
     DataQuality dq = buildDataQuality(
         labourResourceIds, resourcesById, attendanceById, financialsById,
         productivity, noNormCount, noBoqBaselineCount[0]);
@@ -244,6 +273,8 @@ public class ManpowerKpiService {
         round4(idleRatio),
         round4(otRatio),
         achievement,
+        costSummary,
+        round4(cumulativePct),
         dq);
   }
 
@@ -269,9 +300,9 @@ public class ManpowerKpiService {
         if (m.getLineCost() != null) {
           cost += m.getLineCost().doubleValue();
         } else {
-          // Fallback when supervisor didn't enter line_cost: nos × hours × hourlyRate.
+          // Fallback when supervisor didn't enter line_cost: regular pay + OT pay at 2.0× premium.
           double hourly = effectiveHourlyRate(financialsById.get(m.getResourceId()));
-          cost += nos * wh * hourly;
+          cost += nos * (wh + oh * OT_MULTIPLIER) * hourly;
         }
       }
       out.put(e.getKey(), new DprManpowerAgg(manHours, otHours, idleHours, cost));
@@ -598,6 +629,181 @@ public class ManpowerKpiService {
     return rows;
   }
 
+  // ---------- Labour Cost Summary (KPI 3.1 / 3.3 / 3.4 / 3.7) ----------
+
+  /**
+   * Computes Planned / Actual / Variance / LCPI / OT Cost % for the requested window.
+   *
+   * <p>PLC: for each LABOR resource_assignment, prorate
+   * {@code planned_units × hourly_rate} by the overlap fraction of the assignment with the
+   * window. {@code planned_units} stores total man-hours over the assignment period (locked
+   * with user 2026-05-08).
+   *
+   * <p>ALC: pulls from existing per-DPR cost roll-up (already includes 2× OT premium when the
+   * fallback path is hit; supervisor-entered {@code line_cost} is trusted as-is).
+   *
+   * <p>OT Cost %: computed independently as
+   * {@code Σ (nos × ot_hrs × hourly_rate × 2.0) / Σ (nos × (working + ot×2.0) × hourly_rate)}.
+   * Uses fallback rate even when {@code line_cost} was supervisor-entered, since the supervisor
+   * value bundles regular and OT and we can't separate them.
+   */
+  private LabourCostSummary computeLabourCostSummary(
+      UUID projectId, LocalDate from, LocalDate to,
+      Map<UUID, Resource> resourcesById,
+      Map<UUID, ManpowerFinancials> financialsById,
+      Map<UUID, DprManpowerAgg> aggByDpr,
+      Map<UUID, List<DprManpower>> manpowerByDpr) {
+
+    // ---- PLC ----
+    List<ResourceAssignment> assignments =
+        resourceAssignmentRepository.findByProjectId(projectId);
+    Set<UUID> activityIds = assignments.stream()
+        .map(ResourceAssignment::getActivityId)
+        .filter(java.util.Objects::nonNull)
+        .collect(Collectors.toSet());
+    Map<UUID, Activity> activitiesForPlan = activityRepository.findAllById(activityIds).stream()
+        .collect(Collectors.toMap(Activity::getId, a -> a, (a, b) -> a));
+
+    double plc = 0d;
+    int activitiesWithPlan = 0;
+    int missingPlan = 0;
+    Set<UUID> labourResourcesNeeded = new HashSet<>();
+    for (ResourceAssignment ra : assignments) {
+      if (ra.getResourceId() == null) continue;
+      Resource r = resourcesById.get(ra.getResourceId());
+      if (r == null) {
+        // Resource may not be in our deployment-derived map; fetch on-demand for plan side.
+        r = resourceRepository.findById(ra.getResourceId()).orElse(null);
+        if (r != null) resourcesById.put(r.getId(), r);
+      }
+      if (r == null || r.getResourceType() == null
+          || !LABOR_TYPE_CODE.equalsIgnoreCase(r.getResourceType().getCode())) continue;
+      labourResourcesNeeded.add(r.getId());
+    }
+    // Backfill financials for labour resources that weren't in the deployment set.
+    Set<UUID> missingFinIds = labourResourcesNeeded.stream()
+        .filter(id -> !financialsById.containsKey(id)).collect(Collectors.toSet());
+    if (!missingFinIds.isEmpty()) {
+      financialsRepository.findAllById(missingFinIds).forEach(
+          f -> financialsById.put(f.getResourceId(), f));
+    }
+
+    for (ResourceAssignment ra : assignments) {
+      if (ra.getResourceId() == null || ra.getPlannedUnits() == null) continue;
+      Resource r = resourcesById.get(ra.getResourceId());
+      if (r == null || r.getResourceType() == null
+          || !LABOR_TYPE_CODE.equalsIgnoreCase(r.getResourceType().getCode())) continue;
+      Activity activity = activitiesForPlan.get(ra.getActivityId());
+      if (activity == null) { missingPlan++; continue; }
+      Double duration = activity.getOriginalDuration();
+      if (duration == null || duration <= 0d) { missingPlan++; continue; }
+
+      LocalDate aStart = ra.getPlannedStartDate() != null
+          ? ra.getPlannedStartDate() : activity.getPlannedStartDate();
+      LocalDate aFinish = ra.getPlannedFinishDate() != null
+          ? ra.getPlannedFinishDate() : activity.getPlannedFinishDate();
+      if (aStart == null || aFinish == null) { missingPlan++; continue; }
+
+      LocalDate overlapStart = aStart.isAfter(from) ? aStart : from;
+      LocalDate overlapEnd = aFinish.isBefore(to) ? aFinish : to;
+      if (overlapEnd.isBefore(overlapStart)) continue; // outside window
+      double overlapDays = overlapEnd.toEpochDay() - overlapStart.toEpochDay() + 1;
+      double overlapPct = Math.min(1.0d, overlapDays / duration);
+
+      double rate = effectiveHourlyRate(financialsById.get(r.getId()));
+      if (rate <= 0d) continue; // missing-rate banner already covers this
+      double assignmentPlc = ra.getPlannedUnits() * rate * overlapPct;
+      plc += assignmentPlc;
+      activitiesWithPlan++;
+    }
+
+    // ---- ALC ---- (already includes 2× OT in fallback path)
+    double alc = aggByDpr.values().stream().mapToDouble(DprManpowerAgg::cost).sum();
+
+    // ---- OT Cost % ----
+    double otPremiumPay = 0d;
+    double totalWageBill = 0d;
+    for (List<DprManpower> rows : manpowerByDpr.values()) {
+      for (DprManpower m : rows) {
+        if (m.getResourceId() == null) continue;
+        double rate = effectiveHourlyRate(financialsById.get(m.getResourceId()));
+        if (rate <= 0d) continue;
+        int nos = m.getNos() != null ? m.getNos() : 0;
+        double wh = m.getWorkingHours() != null ? m.getWorkingHours().doubleValue() : 0d;
+        double oh = m.getOtHours() != null ? m.getOtHours().doubleValue() : 0d;
+        otPremiumPay += nos * oh * rate * OT_MULTIPLIER;
+        totalWageBill += nos * (wh + oh * OT_MULTIPLIER) * rate;
+      }
+    }
+    double otCostPct = totalWageBill > 0d ? otPremiumPay / totalWageBill : 0d;
+
+    double variance = plc - alc;
+    double lcpi = alc > 0d ? plc / alc : 0d;
+
+    return new LabourCostSummary(
+        round2(plc),
+        round2(alc),
+        round2(variance),
+        round4(lcpi),
+        round4(otCostPct),
+        activitiesWithPlan,
+        missingPlan);
+  }
+
+  // ---------- Cumulative Progress Achievement % (KPI 2.7) ----------
+
+  /**
+   * Linear-interpolation fallback (locked with user 2026-05-08): planned cumulative qty for
+   * each activity = {@code boq_qty × min(1, days_elapsed / original_duration)}. Replaced by
+   * activity_progress_baselines snapshots when Phase 2C ships.
+   *
+   * <p>Returned value is qty-weighted average across activities with a matched BOQ row.
+   * Activities without BOQ are skipped (and already counted by {@code noBoqBaselineCount} in
+   * the data-quality block).
+   */
+  private double computeCumulativeProgressPct(
+      UUID projectId, LocalDate from, LocalDate to,
+      List<DailyProgressReport> windowDprs,
+      Map<UUID, Activity> activitiesById,
+      List<BoqItem> boqItems) {
+    if (windowDprs.isEmpty()) return 0d;
+
+    // Cumulative actual qty per activity = ALL DPRs up to {@code to}, not just the window.
+    List<DailyProgressReport> cumulativeDprs = dprRepository
+        .findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(
+            projectId, LocalDate.of(1900, 1, 1), to);
+    Map<UUID, Double> actualByActivity = new HashMap<>();
+    for (DailyProgressReport d : cumulativeDprs) {
+      if (d.getActivityId() == null || d.getQtyExecuted() == null) continue;
+      actualByActivity.merge(d.getActivityId(), d.getQtyExecuted().doubleValue(), Double::sum);
+    }
+    if (actualByActivity.isEmpty()) return 0d;
+
+    // For weighting, total planned across qualifying activities.
+    double totalActual = 0d;
+    double totalPlanned = 0d;
+    for (Map.Entry<UUID, Double> e : actualByActivity.entrySet()) {
+      Activity activity = activitiesById.get(e.getKey());
+      if (activity == null) continue;
+      Double duration = activity.getOriginalDuration();
+      if (duration == null || duration <= 0d) continue;
+      LocalDate plannedStart = activity.getPlannedStartDate();
+      if (plannedStart == null) continue;
+
+      BoqItem boq = matchBoqByActivityName(boqItems, activity.getName());
+      if (boq == null || boq.getBoqQty() == null || boq.getBoqQty().signum() <= 0) continue;
+
+      double daysElapsed = Math.max(0d, to.toEpochDay() - plannedStart.toEpochDay() + 1);
+      double progressPct = Math.min(1.0d, daysElapsed / duration);
+      double plannedCumQty = boq.getBoqQty().doubleValue() * progressPct;
+      if (plannedCumQty <= 0d) continue;
+
+      totalActual += e.getValue();
+      totalPlanned += plannedCumQty;
+    }
+    return totalPlanned > 0d ? totalActual / totalPlanned : 0d;
+  }
+
   // ---------- Data quality ----------
 
   private DataQuality buildDataQuality(
@@ -669,6 +875,8 @@ public class ManpowerKpiService {
         List.of(),
         0d, 0d,
         List.of(),
+        new LabourCostSummary(0d, 0d, 0d, 0d, 0d, 0, 0),
+        0d,
         new DataQuality(0, List.of(), 0, List.of(), 0, 0, 0));
   }
 

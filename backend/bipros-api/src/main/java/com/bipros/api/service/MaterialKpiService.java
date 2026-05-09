@@ -1,7 +1,9 @@
 package com.bipros.api.service;
 
+import com.bipros.project.domain.model.BoqItem;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.model.DprMaterial;
+import com.bipros.project.domain.repository.BoqItemRepository;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.DprMaterialRepository;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
@@ -48,6 +50,7 @@ public class MaterialKpiService {
   private final MaterialConsumptionLogRepository consumptionLogRepository;
   private final DailyProgressReportRepository dprRepository;
   private final DprMaterialRepository dprMaterialRepository;
+  private final BoqItemRepository boqItemRepository;
 
   // ---------- Response shapes ----------
 
@@ -64,7 +67,9 @@ public class MaterialKpiService {
       Double materialPriceVariance,
       Double materialUsageVariance,
       Double totalMaterialCostVariance,
-      List<MaterialBreakdownRow> byMaterial
+      List<MaterialBreakdownRow> byMaterial,
+      double weightedAvgCostPerUnitFinished,
+      List<CostPerUnitRow> costPerUnitByActivity
   ) {}
 
   public record MaterialBreakdownRow(
@@ -74,6 +79,22 @@ public class MaterialKpiService {
       double wastageQty,
       double utilizationPct,
       double avgUnitRate
+  ) {}
+
+  /**
+   * KPI 9.5 — Material Cost / Unit Finished Work, per activity.
+   * {@code costPerUnit = Σ dpr_material.line_cost ÷ Σ DPR.qty_executed} for the activity.
+   * {@code boqBudgetedRate} is the matched BOQ row's budgeted rate; null if no match.
+   * {@code varianceVsBoqPct} is positive (favourable) when actual cost &lt; budgeted.
+   */
+  public record CostPerUnitRow(
+      UUID activityId,
+      String activityName,
+      double materialCost,
+      double qtyFinished,
+      double costPerUnit,
+      Double boqBudgetedRate,
+      Double varianceVsBoqPct
   ) {}
 
   // ---------- Public API ----------
@@ -119,6 +140,13 @@ public class MaterialKpiService {
 
     List<MaterialBreakdownRow> breakdown = computeBreakdown(issues, logs, dprMaterials);
 
+    // KPI 9.5 — Material Cost / Unit Finished Work
+    List<DailyProgressReport> dprs = dprRepository
+        .findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(projectId, from, to);
+    List<BoqItem> boqItems = boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId);
+    List<CostPerUnitRow> costRows = computeCostPerUnitFinished(dprs, dprMaterials, boqItems);
+    double weightedCpu = computeWeightedCpu(costRows);
+
     return new MaterialKpiResponse(
         projectId,
         from,
@@ -132,7 +160,85 @@ public class MaterialKpiService {
         priceVariance,
         usageVariance,
         totalVariance,
-        breakdown);
+        breakdown,
+        round2(weightedCpu),
+        costRows);
+  }
+
+  // ---------- KPI 9.5 — Cost / Unit Finished Work ----------
+
+  /**
+   * Roll up DPR-material line cost and parent DPR qty_executed by activity. Compare to BOQ
+   * budgeted rate when matched. Variance % positive = under budget (favourable).
+   */
+  private List<CostPerUnitRow> computeCostPerUnitFinished(
+      List<DailyProgressReport> dprs,
+      List<DprMaterial> dprMaterials,
+      List<BoqItem> boqItems) {
+    if (dprs.isEmpty()) return List.of();
+    Map<UUID, double[]> byActivity = new HashMap<>(); // [cost, qty]
+    Map<UUID, String> activityNames = new HashMap<>();
+    Map<UUID, UUID> activityForDpr = dprs.stream()
+        .filter(d -> d.getActivityId() != null)
+        .collect(Collectors.toMap(DailyProgressReport::getId,
+            DailyProgressReport::getActivityId, (a, b) -> a));
+    for (DailyProgressReport d : dprs) {
+      if (d.getActivityId() == null) continue;
+      double qty = d.getQtyExecuted() != null ? d.getQtyExecuted().doubleValue() : 0d;
+      double[] acc = byActivity.computeIfAbsent(d.getActivityId(), k -> new double[2]);
+      acc[1] += qty;
+      activityNames.putIfAbsent(d.getActivityId(), d.getActivityName());
+    }
+    for (DprMaterial m : dprMaterials) {
+      UUID activityId = activityForDpr.get(m.getDprId());
+      if (activityId == null) continue;
+      double cost = m.getLineCost() != null ? m.getLineCost().doubleValue() : 0d;
+      double[] acc = byActivity.computeIfAbsent(activityId, k -> new double[2]);
+      acc[0] += cost;
+    }
+    List<CostPerUnitRow> rows = new java.util.ArrayList<>(byActivity.size());
+    for (Map.Entry<UUID, double[]> e : byActivity.entrySet()) {
+      double cost = e.getValue()[0];
+      double qty = e.getValue()[1];
+      if (cost <= 0d) continue; // skip activities with no material cost
+      double cpu = qty > 0d ? cost / qty : 0d;
+      String name = activityNames.getOrDefault(e.getKey(), "?");
+      BoqItem boq = matchBoq(boqItems, name);
+      Double boqRate = (boq != null && boq.getBudgetedRate() != null)
+          ? boq.getBudgetedRate().doubleValue() : null;
+      Double variancePct = (boqRate != null && boqRate > 0d)
+          ? (boqRate - cpu) / boqRate
+          : null;
+      rows.add(new CostPerUnitRow(
+          e.getKey(), name,
+          round2(cost), round3(qty), round2(cpu),
+          boqRate != null ? round2(boqRate) : null,
+          variancePct != null ? round4(variancePct) : null));
+    }
+    rows.sort(Comparator.comparingDouble(CostPerUnitRow::costPerUnit).reversed());
+    return rows;
+  }
+
+  private double computeWeightedCpu(List<CostPerUnitRow> rows) {
+    double totalCost = 0d;
+    double totalQty = 0d;
+    for (CostPerUnitRow r : rows) {
+      totalCost += r.materialCost();
+      totalQty += r.qtyFinished();
+    }
+    return totalQty > 0d ? totalCost / totalQty : 0d;
+  }
+
+  private static BoqItem matchBoq(List<BoqItem> boq, String activityName) {
+    if (activityName == null || activityName.isBlank()) return null;
+    String needle = activityName.toLowerCase();
+    for (BoqItem b : boq) {
+      if (b.getItemNo() != null && needle.contains(b.getItemNo().toLowerCase())) return b;
+    }
+    for (BoqItem b : boq) {
+      if (b.getDescription() != null && needle.contains(b.getDescription().toLowerCase())) return b;
+    }
+    return null;
   }
 
   private List<DprMaterial> fetchDprMaterials(UUID projectId, LocalDate from, LocalDate to) {

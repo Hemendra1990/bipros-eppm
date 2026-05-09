@@ -46,6 +46,13 @@ export interface DprEquipmentRow {
   breakdownHours?: number | null;
   fuelLitres?: number | null;
   unitRate?: number | null;
+  /**
+   * "HOUR" / "DAY" / "EACH" — derived from the resource's unit at pick time. Drives the cost
+   * preview and is sent on save so the persisted lineCost matches what the user saw. Without
+   * this the backend defaults equipment basis to HOUR, which is wrong for per-day equipment
+   * like a Bull Dozer (cost would be rate × hours instead of rate × NOS).
+   */
+  unitRateBasis?: RateBasis | null;
   lineCost?: number | null;
   operatorName?: string | null;
   availabilityStatus?: EquipmentAvailability | null;

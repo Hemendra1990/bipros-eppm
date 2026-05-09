@@ -61,9 +61,15 @@ public class EquipmentKpiService {
       List<OwnedRentedSlice> ownedVsRented,
       List<ServiceDueRow> serviceDue,
       double mechanicalAvailabilityPct,
-      double equipmentProductivityIndexPct
+      double equipmentProductivityIndexPct,
+      double idleMachineCostTotal
   ) {}
 
+  /**
+   * Per-machine row. {@code idleCost} (KPI 7.1) = idle_hours × Resource.cost_per_unit. The same
+   * rate is used for OWNED and HIRED equipment until ownership-specific rate columns land
+   * (locked Phase 2A fallback, 2026-05-08).
+   */
   public record UtilizationRow(
       UUID resourceId,
       String resourceCode,
@@ -72,7 +78,8 @@ public class EquipmentKpiService {
       double idleHours,
       double breakdownHours,
       double utilizationPct,
-      double mechanicalAvailabilityPct
+      double mechanicalAvailabilityPct,
+      double idleCost
   ) {}
 
   public record IdleAlertRow(
@@ -92,12 +99,17 @@ public class EquipmentKpiService {
       double fuelPerOutput
   ) {}
 
+  /**
+   * Per-machine row carrying availability + EPI + KPI 6.2 Machine Output Rate (qty/hr).
+   * {@code outputRatePerHour} = attributed_qty ÷ Σ working_hours for the machine in the window.
+   */
   public record AvailabilityPerformanceRow(
       UUID resourceId,
       String resourceCode,
       String resourceName,
       double availability,
-      double performance
+      double performance,
+      double outputRatePerHour
   ) {}
 
   public record OwnedRentedSlice(
@@ -162,12 +174,14 @@ public class EquipmentKpiService {
 
     double maPct = computeMechanicalAvailabilityHeadline(utilization);
     double epiPct = computeEpiHeadline(availPerf);
+    double idleCostTotal = utilization.stream().mapToDouble(UtilizationRow::idleCost).sum();
 
     return new EquipmentKpiResponse(
         projectId, from, to, utilization, idleAlerts, fuelPerOutput,
         availPerf, ownedVsRented, serviceDue,
         round4(maPct),
-        round4(epiPct));
+        round4(epiPct),
+        round2(idleCostTotal));
   }
 
   // ---------- Enrichment ----------
@@ -218,12 +232,15 @@ public class EquipmentKpiService {
       double total = v[0] + v[1] + v[2];
       double pct = total > 0 ? v[0] / total : 0d;
       double maPct = total > 0 ? (v[0] + v[1]) / total : 0d;
+      double cpu = (r != null && r.getCostPerUnit() != null) ? r.getCostPerUnit().doubleValue() : 0d;
+      double idleCost = v[1] * cpu;
       rows.add(new UtilizationRow(
           e.getKey(),
           r != null ? r.getCode() : "?",
           r != null ? r.getName() : "Unknown",
           round2(v[0]), round2(v[1]), round2(v[2]),
-          round4(pct), round4(maPct)));
+          round4(pct), round4(maPct),
+          round2(idleCost)));
     }
     rows.sort(Comparator.comparingDouble(UtilizationRow::utilizationPct).reversed());
     return rows;
@@ -339,13 +356,16 @@ public class EquipmentKpiService {
       double daysCount = daysSeen.getOrDefault(e.getKey(), Set.of()).size();
       double actualPerDay = daysCount > 0 ? v[3] / daysCount : 0d;
       double performance = standardPerDay > 0 ? actualPerDay / standardPerDay : 0d;
+      // KPI 6.2 Machine Output Rate (qty / hour) — attributed_qty ÷ Σ working_hours.
+      double outputRatePerHour = v[0] > 0d ? v[3] / v[0] : 0d;
 
       rows.add(new AvailabilityPerformanceRow(
           e.getKey(),
           r != null ? r.getCode() : "?",
           r != null ? r.getName() : "Unknown",
           round4(availability),
-          round4(performance)));
+          round4(performance),
+          round4(outputRatePerHour)));
     }
     rows.sort(Comparator.comparing(AvailabilityPerformanceRow::resourceCode));
     return rows;
@@ -421,7 +441,7 @@ public class EquipmentKpiService {
     return new EquipmentKpiResponse(
         projectId, from, to,
         List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-        0d, 0d);
+        0d, 0d, 0d);
   }
 
   // ---------- Misc ----------

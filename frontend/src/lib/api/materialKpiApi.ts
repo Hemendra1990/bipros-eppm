@@ -10,6 +10,20 @@ export interface MaterialBreakdownRow {
   avgUnitRate: number;
 }
 
+/**
+ * KPI 9.5 — Material Cost / Unit Finished Work, per activity.
+ * varianceVsBoqPct positive = under budget (favourable).
+ */
+export interface CostPerUnitRow {
+  activityId: string;
+  activityName: string;
+  materialCost: number;
+  qtyFinished: number;
+  costPerUnit: number;
+  boqBudgetedRate: number | null;
+  varianceVsBoqPct: number | null;
+}
+
 export interface MaterialKpiResponse {
   projectId: string;
   from: string;
@@ -24,6 +38,8 @@ export interface MaterialKpiResponse {
   materialUsageVariance: number | null;
   totalMaterialCostVariance: number | null;
   byMaterial: MaterialBreakdownRow[];
+  weightedAvgCostPerUnitFinished: number;
+  costPerUnitByActivity: CostPerUnitRow[];
 }
 
 export const materialKpiApi = {

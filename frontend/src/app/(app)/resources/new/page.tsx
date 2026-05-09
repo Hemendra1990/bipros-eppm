@@ -23,6 +23,9 @@ import { employmentTypeMasterApi } from "@/lib/api/employmentTypeMasterApi";
 import { skillMasterApi } from "@/lib/api/skillMasterApi";
 import { skillLevelMasterApi } from "@/lib/api/skillLevelMasterApi";
 import { nationalityMasterApi } from "@/lib/api/nationalityMasterApi";
+import { manpowerRateMasterApi } from "@/lib/api/manpowerRateMasterApi";
+import { equipmentRateMasterApi } from "@/lib/api/equipmentRateMasterApi";
+import { materialRateMasterApi } from "@/lib/api/materialRateMasterApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { MultiSelect } from "@/components/common/MultiSelect";
@@ -70,6 +73,7 @@ interface CommonForm {
   availability: string;
   costPerUnit: string;
   unit: string;
+  rateMasterId: string;
   status: ResourceStatus;
   calendarId: string;
   parentId: string;
@@ -82,6 +86,7 @@ const emptyCommon = (): CommonForm => ({
   availability: "",
   costPerUnit: "",
   unit: "",
+  rateMasterId: "",
   status: "ACTIVE",
   calendarId: "",
   parentId: "",
@@ -128,6 +133,14 @@ export default function NewResourcePage() {
 
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{
+    typeId?: string;
+    roleId?: string;
+    name?: string;
+    rateMasterId?: string;
+    costPerUnit?: string;
+    unit?: string;
+  }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Step 1
@@ -171,6 +184,64 @@ export default function NewResourcePage() {
   const selectedType = types.find((t) => t.id === typeId) ?? null;
   const kind = classifyType(selectedType?.code);
 
+  // Rate master fetches keyed by kind. The picker only fires the relevant query.
+  const { data: manpowerRatesData } = useQuery({
+    queryKey: ["manpower-rate-master"],
+    queryFn: () => manpowerRateMasterApi.list(),
+    enabled: kind === "MANPOWER",
+  });
+  const { data: equipmentRatesData } = useQuery({
+    queryKey: ["equipment-rate-master"],
+    queryFn: () => equipmentRateMasterApi.list(),
+    enabled: kind === "EQUIPMENT",
+  });
+  const { data: materialRatesData } = useQuery({
+    queryKey: ["material-rate-master"],
+    queryFn: () => materialRateMasterApi.list(),
+    enabled: kind === "MATERIAL",
+  });
+
+  /**
+   * Single dropdown of rate-master options for the active kind. Each option carries
+   * the row's id, display label, and the unit/rate to autofill when picked.
+   */
+  const rateMasterOptions = useMemo(() => {
+    if (kind === "MANPOWER") {
+      return (manpowerRatesData?.data ?? [])
+        .filter((r) => r.active)
+        .map((r) => ({
+          id: r.id,
+          label: `${r.roleName ?? "?"} / ${r.categoryName ?? "?"} / Grade ${r.gradeCode ?? "?"} — ${r.unit} @ ${r.rate}`,
+          unit: r.unit,
+          rate: r.rate,
+          roleId: r.roleId,
+        }));
+    }
+    if (kind === "EQUIPMENT") {
+      return (equipmentRatesData?.data ?? [])
+        .filter((r) => r.active)
+        .map((r) => ({
+          id: r.id,
+          label: `${r.equipmentName} / ${r.make} ${r.model} — ${r.unit} @ ${r.rate}`,
+          unit: r.unit,
+          rate: r.rate,
+          roleId: undefined as string | undefined,
+        }));
+    }
+    if (kind === "MATERIAL") {
+      return (materialRatesData?.data ?? [])
+        .filter((r) => r.active)
+        .map((r) => ({
+          id: r.id,
+          label: `${r.categoryName ?? "?"} / ${r.specGrade} — ${r.unit} @ ${r.rate}`,
+          unit: r.unit,
+          rate: r.rate,
+          roleId: undefined as string | undefined,
+        }));
+    }
+    return [];
+  }, [kind, manpowerRatesData, equipmentRatesData, materialRatesData]);
+
   // Auto-fill code prefix when type changes (only when code is empty or still a prefix-only string)
   useEffect(() => {
     if (!selectedType) return;
@@ -184,33 +255,28 @@ export default function NewResourcePage() {
     });
   }, [selectedType, kind]);
 
-  // Auto-fill name and unit from selected role (only if blank). Default Rate is NOT auto-filled —
-  // role no longer carries a rate; the user enters costPerUnit explicitly per resource.
-  useEffect(() => {
-    if (!roleId) return;
-    const role = roles.find((r) => r.id === roleId);
-    if (!role) return;
-    setCommon((prev) => {
-      const next = { ...prev };
-      if (prev.name.trim() === "") next.name = role.name;
-      if (prev.unit.trim() === "" && role.productivityUnit) {
-        next.unit = role.productivityUnit;
-      }
-      return next;
-    });
-  }, [roleId, roles]);
+  // Phase 8: role.productivityUnit is deprecated. Unit comes from the rate master picker —
+  // no role-driven auto-fill. Name is NOT auto-filled either (Manpower expects a real person
+  // name, not the role label).
 
   const canAdvanceToStep2 = !!typeId && !!roleId && common.name.trim() !== "";
 
   const handleSubmit = async () => {
     setError("");
 
-    if (!typeId || !roleId) {
-      setError("Select a Resource Type and Role first");
-      return;
+    // Build per-field error map. Default Rate / Unit are required only when no rate master is
+    // linked — the rate master snapshots those values when present.
+    const errs: typeof fieldErrors = {};
+    if (!typeId) errs.typeId = "Pick a Resource Type";
+    if (!roleId) errs.roleId = "Pick a Role";
+    if (!common.name.trim()) errs.name = "Name is required";
+    if (!common.rateMasterId) {
+      errs.rateMasterId = "Pick a rate master row — unit and rate come from it.";
     }
-    if (!common.name.trim()) {
-      setError("Name is required");
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setError("Please fix the highlighted fields before submitting.");
+      setStep(1);
       return;
     }
 
@@ -225,6 +291,7 @@ export default function NewResourcePage() {
         availability: toNumberOrUndef(common.availability) ?? null,
         costPerUnit: toNumberOrUndef(common.costPerUnit) ?? null,
         unit: common.unit.trim() || null,
+        rateMasterId: common.rateMasterId || null,
         status: common.status,
         calendarId: common.calendarId || null,
         parentId: common.parentId || null,
@@ -353,30 +420,94 @@ export default function NewResourcePage() {
             <>
               <h2 className="mb-3 text-lg font-semibold text-text-primary">Role *</h2>
               <div className="mb-6">
-                <SearchableSelect
-                  options={roles.map((r) => ({
-                    value: r.id,
-                    label: `${r.name} (${r.code})`,
-                  }))}
-                  value={roleId}
-                  onChange={setRoleId}
-                  placeholder={
-                    rolesLoading
-                      ? "Loading roles…"
-                      : roles.length === 0
-                        ? "No active roles for this type"
-                        : "Pick a role"
-                  }
-                  disabled={rolesLoading || roles.length === 0}
-                />
+                {kind === "MANPOWER" && common.rateMasterId ? (
+                  // Manpower: rate master implies role; show read-only label.
+                  <div className={`${inputCls} flex items-center justify-between !cursor-default`}>
+                    <span>
+                      {roles.find((r) => r.id === roleId)?.name ?? "—"}
+                      {roles.find((r) => r.id === roleId)?.code && (
+                        <span className="ml-1 text-text-muted">
+                          ({roles.find((r) => r.id === roleId)?.code})
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs uppercase tracking-wide text-text-muted">
+                      from rate master
+                    </span>
+                  </div>
+                ) : (
+                  <SearchableSelect
+                    options={roles.map((r) => ({
+                      value: r.id,
+                      label: `${r.name} (${r.code})`,
+                    }))}
+                    value={roleId}
+                    onChange={(v) => {
+                      setRoleId(v);
+                      if (fieldErrors.roleId) setFieldErrors({ ...fieldErrors, roleId: undefined });
+                    }}
+                    placeholder={
+                      rolesLoading
+                        ? "Loading roles…"
+                        : roles.length === 0
+                          ? "No active roles for this type"
+                          : "Pick a role"
+                    }
+                    disabled={rolesLoading || roles.length === 0}
+                  />
+                )}
+                {fieldErrors.roleId && (
+                  <p className="mt-1 text-xs text-danger">{fieldErrors.roleId}</p>
+                )}
                 <p className="mt-1 text-xs text-text-muted">
                   Required. Define roles in{" "}
                   <a href="/admin/resource-roles" className="text-accent hover:underline">
                     Resource Roles
                   </a>
-                  . The chosen role auto-fills Name and Unit when blank. Default Rate must be
-                  entered per resource.
+                  .
+                  {kind === "MANPOWER" && (
+                    <>
+                      {" "}<strong className="text-text-secondary">For Manpower the role is set by the rate master pick below. Enter the person's actual name (e.g. <em>Rajesh Kumar</em>) — not the role label.</strong>
+                    </>
+                  )}
                 </p>
+              </div>
+
+              <h2 className="mb-3 text-lg font-semibold text-text-primary">Rate Master</h2>
+              <div className="mb-6">
+                <SearchableSelect
+                  options={rateMasterOptions.map((r) => ({ value: r.id, label: r.label }))}
+                  value={common.rateMasterId}
+                  onChange={(id) => {
+                    const picked = rateMasterOptions.find((r) => r.id === id);
+                    if (picked) {
+                      // Snapshot unit + rate from the selected row, and (Manpower only) align role.
+                      setCommon((prev) => ({
+                        ...prev,
+                        rateMasterId: picked.id,
+                        unit: picked.unit,
+                        costPerUnit: String(picked.rate),
+                      }));
+                      if (picked.roleId) setRoleId(picked.roleId);
+                      if (fieldErrors.rateMasterId) setFieldErrors({ ...fieldErrors, rateMasterId: undefined });
+                    } else {
+                      setCommon((prev) => ({ ...prev, rateMasterId: "" }));
+                    }
+                  }}
+                  placeholder={
+                    rateMasterOptions.length === 0
+                      ? "No rate master rows defined for this type"
+                      : "— pick a rate master row —"
+                  }
+                />
+                {fieldErrors.rateMasterId ? (
+                  <p className="mt-1 text-xs text-danger">{fieldErrors.rateMasterId}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-text-muted">
+                    Required. Picking a rate master row auto-fills Unit and Default Rate, and
+                    cascades any future rate revisions to this resource.
+                  </p>
+                )}
               </div>
 
               <h2 className="mb-3 text-lg font-semibold text-text-primary">Common Fields</h2>
@@ -399,10 +530,17 @@ export default function NewResourcePage() {
                   <input
                     type="text"
                     value={common.name}
-                    onChange={(e) => setCommon({ ...common, name: e.target.value })}
+                    onChange={(e) => {
+                      setCommon({ ...common, name: e.target.value });
+                      if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: undefined });
+                    }}
+                    placeholder={kind === "MANPOWER" ? "e.g. Rajesh Kumar" : kind === "EQUIPMENT" ? "e.g. JCB Excavator #2" : kind === "MATERIAL" ? "e.g. OPC 53 Cement" : "Resource name"}
                     className={inputCls}
                     required
                   />
+                  {fieldErrors.name && (
+                    <p className="mt-1 text-xs text-danger">{fieldErrors.name}</p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <label className={labelCls}>Description</label>
@@ -414,41 +552,58 @@ export default function NewResourcePage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Availability</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={common.availability}
-                    onChange={(e) => setCommon({ ...common, availability: e.target.value })}
-                    className={inputCls}
-                    placeholder="e.g. 8 hours/day or 100 units"
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Default Rate</label>
+                  <label className={labelCls}>
+                    Default Rate
+                    {common.rateMasterId && (
+                      <span className="ml-2 text-xs uppercase tracking-wide text-text-muted">
+                        from rate master
+                      </span>
+                    )}
+                  </label>
                   <input
                     type="number"
                     step="0.01"
                     value={common.costPerUnit}
-                    onChange={(e) => setCommon({ ...common, costPerUnit: e.target.value })}
+                    onChange={(e) => {
+                      setCommon({ ...common, costPerUnit: e.target.value });
+                      if (fieldErrors.costPerUnit) setFieldErrors({ ...fieldErrors, costPerUnit: undefined });
+                    }}
                     className={inputCls}
+                    readOnly={!!common.rateMasterId}
                   />
-                  <p className="mt-1 text-xs text-text-muted">
-                    Rate used for project cost calculations. Enter the cost for ONE unit of this
-                    resource (e.g. ₹2,400 per Day for a mason, ₹4,500 per Hour for a JCB,
-                    ₹65,000 per MT for steel). For Manpower paid monthly, this is the project
-                    charge-out rate per Day — not the salary.
-                  </p>
+                  {fieldErrors.costPerUnit ? (
+                    <p className="mt-1 text-xs text-danger">{fieldErrors.costPerUnit}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-text-muted">
+                      {common.rateMasterId
+                        ? "Synced from the selected rate master. Edit the rate master row to change this value."
+                        : "Rate used for project cost calculations. Enter the cost for ONE unit of this resource (e.g. ₹2,400 per Day for a mason, ₹4,500 per Hour for a JCB, ₹65,000 per MT for steel)."}
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <label className={labelCls}>Unit</label>
+                  <label className={labelCls}>
+                    Unit
+                    {common.rateMasterId && (
+                      <span className="ml-2 text-xs uppercase tracking-wide text-text-muted">
+                        from rate master
+                      </span>
+                    )}
+                  </label>
                   <input
                     type="text"
                     value={common.unit}
-                    onChange={(e) => setCommon({ ...common, unit: e.target.value })}
+                    onChange={(e) => {
+                      setCommon({ ...common, unit: e.target.value });
+                      if (fieldErrors.unit) setFieldErrors({ ...fieldErrors, unit: undefined });
+                    }}
                     placeholder="Hour, Day, Cum, MT, Bags…"
                     className={inputCls}
+                    readOnly={!!common.rateMasterId}
                   />
+                  {fieldErrors.unit && (
+                    <p className="mt-1 text-xs text-danger">{fieldErrors.unit}</p>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>Status</label>
@@ -488,6 +643,17 @@ export default function NewResourcePage() {
                     onChange={(e) => setCommon({ ...common, parentId: e.target.value })}
                     placeholder="Optional — for hierarchical resources"
                     className={inputCls}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelCls}>Availability</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={common.availability}
+                    onChange={(e) => setCommon({ ...common, availability: e.target.value })}
+                    className={inputCls}
+                    placeholder="e.g. 8 hours/day or 100 units (optional)"
                   />
                 </div>
               </div>

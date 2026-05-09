@@ -6,6 +6,9 @@ import { Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
+import { manpowerRateMasterApi } from "@/lib/api/manpowerRateMasterApi";
+import { equipmentRateMasterApi } from "@/lib/api/equipmentRateMasterApi";
+import { materialRateMasterApi } from "@/lib/api/materialRateMasterApi";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -34,6 +37,34 @@ export default function ResourcesPage() {
     queryKey: ["resources"],
     queryFn: () => resourceApi.listResources(),
   });
+
+  const { data: manpowerRatesData } = useQuery({
+    queryKey: ["manpower-rate-master"],
+    queryFn: () => manpowerRateMasterApi.list(),
+  });
+  const { data: equipmentRatesData } = useQuery({
+    queryKey: ["equipment-rate-master"],
+    queryFn: () => equipmentRateMasterApi.list(),
+  });
+  const { data: materialRatesData } = useQuery({
+    queryKey: ["material-rate-master"],
+    queryFn: () => materialRateMasterApi.list(),
+  });
+
+  /** Lookup map: rate-master row id → short label for the grid column. */
+  const rateMasterLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of manpowerRatesData?.data ?? []) {
+      map.set(r.id, `${r.roleName ?? "?"} / Grade ${r.gradeCode ?? "?"} — ${r.unit} @ ${r.rate}`);
+    }
+    for (const r of equipmentRatesData?.data ?? []) {
+      map.set(r.id, `${r.equipmentName} / ${r.make} ${r.model} — ${r.unit} @ ${r.rate}`);
+    }
+    for (const r of materialRatesData?.data ?? []) {
+      map.set(r.id, `${r.categoryName ?? "?"} / ${r.specGrade} — ${r.unit} @ ${r.rate}`);
+    }
+    return map;
+  }, [manpowerRatesData, equipmentRatesData, materialRatesData]);
 
   const deleteMutation = useMutation({
     mutationFn: (resourceId: string) => resourceApi.deleteResource(resourceId),
@@ -98,13 +129,15 @@ export default function ResourcesPage() {
       },
     };
 
-    const availabilityCol: ColumnDef<ResourceResponse> = {
-      accessorKey: "availability",
-      header: "Availability",
+    const rateMasterCol: ColumnDef<ResourceResponse> = {
+      accessorKey: "rateMasterId",
+      header: "Rate Master",
       enableSorting: true,
       cell: (info) => {
-        const row = info.row.original;
-        return row.availability == null ? "—" : Number(row.availability).toFixed(2);
+        const id = info.row.original.rateMasterId;
+        if (!id) return <span className="text-text-muted">—</span>;
+        const label = rateMasterLabels.get(id);
+        return <span className="text-sm text-text-secondary">{label ?? "linked"}</span>;
       },
     };
 
@@ -115,6 +148,18 @@ export default function ResourcesPage() {
       cell: (info) => {
         const row = info.row.original;
         return row.unit ?? "—";
+      },
+    };
+
+    const rateCol: ColumnDef<ResourceResponse> = {
+      accessorKey: "costPerUnit",
+      header: "Rate",
+      enableSorting: true,
+      cell: (info) => {
+        const v = info.row.original.costPerUnit;
+        return v == null
+          ? "—"
+          : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
       },
     };
 
@@ -156,17 +201,9 @@ export default function ResourcesPage() {
       },
     };
 
-    if (typeTab === "MATERIAL") {
-      return [...baseCols, typeCol, roleCol, unitCol, availabilityCol, statusCol, actionsCol];
-    }
-    if (typeTab === "MANPOWER") {
-      return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
-    }
-    if (typeTab === "EQUIPMENT") {
-      return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
-    }
-    return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
-  }, [typeTab, deleteMutation]);
+    // Phase 8: every tab now shows Unit + Rate; Availability column dropped (low-value clutter).
+    return [...baseCols, typeCol, roleCol, rateMasterCol, unitCol, rateCol, statusCol, actionsCol];
+  }, [typeTab, deleteMutation, rateMasterLabels]);
 
   return (
     <div className="h-full flex flex-col">

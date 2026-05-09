@@ -23,6 +23,13 @@ public record CreateResourceRequest(
     BigDecimal availability,
     BigDecimal costPerUnit,
     String unit,
+    /**
+     * Optional FK to the rate master row this resource is linked to. Type is implied by
+     * {@link #resourceTypeId} (LABOR / EQUIPMENT / MATERIAL). When supplied, the service looks
+     * up the row and overrides any caller-supplied {@code unit} and {@code costPerUnit} with
+     * the rate master's values.
+     */
+    UUID rateMasterId,
     ResourceStatus status,
     UUID calendarId,
     UUID parentId,

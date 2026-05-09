@@ -36,6 +36,12 @@ public interface ResourceRepository extends JpaRepository<Resource, UUID> {
   long countByRole_Id(UUID roleId);
 
   /**
+   * Resources linked to a given rate master row. Used by {@code RateMasterSyncService} to
+   * cascade unit + rate edits to all linked resources in the same transaction.
+   */
+  List<Resource> findByRateMasterId(UUID rateMasterId);
+
+  /**
    * Active resources of a given type. Used by the Phase 7.2 eligible-supervisors endpoint
    * that powers the DPR form's Supervisor dropdown.
    *

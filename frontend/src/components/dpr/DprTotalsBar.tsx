@@ -36,7 +36,7 @@ export function DprTotalsBar({ manpower, equipment, materials, qtyExecuted, unit
   const productivity = manpowerHours > 0 && qtyExecuted > 0 ? qtyExecuted / manpowerHours : null;
 
   const manpowerCost = sum(manpower.map((m) => manpowerLineCost(m, m.unitRateBasis)));
-  const equipmentCost = sum(equipment.map((e) => equipmentLineCost(e, "HOUR")));
+  const equipmentCost = sum(equipment.map((e) => equipmentLineCost(e, e.unitRateBasis ?? "HOUR")));
   const materialCost = sum(materials.map((m) => materialLineCost(m)));
   const totalCost = manpowerCost + equipmentCost + materialCost;
   const hasAnyCost = totalCost > 0;

@@ -137,7 +137,7 @@ export function EquipmentKpiSection({ projectId, from, to, density = "compact" }
       </div>
 
       {/* New NH-48 KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg border border-border bg-surface/50 p-4">
           <div className="text-xs uppercase tracking-wide text-text-muted">Mechanical Availability</div>
           <div
@@ -172,6 +172,24 @@ export function EquipmentKpiSection({ projectId, from, to, density = "compact" }
             actual ÷ standard output
           </div>
         </div>
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Idle Machine Cost</div>
+          <div
+            className={`mt-1 text-2xl font-semibold ${
+              (kpis.idleMachineCostTotal ?? 0) > 0 ? "text-warning" : "text-text-primary"
+            }`}
+          >
+            {(kpis.idleMachineCostTotal ?? 0) > 0
+              ? `₹${formatNumber(kpis.idleMachineCostTotal, 0)}`
+              : "—"}
+          </div>
+          <div
+            className="mt-1 text-xs text-text-secondary"
+            title="KPI 7.1 — Σ (idle hours × Resource.costPerUnit). Phase 2A uses a single rate for OWNED + HIRED equipment; refined when ownership-specific rates land."
+          >
+            idle hrs × per-hour rate
+          </div>
+        </div>
       </div>
 
       {density === "full" && (
@@ -204,18 +222,19 @@ export function EquipmentKpiSection({ projectId, from, to, density = "compact" }
           </div>
 
           <div className="rounded-lg border border-border bg-surface/40 p-4">
-            <h3 className="text-sm font-semibold text-text-primary mb-2">Availability vs Performance</h3>
+            <h3 className="text-sm font-semibold text-text-primary mb-2">Availability · Perf · Output rate</h3>
             <table className="w-full text-xs">
               <thead className="text-text-muted">
                 <tr>
                   <th className="text-left pb-1">Machine</th>
                   <th className="text-right pb-1">Avail</th>
                   <th className="text-right pb-1">Perf</th>
+                  <th className="text-right pb-1" title="KPI 6.2 — Qty / hour">Qty / hr</th>
                 </tr>
               </thead>
               <tbody>
                 {kpis.availabilityPerformance.length === 0 && (
-                  <tr><td colSpan={3} className="py-2 text-center text-text-muted">No data</td></tr>
+                  <tr><td colSpan={4} className="py-2 text-center text-text-muted">No data</td></tr>
                 )}
                 {kpis.availabilityPerformance.slice(0, 8).map((r) => (
                   <tr key={r.resourceId} className="text-text-primary">
@@ -226,6 +245,7 @@ export function EquipmentKpiSection({ projectId, from, to, density = "compact" }
                     >
                       {formatPct(r.performance)}
                     </td>
+                    <td className="py-1 text-right">{(r.outputRatePerHour ?? 0) > 0 ? formatNumber(r.outputRatePerHour, 3) : "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -199,6 +199,12 @@ export interface ResourceResponse {
   availability?: number | null;
   costPerUnit?: number | null;
   unit?: string | null;
+  /**
+   * FK to the type-appropriate rate master row (manpower / equipment / material). When set,
+   * Resource.unit and Resource.costPerUnit are snapshots of the rate master row's values
+   * and are kept in sync when the rate master row is edited.
+   */
+  rateMasterId?: string | null;
   status: ResourceStatus;
   calendarId?: string | null;
   parentId?: string | null;
@@ -222,6 +228,7 @@ export interface CreateResourceRequest {
   availability?: number | null;
   costPerUnit?: number | null;
   unit?: string | null;
+  rateMasterId?: string | null;
   status?: ResourceStatus;
   calendarId?: string | null;
   parentId?: string | null;

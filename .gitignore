@@ -84,3 +84,9 @@ backend/storage/
 Bipros_EPPM_Demo*.pptx
 Bipros_EPPM_Demo_Detailed.pdf
 generate_demo_ppt*.py
+
+# Local-only test data reset endpoint and opinionated demo seeders
+backend/bipros-api/src/main/java/com/bipros/api/config/seeder/RealWorldManpowerSeeder.java
+backend/bipros-api/src/main/java/com/bipros/api/service/TestDataResetService.java
+backend/bipros-api/src/main/java/com/bipros/api/controller/admin/TestDataResetController.java
+frontend/src/lib/api/testDataResetApi.ts

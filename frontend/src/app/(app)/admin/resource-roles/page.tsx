@@ -22,7 +22,6 @@ interface RoleForm {
   name: string;
   description: string;
   resourceTypeId: string;
-  productivityUnit: string;
   sortOrder: string;
   active: boolean;
 }
@@ -32,7 +31,6 @@ const initialRoleForm = (): RoleForm => ({
   name: "",
   description: "",
   resourceTypeId: "",
-  productivityUnit: "",
   sortOrder: "",
   active: true,
 });
@@ -42,7 +40,6 @@ const formFromRole = (r: ResourceRole): RoleForm => ({
   name: r.name,
   description: r.description ?? "",
   resourceTypeId: r.resourceTypeId,
-  productivityUnit: r.productivityUnit ?? "",
   sortOrder: r.sortOrder == null ? "" : String(r.sortOrder),
   active: r.active,
 });
@@ -109,10 +106,14 @@ export default function ResourceRolesPage() {
   const filteredRoles = useMemo(() => {
     let list = roles;
     if (typeFilter !== "ALL") {
-      const targetId = typeIdByCode.get(typeFilter);
-      list = list.filter((r) =>
-        targetId ? r.resourceTypeId === targetId : r.resourceTypeCode === typeFilter
-      );
+      // The "Manpower" tab uses code "MANPOWER" but the seeded type code is "LABOR".
+      // Accept both so the filter actually matches.
+      list = list.filter((r) => {
+        if (typeFilter === "MANPOWER") {
+          return r.resourceTypeCode === "MANPOWER" || r.resourceTypeCode === "LABOR";
+        }
+        return r.resourceTypeCode === typeFilter;
+      });
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -167,7 +168,6 @@ export default function ResourceRolesPage() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         resourceTypeId: form.resourceTypeId,
-        productivityUnit: form.productivityUnit.trim() || null,
         sortOrder: toIntOrNull(form.sortOrder),
         active: form.active,
       };
@@ -221,29 +221,6 @@ export default function ResourceRolesPage() {
             <div className="text-xs text-slate mt-0.5">{row.original.description}</div>
           )}
         </div>
-      ),
-    },
-    {
-      accessorKey: "resourceTypeCode",
-      header: "Type",
-      cell: ({ row }) => (
-        <Badge variant={typeBadgeVariant(row.original.resourceTypeCode)} withDot>
-          {row.original.resourceTypeName ?? row.original.resourceTypeCode}
-        </Badge>
-      ),
-    },
-    {
-      accessorKey: "productivityUnit",
-      header: "Productivity Unit",
-      cell: ({ row }) => (
-        <span className="text-slate">{row.original.productivityUnit ?? "—"}</span>
-      ),
-    },
-    {
-      accessorKey: "sortOrder",
-      header: "Sort",
-      cell: ({ row }) => (
-        <span className="text-right text-slate block">{row.original.sortOrder ?? "—"}</span>
       ),
     },
     {
@@ -412,18 +389,6 @@ export default function ResourceRolesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Productivity Unit
-              </label>
-              <input
-                type="text"
-                value={form.productivityUnit}
-                onChange={(e) => setForm({ ...form, productivityUnit: e.target.value })}
-                placeholder="Hours/Day, Sqm/Day, Bags…"
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
                 Sort Order
               </label>
               <input
@@ -511,3 +476,4 @@ export default function ResourceRolesPage() {
     </div>
   );
 }
+

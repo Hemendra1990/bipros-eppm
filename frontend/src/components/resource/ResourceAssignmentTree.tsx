@@ -47,6 +47,8 @@ interface RollupSums {
   plannedUnits: number | null;
   actualUnits: number | null;
   remainingUnits: number | null;
+  /** Common unit shared by all children, or null when mixed. Used to render "10 Day" on rollup rows. */
+  unit: string | null;
   budgetedCost: number;
   plannedCost: number;
   actualCost: number;
@@ -64,7 +66,7 @@ interface TreeNode {
 
 const UNASSIGNED_ROLE_KEY = "__unassigned__";
 
-function sumRows(rows: AssignmentRow[]): Omit<RollupSums, "childCount"> {
+function sumRows(rows: AssignmentRow[]): Omit<RollupSums, "childCount" | "unit"> {
   const acc = {
     budgetedUnits: 0,
     plannedUnits: 0,
@@ -94,6 +96,19 @@ function shareSameUnit(rows: AssignmentRow[]): boolean {
   const first = rows[0].unit;
   if (first == null) return false;
   return rows.every((r) => r.unit === first);
+}
+
+/** Returns the shared unit when {@link shareSameUnit} would be true, else null. */
+function commonUnit(rows: AssignmentRow[]): string | null {
+  return shareSameUnit(rows) ? rows[0].unit : null;
+}
+
+/** Format a number with its unit suffix (e.g. "10 Day"). Empty string for null/empty input. */
+function withUnit(n: number | null | undefined, unit: string | null | undefined): string {
+  if (n == null) return "";
+  const formatted = Number(n).toFixed(2);
+  if (!unit) return formatted;
+  return `${formatted} ${unit}`;
 }
 
 interface Props {
@@ -162,7 +177,7 @@ function buildActivityTree(assignments: AssignmentRow[]): TreeNode[] {
           id: `activity-${activityId}-role-${roleKey}`,
           code: roleName,
           name: roleName,
-          rollup: { childCount: roleRows.length, ...sums },
+          rollup: { childCount: roleRows.length, ...sums, unit: commonUnit(roleRows) },
           children: roleRows
             .slice()
             .sort((a, b) => a.resourceName.localeCompare(b.resourceName))
@@ -187,6 +202,7 @@ function buildActivityTree(assignments: AssignmentRow[]): TreeNode[] {
         plannedUnits: sameUnit ? activitySums.plannedUnits : null,
         actualUnits: sameUnit ? activitySums.actualUnits : null,
         remainingUnits: sameUnit ? activitySums.remainingUnits : null,
+        unit: sameUnit ? activityRows[0].unit : null,
         budgetedCost: activitySums.budgetedCost,
         plannedCost: activitySums.plannedCost,
         actualCost: activitySums.actualCost,
@@ -235,6 +251,7 @@ function buildResourceTypeTree(
         plannedUnits: sameUnit ? sums.plannedUnits : null,
         actualUnits: sameUnit ? sums.actualUnits : null,
         remainingUnits: sameUnit ? sums.remainingUnits : null,
+        unit: sameUnit ? rows[0].unit : null,
         budgetedCost: sums.budgetedCost,
         plannedCost: sums.plannedCost,
         actualCost: sums.actualCost,
@@ -294,6 +311,7 @@ function buildSupervisorTree(assignments: AssignmentRow[]): TreeNode[] {
         plannedUnits: sameUnit ? sums.plannedUnits : null,
         actualUnits: sameUnit ? sums.actualUnits : null,
         remainingUnits: sameUnit ? sums.remainingUnits : null,
+        unit: sameUnit ? rows[0].unit : null,
         budgetedCost: sums.budgetedCost,
         plannedCost: sums.plannedCost,
         actualCost: sums.actualCost,
@@ -339,6 +357,7 @@ function TreeRow({
   const plannedUnits = node.assignment?.plannedUnits ?? node.rollup?.plannedUnits ?? null;
   const actualUnits = node.assignment?.actualUnits ?? node.rollup?.actualUnits ?? null;
   const remainingUnits = node.assignment?.remainingUnits ?? node.rollup?.remainingUnits ?? null;
+  const unit = node.assignment?.unit ?? node.rollup?.unit ?? null;
   const budgetedCost = node.assignment?.budgetedCost ?? node.rollup?.budgetedCost ?? null;
   const plannedCost = node.assignment?.plannedCost ?? node.rollup?.plannedCost ?? null;
   const actualCost = node.assignment?.actualCost ?? node.rollup?.actualCost ?? null;
@@ -397,22 +416,22 @@ function TreeRow({
 
         {/* Budgeted Units (Phase 2) */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(budgetedUnits)}
+          {withUnit(budgetedUnits, unit)}
         </div>
 
         {/* Planned Units */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(plannedUnits)}
+          {withUnit(plannedUnits, unit)}
         </div>
 
         {/* Actual Units */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(actualUnits)}
+          {withUnit(actualUnits, unit)}
         </div>
 
         {/* Remaining Units */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(remainingUnits)}
+          {withUnit(remainingUnits, unit)}
         </div>
 
         {/* Rate Type */}

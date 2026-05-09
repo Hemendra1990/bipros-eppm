@@ -66,6 +66,11 @@ export interface FieldSummary {
   safetyIncidents: number
   activeSites: FieldActiveSite[]
   dailyWorklogs: FieldDailyWorklog[]
+  /** Stock Availability % = OK rows ÷ total tracked materials. */
+  stockAvailabilityPct: number
+  /** Re-Order Level Breach Count = LOW + CRITICAL stock rows. */
+  reorderBreachCount: number
+  stockTrackedMaterialCount: number
 }
 
 export const dashboardApi = {

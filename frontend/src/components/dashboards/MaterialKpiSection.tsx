@@ -79,7 +79,7 @@ export function MaterialKpiSection({ projectId, from, to, density = "compact" }:
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="rounded-lg border border-border bg-surface/50 p-4">
           <div className="text-xs uppercase tracking-wide text-text-muted">Material Utilisation</div>
           <div
@@ -128,6 +128,20 @@ export function MaterialKpiSection({ projectId, from, to, density = "compact" }:
             target = 0
           </div>
         </div>
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Cost / Unit Finished</div>
+          <div className="mt-1 text-2xl font-semibold text-text-primary">
+            {(kpis.weightedAvgCostPerUnitFinished ?? 0) > 0
+              ? `₹${formatNumber(kpis.weightedAvgCostPerUnitFinished, 2)}`
+              : "—"}
+          </div>
+          <div
+            className="mt-1 text-xs text-text-secondary"
+            title="KPI 9.5 — Σ DPR-material line cost ÷ Σ qty finished, weighted across activities. Compared per-activity vs BOQ budgeted_rate in the drill-down."
+          >
+            weighted across activities
+          </div>
+        </div>
       </div>
 
       {density === "full" && kpis.byMaterial.length > 0 && (
@@ -154,6 +168,52 @@ export function MaterialKpiSection({ projectId, from, to, density = "compact" }:
                   <td className="py-1 text-right">{formatPct(row.utilizationPct)}</td>
                   <td className="py-1 text-right">
                     {row.avgUnitRate > 0 ? `₹${formatNumber(row.avgUnitRate, 2)}` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {density === "full" && kpis.costPerUnitByActivity && kpis.costPerUnitByActivity.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface/40 p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-2">
+            Cost / Unit Finished — top 10 by spend (KPI 9.5)
+          </h3>
+          <table className="w-full text-xs">
+            <thead className="text-text-muted">
+              <tr>
+                <th className="text-left pb-1">Activity</th>
+                <th className="text-right pb-1">Material ₹</th>
+                <th className="text-right pb-1">Qty</th>
+                <th className="text-right pb-1">₹ / unit</th>
+                <th className="text-right pb-1">BOQ rate</th>
+                <th className="text-right pb-1">Δ vs BOQ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {kpis.costPerUnitByActivity.slice(0, 10).map((row, i) => (
+                <tr key={row.activityId ?? `mat-unmapped-${i}`} className="text-text-primary">
+                  <td className="py-1 truncate max-w-[200px]">{row.activityName}</td>
+                  <td className="py-1 text-right">₹{formatNumber(row.materialCost, 0)}</td>
+                  <td className="py-1 text-right">{formatNumber(row.qtyFinished, 2)}</td>
+                  <td className="py-1 text-right">₹{formatNumber(row.costPerUnit, 2)}</td>
+                  <td className="py-1 text-right">
+                    {row.boqBudgetedRate != null ? `₹${formatNumber(row.boqBudgetedRate, 2)}` : "—"}
+                  </td>
+                  <td
+                    className={`py-1 text-right ${
+                      row.varianceVsBoqPct == null
+                        ? ""
+                        : row.varianceVsBoqPct < -0.1
+                          ? "text-danger"
+                          : row.varianceVsBoqPct > 0.1
+                            ? "text-success"
+                            : ""
+                    }`}
+                  >
+                    {row.varianceVsBoqPct != null ? formatPct(row.varianceVsBoqPct) : "—"}
                   </td>
                 </tr>
               ))}

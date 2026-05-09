@@ -251,6 +251,109 @@ export function ManpowerKpiSection({ projectId, from, to, density = "compact" }:
         </div>
       </div>
 
+      {/* NH-48 Cost block — KPIs 3.1 / 3.3 / 3.4 / 3.7 + 2.7 */}
+      {kpis.labourCostSummary && (
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Planned Labour Cost</div>
+          <div className="mt-1 text-2xl font-semibold text-text-primary">
+            {kpis.labourCostSummary.plannedLabourCost > 0
+              ? formatRupees(kpis.labourCostSummary.plannedLabourCost)
+              : "—"}
+          </div>
+          <div
+            className="mt-1 text-xs text-text-secondary"
+            title="KPI 3.1 — Σ over LABOR resource assignments of (planned man-hours × hourly rate × overlap-with-window). planned_units stored as man-hours."
+          >
+            {kpis.labourCostSummary.activityCoverageCount} activities planned
+            {kpis.labourCostSummary.missingPlanCount > 0 && ` · ${kpis.labourCostSummary.missingPlanCount} skipped`}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Labour Cost Variance</div>
+          <div
+            className={`mt-1 text-2xl font-semibold ${
+              kpis.labourCostSummary.plannedLabourCost === 0
+                ? "text-text-primary"
+                : kpis.labourCostSummary.labourCostVariance < 0
+                  ? "text-danger"
+                  : "text-success"
+            }`}
+          >
+            {kpis.labourCostSummary.plannedLabourCost > 0
+              ? formatRupees(kpis.labourCostSummary.labourCostVariance)
+              : "—"}
+          </div>
+          <div className="mt-1 text-xs text-text-secondary" title="KPI 3.3 — PLC − ALC. Negative = over budget.">
+            PLC − ALC
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">LCPI</div>
+          <div
+            className={`mt-1 text-2xl font-semibold ${
+              kpis.labourCostSummary.lcpi === 0
+                ? "text-text-primary"
+                : kpis.labourCostSummary.lcpi < 0.95
+                  ? "text-danger"
+                  : kpis.labourCostSummary.lcpi >= 1.0
+                    ? "text-success"
+                    : "text-warning"
+            }`}
+          >
+            {kpis.labourCostSummary.lcpi > 0 ? formatNumber(kpis.labourCostSummary.lcpi, 2) : "—"}
+          </div>
+          <div className="mt-1 text-xs text-text-secondary" title="KPI 3.4 — Budgeted Labour Cost ÷ Actual Labour Cost. ≥ 1.0 = on budget.">
+            PLC ÷ ALC
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">OT Cost % of Wage Bill</div>
+          <div
+            className={`mt-1 text-2xl font-semibold ${
+              kpis.labourCostSummary.otCostPct > 0.15
+                ? "text-danger"
+                : kpis.labourCostSummary.otCostPct > 0.10
+                  ? "text-warning"
+                  : "text-text-primary"
+            }`}
+          >
+            {formatPct(kpis.labourCostSummary.otCostPct)}
+          </div>
+          <div
+            className="mt-1 text-xs text-text-secondary"
+            title="KPI 3.7 — OT premium pay ÷ total wage bill × 100. Premium = OT hrs × rate × 2.0× per Indian Factories Act §59."
+          >
+            premium @ 2.0× base
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-surface/50 p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Cumulative Progress</div>
+          <div
+            className={`mt-1 text-2xl font-semibold ${
+              !kpis.cumulativeProgressPct
+                ? "text-text-primary"
+                : kpis.cumulativeProgressPct < 0.9
+                  ? "text-danger"
+                  : kpis.cumulativeProgressPct > 1.05
+                    ? "text-success"
+                    : "text-text-primary"
+            }`}
+          >
+            {kpis.cumulativeProgressPct && kpis.cumulativeProgressPct > 0
+              ? formatPct(kpis.cumulativeProgressPct)
+              : "—"}
+          </div>
+          <div
+            className="mt-1 text-xs text-text-secondary"
+            title="KPI 2.7 — Cumulative Actual Qty ÷ Cumulative Planned Qty × 100. Planned uses linear interpolation in Phase 2A — replaced by activity baseline snapshots later."
+          >
+            actual ÷ planned (linear)
+          </div>
+        </div>
+      </div>
+      )}
+
       {density === "full" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="rounded-lg border border-border bg-surface/40 p-4">
@@ -272,8 +375,8 @@ export function ManpowerKpiSection({ projectId, from, to, density = "compact" }:
                     <td colSpan={4} className="py-2 text-center text-text-muted">No data</td>
                   </tr>
                 )}
-                {worstProductivity.map((p) => (
-                  <tr key={p.activityId} className="text-text-primary">
+                {worstProductivity.map((p, i) => (
+                  <tr key={p.activityId ?? `unmapped-${i}`} className="text-text-primary">
                     <td className="py-1 truncate max-w-[200px]">
                       {p.activityName}
                       {p.unitMismatch && (
@@ -346,8 +449,8 @@ export function ManpowerKpiSection({ projectId, from, to, density = "compact" }:
                     </td>
                   </tr>
                 )}
-                {worstAchievement.map((row) => (
-                  <tr key={row.activityId} className="text-text-primary">
+                {worstAchievement.map((row, i) => (
+                  <tr key={row.activityId ?? `unmapped-${i}`} className="text-text-primary">
                     <td className="py-1 truncate max-w-[160px]">{row.activityName}</td>
                     <td className="py-1 text-right">{formatNumber(row.actualDailyOutput, 2)}</td>
                     <td className="py-1 text-right">{formatNumber(row.plannedDailyOutput, 2)}</td>
@@ -381,8 +484,8 @@ export function ManpowerKpiSection({ projectId, from, to, density = "compact" }:
                     <td colSpan={4} className="py-2 text-center text-text-muted">No data</td>
                   </tr>
                 )}
-                {worstCrews.map((c) => (
-                  <tr key={c.activityId} className="text-text-primary">
+                {worstCrews.map((c, i) => (
+                  <tr key={c.activityId ?? `unmapped-${i}`} className="text-text-primary">
                     <td className="py-1 truncate max-w-[160px]">{c.activityName}</td>
                     <td className="py-1 text-right">{c.crewSize ?? "—"}</td>
                     <td className="py-1 text-right">{formatNumber(c.actualOutputPerDay, 2)}</td>

@@ -226,8 +226,16 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
     Project project = projectOpt.get();
     UUID projectId = project.getId();
 
-    if (!dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId).isEmpty()) {
-      log.info("[BNK-DAILY] DPR rows already present for project '{}' — skipping", PROJECT_CODE);
+    // Idempotency gate: skip the entire seeder when ANY daily-ops data already exists.
+    // Checking only DPRs is too narrow — the test-data reset endpoint wipes DPRs but leaves
+    // environmental rows like weather alone. Without this broader check, a re-boot after a
+    // reset triggers duplicate-key violations on weather (and other once-only tables) and
+    // worse, re-creates the DPRs/deployments the user just wiped on purpose.
+    boolean dprsExist = !dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId).isEmpty();
+    boolean weatherExists = !weatherRepository.findByProjectIdOrderByLogDateAscIdAsc(projectId).isEmpty();
+    if (dprsExist || weatherExists) {
+      log.info("[BNK-DAILY] daily-ops data already present for project '{}' (dprs={}, weather={}) — skipping",
+          PROJECT_CODE, dprsExist, weatherExists);
       return;
     }
 

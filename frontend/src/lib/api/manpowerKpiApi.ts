@@ -60,6 +60,21 @@ export interface ManpowerDataQuality {
   noBoqBaselineActivityCount: number;
 }
 
+/**
+ * KPI 3.1 / 3.3 / 3.4 / 3.7 cost block.
+ * Variance positive = under budget; LCPI ≥ 1.0 = on budget.
+ * OT premium uses 2.0× per Indian Factories Act §59 (locked 2026-05-08).
+ */
+export interface LabourCostSummary {
+  plannedLabourCost: number;
+  actualLabourCost: number;
+  labourCostVariance: number;
+  lcpi: number;
+  otCostPct: number;
+  activityCoverageCount: number;
+  missingPlanCount: number;
+}
+
 export interface ManpowerKpiResponse {
   projectId: string;
   from: string;
@@ -73,6 +88,9 @@ export interface ManpowerKpiResponse {
   idleTimeRatioPct: number;
   overtimeRatioPct: number;
   outputAchievement: OutputAchievementRow[];
+  labourCostSummary: LabourCostSummary;
+  /** KPI 2.7 — linear-interpolation fallback in Phase 2A. */
+  cumulativeProgressPct: number;
   dataQuality: ManpowerDataQuality;
 }
 

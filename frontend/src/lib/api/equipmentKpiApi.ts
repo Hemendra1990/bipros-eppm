@@ -10,6 +10,8 @@ export interface UtilizationRow {
   breakdownHours: number;
   utilizationPct: number;
   mechanicalAvailabilityPct: number;
+  /** KPI 7.1 — idle_hours × Resource.cost_per_unit. Single rate across OWNED/HIRED in Phase 2A. */
+  idleCost: number;
 }
 
 export interface IdleAlertRow {
@@ -35,6 +37,8 @@ export interface AvailabilityPerformanceRow {
   resourceName: string;
   availability: number;
   performance: number;
+  /** KPI 6.2 — attributed_qty ÷ Σ working_hours per machine. */
+  outputRatePerHour: number;
 }
 
 export interface OwnedRentedSlice {
@@ -63,6 +67,8 @@ export interface EquipmentKpiResponse {
   serviceDue: ServiceDueRow[];
   mechanicalAvailabilityPct: number;
   equipmentProductivityIndexPct: number;
+  /** KPI 7.1 project total. */
+  idleMachineCostTotal: number;
 }
 
 export const equipmentKpiApi = {

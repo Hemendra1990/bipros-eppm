@@ -86,6 +86,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
       resourceId: opt.resourceId,
       equipmentType: opt.resourceName,
       unitRate: opt.unitRate ?? null,
+      unitRateBasis: opt.unitRateBasis ?? null,
     });
   };
 
@@ -212,14 +213,25 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
       label: "Rate",
       minWidth: 100,
       align: "right",
-      render: (r) => <span className="tabular-nums text-slate">{fmtRate(r.unitRate)}</span>,
+      render: (r) => (
+        <span className="tabular-nums text-slate">
+          {fmtRate(r.unitRate)}
+          {r.unitRateBasis === "HOUR" && <span className="ml-1 text-xs text-text-muted">/Hr</span>}
+          {r.unitRateBasis === "DAY" && <span className="ml-1 text-xs text-text-muted">/Day</span>}
+          {r.unitRateBasis === "EACH" && <span className="ml-1 text-xs text-text-muted">/Each</span>}
+        </span>
+      ),
     },
     {
       key: "cost",
       label: "Cost",
       minWidth: 110,
       align: "right",
-      render: (r) => <span className="tabular-nums">{fmtMoney(equipmentLineCost(r, "HOUR"))}</span>,
+      render: (r) => (
+        <span className="tabular-nums">
+          {fmtMoney(equipmentLineCost(r, r.unitRateBasis ?? "HOUR"))}
+        </span>
+      ),
     },
     {
       key: "availabilityStatus",

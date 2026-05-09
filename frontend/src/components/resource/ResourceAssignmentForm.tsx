@@ -48,6 +48,13 @@ export function ResourceAssignmentForm({
   const [roleId, setRoleId] = useState("");
   const [rolePlannedUnits, setRolePlannedUnits] = useState("");
   const [rateType, setRateType] = useState("STANDARD");
+  /**
+   * Type filter for the pooled-resource picker. Defaults to ALL so existing users see no
+   * change unless they pick a type. The dropdown filters to entries whose
+   * {@code resourceTypeName} matches the chosen kind — pool comes back with the localized
+   * name (Labor / Equipment / Material), not the code.
+   */
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "LABOR" | "EQUIPMENT" | "MATERIAL">("ALL");
 
   const { data: poolData } = useQuery({
     queryKey: ["resource-pool", projectId],
@@ -83,6 +90,25 @@ export function ResourceAssignmentForm({
   }, [activitiesData]);
 
   const effectiveActivityId = activityId ?? pickedActivityId;
+
+  /** Counts per type — drives the "Labor 39 / Equipment 34 / Material 23" pill labels. */
+  const typeCounts = useMemo(() => {
+    const c = { ALL: pool.length, LABOR: 0, EQUIPMENT: 0, MATERIAL: 0 } as Record<
+      "ALL" | "LABOR" | "EQUIPMENT" | "MATERIAL",
+      number
+    >;
+    for (const p of pool) {
+      const code = poolKindOf(p);
+      if (code) c[code]++;
+    }
+    return c;
+  }, [pool]);
+
+  /** Pool filtered by the active type pill. */
+  const filteredPool = useMemo(() => {
+    if (typeFilter === "ALL") return pool;
+    return pool.filter((p) => poolKindOf(p) === typeFilter);
+  }, [pool, typeFilter]);
 
   const poolById = useMemo(() => {
     const m = new Map<string, ProjectResourceResponse>();
@@ -218,6 +244,12 @@ export function ResourceAssignmentForm({
               </span>
             </label>
 
+            <ResourceTypeFilter
+              value={typeFilter}
+              onChange={setTypeFilter}
+              counts={typeCounts}
+            />
+
             {resourceLines.length > 0 && (
               <div className="mt-2 space-y-2">
                 {resourceLines.map((line) => {
@@ -274,21 +306,27 @@ export function ResourceAssignmentForm({
                 placeholder={
                   resourceLines.length > 0
                     ? "Add another resource..."
-                    : "Search pooled resources..."
+                    : typeFilter === "ALL"
+                      ? "Search pooled resources..."
+                      : `Search ${typeFilter.toLowerCase()} resources...`
                 }
-                options={pool
+                options={filteredPool
                   .filter((p) => !resourceLines.some((l) => l.resourceId === p.resourceId))
                   .map((p) => ({
                     value: p.resourceId,
-                    label: `${p.resourceCode ?? p.resourceId} - ${p.resourceName ?? "Unknown"}`,
+                    label: `${p.resourceCode ?? p.resourceId} — ${p.resourceName ?? "Unknown"}${p.resourceTypeName ? ` · ${p.resourceTypeName}` : ""}`,
                   }))}
               />
             </div>
-            {pool.length === 0 && (
+            {pool.length === 0 ? (
               <p className="mt-1 text-xs text-amber-600">
                 No resources in pool. Add resources to the project pool first.
               </p>
-            )}
+            ) : filteredPool.length === 0 ? (
+              <p className="mt-1 text-xs text-amber-600">
+                No {typeFilter.toLowerCase()} resources in this project's pool.
+              </p>
+            ) : null}
           </div>
         ) : (
           <>
@@ -355,6 +393,72 @@ export function ResourceAssignmentForm({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Map a {@link ProjectResourceResponse} to one of the three system kinds, falling back to null
+ * for custom resource types. Pool entries carry {@code resourceTypeName} (the localized name —
+ * "Labor", "Equipment", "Material") rather than the code; we case-fold and prefix-match so
+ * "Labour" still resolves to LABOR if seeded that way.
+ */
+function poolKindOf(
+  p: ProjectResourceResponse,
+): "LABOR" | "EQUIPMENT" | "MATERIAL" | null {
+  const name = (p.resourceTypeName ?? "").trim().toLowerCase();
+  if (name.startsWith("lab") || name === "manpower") return "LABOR";
+  if (name.startsWith("equip")) return "EQUIPMENT";
+  if (name.startsWith("mat")) return "MATERIAL";
+  return null;
+}
+
+/**
+ * Pill bar above the pooled-resource picker. Lets the user narrow the dropdown to one
+ * kind (Labor / Equipment / Material) before searching, instead of scrolling through a
+ * mixed list of 73+ resources. Each pill carries its current count for quick scanning.
+ */
+function ResourceTypeFilter({
+  value,
+  onChange,
+  counts,
+}: {
+  value: "ALL" | "LABOR" | "EQUIPMENT" | "MATERIAL";
+  onChange: (v: "ALL" | "LABOR" | "EQUIPMENT" | "MATERIAL") => void;
+  counts: Record<"ALL" | "LABOR" | "EQUIPMENT" | "MATERIAL", number>;
+}) {
+  const pills: { key: "ALL" | "LABOR" | "EQUIPMENT" | "MATERIAL"; label: string }[] = [
+    { key: "ALL", label: "All" },
+    { key: "LABOR", label: "Manpower" },
+    { key: "EQUIPMENT", label: "Equipment" },
+    { key: "MATERIAL", label: "Material" },
+  ];
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {pills.map((p) => {
+        const active = value === p.key;
+        return (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => onChange(p.key)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              active
+                ? "bg-accent text-accent-foreground"
+                : "border border-border bg-surface-hover text-text-secondary hover:bg-surface-active"
+            }`}
+          >
+            {p.label}
+            <span
+              className={`rounded-full px-1.5 text-[10px] ${
+                active ? "bg-black/20 text-accent-foreground" : "bg-surface-active text-text-muted"
+              }`}
+            >
+              {counts[p.key]}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

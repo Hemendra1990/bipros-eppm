@@ -95,7 +95,11 @@ public class ResourceRoleService {
     r.setName(req.name());
     r.setDescription(req.description());
     r.setResourceType(type);
-    r.setProductivityUnit(req.productivityUnit());
+    // Phase 8: productivityUnit is hidden from the UI but kept in DB as the legacy fallback for
+    // role-only / unstaffed assignment unit display. Update only when the request explicitly
+    // supplies a value — sending null (the new UI's default) preserves the existing value
+    // instead of wiping it.
+    if (req.productivityUnit() != null) r.setProductivityUnit(req.productivityUnit());
     if (req.sortOrder() != null) r.setSortOrder(req.sortOrder());
     if (req.active() != null) r.setActive(req.active());
 

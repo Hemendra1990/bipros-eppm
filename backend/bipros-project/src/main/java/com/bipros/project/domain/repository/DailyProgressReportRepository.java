@@ -9,12 +9,23 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface DailyProgressReportRepository extends JpaRepository<DailyProgressReport, UUID> {
 
   List<DailyProgressReport> findByProjectIdOrderByReportDateAscIdAsc(UUID projectId);
+
+  /**
+   * Used by the create path to reject duplicate DPRs for the same (project, day, activity).
+   * The ledger {@code daily_activity_resource_outputs} has a unique key on
+   * {@code (project_id, output_date, activity_id, resource_id)} — two DPRs that touch the same
+   * activity on the same day with overlapping resources collide on save. Catch it up front so
+   * the user sees a clear "edit the existing DPR" message instead of a constraint violation.
+   */
+  Optional<DailyProgressReport> findFirstByProjectIdAndReportDateAndActivityId(
+      UUID projectId, LocalDate reportDate, UUID activityId);
 
   List<DailyProgressReport> findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(
       UUID projectId, LocalDate from, LocalDate to);

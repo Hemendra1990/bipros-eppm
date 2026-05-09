@@ -92,53 +92,121 @@ export function EvmKpiSection({ projectId, density = "compact" }: Props) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Kpi label="BAC" value={formatRupees(evm.budgetAtCompletion)} hint="Budget at Completion" />
-        <Kpi label="PV" value={formatRupees(evm.plannedValue)} hint="KPI 10.1 — BAC × Planned %" />
-        <Kpi label="EV" value={formatRupees(evm.earnedValue)} hint="KPI 10.2 — BAC × Actual %" />
-        <Kpi label="AC" value={formatRupees(evm.actualCost)} hint="KPI 10.3 — Actual costs to date" />
+        <Kpi
+          label="BAC"
+          value={formatRupees(evm.budgetAtCompletion)}
+          caption="Budget at Completion"
+          tooltip={`Total approved project budget — the contractual cost ceiling.
+Source: Σ activity at-completion cost rolled to project.
+Read it as: "We have permission to spend up to this amount."`}
+        />
+        <Kpi
+          label="PV"
+          value={formatRupees(evm.plannedValue)}
+          caption="KPI 10.1 — BAC × Planned %"
+          tooltip={`Planned Value (BCWS) — value of work the schedule says SHOULD be done by today.
+Formula: BAC × planned-percent-complete-as-of-today.
+Read it as: "By this date, we should have produced ₹X worth of deliverables."`}
+        />
+        <Kpi
+          label="EV"
+          value={formatRupees(evm.earnedValue)}
+          caption="KPI 10.2 — BAC × Actual %"
+          tooltip={`Earned Value (BCWP) — value of work actually completed.
+Formula: BAC × actual-percent-complete.
+Read it as: "What we've delivered so far is worth ₹X of contract value."`}
+        />
+        <Kpi
+          label="AC"
+          value={formatRupees(evm.actualCost)}
+          caption="KPI 10.3 — Actual costs to date"
+          tooltip={`Actual Cost (ACWP) — money actually spent so far.
+Source: Σ DPR-derived costs + RA bill payments + invoices to date.
+Compared to EV: tells you whether the spend bought you matching value.`}
+        />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Kpi
           label="SV"
           value={formatRupees(evm.scheduleVariance)}
-          hint="KPI 10.4 — EV − PV (negative = behind schedule)"
+          caption="KPI 10.4 — EV − PV"
+          tooltip={`Schedule Variance — schedule slip expressed in ₹.
+Formula: EV − PV.
+Positive = ahead of schedule.   Negative = behind by this rupee value.
+Pair with SPI for the "ratio" view of the same gap.`}
           accent={evm.scheduleVariance != null && evm.scheduleVariance < 0 ? "danger" : "default"}
         />
         <Kpi
           label="CV"
           value={formatRupees(evm.costVariance)}
-          hint="KPI 10.5 — EV − AC (negative = over budget)"
+          caption="KPI 10.5 — EV − AC"
+          tooltip={`Cost Variance — budget gap expressed in ₹.
+Formula: EV − AC.
+Positive = under budget (saving money).   Negative = over budget (overrun).
+Pair with CPI for the "ratio" view of the same gap.`}
           accent={evm.costVariance != null && evm.costVariance < 0 ? "danger" : "default"}
         />
         <Kpi
           label="SPI"
           value={formatIndex(evm.schedulePerformanceIndex)}
-          hint="KPI 10.6 — EV ÷ PV (1.0 = on plan)"
+          caption="KPI 10.6 — EV ÷ PV"
+          tooltip={`Schedule Performance Index — "how fast are we moving vs plan?"
+Formula: EV ÷ PV.
+1.0 = on plan.   < 1.0 = behind (e.g., 0.85 = delivering 85% of scheduled output).
+< 0.85 = critical — escalate.   Target ≥ 0.90.`}
           accentClass={indexClass(evm.schedulePerformanceIndex)}
         />
         <Kpi
           label="CPI"
           value={formatIndex(evm.costPerformanceIndex)}
-          hint="KPI 10.7 — EV ÷ AC (1.0 = on budget)"
+          caption="KPI 10.7 — EV ÷ AC"
+          tooltip={`Cost Performance Index — "how much value are we getting per rupee spent?"
+Formula: EV ÷ AC.
+1.0 = on budget.   < 1.0 = over budget (e.g., 0.80 = getting ₹0.80 of work per ₹1 spent).
+> 1.0 looks favourable but >> 1.5 usually means AC is under-reported (check invoices/DPR cost capture).`}
           accentClass={indexClass(evm.costPerformanceIndex)}
         />
       </div>
 
       {density === "full" && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Kpi label="EAC" value={formatRupees(evm.estimateAtCompletion)} hint="KPI 10.8 — Forecast at completion" />
-          <Kpi label="ETC" value={formatRupees(evm.estimateToComplete)} hint="Estimate to complete" />
+          <Kpi
+            label="EAC"
+            value={formatRupees(evm.estimateAtCompletion)}
+            caption="KPI 10.8 — BAC ÷ CPI"
+            tooltip={`Estimate at Completion — forecast of total final project cost given current performance.
+Formula: BAC ÷ CPI (assumes current cost efficiency continues).
+Read it as: "If we keep spending at today's efficiency, we'll finish at this number."
+Compared to BAC: tells you the projected final overrun (or saving).`}
+          />
+          <Kpi
+            label="ETC"
+            value={formatRupees(evm.estimateToComplete)}
+            caption="EAC − AC"
+            tooltip={`Estimate to Complete — additional money needed from today to finish.
+Formula: EAC − AC.
+Read it as: "From this point onward, we still need to spend approximately ₹X to deliver the remaining work."`}
+          />
           <Kpi
             label="VAC"
             value={formatRupees(evm.varianceAtCompletion)}
-            hint="KPI 10.9 — BAC − EAC"
+            caption="KPI 10.9 — BAC − EAC"
+            tooltip={`Variance at Completion — final budget surplus or overrun forecast.
+Formula: BAC − EAC.
+Positive = projected under budget at finish.   Negative = projected overrun.
+This is the "headline" number for the cost-engineer's monthly review.`}
             accent={evm.varianceAtCompletion != null && evm.varianceAtCompletion < 0 ? "danger" : "default"}
           />
           <Kpi
             label="TCPI"
             value={formatIndex(evm.toCompletePerformanceIndex)}
-            hint="KPI 10.10 — (BAC − EV) ÷ (BAC − AC)"
+            caption="KPI 10.10 — (BAC − EV) ÷ (BAC − AC)"
+            tooltip={`To-Complete Performance Index — efficiency required over remaining work to still hit BAC.
+Formula: (BAC − EV) ÷ (BAC − AC).
+1.0 = continue at current pace and you'll finish exactly on budget.
+> 1.10 = recovery getting harder.   > 1.20 = unrealistic — re-baseline or accept overrun.
+A common guardrail: if TCPI is much greater than CPI, the original budget can no longer be met without intervention.`}
             accentClass={indexClass(evm.toCompletePerformanceIndex)}
           />
         </div>
@@ -226,8 +294,8 @@ function EvmActivityTable({ projectId }: { projectId: string }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((n) => (
-            <tr key={n.id} className="text-text-primary">
+          {sorted.map((n, i) => (
+            <tr key={n.id ?? `${n.code ?? "wbs"}-${i}`} className="text-text-primary">
               <td className="py-1 truncate max-w-[260px]" title={n.name}>
                 <span className="text-text-muted mr-2">{n.code}</span>{n.name}
               </td>
@@ -252,16 +320,23 @@ function EvmActivityTable({ projectId }: { projectId: string }) {
   );
 }
 
+/**
+ * EVM tile. {@code caption} is the short formula line shown beneath the value (always visible).
+ * {@code tooltip} is the rich plain-English explanation shown on hover over the whole tile —
+ * preserve newlines so the browser tooltip lays out as multiple lines.
+ */
 function Kpi({
   label,
   value,
-  hint,
+  caption,
+  tooltip,
   accent,
   accentClass,
 }: {
   label: string;
   value: string;
-  hint: string;
+  caption: string;
+  tooltip: string;
   accent?: "default" | "danger" | "success";
   accentClass?: string;
 }) {
@@ -273,12 +348,21 @@ function Kpi({
         ? "text-success"
         : "text-text-primary";
   return (
-    <div className="rounded-lg border border-border bg-surface/50 p-4">
-      <div className="text-xs uppercase tracking-wide text-text-muted">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${cls}`} title={hint}>
-        {value}
+    <div
+      className="group relative rounded-lg border border-border bg-surface/50 p-4 cursor-help transition-colors hover:border-gold/40"
+      title={tooltip}
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-xs uppercase tracking-wide text-text-muted">{label}</div>
+        <span
+          aria-hidden
+          className="text-[10px] text-text-muted/50 group-hover:text-gold-deep transition-colors"
+        >
+          ⓘ
+        </span>
       </div>
-      <div className="mt-1 text-[11px] text-text-secondary">{hint}</div>
+      <div className={`mt-1 text-2xl font-semibold ${cls}`}>{value}</div>
+      <div className="mt-1 text-[11px] text-text-secondary">{caption}</div>
     </div>
   );
 }

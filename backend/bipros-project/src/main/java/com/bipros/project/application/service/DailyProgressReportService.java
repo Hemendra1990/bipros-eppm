@@ -91,6 +91,22 @@ public class DailyProgressReportService {
   public DailyProgressReportResponse create(UUID projectId, CreateDailyProgressReportRequest request) {
     ensureProjectExists(projectId);
 
+    // Reject duplicate DPRs for the same (project, day, activity). The ledger
+    // (daily_activity_resource_outputs) has a unique key on (project, date, activity, resource);
+    // two DPRs that overlap on resources for the same activity on the same day collide on save.
+    // The user should edit the existing DPR instead of creating a parallel one.
+    if (request.activityId() != null && request.reportDate() != null) {
+      dprRepository.findFirstByProjectIdAndReportDateAndActivityId(
+              projectId, request.reportDate(), request.activityId())
+          .ifPresent(existing -> {
+            throw new com.bipros.common.exception.BusinessRuleException(
+                "DPR_ALREADY_EXISTS_FOR_ACTIVITY",
+                "A DPR for this activity on " + request.reportDate()
+                    + " already exists. Edit the existing entry to add or update resources, "
+                    + "rather than creating a parallel one.");
+          });
+    }
+
     DailyProgressReport dpr = DailyProgressReport.builder()
         .projectId(projectId)
         .reportDate(request.reportDate())

@@ -6,17 +6,17 @@ import { dashboardApi, type FieldSummary } from "@/lib/api/dashboardApi";
 import { activityApi } from "@/lib/api/activityApi";
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle,
   Clock,
   HardHat,
+  Package,
   ShieldCheck,
   Truck,
   Users,
 } from "lucide-react";
 import type { ActivityResponse } from "@/lib/types";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
-import { ManpowerKpiSection } from "@/components/dashboards/ManpowerKpiSection";
-import { EquipmentKpiSection } from "@/components/dashboards/EquipmentKpiSection";
 
 function activityBadge(status: string): BadgeVariant {
   switch (status) {
@@ -79,6 +79,9 @@ export default function ProjectFieldInsightsPage() {
   const totalEquipment = fieldSummary?.equipmentDeployed ?? 0;
   const totalIncidents = fieldSummary?.safetyIncidents ?? 0;
   const totalOperatingHours = fieldSummary?.operatingHours4d ?? 0;
+  const stockAvailability = fieldSummary?.stockAvailabilityPct ?? 0;
+  const reorderBreaches = fieldSummary?.reorderBreachCount ?? 0;
+  const stockTracked = fieldSummary?.stockTrackedMaterialCount ?? 0;
 
   if (isLoadingConfig) {
     return (
@@ -91,7 +94,7 @@ export default function ProjectFieldInsightsPage() {
   return (
     <div>
       {/* KPI strip */}
-      <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+      <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard label="Workers on site" value={totalWorkers} icon={<Users size={16} />} />
         <KpiCard
           label="Equipment deployed"
@@ -111,15 +114,19 @@ export default function ProjectFieldInsightsPage() {
           icon={<ShieldCheck size={16} />}
           accent={totalIncidents > 0 ? "burgundy" : "emerald"}
         />
+        <KpiCard
+          label="Stock availability"
+          value={stockTracked === 0 ? "—" : `${(stockAvailability * 100).toFixed(0)}%`}
+          icon={<Package size={16} />}
+          accent={stockAvailability >= 0.95 ? "emerald" : stockAvailability >= 0.8 ? "gold" : "burgundy"}
+        />
+        <KpiCard
+          label="Re-order breaches"
+          value={reorderBreaches}
+          icon={<AlertTriangle size={16} />}
+          accent={reorderBreaches > 0 ? "burgundy" : "emerald"}
+        />
       </div>
-
-      <section className="mb-6 rounded-xl border border-hairline bg-paper p-5">
-        <ManpowerKpiSection projectId={projectId} density="compact" />
-      </section>
-
-      <section className="mb-6 rounded-xl border border-hairline bg-paper p-5">
-        <EquipmentKpiSection projectId={projectId} density="compact" />
-      </section>
 
       <section className="mb-6">
         <SectionHeading
