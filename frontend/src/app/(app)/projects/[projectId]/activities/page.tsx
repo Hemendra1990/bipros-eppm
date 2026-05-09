@@ -15,6 +15,23 @@ import { costApi } from "@/lib/api/costApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityWbsTreeView } from "@/components/activity/ActivityWbsTreeView";
 import { ActivityAiGenerateDialog } from "@/components/activity/ActivityAiGenerateDialog";
+import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer";
+import {
+  ActivityRowContextMenu,
+  type ContextMenuPosition,
+} from "@/components/activity/ActivityRowContextMenu";
+import {
+  QuickAssignResourceDialog,
+  type ResourceKind,
+} from "@/components/activity/QuickAssignResourceDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { getErrorMessage } from "@/lib/utils/error";
 import { notificationHelpers } from "@/lib/notificationHelpers";
 import Link from "next/link";
@@ -64,6 +81,16 @@ export default function ActivitiesPage() {
   // currently typed into the % input.
   const [progressEdit, setProgressEdit] = useState<Record<string, string>>({});
   const [pendingId, setPendingId] = useState<string | null>(null);
+
+  // Row interaction state — left-click selects (opens drawer), right-click opens the menu.
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<
+    { activity: ActivityResponse; position: ContextMenuPosition } | null
+  >(null);
+  const [quickAssign, setQuickAssign] = useState<
+    { activity: ActivityResponse; kind: ResourceKind } | null
+  >(null);
+  const [deleteTarget, setDeleteTarget] = useState<ActivityResponse | null>(null);
 
   const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
   const markScheduleFresh = useScheduleStaleStore((s) => s.markScheduleFresh);
@@ -277,6 +304,41 @@ export default function ActivitiesPage() {
       delete next[a.id];
       return next;
     });
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: (activityId: string) => activityApi.deleteActivity(projectId, activityId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["activities", projectId] });
+      qc.invalidateQueries({ queryKey: ["wbs", projectId] });
+      qc.invalidateQueries({ queryKey: ["relationships", projectId] });
+      markScheduleStale(projectId);
+      toast.success("Activity deleted");
+      setDeleteTarget(null);
+      // If the deleted activity was open in the drawer, close it.
+      setSelectedActivityId((prev) => (prev && deleteTarget && prev === deleteTarget.id ? null : prev));
+    },
+    onError: (err: unknown) => {
+      const msg = getErrorMessage(err, "Failed to delete activity");
+      notificationHelpers.handleApiError(err, msg);
+    },
+  });
+
+  // Row click toggles the drawer for the same activity / switches to a new one.
+  const handleRowClick = (a: ActivityResponse) => {
+    setSelectedActivityId((prev) => (prev === a.id ? null : a.id));
+  };
+
+  const handleRowContextMenu = (a: ActivityResponse, x: number, y: number) => {
+    setContextMenu({ activity: a, position: { x, y } });
+  };
+
+  const handleAssign = (a: ActivityResponse, kind: ResourceKind) => {
+    setQuickAssign({ activity: a, kind });
+  };
+
+  const handleEditFromMenu = (a: ActivityResponse) => {
+    setProgressEdit((s) => ({ ...s, [a.id]: String(a.percentComplete ?? 0) }));
   };
 
   const isLoading = isLoadingActivities || (viewMode === "tree" && isLoadingWbs);
@@ -535,6 +597,9 @@ export default function ActivitiesPage() {
           onSaveProgress={saveProgress}
           onStartActivity={start}
           onCompleteActivity={complete}
+          selectedActivityId={selectedActivityId}
+          onRowClick={handleRowClick}
+          onRowContextMenu={handleRowContextMenu}
         />
       ) : (
         <ActivitiesListTable
@@ -555,6 +620,9 @@ export default function ActivitiesPage() {
           baselineByActivity={baselineByActivity}
           actualCostByActivity={actualCostByActivity}
           budgetedCostByActivity={budgetedCostByActivity}
+          selectedActivityId={selectedActivityId}
+          onRowClick={handleRowClick}
+          onRowContextMenu={handleRowContextMenu}
         />
       )}
 
@@ -572,6 +640,80 @@ export default function ActivitiesPage() {
         onClose={() => setShowAiDialog(false)}
         projectId={projectId}
       />
+
+      <ActivityDetailDrawer
+        open={!!selectedActivityId}
+        onClose={() => setSelectedActivityId(null)}
+        projectId={projectId}
+        activityId={selectedActivityId}
+      />
+
+      {contextMenu && (
+        <ActivityRowContextMenu
+          activity={contextMenu.activity}
+          position={contextMenu.position}
+          canStart={canStart(contextMenu.activity)}
+          canComplete={canComplete(contextMenu.activity)}
+          onClose={() => setContextMenu(null)}
+          onOpenDetail={(a) => setSelectedActivityId(a.id)}
+          onAssign={handleAssign}
+          onStart={start}
+          onComplete={complete}
+          onEdit={handleEditFromMenu}
+          onDelete={(a) => setDeleteTarget(a)}
+        />
+      )}
+
+      {quickAssign && (
+        <QuickAssignResourceDialog
+          open
+          onClose={() => setQuickAssign(null)}
+          projectId={projectId}
+          activityId={quickAssign.activity.id}
+          activityCode={quickAssign.activity.code}
+          activityName={quickAssign.activity.name}
+          kind={quickAssign.kind}
+        />
+      )}
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(next) => {
+          if (!next) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete activity?</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            {deleteTarget && (
+              <p>
+                Delete <span className="font-semibold text-charcoal">{deleteTarget.code}</span> —{" "}
+                {deleteTarget.name}? This also removes its relationships and resource assignments.
+                This action cannot be undone.
+              </p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+              className="rounded-md bg-danger px-4 py-2 text-sm font-medium text-text-primary hover:bg-danger/80 disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -594,6 +736,9 @@ function ActivitiesListTable({
   baselineByActivity,
   actualCostByActivity,
   budgetedCostByActivity,
+  selectedActivityId,
+  onRowClick,
+  onRowContextMenu,
 }: {
   activities: ActivityResponse[];
   relationships: Array<{ id?: string; predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
@@ -612,6 +757,9 @@ function ActivitiesListTable({
   baselineByActivity: Map<string, BaselineActivityResponse>;
   actualCostByActivity: Map<string, number>;
   budgetedCostByActivity: Map<string, number>;
+  selectedActivityId: string | null;
+  onRowClick: (a: ActivityResponse) => void;
+  onRowContextMenu: (a: ActivityResponse, x: number, y: number) => void;
 }) {
   // Build dependency count map
   const predCountMap = new Map<string, number>();
@@ -690,12 +838,26 @@ function ActivitiesListTable({
               const busy = pendingId === activity.id && progressIsPending;
               const predCount = predCountMap.get(activity.id) ?? 0;
               const succCount = succCountMap.get(activity.id) ?? 0;
+              const isSelected = selectedActivityId === activity.id;
               return (
-                <tr key={activity.id} className="hover:bg-surface/80">
+                <tr
+                  key={activity.id}
+                  className={`cursor-pointer hover:bg-surface/80 ${
+                    isSelected ? "bg-surface-active/40" : ""
+                  }`}
+                  onClick={() => onRowClick(activity)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onRowContextMenu(activity, e.clientX, e.clientY);
+                  }}
+                >
                   <td className="px-4 py-4 text-sm font-medium text-text-primary whitespace-nowrap">{activity.code}</td>
                   <td className="px-4 py-4 text-sm text-text-primary whitespace-nowrap">{activity.name}</td>
                   <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{activity.originalDuration ?? activity.duration ?? "—"}</td>
-                  <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">
+                  <td
+                    className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {editing ? (
                       <div className="flex items-center gap-1">
                         <input
@@ -883,7 +1045,10 @@ function ActivitiesListTable({
                   <td className="px-4 py-4 text-sm whitespace-nowrap text-text-secondary">
                     {activity.responsibleResourceName ?? <span className="text-text-muted">—</span>}
                   </td>
-                  <td className="px-4 py-4 text-sm whitespace-nowrap">
+                  <td
+                    className="px-4 py-4 text-sm whitespace-nowrap"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="flex gap-2">
                       {canStart(activity) && (
                         <button

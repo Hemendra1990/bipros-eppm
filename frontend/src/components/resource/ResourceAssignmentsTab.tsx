@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { resourceApi, type ResourceAssignmentResponse } from "@/lib/api/resourceApi";
-import { resourceRoleApi, type ResourceRole } from "@/lib/api/resourceRoleApi";
 import { resourceHistogramApi } from "@/lib/api/resourceHistogramApi";
 import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
 import { projectResourceApi, type ProjectResourceResponse } from "@/lib/api/projectResourceApi";
@@ -12,6 +11,7 @@ import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { ResourceLevelingDialog } from "./ResourceLevelingDialog";
+import { ResourceAssignmentForm } from "./ResourceAssignmentForm";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { ResourceAssignmentTree, ViewModeToggle, type AssignmentRow } from "./ResourceAssignmentTree";
@@ -48,14 +48,6 @@ interface ResourceAssignmentRow {
 export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [assignMode, setAssignMode] = useState<"ROLE" | "RESOURCE">("RESOURCE");
-  const [formData, setFormData] = useState({
-    activityId: "",
-    resourceId: "",
-    roleId: "",
-    plannedUnits: "",
-    rateType: "STANDARD",
-  });
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [showLeveling, setShowLeveling] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<{ id: string; resourceName: string; activityName: string } | null>(null);
@@ -71,11 +63,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
     queryFn: () => projectResourceApi.listPool(projectId),
   });
 
-  const { data: rolesData } = useQuery({
-    queryKey: ["resource-roles"],
-    queryFn: () => resourceRoleApi.list(),
-  });
-
   const { data: activitiesData } = useQuery({
     queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 100),
@@ -88,29 +75,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
         ? resourceHistogramApi.getHistogram(projectId, selectedResourceId)
         : Promise.resolve({ data: [], success: true } as unknown as ReturnType<typeof resourceHistogramApi.getHistogram>),
     enabled: !!selectedResourceId,
-  });
-
-  const assignMutation = useMutation({
-    mutationFn: () =>
-      resourceApi.createProjectResourceAssignment(projectId, {
-        activityId: formData.activityId,
-        resourceId: formData.resourceId || undefined,
-        roleId: formData.roleId || undefined,
-        projectId,
-        plannedUnits: parseFloat(formData.plannedUnits),
-        rateType: formData.rateType,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });
-      setShowForm(false);
-      setFormData({
-        activityId: "",
-        resourceId: "",
-        roleId: "",
-        plannedUnits: "",
-        rateType: "STANDARD",
-      });
-    },
   });
 
   const recomputeCostsMutation = useMutation({
@@ -140,13 +104,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
     const raw = poolData?.data as unknown;
     return Array.isArray(raw) ? (raw as ProjectResourceResponse[]) : [];
   }, [poolData]);
-
-  const roles = useMemo<ResourceRole[]>(() => {
-    const raw = rolesData?.data as unknown;
-    return Array.isArray(raw)
-      ? (raw as ResourceRole[])
-      : ((raw as { content?: ResourceRole[] } | undefined)?.content ?? []);
-  }, [rolesData]);
 
   const activities = useMemo<ActivityResponse[]>(() => {
     const raw = activitiesData?.data as unknown;
@@ -289,11 +246,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
     [pool]
   );
 
-  const canSubmit =
-    formData.activityId &&
-    formData.plannedUnits &&
-    (assignMode === "RESOURCE" ? formData.resourceId : formData.roleId);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
@@ -325,132 +277,11 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       </div>
 
       {showForm && (
-        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
-          <h3 className="mb-4 text-lg font-semibold text-text-primary">Assign Resource to Activity</h3>
-
-          <div className="mb-4 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setAssignMode("RESOURCE")}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                assignMode === "RESOURCE"
-                  ? "bg-accent text-accent-foreground"
-                  : "border border-border text-text-secondary hover:bg-surface-hover"
-              }`}
-            >
-              Resource
-            </button>
-            <button
-              type="button"
-              onClick={() => setAssignMode("ROLE")}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                assignMode === "ROLE"
-                  ? "bg-accent text-accent-foreground"
-                  : "border border-border text-text-secondary hover:bg-surface-hover"
-              }`}
-            >
-              Plan with Role
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Activity</label>
-              <SearchableSelect
-                value={formData.activityId}
-                onChange={(val) =>
-                  setFormData({ ...formData, activityId: val })
-                }
-                placeholder="Search activities..."
-                options={activities.map((activity) => ({
-                  value: activity.id,
-                  label: `${activity.code} - ${activity.name}`,
-                }))}
-              />
-            </div>
-
-            {assignMode === "RESOURCE" ? (
-              <div>
-                <label className="block text-sm font-medium text-text-secondary">Resource</label>
-                <SearchableSelect
-                  value={formData.resourceId}
-                  onChange={(val) =>
-                    setFormData({ ...formData, resourceId: val })
-                  }
-                  placeholder="Search pooled resources..."
-                  options={pool.map((p) => ({
-                    value: p.resourceId,
-                    label: `${p.resourceCode ?? p.resourceId} - ${p.resourceName ?? "Unknown"}`,
-                  }))}
-                />
-                {pool.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    No resources in pool. Add resources to the project pool first.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-text-secondary">Role</label>
-                <SearchableSelect
-                  value={formData.roleId}
-                  onChange={(val) =>
-                    setFormData({ ...formData, roleId: val })
-                  }
-                  placeholder="Search roles..."
-                  options={roles.map((role) => ({
-                    value: role.id,
-                    label: `${role.code} - ${role.name}`,
-                  }))}
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Planned Units</label>
-              <input
-                type="number"
-                value={formData.plannedUnits}
-                onChange={(e) =>
-                  setFormData({ ...formData, plannedUnits: e.target.value })
-                }
-                step="0.01"
-                className="mt-1 block w-full rounded-md border-border px-3 py-2 border bg-surface/50 text-text-primary shadow-sm focus:border-accent focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Rate Type</label>
-              <select
-                value={formData.rateType}
-                onChange={(e) =>
-                  setFormData({ ...formData, rateType: e.target.value })
-                }
-                className="mt-1 block w-full rounded-md border-border px-3 py-2 border bg-surface/50 text-text-primary shadow-sm focus:border-accent focus:outline-none"
-              >
-                <option value="STANDARD">Standard</option>
-                <option value="OVERTIME">Overtime</option>
-                <option value="CPWD_SOR">CPWD SOR</option>
-              </select>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => assignMutation.mutate()}
-                disabled={assignMutation.isPending || !canSubmit}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active"
-              >
-                {assignMutation.isPending ? "Assigning..." : "Assign"}
-              </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <ResourceAssignmentForm
+          projectId={projectId}
+          onSuccess={() => setShowForm(false)}
+          onCancel={() => setShowForm(false)}
+        />
       )}
 
       <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">

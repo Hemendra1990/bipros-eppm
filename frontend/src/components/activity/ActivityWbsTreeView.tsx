@@ -28,6 +28,9 @@ interface ActivityWbsTreeViewProps {
   onSaveProgress: (activity: ActivityResponse) => void;
   onStartActivity: (activity: ActivityResponse) => void;
   onCompleteActivity: (activity: ActivityResponse) => void;
+  selectedActivityId?: string | null;
+  onRowClick?: (activity: ActivityResponse) => void;
+  onRowContextMenu?: (activity: ActivityResponse, x: number, y: number) => void;
 }
 
 function buildTree(wbsNodes: WbsNodeResponse[], activities: ActivityResponse[]): TreeNode[] {
@@ -96,6 +99,9 @@ function TreeRow({
   onSaveProgress,
   onStartActivity,
   onCompleteActivity,
+  selectedActivityId,
+  onRowClick,
+  onRowContextMenu,
 }: {
   node: TreeNode;
   depth: number;
@@ -110,6 +116,9 @@ function TreeRow({
   onSaveProgress: (activity: ActivityResponse) => void;
   onStartActivity: (activity: ActivityResponse) => void;
   onCompleteActivity: (activity: ActivityResponse) => void;
+  selectedActivityId?: string | null;
+  onRowClick?: (activity: ActivityResponse) => void;
+  onRowContextMenu?: (activity: ActivityResponse, x: number, y: number) => void;
 }) {
   const isWbs = node.type === "wbs";
   const hasChildren = node.children && node.children.length > 0;
@@ -164,6 +173,9 @@ function TreeRow({
               onSaveProgress={onSaveProgress}
               onStartActivity={onStartActivity}
               onCompleteActivity={onCompleteActivity}
+              selectedActivityId={selectedActivityId}
+              onRowClick={onRowClick}
+              onRowContextMenu={onRowContextMenu}
             />
           ))}
       </>
@@ -194,8 +206,17 @@ function TreeRow({
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
+  const isSelected = selectedActivityId === activity.id;
   return (
-    <tr className="hover:bg-surface/80">
+    <tr
+      className={`cursor-pointer hover:bg-surface/80 ${isSelected ? "bg-surface-active/40" : ""}`}
+      onClick={() => onRowClick?.(activity)}
+      onContextMenu={(e) => {
+        if (!onRowContextMenu) return;
+        e.preventDefault();
+        onRowContextMenu(activity, e.clientX, e.clientY);
+      }}
+    >
       <td className="px-4 py-4 text-sm whitespace-nowrap">
         <div className="flex items-center" style={{ paddingLeft: `${depth * 24 + 24}px` }}>
           <span className="font-medium text-text-primary">{activity.code}</span>
@@ -203,7 +224,10 @@ function TreeRow({
       </td>
       <td className="px-4 py-4 text-sm text-text-primary whitespace-nowrap">{activity.name}</td>
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{activity.originalDuration ?? activity.duration ?? "—"}</td>
-      <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">
+      <td
+        className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap"
+        onClick={(e) => e.stopPropagation()}
+      >
         {editing ? (
           <div className="flex items-center gap-1">
             <input
@@ -292,7 +316,10 @@ function TreeRow({
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.earlyFinishDate)}</td>
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.lateStartDate)}</td>
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.lateFinishDate)}</td>
-      <td className="px-4 py-4 text-sm whitespace-nowrap">
+      <td
+        className="px-4 py-4 text-sm whitespace-nowrap"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex gap-2">
           {canStart(activity) && (
             <button
@@ -351,6 +378,9 @@ export function ActivityWbsTreeView({
   onSaveProgress,
   onStartActivity,
   onCompleteActivity,
+  selectedActivityId,
+  onRowClick,
+  onRowContextMenu,
 }: ActivityWbsTreeViewProps) {
   const tree = useMemo(() => {
     const rawTree = buildTree(wbsNodes, activities);
@@ -425,6 +455,9 @@ export function ActivityWbsTreeView({
                 onSaveProgress={onSaveProgress}
                 onStartActivity={onStartActivity}
                 onCompleteActivity={onCompleteActivity}
+                selectedActivityId={selectedActivityId}
+                onRowClick={onRowClick}
+                onRowContextMenu={onRowContextMenu}
               />
             ))}
           </tbody>

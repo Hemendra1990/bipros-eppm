@@ -27,6 +27,7 @@ import type { ActivityStepResponse, CreateActivityStepRequest } from "@/lib/api/
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
+import { ResourceAssignmentForm } from "@/components/resource/ResourceAssignmentForm";
 import type { ExpenseResponse } from "@/lib/types";
 
 // Heavy children deferred so the initial paint of the detail page is cheap —
@@ -387,6 +388,7 @@ function ViewMode({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogAssignment, setDialogAssignment] = useState<ResourceAssignmentResponse | null>(null);
   const [dialogMode, setDialogMode] = useState<"staff" | "swap">("staff");
+  const [showAssignForm, setShowAssignForm] = useState(false);
 
   const openStaffDialog = (assignment: ResourceAssignmentResponse) => {
     setDialogAssignment(assignment);
@@ -600,18 +602,39 @@ function ViewMode({
       <div className="rounded-lg border border-border bg-surface/50 p-4">
         <h3 className="text-sm font-semibold text-text-primary mb-3">Cost &amp; Earned Value</h3>
 
-        {assignments.length > 0 ? (
-          <div className="mb-4">
-            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Resource Assignments</p>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Resource Assignments</p>
+            <button
+              type="button"
+              onClick={() => setShowAssignForm((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              + Assign resource
+            </button>
+          </div>
+
+          {showAssignForm && (
+            <div className="mb-3">
+              <ResourceAssignmentForm
+                projectId={projectId}
+                activityId={activity.id}
+                onSuccess={() => setShowAssignForm(false)}
+                onCancel={() => setShowAssignForm(false)}
+              />
+            </div>
+          )}
+
+          {assignments.length > 0 ? (
             <ActivityAssignmentsByRole
               assignments={assignments}
               onStaff={openStaffDialog}
               onSwap={openSwapDialog}
             />
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted mb-4">No resource assignments for this activity.</p>
-        )}
+          ) : (
+            <p className="text-sm text-text-muted">No resource assignments yet. Click <span className="font-medium">Assign resource</span> above to add one.</p>
+          )}
+        </div>
 
         <StaffSwapDialog
           projectId={projectId}
