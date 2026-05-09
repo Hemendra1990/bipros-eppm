@@ -16,10 +16,14 @@ target/
 *.pid
 
 # Node.js / Frontend
-frontend/node_modules/
+node_modules/
 frontend/.next/
 frontend/out/
 frontend/.env.local
+
+# Stray root-level Node scratch (typescript/vitest experiment)
+/package.json
+/pnpm-lock.yaml
 
 # OS
 .DS_Store
@@ -61,6 +65,16 @@ graphify-out/
 # Playwright reports & test results (regenerated each run)
 frontend/playwright-report/
 frontend/test-results/
+/test-results/
+
+# Playwright auth state (per-machine credentials cache)
+frontend/e2e/.auth/
+
+# Per-machine local gitignore overrides
+frontend/.gitignore.local
+
+# Runtime document uploads (local-only storage)
+backend/storage/
 
 # One-off design exploration screenshots
 /login-boutique-*.png
