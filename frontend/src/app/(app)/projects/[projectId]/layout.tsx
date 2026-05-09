@@ -47,19 +47,19 @@ function ProjectDetailLayoutInner({
     { id: "resources", label: "Resources", href: null },
     { id: "gantt", label: "Gantt", href: null },
     { id: "network", label: "Network", href: null },
-    { id: "baselines", label: "Baselines", href: null },
+    { id: "dpr", label: "DPR", href: `/projects/${projectId}/dpr` },
+    // { id: "daily-outputs", label: "Daily Outputs", href: `/projects/${projectId}/daily-outputs` },
+    { id: "capacity", label: "Capacity Util.", href: `/projects/${projectId}/capacity-utilization` },
     { id: "costs", label: "Costs", href: null },
     { id: "evm", label: "EVM", href: null },
-    { id: "period-performance", label: "Period Performance", href: null },
-    { id: "cost-accounts", label: "Cost Accounts", href: null },
-    { id: "dpr", label: "DPR", href: `/projects/${projectId}/dpr` },
-    { id: "daily-outputs", label: "Daily Outputs", href: `/projects/${projectId}/daily-outputs` },
+    // { id: "period-performance", label: "Period Performance", href: null },
+    { id: "baselines", label: "Baselines", href: null },
+    // { id: "cost-accounts", label: "Cost Accounts", href: null },
     { id: "insights", label: "Insights", href: `/projects/${projectId}/insights` },
-    { id: "capacity", label: "Capacity Util.", href: `/projects/${projectId}/capacity-utilization` },
     { id: "risks", label: "Risks", href: `/projects/${projectId}/risks` },
     // These navigate to separate route pages:
     { id: "contracts", label: "Contracts", href: `/projects/${projectId}/contracts` },
-    { id: "documents", label: "Documents", href: `/projects/${projectId}/documents` },
+    // { id: "documents", label: "Documents", href: `/projects/${projectId}/documents` },
     { id: "gis", label: "GIS", href: `/projects/${projectId}/gis-viewer` },
   ];
 
@@ -84,14 +84,14 @@ function ProjectDetailLayoutInner({
     { label: "Schedule Health", href: `/projects/${projectId}/schedule-health` },
     { label: "Schedule Compression", href: `/projects/${projectId}/schedule-compression` },
     { label: "Risk Analysis", href: `/projects/${projectId}/risk-analysis` },
-    { label: "Activity Correlations", href: `/projects/${projectId}/activity-correlations` },
-    { label: "Predictions", href: `/projects/${projectId}/predictions` },
-    { label: "RA Bills", href: `/projects/${projectId}/ra-bills` },
-    { label: "Drawings", href: `/projects/${projectId}/drawings` },
-    { label: "RFIs", href: `/projects/${projectId}/rfis` },
-    { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
-    { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
-    { label: "GRNs", href: `/projects/${projectId}/grns` },
+    // { label: "Activity Correlations", href: `/projects/${projectId}/activity-correlations` },
+    // { label: "Predictions", href: `/projects/${projectId}/predictions` },
+    // { label: "RA Bills", href: `/projects/${projectId}/ra-bills` },
+    // { label: "Drawings", href: `/projects/${projectId}/drawings` },
+    // { label: "RFIs", href: `/projects/${projectId}/rfis` },
+    // { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
+    // { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
+    // { label: "GRNs", href: `/projects/${projectId}/grns` },
     { label: "Issues", href: `/projects/${projectId}/issues` },
   ];
 
@@ -211,7 +211,8 @@ function ProjectDetailLayoutInner({
             })}
           </div>
 
-          {/* Master Data Dropdown */}
+          {/* Master Data Dropdown — hidden per request */}
+          {/*
           <div className="relative shrink-0">
             <button
               onClick={() => {
@@ -258,6 +259,7 @@ function ProjectDetailLayoutInner({
               </div>
             )}
           </div>
+          */}
 
           {/* More Dropdown */}
           <div className="relative shrink-0">

@@ -34,6 +34,8 @@ import { apiClient } from "@/lib/api/client";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
 import { TabTip } from "@/components/common/TabTip";
 import { WbsAiGenerateDialog } from "@/components/wbs/WbsAiGenerateDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "@/components/ui/dialog";
+import { ProjectDocumentsPanel } from "@/components/document/ProjectDocumentsPanel";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import type { ContractType } from "@/lib/types";
@@ -477,6 +479,7 @@ export default function ProjectDetailPage() {
 function OverviewTab({ project, projectId }: { project: ProjectResponse; projectId: string }) {
   const queryClient = useQueryClient();
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
 
   const { data: poolData } = useQuery({
     queryKey: ["resource-pool", projectId],
@@ -595,6 +598,23 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         <p className="mt-2 text-text-primary">{project.description || "No description"}</p>
       </div>
 
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Documents</h3>
+          <p className="mt-1 text-sm text-text-secondary">
+            Browse folders, upload files, and manage versions for this project.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setDocumentsOpen(true)}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-gold/45 bg-gold-tint/40 px-3 py-2 text-sm font-semibold text-gold-deep transition-colors hover:border-gold hover:bg-gold-tint"
+        >
+          <FileText size={15} strokeWidth={1.75} />
+          Open Documents
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-text-secondary">Planned Start Date</h3>
@@ -667,6 +687,17 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
       </div>
 
       <UdfSection entityId={projectId} subject="PROJECT" projectId={projectId} />
+
+      <Dialog open={documentsOpen} onOpenChange={setDocumentsOpen}>
+        <DialogContent className="max-w-6xl h-[85vh] flex flex-col p-0">
+          <DialogHeader>
+            <DialogTitle>Documents</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="flex-1 min-h-0 overflow-hidden p-4">
+            <ProjectDocumentsPanel projectId={projectId} embedded />
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
