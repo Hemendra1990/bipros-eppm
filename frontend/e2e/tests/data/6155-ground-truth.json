@@ -1,0 +1,175 @@
+{
+  "project": {
+    "data": {
+      "id": "05829359-4126-48b0-8945-a1c51017859a",
+      "code": "6155",
+      "name": "Dualization of Barka Nakhal Road",
+      "description": "Dualization (twin-carriageway upgrade) of the Barka\u2013Nakhal Road in Muscat\u2013Batinah, Oman. ~41 km between Barka Junction (Km 0+000) and Nakhal Roundabout (Km 41+000). Source: 3-workbook DPR/Capacity/DBS dataset.",
+      "epsNodeId": "07925de8-872e-4de5-b525-6878772697f5",
+      "obsNodeId": "e8f89def-013d-40a1-bf08-df07a35579ad",
+      "plannedStartDate": "2024-09-01",
+      "plannedFinishDate": "2026-08-31",
+      "dataDate": "2026-04-29",
+      "status": "ACTIVE",
+      "mustFinishByDate": null,
+      "priority": 1,
+      "category": "HIGHWAY",
+      "morthCode": "MOTC-BNK-6155",
+      "fromChainageM": 0,
+      "toChainageM": 41000,
+      "fromLocation": "Barka Junction (Km 0+000)",
+      "toLocation": "Nakhal Roundabout (Km 41+000)",
+      "totalLengthKm": 41.0,
+      "calendarId": "2a7f2125-e332-457c-83f8-6676395055d2",
+      "activeBaselineId": "73350e51-9ec0-4a50-a0fa-6e701c1cebd5",
+      "primaryBaselineId": null,
+      "secondaryBaselineId": null,
+      "tertiaryBaselineId": null,
+      "requiresRebaseline": false,
+      "contract": {
+        "contractId": "d1eab00b-8b59-41c3-a248-fa2feb6cb1ce",
+        "contractNumber": "BNK-SUB-EARTH-2024",
+        "contractType": "ITEM_RATE_FIDIC_RED",
+        "contractValue": 8000000.0,
+        "revisedValue": null,
+        "startDate": "2024-10-01",
+        "completionDate": "2025-09-30",
+        "dlpMonths": 12
+      },
+      "originalBudget": 10.0,
+      "currentBudget": 10.0,
+      "budgetCurrency": "OMR",
+      "createdAt": "2026-05-02T21:34:11.306255",
+      "updatedAt": "2026-05-07T19:19:37.176769",
+      "archivedAt": null
+    },
+    "meta": {
+      "timestamp": "2026-05-08T12:46:58.990033Z",
+      "version": "0.1.0"
+    }
+  },
+  "evm": {
+    "data": {
+      "id": "60561403-5a77-48f8-b9f2-1a8b69d14440",
+      "projectId": "05829359-4126-48b0-8945-a1c51017859a",
+      "wbsNodeId": null,
+      "activityId": null,
+      "financialPeriodId": null,
+      "dataDate": "2026-05-07",
+      "budgetAtCompletion": 10.0,
+      "plannedValue": 16403063.3,
+      "earnedValue": 16049263.36,
+      "actualCost": 10579789.27,
+      "scheduleVariance": -2.16,
+      "costVariance": 5469474.09,
+      "schedulePerformanceIndex": 0.9784,
+      "costPerformanceIndex": 1.517,
+      "toCompletePerformanceIndex": 1.517,
+      "estimateAtCompletion": 6.59,
+      "estimateToComplete": -10579782.68,
+      "varianceAtCompletion": 3.41,
+      "evmTechnique": "ACTIVITY_PERCENT_COMPLETE",
+      "etcMethod": "CPI_BASED",
+      "performancePercentComplete": 160492633.6
+    },
+    "meta": {
+      "timestamp": "2026-05-08T12:46:58.995631Z",
+      "version": "0.1.0"
+    }
+  },
+  "dpr_count": 65,
+  "dpr_dates": {
+    "earliest": "2024-09-01",
+    "latest": "2026-04-28",
+    "uniqueDates": 65
+  },
+  "weather": {
+    "CLEAR": 16,
+    "CLOUDY": 16,
+    "RAINY": 16,
+    "HEATWAVE": 16
+  },
+  "approval_status": {
+    "DRAFT": 1
+  },
+  "top_trades": [
+    {
+      "name": "T. Swamy",
+      "count": 1
+    }
+  ],
+  "top_materials": [],
+  "top_equipment": [
+    {
+      "name": "Bull Dozer",
+      "count": 1
+    },
+    {
+      "name": "Asphalt Cutter",
+      "count": 1
+    }
+  ],
+  "resource_assignments_total": 495,
+  "assignment_role_distribution": {
+    "Other": 37,
+    "Supervisor": 2,
+    "Earth Moving": 74,
+    "Role Lddexpat": 8,
+    "Role Tyreman": 8,
+    "Role Lddnational": 8,
+    "Role Officeboy": 8,
+    "Role Labhelper": 8,
+    "Cranes Lifting": 18,
+    "Role Chainman": 7,
+    "Role Hddexpat": 8,
+    "Role Mechanichelper": 8,
+    "Role Storehelper": 8,
+    "Role Rakman": 7,
+    "Paving Equipment": 42,
+    "Role Actechnician": 7,
+    "Role Pestcontroller": 8,
+    "Role Chapatimaker": 8,
+    "Role Cleaner": 7,
+    "Role Waiter": 8,
+    "Role Screwman": 8,
+    "Concrete Equipment": 12,
+    "Role Cook": 8,
+    "Role Electrician": 8,
+    "Role Caretaker": 7,
+    "Role Painter": 8,
+    "Role Welder": 8,
+    "Role Mason": 8,
+    "Role Butcher": 7,
+    "Role Kitchenboy": 8,
+    "Role Laundryman": 8,
+    "Role Plumber": 8,
+    "Role Mechanic": 8,
+    "Transport Vehicles": 24,
+    "Role Steelfixer": 7,
+    "Role Rigger": 8,
+    "Role Helper": 7,
+    "Role Autoelectrician": 7,
+    "Role Roomboy": 8,
+    "Role Asstcampboss": 7,
+    "Role Chargehand": 8,
+    "Role Operator": 8,
+    "Role Scaffolder": 8,
+    "Role Carpenter": 8
+  },
+  "supervisors_via_assignment": [
+    {
+      "name": "T. Swamy",
+      "activityCount": 2,
+      "activities": [
+        "Mobilisation Complete",
+        "Soil Investigation and report"
+      ],
+      "plannedCost": 0.0,
+      "actualCost": 0.0,
+      "plannedUnits": 0.0,
+      "actualUnits": 0.0
+    }
+  ],
+  "activity_count": 0,
+  "sample_activities": []
+}
