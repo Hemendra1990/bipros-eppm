@@ -69,7 +69,6 @@ const groups: NavGroup[] = [
     label: "Control",
     items: [
       { name: "Reports", href: "/reports", icon: BarChart3, module: "M9_REPORTS" },
-      { name: "Analytics", href: "/analytics", icon: Sparkles, module: "M9_REPORTS" },
     ],
   },
   {
