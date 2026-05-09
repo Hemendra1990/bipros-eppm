@@ -59,7 +59,7 @@ export function AssignSupervisorDrawer({ open, onClose, projectId }: Props) {
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <SupervisorAssignmentTab projectId={projectId} />
+          <SupervisorAssignmentTab projectId={projectId} onCancel={onClose} />
         </div>
       </aside>
     </>
