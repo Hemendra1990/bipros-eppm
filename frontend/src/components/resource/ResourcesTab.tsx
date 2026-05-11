@@ -35,8 +35,9 @@ export function ResourcesTab({ projectId }: { projectId: string }) {
               ? "border-accent text-text-primary"
               : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
           }`}
+          title="The roster of resources available to this project"
         >
-          Pool
+          Team
           {!isLoading && (
             <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-surface-hover px-2 py-0.5 text-xs">
               {pool.length}

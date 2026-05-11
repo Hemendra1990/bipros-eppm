@@ -72,7 +72,7 @@ const HEROES_BY_ROLE: Record<string, HeroTile[]> = {
     {
       title: "Master data",
       description: "Skills, categories, risk library, productivity norms.",
-      href: "/admin/manpower-categories",
+      href: "/admin/rate-master",
       icon: Database,
     },
     {
@@ -262,7 +262,7 @@ export const TOOL_COLUMNS: ToolColumn[] = [
     icon: ListChecks,
     adminOnly: true,
     links: [
-      { label: "Master data", href: "/admin/manpower-categories", icon: Database, adminOnly: true },
+      { label: "Master data", href: "/admin/rate-master", icon: Database, adminOnly: true },
       { label: "Risk library", href: "/admin/risk-library", icon: Library, adminOnly: true },
       { label: "Users", href: "/admin/users", icon: Users, adminOnly: true },
       { label: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },

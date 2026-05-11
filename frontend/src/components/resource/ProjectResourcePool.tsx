@@ -5,24 +5,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   projectResourceApi,
   type ProjectResourceResponse,
-  type PoolEntryInput,
 } from "@/lib/api/projectResourceApi";
-import { type ResourceResponse } from "@/lib/api/resourceApi";
-import { resourceTypeApi } from "@/lib/api/resourceTypeApi";
-import { resourceRoleApi } from "@/lib/api/resourceRoleApi";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
-import { SearchableSelect } from "@/components/common/SearchableSelect";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
+import { displayResourceTypeName } from "@/lib/utils/resourceTypeLabel";
+import { AddResourcesDrawer } from "./AddResourcesDrawer";
 
 export function ProjectResourcePool({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
-  const [showPicker, setShowPicker] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{
     rateOverride: string;
@@ -37,43 +31,19 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
     queryFn: () => projectResourceApi.listPool(projectId),
   });
 
-  const { data: availableData, isLoading: isLoadingAvailable } = useQuery({
-    queryKey: ["resource-pool-available", projectId, typeFilter, roleFilter, searchQuery],
-    queryFn: () =>
-      projectResourceApi.listAvailable(projectId, {
-        typeCode: typeFilter || undefined,
-        roleId: roleFilter || undefined,
-        q: searchQuery || undefined,
-      }),
-    enabled: showPicker,
-  });
-
-  const { data: typesData } = useQuery({
-    queryKey: ["resource-types"],
-    queryFn: () => resourceTypeApi.list(),
-    enabled: showPicker,
-  });
-
-  const { data: rolesData } = useQuery({
-    queryKey: ["resource-roles"],
-    queryFn: () => resourceRoleApi.list(),
-    enabled: showPicker,
-  });
-
-  const addMutation = useMutation({
-    mutationFn: (entries: PoolEntryInput[]) =>
-      projectResourceApi.addToPool(projectId, entries),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["resource-pool", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["resource-pool-available", projectId] });
-      setSelectedIds(new Set());
-      setShowPicker(false);
-    },
-  });
-
   const updateMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: { rateOverride?: number; availabilityOverride?: number; customUnit?: string; notes?: string } }) =>
-      projectResourceApi.updatePoolEntry(projectId, id, patch),
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: {
+        rateOverride?: number;
+        availabilityOverride?: number;
+        customUnit?: string;
+        notes?: string;
+      };
+    }) => projectResourceApi.updatePoolEntry(projectId, id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["resource-pool", projectId] });
       setEditingId(null);
@@ -84,12 +54,15 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
     mutationFn: (id: string) => projectResourceApi.removeFromPool(projectId, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["resource-pool", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["resource-pool-available", projectId] });
+      queryClient.invalidateQueries({
+        queryKey: ["resource-pool-available-drawer", projectId],
+      });
       setConfirmDelete(null);
     },
     onError: (error: unknown) => {
       const err = error as { response?: { data?: { error?: { message?: string } } } };
-      const msg = err?.response?.data?.error?.message ?? "Failed to remove resource from pool";
+      const msg =
+        err?.response?.data?.error?.message ?? "Failed to remove resource from pool";
       setConfirmDelete(null);
       alert(msg);
     },
@@ -100,36 +73,19 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
     return Array.isArray(raw) ? (raw as ProjectResourceResponse[]) : [];
   }, [poolData]);
 
-  const available = useMemo<ResourceResponse[]>(() => {
-    const raw = availableData?.data as unknown;
-    return Array.isArray(raw) ? (raw as ResourceResponse[]) : [];
-  }, [availableData]);
+  const typeBuckets = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of pool) {
+      const key = entry.resourceTypeName ?? "Other";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [pool]);
 
-  const types = useMemo(() => {
-    const raw = typesData?.data as unknown;
-    return Array.isArray(raw) ? (raw as { id: string; code: string; name: string }[]) : [];
-  }, [typesData]);
-
-  const roles = useMemo(() => {
-    const raw = rolesData?.data as unknown;
-    return Array.isArray(raw) ? (raw as { id: string; code: string; name: string }[]) : [];
-  }, [rolesData]);
-
-  const toggleSelection = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleAdd = () => {
-    const entries: PoolEntryInput[] = Array.from(selectedIds).map((resourceId) => ({
-      resourceId,
-    }));
-    addMutation.mutate(entries);
-  };
+  const visiblePool = useMemo(() => {
+    if (!typeFilter) return pool;
+    return pool.filter((p) => p.resourceTypeName === typeFilter);
+  }, [pool, typeFilter]);
 
   const startEdit = (entry: ProjectResourceResponse) => {
     setEditingId(entry.id);
@@ -145,8 +101,12 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
     updateMutation.mutate({
       id,
       patch: {
-        rateOverride: editValues.rateOverride ? parseFloat(editValues.rateOverride) : undefined,
-        availabilityOverride: editValues.availabilityOverride ? parseFloat(editValues.availabilityOverride) : undefined,
+        rateOverride: editValues.rateOverride
+          ? parseFloat(editValues.rateOverride)
+          : undefined,
+        availabilityOverride: editValues.availabilityOverride
+          ? parseFloat(editValues.availabilityOverride)
+          : undefined,
         customUnit: editValues.customUnit || undefined,
         notes: editValues.notes || undefined,
       },
@@ -156,13 +116,26 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
   const poolColumns: ColumnDef<ProjectResourceResponse>[] = [
     { accessorKey: "resourceCode", header: "Code", enableSorting: true },
     { accessorKey: "resourceName", header: "Name", enableSorting: true },
-    { accessorKey: "resourceTypeName", header: "Type", enableSorting: true },
-    { accessorKey: "roleName", header: "Role", enableSorting: true, cell: (info) => (info.getValue() as string) ?? "—" },
+    {
+      accessorKey: "resourceTypeName",
+      header: "Type",
+      enableSorting: true,
+      cell: (info) => displayResourceTypeName(info.getValue() as string | null),
+    },
+    {
+      accessorKey: "roleName",
+      header: "Role",
+      enableSorting: true,
+      cell: (info) => (info.getValue() as string) ?? "—",
+    },
     {
       accessorKey: "masterRate",
       header: "Master Rate",
       enableSorting: true,
-      cell: (info) => (info.getValue() != null ? formatDefaultCurrency(Number(info.getValue())) : "—"),
+      cell: (info) =>
+        info.getValue() != null
+          ? formatDefaultCurrency(Number(info.getValue()))
+          : "—",
     },
     {
       accessorKey: "rateOverride",
@@ -174,14 +147,18 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             <input
               type="number"
               value={editValues.rateOverride}
-              onChange={(e) => setEditValues({ ...editValues, rateOverride: e.target.value })}
+              onChange={(e) =>
+                setEditValues({ ...editValues, rateOverride: e.target.value })
+              }
               className="w-24 rounded border border-border bg-surface/50 px-2 py-1 text-sm text-text-primary"
               step="0.01"
               placeholder="—"
             />
           );
         }
-        return info.getValue() != null ? formatDefaultCurrency(Number(info.getValue())) : "—";
+        return info.getValue() != null
+          ? formatDefaultCurrency(Number(info.getValue()))
+          : "—";
       },
     },
     {
@@ -194,7 +171,9 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             <input
               type="number"
               value={editValues.availabilityOverride}
-              onChange={(e) => setEditValues({ ...editValues, availabilityOverride: e.target.value })}
+              onChange={(e) =>
+                setEditValues({ ...editValues, availabilityOverride: e.target.value })
+              }
               className="w-20 rounded border border-border bg-surface/50 px-2 py-1 text-sm text-text-primary"
               step="0.01"
               placeholder="—"
@@ -214,7 +193,9 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
             <input
               type="text"
               value={editValues.notes}
-              onChange={(e) => setEditValues({ ...editValues, notes: e.target.value })}
+              onChange={(e) =>
+                setEditValues({ ...editValues, notes: e.target.value })
+              }
               className="w-32 rounded border border-border bg-surface/50 px-2 py-1 text-sm text-text-primary"
               placeholder="Notes"
             />
@@ -271,138 +252,111 @@ export function ProjectResourcePool({ projectId }: { projectId: string }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-text-primary">Project Resource Pool</h3>
+          <h3 className="text-lg font-semibold text-text-primary">Project Team</h3>
           <p className="text-sm text-text-secondary">
-            {pool.length} resource{pool.length !== 1 ? "s" : ""} in pool
+            {pool.length} resource{pool.length !== 1 ? "s" : ""} on this project
           </p>
         </div>
-        <button
-          onClick={() => setShowPicker(!showPicker)}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-        >
-          <Plus size={16} />
-          Add Resources
-        </button>
+        {pool.length > 0 && (
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+          >
+            <Plus size={16} />
+            Add Resources
+          </button>
+        )}
       </div>
 
-      {showPicker && (
-        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-md font-semibold text-text-primary">Select from Master Data</h4>
-            <button onClick={() => setShowPicker(false)} className="text-text-secondary hover:text-text-primary">
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="mb-4 flex flex-wrap gap-3">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name or code..."
-              className="rounded-md border border-border bg-surface/50 px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:border-accent focus:outline-none"
-            />
-            <SearchableSelect
-              value={typeFilter}
-              onChange={setTypeFilter}
-              placeholder="All types"
-              options={[
-                { value: "", label: "All types" },
-                ...types.map((t) => ({ value: t.code, label: t.name })),
-              ]}
-            />
-            <SearchableSelect
-              value={roleFilter}
-              onChange={setRoleFilter}
-              placeholder="All roles"
-              options={[
-                { value: "", label: "All roles" },
-                ...roles.map((r) => ({ value: r.id, label: r.name })),
-              ]}
-            />
-          </div>
-
-          {isLoadingAvailable ? (
-            <div className="text-center text-text-secondary py-8">Loading available resources...</div>
-          ) : available.length === 0 ? (
-            <div className="text-center text-text-secondary py-8">
-              No available resources found. All active resources may already be in the pool.
-            </div>
-          ) : (
-            <div className="max-h-64 overflow-y-auto space-y-1">
-              {available.map((r) => (
-                <label
-                  key={r.id}
-                  className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-surface-hover cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(r.id)}
-                    onChange={() => toggleSelection(r.id)}
-                    className="h-4 w-4 rounded border-border text-accent focus:ring-accent"
-                  />
-                  <span className="text-sm font-medium text-text-primary">
-                    {r.code} - {r.name}
-                  </span>
-                  <span className="text-xs text-text-secondary">
-                    {r.resourceTypeName} &middot; {r.roleName}
-                  </span>
-                  {r.costPerUnit != null && (
-                    <span className="ml-auto text-xs text-text-secondary">
-                      {formatDefaultCurrency(r.costPerUnit)}
-                    </span>
-                  )}
-                </label>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 flex items-center gap-3">
+      {pool.length > 0 && typeBuckets.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setTypeFilter(null)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              typeFilter === null
+                ? "border-accent bg-accent/15 text-text-primary"
+                : "border-border bg-surface text-text-secondary hover:border-accent/40 hover:text-text-primary"
+            }`}
+          >
+            All <span className="ml-1 text-text-muted">{pool.length}</span>
+          </button>
+          {typeBuckets.map(([typeName, count]) => (
             <button
-              onClick={handleAdd}
-              disabled={selectedIds.size === 0 || addMutation.isPending}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+              key={typeName}
+              onClick={() => setTypeFilter(typeFilter === typeName ? null : typeName)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                typeFilter === typeName
+                  ? "border-accent bg-accent/15 text-text-primary"
+                  : "border-border bg-surface text-text-secondary hover:border-accent/40 hover:text-text-primary"
+              }`}
             >
-              {addMutation.isPending
-                ? "Adding..."
-                : `Add to project (${selectedIds.size})`}
+              {displayResourceTypeName(typeName)}{" "}
+              <span className="ml-1 text-text-muted">{count}</span>
             </button>
-            <span className="text-sm text-text-secondary">
-              {selectedIds.size} selected
-            </span>
-          </div>
+          ))}
         </div>
       )}
 
       <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
         {isLoadingPool ? (
-          <div className="text-center text-text-secondary">Loading pool...</div>
+          <div className="text-center text-text-secondary">Loading team...</div>
         ) : pool.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border py-12 text-center">
-            <h3 className="text-lg font-medium text-text-primary">No Resources in Pool</h3>
-            <p className="mt-2 text-text-secondary">
-              Add resources from master data to set up your project pool.
+            <Users
+              size={32}
+              className="mx-auto mb-3 text-text-muted"
+              strokeWidth={1.5}
+            />
+            <h3 className="text-lg font-medium text-text-primary">
+              No team members assigned yet
+            </h3>
+            <p className="mx-auto mt-2 max-w-md text-sm text-text-secondary">
+              Start by adding the people, equipment, and materials you&apos;ll need for
+              this project.
             </p>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              <Plus size={16} />
+              Add Resources
+            </button>
+          </div>
+        ) : visiblePool.length === 0 ? (
+          <div className="py-8 text-center text-sm text-text-secondary">
+            No resources match the selected filter.
           </div>
         ) : (
           <VirtualDataTable
             columns={poolColumns}
-            data={pool}
+            data={visiblePool}
             sortable
             resizable
           />
         )}
       </div>
 
+      <AddResourcesDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        projectId={projectId}
+      />
+
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="rounded-lg bg-surface p-6 shadow-xl max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-text-primary mb-2">Remove from Pool</h3>
-            <p className="text-sm text-text-secondary mb-4">
-              Remove <span className="font-medium text-text-primary">{confirmDelete.resourceName}</span> from
-              this project&apos;s resource pool? This will fail if the resource has active assignments.
+          <div className="mx-4 w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-semibold text-text-primary">
+              Remove from Team
+            </h3>
+            <p className="mb-4 text-sm text-text-secondary">
+              Remove{" "}
+              <span className="font-medium text-text-primary">
+                {confirmDelete.resourceName}
+              </span>{" "}
+              from this project&apos;s team? This will fail if the resource has active
+              assignments.
             </p>
-            <div className="flex gap-3 justify-end">
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
                 className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover"

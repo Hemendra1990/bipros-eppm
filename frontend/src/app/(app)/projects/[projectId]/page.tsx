@@ -36,6 +36,8 @@ import { TabTip } from "@/components/common/TabTip";
 import { WbsAiGenerateDialog } from "@/components/wbs/WbsAiGenerateDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "@/components/ui/dialog";
 import { ProjectDocumentsPanel } from "@/components/document/ProjectDocumentsPanel";
+import { ProjectSetupProgress } from "@/components/project/ProjectSetupProgress";
+import { ProjectTeamCard } from "@/components/project/ProjectTeamCard";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import type { ContractType } from "@/lib/types";
@@ -544,28 +546,11 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
 
   return (
     <div className="space-y-6">
-      {poolSize === 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-amber-800">
-                No resources in this project yet.
-              </p>
-              <p className="text-sm text-amber-700">
-                Pick from master data to set up your project pool{" "}
-                <a href={`/projects/${projectId}?tab=resources`} className="font-semibold underline hover:text-amber-900">
-                  Open Resources
-                </a>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProjectSetupProgress
+        projectId={projectId}
+        project={project}
+        poolSize={poolSize >= 0 ? poolSize : 0}
+      />
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-text-secondary">Code</h3>
@@ -635,6 +620,8 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         </div>
         <DataDateCard project={project} />
       </div>
+
+      <ProjectTeamCard projectId={projectId} />
 
       <BudgetCard projectId={projectId} />
 
