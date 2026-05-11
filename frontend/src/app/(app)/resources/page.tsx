@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TabTip } from "@/components/common/TabTip";
 import { notificationHelpers } from "@/lib/notificationHelpers";
+import { displayResourceTypeName } from "@/lib/utils/resourceTypeLabel";
 
 type TypeTab = "ALL" | "MANPOWER" | "EQUIPMENT" | "MATERIAL";
 
@@ -113,7 +114,9 @@ export default function ResourcesPage() {
         const row = info.row.original;
         return (
           <span className="text-sm font-medium">
-            {row.resourceTypeName ?? row.resourceTypeCode ?? "—"}
+            {row.resourceTypeName
+              ? displayResourceTypeName(row.resourceTypeName)
+              : row.resourceTypeCode ?? "—"}
           </span>
         );
       },
