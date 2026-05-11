@@ -1,6 +1,6 @@
 "use client";
 
-import { Briefcase, CalendarDays, CloudSun, HardHat, Package, User } from "lucide-react";
+import { CalendarDays, CloudSun, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { DailyProgressReportResponse } from "@/lib/types/dpr";
 import { DprActivityCard } from "./DprActivityCard";
@@ -9,6 +9,11 @@ interface Props {
   rows: DailyProgressReportResponse[];
   onEdit: (row: DailyProgressReportResponse) => void;
   onDelete: (row: DailyProgressReportResponse) => void;
+  /**
+   * Pixel offset for sticky day headers, so they park beneath the page's sticky filter bar.
+   * Falls back to 0 (sticky still works at top of viewport) when caller doesn't measure.
+   */
+  stickyOffset?: number;
 }
 
 interface DayGroup {
@@ -38,17 +43,17 @@ const fmtDate = (iso: string): string => {
   });
 };
 
-const fmt = (n: number, digits = 2) =>
-  isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
-
-export function DprDayList({ rows, onEdit, onDelete }: Props) {
+export function DprDayList({ rows, onEdit, onDelete, stickyOffset = 0 }: Props) {
   const groups = groupByDay(rows);
 
   if (groups.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-hairline bg-ivory/30 px-6 py-12 text-center">
         <CalendarDays className="mx-auto h-8 w-8 text-slate" />
-        <p className="mt-2 text-sm text-slate">No DPR rows in this date range yet.</p>
+        <p className="mt-2 text-sm text-slate">
+          No daily progress logged in this range. Tap{" "}
+          <span className="font-semibold text-gold-ink">Add Activity</span> to start.
+        </p>
       </div>
     );
   }
@@ -58,20 +63,13 @@ export function DprDayList({ rows, onEdit, onDelete }: Props) {
       {groups.map((g) => {
         const supervisors = Array.from(new Set(g.rows.map((r) => r.supervisorName))).filter(Boolean);
         const weather = g.rows.find((r) => r.weatherCondition)?.weatherCondition ?? null;
-        const totalQty = g.rows.reduce((a, r) => a + (r.qtyExecuted ?? 0), 0);
-        const manpower = g.rows.reduce(
-          (a, r) => a + (r.manpower ?? []).reduce((b, m) => b + (m.nos ?? 0), 0),
-          0
-        );
-        const equipment = g.rows.reduce(
-          (a, r) => a + (r.equipment ?? []).reduce((b, e) => b + (e.nos ?? 0), 0),
-          0
-        );
-        const materials = g.rows.reduce((a, r) => a + (r.materials ?? []).length, 0);
 
         return (
           <section key={g.date} className="space-y-2">
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-gold-tint/40 px-4 py-2.5">
+            <div
+              className="sticky z-10 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-ivory/80 px-4 py-2.5 backdrop-blur-sm"
+              style={{ top: stickyOffset }}
+            >
               <div className="flex items-center gap-2 font-display text-base font-semibold text-charcoal">
                 <CalendarDays className="h-4 w-4 text-gold-deep" />
                 {fmtDate(g.date)}
@@ -79,26 +77,16 @@ export function DprDayList({ rows, onEdit, onDelete }: Props) {
               <Badge variant="gold">
                 {g.rows.length} {g.rows.length === 1 ? "activity" : "activities"}
               </Badge>
-              <span className="text-xs text-slate inline-flex items-center gap-1">
-                <User className="h-3 w-3" /> {supervisors.join(", ") || "—"}
-              </span>
+              {supervisors.length > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs text-slate">
+                  <User className="h-3 w-3" /> {supervisors.join(", ")}
+                </span>
+              )}
               {weather && (
-                <span className="text-xs text-slate inline-flex items-center gap-1">
+                <span className="inline-flex items-center gap-1 text-xs text-slate">
                   <CloudSun className="h-3 w-3" /> {weather}
                 </span>
               )}
-              <div className="ml-auto flex items-center gap-3 text-xs text-slate">
-                <span className="font-semibold text-charcoal tabular-nums">{fmt(totalQty)} qty</span>
-                <span className="inline-flex items-center gap-1">
-                  <HardHat className="h-3 w-3" /> {manpower}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Briefcase className="h-3 w-3" /> {equipment}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Package className="h-3 w-3" /> {materials}
-                </span>
-              </div>
             </div>
             <div className="space-y-2">
               {g.rows.map((row) => (
@@ -114,5 +102,21 @@ export function DprDayList({ rows, onEdit, onDelete }: Props) {
         );
       })}
     </div>
+  );
+}
+
+export function DprDaySkeleton() {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-3 rounded-lg border border-hairline bg-ivory/60 px-4 py-2.5">
+        <div className="h-4 w-4 animate-pulse rounded bg-parchment" />
+        <div className="h-4 w-40 animate-pulse rounded bg-parchment" />
+        <div className="h-5 w-20 animate-pulse rounded-full bg-parchment" />
+      </div>
+      <div className="space-y-2">
+        <div className="h-14 animate-pulse rounded-lg bg-parchment/60" />
+        <div className="h-14 animate-pulse rounded-lg bg-parchment/60" />
+      </div>
+    </section>
   );
 }

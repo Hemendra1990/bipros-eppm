@@ -104,12 +104,12 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
         />
       ),
     },
-    {
+    /* {
       key: "unit",
       label: "Unit",
       minWidth: 80,
       render: (r) => <span className="text-slate">{r.unit ?? "—"}</span>,
-    },
+    }, */
     {
       key: "rate",
       label: "Rate",
@@ -117,7 +117,7 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
       align: "right",
       render: (r) => <span className="tabular-nums text-slate">{fmtRate(r.unitRate)}</span>,
     },
-    {
+    /* {
       key: "cost",
       label: "Cost",
       minWidth: 110,
@@ -169,7 +169,7 @@ export function MaterialGrid({ projectId, activityId, reportDate, rows, onChange
           onChange={(v) => u({ remarks: v || null })}
         />
       ),
-    },
+    }, */
   ];
 
   return (

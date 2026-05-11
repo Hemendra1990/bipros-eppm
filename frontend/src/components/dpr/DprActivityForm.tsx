@@ -535,323 +535,323 @@ export function DprActivityForm({
         </div>
       </div>
 
-        {/* Anchoring row: Supervisor + Activity drive everything below, so they lead. */}
-        <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
-          <Field label="Supervisor">
-            <SearchableSelect
-              options={[...supervisorOptions, { value: SUPERVISOR_OTHER, label: "Other (free-text)" }]}
-              value={supervisorPickerValue}
-              onChange={handleSupervisorChange}
-              placeholder="Search supervisor…"
-            />
-            {supervisorIsOther && (
-              <input
-                type="text"
-                value={state.supervisorName}
-                onChange={(e) => patch({ supervisorName: e.target.value })}
-                placeholder="Supervisor name"
-                className={`mt-2 ${inputCls}`}
-                required
-              />
-            )}
-            {supervisorHasNoActivities && (
-              <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
-                <Info className="h-3 w-3" />
-                No activities assigned to this supervisor — showing all.
-              </p>
-            )}
-          </Field>
-          <Field label="Activity name">
-            <SearchableSelect
-              options={filteredActivityOptions}
-              value={state.activityId ?? ""}
-              onChange={handleActivityChange}
-              placeholder="Search activity…"
-              selectedLabel={state.activityName || undefined}
-            />
-            {supervisorAutoFilled && (
-              <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
-                <Info className="h-3 w-3" />
-                Supervisor auto-filled from this activity.
-              </p>
-            )}
-            {activitySupervisorMismatch && (
-              <p className="mt-1 inline-flex items-center gap-1 text-xs text-burgundy">
-                <Info className="h-3 w-3" />
-                Activity is supervised by {activitySupervisorMismatch}, not the selected supervisor.
-              </p>
-            )}
-          </Field>
-        </div>
-
-        {/* Header: timing + state + logistics */}
-        <div className="grid gap-4 border-t border-hairline px-5 py-4 md:grid-cols-3">
-          <Field label="Date">
+      {/* Anchoring row: Supervisor + Activity drive everything below, so they lead. */}
+      <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
+        <Field label="Supervisor">
+          <SearchableSelect
+            options={[...supervisorOptions, { value: SUPERVISOR_OTHER, label: "Other (free-text)" }]}
+            value={supervisorPickerValue}
+            onChange={handleSupervisorChange}
+            placeholder="Search supervisor…"
+          />
+          {supervisorIsOther && (
             <input
-              type="date"
-              value={state.reportDate}
-              onChange={(e) => patch({ reportDate: e.target.value })}
+              type="text"
+              value={state.supervisorName}
+              onChange={(e) => patch({ supervisorName: e.target.value })}
+              placeholder="Supervisor name"
+              className={`mt-2 ${inputCls}`}
+              required
+            />
+          )}
+          {supervisorHasNoActivities && (
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
+              <Info className="h-3 w-3" />
+              No activities assigned to this supervisor — showing all.
+            </p>
+          )}
+        </Field>
+        <Field label="Activity name">
+          <SearchableSelect
+            options={filteredActivityOptions}
+            value={state.activityId ?? ""}
+            onChange={handleActivityChange}
+            placeholder="Search activity…"
+            selectedLabel={state.activityName || undefined}
+          />
+          {supervisorAutoFilled && (
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
+              <Info className="h-3 w-3" />
+              Supervisor auto-filled from this activity.
+            </p>
+          )}
+          {activitySupervisorMismatch && (
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-burgundy">
+              <Info className="h-3 w-3" />
+              Activity is supervised by {activitySupervisorMismatch}, not the selected supervisor.
+            </p>
+          )}
+        </Field>
+      </div>
+
+      {/* Header: timing + state + logistics */}
+      <div className="grid gap-4 border-t border-hairline px-5 py-4 md:grid-cols-3">
+        <Field label="Date">
+          <input
+            type="date"
+            value={state.reportDate}
+            onChange={(e) => patch({ reportDate: e.target.value })}
+            className={inputCls}
+            required
+          />
+        </Field>
+        <Field label="Shift">
+          <select
+            value={state.shift ?? ""}
+            onChange={(e) => patch({ shift: (e.target.value || null) as Shift | null })}
+            className={inputCls}
+          >
+            <option value="">—</option>
+            {SHIFT_OPTS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Approval status">
+          <select
+            value={state.approvalStatus ?? "DRAFT"}
+            onChange={(e) =>
+              patch({ approvalStatus: e.target.value as DprApprovalStatus })
+            }
+            className={inputCls}
+          >
+            {STATUS_OPTS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Contractor">
+          <input
+            type="text"
+            value={state.contractorName ?? ""}
+            onChange={(e) => patch({ contractorName: e.target.value || null })}
+            placeholder="Lead contractor"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Weather">
+          <select
+            value={state.weatherCondition ?? ""}
+            onChange={(e) => patch({ weatherCondition: e.target.value || null })}
+            className={inputCls}
+          >
+            <option value="">—</option>
+            {WEATHER_OPTS.map((w) => (
+              <option key={w} value={w}>
+                {w}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Start time">
+          <input
+            type="time"
+            value={state.startTime ?? ""}
+            onChange={(e) => patch({ startTime: e.target.value || null })}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="End time">
+          <input
+            type="time"
+            value={state.endTime ?? ""}
+            onChange={(e) => patch({ endTime: e.target.value || null })}
+            className={inputCls}
+          />
+        </Field>
+      </div>
+
+      {/* Activity details */}
+      <div className="border-t border-hairline px-5 py-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-charcoal">
+          <Briefcase className="h-4 w-4 text-gold-deep" />
+          Activity details
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Field label="BOQ item">
+            <SearchableSelect
+              options={boqOptions}
+              value={state.boqItemNo ?? ""}
+              onChange={(v) => patch({ boqItemNo: v || null })}
+              placeholder={
+                boqOptions.length ? "Optional — link to BOQ" : "No BOQ items defined"
+              }
+              disabled={boqOptions.length === 0}
+            />
+          </Field>
+          <Field label="Chainage from">
+            <input
+              type="text"
+              value={state.chainageFromRaw}
+              onChange={(e) => patch({ chainageFromRaw: e.target.value })}
+              onBlur={() => handleChainageBlur("from")}
+              placeholder="145+000"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Chainage to">
+            <input
+              type="text"
+              value={state.chainageToRaw}
+              onChange={(e) => patch({ chainageToRaw: e.target.value })}
+              onBlur={() => handleChainageBlur("to")}
+              placeholder="145+200"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Side">
+            <select
+              value={state.side ?? ""}
+              onChange={(e) => patch({ side: (e.target.value || null) as Side | null })}
+              className={inputCls}
+            >
+              <option value="">—</option>
+              {SIDE_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Landmark" className="md:col-span-3">
+            <input
+              type="text"
+              value={state.landmark ?? ""}
+              onChange={(e) => patch({ landmark: e.target.value || null })}
+              placeholder="Near Main Road junction"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Workdone Quantity" required>
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              value={state.qtyExecuted}
+              onChange={(e) => patch({ qtyExecuted: parseFloat(e.target.value) || 0 })}
               className={inputCls}
               required
             />
           </Field>
-          <Field label="Shift">
+          <Field label="Unit">
             <select
-              value={state.shift ?? ""}
-              onChange={(e) => patch({ shift: (e.target.value || null) as Shift | null })}
+              value={state.unit}
+              onChange={(e) => patch({ unit: e.target.value })}
               className={inputCls}
+              required
             >
-              <option value="">—</option>
-              {SHIFT_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {unitOptionsWithFallback(state.unit).map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                  {!(UNIT_OPTS as readonly string[]).includes(u) ? " (legacy)" : ""}
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Approval status">
-            <select
-              value={state.approvalStatus ?? "DRAFT"}
-              onChange={(e) =>
-                patch({ approvalStatus: e.target.value as DprApprovalStatus })
+            {(() => {
+              const activityUnit = state.activityId
+                ? defaultUnitByActivityId.get(state.activityId) ?? null
+                : null;
+              if (
+                activityUnit &&
+                activityUnit.trim().length > 0 &&
+                state.unit &&
+                state.unit.trim().toLowerCase() !== activityUnit.trim().toLowerCase()
+              ) {
+                return (
+                  <p className="mt-1 text-xs text-warning">
+                    ⚠️ This activity is normally measured in{" "}
+                    <strong>{activityUnit}</strong>. Saving with{" "}
+                    <strong>{state.unit}</strong> will make the productivity-norm comparison
+                    meaningless on the Capacity Utilization page.
+                  </p>
+                );
               }
-              className={inputCls}
-            >
-              {STATUS_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              return null;
+            })()}
           </Field>
-          <Field label="Contractor">
-            <input
-              type="text"
-              value={state.contractorName ?? ""}
-              onChange={(e) => patch({ contractorName: e.target.value || null })}
-              placeholder="Lead contractor"
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Weather">
-            <select
-              value={state.weatherCondition ?? ""}
-              onChange={(e) => patch({ weatherCondition: e.target.value || null })}
-              className={inputCls}
-            >
-              <option value="">—</option>
-              {WEATHER_OPTS.map((w) => (
-                <option key={w} value={w}>
-                  {w}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Start time">
-            <input
-              type="time"
-              value={state.startTime ?? ""}
-              onChange={(e) => patch({ startTime: e.target.value || null })}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="End time">
-            <input
-              type="time"
-              value={state.endTime ?? ""}
-              onChange={(e) => patch({ endTime: e.target.value || null })}
+          <Field label="Remarks" className="md:col-span-3">
+            <textarea
+              value={state.remarks ?? ""}
+              onChange={(e) => patch({ remarks: e.target.value || null })}
+              rows={2}
               className={inputCls}
             />
           </Field>
         </div>
+      </div>
 
-        {/* Activity details */}
-        <div className="border-t border-hairline px-5 py-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-charcoal">
-            <Briefcase className="h-4 w-4 text-gold-deep" />
-            Activity details
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field label="BOQ item">
-              <SearchableSelect
-                options={boqOptions}
-                value={state.boqItemNo ?? ""}
-                onChange={(v) => patch({ boqItemNo: v || null })}
-                placeholder={
-                  boqOptions.length ? "Optional — link to BOQ" : "No BOQ items defined"
-                }
-                disabled={boqOptions.length === 0}
-              />
-            </Field>
-            <Field label="Chainage from">
-              <input
-                type="text"
-                value={state.chainageFromRaw}
-                onChange={(e) => patch({ chainageFromRaw: e.target.value })}
-                onBlur={() => handleChainageBlur("from")}
-                placeholder="145+000"
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Chainage to">
-              <input
-                type="text"
-                value={state.chainageToRaw}
-                onChange={(e) => patch({ chainageToRaw: e.target.value })}
-                onBlur={() => handleChainageBlur("to")}
-                placeholder="145+200"
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Side">
-              <select
-                value={state.side ?? ""}
-                onChange={(e) => patch({ side: (e.target.value || null) as Side | null })}
-                className={inputCls}
-              >
-                <option value="">—</option>
-                {SIDE_OPTS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Landmark" className="md:col-span-3">
-              <input
-                type="text"
-                value={state.landmark ?? ""}
-                onChange={(e) => patch({ landmark: e.target.value || null })}
-                placeholder="Near Main Road junction"
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Executed qty">
-              <input
-                type="number"
-                step="0.001"
-                min="0"
-                value={state.qtyExecuted}
-                onChange={(e) => patch({ qtyExecuted: parseFloat(e.target.value) || 0 })}
-                className={inputCls}
-                required
-              />
-            </Field>
-            <Field label="Unit">
-              <select
-                value={state.unit}
-                onChange={(e) => patch({ unit: e.target.value })}
-                className={inputCls}
-                required
-              >
-                {unitOptionsWithFallback(state.unit).map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                    {!(UNIT_OPTS as readonly string[]).includes(u) ? " (legacy)" : ""}
-                  </option>
-                ))}
-              </select>
-              {(() => {
-                const activityUnit = state.activityId
-                  ? defaultUnitByActivityId.get(state.activityId) ?? null
-                  : null;
-                if (
-                  activityUnit &&
-                  activityUnit.trim().length > 0 &&
-                  state.unit &&
-                  state.unit.trim().toLowerCase() !== activityUnit.trim().toLowerCase()
-                ) {
-                  return (
-                    <p className="mt-1 text-xs text-warning">
-                      ⚠️ This activity is normally measured in{" "}
-                      <strong>{activityUnit}</strong>. Saving with{" "}
-                      <strong>{state.unit}</strong> will make the productivity-norm comparison
-                      meaningless on the Capacity Utilization page.
-                    </p>
-                  );
-                }
-                return null;
-              })()}
-            </Field>
-            <Field label="Remarks" className="md:col-span-3">
-              <textarea
-                value={state.remarks ?? ""}
-                onChange={(e) => patch({ remarks: e.target.value || null })}
-                rows={2}
-                className={inputCls}
-              />
-            </Field>
-          </div>
+      {/* Tabs */}
+      <div className="border-t border-hairline">
+        <div className="flex gap-1 border-b border-hairline px-5 pt-3">
+          <TabButton active={tab === "manpower"} onClick={() => setTab("manpower")}>
+            <HardHat className="h-4 w-4" /> Manpower ({manpowerFilledCount})
+          </TabButton>
+          <TabButton active={tab === "equipment"} onClick={() => setTab("equipment")}>
+            <Briefcase className="h-4 w-4" /> Equipment ({equipmentFilledCount})
+          </TabButton>
+          <TabButton active={tab === "material"} onClick={() => setTab("material")}>
+            <Package className="h-4 w-4" /> Material ({materialsFilledCount})
+          </TabButton>
         </div>
-
-        {/* Tabs */}
-        <div className="border-t border-hairline">
-          <div className="flex gap-1 border-b border-hairline px-5 pt-3">
-            <TabButton active={tab === "manpower"} onClick={() => setTab("manpower")}>
-              <HardHat className="h-4 w-4" /> Manpower ({manpowerFilledCount})
-            </TabButton>
-            <TabButton active={tab === "equipment"} onClick={() => setTab("equipment")}>
-              <Briefcase className="h-4 w-4" /> Equipment ({equipmentFilledCount})
-            </TabButton>
-            <TabButton active={tab === "material"} onClick={() => setTab("material")}>
-              <Package className="h-4 w-4" /> Material ({materialsFilledCount})
-            </TabButton>
-          </div>
-          <div className="px-5 py-4">
-            {tab === "manpower" && (
-              <ManpowerGrid
-                projectId={projectId}
-                activityId={state.activityId ?? null}
-                reportDate={state.reportDate}
-                rows={state.manpower ?? []}
-                onChange={(rows: DprManpowerRow[]) => patch({ manpower: rows })}
-              />
-            )}
-            {tab === "equipment" && (
-              <EquipmentGrid
-                projectId={projectId}
-                activityId={state.activityId ?? null}
-                reportDate={state.reportDate}
-                rows={state.equipment ?? []}
-                onChange={(rows: DprEquipmentRow[]) => patch({ equipment: rows })}
-              />
-            )}
-            {tab === "material" && (
-              <MaterialGrid
-                projectId={projectId}
-                activityId={state.activityId ?? null}
-                reportDate={state.reportDate}
-                rows={state.materials ?? []}
-                onChange={(rows: DprMaterialRow[]) => patch({ materials: rows })}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Safety & Delay */}
-        <div className="border-t border-hairline px-5 py-4">
-          <SafetyDelaySection
-            delayReason={state.delayReason}
-            safetyObservation={state.safetyObservation}
-            safetyIncidentType={state.safetyIncidentType}
-            onChange={patch}
-          />
-        </div>
-
-        {/* Photos */}
-        <div className="border-t border-hairline px-5 py-4">
-          <DprPhotosSection
-            projectId={projectId}
-            dprId={editing?.id ?? null}
-            pending={pendingPhotos}
-            existing={existingPhotos}
-            onPendingChange={setPendingPhotos}
-            onExistingChange={setExistingPhotos}
-          />
-          {photoUploadStatus && (
-            <div className="mt-2 text-xs text-slate">{photoUploadStatus}</div>
+        <div className="px-5 py-4">
+          {tab === "manpower" && (
+            <ManpowerGrid
+              projectId={projectId}
+              activityId={state.activityId ?? null}
+              reportDate={state.reportDate}
+              rows={state.manpower ?? []}
+              onChange={(rows: DprManpowerRow[]) => patch({ manpower: rows })}
+            />
+          )}
+          {tab === "equipment" && (
+            <EquipmentGrid
+              projectId={projectId}
+              activityId={state.activityId ?? null}
+              reportDate={state.reportDate}
+              rows={state.equipment ?? []}
+              onChange={(rows: DprEquipmentRow[]) => patch({ equipment: rows })}
+            />
+          )}
+          {tab === "material" && (
+            <MaterialGrid
+              projectId={projectId}
+              activityId={state.activityId ?? null}
+              reportDate={state.reportDate}
+              rows={state.materials ?? []}
+              onChange={(rows: DprMaterialRow[]) => patch({ materials: rows })}
+            />
           )}
         </div>
+      </div>
+
+      {/* Safety & Delay */}
+      <div className="border-t border-hairline px-5 py-4">
+        <SafetyDelaySection
+          delayReason={state.delayReason}
+          safetyObservation={state.safetyObservation}
+          safetyIncidentType={state.safetyIncidentType}
+          onChange={patch}
+        />
+      </div>
+
+      {/* Photos */}
+      <div className="border-t border-hairline px-5 py-4">
+        <DprPhotosSection
+          projectId={projectId}
+          dprId={editing?.id ?? null}
+          pending={pendingPhotos}
+          existing={existingPhotos}
+          onPendingChange={setPendingPhotos}
+          onExistingChange={setExistingPhotos}
+        />
+        {photoUploadStatus && (
+          <div className="mt-2 text-xs text-slate">{photoUploadStatus}</div>
+        )}
+      </div>
 
       {/* Sticky footer: totals + save */}
       <div className="sticky bottom-0 z-10 -mx-1 rounded-lg border border-hairline bg-paper/95 p-3 shadow-[0_-4px_20px_rgba(28,28,28,0.04)] backdrop-blur">
@@ -899,16 +899,19 @@ const inputCls =
 function Field({
   label,
   className,
+  required,
   children,
 }: {
   label: string;
   className?: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className={className}>
       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate">
         {label}
+        {required && <span className="ml-0.5 text-burgundy">*</span>}
       </label>
       {children}
     </div>
@@ -928,11 +931,10 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition ${
-        active
+      className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition ${active
           ? "border-gold text-charcoal"
           : "border-transparent text-slate hover:text-charcoal"
-      }`}
+        }`}
     >
       {children}
     </button>

@@ -71,14 +71,16 @@ const groups: NavGroup[] = [
       { name: "Reports", href: "/reports", icon: BarChart3, module: "M9_REPORTS" },
     ],
   },
-  {
+  /* {
     label: "HSE & Permits",
     items: [
-      { name: "Permits", href: "/permits", icon: ShieldCheck,
-        requireRoles: ["FOREMAN", "SITE_ENGINEER", "HSE_OFFICER", "PROJECT_MANAGER", "ADMIN"] },
+      {
+        name: "Permits", href: "/permits", icon: ShieldCheck,
+        requireRoles: ["FOREMAN", "SITE_ENGINEER", "HSE_OFFICER", "PROJECT_MANAGER", "ADMIN"]
+      },
       { name: "Workflow Reference", href: "/permits/workflow", icon: Workflow },
     ],
-  },
+  }, */
   {
     label: "Resources",
     adminOnly: true,
@@ -86,7 +88,7 @@ const groups: NavGroup[] = [
       { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
       { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
       { name: "Resources", href: "/resources", icon: Users, adminOnly: true },
-      { name: "Labour Master", href: "/labour-master", icon: HardHat, adminOnly: true },
+      /* { name: "Manpower Dashboard", href: "/labour-master", icon: HardHat, adminOnly: true }, */
     ],
   },
   // Nationalities admin page exists at /admin/nationalities (still routable, still seeded
@@ -96,7 +98,7 @@ const groups: NavGroup[] = [
     label: "Master Data",
     adminOnly: true,
     items: [
-      { name: "Categories", href: "/admin/manpower-categories", icon: FolderTree, adminOnly: true },
+      /* { name: "Categories", href: "/admin/manpower-categories", icon: FolderTree, adminOnly: true }, */
       { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true },
       { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true },
       { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true },
@@ -109,6 +111,11 @@ const groups: NavGroup[] = [
       { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
       { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
       { name: "Formulas", href: "/admin/formulas", icon: Calculator, adminOnly: true },
+      {
+        name: "Permits", href: "/permits", icon: ShieldCheck,
+        requireRoles: ["FOREMAN", "SITE_ENGINEER", "HSE_OFFICER", "PROJECT_MANAGER", "ADMIN"]
+      },
+      { name: "Workflow Reference", href: "/permits/workflow", icon: Workflow },
     ],
   },
   {

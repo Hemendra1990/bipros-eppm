@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   HardHat,
+  Image as ImageIcon,
   MapPin,
   Package,
   Pencil,
@@ -45,6 +46,13 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
   const manpowerCount = (row.manpower ?? []).reduce((a, m) => a + (m.nos ?? 0), 0);
   const equipmentCount = (row.equipment ?? []).reduce((a, e) => a + (e.nos ?? 0), 0);
   const materialCount = (row.materials ?? []).length;
+  const photoCount = (row.attachments ?? []).length;
+  const hasAnyChip =
+    row.qtyExecuted != null ||
+    manpowerCount > 0 ||
+    equipmentCount > 0 ||
+    materialCount > 0 ||
+    photoCount > 0;
 
   return (
     <div className="rounded-lg border border-hairline bg-paper">
@@ -58,37 +66,49 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="truncate font-semibold text-charcoal">{row.activityName}</span>
               <Badge variant={STATUS_VARIANT[status]} withDot>
                 {status}
               </Badge>
               {row.side && <Badge variant="neutral">{SIDE_LABEL[row.side] ?? row.side}</Badge>}
               {row.boqItemNo && <Badge variant="gold">BOQ {row.boqItemNo}</Badge>}
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate">
               {(row.chainageFromM != null || row.chainageToM != null) && (
-                <span className="inline-flex items-center gap-1">
+                <span className="inline-flex items-center gap-1 text-xs text-slate">
                   <MapPin className="h-3 w-3" />
                   {chainageLabel(row.chainageFromM)} → {chainageLabel(row.chainageToM)}
                 </span>
               )}
-              <span className="font-semibold text-charcoal tabular-nums">
-                {fmt(row.qtyExecuted)} {row.unit}
-              </span>
-              {row.cumulativeQty != null && (
-                <span>cum. {fmt(row.cumulativeQty)} {row.unit}</span>
-              )}
-              <span className="inline-flex items-center gap-1">
-                <HardHat className="h-3 w-3" /> {manpowerCount}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Briefcase className="h-3 w-3" /> {equipmentCount}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Package className="h-3 w-3" /> {materialCount}
-              </span>
             </div>
+            {hasAnyChip && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {row.qtyExecuted != null && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-parchment px-2 py-0.5 text-xs font-semibold text-charcoal tabular-nums">
+                    {fmt(row.qtyExecuted)} {row.unit}
+                  </span>
+                )}
+                {manpowerCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-ivory px-2 py-0.5 text-xs text-slate">
+                    <HardHat className="h-3 w-3" /> {manpowerCount}
+                  </span>
+                )}
+                {equipmentCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-ivory px-2 py-0.5 text-xs text-slate">
+                    <Briefcase className="h-3 w-3" /> {equipmentCount}
+                  </span>
+                )}
+                {materialCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-ivory px-2 py-0.5 text-xs text-slate">
+                    <Package className="h-3 w-3" /> {materialCount}
+                  </span>
+                )}
+                {photoCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-ivory px-2 py-0.5 text-xs text-slate">
+                    <ImageIcon className="h-3 w-3" /> {photoCount}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </button>
         <div className="flex flex-none items-center gap-1">
@@ -112,6 +132,12 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
       </div>
       {open && (
         <div className="space-y-3 border-t border-hairline px-4 py-3">
+          {row.cumulativeQty != null && (
+            <div className="text-xs text-slate">
+              <span className="font-semibold text-charcoal">Cumulative:</span>{" "}
+              <span className="tabular-nums">{fmt(row.cumulativeQty)} {row.unit}</span>
+            </div>
+          )}
           {row.landmark && (
             <div className="text-xs text-slate">
               <span className="font-semibold text-charcoal">Landmark:</span> {row.landmark}

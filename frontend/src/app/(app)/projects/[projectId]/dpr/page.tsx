@@ -18,7 +18,7 @@ import { Drawer } from "@/components/common/Drawer";
 import { TabTip } from "@/components/common/TabTip";
 import { DprActivityForm } from "@/components/dpr/DprActivityForm";
 import type { SelectOption } from "@/components/common/SearchableSelect";
-import { DprDayList } from "@/components/dpr/DprDayList";
+import { DprDayList, DprDaySkeleton } from "@/components/dpr/DprDayList";
 import { getErrorMessage } from "@/lib/utils/error";
 import { useStickyMeasure } from "@/hooks/useStickyMeasure";
 
@@ -133,7 +133,9 @@ export default function DprPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DailyProgressReportResponse | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
-  const { ref: stickyHeaderRef } = useStickyMeasure<HTMLDivElement>();
+  const { ref: stickyHeaderRef, height: stickyHeaderHeight } = useStickyMeasure<HTMLDivElement>();
+  // tab-nav-h is the page-shell tab strip above the filter bar; day headers park beneath both.
+  const dayStickyOffset = 53 + stickyHeaderHeight;
 
   const { data: listData, isLoading, isFetching } = useQuery({
     queryKey: ["dpr", projectId, from, to],
@@ -197,7 +199,14 @@ export default function DprPage() {
   };
 
   if (isLoading) {
-    return <div className="p-6 text-slate">Loading DPR…</div>;
+    return (
+      <div className="space-y-6 p-6">
+        <div className="h-9 w-72 animate-pulse rounded bg-parchment" />
+        <DprDaySkeleton />
+        <DprDaySkeleton />
+        <DprDaySkeleton />
+      </div>
+    );
   }
 
   return (
@@ -221,7 +230,7 @@ export default function DprPage() {
               onClick={openNew}
               className="inline-flex items-center gap-1.5 rounded-md bg-gold px-4 py-2 text-sm font-semibold text-gold-ink hover:bg-gold-deep transition"
             >
-              <Plus className="h-4 w-4" /> Add Activity
+              <Plus className="h-4 w-4" /> Add DPR
             </button>
           </div>
           <form onSubmit={handleFilterSubmit} className="mt-3 flex flex-wrap items-end gap-3">
@@ -261,7 +270,7 @@ export default function DprPage() {
         <Drawer
           open={showForm}
           onClose={closeForm}
-          title={editing ? "Edit Activity" : "Add Activity"}
+          title={editing ? "Edit DPR" : "Add DPR"}
           widthClass="max-w-7xl"
         >
           <DprActivityForm
@@ -284,7 +293,12 @@ export default function DprPage() {
           />
         </Drawer>
 
-        <DprDayList rows={rows} onEdit={openEdit} onDelete={handleDelete} />
+        <DprDayList
+          rows={rows}
+          onEdit={openEdit}
+          onDelete={handleDelete}
+          stickyOffset={dayStickyOffset}
+        />
       </div>
     </div>
   );

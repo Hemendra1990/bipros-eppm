@@ -101,7 +101,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
         />
       ),
     },
-    {
+    /* {
       key: "category",
       label: "Category",
       minWidth: 140,
@@ -112,7 +112,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
           options={CATEGORIES}
         />
       ),
-    },
+    }, */
     {
       key: "nos",
       label: "Nos",
@@ -142,7 +142,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
         />
       ),
     },
-    {
+    /* {
       key: "otHours",
       label: "OT",
       minWidth: 90,
@@ -156,8 +156,8 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
           onChange={(v) => u({ otHours: v === "" ? null : Number(v) })}
         />
       ),
-    },
-    {
+    }, */
+    /* {
       key: "idleHours",
       label: "Idle",
       minWidth: 90,
@@ -171,7 +171,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
           onChange={(v) => u({ idleHours: v === "" ? null : Number(v) })}
         />
       ),
-    },
+    }, */
     {
       key: "rate",
       label: "Rate",
@@ -187,14 +187,14 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
         );
       },
     },
-    {
+    /* {
       key: "cost",
       label: "Cost",
       minWidth: 110,
       align: "right",
       render: (r) => <span className="tabular-nums">{fmtMoney(manpowerLineCost(r, r.unitRateBasis))}</span>,
-    },
-    {
+    }, */
+    /* {
       key: "remarks",
       label: "Remarks",
       minWidth: 220,
@@ -205,7 +205,7 @@ export function ManpowerGrid({ projectId, activityId, reportDate, rows, onChange
           onChange={(v) => u({ remarks: v || null })}
         />
       ),
-    },
+    }, */
   ];
 
   return (

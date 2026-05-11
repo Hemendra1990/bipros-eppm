@@ -122,7 +122,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
         />
       ),
     },
-    {
+    /* {
       key: "ownership",
       label: "Type",
       minWidth: 140,
@@ -133,7 +133,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
           options={OWNERSHIP}
         />
       ),
-    },
+    }, */
     {
       key: "nos",
       label: "Nos",
@@ -163,7 +163,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
         />
       ),
     },
-    {
+    /* {
       key: "idleHours",
       label: "Idle",
       minWidth: 95,
@@ -207,7 +207,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
           onChange={(v) => u({ fuelLitres: v === "" ? null : Number(v) })}
         />
       ),
-    },
+    }, */
     {
       key: "rate",
       label: "Rate",
@@ -222,7 +222,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
         </span>
       ),
     },
-    {
+    /* {
       key: "cost",
       label: "Cost",
       minWidth: 110,
@@ -232,8 +232,8 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
           {fmtMoney(equipmentLineCost(r, r.unitRateBasis ?? "HOUR"))}
         </span>
       ),
-    },
-    {
+    }, */
+    /* {
       key: "availabilityStatus",
       label: "Status",
       minWidth: 140,
@@ -246,8 +246,8 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
           options={AVAILABILITY}
         />
       ),
-    },
-    {
+    }, */
+    /* {
       key: "operatorName",
       label: "Operator",
       minWidth: 160,
@@ -259,7 +259,7 @@ export function EquipmentGrid({ projectId, activityId, reportDate, rows, onChang
           placeholder="Optional"
         />
       ),
-    },
+    }, */
   ];
 
   return (
