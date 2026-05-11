@@ -49,7 +49,8 @@ class ActivityServicePercentCompleteValidationTest {
   @BeforeEach
   void setUp() {
     service = new ActivityService(activityRepository, relationshipRepository, auditService,
-        projectAccess, projectRepository, percentCompleteCalculator, stepRepository);
+        projectAccess, projectRepository, percentCompleteCalculator, stepRepository,
+        org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
 
     activityId = UUID.randomUUID();
     activity = new Activity();

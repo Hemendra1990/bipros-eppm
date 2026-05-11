@@ -237,6 +237,17 @@ public class EntityResolverTool implements Tool {
 
   private void collectResourceMatches(
       String query, boolean supervisorOnly, List<Match> out) {
+    // TODO(EntityResolverTool#collectResourceMatches, line ~240): resources are
+    // a global pool; this method scans every Resource in the database and only
+    // the caller's access to the project is enforced (enforceScope), not the
+    // resources' membership in that project's pool (ProjectResource). For
+    // supervisor / resource resolution the LLM may therefore see candidates
+    // who are not on the in-scope project. Proper fix: inject
+    // ProjectResourceRepository and filter `all` to resources present in
+    // ProjectResource for ctx.projectId() when projectId != null. Left as a
+    // TODO to avoid expanding scope of the supervisor-routing change; the
+    // newly-added `list_supervisors` tool covers the roster path correctly
+    // and the LLM is now nudged to prefer it.
     List<Resource> all = resourceRepository.findAll();
     for (Resource r : all) {
       String roleName = r.getRole() != null ? r.getRole().getName() : null;

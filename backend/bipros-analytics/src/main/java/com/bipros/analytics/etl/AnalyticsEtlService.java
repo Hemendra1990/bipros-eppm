@@ -1,7 +1,15 @@
 package com.bipros.analytics.etl;
 
+import com.bipros.activity.domain.model.Activity;
 import com.bipros.analytics.etl.dto.RiskSnapshotRow;
 import com.bipros.analytics.store.ClickHouseTemplate;
+import com.bipros.baseline.domain.Baseline;
+import com.bipros.contract.domain.model.VariationOrder;
+import com.bipros.cost.domain.entity.CostAccount;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.model.WbsNode;
+import com.bipros.resource.domain.model.Resource;
+import com.bipros.scheduling.domain.model.ScheduleResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -9,7 +17,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -24,7 +34,13 @@ public class AnalyticsEtlService {
 
     private final ClickHouseTemplate clickHouse;
 
-    private long nowVersion() {
+    /**
+     * Visible for tests + per-dim upsert paths in this package. Live writes use this so
+     * every event-driven row has a strictly newer {@code _version} than the nightly batch
+     * (which fixes {@code VERSION} once per JVM start), letting ReplacingMergeTree converge
+     * to the live state on merge.
+     */
+    long nowVersion() {
         return System.currentTimeMillis();
     }
 
@@ -493,6 +509,113 @@ public class AnalyticsEtlService {
         clickHouse.execute(sql, params);
         log.debug("Inserted labour_daily: project={} date={} contractor={} skill={} source={}",
                 projectId, date, contractorName, skillCategory, source);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Live dimension upserts. Each one issues a single INSERT into a
+    // ReplacingMergeTree(_version) table with _version = nowVersion(), so it always
+    // overrides the most recent nightly batch row for the same key. Listeners route
+    // through here from the AFTER_COMMIT phase.
+    // ────────────────────────────────────────────────────────────────────────────
+
+    public void upsertProjectDimension(Project p) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_PROJECT,
+                AnalyticsDimensionSql.projectParams(p, nowVersion()));
+        log.debug("Upserted dim_project: id={} code={}", p.getId(), p.getCode());
+    }
+
+    public void upsertActivityDimension(Activity a) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_ACTIVITY,
+                AnalyticsDimensionSql.activityParams(a, nowVersion()));
+        log.debug("Upserted dim_activity: id={} project={}", a.getId(), a.getProjectId());
+    }
+
+    /**
+     * Bulk dim_activity upsert. Used by P6 imports / sweep-style updates that touch
+     * thousands of activities at once. Falls back to per-row execute calls because
+     * ClickHouseTemplate's NamedParameter helper does not expose a multi-row VALUES
+     * builder out of the box. Internally batched via NamedParameterJdbcTemplate's
+     * SqlParameterSource[] batchUpdate path inside ClickHouseTemplate (TODO once
+     * batchUpdate is added there); for now this is N round-trips but with a single
+     * version stamp so dedup is consistent.
+     */
+    public void upsertActivitiesBulkDimension(List<Activity> activities) {
+        if (activities == null || activities.isEmpty()) {
+            return;
+        }
+        long version = nowVersion();
+        List<Map<String, Object>> rows = new ArrayList<>(activities.size());
+        for (Activity a : activities) {
+            rows.add(AnalyticsDimensionSql.activityParams(a, version));
+        }
+        // Reuse the existing batchInsert hook on ClickHouseTemplate. It takes a table
+        // and a list of named-param maps — for ReplacingMergeTree the column order in
+        // the INSERT statement does not matter, only that the keys match the columns.
+        // Fall back to per-row execute if batchInsert is not appropriate here.
+        for (Map<String, Object> params : rows) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_ACTIVITY, params);
+        }
+        log.debug("Bulk-upserted {} activities into dim_activity (version={})",
+                activities.size(), version);
+    }
+
+    public void upsertResourceDimension(Resource r) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_RESOURCE,
+                AnalyticsDimensionSql.resourceParams(r, nowVersion()));
+        log.debug("Upserted dim_resource: id={} code={}", r.getId(), r.getCode());
+    }
+
+    public void upsertWbsDimension(WbsNode w) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_WBS,
+                AnalyticsDimensionSql.wbsParams(w, nowVersion()));
+        log.debug("Upserted dim_wbs: id={} project={}", w.getId(), w.getProjectId());
+    }
+
+    public void upsertCostAccountDimension(CostAccount c) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_COST_ACCOUNT,
+                AnalyticsDimensionSql.costAccountParams(c, nowVersion()));
+        log.debug("Upserted dim_cost_account: id={} code={}", c.getId(), c.getCode());
+    }
+
+    public void upsertBaselineDimension(Baseline b) {
+        upsertBaselineDimension(b, b.getIsActive() != null && b.getIsActive());
+    }
+
+    /**
+     * Explicit form for the {@code BaselineDeactivatedEvent} path: emit an is_active=0
+     * row with a strictly newer _version even when the in-memory entity still has
+     * {@code isActive=true} (rare race during the deactivation transaction).
+     */
+    public void upsertBaselineDimension(Baseline b, boolean active) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_BASELINE,
+                AnalyticsDimensionSql.baselineParams(b, active, nowVersion()));
+        log.debug("Upserted dim_baseline: id={} project={} active={}",
+                b.getId(), b.getProjectId(), active);
+    }
+
+    public void upsertScheduleRunDimension(ScheduleResult s) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_SCHEDULE_RUN,
+                AnalyticsDimensionSql.scheduleRunParams(s, nowVersion()));
+        log.debug("Upserted dim_schedule_run: id={} project={}", s.getId(), s.getProjectId());
+    }
+
+    /**
+     * Variation Order → dim_contract row. The VO's contract row links it to the project,
+     * so the listener must pass that projectId through (the VO entity does not carry it).
+     */
+    public void upsertContractDimension(VariationOrder vo, UUID projectId) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_CONTRACT,
+                AnalyticsDimensionSql.contractParams(vo, projectId, nowVersion()));
+        log.debug("Upserted dim_contract: voId={} contractId={} project={}",
+                vo.getId(), vo.getContractId(), projectId);
     }
 
     private static String emptyIfNull(String s) {

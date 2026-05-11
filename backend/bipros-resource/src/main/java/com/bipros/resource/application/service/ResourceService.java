@@ -1,5 +1,7 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.common.event.ResourceCreatedEvent;
+import com.bipros.common.event.ResourceUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
@@ -23,6 +25,7 @@ import com.bipros.resource.domain.repository.ResourceRoleRepository;
 import com.bipros.resource.domain.repository.ResourceTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +50,7 @@ public class ResourceService {
   private final MaterialRateMasterRepository materialRateMasterRepository;
   private final ResourceAssignmentService resourceAssignmentService;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
 
   // ─── Code constants ───
   private static final String TYPE_LABOR = "LABOR";
@@ -103,6 +107,11 @@ public class ResourceService {
     persistDetailSection(saved.getId(), type.getCode(), request);
 
     auditService.logCreate("Resource", saved.getId(), ResourceResponse.from(saved));
+
+    eventPublisher.publishEvent(
+        new ResourceCreatedEvent(saved.getId(), saved.getCode(), saved.getName())
+    );
+
     return loadFull(saved);
   }
 
@@ -215,6 +224,11 @@ public class ResourceService {
     }
 
     auditService.logUpdate("Resource", id, "resource", null, ResourceResponse.from(updated));
+
+    eventPublisher.publishEvent(
+        new ResourceUpdatedEvent(updated.getId(), updated.getCode(), updated.getName())
+    );
+
     return loadFull(updated);
   }
 

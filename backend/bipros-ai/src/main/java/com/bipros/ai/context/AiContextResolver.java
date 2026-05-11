@@ -36,12 +36,13 @@ public class AiContextResolver {
                 ? List.copyOf(projectAccess.getAccessibleProjectIdsForCurrentUser())
                 : List.of();
 
+        // When projectId is null we INTENTIONALLY leave effectiveProjectId null —
+        // even for non-admin users with a single accessible project. The caller
+        // treats this as a portfolio / general session, and scopedProjectIds carries
+        // the breadth. The previous auto-bind silently scoped general questions to
+        // the one accessible project, which made portfolio queries impossible and
+        // surprised users whose scope changed underneath them.
         UUID effectiveProjectId = projectId;
-        if (effectiveProjectId == null
-                && !"ADMIN".equals(role)
-                && scoped.size() == 1) {
-            effectiveProjectId = scoped.get(0);
-        }
 
         return new AiContext(userId, effectiveProjectId, module, role, profileCode, scoped);
     }

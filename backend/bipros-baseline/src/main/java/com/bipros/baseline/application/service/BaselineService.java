@@ -24,6 +24,8 @@ import com.bipros.baseline.infrastructure.repository.BaselineRelationshipReposit
 import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineResourceAssignmentRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineWbsRepository;
+import com.bipros.common.event.BaselineCapturedEvent;
+import com.bipros.common.event.BaselineDeactivatedEvent;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.service.ActivityCostCalculator;
@@ -36,6 +38,7 @@ import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,6 +69,7 @@ public class BaselineService {
   private final ProjectRepository projectRepository;
   private final WbsNodeRepository wbsNodeRepository;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Transactional
   public BaselineResponse createBaseline(UUID projectId, CreateBaselineRequest request) {
@@ -79,8 +83,14 @@ public class BaselineService {
             "DUPLICATE_CODE",
             "A baseline named '" + request.name() + "' already exists for this project and type");
       }
+      boolean wasActive = Boolean.TRUE.equals(baseline.getIsActive());
       baseline.setIsActive(false);
       baselineRepository.save(baseline);
+      if (wasActive) {
+        eventPublisher.publishEvent(
+            new BaselineDeactivatedEvent(projectId, baseline.getId())
+        );
+      }
     }
 
     // Phase 4.3: when sourceProjectId is supplied, snapshot from THAT project's data instead of
@@ -256,6 +266,11 @@ public class BaselineService {
     });
 
     auditService.logCreate("Baseline", saved.getId(), BaselineResponse.from(saved));
+
+    eventPublisher.publishEvent(
+        new BaselineCapturedEvent(saved.getProjectId(), saved.getId(), saved.getName())
+    );
+
     return BaselineResponse.from(saved);
   }
 

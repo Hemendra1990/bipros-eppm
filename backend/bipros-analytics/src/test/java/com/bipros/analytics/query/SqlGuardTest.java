@@ -133,4 +133,26 @@ class SqlGuardTest {
         "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id = '" + scopedA + "'";
     guard.validate(rightSql, List.of(scopedA));
   }
+
+  /**
+   * Portfolio-mode hygiene: a non-admin with N≥10 scoped projects must be able to run
+   * an IN(...) filter listing all of them. This protects against any future regression
+   * that imposes a smaller IN-list cap.
+   */
+  @Test
+  void acceptsTenProjectInList() {
+    int n = 10;
+    List<String> scope = new java.util.ArrayList<>(n);
+    StringBuilder inList = new StringBuilder();
+    for (int i = 0; i < n; i++) {
+      String id = UUID.randomUUID().toString();
+      scope.add(id);
+      if (i > 0) inList.append(", ");
+      inList.append("'").append(id).append("'");
+    }
+    String sql =
+        "SELECT count() FROM bipros_analytics.fact_dpr_logs "
+            + "WHERE project_id IN (" + inList + ") LIMIT 10";
+    guard.validate(sql, scope);
+  }
 }

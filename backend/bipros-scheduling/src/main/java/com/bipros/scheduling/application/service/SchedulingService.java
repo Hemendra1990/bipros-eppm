@@ -5,6 +5,7 @@ import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.calendar.application.service.CalendarService;
+import com.bipros.common.event.ScheduleRunRecordedEvent;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.scheduling.application.dto.FloatPathResponse;
@@ -25,6 +26,7 @@ import com.bipros.scheduling.domain.repository.ScheduleActivityResultRepository;
 import com.bipros.scheduling.domain.repository.ScheduleResultRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +53,7 @@ public class SchedulingService {
   private final PertEstimateService pertEstimateService;
   private final ScheduleHealthService scheduleHealthService;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
 
   public ScheduleResultResponse scheduleProject(UUID projectId, SchedulingOption option) {
     log.info("Scheduling project: id={}, option={}", projectId, option);
@@ -208,6 +211,12 @@ public class SchedulingService {
 
       ScheduleResult saved = scheduleResultRepository.save(scheduleResult);
       auditService.logCreate("ScheduleResult", saved.getId(), ScheduleResultResponse.from(saved));
+
+      SchedulingOption runOption = saved.getSchedulingOption();
+      eventPublisher.publishEvent(
+          new ScheduleRunRecordedEvent(saved.getProjectId(), saved.getId(),
+              runOption != null ? runOption.name() : null)
+      );
 
       // Save activity results and update Activity entities
       List<ScheduleActivityResult> activityResults = new ArrayList<>();

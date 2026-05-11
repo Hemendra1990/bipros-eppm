@@ -103,6 +103,8 @@ public class AiOrchestrator {
 
         String lastAssistantText = "";
         boolean naturalEnd = false;
+        boolean anyToolCalled = false;       // any tool used this turn → answer is data-backed → must verify
+        boolean verificationInjected = false; // we only run the verification pass once per request
 
         for (int round = 0; round < cap; round++) {
             LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(
@@ -117,15 +119,32 @@ public class AiOrchestrator {
                 messages.add(LlmProvider.Message.assistantWithToolCalls(outcome.text, outcome.toolCalls));
                 executeToolsAndAppend(outcome.toolCalls, ctx, messages, sink);
                 lastAssistantText = outcome.text;
+                anyToolCalled = true;
                 continue;
             }
 
-            // Natural termination: model produced a final answer.
-            String rawText = outcome.text == null ? "" : outcome.text;
-            String finalText = ChartAugmenter.augment(rawText);
+            // Model produced a candidate final answer (no tool calls).
+            // If we haven't verified yet AND the answer is data-backed (some tool
+            // was called this turn), inject a verification system message and
+            // loop one more time. This forces the model to re-call the answering
+            // tool and either confirm or correct its number before the user
+            // sees it.
+            String candidate = outcome.text == null ? "" : outcome.text;
+            if (!verificationInjected && anyToolCalled) {
+                verificationInjected = true;
+                messages.add(new LlmProvider.Message("assistant", candidate));
+                messages.add(new LlmProvider.Message("system", buildVerificationPrompt(candidate)));
+                sink.tryEmitNext(new ChatEvent("verifying",
+                        Map.of("note", "Cross-checking the answer before sending.")));
+                continue;
+            }
+
+            // Either verification has run, or this was a tool-less chit-chat answer.
+            String finalText = ChartAugmenter.augment(candidate);
             messages.add(new LlmProvider.Message("assistant", finalText));
             sink.tryEmitNext(new ChatEvent("final_answer",
-                    Map.of("text", finalText, "rounds", round + 1)));
+                    Map.of("text", finalText, "rounds", round + 1,
+                            "verified", verificationInjected)));
             sink.tryEmitNext(new ChatEvent("done", Map.of("text", finalText)));
             naturalEnd = true;
             break;
@@ -254,6 +273,9 @@ public class AiOrchestrator {
         // by role. Empty scope for a non-admin means "no accessible projects".
         boolean admin = "ADMIN".equals(ctx.role());
         boolean hasScope = ctx.scopedProjectIds() != null && !ctx.scopedProjectIds().isEmpty();
+        // Admin with no pinned project is portfolio mode too — they have
+        // unrestricted access, just not enumerated in scopedProjectIds.
+        boolean portfolioMode = ctx.projectId() == null && (hasScope || admin);
 
         String scopedList;
         if (admin) {
@@ -282,6 +304,11 @@ public class AiOrchestrator {
         String exampleFilter = ctx.projectId() != null
                 ? "project_id = '" + ctx.projectId() + "'"
                 : projectFilter;
+
+        // PROJECT SCOPE block — branches on whether the session is locked to one
+        // project (strict copy) or running in portfolio mode (cross-project copy
+        // plus inline roster of accessible projects when small enough).
+        String scopeBlock = buildScopeBlock(ctx, portfolioMode);
 
         String moduleAddendum = buildModuleAddendum(ctx.module());
         com.bipros.ai.persona.RolePersona persona = personaProvider.forProfile(ctx.profile());
@@ -425,60 +452,7 @@ public class AiOrchestrator {
             on the SAME project. If after several attempts there is genuinely no
             data, say so plainly.
 
-            ────────────────────────────────────────
-            PROJECT SCOPE (read this carefully — it is non-negotiable)
-            ────────────────────────────────────────
-
-            Every project-scoped tool runs under a single project, taken from the
-            `Current project` line above. That value is the ONLY project you may
-            act on for this turn.
-
-            (1) If `Current project` shows a code/name/UUID — that IS the scope.
-                Every tool you call will run against it; the system enforces this
-                at the gateway, so attempting to query any other project will be
-                rejected by the database guard with `SQL_PROJECT_OUT_OF_SCOPE`.
-                Therefore:
-                  - Use the code/name from `Current project` in your prose.
-                  - If the user's wording names a DIFFERENT project than the one
-                    in scope, do NOT silently switch. Tell the user plainly:
-                    "Your current scope is <code/name>, but you mentioned <X>.
-                    To switch projects, please open <X>'s page and ask again, or
-                    confirm you want to keep using <code/name>." Then wait.
-                  - Do NOT call list_projects to "double-check" or override.
-                  - Do NOT fabricate a project name from a different source.
-
-            (2) If `Current project` is `none` AND the question is about ONE
-                project:
-                  - Call list_projects (works without scope) to get the candidate
-                    set: code, name, status, id for each.
-                  - If the user's wording contains a token that uniquely matches
-                    exactly one returned project (compare against `code` first as
-                    a case-insensitive exact match, then `name` as a
-                    case-insensitive substring), silently adopt that project as
-                    the scope for the remainder of the turn, identify it once
-                    in your prose by code + name, and proceed.
-                  - If no project matches the wording, OR several match,
-                    enumerate the visible projects as bullets and ask the user
-                    which one. Do not guess.
-                  - Once a project is adopted, the rules in (1) apply for the
-                    rest of the turn.
-
-            (3) If `Current project` is `none` AND the question is genuinely
-                portfolio-wide ("compare my projects", "rank them by X", "across
-                the whole portfolio"), proceed across the full list_projects
-                set without asking.
-
-            (4) Never print raw UUIDs in your final answer. Use the code and
-                name only ("6155 — Dualization of Barka Nakhal Road"). UUIDs
-                are tool plumbing, not user-facing.
-
-            (5) For warehouse SQL (query_clickhouse): the database gateway
-                rewrites your WHERE clause to enforce the scope. If you write
-                `WHERE project_id = '<wrong uuid>'` you will get
-                `SQL_PROJECT_OUT_OF_SCOPE`. When `Current project` is set,
-                ALWAYS use that exact UUID in any SQL. When it is `none`, only
-                use UUIDs returned by list_projects in this same turn — and
-                only those.
+%s
 
             ────────────────────────────────────────
             RECOVERY ON SCOPE / SQL ERROR
@@ -515,6 +489,12 @@ public class AiOrchestrator {
               "wbs" for WBS labels, "resource" otherwise, "auto" only if intent is
               genuinely ambiguous. Use the top match's UUID for the next call.
               This saves a discovery round on cross-entity questions.
+            - When the user names a supervisor (e.g. "T. Swamy", "Sandeep") and
+              you do NOT have a list_supervisors result for this project yet,
+              prefer calling list_supervisors first (it returns codes + names +
+              UUIDs in one round-trip) over calling resolve_entity(kind="supervisor")
+              per name. resolve_entity is still correct when you know exactly one
+              name and want the UUID.
 
             Tool routing for DPR / daily progress questions:
             - For "what was reported on day X", "DPRs in March", "all DPRs by
@@ -543,6 +523,19 @@ public class AiOrchestrator {
               for any new question.
 
             Tool routing for supervisor / team questions:
+            - For "how many supervisors", "list supervisors", "who supervises this
+              project", "rank supervisors by <metric>", "show me the supervisor
+              roster", or any question that asks about the SET of supervisors
+              (not a specific named one) — call list_supervisors first. It
+              returns the full roster for the current project with per-supervisor
+              activity_count, status breakdown, planned/actual cost, CPI, SPI,
+              and an is_in_pool flag. Default rank is activity_count desc; pass
+              rank_by to change it. The roster is the starting point — from
+              there you may drill into ONE supervisor (call `supervisor` with
+              the resource_id) or COMPARE several (call `compare_supervisors`
+              with 2-6 resource_ids picked from the roster). Do NOT loop the
+              `supervisor` tool once per resource_id just to enumerate the
+              roster — that is exactly what list_supervisors is for.
             - For "who reports to <name>", "what's <supervisor>'s team doing",
               "<foreman>'s crew performance", "show me Sandeep's roster" — first
               call resolve_entity(kind="supervisor") with the name to get a
@@ -784,6 +777,7 @@ public class AiOrchestrator {
             chart. Skipping it on chartable data is the single most common
             mistake; do not make it.
             """.formatted(
+                scopeBlock,
                 projectFilter,
                 dataGraphCatalog.compact(),
                 moduleAddendum,
@@ -794,6 +788,193 @@ public class AiOrchestrator {
                 ctx.profile() != null ? ctx.profile() : "(none)",
                 personaBlock
         );
+    }
+
+    /**
+     * Render the PROJECT SCOPE section of the system prompt. Three branches:
+     * <ul>
+     *   <li><b>Portfolio mode</b> ({@code projectId == null} and scope non-empty):
+     *       tell the LLM it may query across all accessible projects via
+     *       {@code project_id IN (...)} and inline an accessible-project roster
+     *       (code — name) when the set is small enough (≤ 50) so it can answer
+     *       "how many projects do I have" without a tool call.</li>
+     *   <li><b>Admin (no scope set)</b>: unrestricted, list_projects is the
+     *       discovery path. Strict per-project copy still applies once a
+     *       project gets adopted.</li>
+     *   <li><b>Project-scoped</b> ({@code projectId != null}): the original
+     *       non-negotiable single-project guardrails — the only project this
+     *       turn may touch.</li>
+     * </ul>
+     */
+    private String buildScopeBlock(AiContext ctx, boolean portfolioMode) {
+        boolean admin = "ADMIN".equals(ctx.role());
+        if (portfolioMode && admin && (ctx.scopedProjectIds() == null || ctx.scopedProjectIds().isEmpty())) {
+            // Admin in unpinned mode: unrestricted access, no enumerated roster.
+            // The LLM must discover projects via list_projects and silently
+            // adopt whichever the user names — NEVER ask them to switch pages
+            // or confirm a project they already named.
+            return """
+            ────────────────────────────────────────
+            PROJECT SCOPE — ADMIN PORTFOLIO MODE
+            ────────────────────────────────────────
+
+            You are talking to an ADMIN. Admin users have unrestricted access to
+            every project in the system. No single project is pinned for this
+            turn, and there is no enumerated scope list — admins are not row-
+            filtered. The SQL guard will admit any `project_id` an admin uses.
+
+            How to handle the user's question:
+              - Portfolio-wide question ("how many projects do I have", "rank my
+                projects by CPI", "compare X and Y"): call `list_projects` once
+                to get codes/names/UUIDs, then answer across the full set.
+              - Single-project question ("how many activities in ROAD-001",
+                "status of 6155"): call `list_projects`, match the user's
+                wording against `code` first (case-insensitive exact), then
+                `name` (case-insensitive substring). If exactly one match,
+                **silently adopt** that project as the scope for this turn,
+                identify it once in prose by `<code> — <name>`, and proceed
+                with the query. Do NOT ask the user to "switch to that
+                project's page". Do NOT ask them to "confirm". Just answer.
+              - Ambiguous wording (matches multiple projects, or matches none):
+                list the candidate set as bullets and ask which one. Only ask
+                when you genuinely cannot resolve the entity.
+
+            For warehouse SQL (`query_clickhouse`): admins may use
+            `project_id = '<any UUID returned by list_projects this turn>'` or
+            `project_id IN (<UUIDs>)`. Do not invent UUIDs — always source them
+            from `list_projects` results in the current turn.
+
+            Never print raw UUIDs in your final answer. Refer to projects by
+            their code and name only ("6155 — Dualization of Barka Nakhal
+            Road").
+            """;
+        }
+        if (portfolioMode) {
+            int n = ctx.scopedProjectIds().size();
+            String roster;
+            if (n <= 50) {
+                try {
+                    List<Project> projects = projectRepository.findAllById(ctx.scopedProjectIds());
+                    if (projects.isEmpty()) {
+                        roster = "Accessible projects: " + n + " total — call list_projects to enumerate";
+                    } else {
+                        StringBuilder sb = new StringBuilder("Accessible projects (")
+                                .append(projects.size()).append("):\n");
+                        for (Project p : projects) {
+                            sb.append("              - ")
+                                    .append(p.getCode() == null ? "?" : p.getCode())
+                                    .append(" — ")
+                                    .append(p.getName() == null ? "(no name)" : p.getName())
+                                    .append('\n');
+                        }
+                        roster = sb.toString().stripTrailing();
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to load project roster for portfolio prompt: {}", e.getMessage());
+                    roster = "Accessible projects: " + n + " total — call list_projects to enumerate";
+                }
+            } else {
+                roster = "Accessible projects: " + n + " total — call list_projects to enumerate";
+            }
+
+            return """
+            ────────────────────────────────────────
+            PROJECT SCOPE — PORTFOLIO MODE
+            ────────────────────────────────────────
+
+            You are in PORTFOLIO MODE. The user has access to %d project(s) and
+            no single project is currently pinned. You MAY query across any of
+            them — the SQL guard will admit any `project_id IN (...)` predicate
+            as long as every UUID in the list is in the accessible set
+            (see `Accessible project scope` below). Use cross-project
+            aggregations and `IN(...)` filters freely.
+
+            %s
+
+            Guidance:
+              - For portfolio-wide questions ("how many projects", "rank my
+                projects by X", "which project has the highest CPI") — answer
+                directly across the accessible set. The roster above already
+                tells you "how many projects" without any tool call.
+              - For single-project questions ("status of ROAD-001", "DPRs for
+                6155 last week") — match the user's wording against the roster
+                (code first, then name). If exactly one project matches,
+                silently adopt it as the scope for this turn, identify it in
+                prose by `<code> — <name>`, and proceed. If multiple match or
+                none match, ask which one — do NOT guess.
+              - Once a project is adopted mid-turn, every subsequent tool call
+                in this turn must use that project's UUID. Do not silently
+                drift back to portfolio scope.
+              - Never print raw UUIDs to the user. Refer to projects by their
+                code and name only ("6155 — Dualization of Barka Nakhal Road").
+
+            For warehouse SQL (query_clickhouse): the gateway accepts any
+            `project_id IN (<subset of accessible UUIDs>)` or
+            `project_id = '<one accessible UUID>'`. Out-of-scope UUIDs return
+            SQL_PROJECT_OUT_OF_SCOPE — re-derive from the roster above.
+            """.formatted(n, roster);
+        }
+
+        // Default (project-scoped, or admin with no projectId pinned): the
+        // strict per-project copy. Admins land here when they have no pinned
+        // project; the rules are still safe because admin tools fall through
+        // to list_projects discovery rather than gateway rejection.
+        return """
+            ────────────────────────────────────────
+            PROJECT SCOPE (read this carefully — it is non-negotiable)
+            ────────────────────────────────────────
+
+            Every project-scoped tool runs under a single project, taken from the
+            `Current project` line above. That value is the ONLY project you may
+            act on for this turn.
+
+            (1) If `Current project` shows a code/name/UUID — that IS the scope.
+                Every tool you call will run against it; the system enforces this
+                at the gateway, so attempting to query any other project will be
+                rejected by the database guard with `SQL_PROJECT_OUT_OF_SCOPE`.
+                Therefore:
+                  - Use the code/name from `Current project` in your prose.
+                  - If the user's wording names a DIFFERENT project than the one
+                    in scope, do NOT silently switch. Tell the user plainly:
+                    "Your current scope is <code/name>, but you mentioned <X>.
+                    To switch projects, please open <X>'s page and ask again, or
+                    confirm you want to keep using <code/name>." Then wait.
+                  - Do NOT call list_projects to "double-check" or override.
+                  - Do NOT fabricate a project name from a different source.
+
+            (2) If `Current project` is `none` AND the question is about ONE
+                project:
+                  - Call list_projects (works without scope) to get the candidate
+                    set: code, name, status, id for each.
+                  - If the user's wording contains a token that uniquely matches
+                    exactly one returned project (compare against `code` first as
+                    a case-insensitive exact match, then `name` as a
+                    case-insensitive substring), silently adopt that project as
+                    the scope for the remainder of the turn, identify it once
+                    in your prose by code + name, and proceed.
+                  - If no project matches the wording, OR several match,
+                    enumerate the visible projects as bullets and ask the user
+                    which one. Do not guess.
+                  - Once a project is adopted, the rules in (1) apply for the
+                    rest of the turn.
+
+            (3) If `Current project` is `none` AND the question is genuinely
+                portfolio-wide ("compare my projects", "rank them by X", "across
+                the whole portfolio"), proceed across the full list_projects
+                set without asking.
+
+            (4) Never print raw UUIDs in your final answer. Use the code and
+                name only ("6155 — Dualization of Barka Nakhal Road"). UUIDs
+                are tool plumbing, not user-facing.
+
+            (5) For warehouse SQL (query_clickhouse): the database gateway
+                rewrites your WHERE clause to enforce the scope. If you write
+                `WHERE project_id = '<wrong uuid>'` you will get
+                `SQL_PROJECT_OUT_OF_SCOPE`. When `Current project` is set,
+                ALWAYS use that exact UUID in any SQL. When it is `none`, only
+                use UUIDs returned by list_projects in this same turn — and
+                only those.
+            """;
     }
 
     /**
@@ -888,5 +1069,67 @@ public class AiOrchestrator {
     }
 
     private record RoundOutcome(String text, List<LlmProvider.ToolCall> toolCalls) {
+    }
+
+    /**
+     * Verification-pass system prompt. After the model produces what it thinks
+     * is a final answer (and at least one tool was called this turn), we inject
+     * this message and run one more round. The model must re-call the answering
+     * tool and either confirm or correct the draft before the user sees it.
+     *
+     * Design notes:
+     * - We repeat the draft inline so the model can't "forget" what it claimed.
+     * - We require at least one tool call this round; the only out is the
+     *   "Best effort (unverified):" prefix, which surfaces the limitation
+     *   honestly rather than silently passing.
+     * - Cross-source verification (JPA ↔ ClickHouse) is preferred — stale CH
+     *   data and row-filter leaks are the common failure modes.
+     * - The model is told NOT to narrate the verification ("I checked again",
+     *   "I verified"), so the user sees one polished answer, not two.
+     */
+    private String buildVerificationPrompt(String draftAnswer) {
+        String safeDraft = draftAnswer == null ? "" : draftAnswer.trim();
+        if (safeDraft.length() > 4000) {
+            // Truncate ridiculously long drafts — only the substance matters here.
+            safeDraft = safeDraft.substring(0, 4000) + "…[truncated]";
+        }
+        return "────────────────────────────────────────\n"
+             + "VERIFICATION PASS (mandatory — do not skip)\n"
+             + "────────────────────────────────────────\n\n"
+             + "You just drafted this answer for the user:\n\n"
+             + "\"\"\"\n" + safeDraft + "\n\"\"\"\n\n"
+             + "Before this answer is shown, you MUST verify it. The user does not\n"
+             + "see your draft yet — they will see whatever you produce in THIS\n"
+             + "round. So produce a polished, single, verified answer.\n\n"
+             + "Rules:\n"
+             + "  (1) For every concrete claim in the draft (counts, sums, percent\n"
+             + "      values, dates, money, list sizes, status labels), re-call the\n"
+             + "      source tool to confirm it. Quote the new value in your head;\n"
+             + "      do not repeat the draft number unless the verifying tool\n"
+             + "      returns it.\n"
+             + "  (2) Where two paths to the same answer exist (JPA-backed tool vs\n"
+             + "      query_clickhouse), prefer cross-source verification — call\n"
+             + "      the OTHER path than your draft used. Stale ClickHouse dims\n"
+             + "      and missed row-filters are common bugs; one source can lie.\n"
+             + "  (3) If your draft mentioned a project, supervisor, activity, or\n"
+             + "      any other named entity, confirm it is the SAME entity the\n"
+             + "      user asked about — not a sibling or a different scope.\n"
+             + "  (4) After verification, produce ONE answer:\n"
+             + "        - If everything matched the draft → emit the same content\n"
+             + "          in your own voice. Do not say \"I verified\" / \"I checked\n"
+             + "          again\" / \"confirmed\". Just answer.\n"
+             + "        - If anything differed → emit the CORRECTED answer and add\n"
+             + "          ONE short sentence explaining what changed (e.g. \"Earlier\n"
+             + "          I miscounted across all projects — within ROAD-001 the\n"
+             + "          count is 2.\").\n"
+             + "        - If you genuinely cannot verify (no tool covers it),\n"
+             + "          prefix the answer with \"Best effort (unverified): \".\n"
+             + "  (5) You MUST make at least one tool call this round, OR your\n"
+             + "      draft must contain no data claims (pure prose / definitions).\n"
+             + "      Repeating the draft without re-checking is not allowed.\n\n"
+             + "Do NOT mention this verification step in your answer. The user\n"
+             + "should see one polished answer, not a \"first I said X, then I\n"
+             + "checked\" narrative.\n"
+             + "────────────────────────────────────────\n";
     }
 }

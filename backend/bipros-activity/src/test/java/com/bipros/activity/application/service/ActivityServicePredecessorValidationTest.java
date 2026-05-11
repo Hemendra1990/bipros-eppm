@@ -55,7 +55,7 @@ class ActivityServicePredecessorValidationTest {
 
   @BeforeEach
   void setUp() {
-    service = new ActivityService(activityRepository, relationshipRepository, auditService, projectAccess, projectRepository, percentCompleteCalculator, stepRepository);
+    service = new ActivityService(activityRepository, relationshipRepository, auditService, projectAccess, projectRepository, percentCompleteCalculator, stepRepository, org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
 
     successorId = UUID.randomUUID();
     predecessorId = UUID.randomUUID();

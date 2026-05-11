@@ -114,7 +114,7 @@ public class ConversationService {
         List<ChatController.MessageDto> messageDtos = msgs.stream()
                 .map(m -> new ChatController.MessageDto(m.getRole(), m.getContent(), m.getCreatedAt()))
                 .toList();
-        return new ChatController.ConversationDetailDto(conv.getId(), conv.getTitle(), messageDtos);
+        return new ChatController.ConversationDetailDto(conv.getId(), conv.getTitle(), conv.getProjectId(), conv.getModule(), messageDtos);
     }
 
     @Transactional

@@ -13,6 +13,8 @@ import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivityStepRepository;
 import com.bipros.common.dto.PagedResponse;
+import com.bipros.common.event.ActivityCreatedEvent;
+import com.bipros.common.event.ActivityUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.AccessSpecifications;
@@ -24,6 +26,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -52,6 +55,7 @@ public class ActivityService {
   private final ProjectRepository projectRepository;
   private final PercentCompleteCalculator percentCompleteCalculator;
   private final ActivityStepRepository stepRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
   /** Cross-schema lookup of {@code resource.work_activities.default_unit} — keeps this module
    *  free of a Maven dep on {@code bipros-resource}, mirroring the precedent in
@@ -137,6 +141,10 @@ public class ActivityService {
 
     // Audit log creation
     auditService.logCreate("Activity", saved.getId(), ActivityResponse.from(saved));
+
+    eventPublisher.publishEvent(
+        new ActivityCreatedEvent(saved.getProjectId(), saved.getId(), saved.getCode(), saved.getName())
+    );
 
     return ActivityResponse.from(saved);
   }
@@ -319,6 +327,10 @@ public class ActivityService {
     if (request.actualFinishDate() != null && !request.actualFinishDate().equals(oldActualFinish)) {
       auditService.logUpdate("Activity", id, "actualFinishDate", oldActualFinish, request.actualFinishDate());
     }
+
+    eventPublisher.publishEvent(
+        new ActivityUpdatedEvent(updated.getProjectId(), updated.getId(), updated.getCode(), updated.getName())
+    );
 
     return ActivityResponse.from(updated);
   }

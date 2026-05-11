@@ -57,7 +57,8 @@ class ActivityServiceApplyActualsTest {
   @BeforeEach
   void setUp() {
     service = new ActivityService(activityRepository, relationshipRepository, auditService,
-        projectAccess, projectRepository, percentCompleteCalculator, stepRepository);
+        projectAccess, projectRepository, percentCompleteCalculator, stepRepository,
+        org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     projectId = UUID.randomUUID();
     dataDate = LocalDate.of(2026, 5, 5);
 

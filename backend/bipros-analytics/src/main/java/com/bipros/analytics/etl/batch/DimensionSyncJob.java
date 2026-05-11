@@ -2,6 +2,7 @@ package com.bipros.analytics.etl.batch;
 
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.analytics.etl.AnalyticsDimensionSql;
 import com.bipros.analytics.store.ClickHouseTemplate;
 import com.bipros.common.scheduling.ScheduledJobLeaseRepository;
 import com.bipros.cost.domain.entity.CostAccount;
@@ -102,134 +103,45 @@ public class DimensionSyncJob {
 
     private void syncProjects() {
         List<Project> projects = projectRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_project
-            (project_id, code, name, status, portfolio_id, org_id, start_date, finish_date, currency, obs_node_id, updated_at, _version)
-            VALUES (:projectId, :code, :name, :status, :portfolioId, :orgId, :startDate, :finishDate, :currency, :obsNodeId, now(), :version)
-            """;
         for (Project p : projects) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("projectId", p.getId());
-            params.put("code", p.getCode());
-            params.put("name", p.getName());
-            params.put("status", p.getStatus() != null ? p.getStatus().name() : null);
-            params.put("portfolioId", null);
-            params.put("orgId", null);
-            params.put("startDate", p.getPlannedStartDate());
-            params.put("finishDate", p.getPlannedFinishDate());
-            params.put("currency", "INR");
-            params.put("obsNodeId", p.getObsNodeId());
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_PROJECT,
+                    AnalyticsDimensionSql.projectParams(p, VERSION));
         }
         log.debug("Synced {} projects", projects.size());
     }
 
     private void syncWbs() {
         List<WbsNode> nodes = wbsNodeRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_wbs
-            (wbs_id, project_id, parent_wbs_id, code, name, level, weight, path, _version)
-            VALUES (:wbsId, :projectId, :parentId, :code, :name, :level, :weight, :path, :version)
-            """;
         for (WbsNode n : nodes) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("wbsId", n.getId());
-            params.put("projectId", n.getProjectId());
-            params.put("parentId", n.getParentId());
-            params.put("code", n.getCode());
-            params.put("name", n.getName());
-            params.put("level", n.getWbsLevel() != null ? n.getWbsLevel() : 0);
-            params.put("weight", 1.0);
-            params.put("path", n.getCode());
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_WBS,
+                    AnalyticsDimensionSql.wbsParams(n, VERSION));
         }
         log.debug("Synced {} WBS nodes", nodes.size());
     }
 
     private void syncActivities() {
         List<Activity> activities = activityRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_activity
-            (activity_id, project_id, wbs_id, code, name, activity_type, uom, bq_quantity, planned_start, planned_finish,
-             chainage_from_m, chainage_to_m, is_critical,
-             responsible_resource_id, responsible_resource_name, _version)
-            VALUES (:activityId, :projectId, :wbsId, :code, :name, :activityType, :uom, :bqQty,
-                    :plannedStart, :plannedFinish, :chainageFrom, :chainageTo, :isCritical,
-                    :responsibleResourceId, :responsibleResourceName, :version)
-            """;
         for (Activity a : activities) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("activityId", a.getId());
-            params.put("projectId", a.getProjectId());
-            params.put("wbsId", a.getWbsNodeId());
-            params.put("code", a.getCode() != null ? a.getCode() : "");
-            params.put("name", a.getName() != null ? a.getName() : "");
-            // CH columns activity_type, uom, bq_quantity are non-nullable. Coalesce
-            // before insert so the sync doesn't abort when OLTP rows have nulls.
-            params.put("activityType", a.getActivityType() != null ? a.getActivityType().name() : "");
-            params.put("uom", "");
-            params.put("bqQty", 0.0);
-            params.put("plannedStart", a.getPlannedStartDate());
-            params.put("plannedFinish", a.getPlannedFinishDate());
-            params.put("chainageFrom", a.getChainageFromM() != null ? a.getChainageFromM().doubleValue() : null);
-            params.put("chainageTo", a.getChainageToM() != null ? a.getChainageToM().doubleValue() : null);
-            params.put("isCritical", a.getIsCritical() != null && a.getIsCritical() ? 1 : 0);
-            params.put("responsibleResourceId", a.getResponsibleResourceId());
-            params.put("responsibleResourceName",
-                    a.getResponsibleResourceName() != null ? a.getResponsibleResourceName() : "");
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_ACTIVITY,
+                    AnalyticsDimensionSql.activityParams(a, VERSION));
         }
         log.debug("Synced {} activities", activities.size());
     }
 
     private void syncResources() {
         List<Resource> resources = resourceRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_resource
-            (resource_id, project_id, resource_type, code, name, uom, unit_rate, is_subcontractor, _version)
-            VALUES (:resourceId, :projectId, :resourceType, :code, :name, :uom, :unitRate, :isSubcontractor, :version)
-            """;
         for (Resource r : resources) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("resourceId", r.getId());
-            params.put("projectId", null);
-            // CH non-nullable columns — coalesce so the sync doesn't abort when
-            // OLTP rows have nulls (e.g. a resource not yet linked to a rate master).
-            params.put("resourceType", r.getResourceType() != null ? r.getResourceType().getCode() : "");
-            params.put("code", r.getCode() != null ? r.getCode() : "");
-            params.put("name", r.getName() != null ? r.getName() : "");
-            params.put("uom", r.getUnit() != null ? r.getUnit() : "");
-            params.put("unitRate", r.getCostPerUnit() != null ? r.getCostPerUnit().doubleValue() : 0.0);
-            params.put("isSubcontractor", 0);
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_RESOURCE,
+                    AnalyticsDimensionSql.resourceParams(r, VERSION));
         }
         log.debug("Synced {} resources", resources.size());
     }
 
     private void syncCostAccounts() {
         List<CostAccount> accounts = costAccountRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_cost_account
-            (cost_account_id, project_id, code, name, parent_id, category, _version)
-            VALUES (:costAccountId, :projectId, :code, :name, :parentId, :category, :version)
-            """;
         for (CostAccount ca : accounts) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("costAccountId", ca.getId());
-            // CH `project_id` on dim_cost_account is non-nullable per init SQL.
-            // OLTP CostAccount has no project_id today (cost accounts are global) —
-            // emit a sentinel zero UUID instead of null.
-            params.put("projectId", new UUID(0L, 0L));
-            params.put("code", ca.getCode() != null ? ca.getCode() : "");
-            params.put("name", ca.getName() != null ? ca.getName() : "");
-            params.put("parentId", ca.getParentId());
-            params.put("category", "");
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_COST_ACCOUNT,
+                    AnalyticsDimensionSql.costAccountParams(ca, VERSION));
         }
         log.debug("Synced {} cost accounts", accounts.size());
     }

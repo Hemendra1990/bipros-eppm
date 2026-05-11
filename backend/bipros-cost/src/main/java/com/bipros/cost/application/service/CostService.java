@@ -2,6 +2,8 @@ package com.bipros.cost.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.event.ActivityExpenseRecordedEvent;
+import com.bipros.common.event.CostAccountCreatedEvent;
+import com.bipros.common.event.CostAccountUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.ProjectAccessGuard;
@@ -67,6 +69,9 @@ public class CostService {
 
         var saved = costAccountRepository.save(entity);
         auditService.logCreate("CostAccount", saved.getId(), CostAccountDto.from(saved));
+        eventPublisher.publishEvent(
+            new CostAccountCreatedEvent(null, saved.getId(), saved.getCode(), saved.getName())
+        );
         return CostAccountDto.from(saved);
     }
 
@@ -95,6 +100,9 @@ public class CostService {
 
         var updated = costAccountRepository.save(entity);
         auditService.logUpdate("CostAccount", id, "costAccount", null, CostAccountDto.from(updated));
+        eventPublisher.publishEvent(
+            new CostAccountUpdatedEvent(null, updated.getId(), updated.getCode(), updated.getName())
+        );
         return CostAccountDto.from(updated);
     }
 

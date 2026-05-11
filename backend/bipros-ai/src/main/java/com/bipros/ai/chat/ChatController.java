@@ -34,6 +34,15 @@ public class ChatController {
     public ResponseEntity<ApiResponse<ChatResponse>> chat(@RequestBody ChatRequest request) {
         AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);
+        // Security invariant: reloading an old conversation that was originally
+        // project-scoped MUST keep that scope, even if the caller sent
+        // projectId=null (e.g. browsing a different page in general mode).
+        // Never silently broaden a project-scoped conversation.
+        if (request.conversationId() != null
+                && conv.getProjectId() != null
+                && ctx.projectId() == null) {
+            ctx = contextResolver.resolve(conv.getProjectId(), conv.getModule());
+        }
         List<LlmProvider.Message> history = conversationService.getMessages(conv.getId());
 
         var flux = orchestrator.handle(request.message(), request.imageUrl(), history, ctx, llmProvider,
@@ -63,6 +72,13 @@ public class ChatController {
     public Flux<org.springframework.http.codec.ServerSentEvent<String>> chatStream(@RequestBody ChatRequest request) {
         AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);
+        // Security invariant: see /chat — reloading a project-scoped conversation
+        // in general mode must NOT silently broaden the scope.
+        if (request.conversationId() != null
+                && conv.getProjectId() != null
+                && ctx.projectId() == null) {
+            ctx = contextResolver.resolve(conv.getProjectId(), conv.getModule());
+        }
         List<LlmProvider.Message> history = conversationService.getMessages(conv.getId());
 
         conversationService.appendUserMessage(conv.getId(), request.message());
@@ -139,7 +155,7 @@ public class ChatController {
     public record ConversationDto(UUID id, String title, String module, Instant lastMessageAt) {
     }
 
-    public record ConversationDetailDto(UUID id, String title, List<MessageDto> messages) {
+    public record ConversationDetailDto(UUID id, String title, UUID projectId, String module, List<MessageDto> messages) {
     }
 
     public record MessageDto(String role, String content, Instant createdAt) {

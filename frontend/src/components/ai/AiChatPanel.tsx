@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAiStore } from "@/lib/state/store";
-import { useAppStore } from "@/lib/state/store";
 import { aiApi, type SseEvent } from "@/lib/api/aiApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { ScopeToggle, type ScopeMode } from "@/components/ai/ScopeToggle";
 import { Bot, X, Send, Loader2, PanelRightClose, PanelRightOpen, Mic, Image as ImageIcon, Square, Check, Copy, Maximize2, Minimize2, Plus, History, Download, FileText, FileSpreadsheet, Sheet } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -118,9 +118,10 @@ function inferModule(pathname: string): string {
   return "general";
 }
 
-// Pull a project UUID out of /projects/<uuid>/... so the AI panel can scope to
-// the project the user is currently viewing, even on pages that haven't called
-// setCurrentProjectId(). Fallback only — useAppStore wins when set.
+// Pull a project UUID out of /projects/<uuid>/... — the sole source of truth
+// for the chat's "current project" scope. We deliberately do NOT consult
+// `useAppStore.currentProjectId`: labour-master sets that store and never
+// clears it, so it leaked into the chat scope on every other page.
 const PROJECT_PATH_RE = /\/projects\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
 function inferProjectIdFromPath(pathname: string): string | null {
   const m = pathname.match(PROJECT_PATH_RE);
@@ -191,26 +192,62 @@ export function AiChatPanel() {
   const setOpen = useAiStore((s) => s.setOpen);
   const conversationId = useAiStore((s) => s.currentConversationId);
   const setConversationId = useAiStore((s) => s.setConversationId);
-  const storeProjectId = useAppStore((s) => s.currentProjectId);
   const pathname = usePathname();
   const activeModule = inferModule(pathname);
-  // Prefer the store's currentProjectId; fall back to the URL when the user
-  // landed on a project page directly (most pages don't set the store).
-  const projectId = storeProjectId ?? inferProjectIdFromPath(pathname);
+  // URL is now the sole "current project" signal for the chat. We deliberately
+  // do NOT read `useAppStore.currentProjectId` any more: labour-master sets it
+  // and never clears it, so it leaks into every other page and silently
+  // re-scopes the chat. The store is still owned by the labour-master nav
+  // helper — we just stop the chat from peeking at it.
+  const pathProjectId = inferProjectIdFromPath(pathname);
+
+  // User-controlled override for the URL-derived scope. "auto" pins to the
+  // current project page; "general" forces portfolio mode even on a project
+  // page. Off a project page (pathProjectId == null) the toggle is hidden and
+  // the chat is always general regardless of this value.
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("auto");
+
+  // When the user reloads a stored conversation from History we keep the
+  // conversation's own original scope (decision: avoid silent broadening of an
+  // old scoped chat just because the user is now browsing a different page).
+  // Cleared whenever the user starts a new chat or flips the toggle, since
+  // those are explicit "new intent" signals.
+  const [historyScope, setHistoryScope] = useState<{
+    projectId: string | null;
+    module: string;
+  } | null>(null);
+
+  const effectiveProjectId = historyScope
+    ? historyScope.projectId
+    : scopeMode === "general"
+      ? null
+      : pathProjectId;
+  const effectiveModule = historyScope ? historyScope.module : activeModule;
 
   // Resolve the in-scope project to a human label (code — name) so the chat
   // header makes the active scope obvious. Without this users sometimes ask
   // "for project X" while browsing a different project's page, which causes
   // tool calls to mismatch the AI's stated project.
   const { data: activeProject } = useQuery({
-    queryKey: ["ai-chat-active-project", projectId],
-    queryFn: () => (projectId ? projectApi.getProject(projectId) : Promise.resolve(null)),
-    enabled: !!projectId,
+    queryKey: ["ai-chat-active-project", effectiveProjectId],
+    queryFn: () =>
+      effectiveProjectId ? projectApi.getProject(effectiveProjectId) : Promise.resolve(null),
+    enabled: !!effectiveProjectId,
     staleTime: 60_000,
   });
   const activeProjectLabel = activeProject?.data
     ? `${activeProject.data.code} — ${activeProject.data.name}`
     : null;
+
+  // Portfolio-mode banner shows "All accessible projects (N)". Fetched once
+  // and cached for the panel's lifetime so the count is steady across renders.
+  const { data: accessibleProjects } = useQuery({
+    queryKey: ["ai-chat-accessible-projects"],
+    queryFn: () => projectApi.listAccessible(),
+    staleTime: 5 * 60_000,
+    enabled: effectiveProjectId == null,
+  });
+  const accessibleProjectCount = accessibleProjects?.data?.length ?? null;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -308,8 +345,16 @@ export function AiChatPanel() {
     setStreamingStatus(null);
     setStreamingAssistantId(null);
     setIsStreaming(false);
+    setHistoryScope(null);
     setView("chat");
   }, [setConversationId]);
+
+  // Flipping the scope toggle is an explicit "new intent" signal — drop any
+  // historyScope so the toggle (not the stored conversation) wins from here.
+  const handleScopeChange = useCallback((next: ScopeMode) => {
+    setScopeMode(next);
+    setHistoryScope(null);
+  }, []);
 
   const loadConversation = useCallback(
     (id: string) => {
@@ -326,6 +371,34 @@ export function AiChatPanel() {
       setPendingImage(null);
       setConversationId(id);
       setView("chat");
+
+      // Reloaded conversation keeps its original scope (decision: don't let
+      // browsing a different page silently broaden an old scoped chat). The
+      // backend currently returns title + messages only; once the detail DTO
+      // is extended with projectId/module (Phase 1a backend work) those
+      // fields flow through automatically. Until then we default to the
+      // module the History list already gave us via the summary (no public
+      // way to thread that through the existing onSelect signature without
+      // changing AiHistoryView — out of scope here), so we issue an extra
+      // detail fetch and read fields defensively.
+      aiApi
+        .getConversation(id)
+        .then((res) => {
+          // The backend DTO may grow `projectId` / `module` fields; read them
+          // optionally so we light up automatically once that lands.
+          const detail = res.data as
+            | (typeof res.data & { projectId?: string | null; module?: string | null })
+            | null;
+          if (!detail) return;
+          setHistoryScope({
+            projectId: detail.projectId ?? null,
+            module: detail.module ?? "general",
+          });
+        })
+        .catch(() => {
+          // 404 / network — the rehydration effect handles cleanup. Leave
+          // historyScope unset so the chat falls back to URL-derived scope.
+        });
     },
     [conversationId, setConversationId],
   );
@@ -408,8 +481,8 @@ export function AiChatPanel() {
     try {
       const chatReq: import("@/lib/api/aiApi").ChatRequest = {
         conversationId: conversationId ?? null,
-        projectId: projectId ?? null,
-        module: activeModule,
+        projectId: effectiveProjectId,
+        module: effectiveModule,
         message: userMsg,
         imageUrl: pendingImage,
       };
@@ -438,7 +511,7 @@ export function AiChatPanel() {
       );
       abortRef.current = null;
     }
-  }, [input, isStreaming, projectId, activeModule, pendingImage, conversationId]);
+  }, [input, isStreaming, effectiveProjectId, effectiveModule, pendingImage, conversationId]);
 
   const handleEvent = (ev: SseEvent, assistantId: string) => {
     if (ev.event === "conversation_started") {
@@ -461,6 +534,10 @@ export function AiChatPanel() {
       // Keep the last tool_call's label visible until the next tool_call or
       // the final answer arrives — gives a steady "still working" signal
       // without flickering between rounds.
+    } else if (ev.event === "verifying") {
+      // Server-side verification pass — the orchestrator is asking the model
+      // to re-check its draft before showing it to the user.
+      setStreamingStatus("Cross-checking the answer…");
     } else if (ev.event === "done" || ev.event === "final_answer") {
       const text = (ev.data.text as string) || "";
       setStreamingStatus(null);
@@ -571,7 +648,7 @@ export function AiChatPanel() {
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !projectId) return;
+    if (!file || !effectiveProjectId) return;
     try {
       const convId = "temp-conv"; // Will be replaced with actual conversation ID
       const result = await aiApi.uploadImage(convId, file);
@@ -615,8 +692,15 @@ export function AiChatPanel() {
                 <Bot size={18} className="text-accent shrink-0" />
                 <span className="text-sm font-semibold text-text-primary shrink-0">Bipros AI</span>
                 <span className="text-xs text-text-muted bg-surface-hover px-2 py-0.5 rounded shrink-0">
-                  {activeModule}
+                  {effectiveModule}
                 </span>
+                {/* Scope toggle is only meaningful on a project page — off a
+                    project page the chat is forced general anyway. Flipping
+                    the toggle while a history-scoped chat is loaded clears
+                    historyScope (treated as a "new intent" signal). */}
+                {pathProjectId != null && (
+                  <ScopeToggle mode={scopeMode} onChange={handleScopeChange} />
+                )}
               </div>
             )}
           <div className="flex items-center gap-1 ml-auto">
@@ -715,14 +799,20 @@ export function AiChatPanel() {
           {!collapsed && (
             <div className="mt-1.5 text-[11px] text-text-muted flex items-center gap-1.5">
               <span className="font-medium uppercase tracking-wide text-text-secondary">Scope:</span>
-              {activeProjectLabel ? (
-                <span className="truncate" title={activeProjectLabel}>
-                  {activeProjectLabel}
+              {effectiveProjectId == null ? (
+                // Portfolio mode — show the count of accessible projects so
+                // the user knows the AI has cross-project visibility.
+                <span className="truncate">
+                  🌐 All accessible projects
+                  {accessibleProjectCount != null ? ` (${accessibleProjectCount})` : ""}
                 </span>
-              ) : projectId ? (
-                <span className="italic">loading project…</span>
+              ) : activeProjectLabel ? (
+                <span className="truncate" title={activeProjectLabel}>
+                  📌 {activeProjectLabel}
+                  {historyScope ? " (from history)" : ""}
+                </span>
               ) : (
-                <span className="italic">no project selected — portfolio mode</span>
+                <span className="italic">loading project…</span>
               )}
             </div>
           )}
@@ -743,9 +833,9 @@ export function AiChatPanel() {
                 <div className="text-center text-text-muted py-12">
                   <Bot size={32} className="mx-auto mb-3 opacity-50" />
                   <p className="text-sm">Ask me about cost variance, schedule health, DPR summaries, or EVM forecasts.</p>
-                  {!projectId && (
+                  {!effectiveProjectId && (
                     <p className="text-xs mt-3 text-text-muted/80">
-                      No project selected — try portfolio questions like
+                      Portfolio mode — try cross-project questions like
                       <span className="block italic mt-1">
                         &ldquo;Which projects have the worst CPI this month?&rdquo;
                       </span>
@@ -878,7 +968,7 @@ export function AiChatPanel() {
               <div className="flex items-end gap-2">
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!projectId || isStreaming}
+                  disabled={!effectiveProjectId || isStreaming}
                   className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
                   title="Attach image"
                 >
@@ -912,7 +1002,7 @@ export function AiChatPanel() {
                       sendMessage();
                     }
                   }}
-                  placeholder={projectId ? "Ask anything..." : "Ask anything (portfolio mode)..."}
+                  placeholder={effectiveProjectId ? "Ask anything..." : "Ask anything (portfolio mode)..."}
                   disabled={isStreaming}
                   rows={1}
                   className="flex-1 resize-none rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent min-h-[40px] max-h-[120px]"

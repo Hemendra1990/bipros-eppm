@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.dim_resource (
     resource_id UUID,
     project_id Nullable(UUID),
     resource_type LowCardinality(String),
+    -- role_code/role_name denormalised from operational Resource.role for AI supervisor queries
+    role_code String DEFAULT '',
+    role_name String DEFAULT '',
     code String,
     name String,
     uom LowCardinality(String),
@@ -71,6 +74,11 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.dim_resource (
     _version UInt64
 ) ENGINE = ReplacingMergeTree(_version)
   ORDER BY (resource_type, resource_id);
+
+-- Idempotent for existing deployments: bring dim_resource up to schema with role cols.
+ALTER TABLE bipros_analytics.dim_resource
+    ADD COLUMN IF NOT EXISTS role_code String DEFAULT '',
+    ADD COLUMN IF NOT EXISTS role_name String DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS bipros_analytics.dim_cost_account (
     cost_account_id UUID,
@@ -82,6 +90,63 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.dim_cost_account (
     _version UInt64
 ) ENGINE = ReplacingMergeTree(_version)
   ORDER BY (project_id, cost_account_id);
+
+-- Baseline snapshots — one row per Baseline. is_active doubles as a soft-delete tombstone:
+-- a BaselineDeactivatedEvent emits an is_active=0 row with a strictly newer _version, so
+-- ReplacingMergeTree converges to the deactivated state on merge.
+CREATE TABLE IF NOT EXISTS bipros_analytics.dim_baseline (
+    baseline_id UUID,
+    project_id UUID,
+    name String,
+    description String DEFAULT '',
+    baseline_type LowCardinality(String),
+    baseline_date Date,
+    is_active UInt8,
+    total_activities Nullable(Int32),
+    total_cost Nullable(Decimal(18,4)),
+    project_duration Nullable(Float64),
+    project_start_date Nullable(Date),
+    project_finish_date Nullable(Date),
+    updated_at DateTime,
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+  ORDER BY (project_id, baseline_id);
+
+-- Schedule run history — one row per ScheduleResult emitted by the CPM scheduler.
+CREATE TABLE IF NOT EXISTS bipros_analytics.dim_schedule_run (
+    schedule_run_id UUID,
+    project_id UUID,
+    data_date Date,
+    project_start_date Nullable(Date),
+    project_finish_date Nullable(Date),
+    critical_path_length Nullable(Float64),
+    total_activities Int32 DEFAULT 0,
+    critical_activities Int32 DEFAULT 0,
+    scheduling_option LowCardinality(String),
+    status LowCardinality(String),
+    duration_seconds Nullable(Float64),
+    calculated_at DateTime64(3),
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+  ORDER BY (project_id, schedule_run_id);
+
+-- Variation Orders denormalised as the "contract change" dim. One row per approved VO.
+CREATE TABLE IF NOT EXISTS bipros_analytics.dim_contract (
+    vo_id UUID,
+    contract_id UUID,
+    project_id UUID,
+    vo_number String,
+    description String DEFAULT '',
+    vo_value Nullable(Decimal(18,4)),
+    impact_on_budget Nullable(Decimal(18,4)),
+    impact_on_schedule_days Nullable(Int32),
+    status LowCardinality(String),
+    approved_by String DEFAULT '',
+    approved_at Nullable(DateTime),
+    updated_at DateTime,
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+  ORDER BY (project_id, vo_id);
 
 CREATE TABLE IF NOT EXISTS bipros_analytics.dim_calendar (
     date Date,

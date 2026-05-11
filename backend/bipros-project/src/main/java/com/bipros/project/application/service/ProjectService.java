@@ -2,6 +2,7 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.event.ProjectCreatedEvent;
+import com.bipros.common.event.ProjectUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.AccessSpecifications;
@@ -238,6 +239,10 @@ public class ProjectService {
         if (request.dataDate() != null && !request.dataDate().equals(oldDataDate)) {
             auditService.logUpdate("Project", id, "dataDate", oldDataDate, request.dataDate());
         }
+
+        eventPublisher.publishEvent(
+            new ProjectUpdatedEvent(updated.getId(), updated.getCode(), updated.getName())
+        );
 
         return buildProjectResponse(updated);
     }
