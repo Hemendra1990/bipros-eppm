@@ -192,6 +192,18 @@ public class CostBreakdownTool implements Tool {
         summary.put("expense_count", exp.size());
         summary.put("account_count", byAcct.size());
         wrapper.set("summary", summary);
+
+        // Data provenance: ActivityExpense.actualCost is reconciled from
+        // ResourceAssignment.actualCost (which is override-aware), so these totals
+        // already factor any ProjectResource.rateOverride values set on the project.
+        ArrayNode provenance = objectMapper.createArrayNode();
+        provenance.add("ResourceAssignment.actualCost");
+        provenance.add("ActivityExpense.actualCost");
+        wrapper.set("data_provenance", provenance);
+        ArrayNode notes = objectMapper.createArrayNode();
+        notes.add("totals_include_project_pool_overrides");
+        wrapper.set("formula_overrides", notes);
+
         ToolResult.attachLinks(wrapper, Map.of("cost_account", new ArrayList<>(ids)));
         return ToolResult.ok(String.format("%d cost account%s; budgeted %.0f, actual %.0f.",
                 byAcct.size(), byAcct.size() == 1 ? "" : "s",

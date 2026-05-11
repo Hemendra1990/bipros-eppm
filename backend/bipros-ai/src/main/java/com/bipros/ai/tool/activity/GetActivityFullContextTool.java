@@ -3,6 +3,8 @@ package com.bipros.ai.tool.activity;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
+import com.bipros.ai.resolver.EffectiveRate;
+import com.bipros.ai.resolver.EffectiveRateResolver;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolResult;
 import com.bipros.cost.domain.entity.ActivityExpense;
@@ -65,6 +67,7 @@ public class GetActivityFullContextTool implements Tool {
   private final ActivityExpenseRepository expenseRepository;
   private final EvmCalculationRepository evmRepository;
   private final DailyProgressReportRepository dprRepository;
+  private final EffectiveRateResolver rateResolver;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -178,6 +181,7 @@ public class GetActivityFullContextTool implements Tool {
     Map<String, AssignmentRollup> byCategory = new HashMap<>();
     BigDecimal plannedCostTotal = BigDecimal.ZERO;
     BigDecimal actualCostTotal = BigDecimal.ZERO;
+    int overrideAssignmentCount = 0;
     for (ResourceAssignment a : assignments) {
       Resource r = a.getResourceId() == null ? null : resourceById.get(a.getResourceId());
       String cat =
@@ -187,6 +191,8 @@ public class GetActivityFullContextTool implements Tool {
       byCategory.computeIfAbsent(cat, k -> new AssignmentRollup(k)).add(a);
       if (a.getPlannedCost() != null) plannedCostTotal = plannedCostTotal.add(a.getPlannedCost());
       if (a.getActualCost() != null) actualCostTotal = actualCostTotal.add(a.getActualCost());
+      EffectiveRate er = rateResolver.resolve(projectId, a.getResourceId());
+      if (er.overrideApplied()) overrideAssignmentCount++;
     }
     ObjectNode assignSummary = objectMapper.createObjectNode();
     ArrayNode assignRows = objectMapper.createArrayNode();
@@ -202,6 +208,10 @@ public class GetActivityFullContextTool implements Tool {
     assignSummary.put("total_count", assignments.size());
     assignSummary.put("planned_cost_total", plannedCostTotal.doubleValue());
     assignSummary.put("actual_cost_total", actualCostTotal.doubleValue());
+    assignSummary.put("override_assignment_count", overrideAssignmentCount);
+    ArrayNode assignNotes = objectMapper.createArrayNode();
+    if (overrideAssignmentCount > 0) assignNotes.add("totals_include_project_pool_overrides");
+    assignSummary.set("formula_overrides", assignNotes);
     wrapper.set("resource_assignments", assignSummary);
 
     if (includeCost) {

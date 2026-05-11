@@ -65,7 +65,11 @@ public class QueryDprTool implements Tool {
         + "asks about DPRs, daily reports, what was reported, or wants to drill into a "
         + "specific day's work. Examples: \"DPRs for last week\", \"What did Foreman John report "
         + "on April 15?\", \"All concrete activity DPRs in March\", \"DPRs at chainage 145+000 "
-        + "to 146+000\". Requires a current project in scope.";
+        + "to 146+000\". Requires a current project in scope. "
+        + "NOTE: this tool returns DPR headline rows (qty, chainage, weather, supervisor). "
+        + "For per-resource cost questions (\"why does this equipment row cost ₹47.55?\") use "
+        + "get_dpr_details, which exposes unit_rate, unit_rate_basis, line_cost, cost_formula, "
+        + "and rate-drift flags on every manpower/equipment/material child row.";
   }
 
   @Override

@@ -1,0 +1,136 @@
+package com.bipros.analytics.query;
+
+import com.bipros.common.exception.BusinessRuleException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class SqlGuardTest {
+
+  private SqlGuard guard;
+  private String scopedA;
+  private String scopedB;
+  private String outOfScope;
+
+  @BeforeEach
+  void setUp() {
+    guard = new SqlGuard();
+    scopedA = UUID.randomUUID().toString();
+    scopedB = UUID.randomUUID().toString();
+    outOfScope = UUID.randomUUID().toString();
+  }
+
+  private void assertOutOfScope(String sql, List<String> scope) {
+    assertThatThrownBy(() -> guard.validate(sql, scope))
+        .isInstanceOfSatisfying(
+            BusinessRuleException.class,
+            ex -> assertThat(ex.getRuleCode()).isEqualTo("SQL_PROJECT_OUT_OF_SCOPE"));
+  }
+
+  private void assertRule(String sql, List<String> scope, String expectedRuleCode) {
+    assertThatThrownBy(() -> guard.validate(sql, scope))
+        .isInstanceOfSatisfying(
+            BusinessRuleException.class,
+            ex -> assertThat(ex.getRuleCode()).isEqualTo(expectedRuleCode));
+  }
+
+  @Test
+  void acceptsEqualsWithInScopeProjectId() {
+    String sql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id = '"
+            + scopedA
+            + "' LIMIT 10";
+    guard.validate(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
+  void rejectsEqualsWithOutOfScopeProjectId() {
+    String sql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id = '"
+            + outOfScope
+            + "' LIMIT 10";
+    assertOutOfScope(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
+  void acceptsInListWithAllInScope() {
+    String sql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id IN ('"
+            + scopedA
+            + "', '"
+            + scopedB
+            + "') LIMIT 10";
+    guard.validate(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
+  void rejectsInListWithAnyOutOfScope() {
+    String sql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id IN ('"
+            + scopedA
+            + "', '"
+            + outOfScope
+            + "') LIMIT 10";
+    assertOutOfScope(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
+  void acceptsQualifiedProjectIdColumn() {
+    String sql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs d "
+            + "WHERE d.project_id = '"
+            + scopedA
+            + "' LIMIT 10";
+    guard.validate(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
+  void rejectsQualifiedOutOfScope() {
+    String sql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs d "
+            + "WHERE d.project_id = '"
+            + outOfScope
+            + "' LIMIT 10";
+    assertOutOfScope(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
+  void allowsColumnToColumnInJoinOn() {
+    String sql =
+        "SELECT a.code FROM bipros_analytics.fact_dpr_logs f "
+            + "LEFT JOIN bipros_analytics.dim_activity a "
+            + "  ON f.project_id = a.project_id AND f.activity_id = a.activity_id "
+            + "WHERE f.project_id = '"
+            + scopedA
+            + "' LIMIT 10";
+    guard.validate(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
+  void rejectsTablesOutsideAllowList() {
+    String sql = "SELECT * FROM secret.classified_table WHERE project_id = '" + scopedA + "'";
+    assertRule(sql, List.of(scopedA), "SQL_TABLE_NOT_ALLOWED");
+  }
+
+  @Test
+  void rejectsMissingProjectIdFilter() {
+    String sql = "SELECT * FROM bipros_analytics.dim_resource LIMIT 10";
+    assertRule(sql, List.of(scopedA), "SQL_MISSING_PROJECT_FILTER");
+  }
+
+  @Test
+  void singleProjectScopeLocksToThatProject() {
+    String wrongSql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id = '" + scopedB + "'";
+    assertOutOfScope(wrongSql, List.of(scopedA));
+
+    String rightSql =
+        "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id = '" + scopedA + "'";
+    guard.validate(rightSql, List.of(scopedA));
+  }
+}

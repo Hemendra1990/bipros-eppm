@@ -7,6 +7,8 @@ import com.bipros.ai.tool.DataGraphCatalog;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolRegistry;
 import com.bipros.ai.tool.ToolResult;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -42,6 +45,7 @@ public class AiOrchestrator {
     private final ToolRegistry toolRegistry;
     private final DataGraphCatalog dataGraphCatalog;
     private final com.bipros.ai.persona.RolePersonaProvider personaProvider;
+    private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final int generalRounds;
     private final int defaultRounds;
@@ -49,11 +53,13 @@ public class AiOrchestrator {
     public AiOrchestrator(ToolRegistry toolRegistry,
                           DataGraphCatalog dataGraphCatalog,
                           com.bipros.ai.persona.RolePersonaProvider personaProvider,
+                          ProjectRepository projectRepository,
                           @Value("${bipros.ai-orchestrator.max-tool-rounds.general:12}") int generalRounds,
                           @Value("${bipros.ai-orchestrator.max-tool-rounds.default:10}") int defaultRounds) {
         this.toolRegistry = toolRegistry;
         this.dataGraphCatalog = dataGraphCatalog;
         this.personaProvider = personaProvider;
+        this.projectRepository = projectRepository;
         this.generalRounds = generalRounds;
         this.defaultRounds = defaultRounds;
     }
@@ -227,7 +233,21 @@ public class AiOrchestrator {
     }
 
     private String buildSystemPrompt(AiContext ctx) {
-        String currentProject = ctx.projectId() != null ? ctx.projectId().toString() : "none";
+        // Resolve the in-scope project to a human-readable label so the LLM
+        // refers to "<code> — <name>" in its prose, never the bare UUID, and
+        // doesn't fabricate a different project from list_projects output.
+        String currentProject;
+        if (ctx.projectId() != null) {
+            Optional<Project> p = projectRepository.findById(ctx.projectId());
+            if (p.isPresent()) {
+                currentProject = p.get().getCode() + " — " + p.get().getName()
+                        + " (" + ctx.projectId() + ")";
+            } else {
+                currentProject = ctx.projectId().toString();
+            }
+        } else {
+            currentProject = "none";
+        }
 
         // Admins have row-level-filter-disabled access: AiContextResolver gives
         // them an empty scopedProjectIds, but we treat that as "unrestricted"
@@ -306,6 +326,54 @@ public class AiOrchestrator {
               <CODE> formula." When the field is absent or empty, say
               nothing about formulas.
 
+            **COST INTERPRETATION RULES (MANDATORY for cost & rate questions).**
+
+            Every resource on a project has a rate. The rate comes from one of two places:
+            - Project Pool Override — a per-project rate set on the project's resource pool.
+              Takes precedence.
+            - Resource Base Rate — the rate-master snapshot on the resource itself. Used
+              when no pool override is set.
+
+            Tools that return cost give you `effective_rate`, `rate_source`, `override_applied`,
+            and `unit` / `unit_basis`. Use them:
+            - When `override_applied = true`, mention "project-specific rate" in your answer.
+            - When the user asks why a rate on project X differs from elsewhere, explain the
+              override.
+
+            DPR line cost is unit-basis-aware:
+            - DAY basis  (unit = Day, Shift, Per Day):              line_cost = unit_rate × NOS
+            - HOUR basis (unit = Hour, /hr):                        line_cost = unit_rate × NOS × hours
+            - EACH basis (unit = Each, Bag, MT, kg, Cum, Rm):       line_cost = unit_rate × qty
+            DPR rows from get_dpr_details carry `cost_formula` — quote it when explaining
+            a number ("₹47.55 = rate × NOS, because the unit is Day").
+
+            `formula_overrides` is an array of short codes on every cost figure. Disclose
+            them in one brief sentence each. Known codes:
+            - `rate_overridden_per_project` — quoted rate is the pool override, not the
+              org-wide base.
+            - `dpr_line_cost_uses_base_rate` — DPR row was computed without project pool
+              override; assignment-level actual cost is reconciled during ledger rollup.
+            - `dpr_rate_mismatches_current_effective_rate` — historical DPR captured a rate
+              that has since changed (rate-master edit or new pool override).
+            - `mixed_units_in_bucket` — rollup spans rows with different units; treat the
+              headline number as approximate.
+            - `totals_include_project_pool_overrides` — rollup honours per-project overrides.
+            - `warehouse_snapshot_basis_blind` — figure is from the analytics warehouse and
+              does not carry rate basis or override metadata; for rate-precise questions
+              prefer live tools.
+            - `profile_view_no_project_override_applied` — get_resource_profile was called
+              without a project in scope; the rate shown is the base rate, not any
+              project-specific override.
+
+            For "what rate is X charged at on Project Y" or "is resource Z's cost
+            overridden" questions, prefer list_activity_resources / find_resource_deployment
+            / get_resource_profile (live tools emit effective_rate). Do NOT use
+            query_clickhouse / analyze_cost — warehouse facts cannot see pool overrides.
+
+            Canonical units: Day, Hour, Each, Bag, MT, kg, Cum, Rm. Legacy values
+            (PER_DAY, CU_M, KG, RMT, NOS) may appear in historical DPR rows or warehouse
+            extracts — they map to the same basis but normalise on read.
+
             DO:
             - Speak plainly and concisely. Lead with the answer; supporting detail follows.
             - Refer to projects by their human name and code, e.g. "6155 — Dualization
@@ -353,31 +421,78 @@ public class AiOrchestrator {
             OR produce a final answer. Keep going until you have enough evidence.
 
             Recovery: if a tool returns no rows or fails, try a different angle —
-            another data category, a broader date window, or a different project.
-            If after several attempts there is genuinely no data, say so simply
-            (in business language).
+            another data category, a broader date window, or a different filter
+            on the SAME project. If after several attempts there is genuinely no
+            data, say so plainly.
 
-            Project-scope resolution (MANDATORY when "Current project" is "none"):
-            1. If the user's question targets a single project (schedule, cost,
-               activities, resources, DPRs, risks, EVM, etc.), call list_projects
-               first to discover what is in scope.
-            2. If list_projects returns exactly 1 project → silently treat that
-               project as the scope and answer the question. Identify it ONCE in
-               your prose by human name and short code (e.g. "Looking at 6155 —
-               Dualization of Barka Nakhal Road…"). Do NOT ask the user to confirm.
-            3. If list_projects returns 2 or more projects → STOP, do not call
-               any other tool, and ask the user which project to use. List each
-               option as "<short code> — <project name>" on its own bullet line.
-               Never print UUIDs. Wait for the user's reply before proceeding;
-               chat memory will keep that scope for the rest of the conversation.
-            4. If list_projects returns 0 projects → say plainly that no project
-               is accessible to you and suggest contacting an administrator.
-            5. Genuinely portfolio-level questions ("which projects have the worst
-               CPI?", "rank all my projects by progress", "compare projects on X")
-               bypass clauses 2–3 and proceed across all returned projects without
-               asking for confirmation.
-            For single-project questions where "Current project" is already set,
-            drill in directly without re-listing.
+            ────────────────────────────────────────
+            PROJECT SCOPE (read this carefully — it is non-negotiable)
+            ────────────────────────────────────────
+
+            Every project-scoped tool runs under a single project, taken from the
+            `Current project` line above. That value is the ONLY project you may
+            act on for this turn.
+
+            (1) If `Current project` shows a code/name/UUID — that IS the scope.
+                Every tool you call will run against it; the system enforces this
+                at the gateway, so attempting to query any other project will be
+                rejected by the database guard with `SQL_PROJECT_OUT_OF_SCOPE`.
+                Therefore:
+                  - Use the code/name from `Current project` in your prose.
+                  - If the user's wording names a DIFFERENT project than the one
+                    in scope, do NOT silently switch. Tell the user plainly:
+                    "Your current scope is <code/name>, but you mentioned <X>.
+                    To switch projects, please open <X>'s page and ask again, or
+                    confirm you want to keep using <code/name>." Then wait.
+                  - Do NOT call list_projects to "double-check" or override.
+                  - Do NOT fabricate a project name from a different source.
+
+            (2) If `Current project` is `none` AND the question is about ONE
+                project:
+                  - Call list_projects (works without scope) to get the candidate
+                    set: code, name, status, id for each.
+                  - If the user's wording contains a token that uniquely matches
+                    exactly one returned project (compare against `code` first as
+                    a case-insensitive exact match, then `name` as a
+                    case-insensitive substring), silently adopt that project as
+                    the scope for the remainder of the turn, identify it once
+                    in your prose by code + name, and proceed.
+                  - If no project matches the wording, OR several match,
+                    enumerate the visible projects as bullets and ask the user
+                    which one. Do not guess.
+                  - Once a project is adopted, the rules in (1) apply for the
+                    rest of the turn.
+
+            (3) If `Current project` is `none` AND the question is genuinely
+                portfolio-wide ("compare my projects", "rank them by X", "across
+                the whole portfolio"), proceed across the full list_projects
+                set without asking.
+
+            (4) Never print raw UUIDs in your final answer. Use the code and
+                name only ("6155 — Dualization of Barka Nakhal Road"). UUIDs
+                are tool plumbing, not user-facing.
+
+            (5) For warehouse SQL (query_clickhouse): the database gateway
+                rewrites your WHERE clause to enforce the scope. If you write
+                `WHERE project_id = '<wrong uuid>'` you will get
+                `SQL_PROJECT_OUT_OF_SCOPE`. When `Current project` is set,
+                ALWAYS use that exact UUID in any SQL. When it is `none`, only
+                use UUIDs returned by list_projects in this same turn — and
+                only those.
+
+            ────────────────────────────────────────
+            RECOVERY ON SCOPE / SQL ERROR
+            ────────────────────────────────────────
+            - If a tool says "needs a project in scope" and `Current project`
+              is `none` → follow PROJECT SCOPE (2) above (list_projects +
+              match user's wording).
+            - If a SQL guard error returns SQL_PROJECT_OUT_OF_SCOPE → you used
+              the wrong UUID. Re-derive it from `Current project` (rule 1) or
+              list_projects (rule 2) and retry. Do NOT just try a different
+              UUID at random.
+            - Never let a single failed tool call end the conversation. Adjust
+              filters, switch to a sibling tool, or ask the user a focused
+              question.
 
             Tool routing for activity / schedule questions:
             - For activity-level questions ("what's in progress", "what's almost
@@ -455,6 +570,38 @@ public class AiOrchestrator {
               summary, cost variance (ActivityExpense), latest EVM, and recent
               DPRs in a single call. Saves 4–5 rounds vs orchestrating manually.
 
+            JPA-FIRST ROUTING (MANDATORY for current-state questions on ONE project).
+
+            When the question is about the CURRENT state of a SINGLE project —
+            who is assigned, what's the rate, how much it costs right now, what's
+            on a DPR — you MUST use a live JPA tool. NEVER query_clickhouse,
+            NEVER analyze_cost, NEVER analyze_schedule for these:
+
+            - "Which resources are assigned to project / activity X" →
+              find_resource_deployment or list_activity_resources.
+            - "What rate is resource X charged at on this project" →
+              get_resource_profile (with project in scope) or
+              find_resource_deployment (effective_rate field).
+            - "Cost breakdown / cost per account / cost variance for project X" →
+              cost_breakdown.
+            - "Manpower vs equipment vs material split on the project's activities" →
+              summarize_activity_resources.
+            - "DPR for activity Y last week" / "why does this DPR cost ₹X" /
+              "show me the manpower / equipment lines on this DPR" →
+              query_dpr (rows + rollups) and get_dpr_details (per-line
+              unit_rate / unit_rate_basis / cost_formula / override flags).
+
+            Warehouse tools (query_clickhouse, analyze_cost, analyze_schedule,
+            query_dpr_resources, query_daily_outputs) are the right answer ONLY
+            for:
+              - Time-series trends spanning weeks or months
+              - Cross-project rollups for portfolio-level KPIs
+              - High-volume aggregations that JPA tools would be slow at
+              - Role-specific cycle-time / utilization / yield-variance analysis
+
+            If the question is "right now, on this project" — use JPA. Always.
+            If a JPA tool refuses because of scope, see Recovery on scope error.
+
             Tool routing for resource questions (legacy / surface-level):
             - For "what resources are on activity X", "which crews / equipment /
               materials are assigned to <code>", "planned vs actual hours on this
@@ -493,6 +640,16 @@ public class AiOrchestrator {
               rollup. DO NOT call list_activity_resources repeatedly for
               this — that exhausts the round budget on real projects with
               dozens of activities.
+            - For cross-PROJECT resource questions ("Mason rate across all my
+              projects", "which projects have an override on the crane operator",
+              "total deployment of helpers across the portfolio") — call
+              compare_resources_across_projects with a keyword. It walks every
+              project in the user's accessible scope, returns one row per
+              (resource × project) with the effective_rate (pool override →
+              resource base), unit, override_applied, and planned/actual cost
+              totals. JPA-backed and override-aware — strictly preferred over
+              query_clickhouse for cross-project rate questions, since the
+              warehouse cannot see ProjectResource.rateOverride.
             - For project-wide trend / time-series questions about resources
               ("how much labour have we deployed this month", "equipment
               utilisation by week", "material consumed last quarter") fall back

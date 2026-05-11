@@ -11,8 +11,14 @@ import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
 import com.bipros.project.domain.model.DailyActivityResourceOutput;
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprEquipment;
+import com.bipros.project.domain.model.DprManpower;
+import com.bipros.project.domain.model.DprMaterial;
 import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprEquipmentRepository;
+import com.bipros.project.domain.repository.DprManpowerRepository;
+import com.bipros.project.domain.repository.DprMaterialRepository;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.risk.domain.model.Risk;
@@ -39,6 +45,9 @@ public class AnalyticsBackfillService {
     private final ClickHouseTemplate clickHouse;
 
     private final DailyProgressReportRepository dprRepository;
+    private final DprManpowerRepository dprManpowerRepository;
+    private final DprEquipmentRepository dprEquipmentRepository;
+    private final DprMaterialRepository dprMaterialRepository;
     private final DailyActivityResourceOutputRepository outputRepository;
     private final ActivityExpenseRepository expenseRepository;
     private final RiskRepository riskRepository;
@@ -80,6 +89,15 @@ public class AnalyticsBackfillService {
                             dpr.getChainageFromM() != null ? dpr.getChainageFromM().doubleValue() : null,
                             dpr.getChainageToM() != null ? dpr.getChainageToM().doubleValue() : null,
                             "dpr");
+
+                    // Backfill per-resource child fact rows. The live event listeners
+                    // only fire when DPRs are SUBMITTED in this app session — DPRs
+                    // created before the listener was wired (e.g. seed data, older
+                    // imports) leave fact_dpr_manpower/equipment/material empty.
+                    // Without this loop, warehouse queries against those tables return
+                    // zero rows even though Postgres has the lines.
+                    backfillDprChildren(projectId, activityId, dpr);
+
                     count++;
                 } catch (Exception e) {
                     log.warn("Backfill DPR failed: dprId={} error={}", dpr.getId(), e.getMessage());
@@ -89,6 +107,56 @@ public class AnalyticsBackfillService {
         }
         log.info("Backfill DPR complete: {} rows processed", count);
         return count;
+    }
+
+    /**
+     * Walks the three child tables of a DPR and writes one fact row per child.
+     * Best-effort: a failed insert on one child row logs + continues so a single
+     * bad row doesn't stop the rest of the DPR's children.
+     */
+    private void backfillDprChildren(UUID projectId, UUID activityId, DailyProgressReport dpr) {
+        for (DprManpower m : dprManpowerRepository.findByDprIdIn(List.of(dpr.getId()))) {
+            try {
+                etl.insertDprManpowerDaily(
+                        projectId, activityId, dpr.getId(), m.getId(), dpr.getReportDate(),
+                        m.getTrade(),
+                        m.getCategory() != null ? m.getCategory().name() : null,
+                        m.getContractorName(),
+                        m.getNos(),
+                        m.getWorkingHours() != null ? m.getWorkingHours().doubleValue() : null,
+                        m.getOtHours() != null ? m.getOtHours().doubleValue() : null);
+            } catch (Exception e) {
+                log.warn("Backfill DPR manpower row failed: rowId={} error={}", m.getId(), e.getMessage());
+            }
+        }
+        for (DprEquipment e : dprEquipmentRepository.findByDprIdIn(List.of(dpr.getId()))) {
+            try {
+                etl.insertDprEquipmentDaily(
+                        projectId, activityId, dpr.getId(), e.getId(), dpr.getReportDate(),
+                        e.getEquipmentType(), e.getFleetNo(),
+                        e.getOwnership() != null ? e.getOwnership().name() : null,
+                        e.getNos(),
+                        e.getWorkingHours() != null ? e.getWorkingHours().doubleValue() : null,
+                        e.getIdleHours() != null ? e.getIdleHours().doubleValue() : null,
+                        e.getBreakdownHours() != null ? e.getBreakdownHours().doubleValue() : null,
+                        e.getFuelLitres() != null ? e.getFuelLitres().doubleValue() : null,
+                        e.getOperatorName(),
+                        e.getAvailabilityStatus() != null ? e.getAvailabilityStatus().name() : null);
+            } catch (Exception ex) {
+                log.warn("Backfill DPR equipment row failed: rowId={} error={}", e.getId(), ex.getMessage());
+            }
+        }
+        for (DprMaterial m : dprMaterialRepository.findByDprIdIn(List.of(dpr.getId()))) {
+            try {
+                etl.insertDprMaterialDaily(
+                        projectId, activityId, dpr.getId(), m.getId(), dpr.getReportDate(),
+                        m.getMaterialName(), m.getUnit(),
+                        m.getQuantity() != null ? m.getQuantity().doubleValue() : null,
+                        m.getSource(), m.getVendorName(), m.getBatchNo());
+            } catch (Exception e) {
+                log.warn("Backfill DPR material row failed: rowId={} error={}", m.getId(), e.getMessage());
+            }
+        }
     }
 
     @Transactional(readOnly = true)

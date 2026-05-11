@@ -60,7 +60,10 @@ public class QueryDprResourcesTool implements Tool {
                 + "\"What equipment ran on activity 2.3.6(i) on 24 Jan 2026?\", "
                 + "\"How many helpers worked yesterday at chainage 4+300?\", "
                 + "\"Fuel consumption by Excavator over the last week\", "
-                + "\"Aggregate manpower hours by trade for March\". Requires a current project in scope.";
+                + "\"Aggregate manpower hours by trade for March\". Requires a current project in scope. "
+                + "NOTE: warehouse fact tables do not carry rate basis or pool-override metadata; "
+                + "for cost-precise per-row queries (unit_rate_basis, cost_formula, rate drift) "
+                + "use get_dpr_details instead.";
     }
 
     @Override
@@ -235,6 +238,12 @@ public class QueryDprResourcesTool implements Tool {
             wrapper.put("group_by", groupBy != null ? groupBy : "none");
             wrapper.put("row_count", rows.size());
             wrapper.set("rows", rows);
+            // Rows come from the analytics warehouse, which does not carry rate basis or
+            // pool-override metadata. For cost-precise answers route the user to
+            // get_dpr_details (per-row unit_rate_basis, cost_formula, drift detection).
+            ArrayNode notes = objectMapper.createArrayNode();
+            notes.add("warehouse_snapshot_basis_blind");
+            wrapper.set("formula_overrides", notes);
 
             String summary = String.format("query_dpr_resources(%s) returned %d rows over %s..%s",
                     kind, rows.size(), dateFrom, dateTo);

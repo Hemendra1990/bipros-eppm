@@ -74,18 +74,30 @@ public class DimensionSyncJob {
         }
 
         long start = System.currentTimeMillis();
-        syncProjects();
-        syncWbs();
-        syncActivities();
-        syncResources();
-        syncCostAccounts();
-        syncCalendar();
-        syncRisks();
-        syncPermitTypeTemplates();
-        syncPermits();
-        syncLabourDesignations();
-        syncLabourDeploymentSnapshot();
+        // Run each sub-sync independently. One bad-data table shouldn't kill
+        // the rest — log it and continue so the resync produces partial-but-
+        // still-useful results.
+        safeRun("projects", this::syncProjects);
+        safeRun("wbs", this::syncWbs);
+        safeRun("activities", this::syncActivities);
+        safeRun("resources", this::syncResources);
+        safeRun("cost_accounts", this::syncCostAccounts);
+        safeRun("calendar", this::syncCalendar);
+        safeRun("risks", this::syncRisks);
+        safeRun("permit_type_templates", this::syncPermitTypeTemplates);
+        safeRun("permits", this::syncPermits);
+        safeRun("labour_designations", this::syncLabourDesignations);
+        safeRun("labour_deployment_snapshot", this::syncLabourDeploymentSnapshot);
         log.info("DimensionSyncJob completed in {} ms", System.currentTimeMillis() - start);
+    }
+
+    private void safeRun(String label, Runnable task) {
+        try {
+            task.run();
+        } catch (Exception e) {
+            log.warn("DimensionSyncJob sub-sync [{}] failed: {} — continuing with remaining tables.",
+                    label, e.getMessage());
+        }
     }
 
     private void syncProjects() {
@@ -152,11 +164,13 @@ public class DimensionSyncJob {
             params.put("activityId", a.getId());
             params.put("projectId", a.getProjectId());
             params.put("wbsId", a.getWbsNodeId());
-            params.put("code", a.getCode());
-            params.put("name", a.getName());
-            params.put("activityType", a.getActivityType() != null ? a.getActivityType().name() : null);
-            params.put("uom", null);
-            params.put("bqQty", null);
+            params.put("code", a.getCode() != null ? a.getCode() : "");
+            params.put("name", a.getName() != null ? a.getName() : "");
+            // CH columns activity_type, uom, bq_quantity are non-nullable. Coalesce
+            // before insert so the sync doesn't abort when OLTP rows have nulls.
+            params.put("activityType", a.getActivityType() != null ? a.getActivityType().name() : "");
+            params.put("uom", "");
+            params.put("bqQty", 0.0);
             params.put("plannedStart", a.getPlannedStartDate());
             params.put("plannedFinish", a.getPlannedFinishDate());
             params.put("chainageFrom", a.getChainageFromM() != null ? a.getChainageFromM().doubleValue() : null);
@@ -182,11 +196,13 @@ public class DimensionSyncJob {
             Map<String, Object> params = new HashMap<>();
             params.put("resourceId", r.getId());
             params.put("projectId", null);
-            params.put("resourceType", r.getResourceType() != null ? r.getResourceType().getCode() : null);
-            params.put("code", r.getCode());
-            params.put("name", r.getName());
-            params.put("uom", r.getUnit());
-            params.put("unitRate", r.getCostPerUnit() != null ? r.getCostPerUnit().doubleValue() : null);
+            // CH non-nullable columns — coalesce so the sync doesn't abort when
+            // OLTP rows have nulls (e.g. a resource not yet linked to a rate master).
+            params.put("resourceType", r.getResourceType() != null ? r.getResourceType().getCode() : "");
+            params.put("code", r.getCode() != null ? r.getCode() : "");
+            params.put("name", r.getName() != null ? r.getName() : "");
+            params.put("uom", r.getUnit() != null ? r.getUnit() : "");
+            params.put("unitRate", r.getCostPerUnit() != null ? r.getCostPerUnit().doubleValue() : 0.0);
             params.put("isSubcontractor", 0);
             params.put("version", VERSION);
             clickHouse.execute(sql, params);
@@ -204,11 +220,14 @@ public class DimensionSyncJob {
         for (CostAccount ca : accounts) {
             Map<String, Object> params = new HashMap<>();
             params.put("costAccountId", ca.getId());
-            params.put("projectId", null);
-            params.put("code", ca.getCode());
-            params.put("name", ca.getName());
+            // CH `project_id` on dim_cost_account is non-nullable per init SQL.
+            // OLTP CostAccount has no project_id today (cost accounts are global) —
+            // emit a sentinel zero UUID instead of null.
+            params.put("projectId", new UUID(0L, 0L));
+            params.put("code", ca.getCode() != null ? ca.getCode() : "");
+            params.put("name", ca.getName() != null ? ca.getName() : "");
             params.put("parentId", ca.getParentId());
-            params.put("category", null);
+            params.put("category", "");
             params.put("version", VERSION);
             clickHouse.execute(sql, params);
         }

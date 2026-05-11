@@ -3,6 +3,8 @@ package com.bipros.ai.tool;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
+import com.bipros.ai.resolver.EffectiveRate;
+import com.bipros.ai.resolver.EffectiveRateResolver;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.ResourceRole;
@@ -61,6 +63,7 @@ public class FindResourceDeploymentTool implements Tool {
     private final ResourceAssignmentRepository assignmentRepository;
     private final ResourceRoleRepository roleRepository;
     private final ActivityRepository activityRepository;
+    private final EffectiveRateResolver rateResolver;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -82,7 +85,10 @@ public class FindResourceDeploymentTool implements Tool {
                 + "and the top activities ranked by planned units. Use for cross-cutting workforce "
                 + "questions like \"how many masons are working\", \"where are the welders\", "
                 + "\"how many earth-moving units are deployed\", or \"list every helper booking on "
-                + "this project\". Requires a current project in scope.";
+                + "this project\". Requires a current project in scope. "
+                + "Each row carries effective_rate (project pool override → resource base), unit, "
+                + "unit_basis (DAY/HOUR/EACH), rate_source, override_applied, and formula_overrides "
+                + "so the AI can disclose project-specific rate overrides.";
     }
 
     @Override
@@ -258,15 +264,25 @@ public class FindResourceDeploymentTool implements Tool {
             row.put("code", r.getCode());
             row.put("name", r.getName());
             row.put("type", r.getResourceType() != null ? r.getResourceType().getCode() : null);
-            row.put("unit", r.getUnit());
             row.put("role", roleNames.isEmpty() ? null : String.join(", ", roleNames));
+
+            EffectiveRate er = rateResolver.resolve(projectId, r.getId());
+            row.put("unit", er.unit());
+            row.put("unit_basis", er.basis());
+            row.put("effective_rate", er.rate() == null ? null : er.rate().doubleValue());
+            row.put("rate_source", er.source().name());
+            row.put("override_applied", er.overrideApplied());
+            row.put("base_cost_per_unit", r.getCostPerUnit() == null ? null : r.getCostPerUnit().doubleValue());
+            ArrayNode notes = objectMapper.createArrayNode();
+            if (er.overrideApplied()) notes.add("rate_overridden_per_project");
+            row.set("formula_overrides", notes);
+
             row.put("activity_count", assigns.size());
             row.put("planned_units_total", plannedUnits);
             row.put("actual_units_total", actualUnits);
             row.put("remaining_units_total", remainingUnits);
             row.put("planned_cost_total", plannedCost);
             row.put("actual_cost_total", actualCost);
-            row.put("cost_per_unit", r.getCostPerUnit() == null ? null : r.getCostPerUnit().doubleValue());
             row.set("top_activities", topActs);
             rows.add(row);
         }

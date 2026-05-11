@@ -4,6 +4,8 @@ import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
+import com.bipros.ai.resolver.EffectiveRate;
+import com.bipros.ai.resolver.EffectiveRateResolver;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
@@ -61,6 +63,7 @@ public class SummarizeActivityResourcesTool implements Tool {
     private final ActivityRepository activityRepository;
     private final ResourceAssignmentRepository assignmentRepository;
     private final ResourceRepository resourceRepository;
+    private final EffectiveRateResolver rateResolver;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -81,7 +84,10 @@ public class SummarizeActivityResourcesTool implements Tool {
                 + "completed activities, what's the manpower vs material vs equipment split?\", "
                 + "\"labour-cost share on the in-progress scope\", \"resource-type mix for "
                 + "activities under ACT-1.3\". One call replaces what would otherwise be a "
-                + "long chain of per-activity lookups. Requires a current project in scope.";
+                + "long chain of per-activity lookups. Each bucket carries override_row_count, "
+                + "override_cost_share_pct, and formula_overrides so the AI can disclose when "
+                + "project pool overrides or mixed units distort the headline percentages. "
+                + "Requires a current project in scope.";
     }
 
     @Override
@@ -200,7 +206,8 @@ public class SummarizeActivityResourcesTool implements Tool {
             String canonical = canonicalize(rawType);
             String label = friendlyLabel(canonical);
             TypeBucket b = buckets.computeIfAbsent(canonical, k -> new TypeBucket(canonical, label));
-            b.add(ra, r);
+            EffectiveRate er = rateResolver.resolve(projectId, ra.getResourceId());
+            b.add(ra, r, er);
         }
 
         // 5) Compute totals + percentages. Cost is the headline (units across types
@@ -380,6 +387,9 @@ public class SummarizeActivityResourcesTool implements Tool {
         // mixed units flip it to null and clear the unit-totals from the headline.
         String unit;
         boolean unitsConsistent = true;
+        int overrideRowCount;
+        double overridePlannedCost;
+        double overrideActualCost;
         final Map<UUID, ResourceRollup> perResource = new HashMap<>();
         final Set<UUID> resourceIds = new HashSet<>();
 
@@ -388,7 +398,7 @@ public class SummarizeActivityResourcesTool implements Tool {
             this.label = label;
         }
 
-        void add(ResourceAssignment ra, Resource r) {
+        void add(ResourceAssignment ra, Resource r, EffectiveRate er) {
             assignmentCount++;
             double pu = nz(ra.getPlannedUnits());
             double au = nz(ra.getActualUnits());
@@ -403,7 +413,9 @@ public class SummarizeActivityResourcesTool implements Tool {
             actualCost += ac;
             remainingCost += rc;
 
-            String thisUnit = r != null ? r.getUnit() : null;
+            // Prefer the effective unit (pool override's customUnit, else Resource.unit)
+            // so the bucket reflects what the project actually sees.
+            String thisUnit = er != null ? er.unit() : (r != null ? r.getUnit() : null);
             if (assignmentCount == 1) {
                 unit = thisUnit;
             } else if (unitsConsistent) {
@@ -411,6 +423,12 @@ public class SummarizeActivityResourcesTool implements Tool {
                     unit = null;
                     unitsConsistent = false;
                 }
+            }
+
+            if (er != null && er.overrideApplied()) {
+                overrideRowCount++;
+                overridePlannedCost += pc;
+                overrideActualCost += ac;
             }
 
             if (r != null) {
@@ -444,6 +462,19 @@ public class SummarizeActivityResourcesTool implements Tool {
                 o.put("actual_units_total", round(actualUnits));
                 o.put("remaining_units_total", round(remainingUnits));
             }
+
+            // Pool-override disclosure: how many rows in this bucket carried a
+            // ProjectResource.rateOverride, and what share of cost that represented.
+            o.put("override_row_count", overrideRowCount);
+            double overrideBasis = actualCost > 0 ? actualCost : plannedCost;
+            double overrideShareNum = actualCost > 0 ? overrideActualCost : overridePlannedCost;
+            o.put("override_cost_share_pct", overrideBasis > 0
+                    ? Math.round(overrideShareNum / overrideBasis * 1000.0) / 10.0 : null);
+            ArrayNode notes = m.createArrayNode();
+            if (overrideRowCount > 0) notes.add("totals_include_project_pool_overrides");
+            if (!unitsConsistent) notes.add("mixed_units_in_bucket");
+            o.set("formula_overrides", notes);
+
             ArrayNode top = m.createArrayNode();
             List<ResourceRollup> rolledUp = new ArrayList<>(perResource.values());
             rolledUp.sort(Comparator.comparingDouble((ResourceRollup r) -> r.plannedCost).reversed());

@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useAiStore } from "@/lib/state/store";
 import { useAppStore } from "@/lib/state/store";
 import { aiApi, type SseEvent } from "@/lib/api/aiApi";
+import { projectApi } from "@/lib/api/projectApi";
 import { Bot, X, Send, Loader2, PanelRightClose, PanelRightOpen, Mic, Image as ImageIcon, Square, Check, Copy, Maximize2, Minimize2, Plus, History, Download, FileText, FileSpreadsheet, Sheet } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -195,6 +197,20 @@ export function AiChatPanel() {
   // Prefer the store's currentProjectId; fall back to the URL when the user
   // landed on a project page directly (most pages don't set the store).
   const projectId = storeProjectId ?? inferProjectIdFromPath(pathname);
+
+  // Resolve the in-scope project to a human label (code — name) so the chat
+  // header makes the active scope obvious. Without this users sometimes ask
+  // "for project X" while browsing a different project's page, which causes
+  // tool calls to mismatch the AI's stated project.
+  const { data: activeProject } = useQuery({
+    queryKey: ["ai-chat-active-project", projectId],
+    queryFn: () => (projectId ? projectApi.getProject(projectId) : Promise.resolve(null)),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+  const activeProjectLabel = activeProject?.data
+    ? `${activeProject.data.code} — ${activeProject.data.name}`
+    : null;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -592,18 +608,17 @@ export function AiChatPanel() {
         className={`relative flex flex-col bg-surface border-l border-border shadow-xl transition-all duration-200 ${widthClass}`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          {!collapsed && (
-            <div className="flex items-center gap-2">
-              <Bot size={18} className="text-accent" />
-              <span className="text-sm font-semibold text-text-primary">Bipros AI</span>
-              {projectId && (
-                <span className="text-xs text-text-muted bg-surface-hover px-2 py-0.5 rounded">
+        <div className="flex flex-col border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between">
+            {!collapsed && (
+              <div className="flex items-center gap-2 min-w-0">
+                <Bot size={18} className="text-accent shrink-0" />
+                <span className="text-sm font-semibold text-text-primary shrink-0">Bipros AI</span>
+                <span className="text-xs text-text-muted bg-surface-hover px-2 py-0.5 rounded shrink-0">
                   {activeModule}
                 </span>
-              )}
-            </div>
-          )}
+              </div>
+            )}
           <div className="flex items-center gap-1 ml-auto">
             {!collapsed && (
               <>
@@ -696,6 +711,21 @@ export function AiChatPanel() {
               </button>
             )}
           </div>
+          </div>
+          {!collapsed && (
+            <div className="mt-1.5 text-[11px] text-text-muted flex items-center gap-1.5">
+              <span className="font-medium uppercase tracking-wide text-text-secondary">Scope:</span>
+              {activeProjectLabel ? (
+                <span className="truncate" title={activeProjectLabel}>
+                  {activeProjectLabel}
+                </span>
+              ) : projectId ? (
+                <span className="italic">loading project…</span>
+              ) : (
+                <span className="italic">no project selected — portfolio mode</span>
+              )}
+            </div>
+          )}
         </div>
 
         {!collapsed && view === "history" && (

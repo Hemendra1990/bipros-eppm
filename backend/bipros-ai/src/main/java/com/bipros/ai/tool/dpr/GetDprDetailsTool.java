@@ -3,6 +3,8 @@ package com.bipros.ai.tool.dpr;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
+import com.bipros.ai.resolver.EffectiveRate;
+import com.bipros.ai.resolver.EffectiveRateResolver;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolResult;
 import com.bipros.project.domain.model.DailyProgressReport;
@@ -53,6 +55,7 @@ public class GetDprDetailsTool implements Tool {
   private final DprManpowerRepository manpowerRepository;
   private final DprEquipmentRepository equipmentRepository;
   private final DprMaterialRepository materialRepository;
+  private final EffectiveRateResolver rateResolver;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -66,7 +69,10 @@ public class GetDprDetailsTool implements Tool {
         + "context. Two lookup modes: by dpr_id (UUID, single record), or by "
         + "report_date + activity_code (zero or more, since a supervisor may split a day's "
         + "work across chainage segments). Use this AFTER query_dpr surfaces an interesting "
-        + "row, or when the user names a specific date and activity. Project-scoped.";
+        + "row, or when the user names a specific date and activity. Project-scoped. "
+        + "Each manpower/equipment/material row carries unit_rate, unit_rate_basis, line_cost, "
+        + "cost_formula (e.g. 'rate × NOS' for DAY basis, 'rate × NOS × hours' for HOUR basis), "
+        + "and formula_overrides flagging rate drift or pool-override mismatches.";
   }
 
   @Override
@@ -203,6 +209,11 @@ public class GetDprDetailsTool implements Tool {
         n.put("working_hours", m.getWorkingHours() == null ? null : m.getWorkingHours().doubleValue());
         n.put("ot_hours", m.getOtHours() == null ? null : m.getOtHours().doubleValue());
         n.put("contractor_name", m.getContractorName());
+        n.put("unit_rate", m.getUnitRate() == null ? null : m.getUnitRate().doubleValue());
+        n.put("unit_rate_basis", m.getUnitRateBasis());
+        n.put("line_cost", m.getLineCost() == null ? null : m.getLineCost().doubleValue());
+        n.put("cost_formula", manpowerCostFormula(m.getUnitRateBasis()));
+        n.set("formula_overrides", dprRowOverrides(projectId, m.getResourceId(), m.getUnitRate()));
         mp.add(n);
       }
       row.set("manpower", mp);
@@ -220,6 +231,11 @@ public class GetDprDetailsTool implements Tool {
         n.put("fuel_litres", e.getFuelLitres() == null ? null : e.getFuelLitres().doubleValue());
         n.put("operator_name", e.getOperatorName());
         n.put("availability_status", e.getAvailabilityStatus() == null ? null : e.getAvailabilityStatus().name());
+        n.put("unit_rate", e.getUnitRate() == null ? null : e.getUnitRate().doubleValue());
+        n.put("unit_rate_basis", e.getUnitRateBasis());
+        n.put("line_cost", e.getLineCost() == null ? null : e.getLineCost().doubleValue());
+        n.put("cost_formula", equipmentCostFormula(e.getUnitRateBasis()));
+        n.set("formula_overrides", dprRowOverrides(projectId, e.getResourceId(), e.getUnitRate()));
         eq.add(n);
       }
       row.set("equipment", eq);
@@ -233,6 +249,10 @@ public class GetDprDetailsTool implements Tool {
         n.put("source", m.getSource());
         n.put("vendor_name", m.getVendorName());
         n.put("batch_no", m.getBatchNo());
+        n.put("unit_rate", m.getUnitRate() == null ? null : m.getUnitRate().doubleValue());
+        n.put("line_cost", m.getLineCost() == null ? null : m.getLineCost().doubleValue());
+        n.put("cost_formula", "rate × qty");
+        n.set("formula_overrides", dprRowOverrides(projectId, m.getResourceId(), m.getUnitRate()));
         mat.add(n);
       }
       row.set("materials", mat);
@@ -308,6 +328,43 @@ public class GetDprDetailsTool implements Tool {
 
   private static String orNull(String s) {
     return s == null || s.isBlank() ? null : s.trim();
+  }
+
+  private static String manpowerCostFormula(String basis) {
+    return equipmentCostFormula(basis);
+  }
+
+  private static String equipmentCostFormula(String basis) {
+    if (basis == null) return "rate × NOS";
+    String b = basis.trim().toUpperCase();
+    return switch (b) {
+      case "HOUR" -> "rate × NOS × hours";
+      case "EACH" -> "rate × qty";
+      default -> "rate × NOS";
+    };
+  }
+
+  /**
+   * Build the formula_overrides array for a DPR line. Always carries the known
+   * core-math gap ({@code dpr_line_cost_uses_base_rate}) because
+   * {@code DailyProgressReportService.lookupAssignmentSnapshot} reads
+   * {@code Resource.cost_per_unit} directly and ignores
+   * {@code ProjectResource.rateOverride}. When the resource id + project id are
+   * known we additionally call the resolver and flag rate drift if the DPR's
+   * captured rate disagrees with what the project would charge today.
+   */
+  private ArrayNode dprRowOverrides(UUID projectId, UUID resourceId, java.math.BigDecimal dprRate) {
+    ArrayNode notes = objectMapper.createArrayNode();
+    notes.add("dpr_line_cost_uses_base_rate");
+    if (projectId == null || resourceId == null || dprRate == null) return notes;
+    EffectiveRate er = rateResolver.resolve(projectId, resourceId);
+    if (er.rate() != null && er.rate().compareTo(dprRate) != 0) {
+      notes.add("dpr_rate_mismatches_current_effective_rate");
+    }
+    if (er.overrideApplied()) {
+      notes.add("rate_overridden_per_project");
+    }
+    return notes;
   }
 
   @Override

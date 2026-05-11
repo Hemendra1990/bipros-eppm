@@ -29,8 +29,14 @@ public class QueryClickHouseTool extends ProjectScopedTool {
 
     @Override
     public String description() {
-        return "Read-only SQL against the analytics warehouse. SELECT only; every query MUST include "
-                + "a `project_id` filter (use IN for multi-project). Schema:\n\n" + schemaCatalog.full();
+        return "Use this ONLY when no specialised tool exists. For resources / cost / DPR / "
+                + "assignment questions on a single project, prefer the live JPA tools "
+                + "(find_resource_deployment, list_activity_resources, "
+                + "summarize_activity_resources, get_resource_profile, cost_breakdown, "
+                + "query_dpr, get_dpr_details) — see JPA-FIRST ROUTING in the system prompt. "
+                + "Read-only SQL against the analytics warehouse. SELECT only; every query MUST "
+                + "include a `project_id` filter (use IN for multi-project). Schema:\n\n"
+                + schemaCatalog.full();
     }
 
     @Override
@@ -51,8 +57,17 @@ public class QueryClickHouseTool extends ProjectScopedTool {
     protected ToolResult doExecute(JsonNode input, AiContext ctx) {
         String sql = input.path("sql").asText();
         int rowLimit = input.path("row_limit").asInt(500);
+        // When the chat has a project in scope (user is on a project page or the
+        // orchestrator has already resolved one), lock the SQL guard to that
+        // single project. The LLM cannot then pick a different project_id —
+        // SqlGuard will reject any UUID literal not in this list.
+        // When no project is in scope, fall back to the user's accessible scope
+        // (admin → all non-archived projects, non-admin → their scoped list).
+        List<UUID> effectiveScope =
+                ctx.projectId() != null ? List.of(ctx.projectId()) : ctx.scopedProjectIds();
         try {
-            ClickHouseQueryService.QueryResult result = queryService.runGuarded(sql, ctx.scopedProjectIds(), rowLimit);
+            ClickHouseQueryService.QueryResult result =
+                    queryService.runGuarded(sql, effectiveScope, rowLimit);
             return ToolResult.table("Query returned " + result.rowCount() + " rows" +
                     (result.truncated() ? " (truncated)" : ""), result.rows(), new String[]{"rows"});
         } catch (Exception e) {
