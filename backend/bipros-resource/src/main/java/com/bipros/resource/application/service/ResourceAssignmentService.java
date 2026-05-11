@@ -87,15 +87,21 @@ public class ResourceAssignmentService {
           UUID effectiveRoleId = resolveEffectiveRoleId(a, resourceMap);
           ResourceRole effectiveRole = effectiveRoleId == null ? null : roleMap.get(effectiveRoleId);
           ResourceRole assignmentRole = a.getRoleId() == null ? null : roleMap.get(a.getRoleId());
+          Resource resource = a.getResourceId() == null ? null : resourceMap.get(a.getResourceId());
+          // Mirror the single-row hydrate() logic: prefer the resource's own unit (snapshotted
+          // from its rate master) so equipment/material assignments surface "Day", "Bag", "Nos"
+          // even when the role has no productivityUnit. Fall back to the role's productivityUnit
+          // for role-only / unstaffed slots where no resource is yet attached.
+          String unit = (resource != null && resource.getUnit() != null && !resource.getUnit().isBlank())
+              ? resource.getUnit()
+              : (effectiveRole == null ? null : effectiveRole.getProductivityUnit());
           return ResourceAssignmentResponse.from(a,
-              a.getResourceId() == null ? null : resourceMap.get(a.getResourceId()) == null
-                  ? null
-                  : resourceMap.get(a.getResourceId()).getName(),
+              resource == null ? null : resource.getName(),
               a.getActivityId() == null ? null : activityNames.get(a.getActivityId()),
               assignmentRole == null ? null : assignmentRole.getName(),
               effectiveRoleId,
               effectiveRole == null ? null : effectiveRole.getName(),
-              effectiveRole == null ? null : effectiveRole.getProductivityUnit());
+              unit);
         })
         .toList();
   }
