@@ -365,6 +365,70 @@ public class AnalyticsEtlService {
         clickHouse.execute(sql, params);
     }
 
+    /**
+     * Field-issue log entries attached to a DPR row. Expected ClickHouse DDL is in
+     * {@code docker/clickhouse-init.sql} (table {@code fact_dpr_issues_daily}). One row per
+     * issue per upsert; the engine ({@code ReplacingMergeTree(_version)}) collapses to the
+     * highest version on FINAL queries, so a PATCH that flips status produces a strictly
+     * newer row.
+     *
+     * <p>{@code resolutionAgeHours} is precomputed by the caller (or null when the issue is
+     * still open) to keep aggregation cheap downstream.
+     */
+    public void insertDprIssue(
+            UUID projectId, UUID dprId, UUID issueId, UUID activityId, String activityName,
+            UUID supervisorResourceId, String supervisorName,
+            UUID assignedToResourceId, String assignedToName,
+            LocalDate reportDate, Instant openedAt, Instant resolvedAt,
+            Double resolutionAgeHours,
+            String category, String severity, String status,
+            String title, String description,
+            Double chainageFromM, Double chainageToM) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_issues_daily
+            (project_id, dpr_id, issue_id, activity_id, activity_name,
+             supervisor_resource_id, supervisor_name,
+             assigned_to_resource_id, assigned_to_name,
+             report_date, opened_at, resolved_at, resolution_age_hours,
+             category, severity, status, title, description,
+             chainage_from_m, chainage_to_m,
+             event_ts, _version)
+            VALUES (:projectId, :dprId, :issueId, :activityId, :activityName,
+                    :supervisorResourceId, :supervisorName,
+                    :assignedToResourceId, :assignedToName,
+                    :reportDate, :openedAt, :resolvedAt, :resolutionAgeHours,
+                    :category, :severity, :status, :title, :description,
+                    :chainageFromM, :chainageToM,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("dprId", dprId);
+        params.put("issueId", issueId);
+        params.put("activityId", activityId);
+        params.put("activityName", emptyIfNull(activityName));
+        params.put("supervisorResourceId", supervisorResourceId);
+        params.put("supervisorName", emptyIfNull(supervisorName));
+        params.put("assignedToResourceId", assignedToResourceId);
+        params.put("assignedToName", emptyIfNull(assignedToName));
+        params.put("reportDate", reportDate);
+        params.put("openedAt", openedAt);
+        params.put("resolvedAt", resolvedAt);
+        params.put("resolutionAgeHours", resolutionAgeHours);
+        params.put("category", emptyIfNull(category));
+        params.put("severity", emptyIfNull(severity));
+        params.put("status", emptyIfNull(status));
+        params.put("title", emptyIfNull(title));
+        params.put("description", emptyIfNull(description));
+        params.put("chainageFromM", chainageFromM);
+        params.put("chainageToM", chainageToM);
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
+    }
+
     public void insertRiskSnapshotDaily(
             UUID projectId, UUID riskId, LocalDate date,
             Float probability, BigDecimal impactCost, Integer impactDays,

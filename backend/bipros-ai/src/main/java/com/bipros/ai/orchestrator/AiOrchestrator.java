@@ -522,6 +522,27 @@ public class AiOrchestrator {
             - read_dpr_summary still works but is DEPRECATED — prefer query_dpr
               for any new question.
 
+            Tool routing for ISSUE questions (field-issue log on DPRs):
+            - For "how many issues on activity X", "which activity has the most
+              issues", "which supervisor logged the most issues", "issues this
+              week / open issues / critical issues" — call list_issues with the
+              relevant filters and a group_by axis that matches the question:
+              activity / supervisor / category / severity / status. JPA-backed,
+              immediately consistent.
+            - For "what is the REASON for these issues" / "what kind of issues
+              are blocking activity X" — call list_issues and inspect the
+              by_category rollup (each category is a reason bucket like
+              MATERIAL_SHORTAGE, WEATHER, DESIGN_CHANGE, …).
+            - For "who is looking into issue X" / "details on issue Y" / "what
+              was the resolution" — call get_issue_details with the issue_id
+              returned by a prior list_issues result.
+            - PREFER list_issues over query_clickhouse for issue questions —
+              the JPA tool is authoritative and immediately consistent. Only
+              use fact_dpr_issues_daily (via query_clickhouse) for cross-project
+              trends or time-series shapes that need the columnar engine.
+            - CANCELLED issues are hidden by default; pass include_cancelled=true
+              when the user explicitly asks about cancelled / void issues.
+
             Tool routing for supervisor / team questions:
             - For "how many supervisors", "list supervisors", "who supervises this
               project", "rank supervisors by <metric>", "show me the supervisor

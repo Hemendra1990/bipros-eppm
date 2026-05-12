@@ -45,6 +45,7 @@ public record DailyProgressReportResponse(
     List<DprEquipmentRow> equipment,
     List<DprMaterialRow> materials,
     List<DprAttachmentResponse> attachments,
+    List<DprIssueRow> issues,
     List<String> warnings
 ) {
   /**
@@ -53,22 +54,23 @@ public record DailyProgressReportResponse(
    * as a placeholder; the list endpoint always computes the real cumulative via the service.
    */
   public static DailyProgressReportResponse from(DailyProgressReport r) {
-    return from(r, r.getQtyExecuted(), List.of(), List.of(), List.of(), List.of(), List.of());
+    return from(r, r.getQtyExecuted(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
   }
 
   public static DailyProgressReportResponse from(DailyProgressReport r, BigDecimal cumulativeQty) {
-    return from(r, cumulativeQty, List.of(), List.of(), List.of(), List.of(), List.of());
+    return from(r, cumulativeQty, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
   }
 
-  /** Read-path overload — children + attachments, no warnings. */
+  /** Read-path overload — children + attachments + issues, no warnings. */
   public static DailyProgressReportResponse from(
       DailyProgressReport r,
       BigDecimal cumulativeQty,
       List<DprManpowerRow> manpower,
       List<DprEquipmentRow> equipment,
       List<DprMaterialRow> materials,
-      List<DprAttachmentResponse> attachments) {
-    return from(r, cumulativeQty, manpower, equipment, materials, attachments, List.of());
+      List<DprAttachmentResponse> attachments,
+      List<DprIssueRow> issues) {
+    return from(r, cumulativeQty, manpower, equipment, materials, attachments, issues, List.of());
   }
 
   public static DailyProgressReportResponse from(
@@ -78,6 +80,7 @@ public record DailyProgressReportResponse(
       List<DprEquipmentRow> equipment,
       List<DprMaterialRow> materials,
       List<DprAttachmentResponse> attachments,
+      List<DprIssueRow> issues,
       List<String> warnings) {
     return new DailyProgressReportResponse(
         r.getId(),
@@ -110,6 +113,7 @@ public record DailyProgressReportResponse(
         equipment,
         materials,
         attachments,
+        issues,
         warnings
     );
   }

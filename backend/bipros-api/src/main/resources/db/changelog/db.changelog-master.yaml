@@ -129,3 +129,5 @@ databaseChangeLog:
       file: db/changelog/075-dpr-attachments.yaml
   - include:
       file: db/changelog/076-dpr-manpower-idle-hours.yaml
+  - include:
+      file: db/changelog/077-dpr-issues.yaml

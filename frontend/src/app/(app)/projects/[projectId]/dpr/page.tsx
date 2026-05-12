@@ -13,6 +13,7 @@ import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { boqApi } from "@/lib/api/boqApi";
 import { resourceApi } from "@/lib/api/resourceApi";
+import { projectResourceApi } from "@/lib/api/projectResourceApi";
 // import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { Drawer } from "@/components/common/Drawer";
 import { TabTip } from "@/components/common/TabTip";
@@ -103,18 +104,33 @@ export default function DprPage() {
     [boqData]
   );
 
-  const { data: supervisorData } = useQuery({
-    queryKey: ["eligibleSupervisors", projectId],
-    queryFn: () => resourceApi.getEligibleSupervisors(projectId),
+  // Supervisor dropdown is sourced from the project resource pool — same query that powers the
+  // Resources → Supervisor tab and the activity-level supervisor picker, so the three views
+  // stay in sync. We previously called {@code resourceApi.getEligibleSupervisors} which filtered
+  // strictly on {@code resourceType.code = "LABOR" AND status = ACTIVE}; projects whose pool
+  // entries don't satisfy both came back empty and the DPR form fell back to "Other (free-text)"
+  // only — even when the user could clearly see supervisors in the pool tab. Reading the pool
+  // directly removes that gap. Free-text "Other" is still appended downstream.
+  const { data: poolData } = useQuery({
+    queryKey: ["resource-pool", projectId],
+    queryFn: () => projectResourceApi.listPool(projectId),
     enabled: !!projectId,
   });
   const supervisorOptions = useMemo(
     () =>
-      (supervisorData?.data ?? []).map((s) => ({
-        value: s.id,
-        label: s.roleName ? `${s.name} (${s.roleName})` : s.name,
-      })),
-    [supervisorData]
+      (poolData?.data ?? [])
+        .filter((p) => {
+          const t = (p.resourceTypeName ?? "").toLowerCase();
+          return t.includes("labor") || t.includes("labour") || t.includes("manpower");
+        })
+        .map((p) => ({
+          value: p.resourceId,
+          label: p.roleName
+            ? `${p.resourceName ?? p.resourceId} (${p.roleName})`
+            : (p.resourceName ?? p.resourceId),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [poolData]
   );
 
   const [fromInput, setFromInput] = useState<string>(() => oneMonthAgoIso());

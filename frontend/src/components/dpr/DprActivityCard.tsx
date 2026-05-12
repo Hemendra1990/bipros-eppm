@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  AlertTriangle,
   Briefcase,
   ChevronDown,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { chainageLabel } from "@/lib/format/chainage";
 import type { DailyProgressReportResponse, DprApprovalStatus } from "@/lib/types/dpr";
+import { SEVERITY_VARIANT, STATUS_VARIANT as ISSUE_STATUS_VARIANT, categoryLabel } from "./IssueBadges";
 
 interface Props {
   row: DailyProgressReportResponse;
@@ -47,12 +49,28 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
   const equipmentCount = (row.equipment ?? []).reduce((a, e) => a + (e.nos ?? 0), 0);
   const materialCount = (row.materials ?? []).length;
   const photoCount = (row.attachments ?? []).length;
+  // Issue chip excludes CANCELLED — matches the AI's default list_issues view so the count
+  // a PM sees on the card matches what the chat reports.
+  const liveIssues = (row.issues ?? []).filter((i) => i.status !== "CANCELLED");
+  const issueCount = liveIssues.length;
+  const openIssueCount = liveIssues.filter(
+    (i) => i.status !== "RESOLVED" && i.status !== "CLOSED"
+  ).length;
+  const hasCriticalOpen = liveIssues.some(
+    (i) => i.severity === "CRITICAL" && i.status !== "RESOLVED" && i.status !== "CLOSED"
+  );
+  const issueChipClass = hasCriticalOpen
+    ? "border-burgundy/30 bg-burgundy/10 text-burgundy"
+    : openIssueCount > 0
+      ? "border-bronze-warn/30 bg-bronze-warn/15 text-bronze-warn"
+      : "border-hairline bg-ivory text-slate";
   const hasAnyChip =
     row.qtyExecuted != null ||
     manpowerCount > 0 ||
     equipmentCount > 0 ||
     materialCount > 0 ||
-    photoCount > 0;
+    photoCount > 0 ||
+    issueCount > 0;
 
   return (
     <div className="rounded-lg border border-hairline bg-paper">
@@ -105,6 +123,17 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
                 {photoCount > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-ivory px-2 py-0.5 text-xs text-slate">
                     <ImageIcon className="h-3 w-3" /> {photoCount}
+                  </span>
+                )}
+                {issueCount > 0 && (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${issueChipClass}`}
+                    title={`${openIssueCount} open / ${issueCount} total`}
+                  >
+                    <AlertTriangle className="h-3 w-3" /> {issueCount}
+                    {openIssueCount > 0 && openIssueCount !== issueCount && (
+                      <span className="opacity-70">({openIssueCount} open)</span>
+                    )}
                   </span>
                 )}
               </div>
@@ -190,6 +219,42 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
               m.vendorName ?? "—",
             ])}
           />
+
+          {liveIssues.length > 0 && (
+            <div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate">Issues</div>
+              <div className="overflow-x-auto rounded-md border border-hairline">
+                <table className="w-full text-xs">
+                  <thead className="bg-ivory/60">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-semibold text-slate">Title</th>
+                      <th className="px-2 py-1 text-left font-semibold text-slate">Reason</th>
+                      <th className="px-2 py-1 text-left font-semibold text-slate">Severity</th>
+                      <th className="px-2 py-1 text-left font-semibold text-slate">Status</th>
+                      <th className="px-2 py-1 text-left font-semibold text-slate">Assigned</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveIssues.map((i) => (
+                      <tr key={i.id ?? i.title} className="border-t border-hairline">
+                        <td className="px-2 py-1 text-charcoal">{i.title}</td>
+                        <td className="px-2 py-1 text-charcoal">{categoryLabel(i.category)}</td>
+                        <td className="px-2 py-1">
+                          <Badge variant={SEVERITY_VARIANT[i.severity]}>{i.severity}</Badge>
+                        </td>
+                        <td className="px-2 py-1">
+                          <Badge variant={ISSUE_STATUS_VARIANT[i.status]} withDot>
+                            {i.status}
+                          </Badge>
+                        </td>
+                        <td className="px-2 py-1 text-charcoal">{i.assignedToName ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {(row.delayReason || row.safetyObservation || row.safetyIncidentType === "INCIDENT" ||
             row.safetyIncidentType === "NEAR_MISS") && (

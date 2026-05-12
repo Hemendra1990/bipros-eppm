@@ -75,6 +75,53 @@ export interface DprMaterialRow {
   remarks?: string | null;
 }
 
+export type IssueCategory =
+  | "SAFETY"
+  | "QUALITY"
+  | "MATERIAL_SHORTAGE"
+  | "EQUIPMENT_BREAKDOWN"
+  | "MANPOWER_SHORTAGE"
+  | "WEATHER"
+  | "DESIGN_CHANGE"
+  | "LAND_ACCESS"
+  | "UTILITY_CLASH"
+  | "PERMIT_DELAY"
+  | "SUBCONTRACTOR"
+  | "ENVIRONMENTAL"
+  | "OTHER";
+
+export type IssueSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type IssueStatus =
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "BLOCKED"
+  | "RESOLVED"
+  | "CLOSED"
+  | "CANCELLED";
+
+/**
+ * Field-issue row attached to a DPR. {@code id} is null on insert, non-null on update; the
+ * backend uses merge-by-id semantics (rows absent from a re-save are deleted). Status
+ * transitions to RESOLVED/CLOSED auto-stamp {@code resolvedAt} server-side; the client must
+ * not set it directly.
+ */
+export interface DprIssueRow {
+  id?: string | null;
+  title: string;
+  description?: string | null;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  supervisorResourceId?: string | null;
+  supervisorName?: string | null;
+  assignedToResourceId?: string | null;
+  assignedToName?: string | null;
+  openedAt?: string | null;
+  resolvedAt?: string | null;
+  resolutionNotes?: string | null;
+}
+
 /** Picker-mode option returned by GET .../resource-assignments/activity/{id}/picker?kind=… */
 export interface AssignedResourceOption {
   assignmentId: string;
@@ -122,6 +169,7 @@ export interface DprBaseFields {
   manpower?: DprManpowerRow[];
   equipment?: DprEquipmentRow[];
   materials?: DprMaterialRow[];
+  issues?: DprIssueRow[];
 }
 
 /**
@@ -149,6 +197,7 @@ export interface DailyProgressReportResponse extends DprBaseFields {
   equipment: DprEquipmentRow[];
   materials: DprMaterialRow[];
   attachments?: DprAttachment[];
+  issues?: DprIssueRow[];
   /** Server-side warnings (e.g. rate-missing:trade-name, assignment-not-found:uuid). */
   warnings?: string[];
 }

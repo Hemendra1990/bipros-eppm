@@ -344,6 +344,38 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.fact_dpr_material_daily (
   ORDER BY (project_id, dpr_id, material_row_id)
   TTL report_date + INTERVAL 7 YEAR;
 
+-- Field-issue log entries attached to a DPR row. Sort key (project_id, dpr_id, issue_id)
+-- matches the OLTP layout in project.dpr_issues and lets the AI tool answer "issues per
+-- activity / supervisor / category" with simple GROUP BYs. _version is currentTimeMillis()
+-- so a PATCH that flips status always produces a strictly newer row that wins on FINAL.
+CREATE TABLE IF NOT EXISTS bipros_analytics.fact_dpr_issues_daily (
+    project_id UUID,
+    dpr_id UUID,
+    issue_id UUID,
+    activity_id Nullable(UUID),
+    activity_name String,
+    supervisor_resource_id Nullable(UUID),
+    supervisor_name String,
+    assigned_to_resource_id Nullable(UUID),
+    assigned_to_name String,
+    report_date Date,
+    opened_at DateTime64(3),
+    resolved_at Nullable(DateTime64(3)),
+    resolution_age_hours Nullable(Float32),
+    category LowCardinality(String),
+    severity LowCardinality(String),
+    status LowCardinality(String),
+    title String,
+    description String,
+    chainage_from_m Nullable(Float64),
+    chainage_to_m Nullable(Float64),
+    event_ts DateTime64(3),
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+  PARTITION BY toYYYYMM(report_date)
+  ORDER BY (project_id, dpr_id, issue_id)
+  TTL report_date + INTERVAL 7 YEAR;
+
 CREATE TABLE IF NOT EXISTS bipros_analytics.fact_risk_snapshot_daily (
     project_id UUID,
     risk_id UUID,

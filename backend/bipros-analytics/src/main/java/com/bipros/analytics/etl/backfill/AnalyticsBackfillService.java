@@ -12,11 +12,13 @@ import com.bipros.cost.domain.repository.ActivityExpenseRepository;
 import com.bipros.project.domain.model.DailyActivityResourceOutput;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.model.DprEquipment;
+import com.bipros.project.domain.model.DprIssue;
 import com.bipros.project.domain.model.DprManpower;
 import com.bipros.project.domain.model.DprMaterial;
 import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.DprEquipmentRepository;
+import com.bipros.project.domain.repository.DprIssueRepository;
 import com.bipros.project.domain.repository.DprManpowerRepository;
 import com.bipros.project.domain.repository.DprMaterialRepository;
 import com.bipros.resource.domain.model.Resource;
@@ -48,6 +50,7 @@ public class AnalyticsBackfillService {
     private final DprManpowerRepository dprManpowerRepository;
     private final DprEquipmentRepository dprEquipmentRepository;
     private final DprMaterialRepository dprMaterialRepository;
+    private final DprIssueRepository dprIssueRepository;
     private final DailyActivityResourceOutputRepository outputRepository;
     private final ActivityExpenseRepository expenseRepository;
     private final RiskRepository riskRepository;
@@ -155,6 +158,30 @@ public class AnalyticsBackfillService {
                         m.getSource(), m.getVendorName(), m.getBatchNo());
             } catch (Exception e) {
                 log.warn("Backfill DPR material row failed: rowId={} error={}", m.getId(), e.getMessage());
+            }
+        }
+        for (DprIssue i : dprIssueRepository.findByDprIdIn(List.of(dpr.getId()))) {
+            try {
+                Double ageHours = null;
+                if (i.getResolvedAt() != null && i.getOpenedAt() != null) {
+                    ageHours = java.time.Duration.between(i.getOpenedAt(), i.getResolvedAt()).toMillis() / 3_600_000.0;
+                } else if (i.getOpenedAt() != null) {
+                    ageHours = java.time.Duration.between(i.getOpenedAt(), java.time.Instant.now()).toMillis() / 3_600_000.0;
+                }
+                etl.insertDprIssue(
+                        projectId, dpr.getId(), i.getId(),
+                        i.getActivityId(), i.getActivityName(),
+                        i.getSupervisorResourceId(), i.getSupervisorName(),
+                        i.getAssignedToResourceId(), i.getAssignedToName(),
+                        i.getReportDate(), i.getOpenedAt(), i.getResolvedAt(), ageHours,
+                        i.getCategory() != null ? i.getCategory().name() : null,
+                        i.getSeverity() != null ? i.getSeverity().name() : null,
+                        i.getStatus() != null ? i.getStatus().name() : null,
+                        i.getTitle(), i.getDescription(),
+                        i.getChainageFromM() != null ? i.getChainageFromM().doubleValue() : null,
+                        i.getChainageToM() != null ? i.getChainageToM().doubleValue() : null);
+            } catch (Exception e) {
+                log.warn("Backfill DPR issue row failed: rowId={} error={}", i.getId(), e.getMessage());
             }
         }
     }

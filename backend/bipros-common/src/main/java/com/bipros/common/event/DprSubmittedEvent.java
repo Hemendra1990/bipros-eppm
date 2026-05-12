@@ -16,9 +16,9 @@ import java.util.UUID;
  * {@code dprId} still resolves to a (now-removed) row and the event carries enough state to
  * skip a follow-up read.
  *
- * <p>{@code manpowerCount}/{@code equipmentCount}/{@code materialCount} let the analytics
- * listener know whether to fetch and ETL the new per-resource child rows (avoids a needless
- * extra query when there are none).
+ * <p>{@code manpowerCount}/{@code equipmentCount}/{@code materialCount}/{@code issueCount} let
+ * the analytics listener know whether to fetch and ETL the new per-resource child rows or issue
+ * rows (avoids a needless extra query when there are none).
  */
 public record DprSubmittedEvent(
     UUID projectId,
@@ -34,6 +34,7 @@ public record DprSubmittedEvent(
     int manpowerCount,
     int equipmentCount,
     int materialCount,
+    int issueCount,
     BigDecimal totalManpowerHours,
     BigDecimal totalEquipmentHours,
     BigDecimal totalFuelLitres
@@ -46,6 +47,6 @@ public record DprSubmittedEvent(
         return new DprSubmittedEvent(
                 projectId, dprId, reportDate, activityName, boqItemNo, qtyExecuted,
                 oldBoqItemNo, oldQty, eventType,
-                0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+                0, 0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 }

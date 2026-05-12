@@ -9,6 +9,7 @@ import com.bipros.project.application.dto.CreateDailyProgressReportRequest;
 import com.bipros.project.application.dto.DailyProgressReportResponse;
 import com.bipros.project.application.dto.DprAttachmentResponse;
 import com.bipros.project.application.dto.DprEquipmentRow;
+import com.bipros.project.application.dto.DprIssueRow;
 import com.bipros.project.application.dto.DprManpowerRow;
 import com.bipros.project.application.dto.DprMaterialRow;
 import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
@@ -16,11 +17,14 @@ import com.bipros.project.application.util.DprCostFormulas;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.model.DprAttachment;
 import com.bipros.project.domain.model.DprEquipment;
+import com.bipros.project.domain.model.DprIssue;
 import com.bipros.project.domain.model.DprManpower;
 import com.bipros.project.domain.model.DprMaterial;
+import com.bipros.project.domain.model.IssueStatus;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.DprAttachmentRepository;
 import com.bipros.project.domain.repository.DprEquipmentRepository;
+import com.bipros.project.domain.repository.DprIssueRepository;
 import com.bipros.project.domain.repository.DprManpowerRepository;
 import com.bipros.project.domain.repository.DprMaterialRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
@@ -33,6 +37,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,6 +45,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -72,6 +79,7 @@ public class DailyProgressReportService {
   private final DprEquipmentRepository equipmentRepository;
   private final DprMaterialRepository materialRepository;
   private final DprAttachmentRepository attachmentRepository;
+  private final DprIssueRepository issueRepository;
   private final com.bipros.project.infrastructure.storage.DprAttachmentStorageService attachmentStorage;
   private final ProjectRepository projectRepository;
   private final DailyActivityResourceOutputService ledgerService;
@@ -146,6 +154,9 @@ public class DailyProgressReportService {
 
     reconcileLedger(saved, savedManpower, savedEquipment, savedMaterial);
 
+    // Issues on create are all inserts — stamp parent context. Empty / null list means none.
+    List<DprIssue> savedIssues = upsertIssues(saved, request.issues(), List.of());
+
     BigDecimal cumulative = computeCumulative(saved.getProjectId(), saved.getActivityName(), saved.getReportDate());
     DailyProgressReportResponse response = DailyProgressReportResponse.from(
         saved, cumulative,
@@ -153,11 +164,12 @@ public class DailyProgressReportService {
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
         List.of(),
+        savedIssues.stream().map(DprIssueRow::from).toList(),
         warnings);
 
     auditService.logCreate("DailyProgressReport", saved.getId(), response);
     eventPublisher.publishEvent(buildEvent(saved, null, null, DprMutationType.CREATED,
-        savedManpower, savedEquipment, savedMaterial));
+        savedManpower, savedEquipment, savedMaterial, savedIssues));
     return response;
   }
 
@@ -219,6 +231,11 @@ public class DailyProgressReportService {
 
     reconcileLedger(saved, savedManpower, savedEquipment, savedMaterial);
 
+    // Issues use merge-by-id (diverges from full-replace) so lifecycle (status, resolvedAt,
+    // opened_at, version) survives a DPR re-save. See DprIssue javadoc.
+    List<DprIssue> existingIssues = issueRepository.findByDprIdOrderByOpenedAtAsc(saved.getId());
+    List<DprIssue> savedIssues = upsertIssues(saved, request.issues(), existingIssues);
+
     BigDecimal cumulative = computeCumulative(saved.getProjectId(), saved.getActivityName(), saved.getReportDate());
     List<DprAttachmentResponse> attachments = attachmentRepository.findByDprIdOrderByCreatedAtAsc(saved.getId())
         .stream().map(DprAttachmentResponse::from).toList();
@@ -228,11 +245,12 @@ public class DailyProgressReportService {
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
         attachments,
+        savedIssues.stream().map(DprIssueRow::from).toList(),
         warnings);
 
     auditService.logUpdate("DailyProgressReport", saved.getId(), "row", before, after);
     eventPublisher.publishEvent(buildEvent(saved, oldBoqItemNo, oldQty, DprMutationType.UPDATED,
-        savedManpower, savedEquipment, savedMaterial));
+        savedManpower, savedEquipment, savedMaterial, savedIssues));
     return after;
   }
 
@@ -259,7 +277,8 @@ public class DailyProgressReportService {
         manpowerRepository.findByDprIdOrderByTradeAsc(id).stream().map(DprManpowerRow::from).toList(),
         equipmentRepository.findByDprIdOrderByEquipmentTypeAsc(id).stream().map(DprEquipmentRow::from).toList(),
         materialRepository.findByDprIdOrderByMaterialNameAsc(id).stream().map(DprMaterialRow::from).toList(),
-        attachmentRepository.findByDprIdOrderByCreatedAtAsc(id).stream().map(DprAttachmentResponse::from).toList()
+        attachmentRepository.findByDprIdOrderByCreatedAtAsc(id).stream().map(DprAttachmentResponse::from).toList(),
+        issueRepository.findByDprIdOrderByOpenedAtAsc(id).stream().map(DprIssueRow::from).toList()
     );
   }
 
@@ -278,6 +297,7 @@ public class DailyProgressReportService {
     manpowerRepository.deleteByDprId(dprId);
     equipmentRepository.deleteByDprId(dprId);
     materialRepository.deleteByDprId(dprId);
+    issueRepository.deleteByDprId(dprId);
     // Photos: collect paths before the DB rows are removed, then drop binaries best-effort.
     List<DprAttachment> attachments = attachmentRepository.findByDprIdOrderByCreatedAtAsc(dprId);
     attachmentRepository.deleteByDprId(dprId);
@@ -321,6 +341,9 @@ public class DailyProgressReportService {
     Map<UUID, List<DprAttachmentResponse>> attachmentsByDpr = attachmentRepository.findByDprIdIn(ids).stream()
         .collect(Collectors.groupingBy(DprAttachment::getDprId,
             Collectors.mapping(DprAttachmentResponse::from, Collectors.toList())));
+    Map<UUID, List<DprIssueRow>> issuesByDpr = issueRepository.findByDprIdIn(ids).stream()
+        .collect(Collectors.groupingBy(DprIssue::getDprId,
+            Collectors.mapping(DprIssueRow::from, Collectors.toList())));
 
     Map<String, BigDecimal> running = new HashMap<>();
     List<DailyProgressReportResponse> out = new ArrayList<>(rows.size());
@@ -339,7 +362,8 @@ public class DailyProgressReportService {
               manpowerByDpr.getOrDefault(r.getId(), List.of()),
               equipmentByDpr.getOrDefault(r.getId(), List.of()),
               materialByDpr.getOrDefault(r.getId(), List.of()),
-              attachmentsByDpr.getOrDefault(r.getId(), List.of())));
+              attachmentsByDpr.getOrDefault(r.getId(), List.of()),
+              issuesByDpr.getOrDefault(r.getId(), List.of())));
         });
     return out;
   }
@@ -413,7 +437,8 @@ public class DailyProgressReportService {
       DprMutationType type,
       Collection<DprManpower> manpower,
       Collection<DprEquipment> equipment,
-      Collection<DprMaterial> material) {
+      Collection<DprMaterial> material,
+      Collection<DprIssue> issues) {
     BigDecimal totalManpowerHours = manpower.stream()
         .map(m -> add(m.getWorkingHours(), m.getOtHours()))
         .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -439,6 +464,7 @@ public class DailyProgressReportService {
         manpower.size(),
         equipment.size(),
         material.size(),
+        issues.size(),
         totalManpowerHours,
         totalEquipmentHours,
         totalFuelLitres);
@@ -448,6 +474,118 @@ public class DailyProgressReportService {
     BigDecimal aa = a != null ? a : BigDecimal.ZERO;
     BigDecimal bb = b != null ? b : BigDecimal.ZERO;
     return aa.add(bb);
+  }
+
+  // ─── Issue merge-by-id (deliberate divergence from full-replace) ──────────────────
+
+  /**
+   * Merge incoming issue rows against existing rows for the same DPR.
+   * <ul>
+   *   <li>Rows in {@code existing} whose id is absent from {@code incoming} are deleted.</li>
+   *   <li>Rows with a known id are updated in place — preserving {@code openedAt}, audit
+   *       fields, and version; auto-managing {@code resolvedAt} on status transitions.</li>
+   *   <li>Rows without an id are inserted with snapshots stamped from the parent DPR.</li>
+   *   <li>Rows whose id is present but doesn't match any existing row for this DPR are
+   *       rejected with a 409 (id from another DPR or stale optimistic).</li>
+   * </ul>
+   * {@code incoming == null} or empty means "clear all issues for this DPR".
+   */
+  private List<DprIssue> upsertIssues(
+      DailyProgressReport parent,
+      List<DprIssueRow> incoming,
+      List<DprIssue> existing) {
+    if (incoming == null) incoming = List.of();
+    Map<UUID, DprIssue> existingById = existing.stream()
+        .collect(Collectors.toMap(DprIssue::getId, e -> e));
+    Set<UUID> incomingIds = incoming.stream()
+        .map(DprIssueRow::id)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toSet());
+
+    // 1) Delete rows in DB that aren't in the payload.
+    List<DprIssue> toDelete = existing.stream()
+        .filter(e -> !incomingIds.contains(e.getId()))
+        .toList();
+    if (!toDelete.isEmpty()) {
+      issueRepository.deleteAllByIdInBatch(toDelete.stream().map(DprIssue::getId).toList());
+      issueRepository.flush();
+    }
+
+    // 2) Walk payload — update existing, insert new.
+    List<DprIssue> toSave = new ArrayList<>(incoming.size());
+    Instant now = Instant.now();
+    for (DprIssueRow row : incoming) {
+      if (row.id() != null) {
+        DprIssue current = existingById.get(row.id());
+        if (current == null) {
+          throw new BusinessRuleException(
+              "DPR_ISSUE_NOT_FOUND",
+              "Issue " + row.id() + " does not belong to DPR " + parent.getId()
+                  + " — refresh and try again.");
+        }
+        applyEditableFields(current, row, now);
+        toSave.add(current);
+      } else {
+        toSave.add(stampNewIssue(parent, row, now));
+      }
+    }
+    return toSave.isEmpty() ? List.of() : issueRepository.saveAll(toSave);
+  }
+
+  /** Apply editable fields from {@code row} onto {@code target}, auto-managing resolvedAt. */
+  private static void applyEditableFields(DprIssue target, DprIssueRow row, Instant now) {
+    IssueStatus oldStatus = target.getStatus();
+    target.setTitle(row.title());
+    target.setDescription(row.description());
+    target.setCategory(row.category());
+    target.setSeverity(row.severity());
+    target.setStatus(row.status());
+    target.setSupervisorResourceId(row.supervisorResourceId());
+    if (row.supervisorName() != null) target.setSupervisorName(row.supervisorName());
+    target.setAssignedToResourceId(row.assignedToResourceId());
+    if (row.assignedToName() != null) target.setAssignedToName(row.assignedToName());
+    target.setResolutionNotes(row.resolutionNotes());
+    boolean wasTerminal = oldStatus != null && oldStatus.resolvedAtTerminal();
+    boolean isTerminal = row.status() != null && row.status().resolvedAtTerminal();
+    if (!wasTerminal && isTerminal) {
+      target.setResolvedAt(now);
+    } else if (wasTerminal && !isTerminal) {
+      target.setResolvedAt(null);
+    }
+  }
+
+  /** Stamp a brand-new issue with snapshots from the parent DPR. */
+  private static DprIssue stampNewIssue(DailyProgressReport parent, DprIssueRow row, Instant now) {
+    UUID assignee = row.assignedToResourceId() != null
+        ? row.assignedToResourceId()
+        : (row.supervisorResourceId() != null ? row.supervisorResourceId() : parent.getSupervisorResourceId());
+    String assigneeName = row.assignedToName() != null
+        ? row.assignedToName()
+        : (row.supervisorName() != null ? row.supervisorName() : parent.getSupervisorName());
+    IssueStatus status = row.status() != null ? row.status() : IssueStatus.OPEN;
+    DprIssue issue = DprIssue.builder()
+        .dprId(parent.getId())
+        .projectId(parent.getProjectId())
+        .activityId(parent.getActivityId())
+        .activityName(parent.getActivityName())
+        .supervisorResourceId(row.supervisorResourceId() != null
+            ? row.supervisorResourceId() : parent.getSupervisorResourceId())
+        .supervisorName(row.supervisorName() != null ? row.supervisorName() : parent.getSupervisorName())
+        .assignedToResourceId(assignee)
+        .assignedToName(assigneeName)
+        .reportDate(parent.getReportDate())
+        .chainageFromM(parent.getChainageFromM())
+        .chainageToM(parent.getChainageToM())
+        .category(row.category())
+        .severity(row.severity())
+        .status(status)
+        .title(row.title())
+        .description(row.description())
+        .openedAt(now)
+        .resolvedAt(status.resolvedAtTerminal() ? now : null)
+        .resolutionNotes(row.resolutionNotes())
+        .build();
+    return issue;
   }
 
   // ─── Resource snapshot + ledger reconcile (DPR write path) ────────────────────────

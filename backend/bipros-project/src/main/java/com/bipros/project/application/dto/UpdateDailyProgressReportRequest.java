@@ -20,6 +20,12 @@ import java.util.UUID;
  * Full replacement of the row, not a sparse patch — the BOQ delta math depends on the old vs.
  * new qty in one transactional write. Child collections are also fully replaced (delete-by-dprId
  * then re-insert) so a missing list ⇒ no children.
+ *
+ * <p>{@code issues} is the exception: it uses <b>merge-by-id</b> semantics so issue lifecycle
+ * (status, resolvedAt) survives a DPR re-save. Rows with an existing {@code id} are updated in
+ * place; rows without {@code id} are inserted with snapshots from the parent DPR; rows present
+ * in the database but absent from this list are deleted. Sending {@code null} or empty list
+ * means "clear all issues for this DPR".
  */
 public record UpdateDailyProgressReportRequest(
     @NotNull LocalDate reportDate,
@@ -60,5 +66,6 @@ public record UpdateDailyProgressReportRequest(
 
     @Valid List<DprManpowerRow> manpower,
     @Valid List<DprEquipmentRow> equipment,
-    @Valid List<DprMaterialRow> materials
+    @Valid List<DprMaterialRow> materials,
+    @Valid List<DprIssueRow> issues
 ) {}

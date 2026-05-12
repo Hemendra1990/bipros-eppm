@@ -1,0 +1,92 @@
+databaseChangeLog:
+  # Field-issue log entries attached to a DPR row. Soft FK (dpr_id) to
+  # project.daily_progress_reports.id; activity / supervisor / report_date are snapshotted at
+  # create time and not re-synced. project_id is denormalised so RLS and SqlGuard can scope
+  # without joining the parent DPR.
+  - changeSet:
+      id: 077-create-dpr-issues
+      author: bipros
+      comment: |
+        Field-issue log on DPR rows: 0..N issues per DPR, each carrying category/severity/status
+        lifecycle. Edits route through DailyProgressReportService (merge-by-id) for batch saves
+        in the DPR drawer, or through the dedicated DprIssueController PATCH/DELETE for
+        post-save status changes. activity_id / supervisor_resource_id are stamped at create and
+        held immutable so the issue is anchored to the context it was logged in.
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: dpr_issues
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints: { primaryKey: true, nullable: false }
+              - column: { name: dpr_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: activity_id, type: UUID }
+              - column: { name: activity_name, type: VARCHAR(150) }
+              - column: { name: supervisor_resource_id, type: UUID }
+              - column: { name: supervisor_name, type: VARCHAR(150) }
+              - column: { name: assigned_to_resource_id, type: UUID }
+              - column: { name: assigned_to_name, type: VARCHAR(150) }
+              - column: { name: report_date, type: DATE, constraints: { nullable: false } }
+              - column: { name: chainage_from_m, type: BIGINT }
+              - column: { name: chainage_to_m, type: BIGINT }
+              - column:
+                  name: category
+                  type: VARCHAR(30)
+                  constraints: { nullable: false }
+              - column:
+                  name: severity
+                  type: VARCHAR(20)
+                  constraints: { nullable: false }
+                  defaultValue: MEDIUM
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints: { nullable: false }
+                  defaultValue: OPEN
+              - column: { name: title, type: VARCHAR(150), constraints: { nullable: false } }
+              - column: { name: description, type: VARCHAR(2000) }
+              - column: { name: opened_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: resolved_at, type: TIMESTAMP }
+              - column: { name: resolution_notes, type: VARCHAR(1000) }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_issues
+            indexName: idx_dpr_issue_dpr
+            columns:
+              - column: { name: dpr_id }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_issues
+            indexName: idx_dpr_issue_project_status
+            columns:
+              - column: { name: project_id }
+              - column: { name: status }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_issues
+            indexName: idx_dpr_issue_activity
+            columns:
+              - column: { name: project_id }
+              - column: { name: activity_id }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_issues
+            indexName: idx_dpr_issue_supervisor
+            columns:
+              - column: { name: project_id }
+              - column: { name: supervisor_resource_id }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_issues
+            indexName: idx_dpr_issue_report_date
+            columns:
+              - column: { name: project_id }
+              - column: { name: report_date }

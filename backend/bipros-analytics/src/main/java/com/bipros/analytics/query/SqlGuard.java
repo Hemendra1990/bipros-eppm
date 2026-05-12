@@ -45,6 +45,7 @@ public class SqlGuard {
             "fact_activity_progress_daily", "fact_resource_usage_daily", "fact_cost_daily",
             "fact_evm_daily", "fact_dpr_logs",
             "fact_dpr_manpower_daily", "fact_dpr_equipment_daily", "fact_dpr_material_daily",
+            "fact_dpr_issues_daily",
             "fact_risk_snapshot_daily", "fact_permit_lifecycle", "fact_labour_daily",
             "mv_project_kpi_daily", "mv_portfolio_scurve_weekly", "mv_activity_weekly"
     );

@@ -63,6 +63,7 @@ class DailyProgressReportServiceChildrenTest {
   @Mock private DprEquipmentRepository equipmentRepository;
   @Mock private DprMaterialRepository materialRepository;
   @Mock private com.bipros.project.domain.repository.DprAttachmentRepository attachmentRepository;
+  @Mock private com.bipros.project.domain.repository.DprIssueRepository issueRepository;
   @Mock private com.bipros.project.infrastructure.storage.DprAttachmentStorageService attachmentStorage;
   @Mock private ProjectRepository projectRepository;
   @Mock private DailyActivityResourceOutputService ledgerService;
@@ -82,10 +83,13 @@ class DailyProgressReportServiceChildrenTest {
   void setUp() {
     service = new DailyProgressReportService(
         dprRepository, manpowerRepository, equipmentRepository, materialRepository,
-        attachmentRepository, attachmentStorage,
+        attachmentRepository, issueRepository, attachmentStorage,
         projectRepository, ledgerService, auditService, eventPublisher);
     lenient().when(attachmentRepository.findByDprIdOrderByCreatedAtAsc(any())).thenReturn(java.util.List.of());
     lenient().when(attachmentRepository.findByDprIdIn(any())).thenReturn(java.util.List.of());
+    lenient().when(issueRepository.findByDprIdOrderByOpenedAtAsc(any())).thenReturn(java.util.List.of());
+    lenient().when(issueRepository.findByDprIdIn(any())).thenReturn(java.util.List.of());
+    lenient().when(issueRepository.saveAll(any())).thenAnswer(this::echoEntities);
     lenient().when(projectRepository.existsById(projectId)).thenReturn(true);
     lenient().when(dprRepository.sumQtyExecutedThroughDate(any(), any(), any()))
         .thenReturn(BigDecimal.ZERO);
@@ -114,7 +118,8 @@ class DailyProgressReportServiceChildrenTest {
         List.of(
             equipRow("Excavator", "Exc-45", 1, 10.0, 30.0),
             equipRow("Tipper", "Tipper-104", 2, 9.0, 50.0)),
-        List.of(matRow("Aggregate 20mm", "Cum", 12.0)));
+        List.of(matRow("Aggregate 20mm", "Cum", 12.0)),
+        null);
 
     DailyProgressReportResponse resp = service.create(projectId, req);
 
@@ -161,7 +166,8 @@ class DailyProgressReportServiceChildrenTest {
         null, null, null, null, null, null, null, null, null, null,
         List.of(mp("Operator", ManpowerCategory.SKILLED, 1, 11.0, 0.0)),  // 3 → 1
         List.of(),  // 2 → 0
-        List.of(matRow("Sand", "Cum", 5.0)));  // 1 → 1 (different)
+        List.of(matRow("Sand", "Cum", 5.0)),  // 1 → 1 (different)
+        null);
 
     service.update(projectId, dprId, req);
 

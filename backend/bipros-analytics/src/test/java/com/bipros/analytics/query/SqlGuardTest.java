@@ -49,6 +49,16 @@ class SqlGuardTest {
   }
 
   @Test
+  void acceptsDprIssuesFactTable() {
+    String sql =
+        "SELECT category, count() c FROM bipros_analytics.fact_dpr_issues_daily FINAL "
+            + "WHERE project_id = '"
+            + scopedA
+            + "' GROUP BY category LIMIT 100";
+    guard.validate(sql, List.of(scopedA, scopedB));
+  }
+
+  @Test
   void rejectsEqualsWithOutOfScopeProjectId() {
     String sql =
         "SELECT * FROM bipros_analytics.fact_dpr_logs WHERE project_id = '"

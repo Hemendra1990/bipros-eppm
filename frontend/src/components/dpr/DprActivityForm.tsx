@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Briefcase, HardHat, Info, Package, Save } from "lucide-react";
+import { AlertTriangle, Briefcase, HardHat, Info, Package, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
@@ -12,6 +12,7 @@ import type {
   DprAttachment,
   DprBaseFields,
   DprEquipmentRow,
+  DprIssueRow,
   DprManpowerRow,
   DprMaterialRow,
   Shift,
@@ -20,12 +21,13 @@ import type {
 import { ManpowerGrid } from "./ManpowerGrid";
 import { EquipmentGrid } from "./EquipmentGrid";
 import { MaterialGrid } from "./MaterialGrid";
+import { IssuesGrid } from "./IssuesGrid";
 import { SafetyDelaySection } from "./SafetyDelaySection";
 import { DprTotalsBar } from "./DprTotalsBar";
 import { DprPhotosSection, type PendingPhoto } from "./DprPhotosSection";
 import { DprVoiceAssistant } from "./DprVoiceAssistant";
 
-type Tab = "manpower" | "equipment" | "material";
+type Tab = "manpower" | "equipment" | "material" | "issues";
 
 interface FormState extends DprBaseFields {
   chainageFromRaw: string;
@@ -122,6 +124,7 @@ const initialState = (
       manpower: editing.manpower ?? [],
       equipment: editing.equipment ?? [],
       materials: editing.materials ?? [],
+      issues: editing.issues ?? [],
     };
   }
   return {
@@ -153,6 +156,7 @@ const initialState = (
     manpower: [],
     equipment: [],
     materials: [],
+    issues: [],
   };
 };
 
@@ -337,6 +341,10 @@ export function DprActivityForm({
     () => (state.materials ?? []).filter((r) => !!r.resourceAssignmentId).length,
     [state.materials]
   );
+  const issuesFilledCount = useMemo(
+    () => (state.issues ?? []).filter((r) => !!r.title?.trim()).length,
+    [state.issues]
+  );
 
   const supervisorAutoFilled = useMemo(() => {
     if (!state.activityId || !state.supervisorResourceId || supervisorIsOther) return false;
@@ -439,6 +447,10 @@ export function DprActivityForm({
     const manpower = (state.manpower ?? []).filter((r) => !!r.resourceAssignmentId);
     const equipment = (state.equipment ?? []).filter((r) => !!r.resourceAssignmentId);
     const materials = (state.materials ?? []).filter((r) => !!r.resourceAssignmentId);
+    // Issues use merge-by-id server-side: rows present in the DB but absent from this
+    // payload are deleted, so we must include EVERY issue the user can still see —
+    // including ones with no title yet aren't sent (treated as cancelled add).
+    const issues = (state.issues ?? []).filter((r) => !!r.title?.trim());
 
     const payload: DprBaseFields = {
       reportDate: state.reportDate,
@@ -467,6 +479,7 @@ export function DprActivityForm({
       manpower,
       equipment,
       materials,
+      issues,
     };
 
     setSubmitting(true);
@@ -796,6 +809,9 @@ export function DprActivityForm({
           <TabButton active={tab === "material"} onClick={() => setTab("material")}>
             <Package className="h-4 w-4" /> Material ({materialsFilledCount})
           </TabButton>
+          <TabButton active={tab === "issues"} onClick={() => setTab("issues")}>
+            <AlertTriangle className="h-4 w-4" /> Issues ({issuesFilledCount})
+          </TabButton>
         </div>
         <div className="px-5 py-4">
           {tab === "manpower" && (
@@ -823,6 +839,14 @@ export function DprActivityForm({
               reportDate={state.reportDate}
               rows={state.materials ?? []}
               onChange={(rows: DprMaterialRow[]) => patch({ materials: rows })}
+            />
+          )}
+          {tab === "issues" && (
+            <IssuesGrid
+              rows={state.issues ?? []}
+              onChange={(rows: DprIssueRow[]) => patch({ issues: rows })}
+              supervisorOptions={supervisorOptions}
+              defaultSupervisorName={state.supervisorName || undefined}
             />
           )}
         </div>

@@ -93,6 +93,22 @@ public class DataGraphCatalog {
               field-level work record. Filter by date range, supervisor_resource_id
               (preferred — stable FK), supervisor_name (string fallback), activity, WBS.
 
+            project.dpr_issues(id, dpr_id→daily_progress_reports, project_id,
+                activity_id→activity.activities, supervisor_resource_id→resource.resources
+                (who LOGGED it), assigned_to_resource_id→resource.resources (WHO IS LOOKING
+                INTO IT), report_date, opened_at, resolved_at,
+                category∈{SAFETY,QUALITY,MATERIAL_SHORTAGE,EQUIPMENT_BREAKDOWN,MANPOWER_SHORTAGE,
+                          WEATHER,DESIGN_CHANGE,LAND_ACCESS,UTILITY_CLASH,PERMIT_DELAY,
+                          SUBCONTRACTOR,ENVIRONMENTAL,OTHER},
+                severity∈{LOW,MEDIUM,HIGH,CRITICAL},
+                status∈{OPEN,IN_PROGRESS,BLOCKED,RESOLVED,CLOSED,CANCELLED},
+                title, description, resolution_notes)
+              Field-issue log entries (obstacles supervisors recorded against a DPR).
+              activity_id, supervisor_resource_id, report_date are SNAPSHOTTED at create
+              from the parent DPR and do not re-sync if the parent is later edited.
+              Counts per activity / supervisor / category are the headline rollups.
+              CANCELLED issues are excluded from default queries.
+
             project.daily_activity_resource_outputs(id, project_id, output_date, activity_id,
                 resource_id, qty_executed, unit, hours_worked, days_worked, remarks)
               GOLD productivity table. Join to productivity_norms via activity.work_activity_id.
@@ -149,6 +165,13 @@ public class DataGraphCatalog {
               ManpowerMaster.reporting_manager_id (HR). Some teams use one, some both.
             • DPR→Activity: string match daily_progress_reports.activity_name to
               activities.name (case-insensitive). Optional wbs_node_id link.
+            • DPR→Issue: dpr_issues.dpr_id = daily_progress_reports.id.
+              Issue→Activity: dpr_issues.activity_id (snapshot — may differ from current
+              DPR.activity_id if the parent DPR was edited).
+              Issue questions ("how many issues on activity X", "which supervisor logged
+              the most issues", "what is the reason of …") ⇒ call list_issues with the
+              matching group_by axis (activity / supervisor / category / severity / status).
+              For drill-down on one issue use get_issue_details.
             • Productivity actual vs norm: DailyActivityResourceOutput × ProductivityNorm
               via activities.work_activity_id (NOT activity_id directly).
             • Cost variance per activity: ActivityExpense (project_id, activity_id) ⇒
