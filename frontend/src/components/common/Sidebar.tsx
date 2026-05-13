@@ -88,7 +88,6 @@ const groups: NavGroup[] = [
       { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
       { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
       { name: "Resources", href: "/resources", icon: Users, adminOnly: true },
-      /* { name: "Manpower Dashboard", href: "/labour-master", icon: HardHat, adminOnly: true }, */
     ],
   },
   // Nationalities admin page exists at /admin/nationalities (still routable, still seeded
