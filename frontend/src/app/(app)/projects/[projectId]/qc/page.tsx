@@ -73,7 +73,7 @@ export default function QcPage() {
         />
       )}
       {activeTab === "types" && <QcTestTypesTable projectId={projectId} />}
-      {activeTab === "dashboard" && <QcDashboard projectId={projectId} />}
+      {activeTab === "dashboard" && <QcDashboard projectId={projectId} activityOptions={activityOptions} />}
     </div>
   );
 }

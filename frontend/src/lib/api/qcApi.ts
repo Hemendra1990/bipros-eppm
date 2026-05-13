@@ -70,8 +70,17 @@ export const qcApi = {
     apiClient.delete(`/v1/projects/${projectId}/qc/${id}`),
 
   // ─── Dashboard ───────────────────────────────────────────────────────────────
-  getDashboard: (projectId: string) =>
-    apiClient
-      .get<ApiResponse<QcDashboardResponse>>(`/v1/projects/${projectId}/qc/dashboard`)
-      .then((r) => r.data),
+  getDashboard: (projectId: string, filters: QcSessionFilters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.activityId) params.set("activityId", filters.activityId);
+    if (filters.outcome)    params.set("outcome", filters.outcome);
+    if (filters.from)       params.set("from", filters.from);
+    if (filters.to)         params.set("to", filters.to);
+    const qs = params.toString();
+    return apiClient
+      .get<ApiResponse<QcDashboardResponse>>(
+        `/v1/projects/${projectId}/qc/dashboard${qs ? `?${qs}` : ""}`
+      )
+      .then((r) => r.data);
+  },
 };

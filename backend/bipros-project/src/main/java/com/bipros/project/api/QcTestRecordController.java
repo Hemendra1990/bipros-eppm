@@ -76,7 +76,11 @@ public class QcTestRecordController {
     @GetMapping("/dashboard")
     @PreAuthorize("@projectAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<QcDashboardResponse>> dashboard(
-            @PathVariable UUID projectId) {
-        return ResponseEntity.ok(ApiResponse.ok(service.dashboard(projectId)));
+            @PathVariable UUID projectId,
+            @RequestParam(required = false) UUID activityId,
+            @RequestParam(required = false) QcOutcome outcome,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(ApiResponse.ok(service.dashboard(projectId, activityId, outcome, from, to)));
     }
 }

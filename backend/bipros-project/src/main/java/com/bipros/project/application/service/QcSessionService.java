@@ -19,7 +19,6 @@ import com.bipros.project.domain.repository.QcTestTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +26,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,11 +104,19 @@ public class QcSessionService {
     }
 
     @Transactional(readOnly = true)
-    public QcDashboardResponse dashboard(UUID projectId) {
-        long passCount = sessionRepository.countItemsByProjectIdAndOutcome(projectId, QcOutcome.PASS);
-        long failCount = sessionRepository.countItemsByProjectIdAndOutcome(projectId, QcOutcome.FAIL);
-        long repeatCount = sessionRepository.countItemsByProjectIdAndOutcome(projectId, QcOutcome.REPEAT);
-        long totalTests = passCount + failCount + repeatCount;
+    public QcDashboardResponse dashboard(UUID projectId, UUID activityId, QcOutcome outcomeFilter,
+                                         LocalDate from, LocalDate to) {
+        List<QcSession> sessions = sessionRepository.findAllByProjectIdAndFilters(
+            projectId, activityId, outcomeFilter, from, to);
+
+        List<QcTestItem> allItems = sessions.stream()
+            .flatMap(s -> s.getItems().stream())
+            .toList();
+
+        long passCount = allItems.stream().filter(i -> i.getOutcome() == QcOutcome.PASS).count();
+        long failCount = allItems.stream().filter(i -> i.getOutcome() == QcOutcome.FAIL).count();
+        long repeatCount = allItems.stream().filter(i -> i.getOutcome() == QcOutcome.REPEAT).count();
+        long totalTests = allItems.size();
 
         Double passRate = totalTests > 0
             ? BigDecimal.valueOf(passCount)
@@ -117,13 +125,18 @@ public class QcSessionService {
                 .doubleValue()
             : 0.0;
 
-        long todayTests = sessionRepository.countTodayItems(projectId, LocalDate.now());
+        LocalDate today = LocalDate.now();
+        long todayTests = sessions.stream()
+            .filter(s -> today.equals(s.getTestDate()))
+            .flatMap(s -> s.getItems().stream())
+            .count();
 
-        List<QcActivitySummary> byActivity = buildActivitySummaries(projectId);
+        List<QcActivitySummary> byActivity = buildActivitySummariesFromSessions(sessions);
 
-        List<QcTestItemResponse> recentFails = itemRepository
-            .findByProjectIdAndOutcome(projectId, QcOutcome.FAIL, PageRequest.of(0, 5))
-            .stream()
+        List<QcTestItemResponse> recentFails = allItems.stream()
+            .filter(i -> i.getOutcome() == QcOutcome.FAIL)
+            .sorted(Comparator.comparing(QcTestItem::getCreatedAt).reversed())
+            .limit(5)
             .map(QcTestItemResponse::from)
             .toList();
 
@@ -166,20 +179,17 @@ public class QcSessionService {
         }
     }
 
-    private List<QcActivitySummary> buildActivitySummaries(UUID projectId) {
-        List<Object[]> rows = sessionRepository.groupByActivityAndOutcome(projectId);
+    private List<QcActivitySummary> buildActivitySummariesFromSessions(List<QcSession> sessions) {
         Map<UUID, QcActivitySummaryBuilder> builders = new HashMap<>();
-        for (Object[] row : rows) {
-            UUID activityId = (UUID) row[0];
-            String activityName = (String) row[1];
-            QcOutcome outcome = (QcOutcome) row[2];
-            Long count = (Long) row[3];
-            QcActivitySummaryBuilder b = builders.computeIfAbsent(activityId,
-                k -> new QcActivitySummaryBuilder(activityId, activityName));
-            switch (outcome) {
-                case PASS -> b.pass += count;
-                case FAIL -> b.fail += count;
-                case REPEAT -> b.repeat += count;
+        for (QcSession s : sessions) {
+            QcActivitySummaryBuilder b = builders.computeIfAbsent(s.getActivityId(),
+                k -> new QcActivitySummaryBuilder(s.getActivityId(), s.getActivityName()));
+            for (QcTestItem item : s.getItems()) {
+                switch (item.getOutcome()) {
+                    case PASS -> b.pass++;
+                    case FAIL -> b.fail++;
+                    case REPEAT -> b.repeat++;
+                }
             }
         }
         return builders.values().stream()
