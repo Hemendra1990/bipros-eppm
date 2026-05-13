@@ -48,7 +48,6 @@ function ProjectDetailLayoutInner({
     { id: "gantt", label: "Gantt", href: null },
     { id: "network", label: "Network", href: null },
     { id: "dpr", label: "DPR", href: `/projects/${projectId}/dpr` },
-    { id: "qc", label: "QC", href: `/projects/${projectId}/qc` },
     // { id: "daily-outputs", label: "Daily Outputs", href: `/projects/${projectId}/daily-outputs` },
     { id: "capacity", label: "Capacity Util.", href: `/projects/${projectId}/capacity-utilization` },
     { id: "costs", label: "Costs", href: null },

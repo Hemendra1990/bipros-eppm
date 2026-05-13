@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronLeft } from "lucide-react";
 import { activityApi } from "@/lib/api/activityApi";
 import { qcApi } from "@/lib/api/qcApi";
 import { TabTip } from "@/components/common/TabTip";
@@ -35,6 +37,14 @@ export default function QcPage() {
 
   return (
     <div className="p-6">
+      <Link
+        href="/qc"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-slate hover:text-charcoal"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+        All projects
+      </Link>
+
       <TabTip
         title="Quality Control"
         description="Log field and lab test results against activities. Compare against IRC/MORTH thresholds and track pass/fail/repeat outcomes."
@@ -73,7 +83,9 @@ export default function QcPage() {
         />
       )}
       {activeTab === "types" && <QcTestTypesTable projectId={projectId} />}
-      {activeTab === "dashboard" && <QcDashboard projectId={projectId} activityOptions={activityOptions} />}
+      {activeTab === "dashboard" && (
+        <QcDashboard projectId={projectId} activityOptions={activityOptions} />
+      )}
     </div>
   );
 }
