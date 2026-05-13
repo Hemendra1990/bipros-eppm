@@ -81,8 +81,8 @@ export function QcSessionGrid({ sessions, onEdit, onDelete }: Props) {
 
         {/* ── Column headers ── */}
         <thead>
-          <tr className="border-b-2 border-gold/40 bg-charcoal text-xs font-semibold uppercase tracking-wider text-white/75">
-            <th className="w-10 px-3 py-3 text-center text-white/40">S.No</th>
+          <tr className="border-b-2 border-gold/40 bg-charcoal dark:bg-parchment text-xs font-semibold uppercase tracking-wider text-white/75 dark:text-white/60">
+            <th className="w-10 px-3 py-3 text-center text-white/40 dark:text-white/30">S.No</th>
             <th className="px-3 py-3 text-left" style={{ minWidth: 180 }}>Activity</th>
             <th className="px-3 py-3 text-left" style={{ minWidth: 130 }}>Test Date</th>
             <th className="px-3 py-3 text-left" style={{ minWidth: 100 }}>CH. From</th>
@@ -93,7 +93,7 @@ export function QcSessionGrid({ sessions, onEdit, onDelete }: Props) {
             <th className="px-3 py-3 text-right" style={{ minWidth: 110 }}>IRC Spec</th>
             <th className="px-3 py-3 text-center" style={{ minWidth: 90 }}>Outcome</th>
             <th className="px-3 py-3 text-left" style={{ minWidth: 150 }}>Lab / Inspector</th>
-            <th className="sticky right-0 w-16 bg-charcoal px-3 py-3 shadow-[-4px_0_8px_rgba(0,0,0,0.15)]" />
+            <th className="sticky right-0 w-16 bg-charcoal dark:bg-parchment px-3 py-3 shadow-[-4px_0_8px_rgba(0,0,0,0.15)]" />
           </tr>
         </thead>
 
@@ -110,7 +110,7 @@ export function QcSessionGrid({ sessions, onEdit, onDelete }: Props) {
                 key={item.id}
                 className={cn(
                   "border-b border-hairline/60 transition-colors hover:bg-gold/5",
-                  isEven ? "bg-white" : "bg-ivory/50",
+                  isEven ? "bg-paper" : "bg-ivory/50",
                   isGroupStart && "border-t-2 border-gold/20"
                 )}
               >
@@ -201,7 +201,7 @@ export function QcSessionGrid({ sessions, onEdit, onDelete }: Props) {
                 {/* Edit / Delete — sticky right, only on first item row of each session */}
                 <td className={cn(
                   "sticky right-0 px-2 py-2.5 shadow-[-4px_0_8px_rgba(0,0,0,0.06)]",
-                  isEven ? "bg-white" : "bg-ivory/50"
+                  isEven ? "bg-paper" : "bg-ivory/50"
                 )}>
                   {isFirstInSession && (
                     <div className="flex items-center justify-end gap-0.5">
