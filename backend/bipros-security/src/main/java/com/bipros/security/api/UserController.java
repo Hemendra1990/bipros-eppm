@@ -59,11 +59,13 @@ public class UserController {
     }
 
     @GetMapping
-    @PreAuthorize("hasPermission(null, 'ADMIN_USER.READ')")
+    @PreAuthorize("hasPermission(null, 'ADMIN_USER.READ') "
+            + "or (#roles != null and #roles.length() > 0 and hasPermission(null, 'DPR.CREATE'))")
     @Operation(summary = "List users",
-            description = "Retrieve a paginated list of all users (admin only). Optional "
-                    + "?roles=COMMA,SEPARATED,NAMES filters to enabled users holding any of "
-                    + "the given role names — used by the supervisor / staff picker.")
+            description = "Retrieve a paginated list of users. Unfiltered listing requires "
+                    + "ADMIN_USER.READ. The role-filtered form (?roles=COMMA,SEPARATED,NAMES) "
+                    + "is also reachable by DPR.CREATE callers — it powers the DPR supervisor "
+                    + "picker on the project pages.")
     public ResponseEntity<ApiResponse<PagedResponse<UserResponse>>> listUsers(
             Pageable pageable,
             @RequestParam(name = "roles", required = false) String roles) {
