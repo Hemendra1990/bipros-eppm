@@ -227,7 +227,11 @@ export function SupervisorAssignmentTab({ projectId, onCancel }: Props) {
   const saveMutation = useMutation({
     mutationFn: () =>
       activityApi.bulkSetSupervisor(projectId, {
-        supervisorResourceId: supervisorId,
+        // Phase 4.4 rename: body key is now `supervisorUserId` (the backend ignores the
+        // legacy `supervisorResourceId` and reads this instead). The value sourced here is
+        // still a Resource UUID until this tab's picker is repointed at the User pool —
+        // see TODO in the field initialiser above.
+        supervisorUserId: supervisorId,
         supervisorResourceName: selectedSupervisor?.name ?? null,
         activityIds: Array.from(checkedActivityIds),
       }),

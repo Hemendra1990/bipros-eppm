@@ -114,6 +114,20 @@ export interface UpdateActivityRequest {
   supervisorResourceName?: string | null;
 }
 
+/**
+ * Phase 4.4 RBAC: per-activity supervisor write. Mirrors the new User-based contract
+ * ({@code supervisorUserId} replaces the deprecated {@code supervisorResourceId}). Pass
+ * a UUID from {@code /v1/users?roles=SUPERVISOR,FOREMAN,SITE_ENGINEER,SITE_MANAGER}, or
+ * {@code null} to clear the supervisor on this activity.
+ */
+export interface SetSupervisorRequest {
+  /** User UUID (NOT a Resource UUID). Null clears the supervisor. */
+  supervisorUserId: string | null;
+  /** Display snapshot of the supervisor's name; persisted alongside the FK so list views
+   * don't need a second hop. Null is acceptable when clearing. */
+  supervisorName: string | null;
+}
+
 export const activityApi = {
   listActivities: (projectId: string, page = 0, size = 20) =>
     apiClient
@@ -213,13 +227,41 @@ export const activityApi = {
       .then((r) => r.data),
 
   /**
-   * Bulk-assign one supervisor (a LABOR Resource) across many activities. Powers the
-   * Resources → Supervisor sub-tab. Returns count updated.
+   * Set (or clear) the supervisor for a single activity. Writes
+   * {@code Activity.supervisorUserId} on the backend; the picker source is now
+   * {@code /v1/users?roles=SUPERVISOR,...} (Phase 4.4 RBAC) instead of the legacy
+   * project resource pool.
+   *
+   * Pass {@code supervisorUserId: null} to clear. The {@code supervisorName} snapshot
+   * is denormalised onto the row so the UI doesn't need a second hop to render the
+   * supervisor's name on activity / DPR lists.
+   */
+  setSupervisor: (
+    projectId: string,
+    activityId: string,
+    body: SetSupervisorRequest
+  ) =>
+    apiClient
+      .put<ApiResponse<ActivityResponse>>(
+        `/v1/projects/${projectId}/activities/${activityId}/supervisor`,
+        body
+      )
+      .then((r) => r.data),
+
+  /**
+   * Bulk-assign one supervisor (a User with SUPERVISOR / FOREMAN / SITE_ENGINEER /
+   * SITE_MANAGER role) across many activities. Powers the Resources → Supervisor sub-tab.
+   * Returns count updated.
+   *
+   * Phase 4.4 rename: the request body field is now {@code supervisorUserId} (User UUID),
+   * not {@code supervisorResourceId} (Resource UUID). Backend's legacy
+   * {@code BulkSupervisorRequest} is {@code @Deprecated}; the new contract carries a
+   * User id.
    */
   bulkSetSupervisor: (
     projectId: string,
     body: {
-      supervisorResourceId: string;
+      supervisorUserId: string;
       supervisorResourceName: string | null;
       activityIds: string[];
     }

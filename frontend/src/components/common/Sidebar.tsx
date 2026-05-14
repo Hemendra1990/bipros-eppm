@@ -25,6 +25,9 @@ const COLLAPSED_GROUPS_STORAGE_KEY = "bipros.sidebar.groups.v1";
 
 /**
  * Optional gating fields:
+ *   - {@code permission} requires the user to hold the named fine-grained code (e.g.
+ *     {@code "PROJECT.READ"}). Source of truth: Phase 2 backend resolves these into
+ *     {@code UserResponse.permissions} on {@code /v1/auth/me}. ADMIN short-circuits.
  *   - {@code module} requires VIEW-or-better access to the named IC-PMS module
  *   - {@code adminOnly} is shorthand for "ROLE_ADMIN required"
  *   - {@code requireRoles} is an OR list of acceptable roles
@@ -35,6 +38,7 @@ type NavItem = {
   name: string;
   href: string;
   icon: LucideIcon;
+  permission?: string;
   module?: IcpmsModule;
   adminOnly?: boolean;
   requireRoles?: readonly string[];
@@ -52,24 +56,24 @@ const groups: NavGroup[] = [
     label: "Plan",
     items: [
       { name: "Home", href: "/", icon: Home },
-      { name: "Portfolios", href: "/portfolios", icon: Briefcase },
-      { name: "Projects", href: "/projects", icon: FolderTree, module: "M1_WBS_GIS" },
-      { name: "EPS", href: "/eps", icon: Layers, module: "M1_WBS_GIS" },
-      { name: "OBS", href: "/obs", icon: Network, module: "M1_WBS_GIS" },
-      { name: "QC", href: "/qc", icon: ClipboardCheck, module: "M1_WBS_GIS" },
-      { name: "Dashboards", href: "/dashboards", icon: LayoutGrid, module: "M9_REPORTS" },
+      { name: "Portfolios", href: "/portfolios", icon: Briefcase, permission: "PORTFOLIO.READ" },
+      { name: "Projects", href: "/projects", icon: FolderTree, module: "M1_WBS_GIS", permission: "PROJECT.READ" },
+      { name: "EPS", href: "/eps", icon: Layers, module: "M1_WBS_GIS", permission: "PROJECT.READ" },
+      { name: "OBS", href: "/obs", icon: Network, module: "M1_WBS_GIS", permission: "PROJECT.READ" },
+      { name: "QC", href: "/qc", icon: ClipboardCheck, module: "M1_WBS_GIS", permission: "NCR.READ" },
+      { name: "Dashboards", href: "/dashboards", icon: LayoutGrid, module: "M9_REPORTS", permission: "REPORT.READ" },
     ],
   },
   {
     label: "Execute",
     items: [
-      { name: "Calendars", href: "/admin/calendars", icon: Calendar, module: "M2_SCHEDULE_EVM" },
+      { name: "Calendars", href: "/admin/calendars", icon: Calendar, module: "M2_SCHEDULE_EVM", permission: "SCHEDULE.READ" },
     ],
   },
   {
     label: "Control",
     items: [
-      { name: "Reports", href: "/reports", icon: BarChart3, module: "M9_REPORTS" },
+      { name: "Reports", href: "/reports", icon: BarChart3, module: "M9_REPORTS", permission: "REPORT.READ" },
     ],
   },
   /* {
@@ -86,9 +90,9 @@ const groups: NavGroup[] = [
     label: "Resources",
     adminOnly: true,
     items: [
-      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true },
-      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true },
-      { name: "Resources", href: "/resources", icon: Users, adminOnly: true },
+      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true, permission: "RESOURCE.READ" },
+      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true, permission: "RESOURCE.READ" },
+      { name: "Resources", href: "/resources", icon: Users, adminOnly: true, permission: "RESOURCE.READ" },
     ],
   },
   // Nationalities admin page exists at /admin/nationalities (still routable, still seeded
@@ -99,40 +103,41 @@ const groups: NavGroup[] = [
     adminOnly: true,
     items: [
       /* { name: "Categories", href: "/admin/manpower-categories", icon: FolderTree, adminOnly: true }, */
-      { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true },
-      { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true },
-      { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true },
-      { name: "Grades", href: "/admin/grades", icon: Award, adminOnly: true },
-      { name: "Material Categories", href: "/admin/material-categories", icon: FolderTree, adminOnly: true },
-      { name: "Rate Master", href: "/admin/rate-master", icon: Banknote, adminOnly: true },
-      { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true },
-      { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true },
-      { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true },
-      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true },
-      { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true },
-      { name: "Formulas", href: "/admin/formulas", icon: Calculator, adminOnly: true },
+      { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Grades", href: "/admin/grades", icon: Award, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Material Categories", href: "/admin/material-categories", icon: FolderTree, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Rate Master", href: "/admin/rate-master", icon: Banknote, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Formulas", href: "/admin/formulas", icon: Calculator, adminOnly: true, permission: "ADMIN_MASTER.READ" },
       {
         name: "Permits", href: "/permits", icon: ShieldCheck,
-        requireRoles: ["FOREMAN", "SITE_ENGINEER", "HSE_OFFICER", "PROJECT_MANAGER", "ADMIN"]
+        requireRoles: ["FOREMAN", "SITE_ENGINEER", "HSE_OFFICER", "PROJECT_MANAGER", "ADMIN"],
+        permission: "PERMIT.READ",
       },
-      { name: "Workflow Reference", href: "/permits/workflow", icon: Workflow },
+      { name: "Workflow Reference", href: "/permits/workflow", icon: Workflow, permission: "PERMIT.READ" },
     ],
   },
   {
     label: "Admin",
     adminOnly: true,
     items: [
-      { name: "Users", href: "/admin/users", icon: UsersRound, adminOnly: true },
-      { name: "Profiles", href: "/admin/profiles", icon: ShieldCheck, adminOnly: true },
-      { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true },
-      { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true },
-      { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true },
+      { name: "Users", href: "/admin/users", icon: UsersRound, adminOnly: true, permission: "ADMIN_USER.READ" },
+      { name: "Profiles", href: "/admin/profiles", icon: ShieldCheck, adminOnly: true, permission: "ADMIN_PROFILE.READ" },
+      { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true, permission: "ADMIN_ORG.READ" },
+      { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true, permission: "ADMIN_USER.READ" },
+      { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true, permission: "ADMIN_MASTER.READ" },
       // { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText, adminOnly: true },
       // { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
-      { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true },
-      { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true },
-      { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true },
-      { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true },
+      { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
+      { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
+      { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
     ],
   },
 ];
@@ -177,6 +182,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useAppStore();
   const { user, clearAuth } = useAuthStore();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
   const { isAdmin, hasAnyRole } = useAuth();
   const { canAccessModule } = useAccess();
   const router = useRouter();
@@ -190,10 +196,12 @@ export function Sidebar() {
     router.push("/auth/login");
   };
 
-  // Filter the static groups by the current user's roles + module access. ADMIN sees everything.
+  // Filter the static groups by the current user's roles + fine-grained permissions +
+  // module access. ADMIN sees everything (each gate short-circuits internally for admins).
   const itemVisible = (item: NavItem) => {
     if (item.adminOnly && !isAdmin) return false;
     if (item.requireRoles && !hasAnyRole(item.requireRoles)) return false;
+    if (item.permission && !hasPermission(item.permission)) return false;
     if (item.module && !canAccessModule(item.module)) return false;
     return true;
   };

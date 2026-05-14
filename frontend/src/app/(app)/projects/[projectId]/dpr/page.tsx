@@ -12,8 +12,7 @@ import type {
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { boqApi } from "@/lib/api/boqApi";
-import { resourceApi } from "@/lib/api/resourceApi";
-import { projectResourceApi } from "@/lib/api/projectResourceApi";
+import { userApi } from "@/lib/api/userApi";
 // import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { Drawer } from "@/components/common/Drawer";
 import { TabTip } from "@/components/common/TabTip";
@@ -104,33 +103,33 @@ export default function DprPage() {
     [boqData]
   );
 
-  // Supervisor dropdown is sourced from the project resource pool — same query that powers the
-  // Resources → Supervisor tab and the activity-level supervisor picker, so the three views
-  // stay in sync. We previously called {@code resourceApi.getEligibleSupervisors} which filtered
-  // strictly on {@code resourceType.code = "LABOR" AND status = ACTIVE}; projects whose pool
-  // entries don't satisfy both came back empty and the DPR form fell back to "Other (free-text)"
-  // only — even when the user could clearly see supervisors in the pool tab. Reading the pool
-  // directly removes that gap. Free-text "Other" is still appended downstream.
-  const { data: poolData } = useQuery({
-    queryKey: ["resource-pool", projectId],
-    queryFn: () => projectResourceApi.listPool(projectId),
-    enabled: !!projectId,
+  // Phase 4.4 RBAC: supervisor candidates come from the User pool, filtered server-side by
+  // the SUPERVISOR / FOREMAN / SITE_ENGINEER / SITE_MANAGER roles. Same source as
+  // SetSupervisorDialog so the activity-level picker and the DPR picker stay in sync. The
+  // option `value` is a User UUID (previously a Resource UUID); the picker still appends
+  // "Other (free-text)" downstream in DprActivityForm for ad-hoc names.
+  const supervisorRoles = useMemo(
+    () => ["SUPERVISOR", "FOREMAN", "SITE_ENGINEER", "SITE_MANAGER"],
+    []
+  );
+  const { data: supervisorUsers } = useQuery({
+    queryKey: ["users", "by-roles", supervisorRoles],
+    queryFn: () => userApi.listByRoles(supervisorRoles),
   });
   const supervisorOptions = useMemo(
     () =>
-      (poolData?.data ?? [])
-        .filter((p) => {
-          const t = (p.resourceTypeName ?? "").toLowerCase();
-          return t.includes("labor") || t.includes("labour") || t.includes("manpower");
+      (supervisorUsers ?? [])
+        .map((u) => {
+          // Personnel-master employeeCode is the natural identifier on the picker row;
+          // fall back to username so legacy / admin users without a code still render.
+          const code = u.employeeCode || u.username;
+          return {
+            value: u.id,
+            label: code && code !== u.name ? `${code} — ${u.name}` : u.name,
+          };
         })
-        .map((p) => ({
-          value: p.resourceId,
-          label: p.roleName
-            ? `${p.resourceName ?? p.resourceId} (${p.roleName})`
-            : (p.resourceName ?? p.resourceId),
-        }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [poolData]
+    [supervisorUsers]
   );
 
   const [fromInput, setFromInput] = useState<string>(() => oneMonthAgoIso());
