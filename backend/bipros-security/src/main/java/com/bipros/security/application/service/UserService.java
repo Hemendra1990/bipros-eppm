@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,6 +52,7 @@ public class UserService {
     private final ProfileRepository profileRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final CurrentUserService currentUserService;
 
     @Transactional(readOnly = true)
     public UserResponse getCurrentUser() {
@@ -237,8 +239,14 @@ public class UserService {
                 extractRoles(user),
                 profile != null ? profile.getId() : null,
                 profile != null ? profile.getName() : null,
-                List.of()
+                List.of(),
+                effectivePermissions(user)
         );
+    }
+
+    /** Effective permission union for {@code user}, sorted ascending for stable client diffs. */
+    private List<String> effectivePermissions(User user) {
+        return new ArrayList<>(new TreeSet<>(currentUserService.permissionsFor(user)));
     }
 
     private Map<UUID, Profile> loadProfilesFor(List<User> users) {

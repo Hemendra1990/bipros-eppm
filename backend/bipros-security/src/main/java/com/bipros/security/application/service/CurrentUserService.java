@@ -99,26 +99,35 @@ public class CurrentUserService {
      * empty immutable set is returned. The returned set is always immutable.
      */
     public Set<String> getEffectivePermissions() {
-        Optional<User> currentUser = getCurrentUser();
-        if (currentUser.isEmpty()) {
+        return getCurrentUser().map(this::permissionsFor).orElse(Set.of());
+    }
+
+    /**
+     * Compute the effective permission union for an arbitrary {@link User} reference, independent
+     * of the {@code SecurityContext}. Used at JWT-issue time (login / refresh) before any
+     * authentication has been planted into the context, and anywhere else a permission set is
+     * needed for a user other than the current principal.
+     *
+     * <p>Semantics mirror {@link #getEffectivePermissions()}: union of
+     * {@link RolePermissionMatrix#permissionsForAll(java.util.Collection)} over the user's role
+     * names plus the user's assigned {@link Profile#getPermissions()}. Returns an immutable set;
+     * empty if {@code user} is {@code null}.
+     */
+    public Set<String> permissionsFor(User user) {
+        if (user == null) {
             return Set.of();
         }
-        User user = currentUser.get();
-
+        Set<String> result = new HashSet<>();
         Set<String> roleNames = user.getRoles().stream()
                 .map(ur -> ur.getRole().getName())
-                .collect(Collectors.toSet());
-        Set<String> rolePermissions = RolePermissionMatrix.permissionsForAll(roleNames);
-
-        Set<String> profilePermissions = user.getProfileId() == null
-                ? Set.of()
-                : profileRepository.findById(user.getProfileId())
-                        .map(Profile::getPermissions)
-                        .orElse(Set.of());
-
-        Set<String> union = new HashSet<>(rolePermissions);
-        union.addAll(profilePermissions);
-        return Set.copyOf(union);
+                .collect(Collectors.toUnmodifiableSet());
+        result.addAll(RolePermissionMatrix.permissionsForAll(roleNames));
+        if (user.getProfileId() != null) {
+            profileRepository.findById(user.getProfileId())
+                    .map(Profile::getPermissions)
+                    .ifPresent(result::addAll);
+        }
+        return Set.copyOf(result);
     }
 
     /**
