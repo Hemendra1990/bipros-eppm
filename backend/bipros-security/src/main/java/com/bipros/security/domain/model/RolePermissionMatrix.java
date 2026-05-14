@@ -63,7 +63,10 @@ public final class RolePermissionMatrix {
                 "AI.READ"
         ));
 
-        // 5. PROJECT_MANAGER — existing PROJECT_MANAGER profile + DPR + PROJECT_MEMBER + PERMIT.
+        // 5. PROJECT_MANAGER — existing PROJECT_MANAGER profile + DPR + PROJECT_MEMBER + PERMIT
+        //     + read-through on site-ops modules + procurement approval. Carries PORTFOLIO.READ
+        //     so the programme dashboard / EPS / portfolios pages are reachable for project
+        //     rollups (PM doesn't *own* portfolios but does view them).
         m.put("PROJECT_MANAGER", Set.of(
                 "PROJECT.CREATE", "PROJECT.READ", "PROJECT.UPDATE", "PROJECT.DELETE", "PROJECT.EXPORT",
                 "ACTIVITY.CREATE", "ACTIVITY.READ", "ACTIVITY.UPDATE", "ACTIVITY.DELETE",
@@ -76,8 +79,18 @@ public final class RolePermissionMatrix {
                 "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE",
                 "CONTRACT.READ", "CONTRACT.UPDATE",
                 "DPR.READ", "DPR.APPROVE",
+                "NCR.READ", "NCR.APPROVE",
+                "SAFETY.READ",
+                "PORTFOLIO.READ",
+                "ADMIN_MASTER.READ",
                 "PROJECT_MEMBER.READ", "PROJECT_MEMBER.MANAGE",
                 "PERMIT.READ", "PERMIT.APPROVE",
+                "WORKFRONT.READ",
+                "SNAG.READ",
+                "SHIFT_HANDOVER.READ",
+                "ATTENDANCE.READ",
+                "CHECKLIST.READ",
+                "PROCUREMENT_REQUEST.READ", "PROCUREMENT_REQUEST.APPROVE",
                 "REPORT.READ", "REPORT.EXPORT",
                 "AI.READ", "AI.WRITE"
         ));
@@ -118,26 +131,29 @@ public final class RolePermissionMatrix {
                 "AI.READ"
         ));
 
-        // 9. STORE_MANAGER — store / inventory focus.
+        // 9. STORE_MANAGER — store / inventory focus + procurement-request approval.
         m.put("STORE_MANAGER", Set.of(
                 "PROJECT.READ",
                 "RESOURCE.READ", "RESOURCE.UPDATE",
                 "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE",
+                "PROCUREMENT_REQUEST.READ", "PROCUREMENT_REQUEST.APPROVE",
                 "REPORT.READ",
                 "AI.READ"
         ));
 
-        // 10. PROCUREMENT_OFFICER — buying / contract intake.
+        // 10. PROCUREMENT_OFFICER — buying / contract intake + procurement-request approval.
         m.put("PROCUREMENT_OFFICER", Set.of(
                 "PROJECT.READ",
                 "RESOURCE.READ", "RESOURCE.UPDATE",
                 "CONTRACT.READ", "CONTRACT.UPDATE",
                 "DOCUMENT.CREATE", "DOCUMENT.READ",
+                "PROCUREMENT_REQUEST.READ", "PROCUREMENT_REQUEST.APPROVE",
                 "REPORT.READ",
                 "AI.READ"
         ));
 
-        // 11. SITE_MANAGER — existing SITE_MANAGER profile + DPR APPROVE + NCR + SAFETY + PERMIT read.
+        // 11. SITE_MANAGER — site-manager profile + DPR APPROVE + NCR + SAFETY + PERMIT read
+        //     + read-through on site-ops + attendance approval.
         m.put("SITE_MANAGER", Set.of(
                 "PROJECT.READ",
                 "ACTIVITY.READ", "ACTIVITY.UPDATE",
@@ -149,11 +165,18 @@ public final class RolePermissionMatrix {
                 "NCR.READ",
                 "SAFETY.READ",
                 "PERMIT.READ", "PERMIT.CREATE",
+                "WORKFRONT.READ",
+                "SNAG.READ",
+                "SHIFT_HANDOVER.READ",
+                "ATTENDANCE.READ", "ATTENDANCE.APPROVE",
+                "CHECKLIST.READ",
+                "PROCUREMENT_REQUEST.READ",
                 "REPORT.READ",
                 "AI.READ"
         ));
 
-        // 12. SITE_ENGINEER — existing SITE_ENGINEER profile + DPR write + NCR write + SAFETY + PERMIT.
+        // 12. SITE_ENGINEER — DPR write + NCR write + SAFETY + PERMIT + workfront RELEASE
+        //     + snag CLOSE + checklist APPROVE (engineering sign-off bench).
         m.put("SITE_ENGINEER", Set.of(
                 "PROJECT.READ",
                 "ACTIVITY.READ", "ACTIVITY.UPDATE",
@@ -164,6 +187,12 @@ public final class RolePermissionMatrix {
                 "NCR.READ", "NCR.CREATE",
                 "SAFETY.READ", "SAFETY.INCIDENT_LOG",
                 "PERMIT.READ", "PERMIT.CREATE",
+                "WORKFRONT.CREATE", "WORKFRONT.READ", "WORKFRONT.UPDATE", "WORKFRONT.RELEASE",
+                "SNAG.READ", "SNAG.UPDATE", "SNAG.CLOSE",
+                "SHIFT_HANDOVER.READ",
+                "ATTENDANCE.READ",
+                "CHECKLIST.READ", "CHECKLIST.APPROVE",
+                "PROCUREMENT_REQUEST.READ",
                 "REPORT.READ"
         ));
 
@@ -183,28 +212,45 @@ public final class RolePermissionMatrix {
                 "AI.READ"
         ));
 
-        // 14. SUPERVISOR — field supervision, DPR write.
+        // 14. SUPERVISOR — site operations: DPR, activity progress, NCR/safety
+        //     raise, photos, permits/checklists, attendance. Generous on own
+        //     records (NCR.UPDATE, DPR.DELETE) but no project/baseline/cost write.
+        //     Phase C: full CRUD on site-ops modules; ATTENDANCE.APPROVE per plan.
         m.put("SUPERVISOR", Set.of(
-                "PROJECT.READ", "ACTIVITY.READ",
-                "RESOURCE.READ",
-                "DOCUMENT.READ",
-                "DPR.READ", "DPR.CREATE", "DPR.UPDATE",
-                "NCR.READ",
-                "SAFETY.READ", "SAFETY.INCIDENT_LOG",
-                "PERMIT.READ",
+                "PROJECT.READ",
+                "ACTIVITY.READ", "ACTIVITY.UPDATE",
+                "RESOURCE.READ", "RESOURCE.UPDATE",
+                "DOCUMENT.READ", "DOCUMENT.CREATE",
+                "DPR.READ", "DPR.CREATE", "DPR.UPDATE", "DPR.DELETE",
+                "NCR.READ", "NCR.CREATE", "NCR.UPDATE",
+                "SAFETY.READ", "SAFETY.CREATE", "SAFETY.INCIDENT_LOG",
+                "PERMIT.READ", "PERMIT.CREATE",
+                "PROJECT_MEMBER.READ",
+                "WORKFRONT.CREATE", "WORKFRONT.READ", "WORKFRONT.UPDATE",
+                "SNAG.CREATE", "SNAG.READ", "SNAG.UPDATE",
+                "SHIFT_HANDOVER.CREATE", "SHIFT_HANDOVER.READ",
+                "ATTENDANCE.CREATE", "ATTENDANCE.READ", "ATTENDANCE.UPDATE", "ATTENDANCE.APPROVE",
+                "CHECKLIST.CREATE", "CHECKLIST.READ", "CHECKLIST.UPDATE",
+                "PROCUREMENT_REQUEST.CREATE", "PROCUREMENT_REQUEST.READ",
+                "YIELD_VARIANCE.READ",
                 "REPORT.READ",
                 "AI.READ"
         ));
 
-        // 15. FOREMAN — crew level, narrowest field role.
+        // 15. FOREMAN — crew level, narrowest field role + minimal site-ops.
         m.put("FOREMAN", Set.of(
                 "PROJECT.READ", "ACTIVITY.READ",
                 "RESOURCE.READ",
                 "DPR.READ", "DPR.CREATE",
-                "SAFETY.INCIDENT_LOG"
+                "SAFETY.INCIDENT_LOG",
+                "PROJECT_MEMBER.READ",
+                "SNAG.CREATE", "SNAG.READ",
+                "SHIFT_HANDOVER.CREATE", "SHIFT_HANDOVER.READ",
+                "ATTENDANCE.CREATE", "ATTENDANCE.READ"
         ));
 
-        // 16. QA_QC_ENGINEER — existing QA_QC_ENGINEER profile + DPR.READ.
+        // 16. QA_QC_ENGINEER — existing QA_QC_ENGINEER profile + DPR.READ
+        //     + checklist sign-off + snag closure.
         m.put("QA_QC_ENGINEER", Set.of(
                 "PROJECT.READ",
                 "ACTIVITY.READ",
@@ -213,6 +259,8 @@ public final class RolePermissionMatrix {
                 "RISK.READ",
                 "NCR.CREATE", "NCR.READ", "NCR.UPDATE", "NCR.APPROVE",
                 "DPR.QC_ANNOTATE", "DPR.READ",
+                "SNAG.READ", "SNAG.CLOSE",
+                "CHECKLIST.READ", "CHECKLIST.APPROVE",
                 "REPORT.READ",
                 "AI.READ"
         ));

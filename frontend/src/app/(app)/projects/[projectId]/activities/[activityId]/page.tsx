@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, lazy, useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { SimpleTable } from "@/components/common/SimpleTable";
@@ -25,6 +25,7 @@ import type { CostAccount } from "@/lib/api/costApi";
 import { evmApi } from "@/lib/api/evmApi";
 import type { ActivityEvmResponse } from "@/lib/api/evmApi";
 import { activityStepApi } from "@/lib/api/activityStepApi";
+import { useAuthStore } from "@/lib/state/store";
 import type { ActivityStepResponse, CreateActivityStepRequest } from "@/lib/api/activityStepApi";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -74,9 +75,12 @@ type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplet
 
 export default function ActivityDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const projectId = params.projectId as string;
   const activityId = params.activityId as string;
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canEditActivity = hasPermission("ACTIVITY.UPDATE");
 
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
@@ -300,13 +304,27 @@ export default function ActivityDetailPage() {
         title={activity.code}
         description={activity.name}
         actions={
-          <button
-            onClick={handleStartEdit}
-            disabled={isEditing}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
-          >
-            {isEditing ? "Editing..." : "Edit"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                router.push(`/projects/${projectId}/dpr?new=1&activityId=${activityId}`)
+              }
+              className="rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover"
+              title="Create a Daily Progress Report pre-filled with this activity"
+            >
+              Create DPR
+            </button>
+            {canEditActivity && (
+              <button
+                onClick={handleStartEdit}
+                disabled={isEditing}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
+              >
+                {isEditing ? "Editing..." : "Edit"}
+              </button>
+            )}
+          </div>
         }
       />
 

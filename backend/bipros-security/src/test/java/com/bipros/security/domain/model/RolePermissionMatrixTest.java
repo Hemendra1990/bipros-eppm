@@ -78,6 +78,48 @@ class RolePermissionMatrixTest {
     }
 
     @Test
+    void supervisorHasSiteOpsPermissions() {
+        Set<String> supervisor = RolePermissionMatrix.permissionsFor("SUPERVISOR");
+
+        // Site-ops write surface granted in Phase A of the supervisor-hardening plan.
+        assertThat(supervisor).contains(
+                "ACTIVITY.UPDATE",
+                "RESOURCE.UPDATE",
+                "DOCUMENT.CREATE",
+                "PERMIT.CREATE",
+                "NCR.CREATE",
+                "NCR.UPDATE",
+                "SAFETY.CREATE",
+                "YIELD_VARIANCE.READ",
+                "DPR.DELETE"
+        );
+
+        // Phase C site-ops modules — supervisor raises, others approve/close/release.
+        assertThat(supervisor).contains(
+                "WORKFRONT.CREATE", "WORKFRONT.READ", "WORKFRONT.UPDATE",
+                "SNAG.CREATE", "SNAG.READ", "SNAG.UPDATE",
+                "SHIFT_HANDOVER.CREATE", "SHIFT_HANDOVER.READ",
+                "ATTENDANCE.CREATE", "ATTENDANCE.READ", "ATTENDANCE.UPDATE", "ATTENDANCE.APPROVE",
+                "CHECKLIST.CREATE", "CHECKLIST.READ", "CHECKLIST.UPDATE",
+                "PROCUREMENT_REQUEST.CREATE", "PROCUREMENT_REQUEST.READ"
+        );
+
+        // Things the supervisor must NOT carry — guards against accidental privilege creep.
+        assertThat(supervisor).doesNotContain(
+                "ACTIVITY.CREATE", "ACTIVITY.DELETE",
+                "PROJECT.CREATE", "PROJECT.DELETE", "PROJECT.UPDATE",
+                "BASELINE.CREATE", "BASELINE.UPDATE",
+                "CONTRACT.CREATE", "CONTRACT.UPDATE",
+                "PROJECT_MEMBER.MANAGE",
+                // Sign-off / approval should stay with engineer / QC / store / procurement
+                "WORKFRONT.RELEASE",
+                "SNAG.CLOSE",
+                "CHECKLIST.APPROVE",
+                "PROCUREMENT_REQUEST.APPROVE"
+        );
+    }
+
+    @Test
     void legacyAliasesNotInMatrix() {
         for (String legacy : List.of("SITE_SUPERVISOR", "COST_ENGINEER", "STORE_KEEPER",
                 "QC_MANAGER", "HSE_OFFICER")) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { dprApi } from "@/lib/api/dprApi";
@@ -34,10 +34,20 @@ const oneMonthAgoIso = () => {
   return d.toISOString().split("T")[0];
 };
 
+interface DprPrefill {
+  activityId: string | null;
+  activityName: string | null;
+  supervisorUserId: string | null;
+  supervisorName: string | null;
+  unit: string | null;
+}
+
 export default function DprPage() {
   const params = useParams();
   const projectId = params.projectId as string;
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
@@ -132,22 +142,54 @@ export default function DprPage() {
     [supervisorUsers]
   );
 
+  // Default window: last 30 days through today. Never anchor `to` to the
+  // project's plannedFinishDate — for any project past its planned finish that
+  // would produce a backwards range (from > to) and the list silently empties.
+  // Users can widen the window via the date inputs when they need older rows.
   const [fromInput, setFromInput] = useState<string>(() => oneMonthAgoIso());
-  const [toInput, setToInput] = useState<string>("");
+  const [toInput, setToInput] = useState<string>(() => todayIso());
   const [from, setFrom] = useState<string>(() => oneMonthAgoIso());
-  const [to, setTo] = useState<string>("");
-
-  useEffect(() => {
-    if (!project) return;
-    if (to === "" && project.plannedFinishDate) {
-      setToInput(project.plannedFinishDate);
-      setTo(project.plannedFinishDate);
-    }
-  }, [project, to]);
+  const [to, setTo] = useState<string>(() => todayIso());
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DailyProgressReportResponse | null>(null);
+  const [prefill, setPrefill] = useState<DprPrefill | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+
+  // "Create DPR" deep-link from the Activities page lands here as ?new=1&activityId=<aid>.
+  // We wait until both activities and the supervisor pool have loaded so the form's
+  // initialState can resolve the activity name + supervisor snapshot synchronously — opening
+  // earlier would seed an empty drawer that back-fills with a visible flicker. After
+  // consuming the params we clear them via router.replace so refresh / Back doesn't re-open.
+  // setState-in-effect is unavoidable here: the trigger is an external URL signal and the
+  // codebase uses the same escape elsewhere (see gis-viewer, AiInsightsPanel).
+  const newParam = searchParams.get("new");
+  const activityIdParam = searchParams.get("activityId");
+  const pendingPrefill: DprPrefill | null = useMemo(() => {
+    if (newParam !== "1" || !activityIdParam) return null;
+    if (!activitiesData || !supervisorUsers) return null;
+    const activityName = activityIndex.byId.get(activityIdParam);
+    if (!activityName) return null;
+    const sup = activityIndex.supervisorByActivityId.get(activityIdParam) ?? null;
+    const unit = activityIndex.defaultUnitByActivityId.get(activityIdParam) ?? null;
+    return {
+      activityId: activityIdParam,
+      activityName,
+      supervisorUserId: sup?.id ?? null,
+      supervisorName: sup?.name ?? null,
+      unit,
+    };
+  }, [newParam, activityIdParam, activitiesData, supervisorUsers, activityIndex]);
+  useEffect(() => {
+    if (!pendingPrefill || showForm) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setPrefill(pendingPrefill);
+    setEditing(null);
+    setShowForm(true);
+    setPageError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    router.replace(`/projects/${projectId}/dpr`, { scroll: false });
+  }, [pendingPrefill, showForm, router, projectId]);
   const { ref: stickyHeaderRef, height: stickyHeaderHeight } = useStickyMeasure<HTMLDivElement>();
   // tab-nav-h is the page-shell tab strip above the filter bar; day headers park beneath both.
   const dayStickyOffset = 53 + stickyHeaderHeight;
@@ -168,12 +210,14 @@ export default function DprPage() {
 
   const openNew = () => {
     setEditing(null);
+    setPrefill(null);
     setShowForm(true);
     setPageError(null);
   };
 
   const openEdit = (row: DailyProgressReportResponse) => {
     setEditing(row);
+    setPrefill(null);
     setShowForm(true);
     setPageError(null);
   };
@@ -181,6 +225,7 @@ export default function DprPage() {
   const closeForm = () => {
     setShowForm(false);
     setEditing(null);
+    setPrefill(null);
   };
 
   const handleSave = async (payload: DprBaseFields) => {
@@ -290,9 +335,10 @@ export default function DprPage() {
         >
           <DprActivityForm
             // Re-mount when switching between edit targets (or new vs. edit) so the form's
-            // lazy useState initializer reseeds. Without this, clicking Edit on row B while
-            // the form for row A is open would keep A's children visible.
-            key={editing?.id ?? "new"}
+            // lazy useState initializer reseeds. The prefill activity id is part of the key so
+            // a second "Create DPR" deep-link for a different activity also reseeds, even
+            // though both share the "new" path.
+            key={editing?.id ?? (prefill?.activityId ? `new:${prefill.activityId}` : "new")}
             projectId={projectId}
             editing={editing}
             defaultDate={editing?.reportDate ?? todayIso()}
@@ -303,6 +349,7 @@ export default function DprPage() {
             supervisorByActivityId={activityIndex.supervisorByActivityId}
             defaultUnitByActivityId={activityIndex.defaultUnitByActivityId}
             boqOptions={boqOptions}
+            defaultPrefill={prefill}
             onCancel={closeForm}
             onSave={handleSave}
           />

@@ -25,6 +25,7 @@ import {
 import { userApi } from "@/lib/api/userApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useAuthStore } from "@/lib/state/store";
 import type { UserResponse } from "@/lib/types";
 
 /**
@@ -87,10 +88,36 @@ function userInitials(user: UserResponse | undefined): string {
   return (first + last).toUpperCase();
 }
 
+/** Build a minimal user-like object from the project-member row's embedded
+ *  user fields (populated by the backend so PMs without ADMIN_USER.READ can
+ *  still render names). Falls back to the {@code usersById} lookup when the
+ *  embedded data isn't present (older clients / cached responses). */
+function memberAsUser(
+  member: ProjectMemberDto,
+  usersById: Map<string, UserResponse>
+): UserResponse | undefined {
+  if (member.username) {
+    return {
+      id: member.userId,
+      username: member.username,
+      email: member.email ?? "",
+      firstName: member.firstName ?? null,
+      lastName: member.lastName ?? null,
+    } as UserResponse;
+  }
+  return usersById.get(member.userId);
+}
+
 export default function ProjectMembersPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
   const qc = useQueryClient();
+
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  // Server enforces PROJECT_MEMBER.MANAGE; hide the write affordances when the
+  // caller can't action them so the page is just a read-only roster for
+  // SUPERVISOR / TEAM_MEMBER tier users.
+  const canManageMembers = hasPermission("PROJECT_MEMBER.MANAGE");
 
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -114,13 +141,14 @@ export default function ProjectMembersPage() {
     enabled: !!projectId,
   });
 
-  // The /v1/users list is needed both to enrich the members table (username /
-  // email / display name) and as a backing store for the add-member search.
-  // No typeahead endpoint exists yet, so we pull a generous first page (500)
-  // and filter client-side — same pattern projectApi.listAccessible() uses.
+  // The /v1/users list is needed by the Add-member dialog (typeahead). The
+  // /members endpoint already embeds user display fields so the table itself
+  // doesn't need it. Skip the call for non-managers — they can't open the
+  // dialog anyway, and the endpoint requires ADMIN_USER.READ which would 403.
   const { data: usersData } = useQuery({
     queryKey: ["users", "all", 500],
     queryFn: () => userApi.listUsers(0, 500),
+    enabled: canManageMembers,
   });
 
   const usersById = useMemo(() => {
@@ -137,11 +165,11 @@ export default function ProjectMembersPage() {
     const q = search.trim().toLowerCase();
     if (!q) return members;
     return members.filter((m) => {
-      const u = usersById.get(m.userId);
+      const u = memberAsUser(m, usersById);
       if (!u) return m.userId.toLowerCase().includes(q);
       return (
         u.username.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
         userDisplayName(u).toLowerCase().includes(q)
       );
     });
@@ -205,14 +233,16 @@ export default function ProjectMembersPage() {
         title="Project Members"
         description={description}
         actions={
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-          >
-            <UserPlus size={16} />
-            Add member
-          </button>
+          canManageMembers ? (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              <UserPlus size={16} />
+              Add member
+            </button>
+          ) : null
         }
       />
 
@@ -280,10 +310,15 @@ export default function ProjectMembersPage() {
               </thead>
               <tbody className="divide-y divide-border/50">
                 {filteredMembers.map((m) => {
-                  const user = usersById.get(m.userId);
+                  const user = memberAsUser(m, usersById);
                   const grantedByUser = m.grantedBy
                     ? usersById.get(m.grantedBy)
                     : undefined;
+                  // Prefer the backend's pre-resolved granter display when present
+                  // (PM doesn't have ADMIN_USER.READ to populate usersById for the
+                  // granter, but the controller looked them up server-side).
+                  const grantedByDisplay = m.grantedByName
+                    ?? (grantedByUser ? userDisplayName(grantedByUser) : null);
                   return (
                     <tr key={m.id} className="hover:bg-surface/80">
                       <td className="px-4 py-3 text-sm">
@@ -302,40 +337,41 @@ export default function ProjectMembersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">
-                        {user?.email ?? "—"}
+                        {user?.email || "—"}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <RoleChip role={m.role} />
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">
-                        {grantedByUser
-                          ? userDisplayName(grantedByUser)
-                          : m.grantedBy
-                          ? "—"
-                          : "System"}
+                        {grantedByDisplay
+                          ?? (m.grantedBy ? "—" : "System")}
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">
                         {formatDate(m.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditTarget(m)}
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover"
-                          >
-                            <Pencil size={12} />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRemoveTarget(m)}
-                            className="inline-flex items-center gap-1 rounded-md border border-danger/40 bg-danger/5 px-2.5 py-1 text-xs font-medium text-danger hover:bg-danger/10"
-                          >
-                            <Trash2 size={12} />
-                            Remove
-                          </button>
-                        </div>
+                        {canManageMembers ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditTarget(m)}
+                              className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover"
+                            >
+                              <Pencil size={12} />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRemoveTarget(m)}
+                              className="inline-flex items-center gap-1 rounded-md border border-danger/40 bg-danger/5 px-2.5 py-1 text-xs font-medium text-danger hover:bg-danger/10"
+                            >
+                              <Trash2 size={12} />
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-text-muted text-xs">—</span>
+                        )}
                       </td>
                     </tr>
                   );

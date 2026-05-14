@@ -189,6 +189,15 @@ export function Sidebar() {
   const logoSrc = useActiveLogo();
   const appName = useAppName();
 
+  // Zustand `persist` rehydrates synchronously from localStorage on the client,
+  // so user/role state on the first client render diverges from SSR (where the
+  // store still holds initial null state). Without this guard the auth-gated
+  // links land in the client tree but not the server tree → hydration mismatch.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
   const handleLogout = () => {
     document.cookie = "access_token=; path=/; max-age=0";
     useThemeStore.getState().clearBackendIds();
@@ -198,7 +207,11 @@ export function Sidebar() {
 
   // Filter the static groups by the current user's roles + fine-grained permissions +
   // module access. ADMIN sees everything (each gate short-circuits internally for admins).
+  // Pre-hydration we render as if unauthenticated so SSR and first-client-render match.
   const itemVisible = (item: NavItem) => {
+    if (!hydrated) {
+      return !item.adminOnly && !item.requireRoles && !item.permission && !item.module;
+    }
     if (item.adminOnly && !isAdmin) return false;
     if (item.requireRoles && !hasAnyRole(item.requireRoles)) return false;
     if (item.permission && !hasPermission(item.permission)) return false;
@@ -206,7 +219,7 @@ export function Sidebar() {
     return true;
   };
   const visibleGroups: NavGroup[] = groups.flatMap((group) => {
-    if (group.adminOnly && !isAdmin) return [];
+    if (group.adminOnly && (!hydrated || !isAdmin)) return [];
     const visibleItems = group.items.filter(itemVisible);
     const visibleSubGroups: NavSubGroup[] = (group.subGroups ?? [])
       .map((sg) => ({ ...sg, items: sg.items.filter(itemVisible) }))
@@ -218,8 +231,9 @@ export function Sidebar() {
 
   // Pick the most "senior" role for the user-chip role label and to seed default-expanded
   // sidebar groups. Shared with the hub via useMostSeniorRole so both stay in sync.
+  // Pre-hydration we collapse the label back to the anonymous default for SSR parity.
   const { role: seniorRole, label: roleLabelTitle } = useMostSeniorRole();
-  const roleLabel = roleLabelTitle.toLowerCase();
+  const roleLabel = (hydrated ? roleLabelTitle : "User").toLowerCase();
 
   // Persist per-group collapsed state. Default-expanded set is derived from role on first
   // visit; once the user toggles anything we trust localStorage and stop re-deriving.
@@ -261,7 +275,11 @@ export function Sidebar() {
     });
   };
 
-  const displayName = user?.firstName ?? user?.username ?? "User";
+  // Same SSR-safety rule as itemVisible: until the persist store has rehydrated,
+  // pretend the user is the anonymous placeholder so the server-rendered chip matches
+  // what the client paints on the first frame.
+  const displayUser = hydrated ? user : null;
+  const displayName = displayUser?.firstName ?? displayUser?.username ?? "User";
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (

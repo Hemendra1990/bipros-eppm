@@ -1,10 +1,11 @@
 # RBAC Implementation Guide
 
-**Status:** Live on `feat/ai-scope-and-rate-hardening` (commits `c3aedba` … `d9697c1`).
+**Status:** Live on `feat/ai-scope-and-rate-hardening` (commits `c3aedba` … `d9697c1`,
+plus the Supervisor hardening sweep — Phase A/B/C — described in §12).
 **Audience:** Part I — developers working on or extending the access-control layer.
 Part II — administrators and end users learning how access is granted.
-**Companion suite:** `frontend/e2e/tests/33-rbac-comprehensive.spec.ts` (30 Playwright
-scenarios, all green).
+**Companion suite:** `frontend/e2e/tests/33-rbac-comprehensive.spec.ts` (37 active
+Playwright scenarios + 2 documented skips, all green).
 
 ---
 
@@ -77,7 +78,7 @@ Legacy authority aliases (`QC_MANAGER` ↔ `QA_QC_ENGINEER`, `HSE_OFFICER` ↔
 in `CustomUserDetailsService` so old JWTs and `hasRole(...)`-style code keep working,
 but the canonical name is what's in the DB and the JWT `roles` claim.
 
-### 3. The 86 permission codes
+### 3. The 108 permission codes
 
 Defined in `backend/bipros-security/src/main/java/com/bipros/security/domain/model/PermissionCatalog.java`.
 Format: `MODULE.ACTION`. Module prefixes:
@@ -87,12 +88,16 @@ PROJECT, ACTIVITY, SCHEDULE, BASELINE, RESOURCE, COST, EVM,
 RISK, DOCUMENT, CONTRACT, PORTFOLIO, REPORT, AI,
 DPR, NCR, PERMIT, SAFETY, YIELD_VARIANCE, DATA_QUALITY,
 PROJECT_MEMBER, ADMIN_USER, ADMIN_PROFILE, ADMIN_ORG,
-ADMIN_MASTER, ADMIN_SETTINGS
+ADMIN_MASTER, ADMIN_SETTINGS,
+WORKFRONT, SNAG, SHIFT_HANDOVER, ATTENDANCE, CHECKLIST,
+PROCUREMENT_REQUEST
 ```
 
 Action verbs: `CREATE`, `READ`, `UPDATE`, `DELETE`, `EXPORT`, `APPROVE`, `ANNOTATE`,
-`AUDIT`, `WRITE`, `MANAGE`, `SUBMIT`, `REJECT`. Not every action exists for every
-module — the catalog enumerates the 86 valid combinations.
+`AUDIT`, `WRITE`, `MANAGE`, `SUBMIT`, `REJECT`, `CLOSE`, `RELEASE`. Not every action
+exists for every module — the catalog enumerates the 108 valid combinations.
+`CLOSE` and `RELEASE` were added with Phase C (see §12) for `SNAG.CLOSE` and
+`WORKFRONT.RELEASE` respectively.
 
 ### 4. JWT shape
 
@@ -207,10 +212,10 @@ Add `legacy-demo` to `SPRING_PROFILES_ACTIVE` to also seed the 20 ICPMS users
 in `bipros-api/.../config/seeder/IcpmsPhaseASeeder.java`; downstream phases
 (B–E) may fail in environments without ClickHouse — that's tolerated.
 
-### 10. The 30-scenario e2e suite
+### 10. The 37-scenario e2e suite
 
-`frontend/e2e/tests/33-rbac-comprehensive.spec.ts` — single file, seven describe
-blocks, ~14s wall-clock against a warm backend.
+`frontend/e2e/tests/33-rbac-comprehensive.spec.ts` — single file, eight describe
+blocks, ~19s wall-clock against a warm backend.
 
 | Block | Coverage |
 | ----- | -------- |
@@ -221,6 +226,7 @@ blocks, ~14s wall-clock against a warm backend.
 | E — Action gating | Delete/Deactivate buttons, "New Activity" by role |
 | F — Legacy aliases + supervisor cutover | `QC_MANAGER` alias, `/v1/users?roles=…` picker, Phase 4 field rename |
 | G — Negative paths | Tampered cookie, VIEWER-tier user can't reach admin |
+| H — Supervisor hardening (Phase A/B/C) | JWT carries new Phase C perms; workfront create+list; SNAG.CLOSE / PROCUREMENT_REQUEST.APPROVE / CHECKLIST.APPROVE gates fire 403 for SUPERVISOR; checklist templates load; project-tab strip reflects per-tab `permission`; VIEWER cannot create workfront |
 
 To run:
 
@@ -270,6 +276,60 @@ a fresh project plus the seeded `pmanager` (manager123). The fixtures are in
 5. **Analytics column name.** `fact_dpr_issues_daily.supervisor_resource_id` in
    ClickHouse still uses the pre-cutover name; a separate analytics PR will
    rename it.
+6. **`SecurityContextHelper.getCurrentUserId()` parses username as UUID.** Surfaced
+   while authoring Block H of the e2e suite — the helper does
+   `UUID.fromString(userDetails.getUsername())` but Spring Security passes the
+   username, so every Phase C service that uses it for an audit column
+   (`SnagService.create`, `ChecklistService.start`, `MaterialIndentService.create`)
+   500s with "Invalid UUID string: <username>". `WorkfrontService` is unaffected
+   because `BaseEntity.createdBy` is a String column populated by JPA auditing.
+   Block H.34b / H.35b are `test.skip`'d until this is fixed.
+
+**Closed by Phase C** (kept here as historical context):
+
+- ~~NCR and Safety lack standalone controllers — only embedded in DPR.~~ Phase C
+  added `NcrController` and `SafetyController` under `bipros-site-ops`.
+- ~~Frontend write-affordance leaks on equipment-logs / labour-returns /
+  weather-log.~~ Phase B added `hasPermission()` gates around the Add/Delete
+  buttons on those three pages.
+- ~~No permission gate on the "New Permit" page.~~ Phase B early-returns with a
+  forbidden notice when the user lacks `PERMIT.CREATE`.
+
+### 12. Site Ops modules (Phase C)
+
+Phase C of the Supervisor hardening sweep added a new Maven module —
+`bipros-site-ops` — with seven controllers, six new permission modules, and the
+`CLOSE` / `RELEASE` action verbs. The SUPERVISOR row in
+`RolePermissionMatrix.DEFAULTS` grew from 13 → 22 codes; `ProfileSeeder` is
+self-healing and back-fills the new codes onto the 10 pre-existing system-default
+profiles at boot (logged on startup).
+
+| Module               | Endpoints                                                                            | Perms (SUPERVISOR gets ✓ / ✗)                                                                    | System-default profile holders                                                                              | Controller                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Workfront            | `POST/GET/PUT /v1/projects/{id}/workfronts`, `POST /{id}/release`                    | `WORKFRONT.CREATE`✓ `.READ`✓ `.UPDATE`✓ `.RELEASE`✗                                              | Site Manager, Project Manager (incl. `.RELEASE`); Supervisor and Site Engineer (create/read/update)         | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/WorkfrontController.java`                                                |
+| Snag                 | `POST/GET/PUT /v1/projects/{id}/snags`, `POST /{id}/close`                           | `SNAG.CREATE`✓ `.READ`✓ `.UPDATE`✓ `.CLOSE`✗                                                     | QA QC Engineer (incl. `.CLOSE`); Supervisor / Site Engineer / Foreman raise & update                        | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/SnagController.java`                                                     |
+| Shift Handover       | `POST/GET /v1/projects/{id}/shift-handovers`, `POST /{id}/acknowledge`               | `SHIFT_HANDOVER.CREATE`✓ `.READ`✓                                                                | Supervisor, Foreman, Site Engineer, Site Manager                                                            | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/ShiftHandoverController.java`                                            |
+| Attendance           | `POST/GET/PUT /v1/projects/{id}/attendance`, `POST /{id}/approve`, `GET /summary`    | `ATTENDANCE.CREATE`✓ `.READ`✓ `.UPDATE`✓ `.APPROVE`✓                                             | Supervisor, Foreman, Site Manager (Site Engineer reads only)                                                | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/AttendanceController.java`                                               |
+| Material Indent      | `POST/GET/PUT /v1/projects/{id}/material-indents`, `POST /{id}/{submit,approve,reject}` | `PROCUREMENT_REQUEST.CREATE`✓ `.READ`✓ `.APPROVE`✗                                            | Store Manager, Procurement Officer, Project Manager (incl. `.APPROVE`); Supervisor / Foreman raise & submit | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/MaterialIndentController.java`                                           |
+| Checklist            | `GET /v1/checklist-templates`, `POST/GET /v1/projects/{id}/checklists`, `POST /{id}/{submit,approve,reject}` | `CHECKLIST.CREATE`✓ `.READ`✓ `.UPDATE`✓ `.APPROVE`✗                                  | QA QC Engineer (incl. `.APPROVE`); Supervisor / Foreman / Site Engineer fill out                            | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/ChecklistController.java` + `ChecklistTemplateController.java`           |
+| NCR (standalone)     | `POST/GET/PUT /v1/projects/{id}/ncrs`, `POST /{id}/approve-closure`, `POST /{id}/reject` | Existing `NCR.*` perms — SUPERVISOR gets `.CREATE`✓ `.READ`✓ `.UPDATE`✓                       | QA QC Engineer (incl. closure approval); Supervisor raises and updates                                      | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/NcrController.java`                                                      |
+| Safety (standalone)  | `POST/GET/PUT /v1/projects/{id}/safety`                                              | Existing `SAFETY.*` perms — SUPERVISOR gets `.CREATE`✓ `.READ`✓                                  | Safety Officer (full); Supervisor raises and reads                                                          | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/SafetyController.java`                                                   |
+
+Checklist templates are seeded on first boot (`ChecklistTemplateSeeder`):
+`PRE_CONCRETE`, `EXCAVATION`, `SHUTTERING`. Any checklist instance starts as
+`DRAFT`, moves through `IN_PROGRESS` (supervisor fills it), `SUBMITTED`, and
+ultimately `APPROVED` / `REJECTED` (QA QC Engineer).
+
+All Phase C controllers use the project-scoped guard
+`@projectAccess.hasProjectPermission(#projectId, '<MODULE>.<ACTION>')` except
+`GET /v1/checklist-templates`, which is a global read.
+
+The Phase A matrix test
+`backend/bipros-security/src/test/java/.../RolePermissionMatrixTest.java#supervisorHasSiteOpsPermissions`
+pins the 22 SUPERVISOR perms and explicitly asserts the four closure perms
+(`WORKFRONT.RELEASE`, `SNAG.CLOSE`, `CHECKLIST.APPROVE`,
+`PROCUREMENT_REQUEST.APPROVE`) are *absent*. Block H of the e2e suite re-asserts
+the same shape end-to-end (JWT → API → UI).
 
 ---
 
@@ -335,6 +395,25 @@ profile and the project members of projects they belong to.
   or it expires, after which they lose access to the project's data.
 - Change a member's role within the project (e.g. promote *Team Member* to
   *Project Manager*).
+
+#### Site-ops project tabs (`/projects/{id}` tab strip)
+
+The seven Phase C tabs surface on a project page only if the user's profile (or
+project-member role) carries the matching READ permission. For a Supervisor on
+their enrolled project, they appear in this order to the right of *GIS*:
+
+| Tab          | Permission to see           | What the supervisor does here                                                                |
+| ------------ | --------------------------- | -------------------------------------------------------------------------------------------- |
+| Workfronts   | `WORKFRONT.READ`            | Marks a workfront *Planned*/*Ready*/*Handed-Over*; release is reserved for Site/Project Mgr. |
+| Snags        | `SNAG.READ`                 | Raises and updates snags; closure goes to QA QC Engineer.                                    |
+| Handovers    | `SHIFT_HANDOVER.READ`       | Writes the end-of-shift handover; outgoing shift acknowledges incoming.                      |
+| Attendance   | `ATTENDANCE.READ`           | Logs daily attendance and approves the day's roster.                                         |
+| Checklists   | `CHECKLIST.READ`            | Picks a template (PRE_CONCRETE / EXCAVATION / SHUTTERING) and fills it out; approval is QA.  |
+| Indents      | `PROCUREMENT_REQUEST.READ`  | Raises material indents (DRAFT → submit); approval is Store Manager / Procurement Officer.   |
+| NCRs         | `NCR.READ`                  | Raises and updates NCRs; closure approval is QA QC Engineer.                                 |
+
+Tabs the supervisor does *not* see (because the corresponding READ perm is
+absent on their profile): *Costs*, *EVM*, *Baselines*, *Risks*, *Contracts*.
 
 ### 4. A worked example
 
@@ -419,6 +498,15 @@ for your own row.
 | Sidebar gating                   | `frontend/src/components/common/Sidebar.tsx`                                                           |
 | Admin pages                      | `frontend/src/app/(app)/admin/{users,roles,profiles}/`                                                 |
 | Project members page             | `frontend/src/app/(app)/projects/[id]/members/`                                                        |
-| 30-scenario e2e suite            | `frontend/e2e/tests/33-rbac-comprehensive.spec.ts`                                                     |
+| 37-scenario e2e suite            | `frontend/e2e/tests/33-rbac-comprehensive.spec.ts`                                                     |
 | E2E fixture helpers              | `frontend/e2e/fixtures/auth.fixture.ts`, `frontend/e2e/fixtures/test-users.ts`                         |
 | Design spec for the suite        | `docs/superpowers/specs/2026-05-14-rbac-e2e-tests-design.md`                                           |
+| Phase C — Workfront controller   | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/WorkfrontController.java`                |
+| Phase C — Snag controller        | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/SnagController.java`                     |
+| Phase C — Shift Handover         | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/ShiftHandoverController.java`            |
+| Phase C — Attendance             | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/AttendanceController.java`               |
+| Phase C — Material Indent        | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/MaterialIndentController.java`           |
+| Phase C — Checklist (+ templates)| `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/ChecklistController.java`, `ChecklistTemplateController.java` |
+| Phase C — NCR controller         | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/NcrController.java`                      |
+| Phase C — Safety controller      | `backend/bipros-site-ops/src/main/java/com/bipros/siteops/api/SafetyController.java`                   |
+| Phase C — Project tab strip      | `frontend/src/app/(app)/projects/[projectId]/layout.tsx` (lines 64–71 — per-tab `permission` field)    |

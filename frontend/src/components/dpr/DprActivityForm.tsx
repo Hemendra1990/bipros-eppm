@@ -58,6 +58,20 @@ interface Props {
    */
   defaultUnitByActivityId: Map<string, string | null>;
   boqOptions: SelectOption[];
+  /**
+   * Optional seed for new DPRs (ignored on edit). When a user clicks "Create DPR" from an
+   * Activity, the parent DPR page passes the activity + supervisor + unit so the drawer opens
+   * pre-filled instead of forcing the user to re-pick. Supervisor is validated against
+   * {@code supervisorOptions} at initialisation; a no-longer-eligible user is silently dropped
+   * (matching the on-pick auto-fill guard further down in this file).
+   */
+  defaultPrefill?: {
+    activityId: string | null;
+    activityName: string | null;
+    supervisorUserId: string | null;
+    supervisorName: string | null;
+    unit: string | null;
+  } | null;
   onCancel: () => void;
   /**
    * Saves the DPR and returns the persisted record so the form can chain photo uploads against
@@ -92,7 +106,9 @@ const WEATHER_OPTS = ["Clear", "Cloudy", "Rain", "Hot", "Cold", "Windy"];
 
 const initialState = (
   editing: DailyProgressReportResponse | null,
-  defaultDate: string
+  defaultDate: string,
+  prefill?: Props["defaultPrefill"],
+  supervisorOptions?: SelectOption[]
 ): FormState => {
   if (editing) {
     return {
@@ -127,19 +143,29 @@ const initialState = (
       issues: editing.issues ?? [],
     };
   }
+  // Validate the seeded supervisor against the eligible options. Mirrors the on-pick auto-fill
+  // guard below (line ~408): if the activity's snapshot points at a user who has since lost
+  // their supervisor role, fall back to an empty supervisor rather than persisting an invalid id.
+  const eligibleSeed =
+    prefill?.supervisorUserId &&
+    (supervisorOptions ?? []).some((s) => s.value === prefill.supervisorUserId)
+      ? { id: prefill.supervisorUserId, name: prefill.supervisorName ?? "" }
+      : null;
+  const seedUnit = prefill?.unit && prefill.unit.trim().length > 0 ? prefill.unit.trim() : null;
+
   return {
     reportDate: defaultDate || todayIso(),
-    supervisorUserId: null,
-    supervisorName: "",
+    supervisorUserId: eligibleSeed?.id ?? null,
+    supervisorName: eligibleSeed?.name ?? "",
     chainageFromM: null,
     chainageToM: null,
     chainageFromRaw: "",
     chainageToRaw: "",
-    activityId: null,
-    activityName: "",
+    activityId: prefill?.activityId ?? null,
+    activityName: prefill?.activityName ?? "",
     wbsNodeId: null,
     boqItemNo: null,
-    unit: "Cum",
+    unit: seedUnit ?? "Cum",
     qtyExecuted: 0,
     weatherCondition: null,
     remarks: null,
@@ -171,11 +197,12 @@ export function DprActivityForm({
   supervisorByActivityId,
   defaultUnitByActivityId,
   boqOptions,
+  defaultPrefill,
   onCancel,
   onSave,
 }: Props) {
   const [state, setState] = useState<FormState>(() => {
-    const s = initialState(editing, defaultDate);
+    const s = initialState(editing, defaultDate, defaultPrefill, supervisorOptions);
     // Editing path: backend may not yet carry activityId on legacy rows. Resolve from name.
     if (editing && !s.activityId && editing.activityName) {
       const id = activityIdByName.get(editing.activityName.toLowerCase());

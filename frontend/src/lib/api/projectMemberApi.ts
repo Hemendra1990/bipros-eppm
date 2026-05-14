@@ -32,6 +32,14 @@ export interface ProjectMemberDto {
   projectId: string;
   role: ProjectMemberRole;
   grantedBy: string | null;
+  // User display fields — populated by the backend in the list response so the
+  // page renders names without needing ADMIN_USER.READ to call /v1/users.
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  grantedByUsername?: string | null;
+  grantedByName?: string | null;
   /**
    * Optional — the backend DTO doesn't include audit timestamps today, but
    * `BaseEntity` does carry `createdAt`. If the controller starts projecting
