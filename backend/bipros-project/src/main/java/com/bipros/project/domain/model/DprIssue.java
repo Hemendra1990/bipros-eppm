@@ -51,17 +51,16 @@ import java.util.UUID;
 @Builder
 public class DprIssue extends BaseEntity {
 
-    @Column(name = "dpr_id", nullable = false, updatable = false)
+    @Column(name = "dpr_id", nullable = true, updatable = false)
     private UUID dprId;
 
     @Column(name = "project_id", nullable = false, updatable = false)
     private UUID projectId;
 
-    /** Snapshot from parent DPR at create. Stamped, not re-synced. */
-    @Column(name = "activity_id", updatable = false)
+    @Column(name = "activity_id")
     private UUID activityId;
 
-    @Column(name = "activity_name", length = 150, updatable = false)
+    @Column(name = "activity_name", length = 150)
     private String activityName;
 
     /** The supervisor who logged the issue. Defaults to {@code DPR.supervisorResourceId}. */
