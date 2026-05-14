@@ -172,10 +172,11 @@ public class ReportController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "RESOURCE_TYPE") String groupBy,
       @RequestParam(required = false) String normType,
+      @RequestParam(required = false) UUID supervisorUserId,
       @RequestParam(required = false) UUID supervisorResourceId) {
     return ApiResponse.ok(
         capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType,
-            supervisorResourceId));
+            supervisorUserId, supervisorResourceId));
   }
 
   /**
@@ -187,12 +188,13 @@ public class ReportController {
   @GetMapping("/supervisor-performance")
   public ApiResponse<SupervisorPerformanceReport> getSupervisorPerformance(
       @RequestParam UUID projectId,
+      @RequestParam(required = false) UUID supervisorUserId,
       @RequestParam(required = false) UUID supervisorResourceId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "26") int workDays) {
     return ApiResponse.ok(supervisorPerformanceReportService.build(
-        projectId, supervisorResourceId, fromDate, toDate, workDays));
+        projectId, supervisorUserId, supervisorResourceId, fromDate, toDate, workDays));
   }
 
   /**

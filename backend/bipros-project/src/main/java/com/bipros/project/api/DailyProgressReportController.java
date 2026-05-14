@@ -43,6 +43,7 @@ public class DailyProgressReportController {
 
   private final DailyProgressReportService service;
   private final DprAttachmentService attachmentService;
+  private final com.bipros.project.application.service.DprProductivityPreviewService previewService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
@@ -84,6 +85,21 @@ public class DailyProgressReportController {
    * Powers the Supervisor filter dropdown on the Capacity Utilization page so only people with
    * data are listed.
    */
+  /**
+   * Productivity preview — read-only, never writes. Returns expected output from manpower,
+   * equipment, and the bottleneck (min) given the rows already entered on the form. Called
+   * from the DPR form on debounced row changes.
+   */
+  @PostMapping("/activities/{activityId}/productivity-preview")
+  public ResponseEntity<ApiResponse<com.bipros.project.application.dto.ProductivityPreviewResponse>>
+      productivityPreview(
+          @PathVariable UUID projectId,
+          @PathVariable UUID activityId,
+          @RequestBody com.bipros.project.application.dto.ProductivityPreviewRequest body) {
+    return ResponseEntity.ok(
+        ApiResponse.ok(previewService.preview(projectId, activityId, body)));
+  }
+
   @GetMapping("/supervisors-used")
   public ResponseEntity<ApiResponse<List<SupervisorOption>>> supervisorsUsed(
       @PathVariable UUID projectId,

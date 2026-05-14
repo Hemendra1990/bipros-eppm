@@ -26,6 +26,13 @@ import { SafetyDelaySection } from "./SafetyDelaySection";
 import { DprTotalsBar } from "./DprTotalsBar";
 import { DprPhotosSection, type PendingPhoto } from "./DprPhotosSection";
 import { DprVoiceAssistant } from "./DprVoiceAssistant";
+import {
+  ProductivityPreviewBanner,
+  type ProductivityPreviewData,
+} from "./ProductivityPreviewBanner";
+import { ProductivityCoverageBanner } from "./ProductivityCoverageBanner";
+
+type FormError = string | null;
 
 type Tab = "manpower" | "equipment" | "material" | "issues";
 
@@ -184,7 +191,8 @@ export function DprActivityForm({
     return s;
   });
   const [tab, setTab] = useState<Tab>("manpower");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError>(null);
+  const [preview, setPreview] = useState<ProductivityPreviewData | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [photoUploadStatus, setPhotoUploadStatus] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
@@ -198,6 +206,56 @@ export function DprActivityForm({
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // Debounced productivity preview. Fires when manpower / equipment / activityId change and an
+  // activity is set. Cancels in-flight requests on rapid edits so the panel reflects the latest
+  // input. Never blocks save — purely advisory; the soft-warn lives on the banner itself.
+  const previewSignature = useMemo(() => {
+    const mp = (state.manpower ?? []).map((r) => ({
+      roleId: (r as { roleId?: string | null }).roleId ?? null,
+      nos: (r as { nos?: number | null }).nos ?? null,
+    }));
+    const eq = (state.equipment ?? []).map((r) => ({
+      roleId: (r as { roleId?: string | null }).roleId ?? null,
+      nos: (r as { nos?: number | null }).nos ?? null,
+      workingHours: (r as { workingHours?: number | null }).workingHours ?? null,
+    }));
+    return JSON.stringify({ a: state.activityId ?? null, mp, eq });
+  }, [state.manpower, state.equipment, state.activityId]);
+
+  useEffect(() => {
+    if (!state.activityId) {
+      setPreview(null);
+      return;
+    }
+    const { a, mp, eq } = JSON.parse(previewSignature) as {
+      a: string;
+      mp: Array<{ roleId: string | null; nos: number | null }>;
+      eq: Array<{
+        roleId: string | null;
+        nos: number | null;
+        workingHours: number | null;
+      }>;
+    };
+    // Always call the preview — even with empty rows — so the coverage banner has data to
+    // show what the Work Activity tracks before the user adds any resources. The endpoint is
+    // read-only and the response is cheap; coverage drives both the banner and the inline panel.
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      dprApi
+        .productivityPreview(projectId, a, { manpower: mp, equipment: eq })
+        .then((r) => {
+          if (!cancelled && r.data) setPreview(r.data);
+        })
+        .catch(() => {
+          if (!cancelled) setPreview(null);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [previewSignature, projectId, state.activityId]);
 
   const getVoiceState = useCallback(() => {
     const s = stateRef.current;
@@ -775,6 +833,11 @@ export function DprActivityForm({
               className={inputCls}
               required
             />
+            <ProductivityPreviewBanner
+              preview={preview}
+              workdone={state.qtyExecuted ?? null}
+              unit={state.unit}
+            />
           </Field>
           <Field label="Unit">
             <select
@@ -822,6 +885,12 @@ export function DprActivityForm({
           </Field>
         </div>
       </div>
+
+      {state.activityId && (
+        <div className="px-5">
+          <ProductivityCoverageBanner coverage={preview?.coverage ?? null} />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-t border-hairline">

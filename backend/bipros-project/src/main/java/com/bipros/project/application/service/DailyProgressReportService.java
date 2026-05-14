@@ -115,6 +115,10 @@ public class DailyProgressReportService {
           });
     }
 
+    // Work Activity is intentionally NOT required. Some activities (e.g. detailed engineering
+    // / design / office work) don't track productivity. The DPR form surfaces a coverage banner
+    // so the user knows when productivity won't be measured.
+
     DailyProgressReport dpr = DailyProgressReport.builder()
         .projectId(projectId)
         .reportDate(request.reportDate())
@@ -388,19 +392,47 @@ public class DailyProgressReportService {
       UUID projectId, LocalDate fromDate, LocalDate toDate) {
     ensureProjectExists(projectId);
 
+    // Union over both supervisor sources so the dropdown is source-agnostic:
+    //  (a) user-supervisors: activity.supervisor_user_id → users (post-migration path)
+    //  (b) resource-supervisors: dpr.supervisor_resource_id → resources (legacy DPRs)
+    // Each row reports exactly one of supervisorUserId / supervisorResourceId. The caller's
+    // filter passes whichever is set so the report SQL matches the same supervisor.
     @SuppressWarnings("unchecked")
     List<Object[]> raw = em.createNativeQuery(
-            "SELECT d.supervisor_resource_id, "
-                + "       COALESCE(r.code, '')                               AS supervisor_code, "
-                + "       MAX(d.supervisor_name)                              AS supervisor_name, "
-                + "       COUNT(*)                                            AS dpr_count "
-                + "FROM project.daily_progress_reports d "
-                + "LEFT JOIN resource.resources r ON r.id = d.supervisor_resource_id "
-                + "WHERE d.project_id = :projectId "
-                + "  AND d.supervisor_resource_id IS NOT NULL "
-                + "  AND (CAST(:fromDate AS date) IS NULL OR d.report_date >= CAST(:fromDate AS date)) "
-                + "  AND (CAST(:toDate AS date) IS NULL OR d.report_date <= CAST(:toDate AS date)) "
-                + "GROUP BY d.supervisor_resource_id, r.code "
+            "SELECT supervisor_user_id, supervisor_resource_id, supervisor_code, supervisor_name, "
+                + "       SUM(dpr_count) AS dpr_count "
+                + "FROM ( "
+                + "  SELECT a.supervisor_user_id                                  AS supervisor_user_id, "
+                + "         NULL::uuid                                            AS supervisor_resource_id, "
+                + "         COALESCE(u.employee_code, '')                         AS supervisor_code, "
+                + "         COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.username) "
+                + "                                                               AS supervisor_name, "
+                + "         COUNT(*)                                              AS dpr_count "
+                + "  FROM project.daily_progress_reports d "
+                + "  JOIN activity.activities a ON a.id = d.activity_id "
+                + "  JOIN public.users u        ON u.id = a.supervisor_user_id "
+                + "  WHERE d.project_id = :projectId "
+                + "    AND a.supervisor_user_id IS NOT NULL "
+                + "    AND (CAST(:fromDate AS date) IS NULL OR d.report_date >= CAST(:fromDate AS date)) "
+                + "    AND (CAST(:toDate AS date) IS NULL OR d.report_date <= CAST(:toDate AS date)) "
+                + "  GROUP BY a.supervisor_user_id, u.employee_code, u.first_name, u.last_name, u.username "
+                + "  UNION ALL "
+                + "  SELECT NULL::uuid                                            AS supervisor_user_id, "
+                + "         d.supervisor_resource_id                              AS supervisor_resource_id, "
+                + "         COALESCE(r.code, '')                                  AS supervisor_code, "
+                + "         MAX(d.supervisor_name)                                AS supervisor_name, "
+                + "         COUNT(*)                                              AS dpr_count "
+                + "  FROM project.daily_progress_reports d "
+                + "  LEFT JOIN resource.resources r ON r.id = d.supervisor_resource_id "
+                + "  LEFT JOIN activity.activities a ON a.id = d.activity_id "
+                + "  WHERE d.project_id = :projectId "
+                + "    AND d.supervisor_resource_id IS NOT NULL "
+                + "    AND (a.supervisor_user_id IS NULL OR a.id IS NULL) "
+                + "    AND (CAST(:fromDate AS date) IS NULL OR d.report_date >= CAST(:fromDate AS date)) "
+                + "    AND (CAST(:toDate AS date) IS NULL OR d.report_date <= CAST(:toDate AS date)) "
+                + "  GROUP BY d.supervisor_resource_id, r.code "
+                + ") src "
+                + "GROUP BY supervisor_user_id, supervisor_resource_id, supervisor_code, supervisor_name "
                 + "ORDER BY dpr_count DESC, supervisor_name")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
@@ -410,7 +442,7 @@ public class DailyProgressReportService {
     List<com.bipros.project.application.dto.SupervisorOption> out = new ArrayList<>(raw.size());
     for (Object[] r : raw) {
       out.add(new com.bipros.project.application.dto.SupervisorOption(
-          (UUID) r[0], (String) r[1], (String) r[2], ((Number) r[3]).longValue()));
+          (UUID) r[0], (UUID) r[1], (String) r[2], (String) r[3], ((Number) r[4]).longValue()));
     }
     return out;
   }

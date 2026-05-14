@@ -122,6 +122,22 @@ public class ActivityController {
   }
 
   /**
+   * Activities under this project that have no {@code work_activity_id} linked but either have
+   * DPRs in the window or have planned dates intersecting the window. Powers the
+   * "N activities need a Work Activity" banner on the Capacity Utilization page.
+   */
+  @GetMapping("/missing-work-activity")
+  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  public ResponseEntity<ApiResponse<java.util.List<
+      com.bipros.activity.application.dto.MissingWorkActivityRow>>> listMissingWorkActivity(
+      @PathVariable UUID projectId,
+      @RequestParam(required = false) LocalDate from,
+      @RequestParam(required = false) LocalDate to) {
+    var rows = activityService.listMissingWorkActivity(projectId, from, to);
+    return ResponseEntity.ok(ApiResponse.ok(rows));
+  }
+
+  /**
    * Bulk-assign one supervisor (a Resource) across many activities. Powers the
    * Resources → Supervisor sub-tab.
    */

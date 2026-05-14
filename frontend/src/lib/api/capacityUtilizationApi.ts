@@ -1,15 +1,57 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
-export type CapacityGroupBy = "RESOURCE_TYPE" | "RESOURCE";
+export type CapacityGroupBy = "RESOURCE_TYPE" | "RESOURCE" | "ROLE";
 export type CapacityNormType = "MANPOWER" | "EQUIPMENT";
 export type BudgetedSource =
+  | "VARIANT"
+  | "ROLE"
+  | "UNSCOPED"
+  | "MIXED"
   | "SPECIFIC_RESOURCE"
   | "RESOURCE_TYPE"
   | "WORK_ACTIVITY"
   | "RESOURCE_LEGACY"
   | "NONE";
 
+/** New role-period shape — SC180 columns (Budget · Planned · Actual · %Util · Cost). */
+export interface RolePeriod {
+  qty: number | null;
+  budgetDays: number | null;
+  budgetNos: number | null;
+  plannedDays: number | null;
+  plannedNos: number | null;
+  actualDays: number | null;
+  actualNos: number | null;
+  /**
+   * Portion of actualDays that landed on activities whose linked Work Activity has no norm for
+   * this role's type — surfaced separately so the user sees util% reflects only the tracked
+   * portion, not the role's full deployment.
+   */
+  actualDaysUntracked: number | null;
+  utilizationPct: number | null;
+  costImplication: number | null;
+}
+
+export interface CapacityRoleRow {
+  roleId: string;
+  roleCode: string | null;
+  roleName: string | null;
+  ratePerDay: number | null;
+  forTheDay: RolePeriod | null;
+  forTheMonth: RolePeriod | null;
+  cumulative: RolePeriod | null;
+  normSource: BudgetedSource;
+}
+
+export interface CapacitySection {
+  rows: CapacityRoleRow[];
+  totalForTheDay: RolePeriod | null;
+  totalForTheMonth: RolePeriod | null;
+  totalCumulative: RolePeriod | null;
+}
+
+/** @deprecated Legacy flat-row shape — kept for older consumers; new code uses {@link CapacitySection}. */
 export interface CapacityPeriod {
   qty: number | null;
   budgetedDays: number | null;
@@ -18,6 +60,7 @@ export interface CapacityPeriod {
   utilizationPct: number | null;
 }
 
+/** @deprecated Legacy row shape; new code consumes {@link CapacitySection}. */
 export interface CapacityUtilizationRow {
   groupKey: {
     resourceTypeDefId: string | null;
@@ -29,7 +72,7 @@ export interface CapacityUtilizationRow {
     code: string;
     name: string;
     defaultUnit: string | null;
-  };
+  } | null;
   budgeted: {
     outputPerDay: number | null;
     source: BudgetedSource;
@@ -43,8 +86,14 @@ export interface CapacityUtilizationReport {
   projectId: string;
   fromDate: string | null;
   toDate: string | null;
+  workDays: number;
+  manpower: CapacitySection | null;
+  equipment: CapacitySection | null;
+  /** @deprecated Legacy fields retained so the older consumers keep working. */
   groupBy: CapacityGroupBy;
+  /** @deprecated. */
   normType: CapacityNormType | null;
+  /** @deprecated Legacy flat rows. New code reads {@link manpower} / {@link equipment}. */
   rows: CapacityUtilizationRow[];
 }
 
@@ -54,6 +103,7 @@ export interface GetCapacityUtilizationParams {
   toDate?: string;
   groupBy?: CapacityGroupBy;
   normType?: CapacityNormType;
+  supervisorUserId?: string;
   supervisorResourceId?: string;
 }
 
@@ -155,7 +205,10 @@ export interface SupervisorPerformanceComparison {
 }
 
 export interface SupervisorOption {
-  supervisorResourceId: string;
+  /** Set when the supervisor is sourced from `activity.supervisor_user_id` (User FK). */
+  supervisorUserId: string | null;
+  /** Set when the supervisor is sourced from `dpr.supervisor_resource_id` (legacy Resource FK). */
+  supervisorResourceId: string | null;
   supervisorCode: string | null;
   supervisorName: string;
   dprCount: number;
@@ -163,6 +216,7 @@ export interface SupervisorOption {
 
 export interface GetSupervisorPerformanceParams {
   projectId: string;
+  supervisorUserId?: string;
   supervisorResourceId?: string;
   fromDate?: string;
   toDate?: string;
@@ -184,6 +238,8 @@ export const capacityUtilizationApi = {
     if (params.toDate) qs.push(`toDate=${params.toDate}`);
     if (params.groupBy) qs.push(`groupBy=${params.groupBy}`);
     if (params.normType) qs.push(`normType=${params.normType}`);
+    if (params.supervisorUserId)
+      qs.push(`supervisorUserId=${params.supervisorUserId}`);
     if (params.supervisorResourceId)
       qs.push(`supervisorResourceId=${params.supervisorResourceId}`);
     return apiClient
@@ -193,6 +249,8 @@ export const capacityUtilizationApi = {
 
   getSupervisorPerformance: (params: GetSupervisorPerformanceParams) => {
     const qs: string[] = [`projectId=${params.projectId}`];
+    if (params.supervisorUserId)
+      qs.push(`supervisorUserId=${params.supervisorUserId}`);
     if (params.supervisorResourceId)
       qs.push(`supervisorResourceId=${params.supervisorResourceId}`);
     if (params.fromDate) qs.push(`fromDate=${params.fromDate}`);
