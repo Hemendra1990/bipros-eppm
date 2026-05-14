@@ -119,7 +119,8 @@ public class CurrentUserService {
         }
         Set<String> result = new HashSet<>();
         Set<String> roleNames = user.getRoles().stream()
-                .map(ur -> ur.getRole().getName())
+                .map(ur -> ur.getRole() == null ? null : ur.getRole().getName())
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toUnmodifiableSet());
         result.addAll(RolePermissionMatrix.permissionsForAll(roleNames));
         if (user.getProfileId() != null) {

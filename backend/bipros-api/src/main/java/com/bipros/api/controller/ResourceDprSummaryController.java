@@ -42,7 +42,7 @@ public class ResourceDprSummaryController {
       @RequestParam(defaultValue = "30") int days) {
     int safeDays = Math.max(1, Math.min(days, 365));
     LocalDate since = LocalDate.now().minusDays(safeDays - 1L);
-    long count = dprRepository.countBySupervisorResourceIdAndReportDateGreaterThanEqual(
+    long count = dprRepository.countBySupervisorUserIdAndReportDateGreaterThanEqual(
         resourceId, since);
     return ResponseEntity.ok(ApiResponse.ok(new ResourceDprSummary(resourceId, safeDays, since, count)));
   }

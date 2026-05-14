@@ -53,14 +53,12 @@ public record ActivityResponse(
      * for read-back; new clients must use the supervisor user id (resolved through the
      * supervisor endpoint or a join via {@code public.users}).
      */
-    @Deprecated(forRemoval = true)
     UUID responsibleResourceId,
     /**
      * @deprecated Phase 4.5: dropped from the OLTP store by Liquibase 094. Always {@code null}
      * for read-back; resolve the supervisor's display name from the user profile keyed by
      * {@code supervisor_user_id}.
      */
-    @Deprecated(forRemoval = true)
     String responsibleResourceName,
     /** Mirror of {@code resource.work_activities.default_unit} for the linked WorkActivity.
      *  Lets the DPR form auto-fill {@code DPR.unit} when an activity is picked. Null when the

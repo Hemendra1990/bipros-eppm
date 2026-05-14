@@ -74,7 +74,7 @@ public class DprSupervisorBackfillController {
     Map<String, Long> nameCounts = new java.util.TreeMap<>();
     for (DailyProgressReport dpr : dprRepository.findAll()) {
       // Only consider rows that have NOT been backfilled yet.
-      if (dpr.getSupervisorResourceId() != null) continue;
+      if (dpr.getSupervisorUserId() != null) continue;
       String name = dpr.getSupervisorName();
       if (name == null || name.isBlank()) continue;
       nameCounts.merge(name.trim(), 1L, Long::sum);

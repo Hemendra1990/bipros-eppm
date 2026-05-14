@@ -42,11 +42,9 @@ public record DprIssueRow(
     @NotNull IssueCategory category,
     @NotNull IssueSeverity severity,
     @NotNull IssueStatus status,
-    /** @deprecated RBAC Phase 4.2 — transitional wire field; prefer {@link #supervisorUserId}. */
-    @Deprecated UUID supervisorResourceId,
+    UUID supervisorResourceId,
     String supervisorName,
-    /** @deprecated RBAC Phase 4.2 — transitional wire field; prefer {@link #assignedToUserId}. */
-    @Deprecated UUID assignedToResourceId,
+    UUID assignedToResourceId,
     String assignedToName,
     Instant openedAt,
     Instant resolvedAt,

@@ -301,13 +301,13 @@ public class ActivityHealthSnapshotTool implements Tool {
                 if (firstDprDate == null || date.isBefore(firstDprDate)) firstDprDate = date;
                 if (latestDprDate == null || date.isAfter(latestDprDate)) {
                     latestDprDate = date;
-                    latestSupervisorResourceId = d.getSupervisorResourceId();
+                    latestSupervisorResourceId = d.getSupervisorUserId();
                     latestSupervisorName = d.getSupervisorName();
                 }
             }
             if (latestSupervisorName == null && d.getSupervisorName() != null) {
                 latestSupervisorName = d.getSupervisorName();
-                latestSupervisorResourceId = d.getSupervisorResourceId();
+                latestSupervisorResourceId = d.getSupervisorUserId();
             }
         }
 

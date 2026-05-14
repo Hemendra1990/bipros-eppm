@@ -62,13 +62,11 @@ public record CreateActivityRequest(
      * ({@code Activity.supervisorUserId}). Retained on the request to keep older frontends
      * compiling.
      */
-    @Deprecated(forRemoval = true)
     UUID supervisorResourceId,
 
     /**
      * @deprecated Phase 4.5: ignored by {@code ActivityService.createActivity} (the display
      * cache it fed is gone — see {@code supervisorResourceId}).
      */
-    @Deprecated(forRemoval = true)
     String supervisorResourceName
 ) {}
