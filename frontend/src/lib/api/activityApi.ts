@@ -59,6 +59,10 @@ export interface ActivityResponse {
   responsibleResourceId?: string | null;
   /** Snapshot of the supervisor Resource name at the time the flag was set. */
   responsibleResourceName?: string | null;
+  /** Phase 4.5 supervisor — User FK to public.users.id. Null when unassigned. */
+  supervisorUserId?: string | null;
+  /** Display-snapshot of the supervisor's name persisted at assignment time. */
+  supervisorUserName?: string | null;
   /** Default unit from the linked WorkActivity. Lets the DPR form auto-fill the unit field
    *  when the user picks an activity. Null when no work-activity link exists. */
   workActivityDefaultUnit?: string | null;

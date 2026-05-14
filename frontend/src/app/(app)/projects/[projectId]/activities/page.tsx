@@ -1098,7 +1098,7 @@ function ActivitiesListTable({
                       className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-surface-hover"
                       title="Click to set or change supervisor"
                     >
-                      {activity.responsibleResourceName ?? (
+                      {activity.supervisorUserName ?? activity.responsibleResourceName ?? (
                         <span className="text-text-muted">— Set —</span>
                       )}
                     </button>

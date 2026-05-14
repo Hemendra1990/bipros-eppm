@@ -194,6 +194,11 @@ public class Activity extends BaseEntity {
   @Column(name = "supervisor_user_id")
   private UUID supervisorUserId;
 
+  // Display-snapshot of the supervisor's name at assignment time. Avoids a cross-schema
+  // join to public.users on every activity read. Updated whenever supervisor_user_id changes.
+  @Column(name = "supervisor_user_name")
+  private String supervisorUserName;
+
   /**
    * Soft FK to {@code resource.work_activities.id} — the master / library activity this
    * project-specific activity is an instance of. Used by the productivity-norm lookup chain to

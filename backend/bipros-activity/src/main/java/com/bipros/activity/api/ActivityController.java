@@ -138,6 +138,20 @@ public class ActivityController {
   }
 
   /**
+   * Per-activity supervisor assignment — Phase 4.5. Writes
+   * {@code Activity.supervisor_user_id}. {@code supervisorUserId = null} clears.
+   */
+  @PutMapping("/{activityId}/supervisor")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ACTIVITY.UPDATE')")
+  public ResponseEntity<ApiResponse<ActivityResponse>> setSupervisor(
+      @PathVariable UUID projectId,
+      @PathVariable UUID activityId,
+      @Valid @RequestBody com.bipros.activity.application.dto.SetSupervisorRequest request) {
+    ActivityResponse response = activityService.setSupervisor(activityId, request);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  /**
    * Bulk-assign one supervisor (a Resource) across many activities. Powers the
    * Resources → Supervisor sub-tab.
    */

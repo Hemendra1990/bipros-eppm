@@ -495,6 +495,25 @@ public class ActivityService {
    * short-circuits to {@code 0} so older frontends do not 500. New callers must use the
    * user-based supervisor endpoint.
    */
+  /**
+   * Phase 4.5: per-activity supervisor assignment. Writes {@code Activity.supervisor_user_id}
+   * (User FK to {@code public.users.id}). Pass {@code supervisorUserId = null} to clear.
+   */
+  public ActivityResponse setSupervisor(UUID activityId,
+      com.bipros.activity.application.dto.SetSupervisorRequest request) {
+    Activity activity = activityRepository.findById(activityId)
+        .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
+    projectAccess.requireEdit(activity.getProjectId());
+    UUID userId = request == null ? null : request.supervisorUserId();
+    String snapshot = request == null ? null : request.supervisorName();
+    activity.setSupervisorUserId(userId);
+    activity.setSupervisorUserName(userId == null ? null : snapshot);
+    Activity saved = activityRepository.save(activity);
+    log.info("Set supervisor: activityId={}, supervisorUserId={}",
+        activityId, saved.getSupervisorUserId());
+    return ActivityResponse.from(saved);
+  }
+
   @Deprecated(forRemoval = true)
   public int bulkSetSupervisor(UUID projectId, com.bipros.activity.application.dto.BulkSupervisorRequest request) {
     log.warn("Phase 4.5: bulkSetSupervisor is a no-op (responsibleResourceId column dropped). "
