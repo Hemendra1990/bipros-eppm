@@ -64,7 +64,7 @@ public class DprIssueController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
     public ResponseEntity<ApiResponse<DprIssueRow>> patch(
             @PathVariable UUID projectId,
             @PathVariable UUID id,
@@ -74,7 +74,7 @@ public class DprIssueController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID projectId,
             @PathVariable UUID id) {

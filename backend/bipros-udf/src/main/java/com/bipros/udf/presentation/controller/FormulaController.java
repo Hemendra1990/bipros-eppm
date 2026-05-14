@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/v1/formulas")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+@PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
 public class FormulaController {
 
     private final FormulaEngine formulaEngine;

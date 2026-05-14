@@ -37,7 +37,7 @@ public class PermitApprovalController {
     private final PermitClosureService closureService;
 
     @PostMapping("/{permitId}/approvals/{stepNo}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> approve(
             @PathVariable UUID permitId,
             @PathVariable int stepNo,
@@ -46,7 +46,7 @@ public class PermitApprovalController {
     }
 
     @PostMapping("/{permitId}/approvals/{stepNo}/reject")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> reject(
             @PathVariable UUID permitId,
             @PathVariable int stepNo,
@@ -55,7 +55,7 @@ public class PermitApprovalController {
     }
 
     @PostMapping("/{permitId}/gas-tests")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> recordGasTest(
             @PathVariable UUID permitId,
             @Valid @RequestBody GasTestRequest request) {
@@ -63,13 +63,13 @@ public class PermitApprovalController {
     }
 
     @GetMapping("/{permitId}/gas-tests")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasPermission(null, 'PERMIT.READ')")
     public ResponseEntity<ApiResponse<List<GasTestDto>>> listGasTests(@PathVariable UUID permitId) {
         return ResponseEntity.ok(ApiResponse.ok(approvalService.listGasTests(permitId)));
     }
 
     @PostMapping("/{permitId}/isolation-points")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<IsolationPointDto>> applyIsolation(
             @PathVariable UUID permitId,
             @Valid @RequestBody IsolationPointRequest request) {
@@ -77,13 +77,13 @@ public class PermitApprovalController {
     }
 
     @GetMapping("/{permitId}/isolation-points")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasPermission(null, 'PERMIT.READ')")
     public ResponseEntity<ApiResponse<List<IsolationPointDto>>> listIsolation(@PathVariable UUID permitId) {
         return ResponseEntity.ok(ApiResponse.ok(approvalService.listIsolationPoints(permitId)));
     }
 
     @PutMapping("/{permitId}/isolation-points/{pointId}/remove")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<IsolationPointDto>> removeIsolation(
             @PathVariable UUID permitId,
             @PathVariable UUID pointId) {
@@ -91,19 +91,19 @@ public class PermitApprovalController {
     }
 
     @PostMapping("/{permitId}/issue")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> issue(@PathVariable UUID permitId) {
         return ResponseEntity.ok(ApiResponse.ok(approvalService.issue(permitId)));
     }
 
     @PostMapping("/{permitId}/start")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> start(@PathVariable UUID permitId) {
         return ResponseEntity.ok(ApiResponse.ok(approvalService.start(permitId)));
     }
 
     @PostMapping("/{permitId}/close")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> close(
             @PathVariable UUID permitId,
             @Valid @RequestBody ClosePermitRequest request) {
@@ -111,7 +111,7 @@ public class PermitApprovalController {
     }
 
     @PostMapping("/{permitId}/revoke")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> revoke(
             @PathVariable UUID permitId,
             @Valid @RequestBody RevokePermitRequest request) {
@@ -119,7 +119,7 @@ public class PermitApprovalController {
     }
 
     @PostMapping("/{permitId}/suspend")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> suspend(
             @PathVariable UUID permitId,
             @Valid @RequestBody SuspendPermitRequest request) {
@@ -127,7 +127,7 @@ public class PermitApprovalController {
     }
 
     @PostMapping("/{permitId}/resume")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'PERMIT.APPROVE')")
     public ResponseEntity<ApiResponse<PermitDetailResponse>> resume(@PathVariable UUID permitId) {
         return ResponseEntity.ok(ApiResponse.ok(closureService.resume(permitId)));
     }

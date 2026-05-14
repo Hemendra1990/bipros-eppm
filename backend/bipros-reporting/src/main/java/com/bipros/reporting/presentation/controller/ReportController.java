@@ -30,7 +30,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/reports")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
 @RequiredArgsConstructor
 public class ReportController {
 
@@ -46,35 +45,41 @@ public class ReportController {
   /** Alias for {@code /reports/definitions}. Dashboards and links that expect the bare
    * {@code /v1/reports} collection endpoint land here instead of receiving a 404. */
   @GetMapping
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<ReportDefinitionResponse>> listReports(
       @RequestParam(required = false) ReportType type) {
     return ApiResponse.ok(reportService.listReportDefinitions(type));
   }
 
   @PostMapping("/definitions")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ReportDefinitionResponse> createReportDefinition(
       @Valid @RequestBody CreateReportDefinitionRequest request) {
     return ApiResponse.ok(reportService.createReportDefinition(request));
   }
 
   @GetMapping("/definitions")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<ReportDefinitionResponse>> listReportDefinitions(
       @RequestParam(required = false) ReportType type) {
     return ApiResponse.ok(reportService.listReportDefinitions(type));
   }
 
   @GetMapping("/definitions/{id}")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ReportDefinitionResponse> getReportDefinition(@PathVariable UUID id) {
     return ApiResponse.ok(reportService.getReportDefinition(id));
   }
 
   @DeleteMapping("/definitions/{id}")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<Void> deleteReportDefinition(@PathVariable UUID id) {
     reportService.deleteReportDefinition(id);
     return ApiResponse.ok(null);
   }
 
   @PostMapping("/execute")
+  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
   public ApiResponse<ReportExecutionResponse> executeReport(
       @Valid @RequestBody ExecuteReportRequest request) {
     return ApiResponse.ok(
@@ -86,17 +91,20 @@ public class ReportController {
   }
 
   @GetMapping("/executions/{id}")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ReportExecutionResponse> getExecution(@PathVariable UUID id) {
     return ApiResponse.ok(reportService.getExecution(id));
   }
 
   @GetMapping("/executions")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<ReportExecutionResponse>> listExecutions(
       @RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.listExecutions(projectId));
   }
 
   @GetMapping("/projects/{projectId}/s-curve")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<List<SCurveDataPoint>> getSCurveData(
       @PathVariable UUID projectId,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
@@ -106,6 +114,7 @@ public class ReportController {
   }
 
   @GetMapping("/projects/{projectId}/resource-histogram")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<List<ResourceHistogramEntry>> getResourceHistogram(
       @PathVariable UUID projectId,
       @RequestParam UUID resourceId,
@@ -115,6 +124,7 @@ public class ReportController {
   }
 
   @GetMapping("/executions/{id}/download")
+  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
   public ResponseEntity<byte[]> downloadReportExecution(@PathVariable UUID id) {
     var execution = reportService.getExecution(id);
 
@@ -133,6 +143,7 @@ public class ReportController {
   }
 
   @GetMapping("/monthly-progress")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<MonthlyProgressData> getMonthlyProgress(
       @RequestParam UUID projectId,
       @RequestParam String period) {
@@ -140,32 +151,38 @@ public class ReportController {
   }
 
   @GetMapping("/evm")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<EvmReportData> getEvmReport(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getEvmReport(projectId));
   }
 
   @GetMapping("/cash-flow")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<CashFlowEntry>> getCashFlowReport(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getCashFlowReport(projectId));
   }
 
   @GetMapping("/contract-status")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ContractStatusData> getContractStatus(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getContractStatus(projectId));
   }
 
   @GetMapping("/risk-register")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<RiskRegisterData> getRiskRegister(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getRiskRegister(projectId));
   }
 
   @GetMapping("/resource-utilization")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ResourceUtilizationData> getResourceUtilization(
       @RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getResourceUtilization(projectId));
   }
 
   @GetMapping("/capacity-utilization")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<CapacityUtilizationReport> getCapacityUtilization(
       @RequestParam UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
@@ -185,6 +202,7 @@ public class ReportController {
    * norms. Reads {@code project.dpr_manpower}/{@code project.dpr_equipment} directly.
    */
   @GetMapping("/supervisor-performance")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<SupervisorPerformanceReport> getSupervisorPerformance(
       @RequestParam UUID projectId,
       @RequestParam(required = false) UUID supervisorResourceId,
@@ -200,6 +218,7 @@ public class ReportController {
    * full report plus pivoted trade/equipment deltas.
    */
   @GetMapping("/supervisor-performance/compare")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<SupervisorPerformanceComparison> compareSupervisorPerformance(
       @RequestParam UUID projectId,
       @RequestParam List<UUID> supervisorResourceIds,
@@ -217,6 +236,7 @@ public class ReportController {
    * days cell (defaults to 26 — typical 6-day-week construction month).
    */
   @GetMapping("/capacity-utilization/excel")
+  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
   public ResponseEntity<byte[]> downloadCapacityUtilizationExcel(
       @RequestParam UUID projectId,
       @RequestParam String month,
@@ -256,7 +276,7 @@ public class ReportController {
   }
 
   @GetMapping("/trend-analysis")
-  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<TrendAnalysisData> getTrendAnalysis(
       @RequestParam UUID projectId,
       @RequestParam(defaultValue = "6") int months) {

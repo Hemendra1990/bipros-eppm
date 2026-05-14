@@ -15,7 +15,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/ai")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+@PreAuthorize("hasPermission(null, 'AI.WRITE')")
 public class ImageController {
 
     private final AiImageStorageService imageStorageService;

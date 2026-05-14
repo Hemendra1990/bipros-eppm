@@ -45,7 +45,7 @@ public class DailyProgressReportController {
   private final DprAttachmentService attachmentService;
 
   @PostMapping
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<DailyProgressReportResponse>> create(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateDailyProgressReportRequest request) {
@@ -55,7 +55,7 @@ public class DailyProgressReportController {
   }
 
   @PostMapping("/bulk")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<List<DailyProgressReportResponse>>> createBulk(
       @PathVariable UUID projectId,
       @Valid @RequestBody List<CreateDailyProgressReportRequest> requests) {
@@ -93,7 +93,7 @@ public class DailyProgressReportController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
   public ResponseEntity<ApiResponse<DailyProgressReportResponse>> update(
       @PathVariable UUID projectId,
       @PathVariable UUID id,
@@ -103,7 +103,7 @@ public class DailyProgressReportController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.DELETE')")
   public ResponseEntity<ApiResponse<Void>> delete(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
@@ -123,7 +123,7 @@ public class DailyProgressReportController {
    * {@code curl -F 'captions=…'}).
    */
   @PostMapping(value = "/{id}/photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
   public ResponseEntity<ApiResponse<List<DprAttachmentResponse>>> uploadPhotos(
       @PathVariable UUID projectId,
       @PathVariable UUID id,
@@ -157,7 +157,7 @@ public class DailyProgressReportController {
   }
 
   @DeleteMapping("/{id}/photos/{photoId}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
   public ResponseEntity<ApiResponse<Void>> deletePhoto(
       @PathVariable UUID projectId,
       @PathVariable UUID id,

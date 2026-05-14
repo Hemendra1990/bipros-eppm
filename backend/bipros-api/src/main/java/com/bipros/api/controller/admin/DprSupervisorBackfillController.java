@@ -30,7 +30,7 @@ import java.util.TreeSet;
  */
 @RestController
 @RequestMapping("/v1/admin/dpr-supervisor-backfill")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasPermission(null, 'ADMIN_USER.UPDATE')")
 @RequiredArgsConstructor
 public class DprSupervisorBackfillController {
 

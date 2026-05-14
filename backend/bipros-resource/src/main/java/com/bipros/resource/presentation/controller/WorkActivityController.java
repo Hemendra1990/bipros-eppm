@@ -33,6 +33,7 @@ public class WorkActivityController {
   private final WorkActivityService service;
 
   @GetMapping
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.READ')")
   public ResponseEntity<ApiResponse<List<WorkActivityResponse>>> list(
       @RequestParam(required = false) Boolean active) {
     log.info("GET /v1/work-activities - active={}", active);
@@ -40,12 +41,13 @@ public class WorkActivityController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.READ')")
   public ResponseEntity<ApiResponse<WorkActivityResponse>> get(@PathVariable UUID id) {
     return ResponseEntity.ok(ApiResponse.ok(service.get(id)));
   }
 
   @PostMapping
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
   public ResponseEntity<ApiResponse<WorkActivityResponse>> create(
       @Valid @RequestBody CreateWorkActivityRequest request) {
     log.info("POST /v1/work-activities - name={}", request.name());
@@ -53,7 +55,7 @@ public class WorkActivityController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
   public ResponseEntity<ApiResponse<WorkActivityResponse>> update(
       @PathVariable UUID id,
       @Valid @RequestBody CreateWorkActivityRequest request) {
@@ -61,14 +63,14 @@ public class WorkActivityController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasRole('ADMIN')")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
   public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
     service.delete(id);
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
 
   @DeleteMapping
-  @PreAuthorize("hasRole('ADMIN')")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
   public ResponseEntity<ApiResponse<Void>> deleteAll() {
     service.deleteAll();
     return ResponseEntity.ok(ApiResponse.ok(null));

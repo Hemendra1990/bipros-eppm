@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Manage per-project role assignments. Only ADMIN or a PROJECT_MANAGER of the project itself
- * may assign / revoke members. Read access is open to anyone who can read the project (the
- * service-layer {@code @projectAccess.canRead} gate filters the listing).
+ * Manage per-project role assignments. Callers need {@code PROJECT_MEMBER.MANAGE} on the project
+ * to assign / revoke members and {@code PROJECT_MEMBER.READ} to list them. ADMIN is short-circuited
+ * by {@code CustomPermissionEvaluator}, so no explicit ADMIN escape hatch is required.
  *
  * <p>Endpoints:
  * <ul>
@@ -52,7 +52,7 @@ public class ProjectMemberController {
     }
 
     @GetMapping
-    @PreAuthorize("@projectAccess.canRead(#projectId)")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.READ')")
     public ResponseEntity<ApiResponse<List<MemberDto>>> list(@PathVariable UUID projectId) {
         List<MemberDto> members = projectMemberRepository.findByProjectId(projectId).stream()
                 .map(MemberDto::from)
@@ -61,7 +61,7 @@ public class ProjectMemberController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN') or @projectAccess.hasProjectRole(#projectId, 'PROJECT_MANAGER')")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.MANAGE')")
     @Transactional
     public ResponseEntity<ApiResponse<MemberDto>> assign(
             @PathVariable UUID projectId,
@@ -83,7 +83,7 @@ public class ProjectMemberController {
     }
 
     @DeleteMapping("/{memberId}")
-    @PreAuthorize("hasRole('ADMIN') or @projectAccess.hasProjectRole(#projectId, 'PROJECT_MANAGER')")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.MANAGE')")
     @Transactional
     public ResponseEntity<Void> revoke(@PathVariable UUID projectId, @PathVariable UUID memberId) {
         projectMemberRepository.findById(memberId).ifPresent(m -> {

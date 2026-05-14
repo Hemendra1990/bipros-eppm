@@ -22,7 +22,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/v1/resources/{resourceId}/dpr-summary")
-@PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','PROGRAMME_MANAGER','TEAM_MEMBER','VIEWER')")
+@PreAuthorize("hasPermission(null, 'DPR.READ')")
 @RequiredArgsConstructor
 public class ResourceDprSummaryController {
 
