@@ -1,15 +1,57 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
-export type CapacityGroupBy = "RESOURCE_TYPE" | "RESOURCE";
+export type CapacityGroupBy = "RESOURCE_TYPE" | "RESOURCE" | "ROLE";
 export type CapacityNormType = "MANPOWER" | "EQUIPMENT";
 export type BudgetedSource =
+  | "VARIANT"
+  | "ROLE"
+  | "UNSCOPED"
+  | "MIXED"
   | "SPECIFIC_RESOURCE"
   | "RESOURCE_TYPE"
   | "WORK_ACTIVITY"
   | "RESOURCE_LEGACY"
   | "NONE";
 
+/** New role-period shape — SC180 columns (Budget · Planned · Actual · %Util · Cost). */
+export interface RolePeriod {
+  qty: number | null;
+  budgetDays: number | null;
+  budgetNos: number | null;
+  plannedDays: number | null;
+  plannedNos: number | null;
+  actualDays: number | null;
+  actualNos: number | null;
+  /**
+   * Portion of actualDays that landed on activities whose linked Work Activity has no norm for
+   * this role's type — surfaced separately so the user sees util% reflects only the tracked
+   * portion, not the role's full deployment.
+   */
+  actualDaysUntracked: number | null;
+  utilizationPct: number | null;
+  costImplication: number | null;
+}
+
+export interface CapacityRoleRow {
+  roleId: string;
+  roleCode: string | null;
+  roleName: string | null;
+  ratePerDay: number | null;
+  forTheDay: RolePeriod | null;
+  forTheMonth: RolePeriod | null;
+  cumulative: RolePeriod | null;
+  normSource: BudgetedSource;
+}
+
+export interface CapacitySection {
+  rows: CapacityRoleRow[];
+  totalForTheDay: RolePeriod | null;
+  totalForTheMonth: RolePeriod | null;
+  totalCumulative: RolePeriod | null;
+}
+
+/** @deprecated Legacy flat-row shape — kept for older consumers; new code uses {@link CapacitySection}. */
 export interface CapacityPeriod {
   qty: number | null;
   budgetedDays: number | null;
@@ -18,6 +60,7 @@ export interface CapacityPeriod {
   utilizationPct: number | null;
 }
 
+/** @deprecated Legacy row shape; new code consumes {@link CapacitySection}. */
 export interface CapacityUtilizationRow {
   groupKey: {
     resourceTypeDefId: string | null;
@@ -29,7 +72,7 @@ export interface CapacityUtilizationRow {
     code: string;
     name: string;
     defaultUnit: string | null;
-  };
+  } | null;
   budgeted: {
     outputPerDay: number | null;
     source: BudgetedSource;
@@ -43,8 +86,14 @@ export interface CapacityUtilizationReport {
   projectId: string;
   fromDate: string | null;
   toDate: string | null;
+  workDays: number;
+  manpower: CapacitySection | null;
+  equipment: CapacitySection | null;
+  /** @deprecated Legacy fields retained so the older consumers keep working. */
   groupBy: CapacityGroupBy;
+  /** @deprecated. */
   normType: CapacityNormType | null;
+  /** @deprecated Legacy flat rows. New code reads {@link manpower} / {@link equipment}. */
   rows: CapacityUtilizationRow[];
 }
 
@@ -55,10 +104,10 @@ export interface GetCapacityUtilizationParams {
   groupBy?: CapacityGroupBy;
   normType?: CapacityNormType;
   /**
-   * Phase 4.4 rename — User UUID (carrying a supervisor role) replaces the legacy
-   * Resource UUID. Sourced from {@code userApi.listByRoles([...])}. NOTE: as of
-   * Phase 4.4 the backend capacity-utilization endpoint may still expect the old
-   * {@code supervisorResourceId} query param; verify before relying on the filter.
+   * User UUID (carrying a supervisor role). Sourced from
+   * {@code userApi.listByRoles([...])}. Phase 091 dropped
+   * {@code daily_progress_reports.supervisor_resource_id}, so this is the only
+   * filter the backend accepts.
    */
   supervisorUserId?: string;
 }
@@ -167,8 +216,8 @@ export interface SupervisorPerformanceComparison {
 
 export interface SupervisorOption {
   /**
-   * Phase 4.4 rename — User UUID. The {@code /dpr/supervisors-used} endpoint
-   * surfaces the renamed JSON field.
+   * User UUID. The {@code /dpr/supervisors-used} endpoint surfaces this JSON
+   * field; Phase 091 dropped the legacy Resource-FK source.
    */
   supervisorUserId: string;
   supervisorCode: string | null;
@@ -178,7 +227,7 @@ export interface SupervisorOption {
 
 export interface GetSupervisorPerformanceParams {
   projectId: string;
-  /** Phase 4.4 rename — User UUID. */
+  /** User UUID. Phase 091 dropped the legacy Resource-FK supervisor filter. */
   supervisorUserId?: string;
   fromDate?: string;
   toDate?: string;

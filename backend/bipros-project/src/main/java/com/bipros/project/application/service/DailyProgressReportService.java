@@ -115,6 +115,10 @@ public class DailyProgressReportService {
           });
     }
 
+    // Work Activity is intentionally NOT required. Some activities (e.g. detailed engineering
+    // / design / office work) don't track productivity. The DPR form surfaces a coverage banner
+    // so the user knows when productivity won't be measured.
+
     DailyProgressReport dpr = DailyProgressReport.builder()
         .projectId(projectId)
         .reportDate(request.reportDate())
@@ -388,8 +392,10 @@ public class DailyProgressReportService {
       UUID projectId, LocalDate fromDate, LocalDate toDate) {
     ensureProjectExists(projectId);
 
-    // Phase 4.4 cutover: pivots off the new supervisor_user_id column and the SupervisorOption
-    // identity field is now named `supervisorUserId` on the wire — matches the frontend contract.
+    // Phase 4.4 cutover: pivots off the new supervisor_user_id column (DPR carries it directly
+    // post Phase 091 OLTP migration). The Phase-10 dual-source UNION I had on
+    // feat/capacity-utilization is obsolete — supervisor_resource_id was dropped from the DPR
+    // table, so the only valid lookup is via the User FK.
     @SuppressWarnings("unchecked")
     List<Object[]> raw = em.createNativeQuery(
             "SELECT d.supervisor_user_id, "

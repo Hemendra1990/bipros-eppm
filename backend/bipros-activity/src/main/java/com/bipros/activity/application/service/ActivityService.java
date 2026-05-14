@@ -665,4 +665,48 @@ public class ActivityService {
     Project project = projectRepository.findById(projectId).orElse(null);
     return project != null ? project.getCalendarId() : null;
   }
+
+  /**
+   * List activities under {@code projectId} that have no {@code work_activity_id} linked AND
+   * either have at least one DPR submitted in the [from, to] window or have planned dates that
+   * intersect the window. Powers the "N activities have no Work Activity linked" banner on the
+   * Capacity Utilization page.
+   *
+   * <p>The query crosses the project schema (for the DPR existence check) so a native SQL is
+   * used; the same precedent applies as elsewhere in this service.
+   */
+  @Transactional(readOnly = true)
+  public List<com.bipros.activity.application.dto.MissingWorkActivityRow> listMissingWorkActivity(
+      UUID projectId, LocalDate from, LocalDate to) {
+    projectAccess.requireRead(projectId);
+    LocalDate fromDate = from != null ? from : LocalDate.now().minusYears(5);
+    LocalDate toDate = to != null ? to : LocalDate.now().plusYears(5);
+
+    @SuppressWarnings("unchecked")
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT a.id, a.code, a.name, "
+                + "  (SELECT COUNT(*) FROM project.daily_progress_reports d "
+                + "     WHERE d.activity_id = a.id AND d.report_date BETWEEN :fromDate AND :toDate) "
+                + "FROM activity.activities a "
+                + "WHERE a.project_id = :projectId "
+                + "  AND a.work_activity_id IS NULL "
+                + "  AND ( "
+                + "    EXISTS (SELECT 1 FROM project.daily_progress_reports d "
+                + "             WHERE d.activity_id = a.id AND d.report_date BETWEEN :fromDate AND :toDate) "
+                + "    OR (a.planned_start_date <= :toDate AND a.planned_finish_date >= :fromDate) "
+                + "  ) "
+                + "ORDER BY a.code")
+        .setParameter("projectId", projectId)
+        .setParameter("fromDate", fromDate)
+        .setParameter("toDate", toDate)
+        .getResultList();
+
+    return rows.stream()
+        .map(r -> new com.bipros.activity.application.dto.MissingWorkActivityRow(
+            (UUID) r[0],
+            (String) r[1],
+            (String) r[2],
+            r[3] == null ? 0 : ((Number) r[3]).intValue()))
+        .toList();
+  }
 }

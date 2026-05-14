@@ -1,6 +1,13 @@
 import { apiClient } from "./client";
 import type { ApiResponse, PagedResponse } from "../types";
 
+export interface MissingWorkActivityRow {
+  activityId: string;
+  code: string;
+  name: string;
+  dprCount: number;
+}
+
 export type ConstraintType =
   | "START_ON"
   | "START_ON_OR_AFTER"
@@ -165,6 +172,15 @@ export const activityApi = {
 
   deleteActivity: (projectId: string, activityId: string) =>
     apiClient.delete(`/v1/projects/${projectId}/activities/${activityId}`),
+
+  /** Activities under this project with no Work Activity linked, optionally filtered by window. */
+  listMissingWorkActivity: (projectId: string, from?: string, to?: string) =>
+    apiClient
+      .get<ApiResponse<MissingWorkActivityRow[]>>(
+        `/v1/projects/${projectId}/activities/missing-work-activity`,
+        { params: { from, to } }
+      )
+      .then((r) => r.data),
 
   triggerSchedule: (projectId: string, option: string) =>
     apiClient

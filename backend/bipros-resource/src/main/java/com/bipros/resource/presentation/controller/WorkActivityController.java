@@ -31,6 +31,7 @@ import java.util.UUID;
 public class WorkActivityController {
 
   private final WorkActivityService service;
+  private final com.bipros.resource.application.service.ProductivityCoverageService coverageService;
 
   @GetMapping
   @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.READ')")
@@ -44,6 +45,17 @@ public class WorkActivityController {
   @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.READ')")
   public ResponseEntity<ApiResponse<WorkActivityResponse>> get(@PathVariable UUID id) {
     return ResponseEntity.ok(ApiResponse.ok(service.get(id)));
+  }
+
+  /**
+   * Productivity coverage summary for a Work Activity: does it have manpower norms, equipment
+   * norms, both, or none? Used by the Activity edit page to render the coverage chip under the
+   * Work Activity picker, and by the DPR form to show the supervisor what will be measured.
+   */
+  @GetMapping("/{id}/productivity-coverage")
+  public ResponseEntity<ApiResponse<com.bipros.resource.application.dto.ProductivityCoverageResponse>>
+      productivityCoverage(@PathVariable UUID id) {
+    return ResponseEntity.ok(ApiResponse.ok(coverageService.coverage(id)));
   }
 
   @PostMapping

@@ -16,6 +16,7 @@ import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { resourceApi } from "@/lib/api/resourceApi";
 import { RoleDemandOverview } from "@/components/activity/RoleDemandOverview";
+import { WorkActivityCoverageChip } from "@/components/activity/WorkActivityCoverageChip";
 import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
 import { projectResourceApi } from "@/lib/api/projectResourceApi";
 import type { ProjectResourceResponse } from "@/lib/api/projectResourceApi";
@@ -758,10 +759,12 @@ function ViewMode({
           </div>
         ) : (
           <p className="text-sm text-text-muted">
-            Not linked. Edit the activity and pick a master entry to enable
-            productivity-norm-driven capacity utilisation reports.
+            Not linked. This activity won't appear on Capacity Utilization (no norm to compare
+            actual vs expected). Fine for design / engineering / office work; pick a master entry
+            on the edit screen if you want productivity tracked.
           </p>
         )}
+        <WorkActivityCoverageChip workActivityId={activity.workActivityId} />
       </div>
 
       {/* Calendar */}
@@ -1316,9 +1319,11 @@ function EditForm({
             ]}
           />
           <p className="mt-1 text-xs text-text-muted">
-            Links this project activity to its master library entry — required for productivity-norm
-            lookups when computing budgeted vs actual resource-days.
+            Links this project activity to its master library entry. Optional — leave blank for
+            activities that don't need productivity tracking (e.g. design / engineering / office
+            work). When set, the productivity norms below drive DPR expected-vs-actual.
           </p>
+          <WorkActivityCoverageChip workActivityId={data.workActivityId} />
         </div>
 
         <div>
