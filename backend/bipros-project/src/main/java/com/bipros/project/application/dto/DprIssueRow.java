@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -37,6 +38,10 @@ import java.util.UUID;
  */
 public record DprIssueRow(
     UUID id,
+    UUID dprId,
+    UUID activityId,
+    String activityName,
+    LocalDate reportDate,
     @NotBlank @Size(max = 150) String title,
     @Size(max = 2000) String description,
     @NotNull IssueCategory category,
@@ -56,6 +61,10 @@ public record DprIssueRow(
     public static DprIssueRow from(DprIssue e) {
         return new DprIssueRow(
             e.getId(),
+            e.getDprId(),
+            e.getActivityId(),
+            e.getActivityName(),
+            e.getReportDate(),
             e.getTitle(),
             e.getDescription(),
             e.getCategory(),

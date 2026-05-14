@@ -6,6 +6,7 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 import type {
+  CreateDprIssueRequest,
   DprIssueRow,
   IssueCategory,
   IssueSeverity,
@@ -13,6 +14,7 @@ import type {
 } from "../types/dpr";
 
 export type {
+  CreateDprIssueRequest,
   DprIssueRow,
   IssueCategory,
   IssueSeverity,
@@ -41,6 +43,8 @@ export interface UpdateDprIssueRequest {
   assignedToUserId?: string | null;
   assignedToName?: string | null;
   resolutionNotes?: string | null;
+  activityId?: string | null;
+  activityName?: string | null;
 }
 
 function toQuery(filters: DprIssueFilters): string {
@@ -57,6 +61,11 @@ function toQuery(filters: DprIssueFilters): string {
 }
 
 export const dprIssueApi = {
+  create: (projectId: string, body: CreateDprIssueRequest) =>
+    apiClient
+      .post<ApiResponse<DprIssueRow>>(`/v1/projects/${projectId}/dpr-issues`, body)
+      .then((r) => r.data),
+
   list: (projectId: string, filters: DprIssueFilters = {}) =>
     apiClient
       .get<ApiResponse<DprIssueRow[]>>(`/v1/projects/${projectId}/dpr-issues${toQuery(filters)}`)

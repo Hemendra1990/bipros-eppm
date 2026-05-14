@@ -5,6 +5,7 @@ import com.bipros.common.event.DprMutationType;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
+import com.bipros.project.application.dto.CreateDprIssueRequest;
 import com.bipros.project.application.dto.DprIssueRow;
 import com.bipros.project.application.dto.UpdateDprIssueRequest;
 import com.bipros.project.domain.model.DprIssue;
@@ -94,6 +95,8 @@ public class DprIssueService {
         }
         if (request.assignedToName() != null) issue.setAssignedToName(request.assignedToName());
         if (request.resolutionNotes() != null) issue.setResolutionNotes(request.resolutionNotes());
+        if (request.activityId() != null) issue.setActivityId(request.activityId());
+        if (request.activityName() != null) issue.setActivityName(request.activityName());
 
         IssueStatus newStatus = request.status() != null ? request.status() : oldStatus;
         if (request.status() != null && newStatus != oldStatus) {
@@ -128,6 +131,37 @@ public class DprIssueService {
                 projectId, dprId, id,
                 oldStatus != null ? oldStatus.name() : null, null,
                 DprMutationType.DELETED));
+    }
+
+    public DprIssueRow create(UUID projectId, CreateDprIssueRequest req) {
+        IssueStatus status = req.status() != null ? req.status() : IssueStatus.OPEN;
+        DprIssue issue = DprIssue.builder()
+                .dprId(null)
+                .projectId(projectId)
+                .activityId(req.activityId())
+                .activityName(req.activityName())
+                .supervisorResourceId(req.supervisorResourceId())
+                .supervisorName(req.supervisorName())
+                .assignedToResourceId(
+                        req.assignedToResourceId() != null
+                                ? req.assignedToResourceId()
+                                : req.supervisorResourceId())
+                .assignedToName(
+                        req.assignedToName() != null ? req.assignedToName() : req.supervisorName())
+                .reportDate(req.reportDate() != null ? req.reportDate() : LocalDate.now())
+                .category(req.category())
+                .severity(req.severity())
+                .status(status)
+                .title(req.title())
+                .description(req.description())
+                .openedAt(Instant.now())
+                .resolvedAt(status.resolvedAtTerminal() ? Instant.now() : null)
+                .build();
+        DprIssue saved = issueRepository.save(issue);
+        auditService.logCreate("DprIssue", saved.getId(), DprIssueRow.from(saved));
+        eventPublisher.publishEvent(new DprIssueChangedEvent(
+                projectId, null, saved.getId(), null, status.name(), DprMutationType.CREATED));
+        return DprIssueRow.from(saved);
     }
 
     private DprIssue findIssue(UUID projectId, UUID id) {

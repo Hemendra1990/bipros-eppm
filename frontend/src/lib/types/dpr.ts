@@ -111,6 +111,10 @@ export type IssueStatus =
  */
 export interface DprIssueRow {
   id?: string | null;
+  dprId?: string | null;
+  activityId?: string | null;
+  activityName?: string | null;
+  reportDate?: string | null;
   title: string;
   description?: string | null;
   category: IssueCategory;
@@ -123,6 +127,22 @@ export interface DprIssueRow {
   openedAt?: string | null;
   resolvedAt?: string | null;
   resolutionNotes?: string | null;
+}
+
+/** Request body for creating a standalone DprIssue not tied to a parent DPR. */
+export interface CreateDprIssueRequest {
+  title: string;
+  description?: string | null;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  status?: IssueStatus;
+  supervisorResourceId?: string | null;
+  supervisorName?: string | null;
+  assignedToResourceId?: string | null;
+  assignedToName?: string | null;
+  activityId?: string | null;
+  activityName?: string | null;
+  reportDate?: string | null;
 }
 
 /** Picker-mode option returned by GET .../resource-assignments/activity/{id}/picker?kind=… */
