@@ -234,10 +234,10 @@ public class ProfileSeeder {
                     )
             ),
             new DefaultProfile(
-                    "QC_MANAGER",
+                    "QA_QC_ENGINEER",
                     "Quality Control Manager",
                     "Process adherence and traceability: NCRs, QC annotations on DPRs, audit trails.",
-                    "QC_MANAGER",
+                    "QA_QC_ENGINEER",
                     of(
                             "PROJECT.READ",
                             "ACTIVITY.READ",

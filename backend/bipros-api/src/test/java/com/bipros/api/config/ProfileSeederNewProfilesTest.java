@@ -35,8 +35,8 @@ class ProfileSeederNewProfilesTest {
 
     @Test
     void seedsQcManagerProfile() {
-        Profile p = profileRepository.findByCode("QC_MANAGER").orElseThrow();
-        assertEquals("QC_MANAGER", p.getLegacyRoleName());
+        Profile p = profileRepository.findByCode("QA_QC_ENGINEER").orElseThrow();
+        assertEquals("QA_QC_ENGINEER", p.getLegacyRoleName());
         assertTrue(p.getPermissions().containsAll(Set.of(
                 "NCR.CREATE", "NCR.READ", "NCR.UPDATE", "DPR.QC_ANNOTATE")));
     }

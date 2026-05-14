@@ -147,3 +147,5 @@ databaseChangeLog:
       file: db/changelog/087-supervisor-user-columns.yaml
   - include:
       file: db/changelog/088-productivity-norm-role-columns.yaml
+  - include:
+      file: db/changelog/089-roles-canonicalize.yaml
