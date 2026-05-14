@@ -22,6 +22,8 @@ public final class PermissionCatalog {
     private static final String ANNOTATE = "ANNOTATE";
     private static final String AUDIT = "AUDIT";
     private static final String WRITE = "WRITE";
+    private static final String INCIDENT_LOG = "INCIDENT_LOG";
+    private static final String MANAGE = "MANAGE";
 
     public static final List<Permission> ALL = List.of(
             // Project
@@ -136,7 +138,29 @@ public final class PermissionCatalog {
             new Permission("YIELD_VARIANCE.READ", "YIELD_VARIANCE", READ, "View material yield variance reports"),
 
             // AI write (lets a profile both run the AI and use write-capable AI tools when added)
-            new Permission("AI.WRITE", "AI", WRITE, "Run AI tools that write back to the system")
+            new Permission("AI.WRITE", "AI", WRITE, "Run AI tools that write back to the system"),
+
+            // DPR (Daily Progress Report)
+            new Permission("DPR.READ",    "DPR", READ,    "View daily progress reports"),
+            new Permission("DPR.CREATE",  "DPR", CREATE,  "Submit DPRs (field role)"),
+            new Permission("DPR.UPDATE",  "DPR", UPDATE,  "Edit own / team DPRs"),
+            new Permission("DPR.DELETE",  "DPR", DELETE,  "Delete DPRs"),
+            new Permission("DPR.APPROVE", "DPR", APPROVE, "Approve DPR submissions"),
+
+            // Safety / HSE
+            new Permission("SAFETY.READ",         "SAFETY", READ,         "View safety records and incident logs"),
+            new Permission("SAFETY.CREATE",       "SAFETY", CREATE,       "Create safety records / inspections"),
+            new Permission("SAFETY.UPDATE",       "SAFETY", UPDATE,       "Edit safety records"),
+            new Permission("SAFETY.INCIDENT_LOG", "SAFETY", INCIDENT_LOG, "Log a safety incident (subset of CREATE for field roles)"),
+
+            // Permits (Permit To Work)
+            new Permission("PERMIT.READ",    "PERMIT", READ,    "View permits"),
+            new Permission("PERMIT.CREATE",  "PERMIT", CREATE,  "Create new permits"),
+            new Permission("PERMIT.APPROVE", "PERMIT", APPROVE, "Approve / reject permit steps"),
+
+            // Project membership
+            new Permission("PROJECT_MEMBER.READ",   "PROJECT_MEMBER", READ,   "View project members"),
+            new Permission("PROJECT_MEMBER.MANAGE", "PROJECT_MEMBER", MANAGE, "Add/remove/edit project members")
     );
 
     public static final Set<String> ALL_CODES = ALL.stream()
