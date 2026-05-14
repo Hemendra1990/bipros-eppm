@@ -54,14 +54,17 @@ public class CapacityUtilizationReportService {
   }
 
   /**
-   * Supervisor-aware overload. When {@code supervisorResourceId} is non-null only daily-output
+   * Supervisor-aware overload. When {@code supervisorUserId} is non-null only daily-output
    * rows linked to that supervisor (via the parent DPR) are counted. MANUAL ledger rows
    * ({@code dpr_id IS NULL}) are filtered out automatically — they have no supervisor.
+   *
+   * <p>RBAC Phase 4.4 — pivots off {@code daily_progress_reports.supervisor_user_id}; the
+   * legacy {@code supervisor_resource_id} column was dropped by migration 091.
    */
   @Transactional(readOnly = true)
   public CapacityUtilizationReport build(
       UUID projectId, LocalDate fromDate, LocalDate toDate,
-      String groupBy, String normType, UUID supervisorResourceId) {
+      String groupBy, String normType, UUID supervisorUserId) {
 
     LocalDate today = LocalDate.now();
     LocalDate effectiveTo = toDate == null ? today : toDate;
@@ -98,13 +101,13 @@ public class CapacityUtilizationReportService {
                 + "WHERE o.project_id = :projectId "
                 + "  AND o.output_date BETWEEN :fromDate AND :toDate "
                 + "  AND a.work_activity_id IS NOT NULL "
-                + "  AND (CAST(:supervisorResourceId AS uuid) IS NULL "
-                + "       OR d.supervisor_resource_id = CAST(:supervisorResourceId AS uuid))")
+                + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
+                + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid))")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", effectiveFrom)
         .setParameter("toDate", effectiveTo)
-        .setParameter("supervisorResourceId",
-            supervisorResourceId != null ? supervisorResourceId.toString() : null)
+        .setParameter("supervisorUserId",
+            supervisorUserId != null ? supervisorUserId.toString() : null)
         .getResultList();
 
     // 2. Aggregate by (workActivity, group-key). Group key = resourceTypeId or resourceId.

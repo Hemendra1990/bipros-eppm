@@ -116,9 +116,9 @@ export interface DprIssueRow {
   category: IssueCategory;
   severity: IssueSeverity;
   status: IssueStatus;
-  supervisorResourceId?: string | null;
+  supervisorUserId?: string | null;
   supervisorName?: string | null;
-  assignedToResourceId?: string | null;
+  assignedToUserId?: string | null;
   assignedToName?: string | null;
   openedAt?: string | null;
   resolvedAt?: string | null;
@@ -144,7 +144,7 @@ export interface AssignedResourceOption {
 
 export interface DprBaseFields {
   reportDate: string;
-  supervisorResourceId?: string | null;
+  supervisorUserId?: string | null;
   supervisorName: string;
   chainageFromM?: number | null;
   chainageToM?: number | null;

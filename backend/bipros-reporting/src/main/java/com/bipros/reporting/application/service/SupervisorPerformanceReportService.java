@@ -34,9 +34,10 @@ import java.util.UUID;
  * Supervisor-aware capacity utilization. Builds the SC180 Resource Productivity Report shape
  * (per-trade Manpower Utilization, per-equipment-type Equipment Utilization, per-activity
  * drill-down) by reading {@code project.dpr_manpower} / {@code project.dpr_equipment} directly
- * — keyed by supervisor via the parent {@code daily_progress_reports.supervisor_resource_id}.
+ * — keyed by supervisor via the parent {@code daily_progress_reports.supervisor_user_id}
+ * (Phase 4.4: the legacy {@code supervisor_resource_id} column was dropped by migration 091).
  *
- * <p>{@code supervisorResourceId == null} collapses the filter to project-wide. The page can use
+ * <p>{@code supervisorUserId == null} collapses the filter to project-wide. The page can use
  * the same endpoint for both views.
  */
 @Service
@@ -56,7 +57,7 @@ public class SupervisorPerformanceReportService {
 
   @Transactional(readOnly = true)
   public SupervisorPerformanceReport build(
-      UUID projectId, UUID supervisorResourceId,
+      UUID projectId, UUID supervisorUserId,
       LocalDate fromDate, LocalDate toDate, int workDays) {
 
     LocalDate today = LocalDate.now();
@@ -64,15 +65,15 @@ public class SupervisorPerformanceReportService {
     LocalDate effectiveFrom = fromDate == null ? effectiveTo.withDayOfMonth(1) : fromDate;
     int effectiveWorkDays = workDays > 0 ? workDays : 26;
 
-    String supervisorName = supervisorResourceId == null ? null
-        : resolveSupervisorName(projectId, supervisorResourceId);
+    String supervisorName = supervisorUserId == null ? null
+        : resolveSupervisorName(projectId, supervisorUserId);
 
     List<ManpowerCellRow> manpowerCells =
-        fetchManpowerCells(projectId, supervisorResourceId, effectiveFrom, effectiveTo);
+        fetchManpowerCells(projectId, supervisorUserId, effectiveFrom, effectiveTo);
     List<EquipmentCellRow> equipmentCells =
-        fetchEquipmentCells(projectId, supervisorResourceId, effectiveFrom, effectiveTo);
+        fetchEquipmentCells(projectId, supervisorUserId, effectiveFrom, effectiveTo);
     Map<UUID, ActivityMeta> activityMeta =
-        fetchActivityMeta(projectId, supervisorResourceId, effectiveFrom, effectiveTo);
+        fetchActivityMeta(projectId, supervisorUserId, effectiveFrom, effectiveTo);
 
     // Resolve norms once per (workActivityId, resourceTypeId) to avoid hammering the DB inside
     // the inner loops. Both the trade rollup and the activity drill-down consume the same map.
@@ -95,7 +96,7 @@ public class SupervisorPerformanceReportService {
     List<ActivityDrillDown> drillDown = buildDrillDown(manpowerCells, equipmentCells, normCache, activityMeta);
 
     return new SupervisorPerformanceReport(
-        projectId, supervisorResourceId, supervisorName,
+        projectId, supervisorUserId, supervisorName,
         effectiveFrom, effectiveTo, effectiveWorkDays,
         new Summary(tradeRollups, equipmentRollups),
         drillDown);
@@ -103,14 +104,14 @@ public class SupervisorPerformanceReportService {
 
   @Transactional(readOnly = true)
   public SupervisorPerformanceComparison compare(
-      UUID projectId, List<UUID> supervisorResourceIds,
+      UUID projectId, List<UUID> supervisorUserIds,
       LocalDate fromDate, LocalDate toDate, int workDays) {
-    if (supervisorResourceIds == null || supervisorResourceIds.size() < 2) {
+    if (supervisorUserIds == null || supervisorUserIds.size() < 2) {
       throw new IllegalArgumentException("compare requires at least 2 supervisor ids");
     }
 
-    List<SupervisorPerformanceReport> reports = new ArrayList<>(supervisorResourceIds.size());
-    for (UUID supId : supervisorResourceIds) {
+    List<SupervisorPerformanceReport> reports = new ArrayList<>(supervisorUserIds.size());
+    for (UUID supId : supervisorUserIds) {
       reports.add(build(projectId, supId, fromDate, toDate, workDays));
     }
 
@@ -123,7 +124,7 @@ public class SupervisorPerformanceReportService {
       for (TradeRollup tr : rep.summary().manpower()) {
         TradeDelta delta = tradeAcc.computeIfAbsent(tr.tradeKey(),
             k -> new TradeDelta(k, tr.tradeLabel(), new LinkedHashMap<>(), null, null));
-        delta.bySupervisor().put(rep.supervisorResourceId(), tr);
+        delta.bySupervisor().put(rep.supervisorUserId(), tr);
       }
     }
     List<TradeDelta> tradeDeltas = new ArrayList<>(tradeAcc.size());
@@ -143,7 +144,7 @@ public class SupervisorPerformanceReportService {
       for (EquipmentRollup er : rep.summary().equipment()) {
         EquipmentDelta delta = eqAcc.computeIfAbsent(er.equipmentKey(),
             k -> new EquipmentDelta(k, er.equipmentLabel(), new LinkedHashMap<>(), null, null));
-        delta.bySupervisor().put(rep.supervisorResourceId(), er);
+        delta.bySupervisor().put(rep.supervisorUserId(), er);
       }
     }
     List<EquipmentDelta> equipmentDeltas = new ArrayList<>(eqAcc.size());
@@ -166,7 +167,7 @@ public class SupervisorPerformanceReportService {
 
   @SuppressWarnings("unchecked")
   private List<ManpowerCellRow> fetchManpowerCells(
-      UUID projectId, UUID supervisorResourceId, LocalDate fromDate, LocalDate toDate) {
+      UUID projectId, UUID supervisorUserId, LocalDate fromDate, LocalDate toDate) {
 
     List<Object[]> raw = em.createNativeQuery(
             "SELECT "
@@ -196,15 +197,15 @@ public class SupervisorPerformanceReportService {
                 + "LEFT JOIN activity.activities a   ON a.id = d.activity_id "
                 + "WHERE d.project_id = :projectId "
                 + "  AND d.report_date BETWEEN :fromDate AND :toDate "
-                + "  AND (CAST(:supervisorResourceId AS uuid) IS NULL "
-                + "       OR d.supervisor_resource_id = CAST(:supervisorResourceId AS uuid)) "
+                + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
+                + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
                 + "GROUP BY trade_key, trade_label, r.resource_type_id, d.activity_id, "
                 + "         a.work_activity_id, a.code, a.name, d.unit")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
         .setParameter("toDate", toDate)
-        .setParameter("supervisorResourceId",
-            supervisorResourceId != null ? supervisorResourceId.toString() : null)
+        .setParameter("supervisorUserId",
+            supervisorUserId != null ? supervisorUserId.toString() : null)
         .getResultList();
 
     List<ManpowerCellRow> out = new ArrayList<>(raw.size());
@@ -220,7 +221,7 @@ public class SupervisorPerformanceReportService {
 
   @SuppressWarnings("unchecked")
   private List<EquipmentCellRow> fetchEquipmentCells(
-      UUID projectId, UUID supervisorResourceId, LocalDate fromDate, LocalDate toDate) {
+      UUID projectId, UUID supervisorUserId, LocalDate fromDate, LocalDate toDate) {
 
     List<Object[]> raw = em.createNativeQuery(
             "SELECT "
@@ -250,15 +251,15 @@ public class SupervisorPerformanceReportService {
                 + "LEFT JOIN activity.activities a     ON a.id = d.activity_id "
                 + "WHERE d.project_id = :projectId "
                 + "  AND d.report_date BETWEEN :fromDate AND :toDate "
-                + "  AND (CAST(:supervisorResourceId AS uuid) IS NULL "
-                + "       OR d.supervisor_resource_id = CAST(:supervisorResourceId AS uuid)) "
+                + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
+                + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
                 + "GROUP BY equipment_key, equipment_label, r.resource_type_id, d.activity_id, "
                 + "         a.work_activity_id, a.code, a.name, d.unit")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
         .setParameter("toDate", toDate)
-        .setParameter("supervisorResourceId",
-            supervisorResourceId != null ? supervisorResourceId.toString() : null)
+        .setParameter("supervisorUserId",
+            supervisorUserId != null ? supervisorUserId.toString() : null)
         .getResultList();
 
     List<EquipmentCellRow> out = new ArrayList<>(raw.size());
@@ -274,7 +275,7 @@ public class SupervisorPerformanceReportService {
 
   @SuppressWarnings("unchecked")
   private Map<UUID, ActivityMeta> fetchActivityMeta(
-      UUID projectId, UUID supervisorResourceId, LocalDate fromDate, LocalDate toDate) {
+      UUID projectId, UUID supervisorUserId, LocalDate fromDate, LocalDate toDate) {
 
     List<Object[]> raw = em.createNativeQuery(
             "SELECT d.activity_id, "
@@ -286,14 +287,14 @@ public class SupervisorPerformanceReportService {
                 + "WHERE d.project_id = :projectId "
                 + "  AND d.report_date BETWEEN :fromDate AND :toDate "
                 + "  AND d.activity_id IS NOT NULL "
-                + "  AND (CAST(:supervisorResourceId AS uuid) IS NULL "
-                + "       OR d.supervisor_resource_id = CAST(:supervisorResourceId AS uuid)) "
+                + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
+                + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
                 + "GROUP BY d.activity_id")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
         .setParameter("toDate", toDate)
-        .setParameter("supervisorResourceId",
-            supervisorResourceId != null ? supervisorResourceId.toString() : null)
+        .setParameter("supervisorUserId",
+            supervisorUserId != null ? supervisorUserId.toString() : null)
         .getResultList();
 
     Map<UUID, ActivityMeta> out = new LinkedHashMap<>(raw.size());
@@ -305,11 +306,18 @@ public class SupervisorPerformanceReportService {
     return out;
   }
 
-  private String resolveSupervisorName(UUID projectId, UUID supervisorResourceId) {
+  /**
+   * Resolve the display name for a supervisor User UUID. Phase 4.4 — the id is a User FK now,
+   * so we look up {@code public.users} first and fall back to the latest DPR's snapshot name
+   * for off-roster (legacy / free-text) supervisors.
+   */
+  private String resolveSupervisorName(UUID projectId, UUID supervisorUserId) {
     @SuppressWarnings("unchecked")
     List<Object[]> rows = em.createNativeQuery(
-            "SELECT r.name, r.code FROM resource.resources r WHERE r.id = :id")
-        .setParameter("id", supervisorResourceId)
+            "SELECT COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.username), "
+                + "       u.username "
+                + "FROM public.users u WHERE u.id = :id")
+        .setParameter("id", supervisorUserId)
         .setMaxResults(1)
         .getResultList();
     if (rows.isEmpty()) {
@@ -317,10 +325,10 @@ public class SupervisorPerformanceReportService {
       @SuppressWarnings("unchecked")
       List<Object> snap = em.createNativeQuery(
               "SELECT supervisor_name FROM project.daily_progress_reports "
-                  + "WHERE project_id = :p AND supervisor_resource_id = :id "
+                  + "WHERE project_id = :p AND supervisor_user_id = :id "
                   + "ORDER BY report_date DESC LIMIT 1")
           .setParameter("p", projectId)
-          .setParameter("id", supervisorResourceId)
+          .setParameter("id", supervisorUserId)
           .getResultList();
       return snap.isEmpty() ? null : (String) snap.get(0);
     }

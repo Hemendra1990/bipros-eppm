@@ -49,7 +49,7 @@ public class DprIssueService {
             IssueStatus status,
             IssueSeverity severity,
             IssueCategory category,
-            UUID supervisorResourceId,
+            UUID supervisorUserId,
             UUID activityId,
             LocalDate dateFrom,
             LocalDate dateTo) {
@@ -57,8 +57,8 @@ public class DprIssueService {
                 .filter(i -> status == null || i.getStatus() == status)
                 .filter(i -> severity == null || i.getSeverity() == severity)
                 .filter(i -> category == null || i.getCategory() == category)
-                .filter(i -> supervisorResourceId == null
-                        || supervisorResourceId.equals(i.getSupervisorResourceId()))
+                .filter(i -> supervisorUserId == null
+                        || supervisorUserId.equals(i.getSupervisorUserId()))
                 .filter(i -> activityId == null || activityId.equals(i.getActivityId()))
                 .filter(i -> dateFrom == null || !i.getReportDate().isBefore(dateFrom))
                 .filter(i -> dateTo == null || !i.getReportDate().isAfter(dateTo))

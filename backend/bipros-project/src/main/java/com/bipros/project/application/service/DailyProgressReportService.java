@@ -388,9 +388,8 @@ public class DailyProgressReportService {
       UUID projectId, LocalDate fromDate, LocalDate toDate) {
     ensureProjectExists(projectId);
 
-    // Phase 4.1 cutover: pivots off the new supervisor_user_id column. The SupervisorOption
-    // record still names its identity field `supervisorResourceId` for backward compatibility;
-    // it now carries a User UUID rather than a Resource UUID.
+    // Phase 4.4 cutover: pivots off the new supervisor_user_id column and the SupervisorOption
+    // identity field is now named `supervisorUserId` on the wire — matches the frontend contract.
     @SuppressWarnings("unchecked")
     List<Object[]> raw = em.createNativeQuery(
             "SELECT d.supervisor_user_id, "

@@ -189,14 +189,14 @@ public class ReportController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "RESOURCE_TYPE") String groupBy,
       @RequestParam(required = false) String normType,
-      @RequestParam(required = false) UUID supervisorResourceId) {
+      @RequestParam(required = false) UUID supervisorUserId) {
     return ApiResponse.ok(
         capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType,
-            supervisorResourceId));
+            supervisorUserId));
   }
 
   /**
-   * Per-supervisor (or project-wide when {@code supervisorResourceId} is null) productivity
+   * Per-supervisor (or project-wide when {@code supervisorUserId} is null) productivity
    * rollup mirroring the SC180 Resource Productivity Report — Manpower Utilization by trade,
    * Equipment Utilization by equipment-type, and a per-activity drill-down with productivity
    * norms. Reads {@code project.dpr_manpower}/{@code project.dpr_equipment} directly.
@@ -205,12 +205,12 @@ public class ReportController {
   @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<SupervisorPerformanceReport> getSupervisorPerformance(
       @RequestParam UUID projectId,
-      @RequestParam(required = false) UUID supervisorResourceId,
+      @RequestParam(required = false) UUID supervisorUserId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "26") int workDays) {
     return ApiResponse.ok(supervisorPerformanceReportService.build(
-        projectId, supervisorResourceId, fromDate, toDate, workDays));
+        projectId, supervisorUserId, fromDate, toDate, workDays));
   }
 
   /**
@@ -221,12 +221,12 @@ public class ReportController {
   @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<SupervisorPerformanceComparison> compareSupervisorPerformance(
       @RequestParam UUID projectId,
-      @RequestParam List<UUID> supervisorResourceIds,
+      @RequestParam List<UUID> supervisorUserIds,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "26") int workDays) {
     return ApiResponse.ok(supervisorPerformanceReportService.compare(
-        projectId, supervisorResourceIds, fromDate, toDate, workDays));
+        projectId, supervisorUserIds, fromDate, toDate, workDays));
   }
 
   /**
@@ -241,14 +241,14 @@ public class ReportController {
       @RequestParam UUID projectId,
       @RequestParam String month,
       @RequestParam(required = false, defaultValue = "26") int workDays,
-      @RequestParam(required = false) UUID supervisorResourceId) {
+      @RequestParam(required = false) UUID supervisorUserId) {
     YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
     LocalDate from = ym.atDay(1);
     LocalDate to = ym.atEndOfMonth();
     var plant = capacityUtilizationReportService.build(
-        projectId, from, to, "RESOURCE_TYPE", "EQUIPMENT", supervisorResourceId);
+        projectId, from, to, "RESOURCE_TYPE", "EQUIPMENT", supervisorUserId);
     var manpower = capacityUtilizationReportService.build(
-        projectId, from, to, "RESOURCE_TYPE", "MANPOWER", supervisorResourceId);
+        projectId, from, to, "RESOURCE_TYPE", "MANPOWER", supervisorUserId);
     var daily = dailyDeploymentReportService.build(projectId, ym);
     var dpr = dprReportService.build(projectId, ym);
     String projectName = lookupProjectName(projectId);

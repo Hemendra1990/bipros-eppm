@@ -1,10 +1,13 @@
 package com.bipros.security.api;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.security.application.dto.UpdateProjectMemberRequest;
 import com.bipros.security.application.service.CurrentUserService;
+import com.bipros.security.application.service.ProjectMemberService;
 import com.bipros.security.domain.model.ProjectMember;
 import com.bipros.security.domain.model.ProjectMemberRole;
 import com.bipros.security.domain.repository.ProjectMemberRepository;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,6 +35,7 @@ import java.util.UUID;
  * <ul>
  *   <li>{@code GET    /v1/projects/{projectId}/members}        — list members</li>
  *   <li>{@code POST   /v1/projects/{projectId}/members}        — assign a role</li>
+ *   <li>{@code PUT    /v1/projects/{projectId}/members/{id}}   — change an existing member's role</li>
  *   <li>{@code DELETE /v1/projects/{projectId}/members/{id}}   — revoke an assignment</li>
  * </ul>
  */
@@ -41,6 +46,7 @@ import java.util.UUID;
 public class ProjectMemberController {
 
     private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectMemberService projectMemberService;
     private final CurrentUserService currentUserService;
 
     public record AssignRequest(UUID userId, ProjectMemberRole role) {}
@@ -80,6 +86,17 @@ public class ProjectMemberController {
         log.info("ProjectMember assigned: userId={} projectId={} role={} by={}",
                 request.userId(), projectId, request.role(), currentUserService.getCurrentUserId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(MemberDto.from(saved)));
+    }
+
+    @PutMapping("/{memberId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.MANAGE')")
+    public ResponseEntity<ApiResponse<MemberDto>> update(
+            @PathVariable UUID projectId,
+            @PathVariable UUID memberId,
+            @Valid @RequestBody UpdateProjectMemberRequest request) {
+        MemberDto updated = projectMemberService.updateMemberRole(
+                projectId, memberId, request.projectRole());
+        return ResponseEntity.ok(ApiResponse.ok(updated));
     }
 
     @DeleteMapping("/{memberId}")

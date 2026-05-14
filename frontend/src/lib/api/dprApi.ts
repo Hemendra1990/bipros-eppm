@@ -160,7 +160,7 @@ export interface DprVoicePhotoCaption {
  */
 export interface DprVoicePatch {
   reportDate?: string | null;
-  supervisorResourceId?: string | null;
+  supervisorUserId?: string | null;
   supervisorName?: string | null;
   activityId?: string | null;
   activityName?: string | null;

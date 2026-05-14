@@ -97,7 +97,7 @@ const initialState = (
   if (editing) {
     return {
       reportDate: editing.reportDate,
-      supervisorResourceId: editing.supervisorResourceId ?? null,
+      supervisorUserId: editing.supervisorUserId ?? null,
       supervisorName: editing.supervisorName,
       chainageFromM: editing.chainageFromM,
       chainageToM: editing.chainageToM,
@@ -129,7 +129,7 @@ const initialState = (
   }
   return {
     reportDate: defaultDate || todayIso(),
-    supervisorResourceId: null,
+    supervisorUserId: null,
     supervisorName: "",
     chainageFromM: null,
     chainageToM: null,
@@ -203,8 +203,8 @@ export function DprActivityForm({
     const s = stateRef.current;
     return {
       reportDate: s.reportDate,
-      supervisorResourceId:
-        s.supervisorResourceId === SUPERVISOR_OTHER ? null : s.supervisorResourceId,
+      supervisorUserId:
+        s.supervisorUserId === SUPERVISOR_OTHER ? null : s.supervisorUserId,
       supervisorName: s.supervisorName,
       activityId: s.activityId,
       activityName: s.activityName,
@@ -242,7 +242,7 @@ export function DprActivityForm({
         if (value !== undefined && value !== null) next[key] = value as FormState[K];
       };
       setIfPresent("reportDate", patch.reportDate);
-      setIfPresent("supervisorResourceId", patch.supervisorResourceId);
+      setIfPresent("supervisorUserId", patch.supervisorUserId);
       setIfPresent("supervisorName", patch.supervisorName);
       setIfPresent("activityId", patch.activityId);
       setIfPresent("activityName", patch.activityName);
@@ -294,7 +294,7 @@ export function DprActivityForm({
 
   const patch = (delta: Partial<FormState>) => setState((s) => ({ ...s, ...delta }));
 
-  const supervisorPickerValue = state.supervisorResourceId || "";
+  const supervisorPickerValue = state.supervisorUserId || "";
   const supervisorIsOther = supervisorPickerValue === SUPERVISOR_OTHER;
 
   /**
@@ -305,28 +305,28 @@ export function DprActivityForm({
    * reasonable behavior so the form stays usable).
    */
   const filteredActivityOptions = useMemo(() => {
-    if (!state.supervisorResourceId || supervisorIsOther) return activityOptions;
+    if (!state.supervisorUserId || supervisorIsOther) return activityOptions;
     const filtered = activityOptions.filter((a) => {
       const sup = supervisorByActivityId.get(a.value);
-      return sup?.id === state.supervisorResourceId;
+      return sup?.id === state.supervisorUserId;
     });
     return filtered.length === 0 ? activityOptions : filtered;
-  }, [activityOptions, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+  }, [activityOptions, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
 
   const supervisorHasNoActivities = useMemo(() => {
-    if (!state.supervisorResourceId || supervisorIsOther) return false;
+    if (!state.supervisorUserId || supervisorIsOther) return false;
     return !activityOptions.some(
-      (a) => supervisorByActivityId.get(a.value)?.id === state.supervisorResourceId
+      (a) => supervisorByActivityId.get(a.value)?.id === state.supervisorUserId
     );
-  }, [activityOptions, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+  }, [activityOptions, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
 
   /** Inline mismatch when the picked supervisor isn't the activity's owner. */
   const activitySupervisorMismatch = useMemo(() => {
-    if (!state.activityId || !state.supervisorResourceId || supervisorIsOther) return null;
+    if (!state.activityId || !state.supervisorUserId || supervisorIsOther) return null;
     const sup = supervisorByActivityId.get(state.activityId);
-    if (!sup || sup.id === state.supervisorResourceId) return null;
+    if (!sup || sup.id === state.supervisorUserId) return null;
     return sup.name || "another supervisor";
-  }, [state.activityId, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+  }, [state.activityId, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
 
   /** Tab counters reflect rows that will actually be saved (FK picker filled).
    *  Role-only rows have variantId set instead of resourceAssignmentId. */
@@ -357,10 +357,10 @@ export function DprActivityForm({
   );
 
   const supervisorAutoFilled = useMemo(() => {
-    if (!state.activityId || !state.supervisorResourceId || supervisorIsOther) return false;
+    if (!state.activityId || !state.supervisorUserId || supervisorIsOther) return false;
     const sup = supervisorByActivityId.get(state.activityId);
-    return sup?.id === state.supervisorResourceId;
-  }, [state.activityId, state.supervisorResourceId, supervisorIsOther, supervisorByActivityId]);
+    return sup?.id === state.supervisorUserId;
+  }, [state.activityId, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
 
   /**
    * Activity dropdown change: when rows already exist for the previous activity, prompt to clear
@@ -400,14 +400,14 @@ export function DprActivityForm({
       delta.unit = activityUnit.trim();
     }
     const sup = newActivityId ? supervisorByActivityId.get(newActivityId) : null;
-    const supervisorEmpty = !state.supervisorResourceId || supervisorIsOther;
+    const supervisorEmpty = !state.supervisorUserId || supervisorIsOther;
     if (sup && supervisorEmpty) {
       // Verify the supervisor actually exists in the eligible list before auto-filling — if the
       // activity's snapshot points at someone no longer eligible (e.g. role changed), fall back
       // to leaving the supervisor untouched rather than silently picking an invalid value.
       const match = supervisorOptions.find((s) => s.value === sup.id);
       if (match) {
-        delta.supervisorResourceId = sup.id;
+        delta.supervisorUserId = sup.id;
         delta.supervisorName = match.label.split(" (")[0];
       }
     }
@@ -416,11 +416,11 @@ export function DprActivityForm({
 
   const handleSupervisorChange = (value: string) => {
     if (value === SUPERVISOR_OTHER) {
-      patch({ supervisorResourceId: SUPERVISOR_OTHER, supervisorName: "" });
+      patch({ supervisorUserId: SUPERVISOR_OTHER, supervisorName: "" });
       return;
     }
     const match = supervisorOptions.find((s) => s.value === value);
-    patch({ supervisorResourceId: value || null, supervisorName: match?.label.split(" (")[0] ?? "" });
+    patch({ supervisorUserId: value || null, supervisorName: match?.label.split(" (")[0] ?? "" });
   };
 
   const handleChainageBlur = (which: "from" | "to") => {
@@ -446,9 +446,9 @@ export function DprActivityForm({
     if (!state.unit) return setError("Unit is required.");
     if (!state.qtyExecuted || state.qtyExecuted <= 0) return setError("Executed quantity must be > 0.");
 
-    const supervisorResourceId =
-      state.supervisorResourceId && state.supervisorResourceId !== SUPERVISOR_OTHER
-        ? state.supervisorResourceId
+    const supervisorUserId =
+      state.supervisorUserId && state.supervisorUserId !== SUPERVISOR_OTHER
+        ? state.supervisorUserId
         : null;
 
     // Drop skeleton rows where the user opened the tab but never picked a role.
@@ -471,7 +471,7 @@ export function DprActivityForm({
 
     const payload: DprBaseFields = {
       reportDate: state.reportDate,
-      supervisorResourceId,
+      supervisorUserId,
       supervisorName: state.supervisorName,
       chainageFromM: state.chainageFromM,
       chainageToM: state.chainageToM,

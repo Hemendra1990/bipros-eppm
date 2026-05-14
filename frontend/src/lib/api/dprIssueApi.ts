@@ -23,7 +23,7 @@ export interface DprIssueFilters {
   status?: IssueStatus;
   severity?: IssueSeverity;
   category?: IssueCategory;
-  supervisorResourceId?: string;
+  supervisorUserId?: string;
   activityId?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -36,9 +36,9 @@ export interface UpdateDprIssueRequest {
   category?: IssueCategory;
   severity?: IssueSeverity;
   status?: IssueStatus;
-  supervisorResourceId?: string | null;
+  supervisorUserId?: string | null;
   supervisorName?: string | null;
-  assignedToResourceId?: string | null;
+  assignedToUserId?: string | null;
   assignedToName?: string | null;
   resolutionNotes?: string | null;
 }
@@ -48,7 +48,7 @@ function toQuery(filters: DprIssueFilters): string {
   if (filters.status) params.set("status", filters.status);
   if (filters.severity) params.set("severity", filters.severity);
   if (filters.category) params.set("category", filters.category);
-  if (filters.supervisorResourceId) params.set("supervisorResourceId", filters.supervisorResourceId);
+  if (filters.supervisorUserId) params.set("supervisorUserId", filters.supervisorUserId);
   if (filters.activityId) params.set("activityId", filters.activityId);
   if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) params.set("dateTo", filters.dateTo);

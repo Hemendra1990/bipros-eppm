@@ -54,7 +54,13 @@ export interface GetCapacityUtilizationParams {
   toDate?: string;
   groupBy?: CapacityGroupBy;
   normType?: CapacityNormType;
-  supervisorResourceId?: string;
+  /**
+   * Phase 4.4 rename — User UUID (carrying a supervisor role) replaces the legacy
+   * Resource UUID. Sourced from {@code userApi.listByRoles([...])}. NOTE: as of
+   * Phase 4.4 the backend capacity-utilization endpoint may still expect the old
+   * {@code supervisorResourceId} query param; verify before relying on the filter.
+   */
+  supervisorUserId?: string;
 }
 
 // ───────────────── Supervisor Performance (SC180-style rollup) ──────────────────
@@ -120,7 +126,12 @@ export interface ActivityDrillDown {
 
 export interface SupervisorPerformanceReport {
   projectId: string;
-  supervisorResourceId: string | null;
+  /**
+   * Phase 4.4 rename — User UUID (carrying a supervisor role). The DTO field on the
+   * backend was renamed from {@code supervisorResourceId}; the JSON key on the wire
+   * is now {@code supervisorUserId}.
+   */
+  supervisorUserId: string | null;
   supervisorName: string | null;
   fromDate: string;
   toDate: string;
@@ -155,7 +166,11 @@ export interface SupervisorPerformanceComparison {
 }
 
 export interface SupervisorOption {
-  supervisorResourceId: string;
+  /**
+   * Phase 4.4 rename — User UUID. The {@code /dpr/supervisors-used} endpoint
+   * surfaces the renamed JSON field.
+   */
+  supervisorUserId: string;
   supervisorCode: string | null;
   supervisorName: string;
   dprCount: number;
@@ -163,7 +178,8 @@ export interface SupervisorOption {
 
 export interface GetSupervisorPerformanceParams {
   projectId: string;
-  supervisorResourceId?: string;
+  /** Phase 4.4 rename — User UUID. */
+  supervisorUserId?: string;
   fromDate?: string;
   toDate?: string;
   workDays?: number;
@@ -171,7 +187,8 @@ export interface GetSupervisorPerformanceParams {
 
 export interface CompareSupervisorPerformanceParams {
   projectId: string;
-  supervisorResourceIds: string[];
+  /** Phase 4.4 rename — array of User UUIDs. */
+  supervisorUserIds: string[];
   fromDate?: string;
   toDate?: string;
   workDays?: number;
@@ -184,8 +201,8 @@ export const capacityUtilizationApi = {
     if (params.toDate) qs.push(`toDate=${params.toDate}`);
     if (params.groupBy) qs.push(`groupBy=${params.groupBy}`);
     if (params.normType) qs.push(`normType=${params.normType}`);
-    if (params.supervisorResourceId)
-      qs.push(`supervisorResourceId=${params.supervisorResourceId}`);
+    if (params.supervisorUserId)
+      qs.push(`supervisorUserId=${params.supervisorUserId}`);
     return apiClient
       .get<ApiResponse<CapacityUtilizationReport>>(`/v1/reports/capacity-utilization?${qs.join("&")}`)
       .then((r) => r.data);
@@ -193,8 +210,8 @@ export const capacityUtilizationApi = {
 
   getSupervisorPerformance: (params: GetSupervisorPerformanceParams) => {
     const qs: string[] = [`projectId=${params.projectId}`];
-    if (params.supervisorResourceId)
-      qs.push(`supervisorResourceId=${params.supervisorResourceId}`);
+    if (params.supervisorUserId)
+      qs.push(`supervisorUserId=${params.supervisorUserId}`);
     if (params.fromDate) qs.push(`fromDate=${params.fromDate}`);
     if (params.toDate) qs.push(`toDate=${params.toDate}`);
     if (params.workDays) qs.push(`workDays=${params.workDays}`);
@@ -208,7 +225,7 @@ export const capacityUtilizationApi = {
   compareSupervisorPerformance: (params: CompareSupervisorPerformanceParams) => {
     const qs: string[] = [
       `projectId=${params.projectId}`,
-      `supervisorResourceIds=${params.supervisorResourceIds.join(",")}`,
+      `supervisorUserIds=${params.supervisorUserIds.join(",")}`,
     ];
     if (params.fromDate) qs.push(`fromDate=${params.fromDate}`);
     if (params.toDate) qs.push(`toDate=${params.toDate}`);

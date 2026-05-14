@@ -291,7 +291,7 @@ export default function CapacityUtilizationPage() {
   const [toDate, setToDate] = useState(today());
   const [groupBy, setGroupBy] = useState<CapacityGroupBy>("RESOURCE_TYPE");
   const [normType, setNormType] = useState<CapacityNormType | "">("");
-  const [supervisorResourceId, setSupervisorResourceId] = useState<string>("");
+  const [supervisorUserId, setSupervisorUserId] = useState<string>("");
   const [workDays, setWorkDays] = useState<number>(26);
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -315,7 +315,7 @@ export default function CapacityUtilizationPage() {
       toDate,
       groupBy,
       normType,
-      supervisorResourceId,
+      supervisorUserId,
     ],
     queryFn: () =>
       capacityUtilizationApi.get({
@@ -324,7 +324,7 @@ export default function CapacityUtilizationPage() {
         toDate,
         groupBy,
         normType: normType || undefined,
-        supervisorResourceId: supervisorResourceId || undefined,
+        supervisorUserId: supervisorUserId || undefined,
       }),
     placeholderData: keepPreviousData,
   });
@@ -335,18 +335,18 @@ export default function CapacityUtilizationPage() {
       projectId,
       fromDate,
       toDate,
-      supervisorResourceId,
+      supervisorUserId,
       workDays,
     ],
     queryFn: () =>
       capacityUtilizationApi.getSupervisorPerformance({
         projectId,
-        supervisorResourceId: supervisorResourceId || undefined,
+        supervisorUserId: supervisorUserId || undefined,
         fromDate,
         toDate,
         workDays,
       }),
-    enabled: !compareMode && !!supervisorResourceId,
+    enabled: !compareMode && !!supervisorUserId,
     placeholderData: keepPreviousData,
   });
 
@@ -362,7 +362,7 @@ export default function CapacityUtilizationPage() {
     queryFn: () =>
       capacityUtilizationApi.compareSupervisorPerformance({
         projectId,
-        supervisorResourceIds: compareIds,
+        supervisorUserIds: compareIds,
         fromDate,
         toDate,
         workDays,
@@ -511,8 +511,8 @@ export default function CapacityUtilizationPage() {
                 >
                   {supervisors.map((s) => (
                     <option
-                      key={s.supervisorResourceId}
-                      value={s.supervisorResourceId}
+                      key={s.supervisorUserId}
+                      value={s.supervisorUserId}
                     >
                       {s.supervisorName} ({s.dprCount})
                     </option>
@@ -520,15 +520,15 @@ export default function CapacityUtilizationPage() {
                 </select>
               ) : (
                 <select
-                  value={supervisorResourceId}
-                  onChange={(e) => setSupervisorResourceId(e.target.value)}
+                  value={supervisorUserId}
+                  onChange={(e) => setSupervisorUserId(e.target.value)}
                   className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 >
                   <option value="">All supervisors (project-wide)</option>
                   {supervisors.map((s) => (
                     <option
-                      key={s.supervisorResourceId}
-                      value={s.supervisorResourceId}
+                      key={s.supervisorUserId}
+                      value={s.supervisorUserId}
                     >
                       {s.supervisorName} ({s.dprCount} DPRs)
                     </option>
@@ -554,7 +554,7 @@ export default function CapacityUtilizationPage() {
                   type="button"
                   onClick={() => {
                     setCompareMode((m) => !m);
-                    if (!compareMode) setSupervisorResourceId("");
+                    if (!compareMode) setSupervisorUserId("");
                     else setCompareIds([]);
                   }}
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold ${
@@ -594,7 +594,7 @@ export default function CapacityUtilizationPage() {
           </div>
         )}
 
-        {!compareMode && supervisorResourceId && supervisorPerf?.data && (
+        {!compareMode && supervisorUserId && supervisorPerf?.data && (
           <SupervisorPerformanceSections report={supervisorPerf.data} />
         )}
 

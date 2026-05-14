@@ -81,10 +81,15 @@ export interface CreateActivityRequest {
   primaryConstraintDate?: string;
   secondaryConstraintType?: ConstraintType;
   secondaryConstraintDate?: string;
-  /** Supervisor: a LABOR Resource accountable for this activity. Optional. */
-  supervisorResourceId?: string | null;
+  /**
+   * Supervisor: a User UUID (carrying SUPERVISOR / FOREMAN / SITE_ENGINEER /
+   * SITE_MANAGER role) accountable for this activity. Phase 4.4 rename — the
+   * legacy {@code supervisorResourceId} (Resource UUID) is gone on the backend.
+   * Source the value from {@code userApi.listByRoles([...])}.
+   */
+  supervisorUserId?: string | null;
   /** Supervisor display-snapshot — frontend passes the picker option name. */
-  supervisorResourceName?: string | null;
+  supervisorUserName?: string | null;
 }
 
 export interface UpdateActivityRequest {
@@ -109,9 +114,13 @@ export interface UpdateActivityRequest {
   primaryConstraintDate?: string | null;
   secondaryConstraintType?: ConstraintType | null;
   secondaryConstraintDate?: string | null;
-  /** Pass to set/change supervisor; omit (null) to leave unchanged. */
-  supervisorResourceId?: string | null;
-  supervisorResourceName?: string | null;
+  /**
+   * Pass to set/change supervisor; omit (null) to leave unchanged. User UUID
+   * sourced from {@code userApi.listByRoles([...])}. Phase 4.4 rename of the
+   * legacy {@code supervisorResourceId} Resource UUID.
+   */
+  supervisorUserId?: string | null;
+  supervisorUserName?: string | null;
 }
 
 /**
@@ -262,7 +271,7 @@ export const activityApi = {
     projectId: string,
     body: {
       supervisorUserId: string;
-      supervisorResourceName: string | null;
+      supervisorName: string | null;
       activityIds: string[];
     }
   ) =>
