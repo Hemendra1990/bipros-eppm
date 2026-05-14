@@ -27,6 +27,14 @@ import java.util.UUID;
  * means "clear all issues for this DPR". There is no "leave alone" sentinel — clients round-
  * trip the latest server payload.
  */
+/**
+ * Field-issue row record.
+ *
+ * <p><b>RBAC Phase 4.2 transition:</b> {@code supervisorUserId} / {@code assignedToUserId} are the
+ * new canonical identities (User-based). {@code supervisorResourceId} / {@code assignedToResourceId}
+ * remain on the wire as nullable transitional fields for backward compatibility with clients still
+ * sending Resource ids; they will be removed once the frontend is migrated.
+ */
 public record DprIssueRow(
     UUID id,
     @NotBlank @Size(max = 150) String title,
@@ -34,14 +42,19 @@ public record DprIssueRow(
     @NotNull IssueCategory category,
     @NotNull IssueSeverity severity,
     @NotNull IssueStatus status,
-    UUID supervisorResourceId,
+    /** @deprecated RBAC Phase 4.2 — transitional wire field; prefer {@link #supervisorUserId}. */
+    @Deprecated UUID supervisorResourceId,
     String supervisorName,
-    UUID assignedToResourceId,
+    /** @deprecated RBAC Phase 4.2 — transitional wire field; prefer {@link #assignedToUserId}. */
+    @Deprecated UUID assignedToResourceId,
     String assignedToName,
     Instant openedAt,
     Instant resolvedAt,
-    @Size(max = 1000) String resolutionNotes
+    @Size(max = 1000) String resolutionNotes,
+    UUID supervisorUserId,
+    UUID assignedToUserId
 ) {
+    @SuppressWarnings("deprecation")
     public static DprIssueRow from(DprIssue e) {
         return new DprIssueRow(
             e.getId(),
@@ -56,6 +69,8 @@ public record DprIssueRow(
             e.getAssignedToName(),
             e.getOpenedAt(),
             e.getResolvedAt(),
-            e.getResolutionNotes());
+            e.getResolutionNotes(),
+            e.getSupervisorUserId(),
+            e.getAssignedToUserId());
     }
 }

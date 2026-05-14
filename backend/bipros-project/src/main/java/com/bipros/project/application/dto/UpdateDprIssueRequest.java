@@ -22,10 +22,12 @@ public record UpdateDprIssueRequest(
     IssueCategory category,
     IssueSeverity severity,
     IssueStatus status,
-    UUID supervisorResourceId,
+    @Deprecated UUID supervisorResourceId,
     String supervisorName,
-    UUID assignedToResourceId,
+    @Deprecated UUID assignedToResourceId,
     String assignedToName,
-    @Size(max = 1000) String resolutionNotes
+    @Size(max = 1000) String resolutionNotes,
+    UUID supervisorUserId,
+    UUID assignedToUserId
 ) {
 }

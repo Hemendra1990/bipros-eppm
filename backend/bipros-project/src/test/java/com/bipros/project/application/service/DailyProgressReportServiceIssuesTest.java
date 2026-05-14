@@ -106,7 +106,7 @@ class DailyProgressReportServiceIssuesTest {
         DprIssueRow incoming = new DprIssueRow(
                 null, "Material shortage", "Aggregate truck broke down",
                 IssueCategory.MATERIAL_SHORTAGE, IssueSeverity.HIGH, IssueStatus.OPEN,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
 
         service.update(projectId, dprId, request(List.of(incoming)));
 
@@ -119,9 +119,9 @@ class DailyProgressReportServiceIssuesTest {
         assertThat(saved.getProjectId()).isEqualTo(projectId);
         assertThat(saved.getActivityId()).isEqualTo(activityId);
         assertThat(saved.getActivityName()).isEqualTo("Bench Cutting");
-        assertThat(saved.getSupervisorResourceId()).isEqualTo(supervisorId);
+        assertThat(saved.getSupervisorUserId()).isEqualTo(supervisorId);
         assertThat(saved.getSupervisorName()).isEqualTo("Mohd Ismaila");
-        assertThat(saved.getAssignedToResourceId()).isEqualTo(supervisorId); // defaults to supervisor
+        assertThat(saved.getAssignedToUserId()).isEqualTo(supervisorId); // defaults to supervisor
         assertThat(saved.getStatus()).isEqualTo(IssueStatus.OPEN);
         assertThat(saved.getOpenedAt()).isNotNull();
         assertThat(saved.getResolvedAt()).isNull();
@@ -139,7 +139,7 @@ class DailyProgressReportServiceIssuesTest {
                 issueId, "Material shortage (updated title)", null,
                 IssueCategory.MATERIAL_SHORTAGE, IssueSeverity.CRITICAL, IssueStatus.IN_PROGRESS,
                 supervisorId, "Mohd Ismaila", supervisorId, "Mohd Ismaila",
-                null, null, null);
+                null, null, null, supervisorId, supervisorId);
 
         service.update(projectId, dprId, request(List.of(incoming)));
 
@@ -166,7 +166,7 @@ class DailyProgressReportServiceIssuesTest {
         DprIssueRow toResolve = new DprIssueRow(
                 issueId, "Material shortage", null,
                 IssueCategory.MATERIAL_SHORTAGE, IssueSeverity.HIGH, IssueStatus.RESOLVED,
-                null, null, null, null, null, null, "Truck back, work resumed");
+                null, null, null, null, null, null, "Truck back, work resumed", null, null);
 
         service.update(projectId, dprId, request(List.of(toResolve)));
 
@@ -184,7 +184,7 @@ class DailyProgressReportServiceIssuesTest {
         DprIssueRow toReopen = new DprIssueRow(
                 issueId, "Material shortage", null,
                 IssueCategory.MATERIAL_SHORTAGE, IssueSeverity.HIGH, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
 
         service.update(projectId, dprId, request(List.of(toReopen)));
 
@@ -206,7 +206,7 @@ class DailyProgressReportServiceIssuesTest {
 
         DprIssueRow stay = new DprIssueRow(
                 keepId, "still relevant", null, IssueCategory.OTHER, IssueSeverity.LOW, IssueStatus.OPEN,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
 
         service.update(projectId, dprId, request(List.of(stay)));
 
@@ -243,7 +243,7 @@ class DailyProgressReportServiceIssuesTest {
 
         DprIssueRow rogue = new DprIssueRow(
                 strangerId, "title", null, IssueCategory.OTHER, IssueSeverity.LOW, IssueStatus.OPEN,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
 
         assertThatThrownBy(() -> service.update(projectId, dprId, request(List.of(rogue))))
                 .isInstanceOf(BusinessRuleException.class)
@@ -279,7 +279,7 @@ class DailyProgressReportServiceIssuesTest {
         DailyProgressReport d = DailyProgressReport.builder()
                 .projectId(projectId)
                 .reportDate(LocalDate.of(2026, 5, 1))
-                .supervisorResourceId(supervisorId)
+                .supervisorUserId(supervisorId)
                 .supervisorName("Mohd Ismaila")
                 .activityId(activityId)
                 .activityName("Bench Cutting")

@@ -67,13 +67,40 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<UserResponse> listUsers(Pageable pageable) {
-        Page<User> users = userRepository.findAll(pageable);
+        return listUsers(pageable, null);
+    }
+
+    /**
+     * List users, optionally filtered to those holding ANY of the given role names. Used by
+     * the supervisor / staff picker on the frontend (e.g. {@code ?roles=SUPERVISOR,FOREMAN})
+     * to narrow the list to operationally-relevant candidates. {@code null} or blank
+     * {@code rolesCsv} falls back to the unfiltered listing.
+     */
+    @Transactional(readOnly = true)
+    public Page<UserResponse> listUsers(Pageable pageable, String rolesCsv) {
+        List<String> roleNames = parseRoleNames(rolesCsv);
+        Page<User> users = roleNames.isEmpty()
+                ? userRepository.findAll(pageable)
+                : userRepository.findByRoleNamesAndEnabled(roleNames, pageable);
         Map<UUID, Profile> profilesById = loadProfilesFor(users.getContent());
         List<UserResponse> responses = users.getContent().stream()
-                .map(u -> toResponse(u, profilesById.get(u.getProfileId())))
+                .map(u -> toResponse(u, u.getProfileId() == null ? null : profilesById.get(u.getProfileId())))
                 .collect(Collectors.toList());
 
         return new PageImpl<>(responses, pageable, users.getTotalElements());
+    }
+
+    /** Split a {@code roles=A,B,C} query string into a clean uppercase role-name list. */
+    private static List<String> parseRoleNames(String rolesCsv) {
+        if (rolesCsv == null || rolesCsv.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(rolesCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(String::toUpperCase)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)

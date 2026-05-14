@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -59,10 +60,15 @@ public class UserController {
 
     @GetMapping
     @PreAuthorize("hasPermission(null, 'ADMIN_USER.READ')")
-    @Operation(summary = "List users", description = "Retrieve a paginated list of all users (admin only)")
-    public ResponseEntity<ApiResponse<PagedResponse<UserResponse>>> listUsers(Pageable pageable) {
+    @Operation(summary = "List users",
+            description = "Retrieve a paginated list of all users (admin only). Optional "
+                    + "?roles=COMMA,SEPARATED,NAMES filters to enabled users holding any of "
+                    + "the given role names — used by the supervisor / staff picker.")
+    public ResponseEntity<ApiResponse<PagedResponse<UserResponse>>> listUsers(
+            Pageable pageable,
+            @RequestParam(name = "roles", required = false) String roles) {
         try {
-            Page<UserResponse> page = userService.listUsers(pageable);
+            Page<UserResponse> page = userService.listUsers(pageable, roles);
             PagedResponse<UserResponse> response = PagedResponse.of(
                     page.getContent(),
                     page.getTotalElements(),

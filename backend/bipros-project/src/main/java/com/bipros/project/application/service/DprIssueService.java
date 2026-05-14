@@ -85,12 +85,12 @@ public class DprIssueService {
         if (request.description() != null) issue.setDescription(request.description());
         if (request.category() != null) issue.setCategory(request.category());
         if (request.severity() != null) issue.setSeverity(request.severity());
-        if (request.supervisorResourceId() != null) {
-            issue.setSupervisorResourceId(request.supervisorResourceId());
+        if (request.supervisorUserId() != null) {
+            issue.setSupervisorUserId(request.supervisorUserId());
         }
         if (request.supervisorName() != null) issue.setSupervisorName(request.supervisorName());
-        if (request.assignedToResourceId() != null) {
-            issue.setAssignedToResourceId(request.assignedToResourceId());
+        if (request.assignedToUserId() != null) {
+            issue.setAssignedToUserId(request.assignedToUserId());
         }
         if (request.assignedToName() != null) issue.setAssignedToName(request.assignedToName());
         if (request.resolutionNotes() != null) issue.setResolutionNotes(request.resolutionNotes());
