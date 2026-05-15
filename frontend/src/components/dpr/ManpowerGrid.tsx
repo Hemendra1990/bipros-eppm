@@ -11,6 +11,7 @@ import type { DprManpowerRow } from "@/lib/types/dpr";
 const blank = (): DprManpowerRow => ({
   trade: "",
   nos: null,
+  workingHours: null,
   manpowerRoleRateId: null,
   roleId: null,
 });
@@ -133,6 +134,21 @@ export function ManpowerGrid({ projectId, activityId, rows, onChange }: Props) {
           min="0"
           value={r.nos}
           onChange={(v) => u({ nos: v === "" ? null : Number(v) })}
+        />
+      ),
+    },
+    {
+      key: "workingHours",
+      label: "Hrs",
+      minWidth: 100,
+      align: "right",
+      render: (r, _i, u) => (
+        <CellInput
+          type="number"
+          step="0.25"
+          min="0"
+          value={r.workingHours}
+          onChange={(v) => u({ workingHours: v === "" ? null : Number(v) })}
         />
       ),
     },

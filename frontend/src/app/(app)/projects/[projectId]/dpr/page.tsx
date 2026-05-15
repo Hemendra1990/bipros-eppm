@@ -84,8 +84,8 @@ export default function DprPage() {
       byId.set(a.id, a.name);
       supervisorByActivityId.set(
         a.id,
-        a.responsibleResourceId
-          ? { id: a.responsibleResourceId, name: a.responsibleResourceName ?? "" }
+        a.supervisorUserId
+          ? { id: a.supervisorUserId, name: a.supervisorUserName ?? "" }
           : null
       );
       defaultUnitByActivityId.set(a.id, a.workActivityDefaultUnit ?? null);

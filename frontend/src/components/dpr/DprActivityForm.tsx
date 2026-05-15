@@ -139,7 +139,7 @@ const initialState = (
       startTime: editing.startTime,
       endTime: editing.endTime,
       shift: editing.shift ?? null,
-      approvalStatus: editing.approvalStatus ?? "DRAFT",
+      approvalStatus: editing.approvalStatus ?? "SUBMITTED",
       contractorName: editing.contractorName,
       delayReason: editing.delayReason,
       safetyObservation: editing.safetyObservation,
@@ -181,7 +181,7 @@ const initialState = (
     startTime: null,
     endTime: null,
     shift: "DAY",
-    approvalStatus: "DRAFT",
+    approvalStatus: "SUBMITTED",
     contractorName: null,
     delayReason: null,
     safetyObservation: null,
@@ -643,9 +643,6 @@ export function DprActivityForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-5 py-3">
-        <Badge variant={editing ? "info" : "gold"} withDot>
-          {state.approvalStatus ?? "DRAFT"}
-        </Badge>
         {state.shift && (
           <Badge variant="neutral">{state.shift === "DAY" ? "Day shift" : "Night shift"}</Badge>
         )}
@@ -727,21 +724,6 @@ export function DprActivityForm({
           >
             <option value="">—</option>
             {SHIFT_OPTS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Approval status">
-          <select
-            value={state.approvalStatus ?? "DRAFT"}
-            onChange={(e) =>
-              patch({ approvalStatus: e.target.value as DprApprovalStatus })
-            }
-            className={inputCls}
-          >
-            {STATUS_OPTS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
