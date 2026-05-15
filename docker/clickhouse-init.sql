@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.dim_activity (
     code String,
     name String,
     activity_type LowCardinality(String),
+    edit_status LowCardinality(String) DEFAULT 'LOCKED',
     uom LowCardinality(String),
     bq_quantity Float64,
     planned_start Date,
@@ -58,6 +59,9 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.dim_activity (
 ALTER TABLE bipros_analytics.dim_activity
     ADD COLUMN IF NOT EXISTS responsible_resource_id Nullable(UUID),
     ADD COLUMN IF NOT EXISTS responsible_resource_name String DEFAULT '';
+
+ALTER TABLE bipros_analytics.dim_activity
+    ADD COLUMN IF NOT EXISTS edit_status LowCardinality(String) DEFAULT 'LOCKED';
 
 CREATE TABLE IF NOT EXISTS bipros_analytics.dim_resource (
     resource_id UUID,

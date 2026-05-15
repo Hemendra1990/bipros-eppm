@@ -25,6 +25,12 @@ export interface ActivityResponse {
   projectId: string;
   wbsNodeId: string;
   status: string;
+  /**
+   * Two-stage edit lifecycle. {@code DRAFT} = inputs editable, DPRs blocked;
+   * {@code LOCKED} = inputs read-only, DPRs flow. New activities default to DRAFT;
+   * seeded activities are LOCKED. Toggled by the lock / unlock endpoints below.
+   */
+  editStatus: "DRAFT" | "LOCKED";
   plannedStartDate: string | null;
   plannedFinishDate: string | null;
   actualStartDate: string | null;
@@ -308,6 +314,28 @@ export const activityApi = {
         `/v1/projects/${projectId}/activities/${activityId}/progress`,
         null,
         { params: { percentComplete, actualStartDate, actualFinishDate } }
+      )
+      .then((r) => r.data),
+
+  /**
+   * Flip an activity from DRAFT to LOCKED. Requires the {@code ACTIVITY.LOCK} permission.
+   * Locking disables manual edits on the inputs but enables DPR submission against this activity.
+   */
+  lock: (projectId: string, activityId: string) =>
+    apiClient
+      .post<ApiResponse<ActivityResponse>>(
+        `/v1/projects/${projectId}/activities/${activityId}/lock`
+      )
+      .then((r) => r.data),
+
+  /**
+   * Flip an activity from LOCKED back to DRAFT. Requires {@code ACTIVITY.UNLOCK}. Re-opens inputs
+   * for editing; DPRs against the activity are rejected until it is locked again.
+   */
+  unlock: (projectId: string, activityId: string) =>
+    apiClient
+      .post<ApiResponse<ActivityResponse>>(
+        `/v1/projects/${projectId}/activities/${activityId}/unlock`
       )
       .then((r) => r.data),
 };

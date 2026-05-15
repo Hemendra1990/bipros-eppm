@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { activityApi } from "@/lib/api/activityApi";
 import { resourceApi } from "@/lib/api/resourceApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ActivityEditStatusBadge } from "@/components/activity/ActivityEditStatusBadge";
 import { RoleDemandSections } from "@/components/activity/RoleDemandSections";
 import { RoleDemandOverview } from "@/components/activity/RoleDemandOverview";
 import { SetSupervisorDialog } from "@/components/activity/SetSupervisorDialog";
@@ -119,10 +120,16 @@ function DrawerInner({
               <div className="flex items-center gap-2 text-sm font-medium text-text-secondary">
                 <span>{activity.code}</span>
                 <StatusBadge status={activity.status} />
+                <ActivityEditStatusBadge editStatus={activity.editStatus} />
               </div>
               <h2 className="mt-1 truncate text-lg font-semibold text-text-primary">
                 {activity.name}
               </h2>
+              {activity.editStatus === "DRAFT" && (
+                <p className="mt-1 text-xs text-text-muted">
+                  Draft — DPRs can&apos;t be submitted until this activity is locked.
+                </p>
+              )}
             </>
           )}
         </div>

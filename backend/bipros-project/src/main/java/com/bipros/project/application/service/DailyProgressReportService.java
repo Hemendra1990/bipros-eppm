@@ -99,6 +99,10 @@ public class DailyProgressReportService {
   public DailyProgressReportResponse create(UUID projectId, CreateDailyProgressReportRequest request) {
     ensureProjectExists(projectId);
 
+    // Reject DPRs against a DRAFT activity — the activity is still being planned, so
+    // execution data against it is meaningless. Lock the activity to start accepting DPRs.
+    rejectIfActivityDraft(request.activityId());
+
     // Reject duplicate DPRs for the same (project, day, activity). The ledger
     // (daily_activity_resource_outputs) has a unique key on (project, date, activity, resource);
     // two DPRs that overlap on resources for the same activity on the same day collide on save.
@@ -189,6 +193,12 @@ public class DailyProgressReportService {
 
   public DailyProgressReportResponse update(UUID projectId, UUID id, UpdateDailyProgressReportRequest request) {
     DailyProgressReport dpr = find(projectId, id);
+
+    // Reject DPR updates against a DRAFT activity (same rule as create). Check the activity the
+    // DPR will reference AFTER the update — request.activityId() if it changed the link, else
+    // the existing DPR's activityId. Either being DRAFT blocks the write.
+    UUID targetActivityId = request.activityId() != null ? request.activityId() : dpr.getActivityId();
+    rejectIfActivityDraft(targetActivityId);
 
     String oldBoqItemNo = dpr.getBoqItemNo();
     BigDecimal oldQty = dpr.getQtyExecuted();
@@ -830,6 +840,41 @@ public class DailyProgressReportService {
     String dprUnit = saved.getUnit().trim();
     if (!activityUnit.trim().equalsIgnoreCase(dprUnit)) {
       warnings.add("unit-mismatch:expected=" + activityUnit.trim() + ":actual=" + dprUnit);
+    }
+  }
+
+  /**
+   * Cross-schema lookup against {@code activity.activities.edit_status}: rejects the DPR write
+   * when the activity is still {@code DRAFT}. We can't import {@code bipros-activity} here —
+   * {@code bipros-activity} already depends on {@code bipros-project}, so a return dep would
+   * cycle (see CLAUDE.md). The native-SQL approach mirrors the existing cross-schema reads in
+   * this service ({@code lookupAssignmentSnapshot}, {@code resolveActivityDefaultUnit}).
+   *
+   * <p>Throws {@code ACTIVITY_NOT_FOUND} if the id doesn't resolve and
+   * {@code ACTIVITY_DRAFT_DPR_REJECTED} if it does but is still DRAFT.
+   */
+  private void rejectIfActivityDraft(UUID activityId) {
+    if (activityId == null || em == null) return;
+    @SuppressWarnings("unchecked")
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT a.edit_status, a.code "
+                + "FROM activity.activities a "
+                + "WHERE a.id = :activityId")
+        .setParameter("activityId", activityId)
+        .getResultList();
+    if (rows.isEmpty()) {
+      throw new BusinessRuleException(
+          "ACTIVITY_NOT_FOUND",
+          "Activity " + activityId + " not found.");
+    }
+    Object[] row = rows.get(0);
+    String editStatus = row[0] == null ? null : row[0].toString();
+    String code = row[1] == null ? activityId.toString() : row[1].toString();
+    if ("DRAFT".equalsIgnoreCase(editStatus)) {
+      throw new BusinessRuleException(
+          "ACTIVITY_DRAFT_DPR_REJECTED",
+          "Cannot submit DPR against activity '" + code
+              + "' — it is still in Draft. Lock the activity to start accepting DPRs.");
     }
   }
 

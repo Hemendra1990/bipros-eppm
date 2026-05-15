@@ -1,6 +1,7 @@
 package com.bipros.api.config.seeder;
 
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.model.ActivityType;
 import com.bipros.activity.domain.model.DurationType;
@@ -300,6 +301,7 @@ public class IcpmsActivitiesSeeder implements CommandLineRunner {
         a.setIsCritical(isCritical);
         a.setSortOrder(sortOrder);
         a.setNotes(notes);
+        a.setEditStatus(ActivityEditStatus.LOCKED);
         activityRepository.save(a);
     }
 
@@ -331,6 +333,7 @@ public class IcpmsActivitiesSeeder implements CommandLineRunner {
         a.setPercentComplete(0.0);
         a.setIsCritical(true);
         a.setSortOrder(sortOrder);
+        a.setEditStatus(ActivityEditStatus.LOCKED);
         activityRepository.save(a);
     }
 }

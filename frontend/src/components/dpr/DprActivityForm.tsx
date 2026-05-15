@@ -219,6 +219,14 @@ export function DprActivityForm({
   });
   const [tab, setTab] = useState<Tab>("manpower");
   const [error, setError] = useState<FormError>(null);
+  /**
+   * Inline error pinned to the Activity selector. Set when the server rejects the DPR with
+   * {@code ACTIVITY_DRAFT_DPR_REJECTED} (activity is still in DRAFT). Surfacing the message
+   * next to the picker — instead of in the generic footer banner — makes the recovery
+   * action obvious: pick a different activity, or ask someone with {@code ACTIVITY.LOCK} to
+   * lock the chosen one.
+   */
+  const [activityFieldError, setActivityFieldError] = useState<FormError>(null);
   const [preview, setPreview] = useState<ProductivityPreviewData | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [photoUploadStatus, setPhotoUploadStatus] = useState<string | null>(null);
@@ -456,6 +464,9 @@ export function DprActivityForm({
    * domain model.
    */
   const handleActivityChange = (newActivityId: string) => {
+    // Switching activities is the recovery for an ACTIVITY_DRAFT_DPR_REJECTED — wipe the
+    // inline error so the field doesn't keep complaining after the user has moved on.
+    if (activityFieldError) setActivityFieldError(null);
     const existingRows =
       (state.manpower?.length ?? 0) +
       (state.equipment?.length ?? 0) +
@@ -629,7 +640,15 @@ export function DprActivityForm({
         response?: { data?: { error?: { code?: string; message?: string } } };
       };
       const apiErr = axiosErr?.response?.data?.error;
-      if (apiErr?.code === "DPR_OVERRUN") {
+      if (apiErr?.code === "ACTIVITY_DRAFT_DPR_REJECTED") {
+        // Pin this one to the Activity field — recovery is "pick a different activity" or
+        // "lock this one", both of which the user does at the picker.
+        setActivityFieldError(
+          apiErr.message ??
+            "This activity is still in Draft — lock it before submitting a DPR against it."
+        );
+        setError(null);
+      } else if (apiErr?.code === "DPR_OVERRUN") {
         setError(apiErr.message ?? "DPR would exceed planned units for one or more roles.");
       } else {
         const msg = err instanceof Error ? err.message : "Failed to save DPR.";
@@ -700,6 +719,12 @@ export function DprActivityForm({
             <p className="mt-1 inline-flex items-center gap-1 text-xs text-burgundy">
               <Info className="h-3 w-3" />
               Activity is supervised by {activitySupervisorMismatch}, not the selected supervisor.
+            </p>
+          )}
+          {activityFieldError && (
+            <p className="mt-1 inline-flex items-start gap-1 text-xs text-burgundy">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>{activityFieldError}</span>
             </p>
           )}
         </Field>

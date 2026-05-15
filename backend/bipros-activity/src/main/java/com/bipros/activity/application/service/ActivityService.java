@@ -4,6 +4,7 @@ import com.bipros.activity.application.dto.ActivityResponse;
 import com.bipros.activity.application.dto.CreateActivityRequest;
 import com.bipros.activity.application.dto.UpdateActivityRequest;
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.application.percent.ActivityStatusDerivation;
@@ -165,6 +166,8 @@ public class ActivityService {
     if (!isAssignee) {
       projectAccess.requireEdit(activity.getProjectId());
     }
+
+    assertEditable(activity);
 
     // Capture old values for audit BEFORE mutation
     String oldName = activity.getName();
@@ -342,6 +345,7 @@ public class ActivityService {
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
 
     projectAccess.requireEdit(activity.getProjectId());
+    assertEditable(activity);
 
     boolean hasRelationships = !relationshipRepository.findByPredecessorActivityId(id).isEmpty()
         || !relationshipRepository.findBySuccessorActivityId(id).isEmpty();
@@ -432,6 +436,8 @@ public class ActivityService {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
 
+    assertEditable(activity);
+
     if (percentComplete < 0 || percentComplete > 100) {
       throw new BusinessRuleException("INVALID_PERCENT_COMPLETE",
           "Percent complete must be between 0 and 100");
@@ -504,6 +510,7 @@ public class ActivityService {
     Activity activity = activityRepository.findById(activityId)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
     projectAccess.requireEdit(activity.getProjectId());
+    assertEditable(activity);
     UUID userId = request == null ? null : request.supervisorUserId();
     String snapshot = request == null ? null : request.supervisorName();
     activity.setSupervisorUserId(userId);
@@ -529,6 +536,12 @@ public class ActivityService {
     java.util.List<Activity> activities = activityRepository.findByProjectId(projectId);
 
     for (Activity activity : activities) {
+      // Skip LOCKED activities — their plan and actuals are frozen. DPR-driven
+      // cascade writes are the only mutator that bypasses this; the batch apply-actuals
+      // is treated like a manual cascade and respects the lock.
+      if (activity.getEditStatus() == ActivityEditStatus.LOCKED) {
+        continue;
+      }
       boolean updated = false;
 
       // Auto-stamp actuals from the data date — this is what `applyActuals` adds
@@ -576,6 +589,58 @@ public class ActivityService {
     }
 
     log.info("Actuals applied successfully for project: projectId={}", projectId);
+  }
+
+  /**
+   * Flip the activity to LOCKED. Idempotent — locking an already-locked activity
+   * is a no-op success. Requires {@code ACTIVITY.LOCK} on the project (enforced
+   * at the controller boundary).
+   */
+  public ActivityResponse lockActivity(UUID id) {
+    Activity activity = activityRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
+    if (activity.getEditStatus() == ActivityEditStatus.LOCKED) {
+      return ActivityResponse.from(activity);
+    }
+    ActivityEditStatus prior = activity.getEditStatus();
+    activity.setEditStatus(ActivityEditStatus.LOCKED);
+    Activity saved = activityRepository.save(activity);
+    log.info("Activity locked: id={}", id);
+    auditService.logUpdate("Activity", id, "editStatus", prior, ActivityEditStatus.LOCKED);
+    return ActivityResponse.from(saved);
+  }
+
+  /**
+   * Flip the activity back to DRAFT. Idempotent. Requires {@code ACTIVITY.UNLOCK}
+   * on the project (enforced at the controller boundary). DPRs already submitted
+   * while locked are unaffected; they continue to exist and their cascade history
+   * is preserved.
+   */
+  public ActivityResponse unlockActivity(UUID id) {
+    Activity activity = activityRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
+    if (activity.getEditStatus() == ActivityEditStatus.DRAFT) {
+      return ActivityResponse.from(activity);
+    }
+    ActivityEditStatus prior = activity.getEditStatus();
+    activity.setEditStatus(ActivityEditStatus.DRAFT);
+    Activity saved = activityRepository.save(activity);
+    log.info("Activity unlocked: id={}", id);
+    auditService.logUpdate("Activity", id, "editStatus", prior, ActivityEditStatus.DRAFT);
+    return ActivityResponse.from(saved);
+  }
+
+  /**
+   * Reject manual edits when the activity is LOCKED. DPR cascade writes bypass
+   * this guard because they go through {@code ActivityRepository.save} directly
+   * from {@code DailyProgressReportService}, not through this service.
+   */
+  private void assertEditable(Activity activity) {
+    if (activity.getEditStatus() == ActivityEditStatus.LOCKED) {
+      throw new BusinessRuleException(
+          "ACTIVITY_LOCKED",
+          "Activity '" + activity.getCode() + "' is locked. Unlock it before editing.");
+    }
   }
 
   /**

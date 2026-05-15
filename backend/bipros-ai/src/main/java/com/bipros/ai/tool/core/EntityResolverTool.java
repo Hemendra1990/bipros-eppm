@@ -15,6 +15,8 @@ import com.bipros.resource.domain.model.manpower.ManpowerMaster;
 import com.bipros.resource.domain.repository.ManpowerMasterRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
+import com.bipros.security.domain.model.User;
+import com.bipros.security.domain.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -64,6 +66,7 @@ public class EntityResolverTool implements Tool {
   private final ManpowerMasterRepository manpowerRepository;
   private final WbsNodeRepository wbsRepository;
   private final ResourceAssignmentRepository assignmentRepository;
+  private final UserRepository userRepository;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -119,9 +122,14 @@ public class EntityResolverTool implements Tool {
     kindNode.put(
         "description",
         "Which entity type to search. Use \"supervisor\" when the user is asking who-reports-to "
-            + "or about a foreman / manager — it matches against ManpowerMaster fields and "
-            + "filters by Resource.parent_id IS NULL OR has subordinates. Use \"auto\" only "
-            + "when the user's intent is genuinely ambiguous.");
+            + "or about a foreman / manager — it matches against (a) application Users with the "
+            + "SUPERVISOR role (the canonical supervisor identity since Phase 4.5; their id is "
+            + "what Activity.supervisor_user_id and DPR.supervisor_user_id point at), and "
+            + "(b) legacy supervisor Resources (ManpowerMaster fields, filtered to roots / those "
+            + "with subordinates). Returned `id` for supervisor matches is the User id when the "
+            + "match came from the User table — pass it straight to downstream tools that take "
+            + "a supervisorUserId. Use \"auto\" only when the user's intent is genuinely "
+            + "ambiguous.");
     props.set("kind", kindNode);
     props.set(
         "top_k",
@@ -168,6 +176,13 @@ public class EntityResolverTool implements Tool {
       // ResourceAssignment so the LLM can adopt a single project automatically
       // instead of asking the user to enumerate the portfolio.
       collectResourceMatches(query, "supervisor".equals(kind), ctx, admin, matches);
+    }
+    if ("auto".equals(kind) || "supervisor".equals(kind)) {
+      // Phase 4.5: supervisor identity migrated from Resource to User. Without
+      // this pass, asking "performance of Vijaykumar" returns no match (the
+      // Resource search above won't find user-only supervisors) even though
+      // Activity.supervisor_user_id is correctly set.
+      collectSupervisorUserMatches(query, ctx, admin, matches);
     }
     if (("auto".equals(kind) || "wbs".equals(kind)) && projectId != null) {
       enforceScope(projectId, ctx, admin);
@@ -277,7 +292,20 @@ public class EntityResolverTool implements Tool {
     for (Activity a : activities) {
       int score = bestScore(query, a.getCode(), a.getName());
       if (score >= MIN_SCORE) {
-        String extra = a.getStatus() != null ? a.getStatus().name() : null;
+        String status = a.getStatus() != null ? a.getStatus().name() : null;
+        String editStatus = a.getEditStatus() != null ? a.getEditStatus().name() : null;
+        // Pack both into `extra` so the LLM sees execution status AND the
+        // Draft/Locked lifecycle that gates DPR submission and manual edits.
+        String extra;
+        if (status == null && editStatus == null) {
+          extra = null;
+        } else if (status == null) {
+          extra = "edit=" + editStatus;
+        } else if (editStatus == null) {
+          extra = status;
+        } else {
+          extra = status + " · edit=" + editStatus;
+        }
         out.add(new Match("activity", a.getId(), a.getCode(), a.getName(), extra, score));
       }
     }
@@ -361,6 +389,64 @@ public class EntityResolverTool implements Tool {
     Map<UUID, ProjectRef> hits = new LinkedHashMap<>();
     for (ResourceAssignment a : assignmentRepository.findByResourceId(resourceId)) {
       UUID pid = a.getProjectId();
+      if (pid == null) continue;
+      ProjectRef ref = accessible.get(pid);
+      if (ref == null) continue;
+      hits.putIfAbsent(pid, ref);
+    }
+    return new ArrayList<>(hits.values());
+  }
+
+  private void collectSupervisorUserMatches(
+      String query, AiContext ctx, boolean admin, List<Match> out) {
+    Set<UUID> accessibleProjectIds = computeAccessibleProjectIds(ctx, admin);
+    Map<UUID, ProjectRef> accessibleProjectMeta = loadAccessibleProjectMeta(accessibleProjectIds);
+
+    List<User> users = userRepository.findByRoleNamesAndEnabled(List.of("SUPERVISOR"));
+    for (User u : users) {
+      String first = u.getFirstName();
+      String last = u.getLastName();
+      String displayName =
+          ((first == null ? "" : first) + " " + (last == null ? "" : last)).trim();
+      if (displayName.isEmpty()) displayName = u.getUsername();
+
+      int score =
+          maxOf(
+              maxOf(
+                  score(query, displayName),
+                  first == null ? 0 : score(query, first),
+                  last == null ? 0 : score(query, last)),
+              u.getUsername() == null ? 0 : score(query, u.getUsername()),
+              u.getEmail() == null ? 0 : score(query, u.getEmail()));
+      int codeScore = u.getEmployeeCode() == null ? 0 : score(query, u.getEmployeeCode());
+      if (codeScore > score) score = codeScore;
+      if (score < MIN_SCORE) continue;
+
+      List<ProjectRef> projects = projectsForSupervisorUser(u.getId(), accessibleProjectMeta);
+      String designation = u.getDesignation();
+      String extra =
+          "Supervisor"
+              + (designation != null && !designation.isBlank() ? " · " + designation : "")
+              + (u.getEmployeeCode() != null && !u.getEmployeeCode().isBlank()
+                  ? " · " + u.getEmployeeCode()
+                  : "");
+      out.add(
+          new Match(
+              "supervisor",
+              u.getId(),
+              u.getEmployeeCode(),
+              displayName,
+              extra.isBlank() ? null : extra,
+              score,
+              projects));
+    }
+  }
+
+  private List<ProjectRef> projectsForSupervisorUser(
+      UUID userId, Map<UUID, ProjectRef> accessible) {
+    if (accessible.isEmpty()) return List.of();
+    Map<UUID, ProjectRef> hits = new LinkedHashMap<>();
+    for (UUID pid : activityRepository.findDistinctProjectIdsBySupervisorUserId(userId)) {
       if (pid == null) continue;
       ProjectRef ref = accessible.get(pid);
       if (ref == null) continue;

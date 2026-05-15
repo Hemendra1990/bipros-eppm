@@ -1,6 +1,7 @@
 package com.bipros.analytics.etl;
 
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.baseline.domain.Baseline;
 import com.bipros.contract.domain.model.VariationOrder;
 import com.bipros.cost.domain.entity.CostAccount;
@@ -84,12 +85,10 @@ public final class AnalyticsDimensionSql {
 
     public static final String INSERT_ACTIVITY = """
         INSERT INTO bipros_analytics.dim_activity
-        (activity_id, project_id, wbs_id, code, name, activity_type, uom, bq_quantity, planned_start, planned_finish,
-         chainage_from_m, chainage_to_m, is_critical,
-         responsible_resource_id, responsible_resource_name, _version)
-        VALUES (:activityId, :projectId, :wbsId, :code, :name, :activityType, :uom, :bqQty,
-                :plannedStart, :plannedFinish, :chainageFrom, :chainageTo, :isCritical,
-                :responsibleResourceId, :responsibleResourceName, :version)
+        (activity_id, project_id, wbs_id, code, name, activity_type, edit_status, uom, bq_quantity, planned_start, planned_finish,
+         chainage_from_m, chainage_to_m, is_critical, _version)
+        VALUES (:activityId, :projectId, :wbsId, :code, :name, :activityType, :editStatus, :uom, :bqQty,
+                :plannedStart, :plannedFinish, :chainageFrom, :chainageTo, :isCritical, :version)
         """;
 
     public static Map<String, Object> activityParams(Activity a, long version) {
@@ -102,6 +101,8 @@ public final class AnalyticsDimensionSql {
         // CH columns activity_type, uom, bq_quantity are non-nullable. Coalesce
         // before insert so the sync doesn't abort when OLTP rows have nulls.
         params.put("activityType", a.getActivityType() != null ? a.getActivityType().name() : "");
+        // Null guard: pre-migration in-memory entities may not yet have the field set.
+        params.put("editStatus", a.getEditStatus() == null ? ActivityEditStatus.LOCKED.name() : a.getEditStatus().name());
         params.put("uom", "");
         params.put("bqQty", 0.0);
         params.put("plannedStart", a.getPlannedStartDate());
@@ -109,9 +110,6 @@ public final class AnalyticsDimensionSql {
         params.put("chainageFrom", a.getChainageFromM() != null ? a.getChainageFromM().doubleValue() : null);
         params.put("chainageTo", a.getChainageToM() != null ? a.getChainageToM().doubleValue() : null);
         params.put("isCritical", a.getIsCritical() != null && a.getIsCritical() ? 1 : 0);
-        params.put("responsibleResourceId", a.getResponsibleResourceId());
-        params.put("responsibleResourceName",
-                a.getResponsibleResourceName() != null ? a.getResponsibleResourceName() : "");
         params.put("version", version);
         return params;
     }

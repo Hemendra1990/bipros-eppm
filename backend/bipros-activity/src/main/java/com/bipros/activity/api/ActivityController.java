@@ -87,6 +87,34 @@ public class ActivityController {
     return ResponseEntity.noContent().build();
   }
 
+  /**
+   * Flip the activity to LOCKED. Idempotent. Once locked, all manual edits
+   * via this controller are rejected with {@code ACTIVITY_LOCKED}, and DPR
+   * submission becomes permitted (a DRAFT activity rejects DPRs).
+   */
+  @PostMapping("/{activityId}/lock")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ACTIVITY.LOCK')")
+  public ResponseEntity<ApiResponse<ActivityResponse>> lockActivity(
+      @PathVariable UUID projectId,
+      @PathVariable UUID activityId) {
+    ActivityResponse response = activityService.lockActivity(activityId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  /**
+   * Flip the activity back to DRAFT. Idempotent. Re-enables manual edits and
+   * causes new DPR submissions against this activity to be rejected until it
+   * is locked again.
+   */
+  @PostMapping("/{activityId}/unlock")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ACTIVITY.UNLOCK')")
+  public ResponseEntity<ApiResponse<ActivityResponse>> unlockActivity(
+      @PathVariable UUID projectId,
+      @PathVariable UUID activityId) {
+    ActivityResponse response = activityService.unlockActivity(activityId);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
   @PutMapping("/{activityId}/progress")
   // Progress updates are allowed for assignees even without full project-edit rights;
   // service performs the precise check.
@@ -113,11 +141,10 @@ public class ActivityController {
 
   @PostMapping("/global-change")
   @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ACTIVITY.UPDATE')")
-  public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> applyGlobalChange(
+  public ResponseEntity<ApiResponse<com.bipros.activity.application.service.GlobalChangeResult>> applyGlobalChange(
       @PathVariable UUID projectId,
       @Valid @RequestBody GlobalChangeRequest request) {
-    int updatedCount = globalChangeService.applyGlobalChange(projectId, request);
-    java.util.Map<String, Object> result = java.util.Map.of("updatedCount", updatedCount);
+    var result = globalChangeService.applyGlobalChange(projectId, request);
     return ResponseEntity.ok(ApiResponse.ok(result));
   }
 
