@@ -1,7 +1,6 @@
 package com.bipros.api.config.seeder;
 
 import com.bipros.activity.domain.model.Activity;
-import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.model.ActivityType;
@@ -408,7 +407,6 @@ public class IoclPanipatSeeder implements CommandLineRunner {
         a.setPlannedFinishDate(plannedFinish);
         a.setPercentComplete(0.0);
         a.setIsCritical(false);
-        a.setEditStatus(ActivityEditStatus.LOCKED);
         map.put(code, activityRepository.save(a).getId());
     }
 

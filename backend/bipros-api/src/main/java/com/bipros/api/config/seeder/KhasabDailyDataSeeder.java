@@ -1,7 +1,6 @@
 package com.bipros.api.config.seeder;
 
 import com.bipros.activity.domain.model.Activity;
-import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.api.config.seeder.KhasabDailyDataWorkbookReader.ActivityCodeRow;
@@ -353,7 +352,6 @@ public class KhasabDailyDataSeeder implements CommandLineRunner {
             a.setName(def.description() != null ? truncate(def.description(), 100) : def.code());
             a.setDescription(def.description());
             a.setStatus(ActivityStatus.IN_PROGRESS);
-            a.setEditStatus(ActivityEditStatus.LOCKED);
             try {
                 Activity saved = activityRepository.save(a);
                 activityIdByCode.put(def.code(), saved.getId());

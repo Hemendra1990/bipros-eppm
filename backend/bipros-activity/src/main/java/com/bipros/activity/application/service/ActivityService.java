@@ -167,8 +167,6 @@ public class ActivityService {
       projectAccess.requireEdit(activity.getProjectId());
     }
 
-    assertEditable(activity);
-
     // Capture old values for audit BEFORE mutation
     String oldName = activity.getName();
     var oldStatus = activity.getStatus();
@@ -345,7 +343,6 @@ public class ActivityService {
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
 
     projectAccess.requireEdit(activity.getProjectId());
-    assertEditable(activity);
 
     boolean hasRelationships = !relationshipRepository.findByPredecessorActivityId(id).isEmpty()
         || !relationshipRepository.findBySuccessorActivityId(id).isEmpty();
@@ -436,8 +433,6 @@ public class ActivityService {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
 
-    assertEditable(activity);
-
     if (percentComplete < 0 || percentComplete > 100) {
       throw new BusinessRuleException("INVALID_PERCENT_COMPLETE",
           "Percent complete must be between 0 and 100");
@@ -510,7 +505,6 @@ public class ActivityService {
     Activity activity = activityRepository.findById(activityId)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
     projectAccess.requireEdit(activity.getProjectId());
-    assertEditable(activity);
     UUID userId = request == null ? null : request.supervisorUserId();
     String snapshot = request == null ? null : request.supervisorName();
     activity.setSupervisorUserId(userId);
@@ -628,19 +622,6 @@ public class ActivityService {
     log.info("Activity unlocked: id={}", id);
     auditService.logUpdate("Activity", id, "editStatus", prior, ActivityEditStatus.DRAFT);
     return ActivityResponse.from(saved);
-  }
-
-  /**
-   * Reject manual edits when the activity is LOCKED. DPR cascade writes bypass
-   * this guard because they go through {@code ActivityRepository.save} directly
-   * from {@code DailyProgressReportService}, not through this service.
-   */
-  private void assertEditable(Activity activity) {
-    if (activity.getEditStatus() == ActivityEditStatus.LOCKED) {
-      throw new BusinessRuleException(
-          "ACTIVITY_LOCKED",
-          "Activity '" + activity.getCode() + "' is locked. Unlock it before editing.");
-    }
   }
 
   /**

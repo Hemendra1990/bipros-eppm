@@ -182,10 +182,11 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
           <DetailTable
             title="Manpower"
             empty="No manpower"
-            headers={["Role · Category / Grade", "Nos"]}
+            headers={["Role · Category / Grade", "Nos", "Hours"]}
             rows={(row.manpower ?? []).map((m) => [
               m.trade,
               fmt(m.nos, 0),
+              fmt(m.workingHours),
             ])}
           />
           <DetailTable

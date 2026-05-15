@@ -46,6 +46,9 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
       @Param("projectId") UUID projectId,
       @Param("responsibleResourceId") UUID responsibleResourceId);
 
+  @Query("SELECT DISTINCT a.projectId FROM Activity a WHERE a.supervisorUserId = :supervisorUserId")
+  List<UUID> findDistinctProjectIdsBySupervisorUserId(@Param("supervisorUserId") UUID supervisorUserId);
+
   long countByProjectId(UUID projectId);
 
   long countByWbsNodeId(UUID wbsNodeId);

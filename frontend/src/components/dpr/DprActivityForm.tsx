@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { AlertTriangle, Briefcase, HardHat, Info, Package, Save } from "lucide-react";
+import { AlertTriangle, Briefcase, HardHat, Info, Package, Save, X } from "lucide-react";
+import toast from "react-hot-toast";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
@@ -229,6 +230,9 @@ export function DprActivityForm({
   const [activityFieldError, setActivityFieldError] = useState<FormError>(null);
   const [preview, setPreview] = useState<ProductivityPreviewData | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Server-side soft warnings from the most recent save (overrun / missing-rate). The DPR is
+  // saved successfully when these are present — they're advisory, not blockers.
+  const [recentWarnings, setRecentWarnings] = useState<string[]>([]);
   const [photoUploadStatus, setPhotoUploadStatus] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [existingPhotos, setExistingPhotos] = useState<DprAttachment[]>(
@@ -599,6 +603,21 @@ export function DprActivityForm({
     setPhotoUploadStatus(null);
     try {
       const saved = await onSave(payload);
+      // Surface soft warnings (overrun on planned rows, missing rate on unplanned rows). The
+      // DPR is already persisted — these are advisory. One summary toast keeps the page tidy
+      // even when many warnings fire; the sticky banner above the tabs lists every one.
+      const warnings = saved?.warnings ?? [];
+      if (warnings.length > 0) {
+        toast(
+          warnings.length === 1
+            ? "Saved with 1 warning — see details above the tabs."
+            : `Saved with ${warnings.length} warnings — see details above the tabs.`,
+          { icon: "⚠️", duration: 5000 },
+        );
+        setRecentWarnings(warnings);
+      } else {
+        setRecentWarnings([]);
+      }
       // Two-step upload: DPR is now persisted (either freshly-created or updated). If the user
       // queued any photos in the drawer, ship them against the saved id. The drawer is closed by
       // calling onCancel() — only after the upload step so the form stays mounted in the meantime.
@@ -635,7 +654,6 @@ export function DprActivityForm({
         onCancel();
       }
     } catch (err: unknown) {
-      // Surface DPR_OVERRUN (hard-block) with the full server-side detail string.
       const axiosErr = err as {
         response?: { data?: { error?: { code?: string; message?: string } } };
       };
@@ -648,8 +666,6 @@ export function DprActivityForm({
             "This activity is still in Draft — lock it before submitting a DPR against it."
         );
         setError(null);
-      } else if (apiErr?.code === "DPR_OVERRUN") {
-        setError(apiErr.message ?? "DPR would exceed planned units for one or more roles.");
       } else {
         const msg = err instanceof Error ? err.message : "Failed to save DPR.";
         setError(msg);
@@ -923,6 +939,30 @@ export function DprActivityForm({
       {state.activityId && (
         <div className="px-5">
           <ProductivityCoverageBanner coverage={preview?.coverage ?? null} />
+        </div>
+      )}
+
+      {recentWarnings.length > 0 && (
+        <div className="mx-5 mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-1.5 font-semibold">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Saved with warnings ({recentWarnings.length})
+            </div>
+            <button
+              type="button"
+              onClick={() => setRecentWarnings([])}
+              className="text-amber-900/70 hover:text-amber-900 dark:text-amber-200/70 dark:hover:text-amber-200"
+              aria-label="Dismiss warnings"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {recentWarnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
         </div>
       )}
 

@@ -1,7 +1,6 @@
 package com.bipros.api.config.seeder;
 
 import com.bipros.activity.domain.model.Activity;
-import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.model.ActivityType;
@@ -623,7 +622,6 @@ public class OdishaSh10ProjectSeeder implements CommandLineRunner {
             a.setSortOrder(sortOrder++);
             a.setChainageFromM(CHAINAGE_START_M);
             a.setChainageToM(CHAINAGE_END_M);
-            a.setEditStatus(ActivityEditStatus.LOCKED);
             activityRepository.save(a);
         }
         log.info("[OD-SH10] seeded {} activities", BOQ_ROWS.size());
