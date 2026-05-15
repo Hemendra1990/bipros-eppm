@@ -1108,13 +1108,19 @@ export interface WbsAiJobView {
 
 // === AI Activity Generation ===
 
+export interface AiPredecessor {
+  code: string;
+  lagDays: number;
+  type?: string | null;
+}
+
 export interface ActivityAiNode {
   code: string;
   name: string;
   description?: string | null;
   wbsNodeCode: string;
   originalDurationDays: number;
-  predecessorCodes: string[];
+  predecessors: AiPredecessor[];
 }
 
 export interface ActivityAiGenerateRequest {
