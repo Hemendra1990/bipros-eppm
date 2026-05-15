@@ -48,11 +48,11 @@ public record ActivityResponse(
     Long chainageToM,
     UUID workActivityId,
     UUID costAccountId,
-    // Deprecated Phase 4.5: dropped from the OLTP store by Liquibase 094. Always null
+    // Deprecated (Phase 4.5): dropped from the OLTP store by Liquibase 094. Always null
     // for read-back; new clients must use the supervisor user id (resolved through the
     // supervisor endpoint or a join via public.users).
     UUID responsibleResourceId,
-    // Deprecated Phase 4.5: dropped from the OLTP store by Liquibase 094. Always null
+    // Deprecated (Phase 4.5): dropped from the OLTP store by Liquibase 094. Always null
     // for read-back; resolve the supervisor's display name from the user profile keyed by
     // supervisor_user_id.
     String responsibleResourceName,
