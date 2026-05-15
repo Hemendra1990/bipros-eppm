@@ -312,7 +312,12 @@ public class AiOrchestrator {
 
         String moduleAddendum = buildModuleAddendum(ctx.module());
         com.bipros.ai.persona.RolePersona persona = personaProvider.forProfile(ctx.profile());
-        String personaBlock = persona == null ? "" : persona.render();
+        // Persona.render() already appends the construction-domain suffix. When no persona
+        // matched the profile (e.g. unknown / null profile), we still need those EPC-execution
+        // rules in every chat, so splice in the static suffix on its own.
+        String personaBlock = persona == null
+                ? com.bipros.ai.persona.RolePersona.constructionDomainSuffix()
+                : persona.render();
 
         return """
             You are Bipros AI, the project intelligence assistant for the Bipros EPPM
@@ -855,10 +860,39 @@ public class AiOrchestrator {
             filtered. The SQL guard will admit any `project_id` an admin uses.
 
             How to handle the user's question:
+              - CONVERSATION MEMORY (read this FIRST). The history above
+                contains every prior user + assistant turn for this chat. Before
+                doing anything else, scan it. If a recent assistant turn already
+                adopted a specific project (it will say "<code> — <name>" in
+                prose), and the user's new turn is a follow-up about the SAME
+                person, activity, or topic ("and for April?", "what's the SPI
+                too?", "list his DPRs", "compare it with February"), silently
+                reuse that adopted project. Do NOT re-ask, do NOT re-run
+                resolve_entity, do NOT re-list the portfolio. Only if the new
+                turn clearly names a DIFFERENT person, project, or scope should
+                you re-resolve.
+              - PERSON named, NO project named ("What is Mohd Ismaila's CPI for
+                March 2025?", "Illayaraja's performance metrics", "how is
+                Sandeep's team doing?"): the user already pinned the scope by
+                naming the person — your job is to find which project they're
+                on, NOT to ask the user to enumerate the portfolio. Call
+                `resolve_entity(kind="supervisor", query="<the name>")` FIRST.
+                Each match returns a `projects` array (the accessible projects
+                that person is assigned to). Then:
+                  • If the top match's `projects` has exactly ONE entry →
+                    **silently adopt** that project as the scope for this turn,
+                    identify it once in prose by `<code> — <name>`, and answer
+                    the original question. NEVER ask the user to confirm.
+                  • If `projects` has 2+ entries → list ONLY those projects
+                    (their code + name) as bullets and ask which one. Do NOT
+                    list any other project from the portfolio.
+                  • If no matches OR `projects` is empty → say plainly: "I
+                    couldn't find <name> on your accessible projects." Do NOT
+                    enumerate the project roster.
               - Portfolio-wide question ("how many projects do I have", "rank my
                 projects by CPI", "compare X and Y"): call `list_projects` once
                 to get codes/names/UUIDs, then answer across the full set.
-              - Single-project question ("how many activities in ROAD-001",
+              - PROJECT named (not a person) ("how many activities in ROAD-001",
                 "status of 6155"): call `list_projects`, match the user's
                 wording against `code` first (case-insensitive exact), then
                 `name` (case-insensitive substring). If exactly one match,
@@ -866,9 +900,9 @@ public class AiOrchestrator {
                 identify it once in prose by `<code> — <name>`, and proceed
                 with the query. Do NOT ask the user to "switch to that
                 project's page". Do NOT ask them to "confirm". Just answer.
-              - Ambiguous wording (matches multiple projects, or matches none):
-                list the candidate set as bullets and ask which one. Only ask
-                when you genuinely cannot resolve the entity.
+              - Ambiguous PROJECT wording (matches multiple projects, or matches
+                none): list the candidate set as bullets and ask which one.
+                Only ask when you genuinely cannot resolve the entity.
 
             For warehouse SQL (`query_clickhouse`): admins may use
             `project_id = '<any UUID returned by list_projects this turn>'` or
@@ -923,16 +957,45 @@ public class AiOrchestrator {
             %s
 
             Guidance:
+              - CONVERSATION MEMORY (read this FIRST). The history above
+                contains every prior user + assistant turn for this chat. Before
+                doing anything else, scan it. If a recent assistant turn already
+                adopted a specific project (it will say "<code> — <name>" in
+                prose), and the user's new turn is a follow-up about the SAME
+                person, activity, or topic ("and for April?", "what's the SPI
+                too?", "list his DPRs", "compare it with February"), silently
+                reuse that adopted project. Do NOT re-ask, do NOT re-run
+                resolve_entity, do NOT re-list the portfolio. Only if the new
+                turn clearly names a DIFFERENT person, project, or scope should
+                you re-resolve.
+              - PERSON named, NO project named ("What is Mohd Ismaila's CPI for
+                March 2025?", "Illayaraja's performance metrics", "how is
+                Sandeep's team doing?"): the user already pinned the scope by
+                naming the person — your job is to find which project they're
+                on, NOT to ask the user to enumerate the portfolio. Call
+                `resolve_entity(kind="supervisor", query="<the name>")` FIRST.
+                Each match returns a `projects` array (the accessible projects
+                that person is assigned to). Then:
+                  • If the top match's `projects` has exactly ONE entry →
+                    **silently adopt** that project as the scope for this turn,
+                    identify it once in prose by `<code> — <name>`, and answer
+                    the original question. NEVER ask the user to confirm.
+                  • If `projects` has 2+ entries → list ONLY those projects
+                    (their code + name) as bullets and ask which one. Do NOT
+                    list the rest of the accessible roster.
+                  • If no matches OR `projects` is empty → say plainly: "I
+                    couldn't find <name> on your accessible projects." Do NOT
+                    enumerate the project roster.
               - For portfolio-wide questions ("how many projects", "rank my
                 projects by X", "which project has the highest CPI") — answer
                 directly across the accessible set. The roster above already
                 tells you "how many projects" without any tool call.
-              - For single-project questions ("status of ROAD-001", "DPRs for
-                6155 last week") — match the user's wording against the roster
-                (code first, then name). If exactly one project matches,
-                silently adopt it as the scope for this turn, identify it in
-                prose by `<code> — <name>`, and proceed. If multiple match or
-                none match, ask which one — do NOT guess.
+              - For PROJECT-named questions (not a person) ("status of ROAD-001",
+                "DPRs for 6155 last week") — match the user's wording against
+                the roster (code first, then name). If exactly one project
+                matches, silently adopt it as the scope for this turn, identify
+                it in prose by `<code> — <name>`, and proceed. If multiple match
+                or none match, ask which one — do NOT guess.
               - Once a project is adopted mid-turn, every subsequent tool call
                 in this turn must use that project's UUID. Do not silently
                 drift back to portfolio scope.

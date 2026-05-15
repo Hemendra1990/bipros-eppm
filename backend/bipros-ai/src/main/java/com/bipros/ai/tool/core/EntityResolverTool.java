@@ -10,8 +10,10 @@ import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.model.Resource;
+import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.model.manpower.ManpowerMaster;
 import com.bipros.resource.domain.repository.ManpowerMasterRepository;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -56,6 +63,7 @@ public class EntityResolverTool implements Tool {
   private final ResourceRepository resourceRepository;
   private final ManpowerMasterRepository manpowerRepository;
   private final WbsNodeRepository wbsRepository;
+  private final ResourceAssignmentRepository assignmentRepository;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -74,9 +82,13 @@ public class EntityResolverTool implements Tool {
         + "resolve_entity(query=\"foundation\", kind=\"activity\"); \"variance on WBS 1.3\" → "
         + "resolve_entity(query=\"1.3\", kind=\"wbs\"). "
         + "Set kind=\"auto\" to search every entity type. Returns up to top_k matches each "
-        + "with a score (0–100; 100 = exact code/name hit). Project-scoped — supervisor / "
-        + "activity / wbs / resource searches require a current project. Project search works "
-        + "across the user's accessible projects.";
+        + "with a score (0–100; 100 = exact code/name hit) and — for supervisor / resource "
+        + "matches — a `projects` array listing the accessible project(s) that person is "
+        + "assigned to. Use this in PORTFOLIO MODE (no current project pinned) the moment "
+        + "the user names a PERSON: the `projects` field tells you which project to adopt, "
+        + "so you don't have to ask the user to enumerate the portfolio. Activity / WBS "
+        + "searches still require a current project. Project search works across the user's "
+        + "accessible projects.";
   }
 
   @Override
@@ -149,10 +161,13 @@ public class EntityResolverTool implements Tool {
       enforceScope(projectId, ctx, admin);
       collectActivityMatches(query, projectId, matches);
     }
-    if (("auto".equals(kind) || "resource".equals(kind) || "supervisor".equals(kind))
-        && projectId != null) {
-      enforceScope(projectId, ctx, admin);
-      collectResourceMatches(query, "supervisor".equals(kind), matches);
+    if ("auto".equals(kind) || "resource".equals(kind) || "supervisor".equals(kind)) {
+      if (projectId != null) enforceScope(projectId, ctx, admin);
+      // Resource pool is global. In portfolio mode (projectId == null), still
+      // surface candidates — we attach each match's accessible projects via
+      // ResourceAssignment so the LLM can adopt a single project automatically
+      // instead of asking the user to enumerate the portfolio.
+      collectResourceMatches(query, "supervisor".equals(kind), ctx, admin, matches);
     }
     if (("auto".equals(kind) || "wbs".equals(kind)) && projectId != null) {
       enforceScope(projectId, ctx, admin);
@@ -174,27 +189,60 @@ public class EntityResolverTool implements Tool {
       row.put("name", m.name);
       if (m.extra != null) row.put("extra", m.extra);
       row.put("score", m.score);
+      if (m.projects != null && !m.projects.isEmpty()) {
+        ArrayNode pr = objectMapper.createArrayNode();
+        for (ProjectRef p : m.projects) {
+          ObjectNode pn = objectMapper.createObjectNode();
+          pn.put("id", p.id.toString());
+          pn.put("code", p.code);
+          pn.put("name", p.name);
+          pr.add(pn);
+        }
+        row.set("projects", pr);
+        row.put("project_count", m.projects.size());
+      }
       rows.add(row);
     }
     wrapper.set("matches", rows);
     wrapper.put("count", matches.size());
 
     if (matches.isEmpty()) {
-      return ToolResult.ok(
-          "No \"" + query + "\" matches found"
-              + (projectId != null
-                  ? " in this project (" + kind + ")."
-                  : " (" + kind + "). Pick a project first if you're looking up activities, "
-                      + "resources, or WBS items."),
-          wrapper);
+      boolean peopleKind =
+          "supervisor".equals(kind) || "resource".equals(kind) || "auto".equals(kind);
+      String tail;
+      if (projectId != null) {
+        tail = " in this project (" + kind + ").";
+      } else if (peopleKind) {
+        tail =
+            " across your accessible projects (" + kind + "). The person may be on a "
+                + "project you don't have access to, or the name may be misspelt.";
+      } else {
+        tail =
+            " (" + kind + "). Pick a project first if you're looking up activities or "
+                + "WBS items.";
+      }
+      return ToolResult.ok("No \"" + query + "\" matches found" + tail, wrapper);
     }
 
-    String topLabel = matches.get(0).code != null ? matches.get(0).code : matches.get(0).name;
-    String summary =
-        matches.size() == 1
-            ? "Resolved \"" + query + "\" → " + matches.get(0).kind + ": " + topLabel
-            : matches.size() + " candidates for \"" + query + "\". Top: " + topLabel;
-    return ToolResult.ok(summary, wrapper);
+    Match top = matches.get(0);
+    String topLabel = top.code != null ? top.code : top.name;
+    StringBuilder summary = new StringBuilder();
+    if (matches.size() == 1) {
+      summary.append("Resolved \"").append(query).append("\" → ").append(top.kind)
+          .append(": ").append(topLabel);
+    } else {
+      summary.append(matches.size()).append(" candidates for \"").append(query)
+          .append("\". Top: ").append(topLabel);
+    }
+    if (top.projects != null && !top.projects.isEmpty()) {
+      if (top.projects.size() == 1) {
+        ProjectRef p = top.projects.get(0);
+        summary.append(" — on ").append(p.code == null ? p.name : p.code);
+      } else {
+        summary.append(" — on ").append(top.projects.size()).append(" accessible projects");
+      }
+    }
+    return ToolResult.ok(summary.toString(), wrapper);
   }
 
   private void enforceScope(UUID projectId, AiContext ctx, boolean admin) {
@@ -236,18 +284,17 @@ public class EntityResolverTool implements Tool {
   }
 
   private void collectResourceMatches(
-      String query, boolean supervisorOnly, List<Match> out) {
-    // TODO(EntityResolverTool#collectResourceMatches, line ~240): resources are
-    // a global pool; this method scans every Resource in the database and only
-    // the caller's access to the project is enforced (enforceScope), not the
-    // resources' membership in that project's pool (ProjectResource). For
-    // supervisor / resource resolution the LLM may therefore see candidates
-    // who are not on the in-scope project. Proper fix: inject
-    // ProjectResourceRepository and filter `all` to resources present in
-    // ProjectResource for ctx.projectId() when projectId != null. Left as a
-    // TODO to avoid expanding scope of the supervisor-routing change; the
-    // newly-added `list_supervisors` tool covers the roster path correctly
-    // and the LLM is now nudged to prefer it.
+      String query, boolean supervisorOnly, AiContext ctx, boolean admin, List<Match> out) {
+    // The resource pool is global by design (not scoped to a project). We rank
+    // candidates by name match, then — for each candidate that passes — attach
+    // the accessible projects the person is actually assigned to (intersected
+    // with ctx.scopedProjectIds for non-admins). The `projects` field is what
+    // lets the LLM auto-adopt a single project in portfolio mode and avoid
+    // asking the user to enumerate the portfolio when they already named the
+    // person.
+    Set<UUID> accessibleProjectIds = computeAccessibleProjectIds(ctx, admin);
+    Map<UUID, ProjectRef> accessibleProjectMeta = loadAccessibleProjectMeta(accessibleProjectIds);
+
     List<Resource> all = resourceRepository.findAll();
     for (Resource r : all) {
       String roleName = r.getRole() != null ? r.getRole().getName() : null;
@@ -269,6 +316,8 @@ public class EntityResolverTool implements Tool {
         if (!isSupervisor) continue;
       }
 
+      List<ProjectRef> projects = projectsForResource(r.getId(), accessibleProjectMeta);
+
       String extra =
           (roleName != null ? roleName : "")
               + (fullName != null ? " · " + fullName : "")
@@ -281,8 +330,43 @@ public class EntityResolverTool implements Tool {
               r.getCode(),
               displayName,
               extra.isBlank() ? null : extra,
-              score));
+              score,
+              projects));
     }
+  }
+
+  private Set<UUID> computeAccessibleProjectIds(AiContext ctx, boolean admin) {
+    if (admin) {
+      Set<UUID> ids = new HashSet<>();
+      for (Project p : projectRepository.findAllByArchivedAtIsNull()) ids.add(p.getId());
+      return ids;
+    }
+    if (ctx.scopedProjectIds() == null || ctx.scopedProjectIds().isEmpty()) {
+      return ctx.projectId() == null ? Set.of() : Set.of(ctx.projectId());
+    }
+    return new HashSet<>(ctx.scopedProjectIds());
+  }
+
+  private Map<UUID, ProjectRef> loadAccessibleProjectMeta(Set<UUID> ids) {
+    if (ids.isEmpty()) return Map.of();
+    Map<UUID, ProjectRef> meta = new HashMap<>();
+    for (Project p : projectRepository.findAllById(ids)) {
+      meta.put(p.getId(), new ProjectRef(p.getId(), p.getCode(), p.getName()));
+    }
+    return meta;
+  }
+
+  private List<ProjectRef> projectsForResource(UUID resourceId, Map<UUID, ProjectRef> accessible) {
+    if (accessible.isEmpty()) return List.of();
+    Map<UUID, ProjectRef> hits = new LinkedHashMap<>();
+    for (ResourceAssignment a : assignmentRepository.findByResourceId(resourceId)) {
+      UUID pid = a.getProjectId();
+      if (pid == null) continue;
+      ProjectRef ref = accessible.get(pid);
+      if (ref == null) continue;
+      hits.putIfAbsent(pid, ref);
+    }
+    return new ArrayList<>(hits.values());
   }
 
   private boolean isLikelySupervisor(Resource r, ManpowerMaster m) {
@@ -366,5 +450,18 @@ public class EntityResolverTool implements Tool {
     return prev[b.length()];
   }
 
-  private record Match(String kind, UUID id, String code, String name, String extra, int score) {}
+  private record Match(
+      String kind,
+      UUID id,
+      String code,
+      String name,
+      String extra,
+      int score,
+      List<ProjectRef> projects) {
+    Match(String kind, UUID id, String code, String name, String extra, int score) {
+      this(kind, id, code, name, extra, score, List.of());
+    }
+  }
+
+  private record ProjectRef(UUID id, String code, String name) {}
 }

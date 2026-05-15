@@ -2,6 +2,8 @@ package com.bipros.ai.tool;
 
 import com.bipros.ai.context.AiContext;
 import com.bipros.analytics.query.ClickHouseQueryService;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -10,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,6 +23,7 @@ public class QueryClickHouseTool extends ProjectScopedTool {
 
     private final ClickHouseQueryService queryService;
     private final SchemaCatalog schemaCatalog;
+    private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -69,10 +73,24 @@ public class QueryClickHouseTool extends ProjectScopedTool {
         // orchestrator has already resolved one), lock the SQL guard to that
         // single project. The LLM cannot then pick a different project_id —
         // SqlGuard will reject any UUID literal not in this list.
-        // When no project is in scope, fall back to the user's accessible scope
-        // (admin → all non-archived projects, non-admin → their scoped list).
-        List<UUID> effectiveScope =
-                ctx.projectId() != null ? List.of(ctx.projectId()) : ctx.scopedProjectIds();
+        // When no project is in scope:
+        //  - non-admin: their scopedProjectIds list (already row-filtered upstream)
+        //  - admin: ctx.scopedProjectIds() is empty by convention (admins are not
+        //    row-filtered); expand to every non-archived project so SqlGuard
+        //    admits any project_id the LLM picked from list_projects /
+        //    resolve_entity. Without this expansion every admin portfolio-mode
+        //    warehouse query fails with SQL_PROJECT_OUT_OF_SCOPE.
+        List<UUID> effectiveScope;
+        if (ctx.projectId() != null) {
+            effectiveScope = List.of(ctx.projectId());
+        } else if ("ADMIN".equals(ctx.role())
+                && (ctx.scopedProjectIds() == null || ctx.scopedProjectIds().isEmpty())) {
+            List<UUID> all = new ArrayList<>();
+            for (Project p : projectRepository.findAllByArchivedAtIsNull()) all.add(p.getId());
+            effectiveScope = all;
+        } else {
+            effectiveScope = ctx.scopedProjectIds();
+        }
         try {
             ClickHouseQueryService.QueryResult result =
                     queryService.runGuarded(sql, effectiveScope, rowLimit);
