@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * AI Orchestrator — true ReAct loop. Each round:
@@ -104,7 +106,10 @@ public class AiOrchestrator {
         String lastAssistantText = "";
         boolean naturalEnd = false;
         boolean anyToolCalled = false;       // any tool used this turn → answer is data-backed → must verify
-        boolean verificationInjected = false; // we only run the verification pass once per request
+        boolean verificationInjected = false; // we only run the standard verification pass once per request
+        boolean toolUseGateFired = false;     // distinct from verificationInjected: fires when first draft was tool-less
+        boolean currencyGateFired = false;    // fires once if the currency cross-check forces a round
+        String knownBudgetCurrency = resolveBudgetCurrency(ctx);
 
         for (int round = 0; round < cap; round++) {
             LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(
@@ -120,16 +125,60 @@ public class AiOrchestrator {
                 executeToolsAndAppend(outcome.toolCalls, ctx, messages, sink);
                 lastAssistantText = outcome.text;
                 anyToolCalled = true;
+                // Refresh the project's budget_currency cache from the latest tool
+                // results — list_projects rows expose it on the row objects, so a
+                // call we just made may have populated what we need for the
+                // post-answer cross-check.
+                if (knownBudgetCurrency == null) {
+                    knownBudgetCurrency = resolveBudgetCurrency(ctx);
+                }
                 continue;
             }
 
             // Model produced a candidate final answer (no tool calls).
-            // If we haven't verified yet AND the answer is data-backed (some tool
-            // was called this turn), inject a verification system message and
-            // loop one more time. This forces the model to re-call the answering
-            // tool and either confirm or correct its number before the user
-            // sees it.
             String candidate = outcome.text == null ? "" : outcome.text;
+
+            // Gate A — TOOL-USE GATE.
+            // If no tool fired this whole request and the draft makes a data claim
+            // (numbers, codes, currency, list words), force ONE verification round
+            // that requires a tool call. This catches the "I'll just answer from
+            // memory" hallucination class — the model otherwise emits false
+            // counts / currencies / codes and we ship them.
+            if (!anyToolCalled && !toolUseGateFired && looksLikeDataClaim(candidate)) {
+                toolUseGateFired = true;
+                messages.add(new LlmProvider.Message("assistant", candidate));
+                messages.add(new LlmProvider.Message("system",
+                        buildToolUseGatePrompt(candidate)));
+                sink.tryEmitNext(new ChatEvent("gate_blocked",
+                        Map.of("reason", "tool_less_data_claim",
+                                "note", "Drafted a data answer without calling a tool — re-checking.")));
+                continue;
+            }
+
+            // Gate B — CURRENCY CROSS-CHECK.
+            // The project's budget_currency is the canonical currency. If the
+            // draft contains a currency token that disagrees, force one round to
+            // requote. Fires at most once per request; suppressed if the standard
+            // verification or tool-use gate has already opened.
+            if (!currencyGateFired && !verificationInjected && !toolUseGateFired
+                    && knownBudgetCurrency != null
+                    && currencyMismatchDetected(candidate, knownBudgetCurrency)) {
+                currencyGateFired = true;
+                messages.add(new LlmProvider.Message("assistant", candidate));
+                messages.add(new LlmProvider.Message("system",
+                        buildCurrencyGatePrompt(candidate, knownBudgetCurrency)));
+                sink.tryEmitNext(new ChatEvent("gate_blocked",
+                        Map.of("reason", "currency_mismatch",
+                                "expected_currency", knownBudgetCurrency,
+                                "note", "Currency in the draft disagrees with the project's budget_currency."
+                        )));
+                continue;
+            }
+
+            // Gate C — STANDARD VERIFICATION.
+            // The draft is data-backed (a tool fired earlier in this request).
+            // Inject the verifier and loop once more so the model re-checks its
+            // numbers before the user sees them.
             if (!verificationInjected && anyToolCalled) {
                 verificationInjected = true;
                 messages.add(new LlmProvider.Message("assistant", candidate));
@@ -139,8 +188,22 @@ public class AiOrchestrator {
                 continue;
             }
 
-            // Either verification has run, or this was a tool-less chit-chat answer.
-            String finalText = ChartAugmenter.augment(candidate);
+            // SAFE-REFUSAL FALLBACK.
+            // Tool-use gate fired but the model still emitted a tool-less data
+            // claim on the second try. Replace with a refusal rather than
+            // shipping a hallucination.
+            String finalText;
+            if (toolUseGateFired && !anyToolCalled && looksLikeDataClaim(candidate)) {
+                finalText = "I can't confirm that without checking the project data. "
+                        + "Try rephrasing or ask me to query a specific entity (a project, "
+                        + "activity, supervisor, WBS node, or DPR).";
+                sink.tryEmitNext(new ChatEvent("gate_blocked",
+                        Map.of("reason", "tool_less_data_claim_persisted",
+                                "note", "Model would not call a tool after the gate fired — using safe refusal.")));
+            } else {
+                // Either verification has run, or this was a tool-less chit-chat answer.
+                finalText = ChartAugmenter.augment(candidate);
+            }
             messages.add(new LlmProvider.Message("assistant", finalText));
             sink.tryEmitNext(new ChatEvent("final_answer",
                     Map.of("text", finalText, "rounds", round + 1,
@@ -326,6 +389,40 @@ public class AiOrchestrator {
             engineer or analyst. They want clear, decision-ready answers about cost,
             schedule, risk, daily progress, earned-value, and portfolio health.
 
+            ════════════════════════════════════════
+            DATA HONESTY RULES (read first; override every rule below on conflict)
+            ════════════════════════════════════════
+            (1) Every numeric, structural, code, currency, name, date, list, count,
+                or status claim in your final answer MUST come from a tool result you
+                fetched THIS request. Numbers from prior turns are stale — refetch.
+            (2) Never invent identifiers. Activity codes, BOQ codes, WBS codes, and
+                role codes are arbitrary strings — `1.0`, `2.1.5 (i)`, `ACT-1.3.5(ii)`,
+                `BOQ-7-A`, `KHA-CIVIL` are all real shapes from real projects. Quote
+                them VERBATIM from the tool result. NEVER extrapolate a pattern
+                (`ACT-001`, `ACT-002`, `WBS-1`, `WBS-2`) from one example or from
+                training-data priors. If a tool returns one node, the answer is "the
+                project has one such node," not "and probably siblings."
+            (3) Currency is project-bound. Every cost / amount / price / budget
+                claim MUST include the project's `budget_currency` (returned by
+                `list_projects`). The default is NOT INR and NOT USD. Quote amounts
+                as `12,500 OMR` (currency suffix), not `₹12,500`. If you have not
+                seen `budget_currency` for the current project this request, call
+                `list_projects` first.
+            (4) If a tool returns 0 rows, the truthful answer is "no rows match
+                these filters" — not "there are none of those." Try one broader
+                filter (date window, drop a predicate), then say so plainly.
+            (5) Never invent supervisor names, contractor names, equipment makes,
+                material specs, chainages, or weather conditions. If the tool didn't
+                return it, you don't say it.
+            (6) Tool-less answers are reserved for greetings, definitions of generic
+                construction terms, and meta-questions about the assistant. ANY
+                question that asks "how many," "what is X's …," "list," "first / last
+                / top N," "compare," "show," or names a project entity (a project,
+                activity, supervisor, WBS node, BOQ item, role, contractor) is a data
+                question and REQUIRES at least one tool call before the final answer.
+                If you find yourself drafting a number, code, or list without having
+                fetched it this request, stop and call the relevant tool.
+
             ────────────────────────────────────────
             OUTPUT STYLE — MANDATORY (apply to every final answer)
             ────────────────────────────────────────
@@ -433,6 +530,33 @@ public class AiOrchestrator {
               × rate.
             DPR rows carry their HISTORICAL unit_rate snapshot. NEVER recompute from
             current rates. Equipment idle / breakdown hours are excluded from the rollup.
+
+            RESOURCE LOOKUP — CATALOGUE vs ASSIGNMENTS (always disambiguate):
+            Two distinct surfaces; pick the right one or you will report "no
+            resources" on a fully-priced project.
+            - CATALOGUE = the project-agnostic priced master at /v1/resources
+              (table resource.resources). Holds Manpower / Equipment / Material
+              rows with code, name, type, role, unit, cost_per_unit. Exists
+              independently of any activity assignment — a project may have
+              hundreds of priced rows here even with zero assignments.
+              Tool: query_resource_catalogue.
+              Use for: "how many resources of each type", "most/least
+              expensive equipment", "daily rate for a 20T excavator", "top N
+              labor categories by rate", "per-MT rate for TMT Rebar Fe500D",
+              "what is X charged at on the master rate sheet".
+            - ASSIGNMENTS = the project-specific bookings in
+              resource_assignments (linked to activity_id + variant FK).
+              Tool: find_resource_deployment, summarize_activity_resources,
+              get_activity_full_context.
+              Use for: "where is the mason role deployed", "labour vs
+              equipment vs material split across completed activities",
+              "cost actually booked on activity X".
+              These tools see ONLY assigned resources — they will return
+              empty when the catalogue is priced but nothing has been
+              booked yet. If you ask one of these for a rate question and
+              get nothing, the right move is to switch to
+              query_resource_catalogue — never tell the user "no data" on
+              a rate question without trying the catalogue.
 
             SUPERVISOR LOOKUP (three senses — always disambiguate):
             - "Currently assigned supervisor(s) for activity X" / "who supervises X" /
@@ -1518,10 +1642,165 @@ public class AiOrchestrator {
              + "          prefix the answer with \"Best effort (unverified): \".\n"
              + "  (5) You MUST make at least one tool call this round, OR your\n"
              + "      draft must contain no data claims (pure prose / definitions).\n"
-             + "      Repeating the draft without re-checking is not allowed.\n\n"
+             + "      Repeating the draft without re-checking is not allowed.\n"
+             + "  (6) Do NOT paraphrase or restate a tool result you have not\n"
+             + "      actually fetched this request. If a number, code, currency,\n"
+             + "      or list is in your draft and the corresponding tool was not\n"
+             + "      called, the only honest moves are: call the tool now, or\n"
+             + "      remove the claim.\n\n"
              + "Do NOT mention this verification step in your answer. The user\n"
              + "should see one polished answer, not a \"first I said X, then I\n"
              + "checked\" narrative.\n"
              + "────────────────────────────────────────\n";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Tool-use gate: forces a tool call when the model drafts a data answer
+    // without ever invoking a tool this request.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Heuristic for "this draft makes a data claim." Triggers on objective
+     * fingerprints only — digits, currency tokens, code-shaped identifiers.
+     * Topic keywords like "cost" or "budget" are NOT enough on their own; a
+     * sentence like "I can help with cost questions" is chit-chat, not a
+     * claim. We accept the trade-off that vague qualitative claims ("there
+     * are quite a few activities") pass through — those don't ship a wrong
+     * number to the user.
+     */
+    static boolean looksLikeDataClaim(String text) {
+        if (text == null) return false;
+        String t = text.trim();
+        if (t.isEmpty()) return false;
+        if (DIGIT_PATTERN.matcher(t).find()) return true;
+        if (CURRENCY_TOKEN_PATTERN.matcher(t).find()) return true;
+        if (CODE_PATTERN.matcher(t).find()) return true;
+        return false;
+    }
+
+    private static final Pattern DIGIT_PATTERN = Pattern.compile("\\d");
+    /** Common currency symbols + ISO codes used in EPPM tenants. */
+    private static final Pattern CURRENCY_TOKEN_PATTERN = Pattern.compile(
+            "[₹$€£¥]|\\b(INR|USD|OMR|AED|EUR|GBP|SAR|QAR|KWD|BHD|JPY|CNY|AUD|CAD)\\b");
+    /** Code-shaped tokens: at least one letter+digit run separated by `-`, `.`, or `(`. */
+    private static final Pattern CODE_PATTERN = Pattern.compile(
+            "\\b[A-Z][A-Z0-9]{1,}-\\d|\\bWBS-\\d|\\bACT-\\d|\\bBOQ-\\d|\\bEMP-\\d");
+
+    /**
+     * System prompt injected when the tool-use gate fires. Sterner than the
+     * standard verification pass — the model has not called any tool yet, so
+     * we cannot rely on "re-check the result you got"; we have to require a
+     * fresh call.
+     */
+    String buildToolUseGatePrompt(String draftAnswer) {
+        String safeDraft = draftAnswer == null ? "" : draftAnswer.trim();
+        if (safeDraft.length() > 4000) safeDraft = safeDraft.substring(0, 4000) + "…[truncated]";
+        return "════════════════════════════════════════\n"
+             + "TOOL-USE GATE (mandatory)\n"
+             + "════════════════════════════════════════\n\n"
+             + "You drafted this answer for the user WITHOUT calling any tool this\n"
+             + "request:\n\n"
+             + "\"\"\"\n" + safeDraft + "\n\"\"\"\n\n"
+             + "The DATA HONESTY RULES at the top of your system prompt forbid this\n"
+             + "pattern. The draft above contains a data claim (a number, code,\n"
+             + "currency, list, or named entity) that you did not fetch from a tool.\n"
+             + "It is almost certainly hallucinated from training-data priors or\n"
+             + "from on-screen context, not from real project data.\n\n"
+             + "What to do this round:\n"
+             + "  • If the draft makes ANY claim about counts, codes, currencies,\n"
+             + "    names, dates, lists, or status values, you MUST call the\n"
+             + "    relevant tool now and re-derive the answer from its result.\n"
+             + "    Use list_projects / list_activities / query_wbs /\n"
+             + "    list_project_supervisors / query_dpr / get_activity_cost as\n"
+             + "    appropriate.\n"
+             + "  • If — and ONLY if — your draft is a greeting, definition of a\n"
+             + "    generic construction term, or a meta-question about yourself,\n"
+             + "    you may repeat it unchanged.\n"
+             + "  • Do NOT paraphrase tool results you have not fetched. \"There\n"
+             + "    are 7777 activities\" is not honest if you did not call\n"
+             + "    list_activities. \"Parvaiz has 0 DPRs\" is not honest if you\n"
+             + "    did not call list_project_supervisors / query_dpr.\n\n"
+             + "Do NOT narrate this gate in your answer. The user should see one\n"
+             + "polished answer, not \"I checked again.\"\n"
+             + "════════════════════════════════════════\n";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Currency cross-check: forces a re-quote when the draft uses a currency
+    // that disagrees with the project's budget_currency.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Look up the in-scope project's budget_currency. Returns null if no
+     * project is in scope, or the project can't be loaded.
+     */
+    private String resolveBudgetCurrency(AiContext ctx) {
+        if (ctx == null || ctx.projectId() == null) return null;
+        try {
+            return projectRepository.findById(ctx.projectId())
+                    .map(p -> {
+                        String c = p.getBudgetCurrency();
+                        return c == null ? null : c.trim().toUpperCase();
+                    })
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Does the draft contain a currency token that disagrees with the
+     * project's budget_currency? Symbols and ISO codes both count. We only
+     * flag a mismatch when we are sure of the disagreement — if no currency
+     * token appears in the draft, return false (no gate).
+     */
+    static boolean currencyMismatchDetected(String text, String projectCurrency) {
+        if (text == null || projectCurrency == null || projectCurrency.isBlank()) return false;
+        String upper = projectCurrency.trim().toUpperCase();
+        Matcher m = CURRENCY_TOKEN_PATTERN.matcher(text);
+        while (m.find()) {
+            String tok = m.group();
+            String iso = symbolToIso(tok);
+            if (iso == null) iso = tok.toUpperCase();
+            if (!iso.equals(upper)) return true;
+        }
+        return false;
+    }
+
+    private static String symbolToIso(String token) {
+        if (token == null || token.isEmpty()) return null;
+        return switch (token) {
+            case "₹" -> "INR";
+            case "$" -> "USD";
+            case "€" -> "EUR";
+            case "£" -> "GBP";
+            case "¥" -> "JPY";
+            default -> null;
+        };
+    }
+
+    /** System prompt injected when the currency cross-check forces a round. */
+    String buildCurrencyGatePrompt(String draftAnswer, String projectCurrency) {
+        String safeDraft = draftAnswer == null ? "" : draftAnswer.trim();
+        if (safeDraft.length() > 4000) safeDraft = safeDraft.substring(0, 4000) + "…[truncated]";
+        return "════════════════════════════════════════\n"
+             + "CURRENCY CROSS-CHECK (mandatory)\n"
+             + "════════════════════════════════════════\n\n"
+             + "You drafted this answer for the user:\n\n"
+             + "\"\"\"\n" + safeDraft + "\n\"\"\"\n\n"
+             + "The draft contains a currency token that disagrees with the\n"
+             + "current project's budget_currency, which is " + projectCurrency
+             + ".\n\nWhat to do this round:\n"
+             + "  • Re-quote every cost / amount in the draft with the suffix\n"
+             + "    '" + projectCurrency + "' (e.g. '12,500 " + projectCurrency
+             + "'). Drop INR / USD / ₹ / $ unless they actually match\n"
+             + "    " + projectCurrency + ".\n"
+             + "  • The numerical values themselves are unchanged — this is a\n"
+             + "    currency suffix correction, not a re-computation. Do NOT\n"
+             + "    apply an exchange rate; the underlying tool figures are\n"
+             + "    already in the project's local currency.\n"
+             + "  • Do NOT narrate this correction. The user should see one\n"
+             + "    polished answer with the right currency.\n"
+             + "════════════════════════════════════════\n";
     }
 }

@@ -61,7 +61,11 @@ public class ListProjectSupervisorsTool implements Tool {
                 + "first_name, last_name, supervisor_name (display name, prefers full name then "
                 + "DPR snapshot then username), supervisor_code (defaults to employee_code, falls "
                 + "back to username — pick this when echoing the supervisor back to the user), "
-                + "activity_count, dpr_count, and sources=['ACTIVITY' | 'DPR']. "
+                + "activity_count, dpr_count, and sources=['ACTIVITY' | 'DPR' | 'DPR_BY_NAME']. "
+                + "DPR_BY_NAME rows surface DPRs whose supervisor_user_id was not "
+                + "resolved at write time — the snapshot name exists but the User join "
+                + "is missing; treat these as a data-quality flag and report them "
+                + "explicitly when they show up. "
                 + "ALWAYS call this for any 'who are the supervisors on project X', 'list "
                 + "supervisors', 'distinct supervisors across activities', or 'supervisors "
                 + "available' question — it is the canonical roster for the role-rate model. "
@@ -157,11 +161,35 @@ public class ListProjectSupervisorsTool implements Tool {
                         + "  LEFT JOIN public.users u "
                         + "    ON u.id = COALESCE(a.user_id, d.user_id) "
                         + " ORDER BY activity_count DESC, dpr_count DESC, supervisor_name");
+
+        // Belt-and-braces second query: DPRs whose supervisor_user_id is NULL but
+        // whose snapshot supervisor_name is non-empty. The seeders write a non-null
+        // user id for OMAN-Demo, but workbook imports / partial backfills can land
+        // DPRs with only a name, and dropping them silently looks identical to
+        // "this person filed no DPRs" — exactly the bug the gate is trying to
+        // prevent. We surface them as a separate row with a data_quality_warning.
+        Query qOrphan = em.createNativeQuery(
+                "SELECT d.supervisor_name AS supervisor_name, "
+                        + "       COUNT(*) AS dpr_count "
+                        + "  FROM project.daily_progress_reports d "
+                        + " WHERE d.project_id = :projectId "
+                        + "   AND d.supervisor_user_id IS NULL "
+                        + "   AND d.supervisor_name IS NOT NULL "
+                        + "   AND TRIM(d.supervisor_name) <> '' "
+                        + "   AND (CAST(:fromDate AS date) IS NULL OR d.report_date >= CAST(:fromDate AS date)) "
+                        + "   AND (CAST(:toDate AS date) IS NULL OR d.report_date <= CAST(:toDate AS date)) "
+                        + " GROUP BY d.supervisor_name "
+                        + " ORDER BY dpr_count DESC");
+        qOrphan.setParameter("projectId", projectId);
+        qOrphan.setParameter("fromDate", fromDate);
+        qOrphan.setParameter("toDate", toDate);
         q.setParameter("projectId", projectId);
         q.setParameter("fromDate", fromDate);
         q.setParameter("toDate", toDate);
         @SuppressWarnings("unchecked")
         List<Object[]> rows = q.getResultList();
+        @SuppressWarnings("unchecked")
+        List<Object[]> orphanRows = qOrphan.getResultList();
 
         ObjectNode wrapper = mapper.createObjectNode();
         wrapper.put("project_id", projectId.toString());
@@ -228,12 +256,49 @@ public class ListProjectSupervisorsTool implements Tool {
             else if (fromActivity) activityOnly++;
             else if (fromDpr) dprOnly++;
         }
+
+        // Append orphan DPR rows: supervisor_user_id IS NULL but a snapshot
+        // name exists. These are NOT joinable to public.users, so we cannot
+        // confirm the identity — surface them with a data_quality_warning so
+        // the model knows to flag the gap rather than silently treat the count
+        // as zero. Subject to the same name_filter as the joined rows above.
+        int orphanByName = 0;
+        for (Object[] r : orphanRows) {
+            String snapshotName = r[0] != null ? r[0].toString() : null;
+            long dprCount = r[1] == null ? 0 : ((Number) r[1]).longValue();
+            if (snapshotName == null || snapshotName.isBlank()) continue;
+            if (normalisedFilter != null
+                    && !snapshotName.toLowerCase(Locale.ROOT).contains(normalisedFilter)) {
+                continue;
+            }
+            ObjectNode row = mapper.createObjectNode();
+            row.putNull("supervisor_user_id");
+            row.putNull("supervisor_code");
+            row.putNull("employee_code");
+            row.putNull("username");
+            row.putNull("email");
+            row.putNull("first_name");
+            row.putNull("last_name");
+            row.put("supervisor_name", snapshotName);
+            row.put("activity_count", 0);
+            row.put("dpr_count", dprCount);
+            ArrayNode sources = mapper.createArrayNode();
+            sources.add("DPR_BY_NAME");
+            row.set("sources", sources);
+            row.put("data_quality_warning",
+                    "supervisor_user_id is NULL on these DPRs — identity not joined to a User row. "
+                            + "May or may not be the same person as a similarly-named user above.");
+            arr.add(row);
+            orphanByName++;
+        }
+
         wrapper.set("supervisors", arr);
         wrapper.put("count", arr.size());
         ObjectNode breakdown = mapper.createObjectNode();
         breakdown.put("both_activity_and_dpr", both);
         breakdown.put("activity_only", activityOnly);
         breakdown.put("dpr_only", dprOnly);
+        breakdown.put("dpr_by_name_only", orphanByName);
         wrapper.set("source_breakdown", breakdown);
 
         String summary;
