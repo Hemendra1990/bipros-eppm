@@ -71,6 +71,21 @@ public class MaterialConsumptionLog extends BaseEntity {
   @Column(name = "wbs_node_id")
   private UUID wbsNodeId;
 
+  @Column(name = "activity_id")
+  private UUID activityId;
+
+  @Column(name = "unit_rate", precision = 19, scale = 4)
+  private BigDecimal unitRate;
+
+  @Column(name = "line_cost", precision = 19, scale = 2)
+  private BigDecimal lineCost;
+
+  @Column(name = "material_rate_master_id")
+  private UUID materialRateMasterId;
+
+  @Column(name = "entered_by_role", length = 32)
+  private String enteredByRole;
+
   @Column(name = "remarks", length = 500)
   private String remarks;
 }

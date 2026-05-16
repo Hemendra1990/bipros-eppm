@@ -9,6 +9,7 @@ import {
   type CreateMaterialConsumptionLogRequest,
 } from "@/lib/api/materialConsumptionApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { activityApi } from "@/lib/api/activityApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
@@ -26,6 +27,7 @@ interface MaterialConsumptionForm {
   wastagePercent: string; // optional — keep as string so empty stays empty
   issuedBy: string;
   receivedBy: string;
+  activityId: string;
   remarks: string;
 }
 
@@ -41,6 +43,7 @@ const initialFormState: MaterialConsumptionForm = {
   wastagePercent: "",
   issuedBy: "",
   receivedBy: "",
+  activityId: "",
   remarks: "",
 };
 
@@ -58,6 +61,18 @@ export default function MaterialConsumptionPage() {
     enabled: !!projectId,
   });
   const project = projectData?.data;
+
+  // Activities used to tag a consumption log so the cost rolls into the activity AC. Logs
+  // without an activity remain valid but won't contribute to per-activity actual cost.
+  const { data: activitiesResponse } = useQuery({
+    queryKey: ["activities-for-consumption", projectId],
+    queryFn: () => activityApi.listActivities(projectId, 0, 500),
+    enabled: !!projectId,
+  });
+  const activities = useMemo(
+    () => activitiesResponse?.data?.content ?? [],
+    [activitiesResponse],
+  );
 
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
@@ -122,6 +137,7 @@ export default function MaterialConsumptionPage() {
           formData.wastagePercent === "" ? null : Number(formData.wastagePercent),
         issuedBy: formData.issuedBy || null,
         receivedBy: formData.receivedBy || null,
+        activityId: formData.activityId || null,
         remarks: formData.remarks || null,
       };
       await materialConsumptionApi.create(projectId, payload);
@@ -267,6 +283,29 @@ export default function MaterialConsumptionPage() {
             onSubmit={handleSubmit}
             className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl"
           >
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1 text-text-secondary">
+                Activity (optional)
+              </label>
+              <select
+                value={formData.activityId}
+                onChange={(e) => setFormData({ ...formData, activityId: e.target.value })}
+                className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+              >
+                <option value="">— No activity —</option>
+                {activities.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} — {a.name}
+                  </option>
+                ))}
+              </select>
+              {formData.activityId === "" && (
+                <p className="mt-2 rounded-md bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 text-xs text-yellow-300">
+                  Activity-linked entries are included in actual cost. Leave blank only when
+                  the consumption isn&apos;t tied to a single activity.
+                </p>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">Date</label>

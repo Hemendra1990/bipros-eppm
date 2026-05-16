@@ -1,22 +1,31 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.SecurityContextHelper;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.application.dto.CreateMaterialConsumptionLogRequest;
 import com.bipros.resource.application.dto.MaterialConsumptionLogResponse;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
+import com.bipros.resource.domain.model.Resource;
+import com.bipros.resource.domain.model.rate.MaterialRateMaster;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
+import com.bipros.resource.domain.repository.MaterialRateMasterRepository;
+import com.bipros.resource.domain.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -27,7 +36,11 @@ public class MaterialConsumptionLogService {
 
   private final MaterialConsumptionLogRepository repository;
   private final ProjectRepository projectRepository;
+  private final ActivityRepository activityRepository;
+  private final ResourceRepository resourceRepository;
+  private final MaterialRateMasterRepository materialRateMasterRepository;
   private final AuditService auditService;
+  private final SecurityContextHelper securityContextHelper;
 
   public MaterialConsumptionLogResponse create(
       UUID projectId, CreateMaterialConsumptionLogRequest request) {
@@ -44,10 +57,39 @@ public class MaterialConsumptionLogService {
       throw new ResourceNotFoundException("Project", projectId);
     }
 
+    if (request.activityId() != null) {
+      Activity activity = activityRepository.findById(request.activityId())
+          .orElseThrow(() -> new ResourceNotFoundException("Activity", request.activityId()));
+      if (!projectId.equals(activity.getProjectId())) {
+        throw new BusinessRuleException("ACTIVITY_PROJECT_MISMATCH",
+            "Activity " + request.activityId() + " does not belong to project " + projectId);
+      }
+    }
+
     BigDecimal opening = request.openingStock();
     BigDecimal received = request.received() != null ? request.received() : BigDecimal.ZERO;
     BigDecimal consumed = request.consumed() != null ? request.consumed() : BigDecimal.ZERO;
     BigDecimal closing = opening.add(received).subtract(consumed);
+
+    // Look up the active MaterialRateMaster row via the linked Resource (Resource.rateMasterId
+    // points at material_rate_masters.id for MATERIAL-type resources). Compute line_cost only
+    // when both consumed and rate are positive.
+    UUID rateMasterId = null;
+    BigDecimal unitRate = null;
+    BigDecimal lineCost = null;
+    if (request.resourceId() != null) {
+      Optional<Resource> resourceOpt = resourceRepository.findById(request.resourceId());
+      if (resourceOpt.isPresent() && resourceOpt.get().getRateMasterId() != null) {
+        Optional<MaterialRateMaster> rateOpt =
+            materialRateMasterRepository.findById(resourceOpt.get().getRateMasterId());
+        if (rateOpt.isPresent() && Boolean.TRUE.equals(rateOpt.get().getActive())) {
+          MaterialRateMaster rate = rateOpt.get();
+          rateMasterId = rate.getId();
+          unitRate = rate.getRate();
+          lineCost = computeLineCost(consumed, unitRate);
+        }
+      }
+    }
 
     MaterialConsumptionLog entity =
         MaterialConsumptionLog.builder()
@@ -64,6 +106,11 @@ public class MaterialConsumptionLogService {
             .issuedBy(request.issuedBy())
             .receivedBy(request.receivedBy())
             .wbsNodeId(request.wbsNodeId())
+            .activityId(request.activityId())
+            .unitRate(unitRate)
+            .lineCost(lineCost)
+            .materialRateMasterId(rateMasterId)
+            .enteredByRole(resolveEnteredByRole())
             .remarks(request.remarks())
             .build();
 
@@ -133,5 +180,25 @@ public class MaterialConsumptionLogService {
     }
     repository.delete(entity);
     auditService.logDelete("MaterialConsumptionLog", id);
+  }
+
+  /**
+   * Stamp which role the caller holds. SUPERVISOR wins over STORE_MANAGER when both are present
+   * (DPR-style entries are conceptually supervisor-owned). Anonymous / system writes return null.
+   */
+  private String resolveEnteredByRole() {
+    try {
+      if (securityContextHelper.hasRole("SUPERVISOR")) return "SUPERVISOR";
+      if (securityContextHelper.hasRole("STORE_MANAGER")) return "STORE_MANAGER";
+    } catch (Exception e) {
+      log.debug("No authenticated user when stamping entered_by_role: {}", e.getMessage());
+    }
+    return null;
+  }
+
+  /** Same shape as {@code DprCostFormulas.materialLineCost}: {@code rate × consumed}, 2 dp. */
+  private static BigDecimal computeLineCost(BigDecimal consumed, BigDecimal unitRate) {
+    if (consumed == null || unitRate == null) return null;
+    return unitRate.multiply(consumed).setScale(2, RoundingMode.HALF_UP);
   }
 }

@@ -22,6 +22,11 @@ public record MaterialConsumptionLogResponse(
     String issuedBy,
     String receivedBy,
     UUID wbsNodeId,
+    UUID activityId,
+    BigDecimal unitRate,
+    BigDecimal lineCost,
+    UUID materialRateMasterId,
+    String enteredByRole,
     String remarks,
     Instant createdAt,
     String createdBy
@@ -42,6 +47,11 @@ public record MaterialConsumptionLogResponse(
         entity.getIssuedBy(),
         entity.getReceivedBy(),
         entity.getWbsNodeId(),
+        entity.getActivityId(),
+        entity.getUnitRate(),
+        entity.getLineCost(),
+        entity.getMaterialRateMasterId(),
+        entity.getEnteredByRole(),
         entity.getRemarks(),
         entity.getCreatedAt(),
         entity.getCreatedBy());

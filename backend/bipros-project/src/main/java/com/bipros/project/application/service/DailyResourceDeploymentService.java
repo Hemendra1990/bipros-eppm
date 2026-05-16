@@ -4,6 +4,7 @@ import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateDailyResourceDeploymentRequest;
 import com.bipros.project.application.dto.DailyResourceDeploymentResponse;
+import com.bipros.project.application.util.ResourceAssignmentPlannedHeadcountResolver;
 import com.bipros.project.domain.model.DailyResourceDeployment;
 import com.bipros.project.domain.model.DeploymentResourceType;
 import com.bipros.project.domain.repository.DailyResourceDeploymentRepository;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -26,9 +28,29 @@ public class DailyResourceDeploymentService {
   private final DailyResourceDeploymentRepository repository;
   private final ProjectRepository projectRepository;
   private final AuditService auditService;
+  private final ResourceAssignmentPlannedHeadcountResolver plannedHeadcountResolver;
 
   public DailyResourceDeploymentResponse create(UUID projectId, CreateDailyResourceDeploymentRequest request) {
     ensureProjectExists(projectId);
+
+    // Treat null OR 0 as "not provided" for back-compat: the legacy UI submitted 0 when the user
+    // left the field blank. When unset, try to derive nosPlanned from ResourceAssignment.
+    Integer nosPlanned = request.nosPlanned();
+    Boolean nosPlannedAuto = null;
+    if (nosPlanned == null || nosPlanned == 0) {
+      Optional<Integer> derived = plannedHeadcountResolver.resolve(
+          projectId, request.resourceRoleId(), request.resourceType(), request.logDate());
+      if (derived.isPresent()) {
+        nosPlanned = derived.get();
+        nosPlannedAuto = Boolean.TRUE;
+      } else {
+        // Leave nosPlanned at the request's value (null or 0); only stamp auto=false when the
+        // user clearly typed a non-zero value below.
+        nosPlannedAuto = null;
+      }
+    } else {
+      nosPlannedAuto = Boolean.FALSE;
+    }
 
     DailyResourceDeployment deployment = DailyResourceDeployment.builder()
         .projectId(projectId)
@@ -37,7 +59,8 @@ public class DailyResourceDeploymentService {
         .resourceDescription(request.resourceDescription())
         .resourceId(request.resourceId())
         .resourceRoleId(request.resourceRoleId())
-        .nosPlanned(request.nosPlanned())
+        .nosPlanned(nosPlanned)
+        .nosPlannedAuto(nosPlannedAuto)
         .nosDeployed(request.nosDeployed())
         .hoursWorked(request.hoursWorked())
         .idleHours(request.idleHours())
@@ -47,6 +70,20 @@ public class DailyResourceDeploymentService {
     DailyResourceDeployment saved = repository.save(deployment);
     auditService.logCreate("DailyResourceDeployment", saved.getId(), DailyResourceDeploymentResponse.from(saved));
     return DailyResourceDeploymentResponse.from(saved);
+  }
+
+  /**
+   * Returns the auto-derived suggested {@code nosPlanned} for a (project, role, date) triple
+   * without persisting anything — used by the "Recalculate from plan" button on the frontend
+   * to refresh its preview before the user submits.
+   */
+  @Transactional(readOnly = true)
+  public Integer suggestNosPlanned(
+      UUID projectId, UUID resourceRoleId, DeploymentResourceType resourceType, LocalDate logDate) {
+    ensureProjectExists(projectId);
+    return plannedHeadcountResolver
+        .resolve(projectId, resourceRoleId, resourceType, logDate)
+        .orElse(null);
   }
 
   public List<DailyResourceDeploymentResponse> createBulk(UUID projectId, List<CreateDailyResourceDeploymentRequest> requests) {

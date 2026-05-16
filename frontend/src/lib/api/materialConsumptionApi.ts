@@ -16,6 +16,11 @@ export interface MaterialConsumptionLogResponse {
   issuedBy: string | null;
   receivedBy: string | null;
   wbsNodeId: string | null;
+  activityId: string | null;
+  unitRate: number | null;
+  lineCost: number | null;
+  materialRateMasterId: string | null;
+  enteredByRole: string | null;
   remarks: string | null;
 }
 
@@ -31,6 +36,7 @@ export interface CreateMaterialConsumptionLogRequest {
   issuedBy?: string | null;
   receivedBy?: string | null;
   wbsNodeId?: string | null;
+  activityId?: string | null;
   remarks?: string | null;
 }
 
