@@ -73,7 +73,17 @@ public class FormulaValidatorTool implements Tool {
                 + "and the source rows so callers can verify the math. Use this any time the user "
                 + "asks 'how did you compute X', 'show the formula for CPI', 'why is variance Y', "
                 + "or 'what's the manpower utilization on activity Z'. Numbers are returned exactly "
-                + "as stored — no rounding, no recomputation in prose.";
+                + "as stored — no rounding, no recomputation in prose. "
+                + "EVM SCOPE — IMPORTANT: for EVM metrics (CPI/SPI/CV/SV/EAC/ETC/VAC/TCPI), the "
+                + "response carries `source.scope` ∈ {activity | project | project_fallback}. "
+                + "'activity' = we found an activity-level EvmCalculation row matching activityCode. "
+                + "'project' = no activityCode was asked, so the latest project-level row was used. "
+                + "'project_fallback' = activityCode WAS asked but no activity-level EVM row "
+                + "exists for it, so the tool returned the project-level snapshot as a fallback. "
+                + "When scope='project_fallback' you MUST NOT report the numbers as activity-specific. "
+                + "Either skip the EVM block in your answer, or explicitly say 'no activity-level "
+                + "earned value yet for <activityCode>; the project-level CPI/SPI/CV is X'. The "
+                + "`source.note` field will spell out the fallback condition — disclose it.";
     }
 
     @Override
@@ -169,13 +179,18 @@ public class FormulaValidatorTool implements Tool {
                                    LocalDate fromDate, LocalDate toDate) {
         EvmCalculation row = null;
         UUID activityId = null;
-        if (activityCode != null) {
+        boolean activityRequested = activityCode != null;
+        boolean activityResolved = false;
+        boolean activityEvmMatched = false;
+        if (activityRequested) {
             Optional<Activity> a = activityRepository.findByProjectIdAndCode(projectId, activityCode);
             if (a.isPresent()) {
                 activityId = a.get().getId();
+                activityResolved = true;
                 row = evmRepository
                         .findTopByProjectIdAndActivityIdOrderByDataDateDesc(projectId, activityId)
                         .orElse(null);
+                if (row != null) activityEvmMatched = true;
             }
         }
         if (row == null) {
@@ -183,6 +198,20 @@ public class FormulaValidatorTool implements Tool {
         }
         if (row == null) {
             return ToolResult.error("No EvmCalculation rows for this scope. Run the EVM job first.");
+        }
+        // If the user asked about an activity but we only have project-level EVM,
+        // record that fact explicitly so the caller (AI) doesn't quote the project
+        // numbers as if they were activity-specific.
+        String evmScope = activityEvmMatched ? "activity"
+                : (activityRequested ? "project_fallback" : "project");
+        String fallbackNote = null;
+        if ("project_fallback".equals(evmScope)) {
+            fallbackNote = activityResolved
+                    ? "No activity-level EvmCalculation row exists for " + activityCode
+                            + ". The numbers below are the latest PROJECT-level EVM snapshot — "
+                            + "they are NOT specific to " + activityCode + "."
+                    : "Activity code '" + activityCode + "' could not be resolved on this project. "
+                            + "Returning the latest project-level EVM snapshot.";
         }
 
         BigDecimal bac = nz(row.getBudgetAtCompletion());
@@ -321,9 +350,19 @@ public class FormulaValidatorTool implements Tool {
         ObjectNode source = objectMapper.createObjectNode();
         source.put("entity", "EvmCalculation");
         source.put("evmRowId", row.getId() == null ? null : row.getId().toString());
-        if (activityId != null) source.put("activityId", activityId.toString());
-        if (activityCode != null) source.put("activityCode", activityCode);
+        // Scope tells the caller whether the EVM row matches the requested activity
+        // (`activity`), was project-wide because no activity was asked (`project`),
+        // or was a project-level fallback because no activity-level EVM exists for
+        // the requested activity (`project_fallback`). The AI MUST treat the
+        // `project_fallback` numbers as project-level, not activity-level.
+        source.put("scope", evmScope);
+        if (activityRequested) source.put("requestedActivityCode", activityCode);
+        if (activityId != null) source.put("resolvedActivityId", activityId.toString());
+        source.put("evmRowProjectId", row.getProjectId() == null ? null : row.getProjectId().toString());
+        source.put("evmRowActivityId",
+                row.getActivityId() == null ? null : row.getActivityId().toString());
         source.put("dataDate", row.getDataDate() == null ? null : row.getDataDate().toString());
+        if (fallbackNote != null) source.put("note", fallbackNote);
         out.set("source", source);
 
         ObjectNode dateRange = objectMapper.createObjectNode();
@@ -332,7 +371,9 @@ public class FormulaValidatorTool implements Tool {
         out.set("dateRange", dateRange);
 
         String summary = metric.name() + " = " + computed
-                + " (" + formula + ") on data_date " + (row.getDataDate() == null ? "?" : row.getDataDate());
+                + " (" + formula + ") on data_date " + (row.getDataDate() == null ? "?" : row.getDataDate())
+                + " · scope=" + evmScope
+                + (fallbackNote != null ? " — NOTE: " + fallbackNote : "");
         return ToolResult.ok(summary, out);
     }
 

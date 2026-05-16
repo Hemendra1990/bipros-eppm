@@ -50,8 +50,17 @@ public class ListActivitiesTool extends ProjectScopedTool {
                 + "Returns code, name, status, edit_status, percent_complete, planned and "
                 + "actual dates, total_float, is_critical. Use this for questions like "
                 + "'what's in progress', 'what's almost done', 'what hasn't started', "
-                + "'list all draft activities'. Works for the current project or across the "
-                + "user's accessible portfolio when no project is selected.";
+                + "'list all draft activities'. "
+                + "DO NOT use this tool to answer 'which activities have negative float' / "
+                + "'what's behind on float' — the total_float field returned here is the live "
+                + "OLTP column on activity.activities and may lag the latest scheduler run by "
+                + "design (the scheduler stores its computed float in "
+                + "scheduling.schedule_activity_results and only reconciles back to OLTP on a "
+                + "later job). For negative-float questions, ALWAYS call "
+                + "schedule_advanced(op='negative_float') instead — that reads the "
+                + "scheduler-authoritative source and is the only correct answer for those "
+                + "questions. Works for the current project or across the user's accessible "
+                + "portfolio when no project is selected.";
     }
 
     @Override
