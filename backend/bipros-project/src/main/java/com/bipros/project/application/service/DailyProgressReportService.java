@@ -414,31 +414,38 @@ public class DailyProgressReportService {
   }
 
   /**
-   * Distinct supervisors who actually filed a DPR in the optional date window. Used by the
-   * Capacity Utilization page's supervisor filter so the dropdown only shows people with data.
+   * Supervisors of activities that have at least one DPR in the date window. Powers the
+   * Capacity Utilization / Supervisor Performance dropdown.
+   *
+   * <p>Multi-supervisor (commit 182141eb): the source is now
+   * {@code activity.activity_supervisors} — a user appears in the dropdown when they
+   * supervise any activity that has a DPR in range, regardless of whether they personally
+   * filed any of those DPRs. The {@code dprCount} field reads as "DPRs under activities
+   * they supervise in range" to match the new filter semantics on the report side.
    */
   @Transactional(readOnly = true)
   public List<com.bipros.project.application.dto.SupervisorOption> listSupervisorsUsed(
       UUID projectId, LocalDate fromDate, LocalDate toDate) {
     ensureProjectExists(projectId);
 
-    // Phase 4.4 cutover: pivots off the new supervisor_user_id column (DPR carries it directly
-    // post Phase 091 OLTP migration). The Phase-10 dual-source UNION I had on
-    // feat/capacity-utilization is obsolete — supervisor_resource_id was dropped from the DPR
-    // table, so the only valid lookup is via the User FK.
     @SuppressWarnings("unchecked")
     List<Object[]> raw = em.createNativeQuery(
-            "SELECT d.supervisor_user_id, "
-                + "       COALESCE(u.username, '')                            AS supervisor_code, "
-                + "       MAX(d.supervisor_name)                              AS supervisor_name, "
-                + "       COUNT(*)                                            AS dpr_count "
-                + "FROM project.daily_progress_reports d "
-                + "LEFT JOIN public.users u ON u.id = d.supervisor_user_id "
-                + "WHERE d.project_id = :projectId "
-                + "  AND d.supervisor_user_id IS NOT NULL "
+            "SELECT s.user_id, "
+                + "       COALESCE(u.username, '')                                              AS supervisor_code, "
+                + "       COALESCE( "
+                + "         NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), "
+                + "         u.username, "
+                + "         MAX(s.user_name_snapshot)) "
+                + "                                                                             AS supervisor_name, "
+                + "       COUNT(DISTINCT d.id)                                                  AS dpr_count "
+                + "FROM activity.activity_supervisors s "
+                + "JOIN activity.activities a            ON a.id = s.activity_id "
+                + "JOIN project.daily_progress_reports d ON d.activity_id = a.id "
+                + "LEFT JOIN public.users u              ON u.id = s.user_id "
+                + "WHERE a.project_id = :projectId "
                 + "  AND (CAST(:fromDate AS date) IS NULL OR d.report_date >= CAST(:fromDate AS date)) "
-                + "  AND (CAST(:toDate AS date) IS NULL OR d.report_date <= CAST(:toDate AS date)) "
-                + "GROUP BY d.supervisor_user_id, u.username "
+                + "  AND (CAST(:toDate   AS date) IS NULL OR d.report_date <= CAST(:toDate   AS date)) "
+                + "GROUP BY s.user_id, u.username, u.first_name, u.last_name "
                 + "ORDER BY dpr_count DESC, supervisor_name")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)

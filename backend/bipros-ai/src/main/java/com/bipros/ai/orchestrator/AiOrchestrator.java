@@ -435,22 +435,35 @@ public class AiOrchestrator {
             current rates. Equipment idle / breakdown hours are excluded from the rollup.
 
             SUPERVISOR LOOKUP (three senses — always disambiguate):
-            - "Currently assigned supervisor for activity X"
-                → activity.supervisor_user_id (FK to public.users) plus the snapshot name
-                  in activity.supervisor_user_name.
-                Tool: get_activity_cost. Its response carries
-                `assigned_supervisor_user_id` + `assigned_supervisor_name` straight from
-                the activity row — answer with those directly.
-                Do NOT call list_supervisors / supervisor / compare_supervisors for this
-                question — those tools are keyed on the legacy
-                Activity.responsibleResourceId which is now @Transient and always null
-                in the role-rate model, so they ALWAYS return "0 assigned supervisors"
-                even when the activity sidebar in the UI clearly shows a supervisor.
-                If the user asks for the project-wide supervisor roster, you may still
-                attempt list_supervisors, but if it returns zero the right answer is
-                "the new role-rate model uses User-FK supervisors on each activity — to
-                see them, query individual activities via get_activity_cost", NOT
-                "this project has no supervisors".
+            - "Currently assigned supervisor(s) for activity X" / "who supervises X" /
+              "list supervisors of X" / "co-supervisors on X"
+                → Multi-supervisor model. An activity can have MANY supervisors (real-world
+                  case: a single BOQ line co-supervised by several site engineers — for
+                  example activity 2.3.6(i)a on OMAN-Demo-Khasab has 9 supervisors).
+                  Tool: get_activity_cost(activity_code='X').
+                  Its response carries `assigned_supervisors` — an ARRAY of every supervisor
+                  on the activity, each row {user_id, name}. There is NO primary marker; all
+                  supervisors are equal in this model. Also carries
+                  `assigned_supervisors_count` (an integer) for fast checks.
+
+                  HOW TO ANSWER:
+                  • If `assigned_supervisors_count` == 0 → "no supervisor currently assigned".
+                  • If == 1 → "the supervisor is <name>".
+                  • If >= 2 → list EVERY name. Example: "Activity X has 3 supervisors: A, B, C."
+                    NEVER report only the first one when the count is greater than one — that
+                    contradicts what the user sees in the UI's supervisor chips on the activity.
+
+                  Legacy back-compat: the response also carries singular
+                  `assigned_supervisor_user_id` + `assigned_supervisor_name` — these are the
+                  first-entry cache and are kept in sync with the array. Use them ONLY when
+                  the user explicitly asks for "the primary" or "first" supervisor (rare),
+                  OR when count == 1 (they're the same thing).
+
+                  Do NOT call list_supervisors / supervisor / compare_supervisors here —
+                  those are keyed on the legacy responsibleResourceId which is null in the
+                  role-rate model. If the user asks for the project-wide supervisor roster,
+                  call list_project_supervisors (which already joins the
+                  activity_supervisors table and surfaces co-supervisors correctly).
             - "Who supervised the work on date D"
                 → daily_progress_reports.supervisor_user_id → public.users.
                 Tool: query_dpr (filter by date).
@@ -530,10 +543,15 @@ public class AiOrchestrator {
                           date_to='2026-05-14') → read supervisor_user_id /
                 supervisor_name from the DPR row.
 
-            Q. "Who is the currently assigned supervisor for activity X?"
-              → get_activity_cost(activity_code='X'). Read
-                `assigned_supervisor_name` / `assigned_supervisor_user_id` from the
-                response. Do NOT call list_supervisors — it's stale on the role-rate model.
+            Q. "Who is the currently assigned supervisor for activity X?" / "List all
+               supervisors of activity X" / "Who supervises X?" / "Co-supervisors on X?"
+              → get_activity_cost(activity_code='X'). Read the `assigned_supervisors` ARRAY.
+                Multi-supervisor activities are common — list EVERY name in the array, not
+                just the first. Use `assigned_supervisors_count` to decide phrasing
+                ("the supervisor is …" for 1, "the N supervisors are …, …, …" for many).
+                The singular `assigned_supervisor_name` is the first-entry cache only — DO
+                NOT report it as "the" supervisor when count > 1, that's a known bug shape
+                (UI shows 5 chips, AI says one name). Never call list_supervisors here.
 
             Q. "Is the Mason / Skilled / Grade A rate overridden on this project?"
               → query_role_rates(role_code='MASON-101', category='Skilled',

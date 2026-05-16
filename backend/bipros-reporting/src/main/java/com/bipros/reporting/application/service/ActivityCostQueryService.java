@@ -67,13 +67,25 @@ public class ActivityCostQueryService {
       BigDecimal remainingCost,
       String warning) {}
 
+  /**
+   * One entry from the {@code activity_supervisors} join table. Flat model — there is no
+   * primary marker, all supervisors are equal. The display name is the snapshot stored when
+   * the row was assigned ({@code user_name_snapshot}); it is kept in sync with public.users
+   * on every {@code setSupervisors} write.
+   */
+  public record AssignedSupervisor(UUID userId, String name) {}
+
   public record ActivityCostReport(
       UUID activityId,
       String activityCode,
       String activityName,
       UUID projectId,
+      /** Legacy cache — equals the first entry in {@link #assignedSupervisors}. Kept for back-compat. */
       UUID assignedSupervisorUserId,
+      /** Legacy cache — equals the first entry's name. Kept for back-compat. */
       String assignedSupervisorName,
+      /** Full multi-supervisor set from {@code activity.activity_supervisors}. Empty when none assigned. */
+      List<AssignedSupervisor> assignedSupervisors,
       LocalDate fromDate,
       LocalDate toDate,
       UUID supervisorFilter,
@@ -97,7 +109,7 @@ public class ActivityCostQueryService {
     Object[] header = findActivityHeader(activityId);
     if (header == null) {
       return new ActivityCostReport(
-          activityId, null, null, null, null, null,
+          activityId, null, null, null, null, null, List.of(),
           fromDate, toDate, supervisorUserId,
           breakdown == null ? Breakdown.NONE : breakdown,
           BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
@@ -129,7 +141,7 @@ public class ActivityCostQueryService {
     Object[] header = findActivityByCode(projectId, activityCode.trim());
     if (header == null) {
       return new ActivityCostReport(
-          null, activityCode, null, projectId, null, null,
+          null, activityCode, null, projectId, null, null, List.of(),
           fromDate, toDate, supervisorUserId,
           breakdown == null ? Breakdown.NONE : breakdown,
           BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
@@ -175,6 +187,11 @@ public class ActivityCostQueryService {
       case NONE -> List.of();
     };
 
+    // Load every supervisor on the activity_supervisors join table. The team's setSupervisors
+    // flow keeps the legacy cache in sync with the first entry, so the singular fields above
+    // remain valid for "primary" / "first" views; this list is the full set.
+    List<AssignedSupervisor> assignedSupervisors = loadAssignedSupervisors(activityId);
+
     String warning = null;
     if (plannedTotal.signum() == 0 && actualTotal.signum() == 0 && breakdown != Breakdown.NONE
         && rows.isEmpty()) {
@@ -183,9 +200,35 @@ public class ActivityCostQueryService {
 
     return new ActivityCostReport(
         activityId, activityCode, activityName, projectId,
-        assignedSupervisorUserId, assignedSupervisorName,
+        assignedSupervisorUserId, assignedSupervisorName, assignedSupervisors,
         fromDate, toDate, supervisorUserId, breakdown,
         plannedTotal, actualTotal, remainingTotal, rows, warning);
+  }
+
+  /**
+   * Read all supervisors on the activity_supervisors join table for this activity. The
+   * display name comes from {@code user_name_snapshot} (kept in sync by setSupervisors),
+   * with a fallback to {@code public.users} when the snapshot is missing.
+   */
+  private List<AssignedSupervisor> loadAssignedSupervisors(UUID activityId) {
+    if (activityId == null) return List.of();
+    Query q = em.createNativeQuery(
+        "SELECT s.user_id, "
+            + "       COALESCE(NULLIF(TRIM(s.user_name_snapshot), ''), "
+            + "                NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), "
+            + "                u.username) AS display_name "
+            + "  FROM activity.activity_supervisors s "
+            + "  LEFT JOIN public.users u ON u.id = s.user_id "
+            + " WHERE s.activity_id = :activityId "
+            + " ORDER BY s.created_at ASC, s.user_id ASC");
+    q.setParameter("activityId", activityId);
+    @SuppressWarnings("unchecked")
+    List<Object[]> rows = q.getResultList();
+    List<AssignedSupervisor> out = new ArrayList<>(rows.size());
+    for (Object[] r : rows) {
+      out.add(new AssignedSupervisor(toUuid(r[0]), toStr(r[1])));
+    }
+    return out;
   }
 
   private BigDecimal sumPlannedCost(UUID activityId) {

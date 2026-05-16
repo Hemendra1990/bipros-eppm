@@ -47,10 +47,15 @@ public class GetActivityCostTool implements Tool {
                 + "supervisor_user_id attributes cost to a specific DPR-level supervisor (uses "
                 + "dpr.supervisor_user_id, NOT activity.supervisor_user_id). Optional "
                 + "breakdown_by ∈ {ROLE, DAY, SUPERVISOR, RESOURCE_TYPE, NONE} controls the rows "
-                + "array. The response carries assigned_supervisor_user_id + "
-                + "assigned_supervisor_name (the User-FK supervisor on the activity row) — use "
-                + "those fields for 'who is the supervisor of activity X' questions; do NOT call "
-                + "list_supervisors for this — that tool is keyed on the legacy "
+                + "array. SUPERVISORS on the activity (multi-supervisor model): the response "
+                + "carries an `assigned_supervisors` ARRAY with every supervisor on the activity "
+                + "({user_id, name} per row, no primary marker — all are equal). USE THIS ARRAY for "
+                + "'who is the supervisor of activity X' / 'list supervisors of activity X' / 'who "
+                + "supervises X' questions and list every name. The singular "
+                + "`assigned_supervisor_user_id` + `assigned_supervisor_name` are the legacy "
+                + "first-entry cache kept in sync with the array (useful if the user explicitly "
+                + "asks for ONE name) but they ARE NOT the full picture and an activity can have "
+                + "5+ supervisors. Do NOT call list_supervisors for this — it's keyed on the legacy "
                 + "responsible_resource_id which is null in the new role-rate model.";
     }
 
@@ -122,8 +127,23 @@ public class GetActivityCostTool implements Tool {
         wrapper.put("activity_code", report.activityCode());
         wrapper.put("activity_name", report.activityName());
         wrapper.put("project_id", report.projectId() != null ? report.projectId().toString() : null);
-        // Currently-assigned supervisor for this activity (User FK on activity.activities,
-        // NOT the per-DPR supervisor). Use this for "who is the supervisor of X" questions.
+        // Multi-supervisor model: emit the full set first, then the legacy singular cache for
+        // back-compat. The AI's SUPERVISOR LOOKUP prompt block routes "who supervises X" to the
+        // array — see assigned_supervisors below.
+        ArrayNode supsArr = mapper.createArrayNode();
+        if (report.assignedSupervisors() != null) {
+            for (var s : report.assignedSupervisors()) {
+                ObjectNode row = mapper.createObjectNode();
+                row.put("user_id", s.userId() != null ? s.userId().toString() : null);
+                row.put("name", s.name());
+                supsArr.add(row);
+            }
+        }
+        wrapper.set("assigned_supervisors", supsArr);
+        wrapper.put("assigned_supervisors_count", supsArr.size());
+        // Legacy first-entry cache — equals the first row of assigned_supervisors when the
+        // activity has any. Useful only when the user explicitly asks for "the primary" or
+        // "first" supervisor; otherwise lead with the array.
         wrapper.put("assigned_supervisor_user_id",
                 report.assignedSupervisorUserId() != null
                         ? report.assignedSupervisorUserId().toString() : null);
