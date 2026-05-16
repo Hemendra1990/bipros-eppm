@@ -3,10 +3,12 @@ package com.bipros.api.config.seeder;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.activity.domain.model.ActivityStatus;
+import com.bipros.activity.domain.model.ActivitySupervisor;
 import com.bipros.activity.domain.model.ActivityType;
 import com.bipros.activity.domain.model.DurationType;
 import com.bipros.activity.domain.model.PercentCompleteType;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
 import com.bipros.api.config.seeder.OmanDemoWorkbookReader.ActivityCodeRow;
 import com.bipros.api.config.seeder.OmanDemoWorkbookReader.DailyDataRawRow;
 import com.bipros.project.domain.model.Project;
@@ -29,9 +31,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -67,6 +71,7 @@ public class OmanDemoWbsAndActivitySeeder implements CommandLineRunner {
     private final ProjectRepository projectRepository;
     private final WbsNodeRepository wbsNodeRepository;
     private final ActivityRepository activityRepository;
+    private final ActivitySupervisorRepository activitySupervisorRepository;
     private final UserRepository userRepository;
     private final OmanDemoWorkbookReader reader;
     private final OmanDemoStaffDirectory directory;
@@ -82,9 +87,23 @@ public class OmanDemoWbsAndActivitySeeder implements CommandLineRunner {
         }
         Project project = projectOpt.get();
 
+        // Build supervisor indexes from the workbook — used both for fresh activity
+        // creation and for the supervisor-refresh pass when activities already exist.
+        Map<String, String> primarySupByCode = buildPrimarySupervisorIndex();
+        Map<String, Set<String>> allSupsByCode = buildAllSupervisorsIndex();
+
+        // Make sure the directory is loaded even on re-runs where OmanDemoStaffUserSeeder
+        // saw "already exists" for every user and never called register().
+        if (!directory.isPopulated()) {
+            backfillDirectoryFromDb();
+        }
+
         if (activityRepository.countByProjectId(project.getId()) > 0) {
-            log.info("[oman-demo wbs] activities already seeded for {} ({} present), skipping",
+            log.info("[oman-demo wbs] activities already seeded for {} ({} present), "
+                    + "refreshing supervisors only",
                     project.getCode(), activityRepository.countByProjectId(project.getId()));
+            refreshSupervisorsForExistingActivities(project.getId(), primarySupByCode,
+                    allSupsByCode);
             return;
         }
 
@@ -95,15 +114,6 @@ public class OmanDemoWbsAndActivitySeeder implements CommandLineRunner {
         }
 
         Map<String, UUID> wbsByCode = seedWbs(project.getId());
-
-        // Build the supervisor → daily-row count index for primary-match supervisor assignment.
-        Map<String, String> primarySupByCode = buildPrimarySupervisorIndex();
-
-        // Make sure the directory is loaded even on re-runs where OmanDemoStaffUserSeeder
-        // saw "already exists" for every user and never called register().
-        if (!directory.isPopulated()) {
-            backfillDirectoryFromDb();
-        }
 
         int primary = 0;
         int fallback1 = 0;
@@ -181,18 +191,98 @@ public class OmanDemoWbsAndActivitySeeder implements CommandLineRunner {
             a.setResponsibleUserId(supervisorId);
             a.setEditStatus(ActivityEditStatus.LOCKED);
 
+            Activity saved;
             try {
-                activityRepository.save(a);
+                saved = activityRepository.save(a);
                 dayOffset += 7;
             } catch (Exception e) {
                 log.warn("[oman-demo wbs] activity save failed for {}: {}",
                         def.code(), e.getMessage());
+                continue;
             }
+
+            attachAllSupervisors(saved, allSupsByCode.get(def.code()), supervisorId);
         }
 
         log.info("[oman-demo wbs] seeded {} activities for {} (supervisor matches: "
                         + "{} primary, {} fallback-bucket, {} round-robin, {} orphan)",
                 codes.size(), project.getCode(), primary, fallback1, fallback2, orphan);
+    }
+
+    /**
+     * Re-run case: activities already exist for the project, but the supervisor join
+     * table may not be populated (initial seed predated multi-supervisor support, or a
+     * prior cleanup wiped the join rows). Refresh both the legacy single-supervisor
+     * cache on {@link Activity} and the {@code activity_supervisors} join table from
+     * the source workbook so the demo reflects current intent.
+     */
+    private void refreshSupervisorsForExistingActivities(UUID projectId,
+                                                         Map<String, String> primarySupByCode,
+                                                         Map<String, Set<String>> allSupsByCode) {
+        List<Activity> activities = activityRepository.findByProjectId(projectId);
+        int touched = 0;
+        for (Activity a : activities) {
+            UUID primary = a.getSupervisorUserId();
+            String primaryName = primarySupByCode.get(a.getCode());
+            if (primary == null && primaryName != null) {
+                UUID resolved = directory.resolve(primaryName);
+                if (resolved != null) {
+                    a.setSupervisorUserId(resolved);
+                    a.setSupervisorUserName(truncate(displayNameFor(resolved, primaryName), 100));
+                    a.setAssignedTo(resolved);
+                    a.setResponsibleUserId(resolved);
+                    try {
+                        activityRepository.save(a);
+                        primary = resolved;
+                        touched++;
+                    } catch (Exception e) {
+                        log.warn("[oman-demo wbs] refresh primary supervisor failed for {}: {}",
+                                a.getCode(), e.getMessage());
+                    }
+                }
+            }
+            attachAllSupervisors(a, allSupsByCode.get(a.getCode()), primary);
+        }
+        log.info("[oman-demo wbs] supervisor refresh complete: {} activities scanned, "
+                + "{} primary caches updated", activities.size(), touched);
+    }
+
+    /**
+     * Insert one {@link ActivitySupervisor} row per distinct supervisor that filed a DPR
+     * against this activity in the source workbook. The legacy single-supervisor cache
+     * column on {@link Activity} is set elsewhere; this method maintains the join table
+     * which is the source of truth for "who supervises X" going forward.
+     *
+     * <p>The primary supervisor (already on {@code activity.supervisor_user_id}) is
+     * always included even when not in the workbook set, so the join table is never
+     * empty for an activity that has a primary.
+     */
+    private void attachAllSupervisors(Activity activity, Set<String> namesFromWorkbook,
+                                      UUID primarySupervisorId) {
+        Set<UUID> userIds = new LinkedHashSet<>();
+        if (primarySupervisorId != null) userIds.add(primarySupervisorId);
+        if (namesFromWorkbook != null) {
+            for (String name : namesFromWorkbook) {
+                UUID uid = directory.resolve(name);
+                if (uid != null) userIds.add(uid);
+            }
+        }
+        for (UUID uid : userIds) {
+            if (activitySupervisorRepository.existsByActivityIdAndUserId(activity.getId(), uid)) {
+                continue;
+            }
+            String snapshot = displayNameFor(uid, null);
+            ActivitySupervisor link = new ActivitySupervisor();
+            link.setActivityId(activity.getId());
+            link.setUserId(uid);
+            link.setUserNameSnapshot(truncate(snapshot, 255));
+            try {
+                activitySupervisorRepository.save(link);
+            } catch (Exception e) {
+                log.warn("[oman-demo wbs] failed to add supervisor {} to activity {}: {}",
+                        uid, activity.getCode(), e.getMessage());
+            }
+        }
     }
 
     /** Build the 4-level WBS tree (project root + 1 L1 + 4 L2 buckets). */
@@ -283,6 +373,31 @@ public class OmanDemoWbsAndActivitySeeder implements CommandLineRunner {
         return out;
     }
 
+    /**
+     * For each BOQ code, collect every distinct supervisor display name that appears
+     * on any DPR row for that code. Used to populate the {@code activity_supervisors}
+     * join table so AI tools can answer "who supervises X" with the full roster
+     * instead of just the most-frequent name.
+     */
+    private Map<String, Set<String>> buildAllSupervisorsIndex() {
+        List<DailyDataRawRow> rows;
+        try {
+            rows = reader.readAllDailyRows();
+        } catch (Exception e) {
+            log.warn("[oman-demo wbs] failed to read daily rows for full-supervisor index: {}",
+                    e.getMessage());
+            return Map.of();
+        }
+        Map<String, Set<String>> out = new HashMap<>();
+        for (DailyDataRawRow r : rows) {
+            if (r.activityCode() == null) continue;
+            if (r.supervisorName() == null || r.supervisorName().isBlank()) continue;
+            out.computeIfAbsent(r.activityCode(), k -> new LinkedHashSet<>())
+                    .add(r.supervisorName().trim());
+        }
+        return out;
+    }
+
     /** Re-populate {@link OmanDemoStaffDirectory} from DB for the re-run case. */
     private void backfillDirectoryFromDb() {
         List<User> users = new ArrayList<>();
@@ -295,8 +410,11 @@ public class OmanDemoWbsAndActivitySeeder implements CommandLineRunner {
                     e.getMessage());
         }
         for (User u : users) {
-            if (u.getUsername() == null
-                    || !u.getUsername().startsWith(OmanDemoStaffUserSeeder.USERNAME_PREFIX)) {
+            // Oman-Demo staff are uniquely identified by the demo email domain — survives
+            // username scheme changes (slug → EMP-XXX) and won't pick up unrelated EMPs
+            // from other seeders.
+            if (u.getEmail() == null
+                    || !u.getEmail().endsWith(OmanDemoStaffUserSeeder.EMAIL_DOMAIN)) {
                 continue;
             }
             String name = displayName(u);

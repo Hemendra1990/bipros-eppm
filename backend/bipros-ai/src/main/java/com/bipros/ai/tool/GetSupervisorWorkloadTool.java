@@ -92,11 +92,18 @@ public class GetSupervisorWorkloadTool implements Tool {
         if (toDate != null) wrapper.put("to_date", toDate.toString());
 
         // ── assigned activities ─────────────────────────────────────────
+        // Multi-supervisor model: join through activity.activity_supervisors so that
+        // co-supervised activities are returned for ANY supervisor in their set, not just
+        // the legacy single-column cache.
         Query qAssigned = em.createNativeQuery(
-                "SELECT id, code, name, status, percent_complete "
-                        + "FROM activity.activities "
-                        + "WHERE project_id = :projectId AND supervisor_user_id = :userId "
-                        + "ORDER BY code");
+                "SELECT a.id, a.code, a.name, a.status, a.percent_complete "
+                        + "FROM activity.activities a "
+                        + "WHERE a.project_id = :projectId "
+                        + "  AND EXISTS ( "
+                        + "    SELECT 1 FROM activity.activity_supervisors s "
+                        + "     WHERE s.activity_id = a.id "
+                        + "       AND s.user_id = :userId) "
+                        + "ORDER BY a.code");
         qAssigned.setParameter("projectId", projectId);
         qAssigned.setParameter("userId", userId);
         @SuppressWarnings("unchecked")

@@ -70,6 +70,14 @@ public class OmanDemoDailyDataSeeder implements CommandLineRunner {
     private static final String DEFAULT_UNIT = "Nos";
     private static final String DEFAULT_WEATHER = "Clear";
 
+    /**
+     * Cell dates in the customer workbook are 2025, but the workbook filename and demo
+     * intent say "Jan, Feb, Mar 2026". We honour the filename so the demo lands data in
+     * the system's "now" window, and the default DPR UI filter opens on populated rows
+     * rather than an empty range.
+     */
+    private static final int YEAR_SHIFT = 1;
+
     private static final Set<String> SKILLED_TRADES = Set.of(
             "operator", "foreman", "supervisor", "mason", "carpenter",
             "steel fixer", "electrician", "plumber", "welder", "mechanic", "driver");
@@ -99,15 +107,17 @@ public class OmanDemoDailyDataSeeder implements CommandLineRunner {
         }
         Project project = projectOpt.get();
 
-        // Idempotency: skip only if DPRs in the workbook's actual date range
-        // (2025-01-24 onward) are already present. Historical performance snapshots
-        // (Oct-24, Nov-24, Jan-5-25) share the project but live in a different date
-        // range, so they must not block the real daily-data import.
+        // Idempotency: skip only if DPRs in the workbook's actual date range are
+        // already present. After YEAR_SHIFT the range is 2026-01-24 onward (cells
+        // say 2025; we land them in 2026 to match filename + demo "now"). Historical
+        // performance snapshots (Oct, Nov, Jan-5 — also +1y to Oct-25/Nov-25/Jan-26)
+        // share the project but live in a different date range, so they must not
+        // block the real daily-data import.
         List<DailyProgressReport> dailyWindow =
                 dprRepository.findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(
                         project.getId(),
-                        LocalDate.of(2025, 1, 24),
-                        LocalDate.of(2025, 4, 30));
+                        LocalDate.of(2025 + YEAR_SHIFT, 1, 24),
+                        LocalDate.of(2025 + YEAR_SHIFT, 4, 30));
         if (!dailyWindow.isEmpty()) {
             log.info("[oman-demo daily] {} daily DPRs already exist for {} in the "
                             + "workbook date range, skipping",
@@ -154,8 +164,10 @@ public class OmanDemoDailyDataSeeder implements CommandLineRunner {
                 negativeQty++;
                 fixed = withZeroQty(r);
             }
+            // Shift cell date by YEAR_SHIFT (see field doc): 2025-01-24 → 2026-01-24, etc.
+            LocalDate shifted = fixed.date().plusYears(YEAR_SHIFT);
             GroupKey key = new GroupKey(
-                    fixed.date(),
+                    shifted,
                     nullToEmpty(fixed.supervisorName()),
                     nullToEmpty(fixed.activityCode()),
                     fixed.chainageFromM(),

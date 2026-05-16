@@ -76,14 +76,20 @@ public class OmanDemoWorkbookReader {
     public static final String CONCRETE_KHASAB_PATH = "seed-data/oman-demo/concrete-summary-khasab.xlsx";
     public static final String CONCRETE_LIMA_PATH = "seed-data/oman-demo/concrete-summary-lima.xlsx";
 
-    /** Three SC180 performance snapshots in chronological order. */
+    /**
+     * Three SC180 performance snapshots in chronological order. Filenames preserve the
+     * original Oct-24 / Nov-24 / Jan-25 capture dates; the {@code date} field is shifted
+     * +1 year so the snapshot timeline aligns with the daily-data workbook (which is
+     * also shifted +1 year in {@link OmanDemoDailyDataSeeder} — see its {@code YEAR_SHIFT}
+     * field doc for the rationale).
+     */
     public static final List<PerformanceFile> PERFORMANCE_FILES = List.of(
             new PerformanceFile("seed-data/oman-demo/sc180-performance-2024-10-31.xlsx",
-                    LocalDate.of(2024, 10, 31)),
+                    LocalDate.of(2025, 10, 31)),
             new PerformanceFile("seed-data/oman-demo/sc180-performance-2024-11-30.xlsx",
-                    LocalDate.of(2024, 11, 30)),
+                    LocalDate.of(2025, 11, 30)),
             new PerformanceFile("seed-data/oman-demo/sc180-performance-2025-01-05.xlsx",
-                    LocalDate.of(2025, 1, 5))
+                    LocalDate.of(2026, 1, 5))
     );
 
     private static final DataFormatter FORMATTER = new DataFormatter(Locale.ENGLISH);

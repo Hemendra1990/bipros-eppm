@@ -54,11 +54,11 @@ interface Props {
   /** lowercased name → id, used for legacy DPRs whose server payload only carries activityName. */
   activityIdByName: Map<string, string>;
   /**
-   * activityId → its assigned supervisor (from `Activity.responsibleResourceId`). Powers the
-   * cross-filter / auto-fill between the Supervisor and Activity pickers. `null` means the
-   * activity has no supervisor assigned yet.
+   * activityId → its assigned supervisors (multi). Powers the cross-filter / auto-fill
+   * between the Supervisor and Activity pickers and the set-membership mismatch warning.
+   * Empty array means the activity has no supervisors assigned yet.
    */
-  supervisorByActivityId: Map<string, { id: string; name: string } | null>;
+  supervisorsByActivityId: Map<string, Array<{ id: string; name: string }>>;
   /**
    * activityId → the linked WorkActivity's `default_unit`. The form auto-fills the unit
    * dropdown when an activity is picked so DPRs default to the activity's unit instead of
@@ -202,7 +202,7 @@ export function DprActivityForm({
   activityOptions,
   activityNameById,
   activityIdByName,
-  supervisorByActivityId,
+  supervisorsByActivityId,
   defaultUnitByActivityId,
   boqOptions,
   defaultPrefill,
@@ -395,35 +395,39 @@ export function DprActivityForm({
   const supervisorIsOther = supervisorPickerValue === SUPERVISOR_OTHER;
 
   /**
-   * Activities owned by the currently selected supervisor (per `Activity.responsibleResourceId`).
-   * If the user hasn't picked a supervisor — or picked the free-text "Other" — show the full list.
-   * If the picked supervisor has zero assigned activities, fall back to showing all activities
-   * (the user explicitly asked for "do nothing" in that case; surfacing all is the closest
-   * reasonable behavior so the form stays usable).
+   * Activities the currently selected supervisor co-supervises. If the user hasn't picked
+   * a supervisor — or picked the free-text "Other" — show the full list. If the picked
+   * supervisor has zero assigned activities, fall back to showing all (so the form stays
+   * usable when an admin/PM is filing on someone else's behalf).
    */
   const filteredActivityOptions = useMemo(() => {
     if (!state.supervisorUserId || supervisorIsOther) return activityOptions;
     const filtered = activityOptions.filter((a) => {
-      const sup = supervisorByActivityId.get(a.value);
-      return sup?.id === state.supervisorUserId;
+      const sups = supervisorsByActivityId.get(a.value) ?? [];
+      return sups.some((s) => s.id === state.supervisorUserId);
     });
     return filtered.length === 0 ? activityOptions : filtered;
-  }, [activityOptions, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
+  }, [activityOptions, state.supervisorUserId, supervisorIsOther, supervisorsByActivityId]);
 
   const supervisorHasNoActivities = useMemo(() => {
     if (!state.supervisorUserId || supervisorIsOther) return false;
-    return !activityOptions.some(
-      (a) => supervisorByActivityId.get(a.value)?.id === state.supervisorUserId
+    return !activityOptions.some((a) =>
+      (supervisorsByActivityId.get(a.value) ?? []).some((s) => s.id === state.supervisorUserId)
     );
-  }, [activityOptions, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
+  }, [activityOptions, state.supervisorUserId, supervisorIsOther, supervisorsByActivityId]);
 
-  /** Inline mismatch when the picked supervisor isn't the activity's owner. */
-  const activitySupervisorMismatch = useMemo(() => {
+  /**
+   * Inline mismatch when the picked supervisor isn't in the activity's supervisor set.
+   * Returns the comma-joined names of the activity's actual supervisors so the message
+   * can name them; null when the picked user IS one of them (or no check is needed).
+   */
+  const activitySupervisorMismatch = useMemo<string | null>(() => {
     if (!state.activityId || !state.supervisorUserId || supervisorIsOther) return null;
-    const sup = supervisorByActivityId.get(state.activityId);
-    if (!sup || sup.id === state.supervisorUserId) return null;
-    return sup.name || "another supervisor";
-  }, [state.activityId, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
+    const sups = supervisorsByActivityId.get(state.activityId) ?? [];
+    if (sups.length === 0) return null;
+    if (sups.some((s) => s.id === state.supervisorUserId)) return null;
+    return sups.map((s) => s.name).filter(Boolean).join(", ") || "another supervisor";
+  }, [state.activityId, state.supervisorUserId, supervisorIsOther, supervisorsByActivityId]);
 
   /** Tab counters reflect rows that will actually be saved (FK picker filled).
    *  Role-only rows have variantId set instead of resourceAssignmentId. */
@@ -455,9 +459,9 @@ export function DprActivityForm({
 
   const supervisorAutoFilled = useMemo(() => {
     if (!state.activityId || !state.supervisorUserId || supervisorIsOther) return false;
-    const sup = supervisorByActivityId.get(state.activityId);
-    return sup?.id === state.supervisorUserId;
-  }, [state.activityId, state.supervisorUserId, supervisorIsOther, supervisorByActivityId]);
+    const sups = supervisorsByActivityId.get(state.activityId) ?? [];
+    return sups.some((s) => s.id === state.supervisorUserId);
+  }, [state.activityId, state.supervisorUserId, supervisorIsOther, supervisorsByActivityId]);
 
   /**
    * Activity dropdown change: when rows already exist for the previous activity, prompt to clear
@@ -499,16 +503,19 @@ export function DprActivityForm({
     if (activityUnit && activityUnit.trim().length > 0) {
       delta.unit = activityUnit.trim();
     }
-    const sup = newActivityId ? supervisorByActivityId.get(newActivityId) : null;
+    // Multi-supervisor: pick the first supervisor in the activity's list that is still
+    // eligible (i.e. still has a supervisor role). If none are eligible, leave the supervisor
+    // untouched rather than silently filling an invalid id.
+    const sups = newActivityId ? (supervisorsByActivityId.get(newActivityId) ?? []) : [];
     const supervisorEmpty = !state.supervisorUserId || supervisorIsOther;
-    if (sup && supervisorEmpty) {
-      // Verify the supervisor actually exists in the eligible list before auto-filling — if the
-      // activity's snapshot points at someone no longer eligible (e.g. role changed), fall back
-      // to leaving the supervisor untouched rather than silently picking an invalid value.
-      const match = supervisorOptions.find((s) => s.value === sup.id);
-      if (match) {
-        delta.supervisorUserId = sup.id;
-        delta.supervisorName = match.label.split(" (")[0];
+    if (sups.length > 0 && supervisorEmpty) {
+      for (const sup of sups) {
+        const match = supervisorOptions.find((s) => s.value === sup.id);
+        if (match) {
+          delta.supervisorUserId = sup.id;
+          delta.supervisorName = match.label.split(" (")[0];
+          break;
+        }
       }
     }
     patch(delta);
@@ -734,7 +741,7 @@ export function DprActivityForm({
           {activitySupervisorMismatch && (
             <p className="mt-1 inline-flex items-center gap-1 text-xs text-burgundy">
               <Info className="h-3 w-3" />
-              Activity is supervised by {activitySupervisorMismatch}, not the selected supervisor.
+              Activity is supervised by {activitySupervisorMismatch} — not the selected supervisor.
             </p>
           )}
           {activityFieldError && (

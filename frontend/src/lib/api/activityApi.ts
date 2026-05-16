@@ -65,10 +65,18 @@ export interface ActivityResponse {
   responsibleResourceId?: string | null;
   /** Snapshot of the supervisor Resource name at the time the flag was set. */
   responsibleResourceName?: string | null;
-  /** Phase 4.5 supervisor — User FK to public.users.id. Null when unassigned. */
+  /**
+   * Legacy single-supervisor cache. Kept in sync with {@code supervisors[0]} for back-compat;
+   * new UIs should read {@code supervisors} instead. Null when no supervisors are assigned.
+   */
   supervisorUserId?: string | null;
-  /** Display-snapshot of the supervisor's name persisted at assignment time. */
+  /** Display-snapshot of the first supervisor's name. Mirror of {@code supervisorUserId}. */
   supervisorUserName?: string | null;
+  /**
+   * All supervisors assigned to this activity. The list is "all equal" — there is no primary.
+   * Empty when no supervisor is assigned.
+   */
+  supervisors?: SupervisorEntry[];
   /** Default unit from the linked WorkActivity. Lets the DPR form auto-fill the unit field
    *  when the user picks an activity. Null when no work-activity link exists. */
   workActivityDefaultUnit?: string | null;
@@ -141,10 +149,9 @@ export interface UpdateActivityRequest {
 }
 
 /**
- * Phase 4.4 RBAC: per-activity supervisor write. Mirrors the new User-based contract
- * ({@code supervisorUserId} replaces the deprecated {@code supervisorResourceId}). Pass
- * a UUID from {@code /v1/users?roles=SUPERVISOR,FOREMAN,SITE_ENGINEER,SITE_MANAGER}, or
- * {@code null} to clear the supervisor on this activity.
+ * Single-supervisor write — legacy. New UIs should use {@link SetSupervisorsRequest}
+ * via {@code activityApi.setSupervisors}. This shape is kept so older clients don't break;
+ * the backend translates it into a one-element list.
  */
 export interface SetSupervisorRequest {
   /** User UUID (NOT a Resource UUID). Null clears the supervisor. */
@@ -152,6 +159,20 @@ export interface SetSupervisorRequest {
   /** Display snapshot of the supervisor's name; persisted alongside the FK so list views
    * don't need a second hop. Null is acceptable when clearing. */
   supervisorName: string | null;
+}
+
+/** One supervisor on an activity. All entries are equal — there is no primary. */
+export interface SupervisorEntry {
+  userId: string;
+  userName: string | null;
+}
+
+/**
+ * Replace the supervisor set on an activity. Pass an empty list (or omit
+ * {@code supervisors}) to clear all supervisors. Duplicates are deduplicated server-side.
+ */
+export interface SetSupervisorsRequest {
+  supervisors: SupervisorEntry[];
 }
 
 export const activityApi = {
@@ -279,6 +300,23 @@ export const activityApi = {
     apiClient
       .put<ApiResponse<ActivityResponse>>(
         `/v1/projects/${projectId}/activities/${activityId}/supervisor`,
+        body
+      )
+      .then((r) => r.data),
+
+  /**
+   * Replace the supervisor set on an activity. All supervisors are equal — there is no
+   * primary. Empty {@code supervisors} array clears everyone; the backend treats null
+   * supervisor and zero supervisors as the same state.
+   */
+  setSupervisors: (
+    projectId: string,
+    activityId: string,
+    body: SetSupervisorsRequest
+  ) =>
+    apiClient
+      .put<ApiResponse<ActivityResponse>>(
+        `/v1/projects/${projectId}/activities/${activityId}/supervisors`,
         body
       )
       .then((r) => r.data),

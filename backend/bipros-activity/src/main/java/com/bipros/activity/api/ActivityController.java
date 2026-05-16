@@ -165,8 +165,9 @@ public class ActivityController {
   }
 
   /**
-   * Per-activity supervisor assignment — Phase 4.5. Writes
-   * {@code Activity.supervisor_user_id}. {@code supervisorUserId = null} clears.
+   * Legacy single-supervisor write. Now delegates to {@link #setSupervisors} with a
+   * one-element list, so callers that haven't migrated to the multi-supervisor contract
+   * keep working. {@code supervisorUserId = null} clears the entire set.
    */
   @PutMapping("/{activityId}/supervisor")
   @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ACTIVITY.UPDATE')")
@@ -175,6 +176,21 @@ public class ActivityController {
       @PathVariable UUID activityId,
       @Valid @RequestBody com.bipros.activity.application.dto.SetSupervisorRequest request) {
     ActivityResponse response = activityService.setSupervisor(activityId, request);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  /**
+   * Replace the supervisor set on an activity. Accepts a list — all supervisors are equal,
+   * there is no primary. Empty (or null) list clears all supervisors. Duplicates are
+   * deduplicated server-side.
+   */
+  @PutMapping("/{activityId}/supervisors")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ACTIVITY.UPDATE')")
+  public ResponseEntity<ApiResponse<ActivityResponse>> setSupervisors(
+      @PathVariable UUID projectId,
+      @PathVariable UUID activityId,
+      @Valid @RequestBody com.bipros.activity.application.dto.SetSupervisorsRequest request) {
+    ActivityResponse response = activityService.setSupervisors(activityId, request);
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 

@@ -116,12 +116,15 @@ public class ListProjectSupervisorsTool implements Tool {
 
         Query q = em.createNativeQuery(
                 "WITH activity_sups AS ("
-                        + "  SELECT a.supervisor_user_id AS user_id, "
-                        + "         COUNT(*)            AS activity_count "
-                        + "    FROM activity.activities a "
+                        // Multi-supervisor: counts via the join table so a user is
+                        // listed even when they're a co-supervisor (not the legacy
+                        // first-in-list cache on activities.supervisor_user_id).
+                        + "  SELECT s.user_id AS user_id, "
+                        + "         COUNT(DISTINCT s.activity_id) AS activity_count "
+                        + "    FROM activity.activity_supervisors s "
+                        + "    JOIN activity.activities a ON a.id = s.activity_id "
                         + "   WHERE a.project_id = :projectId "
-                        + "     AND a.supervisor_user_id IS NOT NULL "
-                        + "   GROUP BY a.supervisor_user_id "
+                        + "   GROUP BY s.user_id "
                         + "), "
                         + "dpr_sups AS ("
                         + "  SELECT d.supervisor_user_id AS user_id, "
