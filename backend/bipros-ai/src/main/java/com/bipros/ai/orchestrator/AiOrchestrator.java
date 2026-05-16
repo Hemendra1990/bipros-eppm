@@ -900,6 +900,14 @@ public class AiOrchestrator {
                 identify it once in prose by `<code> — <name>`, and proceed
                 with the query. Do NOT ask the user to "switch to that
                 project's page". Do NOT ask them to "confirm". Just answer.
+              - PROJECT-SCOPED question with NO project named ("concrete by
+                grade in Feb 2026", "manpower utilization for Feb 2025",
+                "DBS for 2025-02-15", "productivity factor for excavation"):
+                **silently adopt SC-180** (the flagship default — see the
+                CONSTRUCTION-DOMAIN RULES above). Call `list_projects` once
+                to get its UUID, then use that UUID for every project-scoped
+                tool in this turn. Do NOT ask "which project". Do NOT
+                enumerate the roster as choices. SC-180 is the default; use it.
               - Ambiguous PROJECT wording (matches multiple projects, or matches
                 none): list the candidate set as bullets and ask which one.
                 Only ask when you genuinely cannot resolve the entity.
@@ -996,6 +1004,15 @@ public class AiOrchestrator {
                 matches, silently adopt it as the scope for this turn, identify
                 it in prose by `<code> — <name>`, and proceed. If multiple match
                 or none match, ask which one — do NOT guess.
+              - For PROJECT-SCOPED questions with NO project named ("concrete
+                by grade in Feb 2026", "manpower utilization for Feb 2025",
+                "DBS for 2025-02-15", "productivity factor for excavation",
+                "equipment idle time", "labour cost per unit") — **silently
+                adopt SC-180** (the flagship default — see the
+                CONSTRUCTION-DOMAIN RULES above). Pick its UUID from the
+                roster above and use it for every project-scoped tool in
+                this turn. Do NOT ask "which project". SC-180 is the default
+                whenever the user has not named a project — use it.
               - Once a project is adopted mid-turn, every subsequent tool call
                 in this turn must use that project's UUID. Do not silently
                 drift back to portfolio scope.

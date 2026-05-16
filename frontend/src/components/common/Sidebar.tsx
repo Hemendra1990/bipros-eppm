@@ -86,15 +86,7 @@ const groups: NavGroup[] = [
       { name: "Workflow Reference", href: "/permits/workflow", icon: Workflow },
     ],
   }, */
-  {
-    label: "Resources",
-    adminOnly: true,
-    items: [
-      { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true, permission: "RESOURCE.READ" },
-      { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true, permission: "RESOURCE.READ" },
-      { name: "Resources", href: "/resources", icon: Users, adminOnly: true, permission: "RESOURCE.READ" },
-    ],
-  },
+
   // Nationalities admin page exists at /admin/nationalities (still routable, still seeded
   // and consumed by the resource form's nationality datalist) but intentionally hidden
   // from the sidebar — the form's autocomplete is the only place it surfaces.
@@ -104,33 +96,42 @@ const groups: NavGroup[] = [
     items: [
       { name: "Users", href: "/admin/users", icon: UsersRound, adminOnly: true, permission: "ADMIN_USER.READ" },
       { name: "Profiles", href: "/admin/profiles", icon: ShieldCheck, adminOnly: true, permission: "ADMIN_PROFILE.READ" },
-      { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true, permission: "ADMIN_ORG.READ" },
-      { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true, permission: "ADMIN_USER.READ" },
+      /* { name: "Organisations", href: "/admin/organisations", icon: Building2, adminOnly: true, permission: "ADMIN_ORG.READ" }, */
+      /* { name: "User Access", href: "/admin/user-access", icon: UserCog, adminOnly: true, permission: "ADMIN_USER.READ" }, */
       { name: "Risk Scoring Matrix", href: "/admin/risk-scoring-matrix", icon: Grid, adminOnly: true, permission: "ADMIN_MASTER.READ" },
       // { name: "WBS Templates", href: "/admin/wbs-templates", icon: FileText, adminOnly: true },
       // { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
-      { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+      /* { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true, permission: "ADMIN_MASTER.READ" }, */
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
-      { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
+      /* { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true, permission: "ADMIN_SETTINGS.READ" }, */
       { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
     ],
     subGroups: [
       {
+        label: "Resources",
+        /* adminOnly: true, */
+        items: [
+          { name: "Resource Types", href: "/admin/resource-types", icon: ListChecks, adminOnly: true, permission: "RESOURCE.READ" },
+          { name: "Resource Roles", href: "/admin/resource-roles", icon: Contact, adminOnly: true, permission: "RESOURCE.READ" },
+          /* { name: "Resources", href: "/resources", icon: Users, adminOnly: true, permission: "RESOURCE.READ" }, */
+        ],
+      },
+      {
         label: "Master Data",
         items: [
           /* { name: "Categories", href: "/admin/manpower-categories", icon: FolderTree, adminOnly: true }, */
+          { name: "Formulas", href: "/admin/formulas", icon: Calculator, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+          { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+          { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+          { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+          { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Grades", href: "/admin/grades", icon: Award, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Material Categories", href: "/admin/material-categories", icon: FolderTree, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           /* { name: "Rate Master", href: "/admin/rate-master", icon: Banknote, adminOnly: true, permission: "ADMIN_MASTER.READ" }, */
-          { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true, permission: "ADMIN_MASTER.READ" },
-          { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true, permission: "ADMIN_MASTER.READ" },
-          { name: "Work Activities", href: "/admin/work-activities", icon: ListChecks, adminOnly: true, permission: "ADMIN_MASTER.READ" },
-          { name: "Productivity Norms", href: "/admin/productivity-norms", icon: Gauge, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Project Categories", href: "/admin/project-categories", icon: Tag, adminOnly: true, permission: "ADMIN_MASTER.READ" },
-          { name: "Formulas", href: "/admin/formulas", icon: Calculator, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           {
             name: "Permits", href: "/permits", icon: ShieldCheck,
             requireRoles: ["FOREMAN", "SITE_ENGINEER", "HSE_OFFICER", "PROJECT_MANAGER", "ADMIN"],

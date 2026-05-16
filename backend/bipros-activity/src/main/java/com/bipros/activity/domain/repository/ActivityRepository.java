@@ -46,6 +46,13 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
       @Param("projectId") UUID projectId,
       @Param("responsibleResourceId") UUID responsibleResourceId);
 
+  /**
+   * Distinct project ids of activities this user supervises. Used by the AI
+   * EntityResolver to attach a {@code projects} array to supervisor candidates
+   * resolved from the User table — so portfolio-mode chat queries like
+   * "performance of Vijaykumar" can auto-adopt the right project without
+   * asking the user to enumerate.
+   */
   @Query("SELECT DISTINCT a.projectId FROM Activity a WHERE a.supervisorUserId = :supervisorUserId")
   List<UUID> findDistinctProjectIdsBySupervisorUserId(@Param("supervisorUserId") UUID supervisorUserId);
 
