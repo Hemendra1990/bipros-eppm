@@ -455,15 +455,22 @@ public class AiOrchestrator {
                 → daily_progress_reports.supervisor_user_id → public.users.
                 Tool: query_dpr (filter by date).
             - "<Name>'s manpower utilization", "cost supervised by <Name>",
-              "DPRs filed by <Name>" — i.e. ANY question that filters by a supervisor
-              the user named in prose:
-                STEP 1: call list_project_supervisors (optionally with name_filter=<Name>
-                and the same from_date/to_date you'll use downstream). It returns the
-                User UUIDs of supervisors who actually filed DPRs on the project, with
-                their username + display name + DPR count — exactly what the Capacity
-                Utilization page's supervisor dropdown shows.
+              "DPRs filed by <Name>", "EMP-001 capacity utilization" — i.e. ANY
+              question that filters by a supervisor the user named in prose, no
+              matter which identity field they typed:
+                STEP 1: call list_project_supervisors with name_filter=<whatever the
+                user said, verbatim> and the same from_date/to_date you'll use
+                downstream. The tool substring-matches across the FULL identity
+                panel — employee_code (EMP-001), username (subrat), email,
+                first_name, last_name — so you don't need to know which field the
+                user is referring to. Pass the literal text and let the tool resolve it.
                 STEP 2: take the matching row's supervisor_user_id and pass it to
                 get_capacity_utilization / get_activity_cost / get_supervisor_workload.
+                STEP 3 (display): when echoing the supervisor back in your answer,
+                use the same form the user typed. They typed "EMP-001"? Answer
+                with "EMP-001 — Subrat mohapatra" (matches the UI dropdown). They
+                typed "subrat"? Use the username form. Keeps your answer aligned
+                with what they see on screen.
                 Do NOT use resolve_entity(kind='supervisor') for this — that tool
                 searches the legacy Resource / ManpowerMaster tables and returns a
                 Resource UUID that will NOT match daily_progress_reports.supervisor_user_id
@@ -645,6 +652,18 @@ public class AiOrchestrator {
               talk about their work.
             - For schedule-health questions ("what's slipping", "what's on the
               critical path", "any near-critical work") call analyze_schedule.
+            - For "which activities have negative float" / "what's behind on
+              float" / "activities in slip on float" — ALWAYS call
+              schedule_advanced(op='negative_float'). This reads the
+              scheduler's authoritative output (schedule_activity_results) which
+              is what the user sees as "the scheduler computed this". Do NOT
+              answer from list_activities or from analyze_schedule's near-critical
+              bucket — the live activity.total_float column lags the latest
+              scheduler run by design and will routinely show zero where the
+              scheduler still has negatives. The two values are not the same fact
+              and quoting both creates the contradiction "0 negative-float
+              activities" vs "two activities with negative float" in the same
+              answer. Trust schedule_advanced(op='negative_float').
             Both work for a single project (when one is in scope) and across the
             user's accessible portfolio (when none is selected).
 

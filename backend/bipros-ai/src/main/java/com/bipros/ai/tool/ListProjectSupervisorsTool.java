@@ -55,21 +55,30 @@ public class ListProjectSupervisorsTool implements Tool {
                 + "activity-assigned surface (activity.activities.supervisor_user_id, what the "
                 + "activity sidebar shows) AND the DPR-submitted surface "
                 + "(daily_progress_reports.supervisor_user_id, who actually filed reports). "
-                + "Returns one row per User UUID with: supervisor_user_id, supervisor_code "
-                + "(username, e.g. 'EMP-001'), supervisor_name (full name from public.users), "
-                + "activity_count (# of activities they're assigned supervisor of), "
-                + "dpr_count (# of DPRs they filed in the optional window), and sources array "
-                + "tagged with 'ACTIVITY' and/or 'DPR'. "
+                + "Returns one row per User UUID with the FULL identity panel from public.users: "
+                + "supervisor_user_id, employee_code (e.g. 'EMP-001' — the value the UI dropdown "
+                + "shows as the supervisor identifier), username (e.g. 'subrat'), email, "
+                + "first_name, last_name, supervisor_name (display name, prefers full name then "
+                + "DPR snapshot then username), supervisor_code (defaults to employee_code, falls "
+                + "back to username — pick this when echoing the supervisor back to the user), "
+                + "activity_count, dpr_count, and sources=['ACTIVITY' | 'DPR']. "
                 + "ALWAYS call this for any 'who are the supervisors on project X', 'list "
                 + "supervisors', 'distinct supervisors across activities', or 'supervisors "
                 + "available' question — it is the canonical roster for the role-rate model. "
                 + "Also call it first when the user names a supervisor in prose and you need a "
-                + "User UUID (optionally use name_filter to narrow). "
+                + "User UUID — pass name_filter and it will substring-match (case-insensitive) "
+                + "against ALL FIVE identity fields: employee_code, username, email, first_name, "
+                + "last_name. So 'EMP-001', 'subrat', 'subrat@bipros.com', and 'Subrat mohapatra' "
+                + "all resolve to the same user. "
                 + "Do NOT use list_supervisors (legacy responsibleResourceId, returns 0) or "
                 + "resolve_entity(kind='supervisor') (legacy Resource UUIDs that won't match) "
                 + "for these questions. Optional from_date / to_date narrow the DPR side only — "
                 + "an activity supervisor with zero DPRs in the window still appears with "
-                + "dpr_count=0 and sources=['ACTIVITY'].";
+                + "dpr_count=0 and sources=['ACTIVITY']. "
+                + "RESPONSE FORMAT: when answering the user, echo the supervisor in the same "
+                + "form they used. If they said 'EMP-001', answer with 'EMP-001 — Subrat "
+                + "mohapatra' to match the UI dropdown. If they said 'subrat', use the username "
+                + "form. This keeps your answer consistent with what they see on screen.";
     }
 
     @Override
@@ -83,8 +92,10 @@ public class ListProjectSupervisorsTool implements Tool {
         addStringProp(props, "to_date",
                 "ISO date (yyyy-MM-dd) — narrows the DPR-side count only.");
         addStringProp(props, "name_filter",
-                "Optional case-insensitive substring filter on username + display name. Use "
-                        + "this when the user named a single supervisor in prose.");
+                "Optional case-insensitive substring filter applied across all five identity "
+                        + "fields: employee_code (e.g. 'EMP-001'), username (e.g. 'subrat'), "
+                        + "email, first_name, last_name. Pass the literal text the user typed; "
+                        + "no need to know which field it refers to.");
         schema.set("properties", props);
         schema.set("required", mapper.createArrayNode());
         return schema;
@@ -124,7 +135,12 @@ public class ListProjectSupervisorsTool implements Tool {
                         + "   GROUP BY d.supervisor_user_id "
                         + ") "
                         + "SELECT COALESCE(a.user_id, d.user_id) AS user_id, "
-                        + "       COALESCE(u.username, '') AS supervisor_code, "
+                        + "       COALESCE(NULLIF(u.employee_code, ''), u.username, '') AS supervisor_code, "
+                        + "       COALESCE(u.username, '')          AS username, "
+                        + "       COALESCE(u.employee_code, '')     AS employee_code, "
+                        + "       COALESCE(u.email, '')             AS email, "
+                        + "       COALESCE(u.first_name, '')        AS first_name, "
+                        + "       COALESCE(u.last_name, '')         AS last_name, "
                         + "       COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), "
                         + "                d.supervisor_name_snapshot, "
                         + "                u.username, "
@@ -157,23 +173,45 @@ public class ListProjectSupervisorsTool implements Tool {
         for (Object[] r : rows) {
             UUID userId = (UUID) r[0];
             String code = r[1] != null ? r[1].toString() : null;
-            String name = r[2] != null ? r[2].toString() : null;
-            long activityCount = ((Number) r[3]).longValue();
-            long dprCount = ((Number) r[4]).longValue();
-            boolean fromActivity = toBool(r[5]);
-            boolean fromDpr = toBool(r[6]);
+            String username = r[2] != null ? r[2].toString() : null;
+            String employeeCode = r[3] != null ? r[3].toString() : null;
+            String email = r[4] != null ? r[4].toString() : null;
+            String firstName = r[5] != null ? r[5].toString() : null;
+            String lastName = r[6] != null ? r[6].toString() : null;
+            String name = r[7] != null ? r[7].toString() : null;
+            long activityCount = ((Number) r[8]).longValue();
+            long dprCount = ((Number) r[9]).longValue();
+            boolean fromActivity = toBool(r[10]);
+            boolean fromDpr = toBool(r[11]);
 
             if (normalisedFilter != null) {
-                String codeL = code == null ? "" : code.toLowerCase(Locale.ROOT);
-                String nameL = name == null ? "" : name.toLowerCase(Locale.ROOT);
-                if (!codeL.contains(normalisedFilter) && !nameL.contains(normalisedFilter)) {
-                    continue;
+                // Match against the full identity panel: employee_code, username, email,
+                // first_name, last_name, plus the display name (which is the DPR snapshot
+                // for users without first/last on file). This way "EMP-001", "subrat",
+                // "subrat@bipros.com", and "Subrat mohapatra" all resolve to the same user.
+                String[] haystack = {
+                        employeeCode == null ? "" : employeeCode.toLowerCase(Locale.ROOT),
+                        username == null ? "" : username.toLowerCase(Locale.ROOT),
+                        email == null ? "" : email.toLowerCase(Locale.ROOT),
+                        firstName == null ? "" : firstName.toLowerCase(Locale.ROOT),
+                        lastName == null ? "" : lastName.toLowerCase(Locale.ROOT),
+                        name == null ? "" : name.toLowerCase(Locale.ROOT)
+                };
+                boolean matched = false;
+                for (String h : haystack) {
+                    if (h.contains(normalisedFilter)) { matched = true; break; }
                 }
+                if (!matched) continue;
             }
 
             ObjectNode row = mapper.createObjectNode();
             row.put("supervisor_user_id", userId != null ? userId.toString() : null);
             row.put("supervisor_code", code);
+            row.put("employee_code", emptyToNull(employeeCode));
+            row.put("username", emptyToNull(username));
+            row.put("email", emptyToNull(email));
+            row.put("first_name", emptyToNull(firstName));
+            row.put("last_name", emptyToNull(lastName));
             row.put("supervisor_name", name);
             row.put("activity_count", activityCount);
             row.put("dpr_count", dprCount);
@@ -214,6 +252,10 @@ public class ListProjectSupervisorsTool implements Tool {
                     + " activity-only, " + dprOnly + " DPR-only).";
         }
         return ToolResult.ok(summary, wrapper);
+    }
+
+    private static String emptyToNull(String s) {
+        return s == null || s.isEmpty() ? null : s;
     }
 
     private static boolean toBool(Object o) {
