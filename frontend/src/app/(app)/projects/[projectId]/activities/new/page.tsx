@@ -15,6 +15,9 @@ import type { WbsNodeResponse } from "@/lib/types";
 import { getErrorMessage } from "@/lib/utils/error";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
+import { LinkOrCreateWorkActivityDialog } from "@/components/activity/LinkOrCreateWorkActivityDialog";
+import { WorkActivityCoverageChip } from "@/components/activity/WorkActivityCoverageChip";
+import { Plus } from "lucide-react";
 
 export default function NewActivityPage() {
   const router = useRouter();
@@ -55,6 +58,7 @@ export default function NewActivityPage() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [masterDialogOpen, setMasterDialogOpen] = useState(false);
 
   const { data: wbsData, isLoading: isLoadingWbs } = useQuery({
     queryKey: ["wbs", projectId],
@@ -364,29 +368,53 @@ export default function NewActivityPage() {
             <label className="block text-sm font-medium text-text-secondary">
               Work Activity (master)
             </label>
-            <SearchableSelect
-              value={formData.workActivityId}
-              onChange={(val) => setFormData((prev) => ({ ...prev, workActivityId: val }))}
-              placeholder={
-                isLoadingWorkActivities
-                  ? "Loading work activities..."
-                  : "Search master library (optional)..."
-              }
-              options={[
-                { value: "", label: "— none —" },
-                ...workActivities.map((wa) => ({
-                  value: wa.id,
-                  label: wa.defaultUnit ? `${wa.name} (${wa.defaultUnit})` : wa.name,
-                })),
-              ]}
-              disabled={isLoadingWorkActivities}
-            />
+            <div className="mt-1 flex items-stretch gap-2">
+              <div className="flex-1">
+                <SearchableSelect
+                  value={formData.workActivityId}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, workActivityId: val }))}
+                  placeholder={
+                    isLoadingWorkActivities
+                      ? "Loading work activities..."
+                      : "Search master library (optional)..."
+                  }
+                  options={[
+                    { value: "", label: "— none —" },
+                    ...workActivities.map((wa) => ({
+                      value: wa.id,
+                      label: wa.defaultUnit ? `${wa.name} (${wa.defaultUnit})` : wa.name,
+                    })),
+                  ]}
+                  disabled={isLoadingWorkActivities}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setMasterDialogOpen(true)}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-hover px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active hover:text-text-primary"
+                title="Create a new Master Work Activity from this activity's name/code"
+              >
+                <Plus size={14} /> Create new master
+              </button>
+            </div>
             <p className="mt-1 text-xs text-text-muted">
               Optional: link this activity to a master entry from{" "}
               <em>Admin → Work Activities</em>. Required to derive productivity-norm-driven
               capacity utilisation downstream.
             </p>
+            <WorkActivityCoverageChip workActivityId={formData.workActivityId || null} />
           </div>
+
+          <LinkOrCreateWorkActivityDialog
+            open={masterDialogOpen}
+            onClose={() => setMasterDialogOpen(false)}
+            mode="LINK_OR_CREATE"
+            defaultCode={formData.code}
+            defaultName={formData.name}
+            onMasterSelected={(masterId) =>
+              setFormData((prev) => ({ ...prev, workActivityId: masterId }))
+            }
+          />
 
           <div>
             <label className="block text-sm font-medium text-text-secondary">
