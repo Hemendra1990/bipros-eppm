@@ -46,30 +46,41 @@ test.describe("Project Team admin", () => {
     // Pick the first user in the SearchableSelect. The picker is a custom
     // button-trigger popover (NOT a native combobox). Click the trigger inside
     // the "User" field to open it, then click the first option in the portaled
-    // <ul> list (which renders outside the dialog DOM tree).
+    // <ul> list (which renders outside the dialog DOM tree under <body>).
     const userField = dialog.locator('[data-testid="add-team-member-user-field"]');
     const userTrigger = userField.locator("button").first();
     const userTriggerVisible = await userTrigger.isVisible({ timeout: 3_000 }).catch(() => false);
     test.skip(!userTriggerVisible, "User picker not available — no eligible users in directory");
 
     await userTrigger.click();
-    // The portaled <ul> is appended to <body>; pick the first non-loading <li>.
-    const firstUserOption = page
-      .locator('ul[class*="z-[60]"] li, body > ul li')
-      .filter({ hasNotText: /^(Loading|No matches)/i })
+    // The portaled list is tagged with data-testid="searchable-select-list".
+    // Wait for the list, then click the first real option (filtering out the
+    // "Loading…" and "No matches found" placeholder <li>s).
+    const list = page.getByTestId("searchable-select-list").first();
+    await list.waitFor({ state: "visible", timeout: 5_000 });
+    const firstUserOption = list
+      .getByTestId("searchable-select-option")
       .first();
     await firstUserOption.waitFor({ state: "visible", timeout: 5_000 });
     await firstUserOption.click();
+    // List should close after a successful pick.
+    await expect(list).toBeHidden({ timeout: 3_000 });
 
     // Pick PM role on the native <select>.
     await dialog
       .locator('[data-testid="add-team-member-role-select"]')
       .selectOption("PM");
 
-    // Save — the submit button is labelled "Add member" / "Adding…".
-    await dialog
-      .getByRole("button", { name: /^(Add member|Adding…|Save|Confirm)$/i })
-      .click();
+    // Save — submit button has a dedicated test id; fall back to the visible
+    // label if the test id is missing on an older build.
+    const submit = dialog.getByTestId("add-team-member-submit");
+    if (await submit.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await submit.click();
+    } else {
+      await dialog
+        .getByRole("button", { name: /^(Add member|Adding…|Save|Confirm)$/i })
+        .click();
+    }
 
     // Dialog closes + a PM row should be visible somewhere in the page.
     await expect(dialog).toBeHidden({ timeout: 10_000 });

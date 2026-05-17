@@ -567,6 +567,7 @@ function AddTeamMemberDialog({
             </button>
             <button
               type="submit"
+              data-testid="add-team-member-submit"
               disabled={isSubmitting}
               className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
             >
