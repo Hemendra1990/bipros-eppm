@@ -630,11 +630,29 @@ public class CostService {
         // canonical planned-cost total so the field is never null on a project that has
         // resource assignments. This matches what EVM BAC uses as its baseline.
         Project project = projectRepository.findById(projectId).orElse(null);
+        // OBS-5 unit fix: project.originalBudget / currentBudget are stored in the currency's
+        // "major-scale" unit (crores for INR = 1e7, millions for every other currency = 1e6) —
+        // matches the Set-Budget UI, formatBudget helper, and seeders. The rest of the cost
+        // summary (totalBudget, totalActual, materialProcurement, etc.) is in raw currency units,
+        // so we convert the project budget to raw units here to mirror EvmService (lines 108-128).
+        // Without this, /cost-summary returns projectOriginalBudget=0.02 alongside totals in lakhs.
         BigDecimal projectOriginalBudget = project != null ? project.getOriginalBudget() : null;
+        BigDecimal projectCurrentBudget = project != null ? project.getCurrentBudget() : null;
+        if (project != null) {
+            String currency = project.getBudgetCurrency();
+            BigDecimal majorUnitFactor = "INR".equalsIgnoreCase(currency)
+                    ? new BigDecimal("10000000")   // 1 crore = 10^7
+                    : new BigDecimal("1000000");   // 1 million = 10^6 (OMR and all others)
+            if (projectOriginalBudget != null && projectOriginalBudget.signum() > 0) {
+                projectOriginalBudget = projectOriginalBudget.multiply(majorUnitFactor);
+            }
+            if (projectCurrentBudget != null && projectCurrentBudget.signum() > 0) {
+                projectCurrentBudget = projectCurrentBudget.multiply(majorUnitFactor);
+            }
+        }
         if (projectOriginalBudget == null) {
             projectOriginalBudget = totalBudget.compareTo(BigDecimal.ZERO) > 0 ? totalBudget : null;
         }
-        BigDecimal projectCurrentBudget = project != null ? project.getCurrentBudget() : null;
 
         return CostSummaryDto.of(totalBudget, totalActual, totalRemaining, atCompletion,
             expenses.size(), materialProcurement, openStock, materialIssued,

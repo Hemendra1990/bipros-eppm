@@ -1,5 +1,6 @@
 package com.bipros.project.application.service;
 
+import com.bipros.common.event.ResourceDeploymentSavedEvent;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateDailyResourceDeploymentRequest;
@@ -11,6 +12,7 @@ import com.bipros.project.domain.repository.DailyResourceDeploymentRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ public class DailyResourceDeploymentService {
   private final ProjectRepository projectRepository;
   private final AuditService auditService;
   private final ResourceAssignmentPlannedHeadcountResolver plannedHeadcountResolver;
+  private final ApplicationEventPublisher eventPublisher;
 
   public DailyResourceDeploymentResponse create(UUID projectId, CreateDailyResourceDeploymentRequest request) {
     ensureProjectExists(projectId);
@@ -69,6 +72,16 @@ public class DailyResourceDeploymentService {
 
     DailyResourceDeployment saved = repository.save(deployment);
     auditService.logCreate("DailyResourceDeployment", saved.getId(), DailyResourceDeploymentResponse.from(saved));
+
+    eventPublisher.publishEvent(new ResourceDeploymentSavedEvent(
+        saved.getProjectId(),
+        saved.getId(),
+        saved.getLogDate(),
+        saved.getResourceType() != null ? saved.getResourceType().name() : null,
+        saved.getResourceId(),
+        saved.getResourceRoleId(),
+        ResourceDeploymentSavedEvent.EventType.CREATED));
+
     return DailyResourceDeploymentResponse.from(saved);
   }
 
@@ -115,6 +128,15 @@ public class DailyResourceDeploymentService {
     DailyResourceDeployment deployment = find(projectId, id);
     repository.delete(deployment);
     auditService.logDelete("DailyResourceDeployment", id);
+
+    eventPublisher.publishEvent(new ResourceDeploymentSavedEvent(
+        deployment.getProjectId(),
+        deployment.getId(),
+        deployment.getLogDate(),
+        deployment.getResourceType() != null ? deployment.getResourceType().name() : null,
+        deployment.getResourceId(),
+        deployment.getResourceRoleId(),
+        ResourceDeploymentSavedEvent.EventType.DELETED));
   }
 
   private DailyResourceDeployment find(UUID projectId, UUID id) {

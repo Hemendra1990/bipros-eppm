@@ -1,6 +1,8 @@
 package com.bipros.evm.application.service;
 
+import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.model.PercentCompleteType;
 import com.bipros.common.event.EvmRecalculatedEvent;
@@ -59,6 +61,7 @@ public class EvmService {
     private final ApplicationEventPublisher eventPublisher;
     private final FormulaEngine formulaEngine;
     private final DprActualCostLookup dprActualCostLookup;
+    private final PercentCompleteCalculator percentCompleteCalculator;
 
     @Transactional
     public EvmCalculationResponse calculateEvm(UUID projectId, CalculateEvmRequest request) {
@@ -86,6 +89,11 @@ public class EvmService {
         BigDecimal totalBac = BigDecimal.ZERO;
 
         for (Activity activity : activities) {
+            // On-demand percent-complete refresh: covers the gap when DPR listener was a no-op
+            // (e.g. fired before actualStartDate was persisted) and the nightly DurationPercentCompleteJob
+            // hasn't run yet. Without this, the strategy reads a stale 0 and EV is 0 even though
+            // the activity is partway through its planned duration.
+            refreshPercentCompleteIfStale(activity, dataDate);
             BigDecimal activityBac = EvmRollupService.getActivityBac(activity, expensesByActivity, assignmentsByActivity);
             BigDecimal activityPv = EvmRollupService.getActivityPv(activity, activityBac, dataDate);
             BigDecimal activityEv = strategy.calculateEarnedValue(activity, activityBac, activityPv);
@@ -100,11 +108,23 @@ public class EvmService {
         // Project-level BAC source of truth: Project.currentBudget (approved, change-controlled)
         // when set. Activity rollup is the bottom-up forecast (still available via the
         // CostAccountRollup endpoint for variance reporting).
+        //
+        // DEFECT-11 unit fix: project.currentBudget is stored in the currency's "major-scale"
+        // unit (crores for INR = 1e7, millions for every other currency = 1e6) — this matches
+        // the Set-Budget UI ("Amount (crores)" / "Amount (millions OMR)"), the formatBudget
+        // helper that renders it ("0.02 cr"), and the OmanRoadProjectSeeder. EV/AC/PV in this
+        // method are all in raw currency units (rupees / baisa-less OMR), so we must convert
+        // currentBudget to raw units before slotting it into totalBac. Without this, EVM
+        // returns BAC ≈ 0.02 alongside EV ≈ 62 500, garbage CPI/ETC/EAC.
         BigDecimal projectBac = project != null
                 ? (project.getCurrentBudget() != null ? project.getCurrentBudget() : project.getOriginalBudget())
                 : null;
         if (projectBac != null && projectBac.signum() > 0) {
-            totalBac = projectBac;
+            String currency = project.getBudgetCurrency();
+            BigDecimal majorUnitFactor = "INR".equalsIgnoreCase(currency)
+                    ? new BigDecimal("10000000")   // 1 crore = 10^7
+                    : new BigDecimal("1000000");   // 1 million = 10^6 (OMR and all others)
+            totalBac = projectBac.multiply(majorUnitFactor);
         }
 
         var calculation = new EvmCalculation();
@@ -254,6 +274,34 @@ public class EvmService {
         log.info("EVM[project={}]: project.dataDate is null — defaulting dataDate to LocalDate.now(). "
                 + "Set a dataDate on the project to anchor EVM computations.", projectId);
         return LocalDate.now();
+    }
+
+    /**
+     * For IN_PROGRESS DURATION/UNITS activities whose stored percentComplete is null or 0
+     * but whose actualStartDate + originalDuration imply progress against the given dataDate,
+     * recompute via {@link PercentCompleteCalculator} so the strategy sees the correct value.
+     * Non-mutating against the DB — only updates the in-memory entity for this calculation.
+     */
+    private void refreshPercentCompleteIfStale(Activity activity, LocalDate dataDate) {
+        if (activity == null || dataDate == null) return;
+        if (activity.getStatus() != ActivityStatus.IN_PROGRESS) return;
+        PercentCompleteType type = activity.getPercentCompleteType();
+        if (type != PercentCompleteType.DURATION) return; // UNITS needs unit sums we don't have here
+        Double current = activity.getPercentComplete();
+        if (current != null && current > 0.0) return; // already non-zero — trust it
+        try {
+            PercentCompleteCalculator.Result result =
+                    percentCompleteCalculator.calculate(activity, null, null, dataDate);
+            if (result == null || result.isKeepPrior() || result.percent() == null) return;
+            if (result.percent() > 0.0) {
+                activity.setPercentComplete(result.percent());
+                if (activity.getDurationPercentComplete() == null) {
+                    activity.setDurationPercentComplete(result.percent());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("refreshPercentCompleteIfStale: activity={} skipped due to {}", activity.getId(), e.toString());
+        }
     }
 
     private static EvmTechnique resolveEvmTechnique(PercentCompleteType type) {

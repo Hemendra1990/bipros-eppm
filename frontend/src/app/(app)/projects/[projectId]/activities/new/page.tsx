@@ -154,6 +154,26 @@ export default function NewActivityPage() {
         setError(result.error?.message ?? "Failed to create activity");
         notificationHelpers.handleApiError(result.error, "Failed to create activity");
       } else {
+        // POST /v1/projects/{id}/activities is part of the multi-supervisor
+        // refactor (commit 182141eb) and silently DROPS the supervisorUserId
+        // field on the request body. If the user picked a supervisor in the
+        // form, immediately follow up with the dedicated supervisor PUT so the
+        // selection actually persists. We do not roll back on failure — the
+        // activity is created; only the supervisor link is missing.
+        const createdId = result.data?.id;
+        if (createdId && formData.supervisorUserId) {
+          try {
+            await activityApi.setSupervisor(projectId, createdId, {
+              supervisorUserId: formData.supervisorUserId,
+              supervisorName: formData.supervisorUserName || null,
+            });
+          } catch (supErr: unknown) {
+            notificationHelpers.handleApiError(
+              supErr,
+              "Activity created, but failed to assign supervisor"
+            );
+          }
+        }
         activityNotifications.created();
         queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
         router.push(`/projects/${projectId}/activities`);

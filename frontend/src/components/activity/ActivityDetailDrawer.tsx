@@ -284,6 +284,7 @@ function DrawerInner({
                 projectId={projectId}
                 activityId={activityId}
                 locked={isLocked}
+                defaultDuration={activity?.originalDuration ?? activity?.duration ?? null}
               />
 
               {/* Read-only plan summary sits at the bottom of the demand section,

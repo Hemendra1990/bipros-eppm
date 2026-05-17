@@ -90,7 +90,7 @@ public class DprToDailyOutputListener {
     try {
       switch (type) {
         case CREATED, UPDATED -> reconcile(event);
-        case DELETED -> ledgerService.deleteDprLedger(
+        case DELETED -> ledgerService.deleteDprLedgerInNewTx(
             event.projectId(), event.dprId(), event.reportDate());
       }
     } catch (Exception e) {
@@ -112,7 +112,7 @@ public class DprToDailyOutputListener {
     if (dpr.getActivityId() == null) {
       // Free-text activity name only — cannot anchor a ledger row to an activity. Still clear
       // any stale ledger rows for this DPR in case activityId was unset on update.
-      ledgerService.reconcileDprLedger(
+      ledgerService.reconcileDprLedgerInNewTx(
           event.projectId(), event.dprId(), dpr.getReportDate(), List.of());
       return;
     }
@@ -174,7 +174,7 @@ public class DprToDailyOutputListener {
             hoursByResource.get(e.getKey()),
             null)));
 
-    ledgerService.reconcileDprLedger(
+    ledgerService.reconcileDprLedgerInNewTx(
         event.projectId(), event.dprId(), dpr.getReportDate(), aggregates);
   }
 }

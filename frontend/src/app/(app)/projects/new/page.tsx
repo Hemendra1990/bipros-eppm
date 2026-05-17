@@ -24,7 +24,7 @@ export default function NewProjectPage() {
     epsNodeId: "",
     plannedStartDate: "",
     plannedFinishDate: "",
-    priority: 5,
+    priority: 50,
     // Default to INR for back-compat with existing seed data; users on non-INR
     // projects (e.g. Oman OMR) MUST change this so EVM/cost cards label money
     // correctly and AI data-honesty gates don't mislabel an OMR audit as INR.

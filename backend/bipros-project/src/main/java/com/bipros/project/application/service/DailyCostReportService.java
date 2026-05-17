@@ -121,6 +121,11 @@ public class DailyCostReportService {
                     BigDecimal budgetedCost, BigDecimal actualCost,
                     BigDecimal variance, BigDecimal variancePct) {}
 
+    // Persisted DPR child-row costs per dprId — the authoritative actual-cost source. EVM AC
+     // reads the same numbers (via DprActualCostLookup), so the Daily Cost Report must agree.
+     // Falls back to BoqItem.actualRate × qty only when a DPR has no child line_cost at all.
+    Map<UUID, BigDecimal> dprActualCostById = loadActualCostByDprId(projectId, dprRows);
+
     List<Resolved> resolvedRows = new ArrayList<>(dprRows.size());
     BigDecimal periodBudgeted = BigDecimal.ZERO;
     BigDecimal periodActual = BigDecimal.ZERO;
@@ -133,14 +138,28 @@ public class DailyCostReportService {
       BoqItem b = match.item();
       if (match.viaLegacyFallback()) legacyFallbackCount++;
       BigDecimal budgetedRate = b != null ? b.getBudgetedRate() : null;
-      BigDecimal actualRate = b != null ? b.getActualRate() : null;
       BigDecimal qty = d.getQtyExecuted() != null ? d.getQtyExecuted() : BigDecimal.ZERO;
       BigDecimal budgetedCost = (budgetedRate == null)
           ? null
           : qty.multiply(budgetedRate).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
-      BigDecimal actualCost = (actualRate == null)
-          ? null
-          : qty.multiply(actualRate).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+
+      // Prefer the persisted DPR line_cost sum; fall back to BoqItem.actualRate × qty so legacy
+      // data (no DPR children) still renders. Derive actualRate from the sum when available.
+      BigDecimal dprSum = dprActualCostById.get(d.getId());
+      BigDecimal actualCost;
+      BigDecimal actualRate;
+      if (dprSum != null && dprSum.signum() != 0) {
+        actualCost = dprSum.setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+        actualRate = qty.signum() == 0
+            ? null
+            : dprSum.divide(qty, AMOUNT_SCALE, RoundingMode.HALF_UP);
+      } else {
+        BigDecimal boqActualRate = b != null ? b.getActualRate() : null;
+        actualRate = boqActualRate;
+        actualCost = (boqActualRate == null)
+            ? null
+            : qty.multiply(boqActualRate).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+      }
       BigDecimal variance = null;
       BigDecimal variancePct = null;
       if (budgetedCost != null && actualCost != null) {
@@ -163,8 +182,12 @@ public class DailyCostReportService {
     }
 
     // Fetch the latest EVM snapshot per activity in one shot. Activities without a snapshot
-    // get ETC/EAC = null on every row (the UI renders as "—").
+    // fall back to project-level CPI projection; if there is no project-level snapshot either,
+    // fall back to plain (budgetedCost - actualCost) so the UI shows a sensible ETC instead
+    // of "—" forever. The fallbacks are explicit (no silent zeros): we only render numbers
+    // when we have either an EVM snapshot or a budgetedCost to anchor against.
     Map<UUID, ActivityEvm> evmByActivity = loadLatestEvmByActivity(projectId, activityIds);
+    ProjectEvm projectEvm = loadLatestProjectLevelEvm(projectId);
 
     List<DailyCostReportRow> rows = new ArrayList<>(resolvedRows.size());
     for (Resolved r : resolvedRows) {
@@ -182,6 +205,39 @@ public class DailyCostReportService {
           if (evm.eac() != null) {
             eac = evm.eac().multiply(share).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
           }
+        }
+      }
+      // Fallback 1 — project-level EVM CPI applied to the row's remaining budget. Triggers when
+      // no per-activity EVM snapshot exists (which is the common case: EvmService persists only
+      // the project-level summary, not per-activity rows). Use the row's own budgetedCost / actual
+      // so per-row variance still drives the projection.
+      if ((etc == null || eac == null) && projectEvm != null
+          && r.budgetedCost() != null && r.actualCost() != null) {
+        // Clamp ETC at >= 0 — a row that is already over budget has zero work remaining
+        // to forecast against; reporting a negative ETC (or negative remaining when CPI<=0)
+        // is nonsense. EAC then equals actualCost (work done, nothing left to do).
+        BigDecimal remaining = r.budgetedCost().subtract(r.actualCost()).max(BigDecimal.ZERO);
+        BigDecimal cpi = projectEvm.cpi();
+        BigDecimal etcFallback;
+        if (cpi != null && cpi.signum() > 0) {
+          etcFallback = remaining.divide(cpi, AMOUNT_SCALE, RoundingMode.HALF_UP);
+        } else {
+          etcFallback = remaining.setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+        }
+        if (etc == null) etc = etcFallback;
+        if (eac == null) {
+          eac = r.actualCost().add(etcFallback).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+        }
+      }
+      // Fallback 2 — no EVM at all: plain budget remaining. Keeps the column populated so a
+      // viewer can spot row-level cost overruns even before the first EVM calculation.
+      // Clamp at >= 0 for the same reason as Fallback 1.
+      if ((etc == null || eac == null) && r.budgetedCost() != null && r.actualCost() != null) {
+        BigDecimal remaining = r.budgetedCost().subtract(r.actualCost()).max(BigDecimal.ZERO)
+            .setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+        if (etc == null) etc = remaining;
+        if (eac == null) {
+          eac = r.actualCost().add(remaining).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
         }
       }
       BoqItem b = r.boq();
@@ -244,6 +300,12 @@ public class DailyCostReportService {
   private record ActivityEvm(BigDecimal etc, BigDecimal eac) {}
 
   /**
+   * Project-level EVM snapshot used as the fallback when no per-activity row exists. CPI is the
+   * only field consumed; ETC/EAC are recomputed per row from CPI × (budget − actual).
+   */
+  private record ProjectEvm(BigDecimal cpi) {}
+
+  /**
    * Resolve a BoqItem for a DPR row. Order of preference:
    * <ol>
    *   <li>{@code boq_item_id} FK — the new canonical linkage (Workstream B1).</li>
@@ -283,6 +345,69 @@ public class DailyCostReportService {
    * Crossing schemas via raw SQL avoids a maven dep on bipros-evm from this module — matches
    * the existing pattern in {@code DailyProgressReportService}.
    */
+  /**
+   * Sum {@code line_cost} across {@code dpr_manpower + dpr_equipment + dpr_material} per dprId
+   * for the rows in this report window. Cross-schema raw SQL — matches the existing pattern in
+   * {@link DprActualCostLookup}. Returns an empty map when there are no DPRs.
+   */
+  @SuppressWarnings("unchecked")
+  private Map<UUID, BigDecimal> loadActualCostByDprId(UUID projectId, List<DailyProgressReport> dprs) {
+    if (dprs == null || dprs.isEmpty() || em == null) return Map.of();
+    List<UUID> dprIds = new ArrayList<>(dprs.size());
+    for (DailyProgressReport d : dprs) {
+      if (d.getId() != null) dprIds.add(d.getId());
+    }
+    if (dprIds.isEmpty()) return Map.of();
+    String sql =
+        "SELECT dpr_id, SUM(line_cost) FROM ("
+            + "  SELECT dpr_id, COALESCE(SUM(line_cost), 0) AS line_cost FROM project.dpr_manpower "
+            + "    WHERE dpr_id IN (:dprIds) GROUP BY dpr_id "
+            + "  UNION ALL "
+            + "  SELECT dpr_id, COALESCE(SUM(line_cost), 0) AS line_cost FROM project.dpr_equipment "
+            + "    WHERE dpr_id IN (:dprIds) GROUP BY dpr_id "
+            + "  UNION ALL "
+            + "  SELECT dpr_id, COALESCE(SUM(line_cost), 0) AS line_cost FROM project.dpr_material "
+            + "    WHERE dpr_id IN (:dprIds) GROUP BY dpr_id "
+            + ") combined GROUP BY dpr_id";
+    Query q = em.createNativeQuery(sql);
+    q.setParameter("dprIds", dprIds);
+    List<Object[]> rows = q.getResultList();
+    Map<UUID, BigDecimal> out = new HashMap<>(rows.size());
+    for (Object[] r : rows) {
+      UUID dprId = (UUID) r[0];
+      BigDecimal amount = r[1] == null ? BigDecimal.ZERO
+          : (r[1] instanceof BigDecimal b ? b : new BigDecimal(r[1].toString()));
+      out.put(dprId, amount);
+    }
+    return out;
+  }
+
+  /**
+   * Load the most recent project-level EVM row (wbs_node_id IS NULL AND activity_id IS NULL).
+   * Used as the fallback when {@link #loadLatestEvmByActivity} returns nothing for an activity —
+   * the EvmService only persists a single project-level snapshot today, so per-row ETC/EAC must
+   * be derived from project CPI × the row's own (budget − actual). Returns null when no EVM
+   * calculation has ever been run for the project.
+   */
+  @SuppressWarnings("unchecked")
+  private ProjectEvm loadLatestProjectLevelEvm(UUID projectId) {
+    if (em == null) return null;
+    String sql =
+        "SELECT cost_performance_index FROM evm.evm_calculations "
+            + "WHERE project_id = :projectId AND wbs_node_id IS NULL AND activity_id IS NULL "
+            + "ORDER BY data_date DESC, created_at DESC LIMIT 1";
+    Query q = em.createNativeQuery(sql);
+    q.setParameter("projectId", projectId);
+    List<Object> rows = q.getResultList();
+    if (rows.isEmpty()) return null;
+    Object raw = rows.get(0);
+    if (raw == null) return new ProjectEvm(null);
+    BigDecimal cpi = (raw instanceof BigDecimal b)
+        ? b
+        : (raw instanceof Number n ? BigDecimal.valueOf(n.doubleValue()) : null);
+    return new ProjectEvm(cpi);
+  }
+
   @SuppressWarnings("unchecked")
   private Map<UUID, ActivityEvm> loadLatestEvmByActivity(UUID projectId, Set<UUID> activityIds) {
     if (activityIds.isEmpty()) return Map.of();

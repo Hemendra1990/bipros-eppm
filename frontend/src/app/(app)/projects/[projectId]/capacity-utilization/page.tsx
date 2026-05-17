@@ -199,8 +199,8 @@ const Sc180SectionTable = memo(function Sc180SectionTable({
             </tr>
           </thead>
           <tbody>
-            {section.rows.map((r) => (
-              <tr key={r.roleId} className="border-t border-border/50 hover:bg-surface/30">
+            {section.rows.map((r, i) => (
+              <tr key={`${r.roleId ?? "no-role"}-${i}`} className="border-t border-border/50 hover:bg-surface/30">
                 <td className="px-4 py-3 align-top">
                   <div className="text-text-primary">{r.roleName ?? "(role)"}</div>
                   {r.roleCode && (

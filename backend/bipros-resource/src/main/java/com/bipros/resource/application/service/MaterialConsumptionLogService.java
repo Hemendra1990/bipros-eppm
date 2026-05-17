@@ -2,6 +2,7 @@ package com.bipros.resource.application.service;
 
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.common.event.MaterialConsumptionLoggedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.SecurityContextHelper;
@@ -17,6 +18,7 @@ import com.bipros.resource.domain.repository.MaterialRateMasterRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +43,7 @@ public class MaterialConsumptionLogService {
   private final MaterialRateMasterRepository materialRateMasterRepository;
   private final AuditService auditService;
   private final SecurityContextHelper securityContextHelper;
+  private final ApplicationEventPublisher eventPublisher;
 
   public MaterialConsumptionLogResponse create(
       UUID projectId, CreateMaterialConsumptionLogRequest request) {
@@ -91,6 +94,13 @@ public class MaterialConsumptionLogService {
       }
     }
 
+    // Caller-supplied enteredByRole wins (e.g. UI explicit "Storekeeper view"); fall back
+    // to deriving from the authenticated principal when the request did not set it.
+    String enteredByRole = request.enteredByRole();
+    if (enteredByRole == null || enteredByRole.isBlank()) {
+      enteredByRole = resolveEnteredByRole();
+    }
+
     MaterialConsumptionLog entity =
         MaterialConsumptionLog.builder()
             .projectId(projectId)
@@ -105,12 +115,14 @@ public class MaterialConsumptionLogService {
             .wastagePercent(request.wastagePercent())
             .issuedBy(request.issuedBy())
             .receivedBy(request.receivedBy())
+            .issuedByUserId(request.issuedByUserId())
+            .receivedByUserId(request.receivedByUserId())
             .wbsNodeId(request.wbsNodeId())
             .activityId(request.activityId())
             .unitRate(unitRate)
             .lineCost(lineCost)
             .materialRateMasterId(rateMasterId)
-            .enteredByRole(resolveEnteredByRole())
+            .enteredByRole(enteredByRole)
             .remarks(request.remarks())
             .build();
 
@@ -119,6 +131,18 @@ public class MaterialConsumptionLogService {
 
     auditService.logCreate(
         "MaterialConsumptionLog", saved.getId(), MaterialConsumptionLogResponse.from(saved));
+
+    eventPublisher.publishEvent(new MaterialConsumptionLoggedEvent(
+        saved.getProjectId(),
+        saved.getId(),
+        saved.getLogDate(),
+        saved.getActivityId(),
+        saved.getWbsNodeId(),
+        saved.getMaterialRateMasterId(),
+        saved.getIssuedByUserId(),
+        saved.getReceivedByUserId(),
+        saved.getLineCost(),
+        MaterialConsumptionLoggedEvent.EventType.CREATED));
 
     return MaterialConsumptionLogResponse.from(saved);
   }
@@ -180,6 +204,18 @@ public class MaterialConsumptionLogService {
     }
     repository.delete(entity);
     auditService.logDelete("MaterialConsumptionLog", id);
+
+    eventPublisher.publishEvent(new MaterialConsumptionLoggedEvent(
+        entity.getProjectId(),
+        entity.getId(),
+        entity.getLogDate(),
+        entity.getActivityId(),
+        entity.getWbsNodeId(),
+        entity.getMaterialRateMasterId(),
+        entity.getIssuedByUserId(),
+        entity.getReceivedByUserId(),
+        entity.getLineCost(),
+        MaterialConsumptionLoggedEvent.EventType.DELETED));
   }
 
   /**

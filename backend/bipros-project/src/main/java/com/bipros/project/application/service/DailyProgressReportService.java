@@ -732,7 +732,13 @@ public class DailyProgressReportService {
         AssignmentSnapshot snap = lookupAssignmentSnapshot(row.resourceAssignmentId(), reportDate);
         if (canValidate) requireKind(row.resourceAssignmentId(), snap, "MANPOWER", activityId);
         BigDecimal unitRate = pickUnitRate(row.unitRate(), snap);
-        String basis = pickBasis(row.unitRateBasis(), snap);
+        // Manpower defaults to HOUR — matches equipment and the per-hour math the client posts
+        // (nos × workingHours × unitRate). Snapshot basis derived from resource.unit is often a
+        // productivity unit (e.g. "PER_DAY") that doesn't match the actual rate basis, so we
+        // only honour an explicit client-provided basis; otherwise default to HOUR.
+        String basis = row.unitRateBasis() != null && !row.unitRateBasis().isBlank()
+            ? row.unitRateBasis()
+            : "HOUR";
         // Legacy "rate-missing:" warning removed: in the role-only model the rate flows from
         // manpower_role_rates via RoleRateResolver/ensureAssignmentsExist, which emits its own
         // MISSING_RATE: ... warning only when truly absent. The legacy resource_id chain that

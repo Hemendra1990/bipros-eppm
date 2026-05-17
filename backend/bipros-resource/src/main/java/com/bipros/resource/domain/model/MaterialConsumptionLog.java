@@ -68,6 +68,21 @@ public class MaterialConsumptionLog extends BaseEntity {
   @Column(name = "received_by", length = 150)
   private String receivedBy;
 
+  /**
+   * Soft FK to {@code public.users.id}. The user who issued the material from store.
+   * Surfaced for the DBS rollup so consumption can be attributed by storekeeper / supervisor
+   * identity. The legacy {@link #issuedBy} free-text column is retained for back-compat.
+   */
+  @Column(name = "issued_by_user_id")
+  private UUID issuedByUserId;
+
+  /**
+   * Soft FK to {@code public.users.id}. The user (typically the site supervisor) who
+   * received the material at site. Legacy {@link #receivedBy} text column retained.
+   */
+  @Column(name = "received_by_user_id")
+  private UUID receivedByUserId;
+
   @Column(name = "wbs_node_id")
   private UUID wbsNodeId;
 

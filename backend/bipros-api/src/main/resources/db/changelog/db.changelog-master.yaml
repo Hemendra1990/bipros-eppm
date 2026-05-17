@@ -173,3 +173,9 @@ databaseChangeLog:
       file: db/changelog/099-deployment-nos-planned-auto.yaml
   - include:
       file: db/changelog/100-dpr-boq-item-id-and-manual-override.yaml
+  - include:
+      file: db/changelog/101-project-team.yaml
+  - include:
+      file: db/changelog/102-material-consumption-user-cols.yaml
+  - include:
+      file: db/changelog/103-dbs-tables.yaml
