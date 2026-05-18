@@ -108,19 +108,22 @@ public class DailyProgressReportService {
     // execution data against it is meaningless. Lock the activity to start accepting DPRs.
     rejectIfActivityDraft(request.activityId());
 
-    // Reject duplicate DPRs for the same (project, day, activity). The ledger
-    // (daily_activity_resource_outputs) has a unique key on (project, date, activity, resource);
-    // two DPRs that overlap on resources for the same activity on the same day collide on save.
-    // The user should edit the existing DPR instead of creating a parallel one.
-    if (request.activityId() != null && request.reportDate() != null) {
-      dprRepository.findFirstByProjectIdAndReportDateAndActivityId(
-              projectId, request.reportDate(), request.activityId())
+    // Reject duplicate DPRs from the *same supervisor* for the same (project, day, activity).
+    // Multi-supervisor model: an activity can have two or more supervisors and each may file
+    // their own DPR for the same date — uniqueness is per supervisor, not per activity. Resource
+    // overlap between two supervisors' DPRs is still blocked by the ledger's unique key on
+    // (project, date, activity, resource). Legacy free-text DPRs (supervisor_user_id null) skip
+    // this check; the ledger handles the collision case.
+    if (request.activityId() != null
+        && request.reportDate() != null
+        && request.supervisorUserId() != null) {
+      dprRepository.findFirstByProjectIdAndReportDateAndActivityIdAndSupervisorUserId(
+              projectId, request.reportDate(), request.activityId(), request.supervisorUserId())
           .ifPresent(existing -> {
             throw new com.bipros.common.exception.BusinessRuleException(
                 "DPR_ALREADY_EXISTS_FOR_ACTIVITY",
-                "A DPR for this activity on " + request.reportDate()
-                    + " already exists. Edit the existing entry to add or update resources, "
-                    + "rather than creating a parallel one.");
+                "A DPR for this supervisor on this activity for " + request.reportDate()
+                    + " already exists. Edit the existing entry instead of creating a parallel one.");
           });
     }
 
