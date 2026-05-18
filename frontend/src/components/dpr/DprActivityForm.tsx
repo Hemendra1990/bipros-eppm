@@ -1047,7 +1047,10 @@ export function DprActivityForm({
 
       {state.activityId && (
         <div className="px-5">
-          <ProductivityCoverageBanner coverage={preview?.coverage ?? null} />
+          <ProductivityCoverageBanner
+            coverage={preview?.coverage ?? null}
+            normCombination={preview?.normCombination}
+          />
         </div>
       )}
 
