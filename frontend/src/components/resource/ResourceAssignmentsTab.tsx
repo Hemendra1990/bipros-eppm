@@ -122,7 +122,15 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       const poolEntry = a.resourceId ? poolMap.get(a.resourceId) : undefined;
       const activity = activityMap.get(a.activityId);
       const anyA = a as unknown as Record<string, unknown>;
-      const plannedUnits = a.plannedUnits;
+      // Display the raw nos the planner entered. plannedUnits in the DB is headcount × duration
+      // (person-days for DPR/EVA), but the user thinks in terms of headcount; show that here.
+      // Material assignments use quantity. Fall back to plannedUnits for legacy rows.
+      const plannedUnits =
+        a.headcount != null
+          ? a.headcount
+          : a.quantity != null
+            ? Number(a.quantity)
+            : a.plannedUnits;
       const actualUnits = a.actualUnits;
       const plannedCost = (anyA.plannedCost as number) ?? 0;
       const actualCost = (anyA.actualCost as number) ?? 0;

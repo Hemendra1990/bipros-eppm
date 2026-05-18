@@ -41,6 +41,11 @@ export function WorkActivityCoverageChip({ workActivityId }: Props) {
   if (!summaryLine) return null;
 
   const muted = coverage.summary === "NONE";
+  // Master's default unit — appended to every norm output figure so "50 per man/day" reads
+  // as "50 kg per man/day". Without it the planner can't tell whether 50 means 50 kg, 50 m³
+  // or 50 Sqm, which is the difference between an accurate productivity % and a wrong one.
+  const unit = coverage.defaultUnit ?? "";
+  const u = unit ? ` ${unit}` : "";
 
   return (
     <div
@@ -59,14 +64,14 @@ export function WorkActivityCoverageChip({ workActivityId }: Props) {
               {coverage.manpower.norms.map((n, i) => (
                 <li key={`mp-${i}`}>
                   <span className="font-medium">Manpower</span> · {n.label}
-                  {n.outputPerManPerDay != null && ` — ${n.outputPerManPerDay} per man/day`}
-                  {n.outputPerDay != null && ` (gang ${n.outputPerDay}/day)`}
+                  {n.outputPerManPerDay != null && ` — ${n.outputPerManPerDay}${u} per man/day`}
+                  {n.outputPerDay != null && ` (gang ${n.outputPerDay}${u}/day)`}
                 </li>
               ))}
               {coverage.equipment.norms.map((n, i) => (
                 <li key={`eq-${i}`}>
                   <span className="font-medium">Equipment</span> · {n.label}
-                  {n.outputPerDay != null && ` — ${n.outputPerDay}/day`}
+                  {n.outputPerDay != null && ` — ${n.outputPerDay}${u}/day`}
                   {n.workingHoursPerDay != null && ` over ${n.workingHoursPerDay}h`}
                 </li>
               ))}

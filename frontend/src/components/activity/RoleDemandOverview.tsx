@@ -33,10 +33,22 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
     [resp],
   );
 
+  // "Planned Units" displays the raw nos the planner entered (headcount for manpower/equipment,
+  // quantity for material). The backend's plannedUnits column stores headcount × duration as
+  // person-days for DPR/EVA rollups — that's the right number for those calculations, but the
+  // user thinks in nos and seeing 100 × 30 = 3000 here is confusing. Fall back to plannedUnits
+  // only for legacy rows that lack the raw nos.
+  const displayPlannedUnits = (r: RoleAssignmentResponse) =>
+    r.headcount != null
+      ? r.headcount
+      : r.quantity != null
+        ? Number(r.quantity)
+        : r.plannedUnits ?? 0;
+
   const totals = useMemo(() => {
     return rows.reduce(
       (acc, r) => {
-        acc.plannedUnits += r.plannedUnits ?? 0;
+        acc.plannedUnits += displayPlannedUnits(r);
         acc.actualUnits += r.actualUnits ?? 0;
         acc.remainingUnits += r.remainingUnits ?? 0;
         acc.plannedCost += r.plannedCost ?? 0;
@@ -53,6 +65,7 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
         remainingCost: 0,
       },
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
   const sz = compact ? "text-xs" : "text-sm";
@@ -121,7 +134,7 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
                   )}
                 </td>
                 <td className={`${pad} text-text-secondary`}>{r.variantLabel ?? "—"}</td>
-                <td className={`${pad} text-right tabular-nums ${cellPlanned}`}>{fmtNum(r.plannedUnits)}</td>
+                <td className={`${pad} text-right tabular-nums ${cellPlanned}`}>{fmtNum(displayPlannedUnits(r))}</td>
                 <td className={`${pad} text-right tabular-nums ${cellActual}`}>{fmtNum(r.actualUnits)}</td>
                 <td className={`${pad} text-right tabular-nums ${cellRemaining}`}>{fmtNum(r.remainingUnits)}</td>
                 <td className={`${pad} text-right tabular-nums ${cellPlanned}`}>{fmtCost(r.plannedCost)}</td>
