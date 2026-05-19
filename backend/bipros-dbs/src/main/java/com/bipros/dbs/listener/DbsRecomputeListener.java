@@ -63,7 +63,12 @@ public class DbsRecomputeListener {
         // (see WARN with stack trace below).
         log.info("DbsRecomputeListener.onDpr received projectId={} dprId={} supervisor={} date={} type={}",
             e.projectId(), e.dprId(), e.supervisorUserId(), e.reportDate(), e.eventType());
-        recomputeChain(e.projectId(), e.supervisorUserId(), e.reportDate());
+        // Fan out to every supervisor with a DPR on (project, date) — not just the
+        // submitting one. When the submitting DPR changes BOQ qty_executed_to_date,
+        // the cumulative figures on OTHER supervisors' rows go stale. Project-wide
+        // recompute keeps the engineer/CM/PM rollups consistent. Same pattern used
+        // by onDeployment / onMaterial below.
+        recomputeProjectForDate(e.projectId(), e.reportDate());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

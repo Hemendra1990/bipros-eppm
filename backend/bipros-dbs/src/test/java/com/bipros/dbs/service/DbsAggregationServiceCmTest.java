@@ -12,6 +12,7 @@ import com.bipros.dbs.service.calculator.SectionCMachineryCalculator;
 import com.bipros.dbs.service.calculator.SectionDFuelCalculator;
 import com.bipros.dbs.service.calculator.SectionEMaterialCalculator;
 import com.bipros.dbs.service.calculator.SectionFBoqCalculator;
+import com.bipros.dbs.service.calculator.SectionFBoqCalculator.BoqCumulative;
 import com.bipros.project.application.service.ProjectTeamService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +31,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -115,6 +117,12 @@ class DbsAggregationServiceCmTest {
         when(cmRepo.findByProjectIdAndCmUserIdAndReportDate(projectId, cmId, date))
             .thenReturn(Optional.empty());
         when(cmRepo.save(any(DbsDailyCm.class))).thenAnswer(inv -> inv.getArgument(0));
+        // BOQ cumulative now comes from a deduped scope query, not a sum across supervisor
+        // rows. Stub the planned/achieved this CM scope is expected to see:
+        //   planned = 200000 (single unique BOQ item both supervisors touched),
+        //   achieved = 120000 (cumulative qty × rate at the time of recompute).
+        when(boqCalc.computeCumulativeForScope(eq(projectId), eq(date), any()))
+            .thenReturn(new BoqCumulative(new BigDecimal("200000.00"), new BigDecimal("120000.00")));
 
         DbsDailyCm result = service.recomputeCmDay(projectId, cmId, date);
 

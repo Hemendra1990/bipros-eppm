@@ -20,14 +20,14 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * Phase 7: verifies {@link SectionFBoqCalculator} buckets each BOQ line into
- * {@code directBoqAmount} or {@code prelimBoqAmount} according to the underlying
- * activity's {@code is_preliminary} flag returned by the SQL projection.
- *
- * <p>The calculator runs a native query against {@code project.daily_progress_reports
- * JOIN project.boq_items LEFT JOIN activity.activities}. We mock the {@link EntityManager}
- * to return a synthetic two-row result — one non-preliminary, one preliminary — and assert
- * the resulting {@link BoqSectionResult} splits the per-day amount correctly.
+ * Phase 7 + cumulative-scope fix: verifies {@link SectionFBoqCalculator}
+ * <ol>
+ *   <li>buckets each BOQ line into {@code directBoqAmount} / {@code prelimBoqAmount}
+ *       according to the activity's {@code is_preliminary} flag, AND</li>
+ *   <li>only populates cumulative {@code plannedAmount} / {@code achievedAmount} in
+ *       project scope ({@code supervisorUserId == null}). In supervisor scope it
+ *       returns zero, so the per-tier rollups do not double-count when summed.</li>
+ * </ol>
  */
 @ExtendWith(MockitoExtension.class)
 class SectionFBoqCalculatorPrelimSplitTest {
@@ -36,9 +36,9 @@ class SectionFBoqCalculatorPrelimSplitTest {
     @Mock private Query nativeQuery;
 
     @Test
-    @DisplayName("compute splits forTheDayAmount into directBoqAmount vs prelimBoqAmount by is_preliminary")
+    @DisplayName("supervisor scope: forTheDay split is computed but cumulative planned/achieved are zero")
     @SuppressWarnings({"unchecked", "rawtypes"})
-    void compute_splitsDirectAndPrelim() throws Exception {
+    void compute_supervisorScope_zerosCumulative() throws Exception {
         SectionFBoqCalculator calc = new SectionFBoqCalculator();
         injectEntityManager(calc, em);
 
@@ -49,16 +49,11 @@ class SectionFBoqCalculatorPrelimSplitTest {
         UUID boq1 = UUID.randomUUID();
         UUID boq2 = UUID.randomUUID();
 
-        // Row 0: non-prelim activity. itemNo, description, unit, rate, qtyToday, plannedAmount,
-        //        qtyToDate, boqId, isPreliminary.
-        //   amount today = 10 × 100 = 1000.00
         Object[] direct = new Object[]{
             "BOQ-001", "Earthwork in cutting", "cum",
             new BigDecimal("100"), new BigDecimal("10"), new BigDecimal("50000"),
             new BigDecimal("100"), boq1, Boolean.FALSE
         };
-        // Row 1: prelim activity (Mobilization).
-        //   amount today = 1 × 250 = 250.00
         Object[] prelim = new Object[]{
             "BOQ-100", "Mobilisation", "LS",
             new BigDecimal("250"), new BigDecimal("1"), new BigDecimal("5000"),
@@ -71,23 +66,56 @@ class SectionFBoqCalculatorPrelimSplitTest {
 
         BoqSectionResult result = calc.compute(projectId, supId, date);
 
-        // forTheDay totals 1000 + 250 = 1250
+        // For-the-day math still runs per supervisor — these stay correct.
         assertThat(result.forTheDayAmount()).isEqualByComparingTo("1250.00");
-        // Direct bucket gets only the non-preliminary line's amount.
         assertThat(result.directBoqAmount()).isEqualByComparingTo("1000.00");
-        // Prelim bucket gets only the preliminary line's amount.
         assertThat(result.prelimBoqAmount()).isEqualByComparingTo("250.00");
-        // Direct + Prelim = ForTheDay (round-trip invariant).
         assertThat(result.directBoqAmount().add(result.prelimBoqAmount()))
             .isEqualByComparingTo(result.forTheDayAmount());
 
-        // planned-to-date = 50000 + 5000 (distinct BOQ ids only counted once each)
-        assertThat(result.plannedAmount()).isEqualByComparingTo("55000.00");
-        // achieved-to-date = 100×100 + 2×250 = 10000 + 500 = 10500
-        assertThat(result.achievedAmount()).isEqualByComparingTo("10500.00");
+        // Cumulative figures must be zero in supervisor scope so the engineer/CM/PM
+        // rollups don't double-count when two supervisors share a BOQ item.
+        assertThat(result.plannedAmount()).isEqualByComparingTo("0");
+        assertThat(result.achievedAmount()).isEqualByComparingTo("0");
 
         // The flat line list always carries every DPR row (no de-dupe).
         assertThat(result.lines()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("project scope (null supervisor): cumulative planned/achieved are computed and deduped")
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void compute_projectScope_populatesCumulative() throws Exception {
+        SectionFBoqCalculator calc = new SectionFBoqCalculator();
+        injectEntityManager(calc, em);
+
+        UUID projectId = UUID.randomUUID();
+        LocalDate date = LocalDate.of(2026, 5, 18);
+
+        UUID boq1 = UUID.randomUUID();
+        UUID boq2 = UUID.randomUUID();
+
+        Object[] direct = new Object[]{
+            "BOQ-001", "Earthwork in cutting", "cum",
+            new BigDecimal("100"), new BigDecimal("10"), new BigDecimal("50000"),
+            new BigDecimal("100"), boq1, Boolean.FALSE
+        };
+        Object[] prelim = new Object[]{
+            "BOQ-100", "Mobilisation", "LS",
+            new BigDecimal("250"), new BigDecimal("1"), new BigDecimal("5000"),
+            new BigDecimal("2"), boq2, Boolean.TRUE
+        };
+
+        when(em.createNativeQuery(anyString())).thenReturn(nativeQuery);
+        when(nativeQuery.setParameter(anyString(), any())).thenReturn(nativeQuery);
+        when(nativeQuery.getResultList()).thenReturn((List) List.of(direct, prelim));
+
+        BoqSectionResult result = calc.compute(projectId, null, date);
+
+        // Project scope must populate cumulative — these are the values the PM rollup
+        // historically used. planned dedupes by boq_id; achieved = qty_to_date × rate.
+        assertThat(result.plannedAmount()).isEqualByComparingTo("55000.00");
+        assertThat(result.achievedAmount()).isEqualByComparingTo("10500.00");
     }
 
     @Test

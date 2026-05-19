@@ -341,20 +341,20 @@ export function PmDbsTab({
             data-testid="pm-prelim-kpis"
           >
             <KpiTile
-              label="Direct Cost"
+              label="Direct BOQ Value"
               value={formatCurrency(day.directCost ?? 0, currency)}
-              hint="Excl. preliminaries"
+              hint="Today's BOQ income · excl. preliminaries"
               tone="warning"
             />
             <KpiTile
-              label="Prelim Cost"
+              label="Prelim BOQ Value"
               value={formatCurrency(day.prelimCost ?? 0, currency)}
-              hint="BOQ Section 1 items"
+              hint="Today's BOQ income · prelim items only"
             />
             <KpiTile
-              label="Cost incl Prelims"
+              label="Total BOQ Value"
               value={formatCurrency(day.totalCostInclPrelims ?? 0, currency)}
-              hint="Direct + Prelim"
+              hint="Direct + Prelim BOQ value today"
               tone="accent"
             />
             <KpiTile
@@ -364,7 +364,7 @@ export function PmDbsTab({
                   ? formatPercent(day.pctAchieved)
                   : "—"
               }
-              hint="BOQ achieved-to-date ÷ planned-to-date"
+              hint="qty executed-to-date ÷ planned"
               tone={
                 day.pctAchieved != null && day.pctAchieved >= 95
                   ? "success"
@@ -407,7 +407,7 @@ export function PmDbsTab({
                 <KpiTile
                   label="Cumulative Income"
                   value={formatCurrency(day.cumulativeIncome ?? 0, currency)}
-                  hint="BOQ achieved-to-date × rate"
+                  hint="qty executed-to-date × boq_rate"
                   tone="accent"
                 />
                 <KpiTile

@@ -184,13 +184,24 @@ public class DbsAggregationService {
         applyAggregates(row::setMaterialAmount, supRows, DbsDailySupervisor::getMaterialAmount);
         applyAggregates(row::setSubcontractAmount, supRows, DbsDailySupervisor::getSubcontractAmount);
         applyAggregates(row::setBoqForTheDayAmount, supRows, DbsDailySupervisor::getBoqForTheDayAmount);
-        applyAggregates(row::setBoqPlannedAmount, supRows, DbsDailySupervisor::getBoqPlannedAmount);
-        applyAggregates(row::setBoqAchievedAmount, supRows, DbsDailySupervisor::getBoqAchievedAmount);
         applyAggregates(row::setTotalExpense, supRows, DbsDailySupervisor::getTotalExpense);
         applyAggregates(row::setTotalIncome, supRows, DbsDailySupervisor::getTotalIncome);
 
+        // BOQ cumulative planned/achieved must be DEDUPED at engineer scope — summing the
+        // supervisor rows double-counts whenever two supervisors of this engineer touched
+        // the same BOQ item. computeCumulativeForScope runs a single SELECT DISTINCT over
+        // boq_items filtered to this engineer's supervisors on the date.
+        SectionFBoqCalculator.BoqCumulative engCum = boqCalc.computeCumulativeForScope(
+            projectId, date,
+            supRows.stream()
+                .map(DbsDailySupervisor::getSupervisorUserId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet()));
+        row.setBoqPlannedAmount(engCum.planned());
+        row.setBoqAchievedAmount(engCum.achieved());
+
         // Phase 7: prelim split rolls up by simple summation. totalCostInclPrelims is
-        // a derived sum-of-sums; pctAchieved is recomputed from the aggregated planned/
+        // a derived sum-of-sums; pctAchieved is recomputed from the deduped planned/
         // achieved totals (rather than averaging per-supervisor percentages, which would
         // over-weight supervisors with small denominators).
         BigDecimal directCost = sumOf(supRows, DbsDailySupervisor::getDirectCost);
@@ -250,8 +261,15 @@ public class DbsAggregationService {
         row.setMaterialAmount(sumOf(supRows, DbsDailySupervisor::getMaterialAmount));
 
         BigDecimal boqForDay = sumOf(supRows, DbsDailySupervisor::getBoqForTheDayAmount);
-        BigDecimal boqPlanned = sumOf(supRows, DbsDailySupervisor::getBoqPlannedAmount);
-        BigDecimal boqAchieved = sumOf(supRows, DbsDailySupervisor::getBoqAchievedAmount);
+        // BOQ cumulative is DEDUPED at CM scope — see comment on the engineer rollup.
+        SectionFBoqCalculator.BoqCumulative cmCum = boqCalc.computeCumulativeForScope(
+            projectId, date,
+            supRows.stream()
+                .map(DbsDailySupervisor::getSupervisorUserId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet()));
+        BigDecimal boqPlanned = cmCum.planned();
+        BigDecimal boqAchieved = cmCum.achieved();
         row.setBoqForTheDayAmount(boqForDay);
         row.setBoqPlannedToDate(boqPlanned);
         row.setBoqAchievedToDate(boqAchieved);
@@ -408,11 +426,16 @@ public class DbsAggregationService {
             DbsDailySupervisor::getMaterialAmount, materialLegacyOnly);
         applyAggregates(row::setSubcontractAmount, supRows, DbsDailySupervisor::getSubcontractAmount);
         applyAggregates(row::setBoqForTheDayAmount, supRows, DbsDailySupervisor::getBoqForTheDayAmount);
-        applyAggregates(row::setBoqPlannedAmount, supRows, DbsDailySupervisor::getBoqPlannedAmount);
-        applyAggregates(row::setBoqAchievedAmount, supRows, DbsDailySupervisor::getBoqAchievedAmount);
+
+        // BOQ cumulative is DEDUPED at project scope (null filter = project-wide). Summing
+        // supervisor rows would double-count whenever two supervisors share a BOQ item.
+        SectionFBoqCalculator.BoqCumulative projCum = boqCalc.computeCumulativeForScope(
+            projectId, date, null);
+        row.setBoqPlannedAmount(projCum.planned());
+        row.setBoqAchievedAmount(projCum.achieved());
 
         // Phase 7: project-wide prelim split sums the per-supervisor split and recomputes
-        // pctAchieved against the aggregated planned/achieved.
+        // pctAchieved against the deduped planned/achieved.
         BigDecimal projectDirect = sumOf(supRows, DbsDailySupervisor::getDirectCost);
         BigDecimal projectPrelim = sumOf(supRows, DbsDailySupervisor::getPrelimCost);
         row.setDirectCost(projectDirect);
