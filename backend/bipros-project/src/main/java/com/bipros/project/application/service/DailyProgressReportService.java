@@ -1464,11 +1464,13 @@ public class DailyProgressReportService {
         s(r.roleId()) + "|" + s(r.manpowerRoleRateId()) + "|"
             + n(r.nos()) + "|" + b(r.workingHours()) + "|" + b(r.otHours()) + "|" + b(r.idleHours())
             + "|" + nz(r.contractorName()) + "|" + nz(r.remarks())
+            + "|" + sh(r.shift())
     ).sorted().toList();
     List<String> e = existing.stream().map(r ->
         s(r.getRoleId()) + "|" + s(r.getManpowerRoleRateId()) + "|"
             + n(r.getNos()) + "|" + b(r.getWorkingHours()) + "|" + b(r.getOtHours()) + "|" + b(r.getIdleHours())
             + "|" + nz(r.getContractorName()) + "|" + nz(r.getRemarks())
+            + "|" + sh(r.getShift())
     ).sorted().toList();
     return a.equals(e);
   }
@@ -1482,12 +1484,14 @@ public class DailyProgressReportService {
             + n(r.nos()) + "|" + b(r.workingHours()) + "|" + b(r.idleHours()) + "|"
             + b(r.breakdownHours()) + "|" + b(r.fuelLitres()) + "|"
             + nz(r.operatorName()) + "|" + nz(r.remarks())
+            + "|" + sh(r.shift())
     ).sorted().toList();
     List<String> e = existing.stream().map(r ->
         s(r.getRoleId()) + "|" + s(r.getEquipmentRoleVariantId()) + "|" + nz(r.getFleetNo()) + "|"
             + n(r.getNos()) + "|" + b(r.getWorkingHours()) + "|" + b(r.getIdleHours()) + "|"
             + b(r.getBreakdownHours()) + "|" + b(r.getFuelLitres()) + "|"
             + nz(r.getOperatorName()) + "|" + nz(r.getRemarks())
+            + "|" + sh(r.getShift())
     ).sorted().toList();
     return a.equals(e);
   }
@@ -1513,5 +1517,8 @@ public class DailyProgressReportService {
     return d == null ? "" : d.stripTrailingZeros().toPlainString();
   }
   private static String nz(String x) { return x == null ? "" : x; }
+  private static String sh(com.bipros.project.domain.model.Shift s) {
+    return s == null ? "DAY" : s.name();
+  }
 
 }

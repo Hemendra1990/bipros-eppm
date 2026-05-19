@@ -90,6 +90,13 @@ public class DbsRecomputeListener {
                 if (engineerUserId != null) {
                     aggregationService.recomputeEngineerDay(projectId, engineerUserId, date);
                 }
+                // Phase 4: roll up to the CM tier when this supervisor reports through a CM.
+                UUID cmUserId = projectTeamService
+                    .resolveCmFor(projectId, supervisorUserId)
+                    .orElse(null);
+                if (cmUserId != null) {
+                    aggregationService.recomputeCmDay(projectId, cmUserId, date);
+                }
             }
             aggregationService.recomputeProjectDay(projectId, date);
             log.info("DBS recompute OK projectId={} supervisor={} date={}",

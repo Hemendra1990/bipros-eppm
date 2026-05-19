@@ -37,6 +37,11 @@ public class SectionFBoqCalculator {
     @SuppressWarnings("unchecked")
     public BoqSectionResult compute(UUID projectId, UUID supervisorUserId, LocalDate date) {
         try {
+            // Phase 7: LEFT JOIN activity.activities so the prelim flag is included per-row.
+            // The join is on the DPR's activity_id (not the boq item) because the
+            // is_preliminary flag lives on the Activity entity (DBS-Phase-2 column added by
+            // changeset-2026-05-add-activity-preliminary.xml). DPRs that pre-date the
+            // activity_id column (or whose activity link is null) bucket as direct (non-prelim).
             String sql = """
                 SELECT b.item_no,
                        b.description,
@@ -45,9 +50,11 @@ public class SectionFBoqCalculator {
                        COALESCE(d.qty_executed, 0)          AS qty_today,
                        COALESCE(b.boq_amount, 0)            AS planned_amount,
                        COALESCE(b.qty_executed_to_date, 0)  AS qty_to_date,
-                       b.id                                  AS boq_id
+                       b.id                                  AS boq_id,
+                       COALESCE(a.is_preliminary, false)    AS is_preliminary
                 FROM project.daily_progress_reports d
                 JOIN project.boq_items b ON b.id = d.boq_item_id
+                LEFT JOIN activity.activities a ON a.id = d.activity_id
                 WHERE d.project_id = cast(:pid as uuid)
                   AND d.report_date = :dt
                   AND (cast(:sup as uuid) IS NULL OR d.supervisor_user_id = cast(:sup as uuid))
@@ -65,6 +72,8 @@ public class SectionFBoqCalculator {
             BigDecimal forTheDay = BigDecimal.ZERO;
             BigDecimal achieved = BigDecimal.ZERO;
             BigDecimal planned = BigDecimal.ZERO;
+            BigDecimal directBoq = BigDecimal.ZERO;
+            BigDecimal prelimBoq = BigDecimal.ZERO;
             Set<UUID> seenBoq = new HashSet<>();
 
             for (Object[] r : rows) {
@@ -76,9 +85,15 @@ public class SectionFBoqCalculator {
                 BigDecimal plannedAmount = toBigDecimal(r[5]);
                 BigDecimal qtyToDate = toBigDecimal(r[6]);
                 UUID boqId = (UUID) r[7];
+                boolean preliminary = r[8] != null && (Boolean) r[8];
 
                 BigDecimal todayAmount = qtyToday.multiply(rate).setScale(2, RoundingMode.HALF_UP);
                 forTheDay = forTheDay.add(todayAmount);
+                if (preliminary) {
+                    prelimBoq = prelimBoq.add(todayAmount);
+                } else {
+                    directBoq = directBoq.add(todayAmount);
+                }
 
                 String label = (itemNo != null ? itemNo + " " : "") + (desc != null ? desc : "");
                 lines.add(new SectionLine(label, unit, rate, qtyToday, todayAmount));
@@ -92,6 +107,8 @@ public class SectionFBoqCalculator {
                 forTheDay.setScale(2, RoundingMode.HALF_UP),
                 planned.setScale(2, RoundingMode.HALF_UP),
                 achieved.setScale(2, RoundingMode.HALF_UP),
+                directBoq.setScale(2, RoundingMode.HALF_UP),
+                prelimBoq.setScale(2, RoundingMode.HALF_UP),
                 lines);
         } catch (Exception ex) {
             log.warn("Section F (BOQ) compute failed projectId={} supervisor={} date={}: {}",

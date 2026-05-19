@@ -19,4 +19,11 @@ public interface ProjectTeamRepository extends JpaRepository<ProjectTeamMember, 
     Optional<ProjectTeamMember> findByProjectIdAndUserIdAndRole(UUID projectId, UUID userId, ProjectRole role);
 
     List<ProjectTeamMember> findByProjectIdAndReportsToUserId(UUID projectId, UUID reportsToUserId);
+
+    /**
+     * Find every team-member row a user holds on a given project. A user can hold multiple
+     * project roles (e.g. acting Engineer + Supervisor); the chain-walking helpers in
+     * {@code ProjectTeamService} take the first row from this list to follow {@code reportsToUserId}.
+     */
+    List<ProjectTeamMember> findAllByProjectIdAndUserId(UUID projectId, UUID userId);
 }
