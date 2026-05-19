@@ -45,15 +45,28 @@ export function ManpowerRegisterPanel({ projectId, date }: ManpowerRegisterPanel
     [cumulativeQuery.data],
   );
 
+  // Track raw cmName so we can distinguish a named CM from an unattributed bucket.
+  // A null cmName means the supervisors who logged this row don't report through
+  // a Construction Manager in the project team — we surface that as "Unassigned"
+  // and show a banner pointing the PM at Project → Team.
   const cmColumns = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, string | null>();
     for (const row of manpowerRows) {
       for (const cm of row.byCm) {
-        if (!map.has(cm.cmUserId)) map.set(cm.cmUserId, cm.cmName ?? "CM");
+        if (!map.has(cm.cmUserId)) map.set(cm.cmUserId, cm.cmName ?? null);
       }
     }
-    return Array.from(map.entries()).map(([cmUserId, cmName]) => ({ cmUserId, cmName }));
+    return Array.from(map.entries()).map(([cmUserId, rawName]) => ({
+      cmUserId,
+      displayName: rawName ?? "Unassigned",
+      isUnassigned: !rawName,
+    }));
   }, [manpowerRows]);
+
+  const hasUnassigned = useMemo(
+    () => cmColumns.some((c) => c.isUnassigned),
+    [cmColumns],
+  );
 
   const lookupCm = (row: { byCm: CmShiftCount[] }, cmUserId: string) =>
     row.byCm.find((c) => c.cmUserId === cmUserId);
@@ -105,23 +118,39 @@ export function ManpowerRegisterPanel({ projectId, date }: ManpowerRegisterPanel
             description="No DPR manpower rows submitted for this date — nothing to roll up."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="manpower-register-today">
-              <thead className="bg-surface/40 text-left text-xs uppercase tracking-wide text-text-muted">
-                <tr>
-                  <th className="px-4 py-2">Trade</th>
-                  <th className="px-4 py-2 text-right">Total</th>
-                  {cmColumns.map((cm) => (
-                    <th
-                      key={cm.cmUserId}
-                      colSpan={2}
-                      className="border-l border-border px-4 py-2 text-center"
-                      title={cm.cmName}
-                    >
-                      {cm.cmName}
-                    </th>
-                  ))}
-                </tr>
+          <>
+            {hasUnassigned ? (
+              <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-800 dark:text-amber-300">
+                Some man-days are not attributed to a Construction Manager. Assign CMs to
+                your supervisors in{" "}
+                <a
+                  href={`/projects/${projectId}/team`}
+                  className="font-semibold underline hover:no-underline"
+                >
+                  Project → Team
+                </a>{" "}
+                to see per-CM slicing.
+              </div>
+            ) : null}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="manpower-register-today">
+                <thead className="bg-surface/40 text-left text-xs uppercase tracking-wide text-text-muted">
+                  <tr>
+                    <th className="px-4 py-2">Trade</th>
+                    <th className="px-4 py-2 text-right">Total</th>
+                    {cmColumns.map((cm) => (
+                      <th
+                        key={cm.cmUserId}
+                        colSpan={2}
+                        className={`border-l border-border px-4 py-2 text-center ${
+                          cm.isUnassigned ? "italic text-text-muted" : ""
+                        }`}
+                        title={cm.displayName}
+                      >
+                        {cm.displayName}
+                      </th>
+                    ))}
+                  </tr>
                 <tr className="text-[10px] uppercase tracking-wide text-text-muted">
                   <th className="px-4 pb-2"></th>
                   <th className="px-4 pb-2 text-right">Day+Night</th>
@@ -167,6 +196,7 @@ export function ManpowerRegisterPanel({ projectId, date }: ManpowerRegisterPanel
               </tbody>
             </table>
           </div>
+          </>
         )
       ) : cumulativeQuery.isLoading ? (
         <div className="px-4 py-6 text-center text-xs text-text-muted">
