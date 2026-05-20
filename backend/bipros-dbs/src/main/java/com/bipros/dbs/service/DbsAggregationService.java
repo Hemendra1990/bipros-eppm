@@ -113,8 +113,17 @@ public class DbsAggregationService {
         row.setMaterialAmount(material.totalAmount());
         row.setSubcontractAmount(BigDecimal.ZERO);
         row.setBoqForTheDayAmount(boq.forTheDayAmount());
-        row.setBoqPlannedAmount(boq.plannedAmount());
-        row.setBoqAchievedAmount(boq.achievedAmount());
+
+        // Per-supervisor deduped cumulative — SectionFBoqCalculator.compute returns
+        // planned=0/achieved=0 in supervisor scope by design (see 95df0394), so we
+        // get the supervisor's own deduped figures via computeCumulativeForScope with
+        // a single-element set. A null supervisorUserId (free-text "Other" supervisor)
+        // has no scope, so we pass an empty set → planned/achieved=0.
+        SectionFBoqCalculator.BoqCumulative supCum = boqCalc.computeCumulativeForScope(
+            projectId, date,
+            supervisorUserId == null ? java.util.Set.of() : java.util.Set.of(supervisorUserId));
+        row.setBoqPlannedAmount(supCum.planned());
+        row.setBoqAchievedAmount(supCum.achieved());
 
         // Phase 7: split the day's BOQ value into direct (non-preliminary activities)
         // and prelim (mobilisation / site-setup / diversions). totalCostInclPrelims is
@@ -124,7 +133,7 @@ public class DbsAggregationService {
         row.setDirectCost(directCost);
         row.setPrelimCost(prelimCost);
         row.setTotalCostInclPrelims(directCost.add(prelimCost));
-        row.setPctAchieved(percentage(boq.achievedAmount(), boq.plannedAmount()));
+        row.setPctAchieved(percentage(supCum.achieved(), supCum.planned()));
 
         BigDecimal totalExpense = sum(manpower.totalAmount(), admin.totalAmount(), machinery.totalAmount(),
             fuel.totalAmount(), material.totalAmount(), BigDecimal.ZERO);
