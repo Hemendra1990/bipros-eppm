@@ -310,7 +310,7 @@ function DrawerInner({
           Open full detail page
           <ExternalLink size={14} />
         </Link>
-        {activity && (
+        {activity && isLocked && (
           <button
             type="button"
             onClick={() => {
