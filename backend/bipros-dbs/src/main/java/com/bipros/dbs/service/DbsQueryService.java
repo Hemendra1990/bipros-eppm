@@ -385,6 +385,9 @@ public class DbsQueryService {
             nz(e.getMachineryAmount()),
             nz(e.getFuelAmount()),
             nz(e.getSubcontractAmount()),
+            nz(e.getGeneralExpenseAmount()),
+            nz(e.getGeneralExpenseMonthlyTotal()),
+            e.getGeneralExpenseLinesJson(),
             nz(e.getBoqForTheDayAmount()),
             nz(e.getBoqPlannedAmount()),
             nz(e.getBoqAchievedAmount()),
@@ -455,7 +458,10 @@ public class DbsQueryService {
         return new DbsProjectDayResponse(
             null, projectId, date, Collections.emptyList(), 0, 0,
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-            BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+            BigDecimal.ZERO, BigDecimal.ZERO,
+            // Section G: amount, monthlyTotal, linesJson
+            BigDecimal.ZERO, BigDecimal.ZERO, "[]",
+            BigDecimal.ZERO, BigDecimal.ZERO,
             BigDecimal.ZERO,
             // Phase 7
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
@@ -548,6 +554,16 @@ public class DbsQueryService {
         BigDecimal machinery = sumDtos(daily, DbsProjectDayResponse::machineryAmount);
         BigDecimal fuel = sumDtos(daily, DbsProjectDayResponse::fuelAmount);
         BigDecimal sub = sumDtos(daily, DbsProjectDayResponse::subcontractAmount);
+        // Section G: daily-prorated amounts already on each day; summing across the
+        // month yields the same value as the monthly total (modulo rounding).
+        BigDecimal generalExpense = sumDtos(daily, DbsProjectDayResponse::generalExpenseAmount);
+        // Use the max monthly total across rows — every row in the same month carries
+        // the same snapshot; taking max guards against zero-filled rows.
+        BigDecimal generalExpenseMonthlyTotal = daily.stream()
+            .map(DbsProjectDayResponse::generalExpenseMonthlyTotal)
+            .filter(Objects::nonNull)
+            .max(BigDecimal::compareTo)
+            .orElse(BigDecimal.ZERO);
         BigDecimal boqDay = sumDtos(daily, DbsProjectDayResponse::boqForTheDayAmount);
         BigDecimal boqPlanned = sumDtos(daily, DbsProjectDayResponse::boqPlannedAmount);
         BigDecimal boqAch = sumDtos(daily, DbsProjectDayResponse::boqAchievedAmount);
@@ -586,6 +602,7 @@ public class DbsQueryService {
         return new DbsProjectDayResponse(
             null, projectId, to, new ArrayList<>(engineers), supervisorCount, dprCount,
             material, manpower, admin, machinery, fuel, sub,
+            generalExpense, generalExpenseMonthlyTotal, null,
             boqDay, boqPlanned, boqAch,
             direct, prelim, totalIncl, pctAchieved,
             expense, income, contribution, contributionPct,

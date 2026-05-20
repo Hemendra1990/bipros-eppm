@@ -152,6 +152,12 @@ export interface DbsProjectDayResponse {
   machineryAmount: number;
   fuelAmount: number;
   subcontractAmount: number;
+  /** Section G — daily-prorated overhead (= monthlyTotal / daysInMonth). */
+  generalExpenseAmount?: number | null;
+  /** Snapshot of the month total for the row's `reportDate.yearMonth`. */
+  generalExpenseMonthlyTotal?: number | null;
+  /** JSON-serialised SectionLine[] for the Section G accordion. */
+  generalExpenseLinesJson?: string | null;
   boqForTheDayAmount: number;
   boqPlannedAmount: number;
   boqAchievedAmount: number;
