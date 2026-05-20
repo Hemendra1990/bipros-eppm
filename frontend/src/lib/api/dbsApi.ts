@@ -359,11 +359,11 @@ export const dbsApi = {
       })
       .then((r) => r.data),
 
-  listSupervisorsForDay: (projectId: string, date: string) =>
+  listSupervisorsForDay: (projectId: string, date: string, periodType?: string) =>
     apiClient
       .get<ApiResponse<DbsSupervisorSummaryDto[]>>(
         `${base(projectId)}/supervisors`,
-        { params: { date } },
+        { params: periodType && periodType !== "DAY" ? { date, periodType } : { date } },
       )
       .then((r) => r.data),
 

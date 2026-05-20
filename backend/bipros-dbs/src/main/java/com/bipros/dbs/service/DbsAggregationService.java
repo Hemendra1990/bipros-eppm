@@ -68,6 +68,7 @@ public class DbsAggregationService {
     private final ProjectTeamService projectTeamService;
     private final ObjectMapper objectMapper;
     private final RegisterAggregationService registerAggregationService;
+    private final com.bipros.project.domain.repository.DailyProgressReportRepository dprRepository;
 
     /**
      * Recompute the supervisor-day row by running the six section calculators and
@@ -477,7 +478,10 @@ public class DbsAggregationService {
             .map(DbsDailySupervisor::getSupervisorUserId)
             .filter(java.util.Objects::nonNull)
             .distinct().count());
-        row.setDprCount(supRows.size());
+        // Count from the actual DPR ledger, not supRows.size(). A "phantom" supervisor row
+        // (supervisorUserId == null) is created on recompute-without-DPRs so DRD/MCL data
+        // still rolls up; counting it as a DPR inflates the PM-tab DPRs KPI.
+        row.setDprCount((int) dprRepository.countByProjectIdAndReportDate(projectId, date));
         row.setRecomputedAt(Instant.now());
 
         DbsDailyProject saved = projectRepo.save(row);

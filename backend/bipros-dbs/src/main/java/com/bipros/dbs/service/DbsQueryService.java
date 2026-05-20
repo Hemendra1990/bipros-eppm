@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -244,6 +245,85 @@ public class DbsQueryService {
     // ── list ────────────────────────────────────────────────────────────────────
 
     public List<DbsSupervisorSummaryDto> listSupervisorsForDay(UUID projectId, LocalDate date) {
+        return listSupervisorsForScope(projectId, date, null);
+    }
+
+    /**
+     * Period-aware roster query. When {@code periodType} is null or {@code "DAY"},
+     * behaves like the single-day list. When {@code periodType} is {@code "WEEK"} or
+     * {@code "MONTH"}, expands the search to the period bounds (Mon-Sun ISO week or
+     * calendar-month, mirroring {@link #boundsFor}), groups by supervisor across the
+     * range, and aggregates the totals so the picker shows one entry per supervisor
+     * with the period's combined figures.
+     *
+     * <p>Why this exists: with date-only roster filtering, the Supervisor tab would
+     * render empty on any selected day with no DPRs — even if the surrounding week/month
+     * had plenty of activity. PM tab works in period mode because it has no roster gate.
+     */
+    public List<DbsSupervisorSummaryDto> listSupervisorsForScope(
+        UUID projectId, LocalDate referenceDate, String periodType) {
+
+        String normalised = normalisePeriod(periodType);
+        if (normalised == null || "DAY".equals(normalised)) {
+            return listSupervisorsForDayInternal(projectId, referenceDate);
+        }
+
+        LocalDate[] bounds = boundsFor(normalised, referenceDate);
+        List<DbsDailySupervisor> rows = supervisorRepo
+            .findByProjectIdAndReportDateBetween(projectId, bounds[0], bounds[1]);
+        if (rows.isEmpty()) return List.of();
+
+        // Drop rows with no supervisor — those are phantoms written by
+        // DbsRecomputeListener for dates with no DPRs so DRD/MCL still rolls up.
+        // They should not appear in the supervisor picker or inflate counts.
+        Map<UUID, List<DbsDailySupervisor>> byUser = rows.stream()
+            .filter(r -> r.getSupervisorUserId() != null)
+            .collect(Collectors.groupingBy(
+                DbsDailySupervisor::getSupervisorUserId,
+                LinkedHashMap::new,
+                Collectors.toList()));
+        if (byUser.isEmpty()) return List.of();
+        Map<UUID, String> nameByUser = resolveUserNames(new LinkedHashSet<>(byUser.keySet()));
+
+        return byUser.entrySet().stream()
+            .map(entry -> {
+                List<DbsDailySupervisor> daily = entry.getValue();
+                UUID supId = entry.getKey();
+                BigDecimal expense = sumRows(daily, DbsDailySupervisor::getTotalExpense);
+                BigDecimal income = sumRows(daily, DbsDailySupervisor::getTotalIncome);
+                BigDecimal contribution = sumRows(daily, DbsDailySupervisor::getContribution);
+                BigDecimal direct = sumRows(daily, DbsDailySupervisor::getDirectCost);
+                BigDecimal prelim = sumRows(daily, DbsDailySupervisor::getPrelimCost);
+                BigDecimal totalIncl = direct.add(prelim);
+                BigDecimal contributionPct = income.compareTo(BigDecimal.ZERO) > 0
+                    ? contribution.divide(income, 4, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+                BigDecimal boqPlanned = sumRows(daily, DbsDailySupervisor::getBoqPlannedAmount);
+                BigDecimal boqAchieved = sumRows(daily, DbsDailySupervisor::getBoqAchievedAmount);
+                BigDecimal pctAchieved = boqPlanned.compareTo(BigDecimal.ZERO) > 0
+                    ? boqAchieved.multiply(BigDecimal.valueOf(100))
+                        .divide(boqPlanned, 4, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+                return new DbsSupervisorSummaryDto(
+                    supId,
+                    nameByUser.get(supId),
+                    expense, income, contribution, contributionPct,
+                    direct, prelim, totalIncl, pctAchieved,
+                    daily.size()
+                );
+            })
+            .toList();
+    }
+
+    private static BigDecimal sumRows(List<DbsDailySupervisor> rows,
+                                       java.util.function.Function<DbsDailySupervisor, BigDecimal> f) {
+        return rows.stream()
+            .map(f)
+            .map(v -> v == null ? BigDecimal.ZERO : v)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<DbsSupervisorSummaryDto> listSupervisorsForDayInternal(UUID projectId, LocalDate date) {
         List<DbsDailySupervisor> rows = supervisorRepo.findByProjectIdAndReportDate(projectId, date);
         Map<UUID, String> nameByUser = resolveUserNames(rows.stream()
             .map(DbsDailySupervisor::getSupervisorUserId)
@@ -497,17 +577,57 @@ public class DbsQueryService {
         BigDecimal contributionPct = income.compareTo(BigDecimal.ZERO) > 0
             ? contribution.divide(income, 4, RoundingMode.HALF_UP)
             : BigDecimal.ZERO;
+        // Period totals were previously emitting empty section line arrays — the dollar
+        // totals were correct but the section accordions all said "0 lines". Aggregate
+        // each per-day line list into period totals by grouping on description + unit +
+        // rate, summing qty + amount.
         return new DbsSupervisorDayResponse(
             null, projectId, supervisorUserId, null, null, to,
             material, manpower, admin, machinery, fuel, sub,
             boqDay, boqPlanned, boqAch,
             direct, prelim, totalIncl, pctAchieved,
             expense, income, contribution, contributionPct,
-            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-            Collections.emptyList(),
+            aggregateSectionLines(daily, DbsSupervisorDayResponse::materialLines),
+            aggregateSectionLines(daily, DbsSupervisorDayResponse::manpowerLines),
+            aggregateSectionLines(daily, DbsSupervisorDayResponse::adminLines),
+            aggregateSectionLines(daily, DbsSupervisorDayResponse::machineryLines),
+            aggregateSectionLines(daily, DbsSupervisorDayResponse::fuelLines),
+            aggregateSectionLines(daily, DbsSupervisorDayResponse::boqLines),
+            aggregateSectionLines(daily, DbsSupervisorDayResponse::subcontractLines),
             null
         );
+    }
+
+    /**
+     * Group section lines across days by (description + unit + rate), summing qty +
+     * amount. Lets the period-mode supervisor view render meaningful per-resource rows
+     * under each accordion instead of "0 lines".
+     */
+    private static List<DbsSectionLineDto> aggregateSectionLines(
+        List<DbsSupervisorDayResponse> daily,
+        java.util.function.Function<DbsSupervisorDayResponse, List<DbsSectionLineDto>> extractor) {
+
+        Map<String, DbsSectionLineDto> byKey = new LinkedHashMap<>();
+        for (DbsSupervisorDayResponse d : daily) {
+            List<DbsSectionLineDto> lines = extractor.apply(d);
+            if (lines == null) continue;
+            for (DbsSectionLineDto line : lines) {
+                if (line == null) continue;
+                String key = (line.description() == null ? "" : line.description())
+                    + "|" + (line.unit() == null ? "" : line.unit())
+                    + "|" + (line.rate() == null ? "0" : line.rate().toPlainString());
+                DbsSectionLineDto existing = byKey.get(key);
+                if (existing == null) {
+                    byKey.put(key, line);
+                } else {
+                    BigDecimal qty = nz(existing.quantity()).add(nz(line.quantity()));
+                    BigDecimal amt = nz(existing.totalAmount()).add(nz(line.totalAmount()));
+                    byKey.put(key, new DbsSectionLineDto(
+                        existing.description(), existing.unit(), existing.rate(), qty, amt));
+                }
+            }
+        }
+        return new ArrayList<>(byKey.values());
     }
 
     private DbsEngineerDayResponse engineerTotals(UUID projectId, UUID engineerUserId,
