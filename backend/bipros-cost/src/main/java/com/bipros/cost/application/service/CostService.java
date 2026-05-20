@@ -597,13 +597,16 @@ public class CostService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         // Add DPR-sourced actuals so a project that books cost via supervisor DPRs (rather than
         // via discrete ActivityExpense rows) still shows a non-zero totalActual.
+        //
+        // Important: do NOT also add resource_assignments.actual_cost here. RA.actualCost is
+        // maintained in lock-step with DPR child rows by ResourceAssignmentCostRollupListener
+        // (actualCost = rate × actualUnits where actualUnits is rolled up from DPR ledger), so
+        // it represents the same money as `dprActual`. The earlier FIX-18 attempt added both
+        // sums and produced a 2× over-count for any project that books cost purely via DPRs
+        // (verified against HIGHWAY-301: DPR = ₹7,150, RA = ₹7,150, totalActual shown as
+        // ₹14,300 instead of ₹7,150).
         BigDecimal dprActual = dprActualCostLookup.sumByProject(projectId);
         totalActual = totalActual.add(dprActual);
-        // FIX-18: also add ResourceAssignment.actualCost — EVM's getActivityAc includes this
-        // component but getCostSummary was not, causing totalActual (616) to lag EVM AC (1516)
-        // on projects where actuals are tracked on resource assignments (e.g. Oman-Demo: 900 OMR).
-        BigDecimal raActual = resourceAssignmentRepository.sumActualCostByProjectId(projectId);
-        totalActual = totalActual.add(raActual != null ? raActual : BigDecimal.ZERO);
 
         BigDecimal totalRemaining = expenses.stream()
                 .map(e -> e.getRemainingCost() != null ? e.getRemainingCost() : BigDecimal.ZERO)
