@@ -44,6 +44,7 @@
         <module>bipros-ai</module>
         <module>bipros-site-ops</module>
         <module>bipros-dbs</module>
+        <module>bipros-hds</module>
         <module>bipros-api</module>
         <module>bipros-data-bootstrap</module>
     </modules>
@@ -193,6 +194,23 @@
                 <groupId>com.bipros</groupId>
                 <artifactId>bipros-dbs</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-hds</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- AWS SDK v2 BOM — manages s3 and downstream artifact versions so child
+                 modules (bipros-integration, bipros-hds) can declare the dep without
+                 pinning a version. Aligned with the version already pinned in
+                 bipros-integration/pom.xml. -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.28.16</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <!-- JWT -->
