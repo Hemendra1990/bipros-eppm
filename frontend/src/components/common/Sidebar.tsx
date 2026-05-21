@@ -103,6 +103,7 @@ const groups: NavGroup[] = [
       // { name: "Unit Rate Master", href: "/admin/unit-rate-master", icon: Banknote, adminOnly: true },
       /* { name: "Cost Accounts", href: "/admin/cost-accounts", icon: CircleDollarSign, adminOnly: true, permission: "ADMIN_MASTER.READ" }, */
       { name: "Integrations", href: "/admin/integrations", icon: Plug, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
+      { name: "HDS Library", href: "/admin/hds-library", icon: Library, permission: "HDS_LIBRARY.READ" },
       /* { name: "User Defined Fields", href: "/admin/udf", icon: SlidersHorizontal, adminOnly: true, permission: "ADMIN_SETTINGS.READ" }, */
       { name: "Settings", href: "/admin/settings", icon: Settings, adminOnly: true, permission: "ADMIN_SETTINGS.READ" },
     ],
