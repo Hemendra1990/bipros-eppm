@@ -17,11 +17,13 @@ import {
 import {
   subContractorMasterApi,
   type SubContractorMaster,
+  type SubContractorWorkActivityMappingRow,
 } from "@/lib/api/subContractorMasterApi";
 import {
   activitySubContractorApi,
   type ActivitySubContractorAssignment,
 } from "@/lib/api/activitySubContractorApi";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 
 interface Props {
   projectId: string;
@@ -677,6 +679,8 @@ function SubContractorSection({
   locked,
 }: SubContractorSectionProps) {
   const [masterId, setMasterId] = useState("");
+  const [workActivityId, setWorkActivityId] = useState("");
+  const [plannedUnits, setPlannedUnits] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
   const activeMasters = useMemo(
@@ -684,14 +688,45 @@ function SubContractorSection({
     [masters],
   );
 
+  const selectedMaster = useMemo(
+    () => activeMasters.find((m) => m.id === masterId),
+    [activeMasters, masterId],
+  );
+
+  const mappings = useMemo<SubContractorWorkActivityMappingRow[]>(
+    () => selectedMaster?.workActivityMappings ?? [],
+    [selectedMaster],
+  );
+
+  const mappingOptions = useMemo(
+    () =>
+      mappings.map((m) => ({
+        value: m.workActivityId,
+        label: `${m.workActivityName ?? m.workActivityId}${m.unit ? ` (${m.unit})` : ""}`,
+      })),
+    [mappings],
+  );
+
+  const selectedMapping = useMemo(
+    () => mappings.find((m) => m.workActivityId === workActivityId),
+    [mappings, workActivityId],
+  );
+
+  const rate = selectedMapping?.ratePerUnit ?? 0;
+  const plannedCost = rate * plannedUnits;
+
   const create = useMutation({
     mutationFn: () =>
       activitySubContractorApi.create(projectId, {
         activityId,
         subContractorMasterId: masterId,
+        workActivityId,
+        plannedUnits,
       }),
     onSuccess: () => {
       setMasterId("");
+      setWorkActivityId("");
+      setPlannedUnits(0);
       setError(null);
       onChanged();
     },
@@ -709,31 +744,69 @@ function SubContractorSection({
     <section className="rounded-md border border-border bg-surface p-3">
       <h4 className="mb-2 text-sm font-semibold">Sub-Contractor Requirements</h4>
       {error && <div className="mb-2 text-xs text-danger">{error}</div>}
-      <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+      <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
         <label className="text-xs">
           <span className="text-text-muted">Sub-Contractor</span>
-          <select
+          <SearchableSelect
+            className="w-56"
+            options={activeMasters.map((m) => ({
+              value: m.id,
+              label: `${m.name} (${m.code})`,
+            }))}
             value={masterId}
-            onChange={(e) => setMasterId(e.target.value)}
+            onChange={(val) => {
+              setMasterId(val);
+              setWorkActivityId("");
+            }}
+            placeholder="— pick sub-contractor —"
+            disabled={locked}
+          />
+        </label>
+        <label className="text-xs">
+          <span className="text-text-muted">Work Activity</span>
+          <SearchableSelect
+            className="w-56"
+            options={mappingOptions}
+            value={workActivityId}
+            onChange={(val) => setWorkActivityId(val)}
+            placeholder={masterId ? "— pick work activity —" : "Select sub-contractor first"}
+            disabled={locked || !masterId}
+          />
+        </label>
+        <label className="text-xs">
+          <span className="text-text-muted">
+            Quantity {selectedMapping?.unit ? `(${selectedMapping.unit})` : ""}
+          </span>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={plannedUnits}
+            onChange={(e) => setPlannedUnits(parseFloat(e.target.value) || 0)}
             disabled={locked}
             className="mt-1 w-full rounded-md border border-border bg-surface-hover px-2 py-1.5 text-xs disabled:opacity-50"
-          >
-            <option value="">— pick sub-contractor —</option>
-            {activeMasters.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.code})
-              </option>
-            ))}
-          </select>
+          />
         </label>
         <button
-          disabled={locked || !masterId || create.isPending}
+          disabled={locked || !masterId || !workActivityId || !plannedUnits || create.isPending}
           onClick={() => create.mutate()}
           className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
         >
           <Plus className="h-3.5 w-3.5" /> Add
         </button>
       </div>
+
+      {selectedMapping && (
+        <div className="mt-2 text-xs text-text-muted">
+          Rate: <b>₹{rate.toFixed(2)}</b> per {selectedMapping.unit ?? "unit"}
+          {plannedUnits > 0 && (
+            <>
+              {" "}· Planned: <b>{plannedUnits}</b> · Cost:{" "}
+              <b>₹{plannedCost.toFixed(2)}</b>
+            </>
+          )}
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <p className="mt-3 text-xs text-text-muted">No rows added yet.</p>
@@ -743,7 +816,11 @@ function SubContractorSection({
             <thead className="border-b border-border text-text-muted">
               <tr>
                 <th className="py-1.5 pr-2 text-left font-medium">Sub-Contractor</th>
-                <th className="py-1.5 pr-2 text-left font-medium">Code</th>
+                <th className="py-1.5 pr-2 text-left font-medium">Work Activity</th>
+                <th className="py-1.5 pr-2 text-left font-medium">Unit</th>
+                <th className="py-1.5 pr-2 text-right font-medium">Qty</th>
+                <th className="py-1.5 pr-2 text-right font-medium">Rate</th>
+                <th className="py-1.5 pr-2 text-right font-medium">Cost</th>
                 <th className="py-1.5 text-right" />
               </tr>
             </thead>
@@ -751,7 +828,17 @@ function SubContractorSection({
               {rows.map((r) => (
                 <tr key={r.id} className="border-b border-border/40">
                   <td className="py-1.5 pr-2">{r.subContractorName ?? "—"}</td>
-                  <td className="py-1.5 pr-2">{r.subContractorCode ?? "—"}</td>
+                  <td className="py-1.5 pr-2">{r.workActivityName ?? "—"}</td>
+                  <td className="py-1.5 pr-2">{r.unit ?? "—"}</td>
+                  <td className="py-1.5 pr-2 text-right">
+                    {r.plannedUnits != null ? r.plannedUnits.toFixed(2) : "—"}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right">
+                    {r.ratePerUnit != null ? `₹${r.ratePerUnit.toFixed(2)}` : "—"}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right">
+                    {r.plannedCost != null ? `₹${r.plannedCost.toFixed(2)}` : "—"}
+                  </td>
                   <td className="py-1.5 text-right">
                     <button
                       onClick={() => remove.mutate(r.id)}

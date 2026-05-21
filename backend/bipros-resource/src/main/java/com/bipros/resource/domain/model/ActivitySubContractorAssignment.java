@@ -11,11 +11,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Links an activity to a sub-contractor master row. Stored independently of
- * {@code ResourceAssignment} — appears as the 4th section in the Resource Demand panel.
+ * Links an activity to a sub-contractor master row with work-activity mapping snapshot.
+ * Stored independently of {@code ResourceAssignment} — appears as the 4th section in
+ * the Resource Demand panel.
  */
 @Entity
 @Table(
@@ -41,4 +43,22 @@ public class ActivitySubContractorAssignment extends BaseEntity {
 
   @Column(name = "sub_contractor_master_id", nullable = false)
   private UUID subContractorMasterId;
+
+  @Column(name = "work_activity_id", nullable = false)
+  private UUID workActivityId;
+
+  @Column(name = "work_activity_name", length = 150)
+  private String workActivityName;
+
+  @Column(name = "unit", length = 30)
+  private String unit;
+
+  @Column(name = "planned_units", precision = 19, scale = 4)
+  private BigDecimal plannedUnits;
+
+  @Column(name = "rate_per_unit", precision = 19, scale = 4)
+  private BigDecimal ratePerUnit;
+
+  @Column(name = "planned_cost", precision = 19, scale = 4)
+  private BigDecimal plannedCost;
 }

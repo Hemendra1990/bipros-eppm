@@ -18,4 +18,8 @@ public interface SubContractorWorkActivityMappingRepository
 
   boolean existsBySubContractorMasterIdAndWorkActivityId(
       UUID subContractorMasterId, UUID workActivityId);
+
+  java.util.Optional<SubContractorWorkActivityMapping>
+      findBySubContractorMasterIdAndWorkActivityId(
+          UUID subContractorMasterId, UUID workActivityId);
 }

@@ -9,6 +9,12 @@ export interface ActivitySubContractorAssignment {
   subContractorName: string;
   subContractorCode: string;
   subContractorLocation?: string | null;
+  workActivityId: string;
+  workActivityName?: string | null;
+  unit?: string | null;
+  plannedUnits?: number | null;
+  ratePerUnit?: number | null;
+  plannedCost?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -16,6 +22,8 @@ export interface ActivitySubContractorAssignment {
 export interface CreateActivitySubContractorAssignmentRequest {
   activityId: string;
   subContractorMasterId: string;
+  workActivityId: string;
+  plannedUnits: number;
 }
 
 export const activitySubContractorApi = {

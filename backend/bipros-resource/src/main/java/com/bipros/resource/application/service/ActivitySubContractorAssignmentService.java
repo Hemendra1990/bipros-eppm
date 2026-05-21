@@ -12,11 +12,13 @@ import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.master.SubContractorMaster;
 import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.SubContractorMasterRepository;
+import com.bipros.resource.domain.repository.SubContractorWorkActivityMappingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,6 +32,7 @@ public class ActivitySubContractorAssignmentService {
 
   private final ActivitySubContractorAssignmentRepository assignmentRepository;
   private final SubContractorMasterRepository masterRepository;
+  private final SubContractorWorkActivityMappingRepository mappingRepository;
   private final ActivityRepository activityRepository;
   private final AuditService auditService;
 
@@ -57,21 +60,39 @@ public class ActivitySubContractorAssignmentService {
       UUID projectId, CreateActivitySubContractorAssignmentRequest req) {
     UUID activityId = UUID.fromString(req.activityId());
     UUID masterId = UUID.fromString(req.subContractorMasterId());
+    UUID workActivityId = UUID.fromString(req.workActivityId());
 
     assertActivityEditable(activityId);
 
     SubContractorMaster master = masterRepository.findById(masterId)
         .orElseThrow(() -> new ResourceNotFoundException("SubContractorMaster", masterId));
 
+    var mapping = mappingRepository.findBySubContractorMasterIdAndWorkActivityId(
+        masterId, workActivityId)
+        .orElseThrow(() -> new BusinessRuleException(
+            "SC_WORK_ACTIVITY_NOT_FOUND",
+            "No work activity mapping found for sub-contractor " + master.getName()
+                + " and work activity " + workActivityId));
+
+    BigDecimal rate = mapping.getRatePerUnit() != null ? mapping.getRatePerUnit() : BigDecimal.ZERO;
+    BigDecimal plannedUnits = req.plannedUnits() != null ? req.plannedUnits() : BigDecimal.ZERO;
+    BigDecimal plannedCost = rate.multiply(plannedUnits);
+
     ActivitySubContractorAssignment assignment = ActivitySubContractorAssignment.builder()
         .activityId(activityId)
         .projectId(projectId)
         .subContractorMasterId(masterId)
+        .workActivityId(workActivityId)
+        .workActivityName(mapping.getWorkActivityName())
+        .unit(mapping.getUnit())
+        .plannedUnits(plannedUnits)
+        .ratePerUnit(rate)
+        .plannedCost(plannedCost)
         .build();
 
     ActivitySubContractorAssignment saved = assignmentRepository.save(assignment);
-    log.info("Sub-contractor assignment created: id={}, activity={}, master={}",
-        saved.getId(), activityId, masterId);
+    log.info("Sub-contractor assignment created: id={}, activity={}, master={}, workActivity={}",
+        saved.getId(), activityId, masterId, workActivityId);
 
     ActivitySubContractorAssignmentResponse response =
         ActivitySubContractorAssignmentResponse.from(saved, master);
