@@ -151,7 +151,16 @@ public class ChatController {
                 .orElseThrow(() -> new IllegalStateException("No active LLM provider configured. Add one via /v1/admin/llm-providers."));
     }
 
-    public record ChatRequest(UUID conversationId, UUID projectId, String module, String message, String imageUrl) {
+    /**
+     * Chat request payload. {@code hdsVersionIds} is optional — when non-empty,
+     * the orchestrator routes deterministically to the HDS search tool instead
+     * of running the LLM-driven tool-selection loop. The frontend sends the
+     * UUIDs of the HDS document versions the user has selected as scope; the
+     * resolver persists them on the conversation so follow-up turns without
+     * the field still answer in HDS scope.
+     */
+    public record ChatRequest(UUID conversationId, UUID projectId, String module, String message, String imageUrl,
+                              List<String> hdsVersionIds) {
     }
 
     public record ChatResponse(UUID conversationId, String text) {
