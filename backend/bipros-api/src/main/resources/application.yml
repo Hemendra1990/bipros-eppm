@@ -1,6 +1,6 @@
 spring:
   profiles:
-    active: seed
+    active: dev
   application:
     name: bipros-eppm
 
