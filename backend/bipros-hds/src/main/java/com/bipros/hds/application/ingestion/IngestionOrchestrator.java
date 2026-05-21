@@ -53,9 +53,14 @@ public class IngestionOrchestrator {
                 advance(job, version, HdsIngestionStage.PARSING, 0, "Parsing PDF…");
                 byte[] pdf = storage.download(version.getStorageKey()).readAllBytes();
                 parsed = docling.parse(pdf, version.getFileName());
-                if (parsed.getPages() != null && version.getPageCount() == null) {
-                    version.setPageCount(parsed.getPages());
-                    versionRepo.save(version);
+                if (parsed.getPages() != null) {
+                    Integer pages = parsed.getPages();
+                    versionRepo.findById(version.getId()).ifPresent(v -> {
+                        if (v.getPageCount() == null) {
+                            v.setPageCount(pages);
+                            versionRepo.save(v);
+                        }
+                    });
                 }
                 advance(job, version, HdsIngestionStage.PARSING, 60, "Parsed " + parsed.getPages() + " pages");
             }
@@ -113,29 +118,47 @@ public class IngestionOrchestrator {
                         pc.chunkType(), pc.content(), pc.contentTokens()));
                 }
                 hybridRepo.insertChunks(inserts, embeddings);
-                version.setChunkCount(chunks.size());
-                version.setStatus(HdsVersionStatus.INDEXED);
-                version.setIndexedAt(Instant.now());
-                versionRepo.save(version);
 
-                job.setStage(HdsIngestionStage.COMPLETE);
-                job.setProgressPct(100);
-                job.setCompletedAt(Instant.now());
-                jobRepo.save(job);
-                progress.publish(new IngestionProgressEvent(version.getId(), "COMPLETE", 100, "Indexed " + chunks.size() + " chunks"));
-                versionStatusListener.onIndexedOrFailed(version);
+                final int chunkCount = chunks.size();
+                HdsVersion finalVersion = versionRepo.findById(version.getId())
+                    .map(v -> {
+                        v.setChunkCount(chunkCount);
+                        v.setStatus(HdsVersionStatus.INDEXED);
+                        v.setIndexedAt(Instant.now());
+                        return versionRepo.save(v);
+                    }).orElse(version);
+
+                jobRepo.findById(job.getId()).ifPresent(j -> {
+                    j.setStage(HdsIngestionStage.COMPLETE);
+                    j.setProgressPct(100);
+                    j.setCompletedAt(Instant.now());
+                    jobRepo.save(j);
+                });
+                progress.publish(new IngestionProgressEvent(finalVersion.getId(), "COMPLETE", 100, "Indexed " + chunkCount + " chunks"));
+                versionStatusListener.onIndexedOrFailed(finalVersion);
             }
         } catch (Exception e) {
             log.error("Ingestion failed: versionId={}", version.getId(), e);
-            job.setStage(HdsIngestionStage.FAILED);
-            job.setErrorMessage(e.getMessage() == null ? e.toString() : e.getMessage());
-            job.setCompletedAt(Instant.now());
-            jobRepo.save(job);
-            version.setStatus(HdsVersionStatus.FAILED);
-            version.setIndexingError(job.getErrorMessage());
-            versionRepo.save(version);
-            progress.publish(new IngestionProgressEvent(version.getId(), "FAILED", job.getProgressPct(), job.getErrorMessage()));
-            versionStatusListener.onIndexedOrFailed(version);
+            String errMsg = e.getMessage() == null ? e.toString() : e.getMessage();
+            try {
+                jobRepo.findById(job.getId()).ifPresent(j -> {
+                    j.setStage(HdsIngestionStage.FAILED);
+                    j.setErrorMessage(errMsg);
+                    j.setCompletedAt(Instant.now());
+                    jobRepo.save(j);
+                });
+                versionRepo.findById(version.getId()).ifPresent(v -> {
+                    v.setStatus(HdsVersionStatus.FAILED);
+                    v.setIndexingError(errMsg);
+                    versionRepo.save(v);
+                    versionStatusListener.onIndexedOrFailed(v);
+                });
+            } catch (Exception nested) {
+                log.warn("Could not record FAILED status for job={} version={}: {}",
+                    job.getId(), version.getId(), nested.getMessage());
+            }
+            progress.publish(new IngestionProgressEvent(version.getId(), "FAILED",
+                job.getProgressPct() == null ? 0 : job.getProgressPct(), errMsg));
             throw new RuntimeException(e);
         }
     }
@@ -148,21 +171,33 @@ public class IngestionOrchestrator {
 
     @Transactional
     public void advance(HdsIngestionJob job, HdsVersion version, HdsIngestionStage stage, int pct, String msg) {
-        job.setStage(stage);
-        job.setProgressPct(pct);
-        job.setLastHeartbeatAt(Instant.now());
-        jobRepo.save(job);
+        // Reload to pick up fresh @Version values — between two advance() calls within the
+        // same run(), the JPA session has closed and the local @Version is stale.
+        var freshJob = jobRepo.findById(job.getId()).orElse(job);
+        freshJob.setStage(stage);
+        freshJob.setProgressPct(pct);
+        freshJob.setLastHeartbeatAt(Instant.now());
+        jobRepo.save(freshJob);
+        // Copy the post-save @Version back into the caller's reference so the next
+        // advance() call (which still uses the run-loop's local `job`) sees current state.
+        job.setVersion(freshJob.getVersion());
+        job.setStage(freshJob.getStage());
+        job.setProgressPct(freshJob.getProgressPct());
 
-        version.setStatus(switch (stage) {
+        var freshVersion = versionRepo.findById(version.getId()).orElse(version);
+        freshVersion.setStatus(switch (stage) {
             case PARSING -> HdsVersionStatus.PARSING;
             case CHUNKING -> HdsVersionStatus.CHUNKING;
             case EMBEDDING, INDEXING -> HdsVersionStatus.EMBEDDING;
             case COMPLETE -> HdsVersionStatus.INDEXED;
             case FAILED -> HdsVersionStatus.FAILED;
         });
-        version.setIndexingProgressPct(pct);
-        versionRepo.save(version);
+        freshVersion.setIndexingProgressPct(pct);
+        versionRepo.save(freshVersion);
+        version.setVersion(freshVersion.getVersion());
+        version.setStatus(freshVersion.getStatus());
+        version.setIndexingProgressPct(freshVersion.getIndexingProgressPct());
 
-        progress.publish(new IngestionProgressEvent(version.getId(), stage.name(), pct, msg));
+        progress.publish(new IngestionProgressEvent(freshVersion.getId(), stage.name(), pct, msg));
     }
 }

@@ -96,7 +96,11 @@ public class HdsVersionAdminController {
     private UUID currentUserIdOrNull() {
         try {
             return securityContextHelper.getCurrentUserId();
-        } catch (IllegalStateException noAuth) {
+        } catch (Exception e) {
+            // SecurityContextHelper throws IllegalStateException when no auth,
+            // and IllegalArgumentException when the JWT principal name isn't a UUID
+            // (the admin user's principal is the literal "admin" string).
+            // Both are fine — fall back to null uploadedBy.
             return null;
         }
     }

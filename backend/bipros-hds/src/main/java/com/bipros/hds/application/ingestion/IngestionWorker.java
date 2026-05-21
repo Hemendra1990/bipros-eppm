@@ -65,11 +65,13 @@ public class IngestionWorker {
             log.info("Picked up ingestion job {} (stage={}) on worker {}", job.getId(), job.getStage(), workerId);
             job.setWorkerId(workerId);
             job.setAttemptCount((job.getAttemptCount() == null ? 0 : job.getAttemptCount()) + 1);
-            jobRepo.save(job);
+            // Save and pass the FRESH entity (with bumped @Version) to the orchestrator
+            // so subsequent saves inside run() don't trip optimistic-lock checks.
+            var freshJob = jobRepo.save(job);
             try {
-                orchestrator.run(job);
+                orchestrator.run(freshJob);
             } catch (Exception e) {
-                log.error("Job {} failed", job.getId(), e);
+                log.error("Job {} failed", freshJob.getId(), e);
             }
         } finally {
             jdbc.execute("SELECT pg_advisory_unlock(" + ADVISORY_LOCK_KEY + ")");
