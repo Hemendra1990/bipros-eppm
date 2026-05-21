@@ -51,8 +51,10 @@ public class IngestionOrchestrator {
             // PARSING
             if (resumeFrom(job, HdsIngestionStage.PARSING)) {
                 advance(job, version, HdsIngestionStage.PARSING, 0, "Parsing PDF…");
-                byte[] pdf = storage.download(version.getStorageKey()).readAllBytes();
-                parsed = docling.parse(pdf, version.getFileName());
+                try (var pdf = storage.download(version.getStorageKey())) {
+                    Long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
+                    parsed = docling.parse(pdf, sz, version.getFileName());
+                }
                 if (parsed.getPages() != null) {
                     Integer pages = parsed.getPages();
                     versionRepo.findById(version.getId()).ifPresent(v -> {
@@ -69,8 +71,10 @@ public class IngestionOrchestrator {
             if (resumeFrom(job, HdsIngestionStage.CHUNKING)) {
                 if (parsed == null) {
                     // Resumed mid-pipeline — re-parse (Docling is idempotent on the same bytes)
-                    byte[] pdf = storage.download(version.getStorageKey()).readAllBytes();
-                    parsed = docling.parse(pdf, version.getFileName());
+                    try (var pdf = storage.download(version.getStorageKey())) {
+                        long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
+                        parsed = docling.parse(pdf, sz, version.getFileName());
+                    }
                 }
                 advance(job, version, HdsIngestionStage.CHUNKING, 65, "Chunking…");
                 chunks = chunking.chunk(parsed);
@@ -81,8 +85,10 @@ public class IngestionOrchestrator {
             if (resumeFrom(job, HdsIngestionStage.EMBEDDING)) {
                 if (chunks == null) {
                     if (parsed == null) {
-                        byte[] pdf = storage.download(version.getStorageKey()).readAllBytes();
-                        parsed = docling.parse(pdf, version.getFileName());
+                        try (var pdf = storage.download(version.getStorageKey())) {
+                            long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
+                            parsed = docling.parse(pdf, sz, version.getFileName());
+                        }
                     }
                     chunks = chunking.chunk(parsed);
                 }
@@ -100,8 +106,10 @@ public class IngestionOrchestrator {
                 if (chunks == null || embeddings == null) {
                     // Resumed mid-INDEXING: re-run embedding (cheap to redo at our scale).
                     if (parsed == null) {
-                        byte[] pdf = storage.download(version.getStorageKey()).readAllBytes();
-                        parsed = docling.parse(pdf, version.getFileName());
+                        try (var pdf = storage.download(version.getStorageKey())) {
+                            long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
+                            parsed = docling.parse(pdf, sz, version.getFileName());
+                        }
                     }
                     if (chunks == null) chunks = chunking.chunk(parsed);
                     if (embeddings == null) {

@@ -4,57 +4,82 @@ import com.bipros.hds.config.HdsProperties;
 import com.bipros.hds.infrastructure.docling.dto.DoclingBlock;
 import com.bipros.hds.infrastructure.docling.dto.DoclingResponse;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Calls docling-serve's /v1/convert/file endpoint and converts the markdown content
  * it returns into the synthetic DoclingBlock list the chunker consumes.
  *
- * <p>docling-serve's response shape is {@code {document: {md_content, json_content, ...},
- * status, processing_time, ...}}. The richer structure is in {@code json_content}, but
- * for v1 we parse {@code md_content} (markdown) into heading + paragraph blocks.
- * Section numbers and page numbers come from the markdown headings when present.
+ * <p>For large PDFs (hundreds of MB) the body is streamed via {@link InputStreamResource}
+ * instead of buffered into a byte array. The underlying Reactor Netty connector is
+ * configured with multi-hour timeouts so Docling has enough wall time to parse 1 GB docs.
  */
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class DoclingClient {
 
+    private static final int CODEC_MAX_BYTES = 2 * 1024 * 1024 * 1024 - 1;   // ~2 GB
+
     private final HdsProperties props;
     private WebClient webClient;
 
     private WebClient client() {
         if (webClient == null) {
+            int timeoutMinutes = Math.max(15, props.getDocling().getTimeoutMinutes());
+            HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60_000)
+                .responseTimeout(Duration.ofMinutes(timeoutMinutes))
+                .doOnConnected(conn -> conn
+                    .addHandlerLast(new ReadTimeoutHandler(timeoutMinutes * 60L, TimeUnit.SECONDS))
+                    .addHandlerLast(new WriteTimeoutHandler(timeoutMinutes * 60L, TimeUnit.SECONDS)));
+
             webClient = WebClient.builder()
                 .baseUrl(props.getDocling().getUrl())
-                .codecs(c -> c.defaultCodecs().maxInMemorySize(64 * 1024 * 1024))
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .codecs(c -> c.defaultCodecs().maxInMemorySize(CODEC_MAX_BYTES))
                 .build();
         }
         return webClient;
     }
 
-    public DoclingResponse parse(byte[] pdfBytes, String fileName) {
-        log.info("Submitting PDF to Docling: name={}, size={} bytes", fileName, pdfBytes.length);
+    /**
+     * Streamed variant — preferred for large PDFs.
+     * The caller is responsible for closing the stream after the call returns.
+     */
+    public DoclingResponse parse(InputStream pdfStream, long contentLength, String fileName) {
+        log.info("Submitting PDF to Docling (stream): name={}, length={} bytes", fileName, contentLength);
         MultipartBodyBuilder mb = new MultipartBodyBuilder();
-        mb.part("files", new ByteArrayResource(pdfBytes) {
+        // InputStreamResource with explicit content length streams the body
+        // instead of buffering it.
+        InputStreamResource resource = new InputStreamResource(pdfStream) {
             @Override public String getFilename() { return fileName; }
-        }).contentType(MediaType.APPLICATION_PDF);
+            @Override public long contentLength() { return contentLength; }
+        };
+        mb.part("files", resource).contentType(MediaType.APPLICATION_PDF);
         mb.part("to_formats", "md");
         mb.part("do_ocr", "false");
         mb.part("do_table_structure", "true");
 
-        Duration timeout = Duration.ofMinutes(props.getDocling().getTimeoutMinutes());
+        Duration timeout = Duration.ofMinutes(Math.max(15, props.getDocling().getTimeoutMinutes()));
         JsonNode raw = client().post()
             .uri("/v1/convert/file")
             .contentType(MediaType.MULTIPART_FORM_DATA)
@@ -66,18 +91,25 @@ public class DoclingClient {
         if (raw == null) {
             throw new IllegalStateException("Docling returned null response");
         }
+        String status = raw.path("status").asText("ok");
         String md = raw.path("document").path("md_content").asText("");
         if (md.isBlank()) {
-            log.warn("Docling returned empty md_content; status={}", raw.path("status").asText());
+            log.warn("Docling returned empty md_content; status={}", status);
         }
 
         DoclingResponse resp = new DoclingResponse();
-        resp.setStatus(raw.path("status").asText("ok"));
+        resp.setStatus(status);
         resp.setBlocks(markdownToBlocks(md));
-        // We don't have page-level metadata from md_content; the chunker handles -1 → 1 fallback.
         resp.setPages(1);
         log.info("Docling parse complete: status={}, blocks={}", resp.getStatus(), resp.getBlocks().size());
         return resp;
+    }
+
+    /**
+     * Buffered variant kept for tests and small payloads.
+     */
+    public DoclingResponse parse(byte[] pdfBytes, String fileName) {
+        return parse(new java.io.ByteArrayInputStream(pdfBytes), pdfBytes.length, fileName);
     }
 
     /**
@@ -95,8 +127,7 @@ public class DoclingClient {
         StringBuilder table = new StringBuilder();
         boolean inTable = false;
 
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
+        for (String line : lines) {
             String trimmed = line.trim();
 
             if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
@@ -124,9 +155,7 @@ public class DoclingClient {
                 hb.setLevel(level);
                 hb.setText(headingText);
                 hb.setPage(1);
-                // Best-effort section number — leading "1.2.3 ..." pattern
-                String sectionNum = leadingSectionNumber(headingText);
-                hb.setSectionNumber(sectionNum);
+                hb.setSectionNumber(leadingSectionNumber(headingText));
                 out.add(hb);
                 continue;
             }
@@ -160,7 +189,6 @@ public class DoclingClient {
     }
 
     private String leadingSectionNumber(String heading) {
-        // Match "1", "1.2", "1.2.3", optionally followed by a space.
         int i = 0;
         while (i < heading.length() && (Character.isDigit(heading.charAt(i)) || heading.charAt(i) == '.')) {
             i++;

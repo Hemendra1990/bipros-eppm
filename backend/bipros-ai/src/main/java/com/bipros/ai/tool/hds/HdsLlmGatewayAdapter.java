@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -62,7 +63,7 @@ public class HdsLlmGatewayAdapter implements LlmGateway {
                 jsonObjectResponseFormat(),
                 null,
                 null);
-        LlmProvider.ChatResponse resp = provider.chatCompletion(req);
+        LlmProvider.ChatResponse resp = retryOnTransient(() -> provider.chatCompletion(req));
         return resp.content() == null ? "" : resp.content();
     }
 
@@ -108,7 +109,7 @@ public class HdsLlmGatewayAdapter implements LlmGateway {
                     streamError.get() == null ? "none" : streamError.get().getMessage());
         }
 
-        LlmProvider.ChatResponse resp = provider.chatCompletion(req);
+        LlmProvider.ChatResponse resp = retryOnTransient(() -> provider.chatCompletion(req));
         String content = resp.content() == null ? "" : resp.content();
         if (onToken != null && !content.isEmpty()) {
             try {
@@ -143,5 +144,53 @@ public class HdsLlmGatewayAdapter implements LlmGateway {
     @SuppressWarnings("unused")
     private Duration streamTimeoutForTests() {
         return STREAM_TIMEOUT;
+    }
+
+    /**
+     * Retries the provider call up to twice on transient network failures
+     * ("Connection reset", "Connection prematurely closed", "Broken pipe", etc.)
+     * with a short backoff. Pool connections to OpenAI go stale; the first
+     * attempt may fail with a reset before the client picks a fresh socket.
+     */
+    private <T> T retryOnTransient(Supplier<T> call) {
+        RuntimeException last = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                return call.get();
+            } catch (RuntimeException e) {
+                if (!isTransientNetworkError(e) || attempt == 3) {
+                    throw e;
+                }
+                last = e;
+                long delayMs = 300L * attempt;
+                log.warn("LLM call attempt {}/3 hit transient error ({}); retrying in {}ms",
+                        attempt, e.getMessage(), delayMs);
+                try { Thread.sleep(delayMs); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw last;
+                }
+            }
+        }
+        throw last == null ? new IllegalStateException("unreachable") : last;
+    }
+
+    static boolean isTransientNetworkError(Throwable t) {
+        for (Throwable cur = t; cur != null; cur = cur.getCause()) {
+            String msg = cur.getMessage();
+            if (msg != null && (
+                msg.contains("Connection reset")
+                || msg.contains("Connection prematurely closed")
+                || msg.contains("Broken pipe")
+                || msg.contains("connection was aborted")
+                || msg.contains("Read timed out")
+            )) return true;
+            if (cur instanceof java.net.SocketException
+                || cur instanceof java.net.SocketTimeoutException
+                || cur instanceof java.io.IOException
+                   && cur.getClass().getSimpleName().equals("PrematureCloseException")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

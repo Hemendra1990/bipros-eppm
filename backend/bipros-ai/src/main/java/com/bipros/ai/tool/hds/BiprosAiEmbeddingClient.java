@@ -84,7 +84,7 @@ public class BiprosAiEmbeddingClient implements EmbeddingClient {
             .retrieve()
             .bodyToMono(JsonNode.class)
             .retryWhen(reactor.util.retry.Retry.backoff(4, Duration.ofSeconds(2))
-                .filter(this::isRetryable))
+                .filter(t -> isRetryable(t) || HdsLlmGatewayAdapter.isTransientNetworkError(t)))
             .block(Duration.ofMinutes(2));
 
         if (resp == null || !resp.has("data")) {

@@ -70,6 +70,12 @@ server:
   port: 8080
   servlet:
     context-path: /
+  tomcat:
+    # Tomcat silently drops large bodies past max-swallow-size (default 2MB).
+    # Match the multipart limits so 1GB HDS PDF uploads aren't truncated.
+    max-swallow-size: 1200MB
+    max-http-form-post-size: 1200MB
+    connection-timeout: 10m
 
 # JWT Configuration — set JWT_SECRET in prod env to a 32+ byte random string.
 bipros:
