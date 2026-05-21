@@ -11,7 +11,6 @@ const blank = (): DprSubContractorRow => ({
   subContractorMasterId: null,
   subContractorName: "",
   subContractorCode: "",
-  unitsExecuted: null,
   remarks: null,
 });
 
@@ -23,8 +22,8 @@ interface Props {
 }
 
 /**
- * Sub-contractor DPR grid. Supervisor picks from the master list and enters units executed.
- * The master list is project-agnostic — all active sub-contractors are available.
+ * Sub-contractor DPR grid. Supervisor picks from the master list to record which
+ * sub-contractor worked on the activity that day. The master list is project-agnostic.
  */
 export function SubContractorGrid({ activityId, rows, onChange }: Props) {
   const { data: mastersResp, isLoading } = useQuery({
@@ -76,21 +75,6 @@ export function SubContractorGrid({ activityId, rows, onChange }: Props) {
           placeholder={isLoading ? "Loading…" : "Pick sub-contractor…"}
           loading={isLoading}
           disabled={!activityId}
-        />
-      ),
-    },
-    {
-      key: "unitsExecuted",
-      label: "Units Executed",
-      minWidth: 160,
-      align: "right",
-      render: (r, _i, u) => (
-        <CellInput
-          type="number"
-          step="0.01"
-          min="0"
-          value={r.unitsExecuted}
-          onChange={(v) => u({ unitsExecuted: v === "" ? null : Number(v) })}
         />
       ),
     },

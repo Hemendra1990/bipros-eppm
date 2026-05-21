@@ -1670,10 +1670,10 @@ public class DailyProgressReportService {
     if (reqSize != existing.size()) return false;
     if (reqSize == 0) return true;
     List<String> a = req.stream().map(r ->
-        s(r.subContractorMasterId()) + "|" + b(r.unitsExecuted()) + "|" + nz(r.remarks())
+        s(r.subContractorMasterId()) + "|" + nz(r.remarks())
     ).sorted().toList();
     List<String> e = existing.stream().map(r ->
-        s(r.getSubContractorMasterId()) + "|" + b(r.getUnitsExecuted()) + "|" + nz(r.getRemarks())
+        s(r.getSubContractorMasterId()) + "|" + nz(r.getRemarks())
     ).sorted().toList();
     return a.equals(e);
   }

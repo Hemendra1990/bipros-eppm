@@ -87,7 +87,6 @@ export interface DprSubContractorRow {
   subContractorMasterId?: string | null;
   subContractorName?: string | null;
   subContractorCode?: string | null;
-  unitsExecuted?: number | null;
   remarks?: string | null;
 }
 

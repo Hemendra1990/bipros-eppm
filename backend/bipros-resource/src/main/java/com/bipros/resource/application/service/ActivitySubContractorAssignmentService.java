@@ -67,7 +67,6 @@ public class ActivitySubContractorAssignmentService {
         .activityId(activityId)
         .projectId(projectId)
         .subContractorMasterId(masterId)
-        .units(req.units())
         .build();
 
     ActivitySubContractorAssignment saved = assignmentRepository.save(assignment);

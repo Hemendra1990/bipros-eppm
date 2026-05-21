@@ -220,10 +220,9 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
           <DetailTable
             title="Sub-Contractor"
             empty="No sub-contractor"
-            headers={["Sub-Contractor", "Units Executed"]}
+            headers={["Sub-Contractor"]}
             rows={(row.subContractors ?? []).map((s) => [
               s.subContractorName ?? "—",
-              fmt(s.unitsExecuted, 2),
             ])}
           />
 

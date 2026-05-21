@@ -677,7 +677,6 @@ function SubContractorSection({
   locked,
 }: SubContractorSectionProps) {
   const [masterId, setMasterId] = useState("");
-  const [units, setUnits] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
   const activeMasters = useMemo(
@@ -690,11 +689,9 @@ function SubContractorSection({
       activitySubContractorApi.create(projectId, {
         activityId,
         subContractorMasterId: masterId,
-        units,
       }),
     onSuccess: () => {
       setMasterId("");
-      setUnits(0);
       setError(null);
       onChanged();
     },
@@ -712,7 +709,7 @@ function SubContractorSection({
     <section className="rounded-md border border-border bg-surface p-3">
       <h4 className="mb-2 text-sm font-semibold">Sub-Contractor Requirements</h4>
       {error && <div className="mb-2 text-xs text-danger">{error}</div>}
-      <div className="grid grid-cols-[1.6fr_1fr_auto] gap-2 items-end">
+      <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
         <label className="text-xs">
           <span className="text-text-muted">Sub-Contractor</span>
           <select
@@ -729,20 +726,8 @@ function SubContractorSection({
             ))}
           </select>
         </label>
-        <label className="text-xs">
-          <span className="text-text-muted">Units</span>
-          <input
-            type="number"
-            step="0.01"
-            min={0}
-            value={units}
-            onChange={(e) => setUnits(parseFloat(e.target.value) || 0)}
-            disabled={locked}
-            className="mt-1 w-full rounded-md border border-border bg-surface-hover px-2 py-1.5 text-xs disabled:opacity-50"
-          />
-        </label>
         <button
-          disabled={locked || !masterId || !units || create.isPending}
+          disabled={locked || !masterId || create.isPending}
           onClick={() => create.mutate()}
           className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
         >
@@ -759,7 +744,6 @@ function SubContractorSection({
               <tr>
                 <th className="py-1.5 pr-2 text-left font-medium">Sub-Contractor</th>
                 <th className="py-1.5 pr-2 text-left font-medium">Code</th>
-                <th className="py-1.5 pr-2 text-left font-medium">Units</th>
                 <th className="py-1.5 text-right" />
               </tr>
             </thead>
@@ -768,7 +752,6 @@ function SubContractorSection({
                 <tr key={r.id} className="border-b border-border/40">
                   <td className="py-1.5 pr-2">{r.subContractorName ?? "—"}</td>
                   <td className="py-1.5 pr-2">{r.subContractorCode ?? "—"}</td>
-                  <td className="py-1.5 pr-2">{r.units ?? "—"}</td>
                   <td className="py-1.5 text-right">
                     <button
                       onClick={() => remove.mutate(r.id)}

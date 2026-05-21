@@ -3,7 +3,6 @@ package com.bipros.resource.application.dto;
 import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.master.SubContractorMaster;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -15,7 +14,6 @@ public record ActivitySubContractorAssignmentResponse(
     String subContractorName,
     String subContractorCode,
     String subContractorLocation,
-    BigDecimal units,
     Instant createdAt,
     Instant updatedAt) {
 
@@ -29,7 +27,6 @@ public record ActivitySubContractorAssignmentResponse(
         master == null ? null : master.getName(),
         master == null ? null : master.getCode(),
         master == null ? null : master.getLocation(),
-        a.getUnits(),
         a.getCreatedAt(),
         a.getUpdatedAt());
   }

@@ -11,14 +11,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Sub-contractor line item under a {@link DailyProgressReport} row. Each row records the
- * units executed by one sub-contractor for that activity on that day. {@code dprId} is a soft FK
- * — lifecycle is managed transactionally by {@code DailyProgressReportService}
- * (replace-on-update semantics).
+ * Sub-contractor line item under a {@link DailyProgressReport} row. Each row records which
+ * sub-contractor worked on that activity that day. {@code dprId} is a soft FK — lifecycle is
+ * managed transactionally by {@code DailyProgressReportService} (replace-on-update semantics).
  */
 @Entity
 @Table(
@@ -45,9 +43,6 @@ public class DprSubContractor extends BaseEntity {
 
   @Column(name = "sub_contractor_code", length = 50)
   private String subContractorCode;
-
-  @Column(name = "units_executed", precision = 19, scale = 4)
-  private BigDecimal unitsExecuted;
 
   @Column(name = "remarks", length = 500)
   private String remarks;
