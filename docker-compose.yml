@@ -48,6 +48,26 @@ services:
       timeout: 5s
       retries: 5
 
+  docling:
+    image: quay.io/docling-project/docling-serve-cpu:latest
+    container_name: bipros-docling
+    ports:
+      - "5001:5001"
+    environment:
+      DOCLING_SERVE_ENABLE_UI: "false"
+      DOCLING_SERVE_API_HOST: "0.0.0.0"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
   # S3-compatible object store for satellite raster tiles. Prod can point the
   # storage adapter at AWS S3; dev uses MinIO so `docker compose up -d` gives a
   # working pipeline without AWS credentials.
