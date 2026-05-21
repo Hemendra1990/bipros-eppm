@@ -67,8 +67,9 @@ class IngestionOrchestratorTest {
         job.setHdsVersionId(versionId);
         job.setStage(HdsIngestionStage.PARSING);
 
+        var listener = mock(com.bipros.hds.application.library.VersionStatusListener.class);
         var orch = new IngestionOrchestrator(props, versionRepo, jobRepo, storage, docling,
-            chunking, embedSvc, hybrid, progress);
+            chunking, embedSvc, hybrid, progress, listener);
         orch.run(job);
 
         ArgumentCaptor<HdsVersion> verCap = ArgumentCaptor.forClass(HdsVersion.class);

@@ -7,6 +7,7 @@ import com.bipros.hds.domain.enums.HdsIngestionStage;
 import com.bipros.hds.domain.enums.HdsVersionStatus;
 import com.bipros.hds.domain.repo.HdsIngestionJobRepository;
 import com.bipros.hds.domain.repo.HdsVersionRepository;
+import com.bipros.hds.application.library.VersionStatusListener;
 import com.bipros.hds.infrastructure.docling.DoclingClient;
 import com.bipros.hds.infrastructure.docling.dto.DoclingResponse;
 import com.bipros.hds.infrastructure.retrieval.HybridSearchRepository;
@@ -35,6 +36,7 @@ public class IngestionOrchestrator {
     private final EmbeddingService embedding;
     private final HybridSearchRepository hybridRepo;
     private final ProgressStreamRegistry progress;
+    private final VersionStatusListener versionStatusListener;
 
     /** Runs the full pipeline from the job's current stage to COMPLETE or FAILED. Blocking. */
     public void run(HdsIngestionJob job) {
@@ -121,8 +123,7 @@ public class IngestionOrchestrator {
                 job.setCompletedAt(Instant.now());
                 jobRepo.save(job);
                 progress.publish(new IngestionProgressEvent(version.getId(), "COMPLETE", 100, "Indexed " + chunks.size() + " chunks"));
-                // TODO(hds-cache-invalidate): call versionStatusListener.onIndexedOrFailed(version)
-                // once Track C's VersionStatusListener bean is wired in (Phase 5).
+                versionStatusListener.onIndexedOrFailed(version);
             }
         } catch (Exception e) {
             log.error("Ingestion failed: versionId={}", version.getId(), e);
@@ -134,8 +135,7 @@ public class IngestionOrchestrator {
             version.setIndexingError(job.getErrorMessage());
             versionRepo.save(version);
             progress.publish(new IngestionProgressEvent(version.getId(), "FAILED", job.getProgressPct(), job.getErrorMessage()));
-            // TODO(hds-cache-invalidate): call versionStatusListener.onIndexedOrFailed(version)
-            // once Track C's VersionStatusListener bean is wired in (Phase 5).
+            versionStatusListener.onIndexedOrFailed(version);
             throw new RuntimeException(e);
         }
     }
