@@ -13,6 +13,7 @@ import com.bipros.project.application.dto.DprEquipmentRow;
 import com.bipros.project.application.dto.DprIssueRow;
 import com.bipros.project.application.dto.DprManpowerRow;
 import com.bipros.project.application.dto.DprMaterialRow;
+import com.bipros.project.application.dto.DprSubContractorRow;
 import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
 import com.bipros.project.application.util.DprCostFormulas;
 import com.bipros.project.domain.model.DailyProgressReport;
@@ -21,6 +22,7 @@ import com.bipros.project.domain.model.DprEquipment;
 import com.bipros.project.domain.model.DprIssue;
 import com.bipros.project.domain.model.DprManpower;
 import com.bipros.project.domain.model.DprMaterial;
+import com.bipros.project.domain.model.DprSubContractor;
 import com.bipros.project.domain.model.IssueStatus;
 import com.bipros.project.domain.repository.BoqItemRepository;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
@@ -29,6 +31,7 @@ import com.bipros.project.domain.repository.DprEquipmentRepository;
 import com.bipros.project.domain.repository.DprIssueRepository;
 import com.bipros.project.domain.repository.DprManpowerRepository;
 import com.bipros.project.domain.repository.DprMaterialRepository;
+import com.bipros.project.domain.repository.DprSubContractorRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.model.BoqItem;
 import jakarta.persistence.EntityManager;
@@ -81,6 +84,7 @@ public class DailyProgressReportService {
   private final DprManpowerRepository manpowerRepository;
   private final DprEquipmentRepository equipmentRepository;
   private final DprMaterialRepository materialRepository;
+  private final DprSubContractorRepository subContractorRepository;
   private final DprAttachmentRepository attachmentRepository;
   private final DprIssueRepository issueRepository;
   private final com.bipros.project.infrastructure.storage.DprAttachmentStorageService attachmentStorage;
@@ -170,6 +174,7 @@ public class DailyProgressReportService {
     List<DprManpower> savedManpower = snap.manpower.isEmpty() ? List.of() : manpowerRepository.saveAll(snap.manpower);
     List<DprEquipment> savedEquipment = snap.equipment.isEmpty() ? List.of() : equipmentRepository.saveAll(snap.equipment);
     List<DprMaterial> savedMaterial = snap.material.isEmpty() ? List.of() : materialRepository.saveAll(snap.material);
+    List<DprSubContractor> savedSubContractors = saveSubContractors(saved.getId(), request.subContractors());
 
     reconcileLedger(saved, savedManpower, savedEquipment, savedMaterial);
     // Insert phantom ResourceAssignment rows for any (role, variant) the planner never added.
@@ -188,6 +193,7 @@ public class DailyProgressReportService {
         savedManpower.stream().map(DprManpowerRow::from).toList(),
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
+        savedSubContractors.stream().map(DprSubContractorRow::from).toList(),
         List.of(),
         savedIssues.stream().map(DprIssueRow::from).toList(),
         warnings);
@@ -254,9 +260,10 @@ public class DailyProgressReportService {
     List<DprManpower> existingManpower = manpowerRepository.findByDprIdOrderByTradeAsc(saved.getId());
     List<DprEquipment> existingEquipment = equipmentRepository.findByDprIdOrderByEquipmentTypeAsc(saved.getId());
     List<DprMaterial> existingMaterial = materialRepository.findByDprIdOrderByMaterialNameAsc(saved.getId());
+    List<DprSubContractor> existingSubContractors = subContractorRepository.findByDprIdOrderBySubContractorNameAsc(saved.getId());
     boolean resourcesUnchanged = resourceRowsEqual(
-        request.manpower(), request.equipment(), request.materials(),
-        existingManpower, existingEquipment, existingMaterial);
+        request.manpower(), request.equipment(), request.materials(), request.subContractors(),
+        existingManpower, existingEquipment, existingMaterial, existingSubContractors);
 
     List<String> warnings = new ArrayList<>();
     addUnitMismatchWarning(saved, warnings);
@@ -264,26 +271,31 @@ public class DailyProgressReportService {
     List<DprManpower> savedManpower;
     List<DprEquipment> savedEquipment;
     List<DprMaterial> savedMaterial;
+    List<DprSubContractor> savedSubContractors;
     if (resourcesUnchanged) {
       // Nothing in the resource arrays changed — leave the rows + the activity rollup alone.
       savedManpower = existingManpower;
       savedEquipment = existingEquipment;
       savedMaterial = existingMaterial;
+      savedSubContractors = existingSubContractors;
     } else {
       // Replace children: delete then re-insert. Flush between to avoid PK collisions on the
       // unique constraint inside one TX (Hibernate batches the delete with the insert otherwise).
       manpowerRepository.deleteByDprId(saved.getId());
       equipmentRepository.deleteByDprId(saved.getId());
       materialRepository.deleteByDprId(saved.getId());
+      subContractorRepository.deleteByDprId(saved.getId());
       manpowerRepository.flush();
       equipmentRepository.flush();
       materialRepository.flush();
+      subContractorRepository.flush();
 
       SnapshottedChildren snap = snapshotChildren(saved, request.manpower(), request.equipment(), request.materials(), warnings);
 
       savedManpower = snap.manpower.isEmpty() ? List.of() : manpowerRepository.saveAll(snap.manpower);
       savedEquipment = snap.equipment.isEmpty() ? List.of() : equipmentRepository.saveAll(snap.equipment);
       savedMaterial = snap.material.isEmpty() ? List.of() : materialRepository.saveAll(snap.material);
+      savedSubContractors = saveSubContractors(saved.getId(), request.subContractors());
 
       reconcileLedger(saved, savedManpower, savedEquipment, savedMaterial);
       ensureAssignmentsExist(saved.getActivityId(), saved.getProjectId(), warnings);
@@ -304,6 +316,7 @@ public class DailyProgressReportService {
         savedManpower.stream().map(DprManpowerRow::from).toList(),
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
+        savedSubContractors.stream().map(DprSubContractorRow::from).toList(),
         attachments,
         savedIssues.stream().map(DprIssueRow::from).toList(),
         warnings);
@@ -337,6 +350,7 @@ public class DailyProgressReportService {
         manpowerRepository.findByDprIdOrderByTradeAsc(id).stream().map(DprManpowerRow::from).toList(),
         equipmentRepository.findByDprIdOrderByEquipmentTypeAsc(id).stream().map(DprEquipmentRow::from).toList(),
         materialRepository.findByDprIdOrderByMaterialNameAsc(id).stream().map(DprMaterialRow::from).toList(),
+        subContractorRepository.findByDprIdOrderBySubContractorNameAsc(id).stream().map(DprSubContractorRow::from).toList(),
         attachmentRepository.findByDprIdOrderByCreatedAtAsc(id).stream().map(DprAttachmentResponse::from).toList(),
         issueRepository.findByDprIdOrderByOpenedAtAsc(id).stream().map(DprIssueRow::from).toList()
     );
@@ -358,6 +372,7 @@ public class DailyProgressReportService {
     manpowerRepository.deleteByDprId(dprId);
     equipmentRepository.deleteByDprId(dprId);
     materialRepository.deleteByDprId(dprId);
+    subContractorRepository.deleteByDprId(dprId);
     issueRepository.deleteByDprId(dprId);
     // Photos: collect paths before the DB rows are removed, then drop binaries best-effort.
     List<DprAttachment> attachments = attachmentRepository.findByDprIdOrderByCreatedAtAsc(dprId);
@@ -399,6 +414,9 @@ public class DailyProgressReportService {
     Map<UUID, List<DprMaterialRow>> materialByDpr = materialRepository.findByDprIdIn(ids).stream()
         .collect(Collectors.groupingBy(DprMaterial::getDprId,
             Collectors.mapping(DprMaterialRow::from, Collectors.toList())));
+    Map<UUID, List<DprSubContractorRow>> subContractorsByDpr = subContractorRepository.findByDprIdIn(ids).stream()
+        .collect(Collectors.groupingBy(DprSubContractor::getDprId,
+            Collectors.mapping(DprSubContractorRow::from, Collectors.toList())));
     Map<UUID, List<DprAttachmentResponse>> attachmentsByDpr = attachmentRepository.findByDprIdIn(ids).stream()
         .collect(Collectors.groupingBy(DprAttachment::getDprId,
             Collectors.mapping(DprAttachmentResponse::from, Collectors.toList())));
@@ -423,6 +441,7 @@ public class DailyProgressReportService {
               manpowerByDpr.getOrDefault(r.getId(), List.of()),
               equipmentByDpr.getOrDefault(r.getId(), List.of()),
               materialByDpr.getOrDefault(r.getId(), List.of()),
+              subContractorsByDpr.getOrDefault(r.getId(), List.of()),
               attachmentsByDpr.getOrDefault(r.getId(), List.of()),
               issuesByDpr.getOrDefault(r.getId(), List.of())));
         });
@@ -805,6 +824,35 @@ public class DailyProgressReportService {
     }
 
     return new SnapshottedChildren(manpower, equipment, material);
+  }
+
+  /**
+   * Persist sub-contractor rows under a DPR. Validates each master exists via a native SQL
+   * cross-schema read (same pattern as role-rate lookups), snapshots name+code, and saves all.
+   */
+  private List<DprSubContractor> saveSubContractors(UUID dprId, List<DprSubContractorRow> rows) {
+    if (rows == null || rows.isEmpty()) return List.of();
+    List<DprSubContractor> entities = new ArrayList<>(rows.size());
+    for (DprSubContractorRow row : rows) {
+      String name = null;
+      String code = null;
+      if (em != null && row.subContractorMasterId() != null) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> masterRows = em.createNativeQuery(
+                "SELECT name, code FROM resource.sub_contractor_master WHERE id = :id")
+            .setParameter("id", row.subContractorMasterId())
+            .getResultList();
+        if (!masterRows.isEmpty()) {
+          name = (String) masterRows.get(0)[0];
+          code = (String) masterRows.get(0)[1];
+        }
+      }
+      DprSubContractor entity = row.toEntity(dprId);
+      entity.setSubContractorName(name != null ? name : row.subContractorName());
+      entity.setSubContractorCode(code != null ? code : row.subContractorCode());
+      entities.add(entity);
+    }
+    return subContractorRepository.saveAll(entities);
   }
 
   /**
@@ -1554,11 +1602,12 @@ public class DailyProgressReportService {
   // ===========================================================================================
 
   private boolean resourceRowsEqual(
-      List<DprManpowerRow> reqMan, List<DprEquipmentRow> reqEq, List<DprMaterialRow> reqMat,
-      List<DprManpower> existMan, List<DprEquipment> existEq, List<DprMaterial> existMat) {
+      List<DprManpowerRow> reqMan, List<DprEquipmentRow> reqEq, List<DprMaterialRow> reqMat, List<DprSubContractorRow> reqSub,
+      List<DprManpower> existMan, List<DprEquipment> existEq, List<DprMaterial> existMat, List<DprSubContractor> existSub) {
     return manpowerRowsEqual(reqMan, existMan)
         && equipmentRowsEqual(reqEq, existEq)
-        && materialRowsEqual(reqMat, existMat);
+        && materialRowsEqual(reqMat, existMat)
+        && subContractorRowsEqual(reqSub, existSub);
   }
 
   private static boolean manpowerRowsEqual(List<DprManpowerRow> req, List<DprManpower> existing) {
@@ -1612,6 +1661,19 @@ public class DailyProgressReportService {
     List<String> e = existing.stream().map(r ->
         s(r.getRoleId()) + "|" + s(r.getMaterialRoleVariantId()) + "|" + b(r.getQuantity()) + "|"
             + nz(r.getBatchNo()) + "|" + nz(r.getVendorName()) + "|" + nz(r.getSource()) + "|" + nz(r.getRemarks())
+    ).sorted().toList();
+    return a.equals(e);
+  }
+
+  private static boolean subContractorRowsEqual(List<DprSubContractorRow> req, List<DprSubContractor> existing) {
+    int reqSize = req == null ? 0 : req.size();
+    if (reqSize != existing.size()) return false;
+    if (reqSize == 0) return true;
+    List<String> a = req.stream().map(r ->
+        s(r.subContractorMasterId()) + "|" + b(r.unitsExecuted()) + "|" + nz(r.remarks())
+    ).sorted().toList();
+    List<String> e = existing.stream().map(r ->
+        s(r.getSubContractorMasterId()) + "|" + b(r.getUnitsExecuted()) + "|" + nz(r.getRemarks())
     ).sorted().toList();
     return a.equals(e);
   }

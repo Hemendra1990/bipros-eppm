@@ -269,6 +269,17 @@ export function DprWorkFrontRow({ row, index, total, onEdit, onDelete }: Props) 
             accent="steel"
             numericFromIndex={1}
           />
+          <DetailTable
+            title="Sub-Contractor"
+            empty="No sub-contractor"
+            headers={["Sub-Contractor", "Units Executed"]}
+            rows={(row.subContractors ?? []).map((s) => [
+              s.subContractorName ?? "—",
+              fmt(s.unitsExecuted, 2),
+            ])}
+            accent="slate"
+            numericFromIndex={1}
+          />
 
           {liveIssues.length > 0 && (
             <div>
