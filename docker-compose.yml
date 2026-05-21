@@ -1,10 +1,11 @@
 services:
   postgresql:
-    # postgis/postgis:17-3.5 ships Postgres 17 + PostGIS 3.5 extensions so that
-    # the gis module's wbs_polygons geometry column is resolvable without a
-    # separate extension installer step. Bipros only uses PostGIS for polygons
-    # right now but the same image works for future raster / topology needs.
-    image: postgis/postgis:17-3.5
+    # Custom image: postgis/postgis:17-3.5 (Postgres 17 + PostGIS 3.5 for the
+    # gis module's wbs_polygons geometry column) extended with pgvector for the
+    # HDS knowledge base. See docker/postgres/Dockerfile.
+    build:
+      context: ./docker/postgres
+    image: bipros-postgis-pgvector:17-3.5
     container_name: bipros-postgres
     environment:
       POSTGRES_PASSWORD: postgres_password
