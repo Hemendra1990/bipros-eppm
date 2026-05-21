@@ -1,8 +1,8 @@
 package com.bipros.resource.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
-import com.bipros.resource.application.dto.SubContractorMasterRequest;
 import com.bipros.resource.application.dto.SubContractorMasterResponse;
+import com.bipros.resource.application.dto.SubContractorMasterWithMappingsRequest;
 import com.bipros.resource.application.service.SubContractorMasterService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +44,7 @@ public class SubContractorMasterController {
   @PostMapping
   @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
   public ResponseEntity<ApiResponse<SubContractorMasterResponse>> create(
-      @Valid @RequestBody SubContractorMasterRequest request) {
+      @Valid @RequestBody SubContractorMasterWithMappingsRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.ok(service.create(request)));
   }
@@ -52,7 +52,7 @@ public class SubContractorMasterController {
   @PutMapping("/{id}")
   @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
   public ResponseEntity<ApiResponse<SubContractorMasterResponse>> update(
-      @PathVariable UUID id, @Valid @RequestBody SubContractorMasterRequest request) {
+      @PathVariable UUID id, @Valid @RequestBody SubContractorMasterWithMappingsRequest request) {
     return ResponseEntity.ok(ApiResponse.ok(service.update(id, request)));
   }
 

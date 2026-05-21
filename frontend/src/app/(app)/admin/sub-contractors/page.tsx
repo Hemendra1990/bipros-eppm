@@ -8,44 +8,16 @@ import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import {
   subContractorMasterApi,
   type SubContractorMaster,
-  type SubContractorMasterRequest,
 } from "@/lib/api/subContractorMasterApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
-
-interface RowForm {
-  code: string;
-  name: string;
-  location: string;
-  primaryContactName: string;
-  primaryContactNumber: string;
-  active: boolean;
-}
-
-const initialForm = (): RowForm => ({
-  code: "",
-  name: "",
-  location: "",
-  primaryContactName: "",
-  primaryContactNumber: "",
-  active: true,
-});
-
-const formFromRow = (r: SubContractorMaster): RowForm => ({
-  code: r.code,
-  name: r.name,
-  location: r.location ?? "",
-  primaryContactName: r.primaryContactName ?? "",
-  primaryContactNumber: r.primaryContactNumber ?? "",
-  active: r.active,
-});
+import SubContractorWithMappingsEditor from "@/components/sub-contractor/SubContractorWithMappingsEditor";
 
 export default function SubContractorsPage() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<RowForm>(initialForm());
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError, error: queryError, refetch, isFetching } = useQuery({
@@ -67,14 +39,12 @@ export default function SubContractorsPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(initialForm());
     setError(null);
     setShowForm(true);
   };
 
   const openEdit = (row: SubContractorMaster) => {
     setEditingId(row.id);
-    setForm(formFromRow(row));
     setError(null);
     setShowForm(true);
   };
@@ -82,32 +52,7 @@ export default function SubContractorsPage() {
   const closeForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setForm(initialForm());
     setError(null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      const payload: SubContractorMasterRequest = {
-        code: form.code.trim(),
-        name: form.name.trim(),
-        location: form.location.trim() || null,
-        primaryContactName: form.primaryContactName.trim() || null,
-        primaryContactNumber: form.primaryContactNumber.trim() || null,
-        active: form.active,
-      };
-      if (editingId) {
-        await subContractorMasterApi.update(editingId, payload);
-      } else {
-        await subContractorMasterApi.create(payload);
-      }
-      closeForm();
-      queryClient.invalidateQueries({ queryKey: ["sub-contractors"] });
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to save sub-contractor"));
-    }
   };
 
   const handleDelete = async (id: string) => {
@@ -160,6 +105,15 @@ export default function SubContractorsPage() {
       ),
     },
     {
+      id: "mappings",
+      header: "Activities",
+      cell: ({ row }) => (
+        <span className="text-xs text-slate">
+          {row.original.workActivityMappings?.length ?? 0} mapped
+        </span>
+      ),
+    },
+    {
       accessorKey: "active",
       header: "Active",
       cell: ({ row }) =>
@@ -197,7 +151,7 @@ export default function SubContractorsPage() {
     <div>
       <TabTip
         title="Sub-Contractors"
-        description="Master list of sub-contractors with location and contact details. Used when planning activity resource demand."
+        description="Master list of sub-contractors with work-activity rate mappings. Used when planning activity resource demand and DPR reporting."
       />
 
       <div className="mb-8 flex items-start justify-between gap-6">
@@ -212,8 +166,8 @@ export default function SubContractorsPage() {
             Sub-Contractors
           </h1>
           <p className="mt-2 max-w-[560px] text-sm text-slate leading-relaxed">
-            Admin-managed directory of sub-contractor organisations. Referenced by the
-            Activity Resource Demand panel.
+            Admin-managed directory of sub-contractor organisations with activity rate
+            mappings. Referenced by the Activity Resource Demand panel and DPR forms.
           </p>
         </div>
         <button
@@ -244,84 +198,43 @@ export default function SubContractorsPage() {
         </div>
       )}
 
+      {/* Drawer */}
       {showForm && (
-        <form
-          onSubmit={handleSubmit}
-          className="mb-6 rounded-xl border border-hairline bg-paper p-5 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]"
-        >
-          <h2 className="text-lg font-semibold text-charcoal mb-4">
-            {editingId ? "Edit Sub-Contractor" : "New Sub-Contractor"}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Code *">
-              <input
-                type="text"
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                className={inputCls}
-                required
+        <>
+          <div
+            className="fixed inset-0 z-30 bg-black/50"
+            onClick={closeForm}
+            aria-hidden="true"
+          />
+          <aside
+            className="fixed right-0 top-0 z-40 flex h-screen w-full flex-col border-l border-hairline bg-paper shadow-xl md:w-[760px] lg:w-[920px]"
+            role="dialog"
+            aria-modal="true"
+          >
+            <header className="flex items-center justify-between border-b border-hairline px-5 py-3">
+              <h2 className="text-base font-semibold text-charcoal">
+                {editingId ? "Edit Sub-Contractor" : "New Sub-Contractor"}
+              </h2>
+              <button
+                onClick={closeForm}
+                className="rounded-md p-1 text-slate hover:bg-ivory"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <SubContractorWithMappingsEditor
+                editingId={editingId}
+                onSaved={() => {
+                  closeForm();
+                  queryClient.invalidateQueries({ queryKey: ["sub-contractors"] });
+                }}
+                onCancel={closeForm}
               />
-            </FormField>
-            <FormField label="Name *">
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className={inputCls}
-                required
-              />
-            </FormField>
-            <FormField label="Location">
-              <input
-                type="text"
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className={inputCls}
-              />
-            </FormField>
-            <FormField label="Primary Contact Name">
-              <input
-                type="text"
-                value={form.primaryContactName}
-                onChange={(e) => setForm({ ...form, primaryContactName: e.target.value })}
-                className={inputCls}
-              />
-            </FormField>
-            <FormField label="Primary Contact Number">
-              <input
-                type="text"
-                value={form.primaryContactNumber}
-                onChange={(e) => setForm({ ...form, primaryContactNumber: e.target.value })}
-                className={inputCls}
-              />
-            </FormField>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
-                />
-                Active
-              </label>
             </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <button
-              type="submit"
-              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-gold px-4 text-sm font-semibold text-paper transition-all duration-200 hover:bg-gold-deep"
-            >
-              {editingId ? "Save Changes" : "Create"}
-            </button>
-            <button
-              type="button"
-              onClick={closeForm}
-              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-hairline bg-paper px-4 text-sm font-semibold text-slate hover:border-gold hover:text-gold-deep"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+          </aside>
+        </>
       )}
 
       {isError && (
@@ -360,18 +273,6 @@ export default function SubContractorsPage() {
       {!isLoading && filtered.length > 0 && (
         <VirtualDataTable columns={columns} data={filtered} sortable resizable searchable={false} />
       )}
-    </div>
-  );
-}
-
-const inputCls =
-  "w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]";
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium mb-1 text-text-secondary">{label}</label>
-      {children}
     </div>
   );
 }

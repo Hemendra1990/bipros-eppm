@@ -1,6 +1,15 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
+export interface SubContractorWorkActivityMappingRow {
+  id?: string | null;
+  workActivityId: string;
+  workActivityName?: string | null;
+  unit?: string | null;
+  ratePerUnit?: number | null;
+  outputPerDay?: number | null;
+}
+
 export interface SubContractorMaster {
   id: string;
   code: string;
@@ -8,18 +17,22 @@ export interface SubContractorMaster {
   location?: string | null;
   primaryContactName?: string | null;
   primaryContactNumber?: string | null;
+  remarks?: string | null;
   active: boolean;
+  workActivityMappings: SubContractorWorkActivityMappingRow[];
   createdAt: string;
   updatedAt: string;
 }
 
-export interface SubContractorMasterRequest {
+export interface SubContractorMasterWithMappingsRequest {
   code: string;
   name: string;
   location?: string | null;
   primaryContactName?: string | null;
   primaryContactNumber?: string | null;
+  remarks?: string | null;
   active?: boolean;
+  workActivityMappings: SubContractorWorkActivityMappingRow[];
 }
 
 export const subContractorMasterApi = {
@@ -33,12 +46,12 @@ export const subContractorMasterApi = {
       .get<ApiResponse<SubContractorMaster>>(`/v1/admin/sub-contractors/${id}`)
       .then((r) => r.data),
 
-  create: (request: SubContractorMasterRequest) =>
+  create: (request: SubContractorMasterWithMappingsRequest) =>
     apiClient
       .post<ApiResponse<SubContractorMaster>>("/v1/admin/sub-contractors", request)
       .then((r) => r.data),
 
-  update: (id: string, request: SubContractorMasterRequest) =>
+  update: (id: string, request: SubContractorMasterWithMappingsRequest) =>
     apiClient
       .put<ApiResponse<SubContractorMaster>>(`/v1/admin/sub-contractors/${id}`, request)
       .then((r) => r.data),

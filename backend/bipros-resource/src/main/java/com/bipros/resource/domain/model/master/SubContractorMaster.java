@@ -45,6 +45,9 @@ public class SubContractorMaster extends BaseEntity {
   @Column(name = "primary_contact_number", length = 30)
   private String primaryContactNumber;
 
+  @Column(length = 1000)
+  private String remarks;
+
   @Column(nullable = false)
   @Default
   private Boolean active = true;

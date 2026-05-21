@@ -1,9 +1,12 @@
 package com.bipros.resource.application.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-public record SubContractorMasterRequest(
+import java.util.List;
+
+public record SubContractorMasterWithMappingsRequest(
     @NotBlank(message = "Code is required")
     @Size(max = 50, message = "Code must be at most 50 characters")
     String code,
@@ -24,5 +27,9 @@ public record SubContractorMasterRequest(
     @Size(max = 1000, message = "Remarks must be at most 1000 characters")
     String remarks,
 
-    Boolean active
-) {}
+    Boolean active,
+
+    @Valid
+    List<SubContractorWorkActivityMappingRow> workActivityMappings
+) {
+}
