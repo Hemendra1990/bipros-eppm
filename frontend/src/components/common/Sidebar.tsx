@@ -126,6 +126,7 @@ const groups: NavGroup[] = [
           { name: "Risk Library", href: "/admin/risk-library", icon: Library, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Risk Categories", href: "/admin/risk-categories", icon: Layers, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Employment Types", href: "/admin/employment-types", icon: Briefcase, adminOnly: true, permission: "ADMIN_MASTER.READ" },
+          { name: "Sub-Contractors", href: "/admin/sub-contractors", icon: HardHat, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Skills", href: "/admin/skills", icon: Sparkles, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Skill Levels", href: "/admin/skill-levels", icon: Award, adminOnly: true, permission: "ADMIN_MASTER.READ" },
           { name: "Grades", href: "/admin/grades", icon: Award, adminOnly: true, permission: "ADMIN_MASTER.READ" },

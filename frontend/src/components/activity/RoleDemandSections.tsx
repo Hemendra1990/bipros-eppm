@@ -14,6 +14,14 @@ import {
   roleAssignmentApi,
   type RoleAssignmentResponse,
 } from "@/lib/api/roleAssignmentApi";
+import {
+  subContractorMasterApi,
+  type SubContractorMaster,
+} from "@/lib/api/subContractorMasterApi";
+import {
+  activitySubContractorApi,
+  type ActivitySubContractorAssignment,
+} from "@/lib/api/activitySubContractorApi";
 
 interface Props {
   projectId: string;
@@ -59,9 +67,29 @@ export function RoleDemandSections({
     [assignmentsResp],
   );
 
+  const { data: subContractorResp, refetch: refetchSubContractors } = useQuery({
+    queryKey: ["sub-contractor-assignments", projectId, activityId],
+    queryFn: () => activitySubContractorApi.listForActivity(projectId, activityId),
+  });
+  const subContractorAssignments = useMemo<ActivitySubContractorAssignment[]>(
+    () => (Array.isArray(subContractorResp?.data) ? subContractorResp.data : []),
+    [subContractorResp],
+  );
+
+  const { data: mastersResp } = useQuery({
+    queryKey: ["sub-contractor-masters"],
+    queryFn: () => subContractorMasterApi.list(),
+  });
+  const subContractorMasters = useMemo<SubContractorMaster[]>(
+    () => (Array.isArray(mastersResp?.data) ? mastersResp.data : []),
+    [mastersResp],
+  );
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["role-assignments", projectId, activityId] });
+    qc.invalidateQueries({ queryKey: ["sub-contractor-assignments", projectId, activityId] });
     void refetch();
+    void refetchSubContractors();
     onChanged?.();
   };
 
@@ -116,6 +144,14 @@ export function RoleDemandSections({
         activityId={activityId}
         roles={materialRoles}
         rows={materialAssignments}
+        onChanged={refresh}
+        locked={locked}
+      />
+      <SubContractorSection
+        projectId={projectId}
+        activityId={activityId}
+        masters={subContractorMasters}
+        rows={subContractorAssignments}
         onChanged={refresh}
         locked={locked}
       />
@@ -615,6 +651,140 @@ function MaterialSection({
         onDelete={(id) => remove.mutate(id)}
         locked={locked}
       />
+    </section>
+  );
+}
+
+// =============================================================================
+// Sub-Contractor
+// =============================================================================
+
+interface SubContractorSectionProps {
+  projectId: string;
+  activityId: string;
+  masters: SubContractorMaster[];
+  rows: ActivitySubContractorAssignment[];
+  onChanged: () => void;
+  locked: boolean;
+}
+
+function SubContractorSection({
+  projectId,
+  activityId,
+  masters,
+  rows,
+  onChanged,
+  locked,
+}: SubContractorSectionProps) {
+  const [masterId, setMasterId] = useState("");
+  const [units, setUnits] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeMasters = useMemo(
+    () => masters.filter((m) => m.active),
+    [masters],
+  );
+
+  const create = useMutation({
+    mutationFn: () =>
+      activitySubContractorApi.create(projectId, {
+        activityId,
+        subContractorMasterId: masterId,
+        units,
+      }),
+    onSuccess: () => {
+      setMasterId("");
+      setUnits(0);
+      setError(null);
+      onChanged();
+    },
+    onError: (e: unknown) =>
+      setError(e instanceof Error ? e.message : "Failed to add sub-contractor"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => activitySubContractorApi.delete(id),
+    onSuccess: () => onChanged(),
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to remove row"),
+  });
+
+  return (
+    <section className="rounded-md border border-border bg-surface p-3">
+      <h4 className="mb-2 text-sm font-semibold">Sub-Contractor Requirements</h4>
+      {error && <div className="mb-2 text-xs text-danger">{error}</div>}
+      <div className="grid grid-cols-[1.6fr_1fr_auto] gap-2 items-end">
+        <label className="text-xs">
+          <span className="text-text-muted">Sub-Contractor</span>
+          <select
+            value={masterId}
+            onChange={(e) => setMasterId(e.target.value)}
+            disabled={locked}
+            className="mt-1 w-full rounded-md border border-border bg-surface-hover px-2 py-1.5 text-xs disabled:opacity-50"
+          >
+            <option value="">— pick sub-contractor —</option>
+            {activeMasters.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} ({m.code})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs">
+          <span className="text-text-muted">Units</span>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={units}
+            onChange={(e) => setUnits(parseFloat(e.target.value) || 0)}
+            disabled={locked}
+            className="mt-1 w-full rounded-md border border-border bg-surface-hover px-2 py-1.5 text-xs disabled:opacity-50"
+          />
+        </label>
+        <button
+          disabled={locked || !masterId || !units || create.isPending}
+          onClick={() => create.mutate()}
+          className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="mt-3 text-xs text-text-muted">No rows added yet.</p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="border-b border-border text-text-muted">
+              <tr>
+                <th className="py-1.5 pr-2 text-left font-medium">Sub-Contractor</th>
+                <th className="py-1.5 pr-2 text-left font-medium">Code</th>
+                <th className="py-1.5 pr-2 text-left font-medium">Units</th>
+                <th className="py-1.5 text-right" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b border-border/40">
+                  <td className="py-1.5 pr-2">{r.subContractorName ?? "—"}</td>
+                  <td className="py-1.5 pr-2">{r.subContractorCode ?? "—"}</td>
+                  <td className="py-1.5 pr-2">{r.units ?? "—"}</td>
+                  <td className="py-1.5 text-right">
+                    <button
+                      onClick={() => remove.mutate(r.id)}
+                      disabled={locked}
+                      className="text-danger hover:opacity-80 disabled:opacity-40"
+                      title={locked ? "Activity is locked" : "Remove"}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 inline" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
