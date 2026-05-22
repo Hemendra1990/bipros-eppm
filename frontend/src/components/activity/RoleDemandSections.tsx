@@ -696,7 +696,7 @@ function SubContractorSection({
   locked,
 }: SubContractorSectionProps) {
   const [masterId, setMasterId] = useState("");
-  const [workActivityId, setWorkActivityId] = useState("");
+  const [scWorkTypeId, setScWorkTypeId] = useState("");
   const [plannedUnits, setPlannedUnits] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -727,12 +727,12 @@ function SubContractorSection({
   const mappingOptions = useMemo(
     () =>
       mappings.map((m) => {
-        const name = m.workActivityName ?? m.workActivityId;
+        const name = m.workTypeName ?? m.scWorkTypeId;
         const tail: string[] = [];
         if (m.unit) tail.push(m.unit);
         if (m.ratePerUnit != null) tail.push(`@ ₹${m.ratePerUnit.toFixed(2)}`);
         return {
-          value: m.workActivityId,
+          value: m.scWorkTypeId,
           label: tail.length ? `${name} — ${tail.join(" ")}` : name,
         };
       }),
@@ -740,8 +740,8 @@ function SubContractorSection({
   );
 
   const selectedMapping = useMemo(
-    () => mappings.find((m) => m.workActivityId === workActivityId),
-    [mappings, workActivityId],
+    () => mappings.find((m) => m.scWorkTypeId === scWorkTypeId),
+    [mappings, scWorkTypeId],
   );
 
   const rate = selectedMapping?.ratePerUnit ?? 0;
@@ -752,12 +752,12 @@ function SubContractorSection({
       activitySubContractorApi.create(projectId, {
         activityId,
         subContractorMasterId: masterId,
-        workActivityId,
+        scWorkTypeId,
         plannedUnits,
       }),
     onSuccess: () => {
       setMasterId("");
-      setWorkActivityId("");
+      setScWorkTypeId("");
       setPlannedUnits(0);
       setError(null);
       onChanged();
@@ -788,25 +788,25 @@ function SubContractorSection({
             value={masterId}
             onChange={(val) => {
               setMasterId(val);
-              setWorkActivityId("");
+              setScWorkTypeId("");
             }}
             placeholder="— pick sub-contractor —"
             disabled={locked}
           />
         </label>
         <label className="text-xs">
-          <span className="text-text-muted">Work Activity</span>
+          <span className="text-text-muted">Work Type</span>
           <SearchableSelect
             className="w-56"
             options={mappingOptions}
-            value={workActivityId}
-            onChange={(val) => setWorkActivityId(val)}
-            placeholder={masterId ? "— pick work activity —" : "Select sub-contractor first"}
+            value={scWorkTypeId}
+            onChange={(val) => setScWorkTypeId(val)}
+            placeholder={masterId ? "— pick work type —" : "Select sub-contractor first"}
             disabled={locked || !masterId || noMatchingMappings}
           />
           {noMatchingMappings && (
             <span className="mt-1 block text-[11px] text-danger">
-              This sub-contractor has no work activity mappings with unit
+              This sub-contractor has no work type mappings with unit
               {" "}&quot;{activityUnit}&quot;.
             </span>
           )}
@@ -826,7 +826,7 @@ function SubContractorSection({
           />
         </label>
         <button
-          disabled={locked || !masterId || !workActivityId || !plannedUnits || create.isPending}
+          disabled={locked || !masterId || !scWorkTypeId || !plannedUnits || create.isPending}
           onClick={() => create.mutate()}
           className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
         >
@@ -866,7 +866,7 @@ function SubContractorSection({
               {rows.map((r) => (
                 <tr key={r.id} className="border-b border-border/40">
                   <td className="py-1.5 pr-2">{r.subContractorName ?? "—"}</td>
-                  <td className="py-1.5 pr-2">{r.workActivityName ?? "—"}</td>
+                  <td className="py-1.5 pr-2">{r.workTypeName ?? "—"}</td>
                   <td className="py-1.5 pr-2">{r.unit ?? "—"}</td>
                   <td className="py-1.5 pr-2 text-right">
                     {r.plannedUnits != null ? r.plannedUnits.toFixed(2) : "—"}

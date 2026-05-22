@@ -206,6 +206,7 @@ public class Stage12Dprs implements Stage {
                     manpower,
                     equipment,
                     materials,
+                    List.of(),                              // subContractors
                     List.of()                               // issues
             );
 

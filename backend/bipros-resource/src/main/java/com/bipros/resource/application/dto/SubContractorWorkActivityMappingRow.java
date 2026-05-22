@@ -9,10 +9,10 @@ import java.util.UUID;
 public record SubContractorWorkActivityMappingRow(
     UUID id,
 
-    @NotNull(message = "workActivityId is required")
-    UUID workActivityId,
+    @NotNull(message = "scWorkTypeId is required")
+    UUID scWorkTypeId,
 
-    String workActivityName,
+    String workTypeName,
 
     String unit,
 

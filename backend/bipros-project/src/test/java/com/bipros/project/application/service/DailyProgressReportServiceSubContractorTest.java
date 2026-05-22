@@ -274,7 +274,7 @@ class DailyProgressReportServiceSubContractorTest {
 
   /**
    * Stub the native lookup against
-   * {@code SELECT activity_id, sub_contractor_master_id, work_activity_name, unit, rate_per_unit
+   * {@code SELECT activity_id, sub_contractor_master_id, work_type_name, unit, rate_per_unit
    *   FROM resource.activity_sub_contractor_assignments WHERE id = :id}.
    * The service treats an empty result-list as SC_ASSIGNMENT_NOT_FOUND; otherwise it reads
    * activityId from column 0 and the master id from column 1.
@@ -283,7 +283,7 @@ class DailyProgressReportServiceSubContractorTest {
                                     String unit, BigDecimal rate) {
     Object[] row = new Object[]{activityId, masterId, "Sub-contracting Work", unit, rate};
     resultListBySql.put(
-        "SELECT activity_id, sub_contractor_master_id, work_activity_name",
+        "SELECT activity_id, sub_contractor_master_id, work_type_name",
         List.<Object[]>of(row));
     // Recompute path also issues SELECT rate_per_unit FROM resource.activity_sub_contractor_assignments
     // — return the rate as a single BigDecimal column.

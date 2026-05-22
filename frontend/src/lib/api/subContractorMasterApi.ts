@@ -3,8 +3,8 @@ import type { ApiResponse } from "../types";
 
 export interface SubContractorWorkActivityMappingRow {
   id?: string | null;
-  workActivityId: string;
-  workActivityName?: string | null;
+  scWorkTypeId: string;
+  workTypeName?: string | null;
   unit?: string | null;
   ratePerUnit?: number | null;
   outputPerDay?: number | null;

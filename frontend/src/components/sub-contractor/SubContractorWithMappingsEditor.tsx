@@ -1,15 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import {
   subContractorMasterApi,
   type SubContractorMasterWithMappingsRequest,
 } from "@/lib/api/subContractorMasterApi";
-import { workActivityApi } from "@/lib/api/workActivityApi";
-import { SearchableSelect } from "@/components/common/SearchableSelect";
+import WorkTypeCombobox from "@/components/sub-contractor/WorkTypeCombobox";
 import { getErrorMessage } from "@/lib/utils/error";
+import { unitOptionsWithFallback, STANDARD_UNITS } from "@/lib/constants/units";
+import { scWorkTypeApi } from "@/lib/api/subContractorWorkTypeApi";
 
 interface Props {
   editingId?: string | null;
@@ -19,7 +20,8 @@ interface Props {
 
 interface MappingFormRow {
   _key: string;
-  workActivityId: string;
+  scWorkTypeId: string;
+  workTypeName: string;
   unit: string;
   ratePerUnit: string;
   outputPerDay: string;
@@ -46,12 +48,6 @@ export default function SubContractorWithMappingsEditor({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const { data: activitiesData } = useQuery({
-    queryKey: ["work-activities", "active"],
-    queryFn: () => workActivityApi.list(true),
-  });
-  const activities = activitiesData?.data ?? [];
-
   // Load existing data when editing
   useState(() => {
     if (editingId) {
@@ -70,7 +66,8 @@ export default function SubContractorWithMappingsEditor({
             setMappings(
               (m.workActivityMappings ?? []).map((row) => ({
                 _key: row.id ?? crypto.randomUUID(),
-                workActivityId: row.workActivityId ?? "",
+                scWorkTypeId: row.scWorkTypeId ?? "",
+                workTypeName: row.workTypeName ?? "",
                 unit: row.unit ?? "",
                 ratePerUnit: row.ratePerUnit?.toString() ?? "",
                 outputPerDay: row.outputPerDay?.toString() ?? "",
@@ -89,7 +86,8 @@ export default function SubContractorWithMappingsEditor({
       ...prev,
       {
         _key: crypto.randomUUID(),
-        workActivityId: "",
+        scWorkTypeId: "",
+        workTypeName: "",
         unit: "",
         ratePerUnit: "",
         outputPerDay: "",
@@ -110,13 +108,13 @@ export default function SubContractorWithMappingsEditor({
     );
   };
 
-  const duplicateActivities = useMemo(() => {
+  const duplicateWorkTypes = useMemo(() => {
     const seen = new Set<string>();
     return mappings
-      .filter((r) => r.workActivityId)
+      .filter((r) => r.scWorkTypeId)
       .some((r) => {
-        const dup = seen.has(r.workActivityId);
-        seen.add(r.workActivityId);
+        const dup = seen.has(r.scWorkTypeId);
+        seen.add(r.scWorkTypeId);
         return dup;
       });
   }, [mappings]);
@@ -130,27 +128,39 @@ export default function SubContractorWithMappingsEditor({
       return;
     }
 
-    const payload: SubContractorMasterWithMappingsRequest = {
-      code: code.trim(),
-      name: name.trim(),
-      location: location.trim() || null,
-      primaryContactName: primaryContactName.trim() || null,
-      primaryContactNumber: primaryContactNumber.trim() || null,
-      remarks: remarks.trim() || null,
-      active,
-      workActivityMappings: mappings
-        .filter((r) => r.workActivityId)
-        .map((r) => ({
-          workActivityId: r.workActivityId,
-          ratePerUnit:
-            r.ratePerUnit === "" ? null : Number(r.ratePerUnit),
-          outputPerDay:
-            r.outputPerDay === "" ? null : Number(r.outputPerDay),
-        })),
-    };
-
     setSaving(true);
     try {
+      // Resolve any mapping rows that have a typed name but no ID yet.
+      // We do this at save time so the unit dropdown value is guaranteed to be set.
+      const resolvedMappings = await Promise.all(
+        mappings
+          .filter((r) => r.scWorkTypeId || r.workTypeName.trim())
+          .map(async (r) => {
+            if (r.scWorkTypeId) return r; // already resolved
+            const resp = await scWorkTypeApi.findOrCreate(r.workTypeName.trim(), r.unit || null);
+            return { ...r, scWorkTypeId: resp.data?.id ?? "", workTypeName: resp.data?.name ?? r.workTypeName };
+          })
+      );
+
+      const validMappings = resolvedMappings.filter((r) => r.scWorkTypeId);
+
+      const payload: SubContractorMasterWithMappingsRequest = {
+        code: code.trim(),
+        name: name.trim(),
+        location: location.trim() || null,
+        primaryContactName: primaryContactName.trim() || null,
+        primaryContactNumber: primaryContactNumber.trim() || null,
+        remarks: remarks.trim() || null,
+        active,
+        workActivityMappings: validMappings.map((r) => ({
+          scWorkTypeId: r.scWorkTypeId,
+          workTypeName: r.workTypeName || undefined,
+          unit: r.unit || undefined,
+          ratePerUnit: r.ratePerUnit === "" ? null : Number(r.ratePerUnit),
+          outputPerDay: r.outputPerDay === "" ? null : Number(r.outputPerDay),
+        })),
+      };
+
       if (editingId) {
         await subContractorMasterApi.update(editingId, payload);
       } else {
@@ -253,7 +263,7 @@ export default function SubContractorWithMappingsEditor({
       <section>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate">
-            Work Activity Mappings
+            Work Type Mappings
           </h3>
           <button
             type="button"
@@ -265,16 +275,16 @@ export default function SubContractorWithMappingsEditor({
           </button>
         </div>
 
-        {duplicateActivities && (
+        {duplicateWorkTypes && (
           <div className="mb-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-            Duplicate work activities detected. Each activity should only appear once per
+            Duplicate work types detected. Each work type should only appear once per
             sub-contractor.
           </div>
         )}
 
         {mappings.length === 0 ? (
           <p className="text-sm text-slate italic">
-            No mappings yet. Click &ldquo;Add Mapping&rdquo; to link work activities.
+            No mappings yet. Click &ldquo;Add Mapping&rdquo; to link work types.
           </p>
         ) : (
           <div className="space-y-3">
@@ -282,7 +292,6 @@ export default function SubContractorWithMappingsEditor({
               <MappingRowEditor
                 key={row._key}
                 row={row}
-                activities={activities}
                 onChange={(patch) => updateMapping(row._key, patch)}
                 onRemove={() => removeMapping(row._key)}
               />
@@ -321,40 +330,30 @@ export default function SubContractorWithMappingsEditor({
 
 function MappingRowEditor({
   row,
-  activities,
   onChange,
   onRemove,
 }: {
   row: MappingFormRow;
-  activities: Array<{ id: string; name: string; defaultUnit: string | null }>;
   onChange: (patch: Partial<MappingFormRow>) => void;
   onRemove: () => void;
 }) {
-  const activityOptions = useMemo(
-    () =>
-      activities.map((a) => ({
-        value: a.id,
-        label: a.defaultUnit ? `${a.name} (${a.defaultUnit})` : a.name,
-      })),
-    [activities]
-  );
-
-  const handleSelect = (id: string) => {
-    const wa = activities.find((a) => a.id === id);
-    onChange({ workActivityId: id, unit: wa?.defaultUnit ?? "" });
+  const handleSelect = (id: string, name: string, defaultUnit?: string | null) => {
+    // Only auto-fill unit when the user hasn't chosen one yet — never overwrite an existing selection.
+    onChange({ scWorkTypeId: id, workTypeName: name, ...(row.unit ? {} : { unit: defaultUnit ?? "" }) });
   };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end rounded-lg border border-hairline bg-paper p-3">
       <div className="md:col-span-4">
         <label className="block text-xs font-medium mb-1 text-text-secondary">
-          Work Activity
+          Work Type
         </label>
-        <SearchableSelect
-          options={activityOptions}
-          value={row.workActivityId}
+        <WorkTypeCombobox
+          value={row.scWorkTypeId}
+          displayValue={row.workTypeName}
+          currentUnit={row.unit}
           onChange={handleSelect}
-          placeholder="Search activity…"
+          placeholder="Type work type…"
         />
       </div>
 
@@ -362,13 +361,19 @@ function MappingRowEditor({
         <label className="block text-xs font-medium mb-1 text-text-secondary">
           Unit
         </label>
-        <input
-          type="text"
+        <select
           value={row.unit}
-          readOnly
-          className={`${inputCls} bg-ivory/50 cursor-not-allowed`}
-          placeholder="auto"
-        />
+          onChange={(e) => onChange({ unit: e.target.value })}
+          className={inputCls}
+        >
+          <option value="">— select —</option>
+          {unitOptionsWithFallback(row.unit).map((u) => (
+            <option key={u} value={u}>
+              {u}
+              {!(STANDARD_UNITS as readonly string[]).includes(u) ? " (legacy)" : ""}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="md:col-span-2">

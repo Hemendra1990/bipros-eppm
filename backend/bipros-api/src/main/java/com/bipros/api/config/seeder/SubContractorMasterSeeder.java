@@ -1,11 +1,11 @@
 package com.bipros.api.config.seeder;
 
 import com.bipros.resource.domain.model.SubContractorWorkActivityMapping;
-import com.bipros.resource.domain.model.WorkActivity;
+import com.bipros.resource.domain.model.SubContractorWorkType;
 import com.bipros.resource.domain.model.master.SubContractorMaster;
 import com.bipros.resource.domain.repository.SubContractorMasterRepository;
 import com.bipros.resource.domain.repository.SubContractorWorkActivityMappingRepository;
-import com.bipros.resource.domain.repository.WorkActivityRepository;
+import com.bipros.resource.domain.repository.SubContractorWorkTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -20,14 +20,11 @@ import java.util.List;
 
 /**
  * Idempotently seeds a small directory of demo sub-contractor organisations with
- * work-activity rate mappings, so the Activity Resource Demand panel has data to
+ * work-type rate mappings, so the Activity Resource Demand panel has data to
  * pick from out-of-the-box. Skips if {@code sub_contractor_master} is non-empty.
  *
- * <p>Each contractor is mapped to the work activities whose names contain its discipline
- * keywords — that way the seeder works regardless of which demo project (NHAI / Odisha /
- * Oman / IOCL / ICPMS) populated the {@code work_activities} table. Runs as an
- * {@code ApplicationReadyEvent} listener so all {@code CommandLineRunner}-based project
- * seeders have already created their work activities by the time we look them up.
+ * <p>Runs as an {@code ApplicationReadyEvent} listener so all
+ * {@code CommandLineRunner}-based project seeders have already run.
  */
 @Component
 @RequiredArgsConstructor
@@ -37,7 +34,7 @@ public class SubContractorMasterSeeder {
 
   private final SubContractorMasterRepository masterRepo;
   private final SubContractorWorkActivityMappingRepository mappingRepo;
-  private final WorkActivityRepository workActivityRepo;
+  private final SubContractorWorkTypeRepository workTypeRepo;
 
   @EventListener(ApplicationReadyEvent.class)
   @Transactional
@@ -46,9 +43,10 @@ public class SubContractorMasterSeeder {
       log.info("[SubContractorMasterSeeder] sub_contractor_master not empty — skipping");
       return;
     }
-    List<WorkActivity> allActivities = workActivityRepo.findAll();
-    if (allActivities.isEmpty()) {
-      log.info("[SubContractorMasterSeeder] no work_activities present — skipping (no anchors to map)");
+
+    List<SubContractorWorkType> workTypes = seedWorkTypes();
+    if (workTypes.isEmpty()) {
+      log.info("[SubContractorMasterSeeder] no work types seeded — skipping");
       return;
     }
 
@@ -69,18 +67,18 @@ public class SubContractorMasterSeeder {
 
       List<SubContractorWorkActivityMapping> mappings = new ArrayList<>();
       for (MappingRule rule : spec.rules()) {
-        for (WorkActivity wa : allActivities) {
-          if (!matchesAny(wa, rule.keywords())) continue;
-          if (mappings.stream().anyMatch(m -> m.getWorkActivityId().equals(wa.getId()))) continue;
+        for (SubContractorWorkType wt : workTypes) {
+          if (!matchesAny(wt, rule.keywords())) continue;
+          if (mappings.stream().anyMatch(m -> m.getScWorkTypeId().equals(wt.getId()))) continue;
           mappings.add(SubContractorWorkActivityMapping.builder()
               .subContractorMasterId(saved.getId())
-              .workActivityId(wa.getId())
-              .workActivityName(wa.getName())
-              .unit(wa.getDefaultUnit())
+              .scWorkTypeId(wt.getId())
+              .workTypeName(wt.getName())
+              .unit(wt.getDefaultUnit())
               .ratePerUnit(rule.ratePerUnit())
               .outputPerDay(rule.outputPerDay())
               .build());
-          if (mappings.size() >= 6) break; // keep demo tidy
+          if (mappings.size() >= 6) break;
         }
         if (mappings.size() >= 6) break;
       }
@@ -89,16 +87,41 @@ public class SubContractorMasterSeeder {
         mappingCount += mappings.size();
       }
     }
-    log.info("[SubContractorMasterSeeder] seeded {} sub-contractors with {} work-activity mappings",
+    log.info("[SubContractorMasterSeeder] seeded {} sub-contractors with {} work-type mappings",
         contractorCount, mappingCount);
   }
 
-  private static boolean matchesAny(WorkActivity wa, List<String> keywords) {
-    String name = wa.getName() == null ? "" : wa.getName().toLowerCase();
-    String discipline = wa.getDiscipline() == null ? "" : wa.getDiscipline().toLowerCase();
+  private List<SubContractorWorkType> seedWorkTypes() {
+    List<String> names = List.of(
+        "Earthwork", "Excavation", "Embankment", "Filling",
+        "Granular Sub-Base", "Wet Mix Macadam", "Dense Bituminous Macadam",
+        "Bituminous Concrete", "Pavement Layer",
+        "Concrete Work", "PCC", "RCC", "Pour",
+        "Steel Work", "Reinforcement", "Bar Bending", "Rebar",
+        "Formwork", "Shuttering", "Scaffolding",
+        "Masonry", "Brickwork", "Plastering", "Blockwork",
+        "Electrical Installation", "Cable Laying", "Conduit", "Wiring", "Panel",
+        "Plumbing", "Pipe Laying", "Drainage", "Sanitary", "Water Supply",
+        "Painting", "Finishing", "Primer",
+        "Welding", "Fabrication", "Structural Steel", "Erection");
+
+    List<SubContractorWorkType> result = new ArrayList<>();
+    for (String name : names) {
+      workTypeRepo.findByNameIgnoreCase(name).ifPresentOrElse(
+          result::add,
+          () -> result.add(workTypeRepo.save(SubContractorWorkType.builder()
+              .name(name)
+              .defaultUnit("Cum")
+              .active(true)
+              .build())));
+    }
+    return result;
+  }
+
+  private static boolean matchesAny(SubContractorWorkType wt, List<String> keywords) {
+    String name = wt.getName() == null ? "" : wt.getName().toLowerCase();
     for (String k : keywords) {
-      String kw = k.toLowerCase();
-      if (name.contains(kw) || discipline.contains(kw)) return true;
+      if (name.contains(k.toLowerCase())) return true;
     }
     return false;
   }
@@ -117,64 +140,64 @@ public class SubContractorMasterSeeder {
             "Sunil Deshmukh", "+91 98230 22233",
             "Road pavement layers — GSB, WMM, DBM, BC",
             List.of(
-                new MappingRule(List.of("gsb", "granular sub-base", "wmm", "wet mix",
-                    "dbm", "dense bituminous", "bituminous concrete", "pavement", "bc layer"),
+                new MappingRule(List.of("granular sub-base", "wet mix macadam",
+                    "dense bituminous macadam", "bituminous concrete", "pavement layer"),
                     new BigDecimal("680.00"), new BigDecimal("180")))),
         new ContractorSpec(
             "SC-CONC-01", "Apex Concrete Solutions", "Hyderabad, Telangana",
             "Ravi Kumar", "+91 99490 33344",
             "Concrete works — PCC, RCC, pours and curing",
             List.of(
-                new MappingRule(List.of("concret", "pcc", "rcc", "pour"),
+                new MappingRule(List.of("concrete work", "pcc", "rcc", "pour"),
                     new BigDecimal("4250.00"), new BigDecimal("85")))),
         new ContractorSpec(
             "SC-STL-01", "Reliable Steel Works", "Raipur, Chhattisgarh",
             "Imran Sheikh", "+91 94250 44455",
             "Steel — cutting, bending, fixing, reinforcement",
             List.of(
-                new MappingRule(List.of("steel", "reinforce", "bar bend", "rebar"),
+                new MappingRule(List.of("steel work", "reinforcement", "bar bending", "rebar"),
                     new BigDecimal("8.50"), new BigDecimal("1800")))),
         new ContractorSpec(
             "SC-FORM-01", "Vinayak Formworks", "Vadodara, Gujarat",
             "Nitin Shah", "+91 99980 55566",
             "Shuttering, scaffolding, formwork erection & dismantling",
             List.of(
-                new MappingRule(List.of("shutter", "formwork", "scaffold"),
+                new MappingRule(List.of("formwork", "shuttering", "scaffolding"),
                     new BigDecimal("215.00"), new BigDecimal("260")))),
         new ContractorSpec(
             "SC-CIVIL-01", "Sairam Civil Contractors", "Bhubaneswar, Odisha",
             "Subrat Mohanty", "+91 94370 66677",
             "General civil — masonry, plastering, brickwork",
             List.of(
-                new MappingRule(List.of("masonry", "brick", "plaster", "block"),
+                new MappingRule(List.of("masonry", "brickwork", "plastering", "blockwork"),
                     new BigDecimal("520.00"), new BigDecimal("75")))),
         new ContractorSpec(
             "SC-ELEC-01", "Sunrise Electricals & Allied Services", "Bengaluru, Karnataka",
             "Anil Reddy", "+91 98860 77788",
             "Electrical installation — conduit, wiring, panels, fittings",
             List.of(
-                new MappingRule(List.of("electric", "cable", "conduit", "wiring", "panel"),
+                new MappingRule(List.of("electrical installation", "cable laying", "conduit", "wiring", "panel"),
                     new BigDecimal("145.00"), new BigDecimal("120")))),
         new ContractorSpec(
             "SC-PLB-01", "Skyline Plumbing Services", "Chennai, Tamil Nadu",
             "Karthik Subramaniam", "+91 98400 88899",
             "Plumbing — water supply, drainage, sanitary fixtures",
             List.of(
-                new MappingRule(List.of("plumb", "pipe", "drain", "sanitary", "water supply"),
+                new MappingRule(List.of("plumbing", "pipe laying", "drainage", "sanitary", "water supply"),
                     new BigDecimal("210.00"), new BigDecimal("95")))),
         new ContractorSpec(
             "SC-PNT-01", "PrimeFinish Painters & Decorators", "Indore, Madhya Pradesh",
             "Rakesh Verma", "+91 99070 99900",
             "Surface preparation, primer and finish painting",
             List.of(
-                new MappingRule(List.of("paint", "finish", "primer"),
+                new MappingRule(List.of("painting", "finishing", "primer"),
                     new BigDecimal("38.00"), new BigDecimal("220")))),
         new ContractorSpec(
             "SC-WELD-01", "Trinity Welding & Fabrication Works", "Jamshedpur, Jharkhand",
             "Joseph D'Souza", "+91 94310 10101",
             "Structural welding, fabrication, gas cutting",
             List.of(
-                new MappingRule(List.of("weld", "fabric", "structural steel", "erection"),
+                new MappingRule(List.of("welding", "fabrication", "structural steel", "erection"),
                     new BigDecimal("95.00"), new BigDecimal("65"))))
     );
   }

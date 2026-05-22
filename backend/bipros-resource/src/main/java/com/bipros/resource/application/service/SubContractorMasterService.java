@@ -7,23 +7,21 @@ import com.bipros.resource.application.dto.SubContractorMasterResponse;
 import com.bipros.resource.application.dto.SubContractorMasterWithMappingsRequest;
 import com.bipros.resource.application.dto.SubContractorWorkActivityMappingRow;
 import com.bipros.resource.domain.model.SubContractorWorkActivityMapping;
-import com.bipros.resource.domain.model.WorkActivity;
+import com.bipros.resource.domain.model.SubContractorWorkType;
 import com.bipros.resource.domain.model.master.SubContractorMaster;
 import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.SubContractorMasterRepository;
 import com.bipros.resource.domain.repository.SubContractorWorkActivityMappingRepository;
-import com.bipros.resource.domain.repository.WorkActivityRepository;
+import com.bipros.resource.domain.repository.SubContractorWorkTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,7 +33,7 @@ public class SubContractorMasterService {
   private final SubContractorMasterRepository repository;
   private final ActivitySubContractorAssignmentRepository assignmentRepository;
   private final SubContractorWorkActivityMappingRepository mappingRepository;
-  private final WorkActivityRepository workActivityRepository;
+  private final SubContractorWorkTypeRepository workTypeRepository;
   private final AuditService auditService;
 
   @Transactional(readOnly = true)
@@ -61,7 +59,7 @@ public class SubContractorMasterService {
     SubContractorMaster m = repository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("SubContractorMaster", id));
     List<SubContractorWorkActivityMappingRow> mappings =
-        mappingRepository.findBySubContractorMasterIdOrderByWorkActivityNameAsc(id)
+        mappingRepository.findBySubContractorMasterIdOrderByWorkTypeNameAsc(id)
             .stream().map(this::toRow).toList();
     return SubContractorMasterResponse.from(m, mappings);
   }
@@ -129,13 +127,13 @@ public class SubContractorMasterService {
       return;
     }
     List<SubContractorWorkActivityMapping> entities = rows.stream().map(row -> {
-      WorkActivity wa = workActivityRepository.findById(row.workActivityId())
-          .orElseThrow(() -> new ResourceNotFoundException("WorkActivity", row.workActivityId()));
+      SubContractorWorkType wt = workTypeRepository.findById(row.scWorkTypeId())
+          .orElseThrow(() -> new ResourceNotFoundException("SubContractorWorkType", row.scWorkTypeId()));
       return SubContractorWorkActivityMapping.builder()
           .subContractorMasterId(masterId)
-          .workActivityId(row.workActivityId())
-          .workActivityName(wa.getName())
-          .unit(wa.getDefaultUnit())
+          .scWorkTypeId(row.scWorkTypeId())
+          .workTypeName(wt.getName())
+          .unit(row.unit() != null ? row.unit() : wt.getDefaultUnit())
           .ratePerUnit(row.ratePerUnit())
           .outputPerDay(row.outputPerDay())
           .build();
@@ -145,7 +143,7 @@ public class SubContractorMasterService {
 
   private SubContractorWorkActivityMappingRow toRow(SubContractorWorkActivityMapping e) {
     return new SubContractorWorkActivityMappingRow(
-        e.getId(), e.getWorkActivityId(), e.getWorkActivityName(),
+        e.getId(), e.getScWorkTypeId(), e.getWorkTypeName(),
         e.getUnit(), e.getRatePerUnit(), e.getOutputPerDay());
   }
 

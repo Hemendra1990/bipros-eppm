@@ -459,7 +459,7 @@ public class DailyProgressReportService {
       if (!assignmentIds.isEmpty()) {
         @SuppressWarnings("unchecked")
         List<Object[]> scAssignmentRows = em.createNativeQuery(
-                "SELECT id, work_activity_name, unit, rate_per_unit "
+                "SELECT id, work_type_name, unit, rate_per_unit "
                     + "FROM resource.activity_sub_contractor_assignments WHERE id IN (:ids)")
             .setParameter("ids", assignmentIds)
             .getResultList();
@@ -888,7 +888,7 @@ public class DailyProgressReportService {
   /** Tiny tuple resolved from a native lookup against {@code activity_sub_contractor_assignments}. */
   private record ScAssignmentSnapshot(
       UUID assignmentId, UUID activityId, UUID subContractorMasterId,
-      String workActivityName, String unit, BigDecimal ratePerUnit) {}
+      String workTypeName, String unit, BigDecimal ratePerUnit) {}
 
   /**
    * Native cross-schema lookup for an assignment id. Returns null when the row is missing.
@@ -900,7 +900,7 @@ public class DailyProgressReportService {
   private ScAssignmentSnapshot lookupScAssignment(UUID assignmentId) {
     if (assignmentId == null || em == null) return null;
     List<Object[]> rows = em.createNativeQuery(
-            "SELECT activity_id, sub_contractor_master_id, work_activity_name, unit, rate_per_unit "
+            "SELECT activity_id, sub_contractor_master_id, work_type_name, unit, rate_per_unit "
                 + "FROM resource.activity_sub_contractor_assignments WHERE id = :id")
         .setParameter("id", assignmentId)
         .getResultList();
@@ -1047,7 +1047,7 @@ public class DailyProgressReportService {
     Map<UUID, Object[]> byId = new HashMap<>();
     if (em != null && !assignmentIds.isEmpty()) {
       List<Object[]> rows = em.createNativeQuery(
-              "SELECT id, work_activity_name, unit, rate_per_unit "
+              "SELECT id, work_type_name, unit, rate_per_unit "
                   + "FROM resource.activity_sub_contractor_assignments "
                   + "WHERE id IN (:ids)")
           .setParameter("ids", assignmentIds)

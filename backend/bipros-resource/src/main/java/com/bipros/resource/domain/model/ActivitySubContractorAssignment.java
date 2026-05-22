@@ -44,11 +44,11 @@ public class ActivitySubContractorAssignment extends BaseEntity {
   @Column(name = "sub_contractor_master_id", nullable = false)
   private UUID subContractorMasterId;
 
-  @Column(name = "work_activity_id", nullable = false)
-  private UUID workActivityId;
+  @Column(name = "sc_work_type_id", nullable = false)
+  private UUID scWorkTypeId;
 
-  @Column(name = "work_activity_name", length = 150)
-  private String workActivityName;
+  @Column(name = "work_type_name", length = 150)
+  private String workTypeName;
 
   @Column(name = "unit", length = 30)
   private String unit;

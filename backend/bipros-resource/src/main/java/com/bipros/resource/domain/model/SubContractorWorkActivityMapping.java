@@ -25,7 +25,7 @@ import java.util.UUID;
     schema = "resource",
     indexes = {
         @Index(name = "idx_scwam_sub_contractor", columnList = "sub_contractor_master_id"),
-        @Index(name = "idx_scwam_work_activity", columnList = "work_activity_id"),
+        @Index(name = "idx_scwam_sc_work_type", columnList = "sc_work_type_id"),
     })
 @Getter
 @Setter
@@ -37,12 +37,12 @@ public class SubContractorWorkActivityMapping extends BaseEntity {
   @Column(name = "sub_contractor_master_id", nullable = false)
   private UUID subContractorMasterId;
 
-  @Column(name = "work_activity_id", nullable = false)
-  private UUID workActivityId;
+  @Column(name = "sc_work_type_id", nullable = false)
+  private UUID scWorkTypeId;
 
   /** Denormalized snapshot for display without cross-module joins. */
-  @Column(name = "work_activity_name", length = 150)
-  private String workActivityName;
+  @Column(name = "work_type_name", length = 150)
+  private String workTypeName;
 
   @Column(name = "unit", length = 30)
   private String unit;

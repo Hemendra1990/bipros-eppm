@@ -12,14 +12,14 @@ public interface SubContractorWorkActivityMappingRepository
     extends JpaRepository<SubContractorWorkActivityMapping, UUID> {
 
   List<SubContractorWorkActivityMapping>
-      findBySubContractorMasterIdOrderByWorkActivityNameAsc(UUID subContractorMasterId);
+      findBySubContractorMasterIdOrderByWorkTypeNameAsc(UUID subContractorMasterId);
 
   void deleteBySubContractorMasterId(UUID subContractorMasterId);
 
-  boolean existsBySubContractorMasterIdAndWorkActivityId(
-      UUID subContractorMasterId, UUID workActivityId);
+  boolean existsBySubContractorMasterIdAndScWorkTypeId(
+      UUID subContractorMasterId, UUID scWorkTypeId);
 
   java.util.Optional<SubContractorWorkActivityMapping>
-      findBySubContractorMasterIdAndWorkActivityId(
-          UUID subContractorMasterId, UUID workActivityId);
+      findBySubContractorMasterIdAndScWorkTypeId(
+          UUID subContractorMasterId, UUID scWorkTypeId);
 }

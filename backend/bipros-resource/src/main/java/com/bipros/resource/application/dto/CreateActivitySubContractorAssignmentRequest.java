@@ -12,8 +12,8 @@ public record CreateActivitySubContractorAssignmentRequest(
     @NotNull(message = "subContractorMasterId is required")
     String subContractorMasterId,
 
-    @NotNull(message = "workActivityId is required")
-    String workActivityId,
+    @NotNull(message = "scWorkTypeId is required")
+    String scWorkTypeId,
 
     @NotNull(message = "plannedUnits is required")
     @Positive(message = "plannedUnits must be positive")

@@ -63,7 +63,7 @@ public class ActivitySubContractorAssignmentService {
       UUID projectId, CreateActivitySubContractorAssignmentRequest req) {
     UUID activityId = UUID.fromString(req.activityId());
     UUID masterId = UUID.fromString(req.subContractorMasterId());
-    UUID workActivityId = UUID.fromString(req.workActivityId());
+    UUID scWorkTypeId = UUID.fromString(req.scWorkTypeId());
 
     Activity activity = loadActivity(activityId);
     assertActivityEditable(activity);
@@ -71,12 +71,12 @@ public class ActivitySubContractorAssignmentService {
     SubContractorMaster master = masterRepository.findById(masterId)
         .orElseThrow(() -> new ResourceNotFoundException("SubContractorMaster", masterId));
 
-    var mapping = mappingRepository.findBySubContractorMasterIdAndWorkActivityId(
-        masterId, workActivityId)
+    var mapping = mappingRepository.findBySubContractorMasterIdAndScWorkTypeId(
+        masterId, scWorkTypeId)
         .orElseThrow(() -> new BusinessRuleException(
-            "SC_WORK_ACTIVITY_NOT_FOUND",
-            "No work activity mapping found for sub-contractor " + master.getName()
-                + " and work activity " + workActivityId));
+            "SC_WORK_TYPE_NOT_FOUND",
+            "No work type mapping found for sub-contractor " + master.getName()
+                + " and work type " + scWorkTypeId));
 
     // Belt-and-braces guard: the mapping's unit must match the activity's workdone unit.
     // The unit resolves via Activity → WorkActivity.defaultUnit; the same resolution chain
@@ -98,8 +98,8 @@ public class ActivitySubContractorAssignmentService {
         .activityId(activityId)
         .projectId(projectId)
         .subContractorMasterId(masterId)
-        .workActivityId(workActivityId)
-        .workActivityName(mapping.getWorkActivityName())
+        .scWorkTypeId(scWorkTypeId)
+        .workTypeName(mapping.getWorkTypeName())
         .unit(mapping.getUnit())
         .plannedUnits(plannedUnits)
         .ratePerUnit(rate)
@@ -107,8 +107,8 @@ public class ActivitySubContractorAssignmentService {
         .build();
 
     ActivitySubContractorAssignment saved = assignmentRepository.save(assignment);
-    log.info("Sub-contractor assignment created: id={}, activity={}, master={}, workActivity={}",
-        saved.getId(), activityId, masterId, workActivityId);
+    log.info("Sub-contractor assignment created: id={}, activity={}, master={}, scWorkType={}",
+        saved.getId(), activityId, masterId, scWorkTypeId);
 
     ActivitySubContractorAssignmentResponse response =
         ActivitySubContractorAssignmentResponse.from(saved, master);

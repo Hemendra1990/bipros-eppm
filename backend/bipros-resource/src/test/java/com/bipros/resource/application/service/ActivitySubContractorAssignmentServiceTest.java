@@ -53,7 +53,7 @@ class ActivitySubContractorAssignmentServiceTest {
     UUID projectId = UUID.randomUUID();
     UUID activityId = UUID.randomUUID();
     UUID masterId = UUID.randomUUID();
-    UUID workActivityId = UUID.randomUUID();
+    UUID scWorkTypeId = UUID.randomUUID();
     UUID activityWorkActivityId = UUID.randomUUID();
 
     // Activity → WorkActivity master with defaultUnit "Cum".
@@ -70,15 +70,15 @@ class ActivitySubContractorAssignmentServiceTest {
     // Mapping unit "Nos" -- mismatch vs activity unit "Cum".
     SubContractorWorkActivityMapping mapping = SubContractorWorkActivityMapping.builder()
         .subContractorMasterId(masterId)
-        .workActivityId(workActivityId)
-        .workActivityName("Carting")
+        .scWorkTypeId(scWorkTypeId)
+        .workTypeName("Carting")
         .unit("Nos")
         .ratePerUnit(new BigDecimal("100"))
         .build();
 
     when(activityRepository.findById(activityId)).thenReturn(Optional.of(activity));
     when(masterRepository.findById(masterId)).thenReturn(Optional.of(master));
-    when(mappingRepository.findBySubContractorMasterIdAndWorkActivityId(masterId, workActivityId))
+    when(mappingRepository.findBySubContractorMasterIdAndScWorkTypeId(masterId, scWorkTypeId))
         .thenReturn(Optional.of(mapping));
     when(workActivityRepository.findById(activityWorkActivityId))
         .thenReturn(Optional.of(activityWa));
@@ -87,7 +87,7 @@ class ActivitySubContractorAssignmentServiceTest {
         new CreateActivitySubContractorAssignmentRequest(
             activityId.toString(),
             masterId.toString(),
-            workActivityId.toString(),
+            scWorkTypeId.toString(),
             new BigDecimal("10"));
 
     assertThatThrownBy(() -> service.create(projectId, req))
@@ -104,7 +104,7 @@ class ActivitySubContractorAssignmentServiceTest {
     UUID projectId = UUID.randomUUID();
     UUID activityId = UUID.randomUUID();
     UUID masterId = UUID.randomUUID();
-    UUID workActivityId = UUID.randomUUID();
+    UUID scWorkTypeId = UUID.randomUUID();
     UUID activityWorkActivityId = UUID.randomUUID();
 
     Activity activity = new Activity();
@@ -120,15 +120,15 @@ class ActivitySubContractorAssignmentServiceTest {
     // Mapping unit "cum" -- case-insensitive match for activity unit "Cum".
     SubContractorWorkActivityMapping mapping = SubContractorWorkActivityMapping.builder()
         .subContractorMasterId(masterId)
-        .workActivityId(workActivityId)
-        .workActivityName("Carting")
+        .scWorkTypeId(scWorkTypeId)
+        .workTypeName("Carting")
         .unit("cum")
         .ratePerUnit(new BigDecimal("150"))
         .build();
 
     when(activityRepository.findById(activityId)).thenReturn(Optional.of(activity));
     when(masterRepository.findById(masterId)).thenReturn(Optional.of(master));
-    when(mappingRepository.findBySubContractorMasterIdAndWorkActivityId(masterId, workActivityId))
+    when(mappingRepository.findBySubContractorMasterIdAndScWorkTypeId(masterId, scWorkTypeId))
         .thenReturn(Optional.of(mapping));
     when(workActivityRepository.findById(activityWorkActivityId))
         .thenReturn(Optional.of(activityWa));
@@ -143,7 +143,7 @@ class ActivitySubContractorAssignmentServiceTest {
         new CreateActivitySubContractorAssignmentRequest(
             activityId.toString(),
             masterId.toString(),
-            workActivityId.toString(),
+            scWorkTypeId.toString(),
             new BigDecimal("10"));
 
     ActivitySubContractorAssignmentResponse response = service.create(projectId, req);
@@ -164,7 +164,7 @@ class ActivitySubContractorAssignmentServiceTest {
     UUID projectId = UUID.randomUUID();
     UUID activityId = UUID.randomUUID();
     UUID masterId = UUID.randomUUID();
-    UUID workActivityId = UUID.randomUUID();
+    UUID scWorkTypeId = UUID.randomUUID();
     UUID activityWorkActivityId = UUID.randomUUID();
 
     Activity activity = new Activity();
@@ -178,15 +178,15 @@ class ActivitySubContractorAssignmentServiceTest {
     // Mapping has a unit but activity's WorkActivity can't be resolved -> skip check.
     SubContractorWorkActivityMapping mapping = SubContractorWorkActivityMapping.builder()
         .subContractorMasterId(masterId)
-        .workActivityId(workActivityId)
-        .workActivityName("Carting")
+        .scWorkTypeId(scWorkTypeId)
+        .workTypeName("Carting")
         .unit("Nos")
         .ratePerUnit(new BigDecimal("100"))
         .build();
 
     when(activityRepository.findById(activityId)).thenReturn(Optional.of(activity));
     when(masterRepository.findById(masterId)).thenReturn(Optional.of(master));
-    when(mappingRepository.findBySubContractorMasterIdAndWorkActivityId(masterId, workActivityId))
+    when(mappingRepository.findBySubContractorMasterIdAndScWorkTypeId(masterId, scWorkTypeId))
         .thenReturn(Optional.of(mapping));
     // WorkActivity lookup returns empty -> resolved unit is null -> check is short-circuited.
     when(workActivityRepository.findById(activityWorkActivityId))
@@ -202,7 +202,7 @@ class ActivitySubContractorAssignmentServiceTest {
         new CreateActivitySubContractorAssignmentRequest(
             activityId.toString(),
             masterId.toString(),
-            workActivityId.toString(),
+            scWorkTypeId.toString(),
             new BigDecimal("5"));
 
     assertThatCode(() -> service.create(projectId, req)).doesNotThrowAnyException();
