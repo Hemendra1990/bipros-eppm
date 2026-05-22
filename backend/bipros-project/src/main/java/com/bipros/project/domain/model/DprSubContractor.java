@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -43,6 +44,19 @@ public class DprSubContractor extends BaseEntity {
 
   @Column(name = "sub_contractor_code", length = 50)
   private String subContractorCode;
+
+  /**
+   * Soft FK to {@code resource.activity_sub_contractor_assignments.id} — the planned row this
+   * DPR row contributes to. NOT NULL is enforced server-side (validation in
+   * {@code DailyProgressReportService}); the DB column is currently nullable so {@code
+   * ddl-auto: update} can add it to populated tables. Liquibase will tighten this in prod.
+   */
+  @Column(name = "activity_sub_contractor_assignment_id")
+  private UUID activitySubContractorAssignmentId;
+
+  /** Units delivered by this sub-contractor on this DPR's date. Required at write time. */
+  @Column(name = "quantity", precision = 19, scale = 4)
+  private BigDecimal quantity;
 
   @Column(name = "remarks", length = 500)
   private String remarks;

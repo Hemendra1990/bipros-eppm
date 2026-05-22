@@ -61,4 +61,14 @@ public class ActivitySubContractorAssignment extends BaseEntity {
 
   @Column(name = "planned_cost", precision = 19, scale = 4)
   private BigDecimal plannedCost;
+
+  @Column(name = "actual_units", precision = 19, scale = 4,
+          columnDefinition = "NUMERIC(19,4) DEFAULT 0")
+  @Builder.Default
+  private BigDecimal actualUnits = BigDecimal.ZERO;
+
+  @Column(name = "actual_cost", precision = 19, scale = 4,
+          columnDefinition = "NUMERIC(19,4) DEFAULT 0")
+  @Builder.Default
+  private BigDecimal actualCost = BigDecimal.ZERO;
 }

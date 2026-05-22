@@ -193,3 +193,5 @@ databaseChangeLog:
       file: db/changelog/changeset-2026-05-add-dbs-register.xml
   - include:
       file: db/changelog/changeset-2026-05-add-cm-role-constraint.xml
+  - include:
+      file: db/changelog/105-add-dpr-sub-contractor-quantity-and-assignment-fk.xml

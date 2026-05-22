@@ -15,6 +15,10 @@ export interface ActivitySubContractorAssignment {
   plannedUnits?: number | null;
   ratePerUnit?: number | null;
   plannedCost?: number | null;
+  actualUnits?: number | null;
+  actualCost?: number | null;
+  remainingUnits?: number | null;
+  remainingCost?: number | null;
   createdAt: string;
   updatedAt: string;
 }

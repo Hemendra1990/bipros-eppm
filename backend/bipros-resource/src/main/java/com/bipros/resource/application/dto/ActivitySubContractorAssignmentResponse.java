@@ -21,11 +21,23 @@ public record ActivitySubContractorAssignmentResponse(
     BigDecimal plannedUnits,
     BigDecimal ratePerUnit,
     BigDecimal plannedCost,
+    BigDecimal actualUnits,
+    BigDecimal actualCost,
+    BigDecimal remainingUnits,
+    BigDecimal remainingCost,
     Instant createdAt,
     Instant updatedAt) {
 
   public static ActivitySubContractorAssignmentResponse from(
       ActivitySubContractorAssignment a, SubContractorMaster master) {
+    // Preserve nullable planned* in the payload (caller may distinguish "not set" from 0);
+    // use coalesced values only for remaining* arithmetic.
+    BigDecimal planned = a.getPlannedUnits() != null ? a.getPlannedUnits() : BigDecimal.ZERO;
+    BigDecimal actual = a.getActualUnits() != null ? a.getActualUnits() : BigDecimal.ZERO;
+    BigDecimal plannedCost = a.getPlannedCost() != null ? a.getPlannedCost() : BigDecimal.ZERO;
+    BigDecimal actualCost = a.getActualCost() != null ? a.getActualCost() : BigDecimal.ZERO;
+    BigDecimal remainingUnits = planned.subtract(actual).max(BigDecimal.ZERO);
+    BigDecimal remainingCost = plannedCost.subtract(actualCost).max(BigDecimal.ZERO);
     return new ActivitySubContractorAssignmentResponse(
         a.getId(),
         a.getActivityId(),
@@ -40,6 +52,10 @@ public record ActivitySubContractorAssignmentResponse(
         a.getPlannedUnits(),
         a.getRatePerUnit(),
         a.getPlannedCost(),
+        a.getActualUnits(),
+        a.getActualCost(),
+        remainingUnits,
+        remainingCost,
         a.getCreatedAt(),
         a.getUpdatedAt());
   }

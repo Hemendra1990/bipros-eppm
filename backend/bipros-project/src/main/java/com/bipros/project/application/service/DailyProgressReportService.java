@@ -174,7 +174,13 @@ public class DailyProgressReportService {
     List<DprManpower> savedManpower = snap.manpower.isEmpty() ? List.of() : manpowerRepository.saveAll(snap.manpower);
     List<DprEquipment> savedEquipment = snap.equipment.isEmpty() ? List.of() : equipmentRepository.saveAll(snap.equipment);
     List<DprMaterial> savedMaterial = snap.material.isEmpty() ? List.of() : materialRepository.saveAll(snap.material);
-    List<DprSubContractor> savedSubContractors = saveSubContractors(saved.getId(), request.subContractors());
+    List<DprSubContractor> savedSubContractors = saveSubContractors(
+        saved.getId(), saved.getActivityId(), request.qtyExecuted(), request.subContractors());
+    // Recompute actuals for every assignment this create touched.
+    recomputeScActuals(savedSubContractors.stream()
+        .map(DprSubContractor::getActivitySubContractorAssignmentId)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toSet()));
 
     reconcileLedger(saved, savedManpower, savedEquipment, savedMaterial);
     // Insert phantom ResourceAssignment rows for any (role, variant) the planner never added.
@@ -193,7 +199,7 @@ public class DailyProgressReportService {
         savedManpower.stream().map(DprManpowerRow::from).toList(),
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
-        savedSubContractors.stream().map(DprSubContractorRow::from).toList(),
+        toScResponseRows(savedSubContractors),
         List.of(),
         savedIssues.stream().map(DprIssueRow::from).toList(),
         warnings);
@@ -279,6 +285,13 @@ public class DailyProgressReportService {
       savedMaterial = existingMaterial;
       savedSubContractors = existingSubContractors;
     } else {
+      // Capture pre-mutation sub-contractor assignment ids so we can recompute them after the
+      // delete-and-replace. The new set is added in via the union below.
+      Set<UUID> oldScAssignmentIds = existingSubContractors.stream()
+          .map(DprSubContractor::getActivitySubContractorAssignmentId)
+          .filter(Objects::nonNull)
+          .collect(Collectors.toSet());
+
       // Replace children: delete then re-insert. Flush between to avoid PK collisions on the
       // unique constraint inside one TX (Hibernate batches the delete with the insert otherwise).
       manpowerRepository.deleteByDprId(saved.getId());
@@ -295,7 +308,17 @@ public class DailyProgressReportService {
       savedManpower = snap.manpower.isEmpty() ? List.of() : manpowerRepository.saveAll(snap.manpower);
       savedEquipment = snap.equipment.isEmpty() ? List.of() : equipmentRepository.saveAll(snap.equipment);
       savedMaterial = snap.material.isEmpty() ? List.of() : materialRepository.saveAll(snap.material);
-      savedSubContractors = saveSubContractors(saved.getId(), request.subContractors());
+      savedSubContractors = saveSubContractors(
+          saved.getId(), saved.getActivityId(), request.qtyExecuted(), request.subContractors());
+
+      // Recompute actuals for the union of old + new assignment ids — so a removed row decrements
+      // its old assignment, a swapped row updates both, and a kept row refreshes once.
+      Set<UUID> touchedSc = new java.util.HashSet<>(oldScAssignmentIds);
+      savedSubContractors.stream()
+          .map(DprSubContractor::getActivitySubContractorAssignmentId)
+          .filter(Objects::nonNull)
+          .forEach(touchedSc::add);
+      recomputeScActuals(touchedSc);
 
       reconcileLedger(saved, savedManpower, savedEquipment, savedMaterial);
       ensureAssignmentsExist(saved.getActivityId(), saved.getProjectId(), warnings);
@@ -316,7 +339,7 @@ public class DailyProgressReportService {
         savedManpower.stream().map(DprManpowerRow::from).toList(),
         savedEquipment.stream().map(DprEquipmentRow::from).toList(),
         savedMaterial.stream().map(DprMaterialRow::from).toList(),
-        savedSubContractors.stream().map(DprSubContractorRow::from).toList(),
+        toScResponseRows(savedSubContractors),
         attachments,
         savedIssues.stream().map(DprIssueRow::from).toList(),
         warnings);
@@ -350,7 +373,7 @@ public class DailyProgressReportService {
         manpowerRepository.findByDprIdOrderByTradeAsc(id).stream().map(DprManpowerRow::from).toList(),
         equipmentRepository.findByDprIdOrderByEquipmentTypeAsc(id).stream().map(DprEquipmentRow::from).toList(),
         materialRepository.findByDprIdOrderByMaterialNameAsc(id).stream().map(DprMaterialRow::from).toList(),
-        subContractorRepository.findByDprIdOrderBySubContractorNameAsc(id).stream().map(DprSubContractorRow::from).toList(),
+        toScResponseRows(subContractorRepository.findByDprIdOrderBySubContractorNameAsc(id)),
         attachmentRepository.findByDprIdOrderByCreatedAtAsc(id).stream().map(DprAttachmentResponse::from).toList(),
         issueRepository.findByDprIdOrderByOpenedAtAsc(id).stream().map(DprIssueRow::from).toList()
     );
@@ -369,11 +392,22 @@ public class DailyProgressReportService {
     // child rows (the ledger holds aggregates, not child references).
     ledgerService.deleteDprLedger(projectId, dprId, reportDate);
 
+    // Capture the assignment ids referenced by this DPR's sub-contractor rows so we can refresh
+    // their actuals AFTER the delete (so the SUM excludes the doomed rows).
+    Set<UUID> doomedScAssignmentIds = subContractorRepository
+        .findByDprIdOrderBySubContractorNameAsc(dprId).stream()
+        .map(DprSubContractor::getActivitySubContractorAssignmentId)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toSet());
+
     manpowerRepository.deleteByDprId(dprId);
     equipmentRepository.deleteByDprId(dprId);
     materialRepository.deleteByDprId(dprId);
     subContractorRepository.deleteByDprId(dprId);
     issueRepository.deleteByDprId(dprId);
+
+    // Recompute the affected sub-contractor assignment actuals after the rows have been removed.
+    recomputeScActuals(doomedScAssignmentIds);
     // Photos: collect paths before the DB rows are removed, then drop binaries best-effort.
     List<DprAttachment> attachments = attachmentRepository.findByDprIdOrderByCreatedAtAsc(dprId);
     attachmentRepository.deleteByDprId(dprId);
@@ -414,9 +448,34 @@ public class DailyProgressReportService {
     Map<UUID, List<DprMaterialRow>> materialByDpr = materialRepository.findByDprIdIn(ids).stream()
         .collect(Collectors.groupingBy(DprMaterial::getDprId,
             Collectors.mapping(DprMaterialRow::from, Collectors.toList())));
-    Map<UUID, List<DprSubContractorRow>> subContractorsByDpr = subContractorRepository.findByDprIdIn(ids).stream()
+    // Group + enrich SC rows with assignment snapshots in one shot to avoid N+1.
+    List<DprSubContractor> allSc = subContractorRepository.findByDprIdIn(ids);
+    Map<UUID, Object[]> scAssignmentById = new HashMap<>();
+    if (em != null && !allSc.isEmpty()) {
+      java.util.Set<UUID> assignmentIds = allSc.stream()
+          .map(DprSubContractor::getActivitySubContractorAssignmentId)
+          .filter(Objects::nonNull)
+          .collect(Collectors.toSet());
+      if (!assignmentIds.isEmpty()) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> scAssignmentRows = em.createNativeQuery(
+                "SELECT id, work_activity_name, unit, rate_per_unit "
+                    + "FROM resource.activity_sub_contractor_assignments WHERE id IN (:ids)")
+            .setParameter("ids", assignmentIds)
+            .getResultList();
+        for (Object[] r : scAssignmentRows) scAssignmentById.put((UUID) r[0], r);
+      }
+    }
+    Map<UUID, List<DprSubContractorRow>> subContractorsByDpr = allSc.stream()
         .collect(Collectors.groupingBy(DprSubContractor::getDprId,
-            Collectors.mapping(DprSubContractorRow::from, Collectors.toList())));
+            Collectors.mapping(e -> {
+              Object[] r = e.getActivitySubContractorAssignmentId() == null
+                  ? null : scAssignmentById.get(e.getActivitySubContractorAssignmentId());
+              String waName = r == null ? null : (String) r[1];
+              String unit = r == null ? null : (String) r[2];
+              BigDecimal rate = r == null || r[3] == null ? null : (BigDecimal) r[3];
+              return DprSubContractorRow.withAssignmentSnapshot(e, waName, unit, rate);
+            }, Collectors.toList())));
     Map<UUID, List<DprAttachmentResponse>> attachmentsByDpr = attachmentRepository.findByDprIdIn(ids).stream()
         .collect(Collectors.groupingBy(DprAttachment::getDprId,
             Collectors.mapping(DprAttachmentResponse::from, Collectors.toList())));
@@ -826,33 +885,187 @@ public class DailyProgressReportService {
     return new SnapshottedChildren(manpower, equipment, material);
   }
 
+  /** Tiny tuple resolved from a native lookup against {@code activity_sub_contractor_assignments}. */
+  private record ScAssignmentSnapshot(
+      UUID assignmentId, UUID activityId, UUID subContractorMasterId,
+      String workActivityName, String unit, BigDecimal ratePerUnit) {}
+
   /**
-   * Persist sub-contractor rows under a DPR. Validates each master exists via a native SQL
-   * cross-schema read (same pattern as role-rate lookups), snapshots name+code, and saves all.
+   * Native cross-schema lookup for an assignment id. Returns null when the row is missing.
+   * Mirrors the cross-module pattern used elsewhere in this service — we cannot depend on
+   * {@code bipros-resource} (it already depends on {@code bipros-project}, so the reverse
+   * would create a cycle).
    */
-  private List<DprSubContractor> saveSubContractors(UUID dprId, List<DprSubContractorRow> rows) {
+  @SuppressWarnings("unchecked")
+  private ScAssignmentSnapshot lookupScAssignment(UUID assignmentId) {
+    if (assignmentId == null || em == null) return null;
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT activity_id, sub_contractor_master_id, work_activity_name, unit, rate_per_unit "
+                + "FROM resource.activity_sub_contractor_assignments WHERE id = :id")
+        .setParameter("id", assignmentId)
+        .getResultList();
+    if (rows.isEmpty()) return null;
+    Object[] r = rows.get(0);
+    return new ScAssignmentSnapshot(
+        assignmentId,
+        (UUID) r[0],
+        (UUID) r[1],
+        (String) r[2],
+        (String) r[3],
+        r[4] == null ? null : (BigDecimal) r[4]);
+  }
+
+  /**
+   * Persist sub-contractor rows under a DPR with full validation. Validates the assignment
+   * exists, belongs to the DPR's activity, isn't duplicated within this DPR, and that the
+   * total quantity doesn't exceed the DPR's workdone. Snapshots master name+code at write
+   * time from {@code resource.sub_contractor_master}.
+   *
+   * @throws BusinessRuleException with code {@code SC_EXCEEDS_WORKDONE},
+   *     {@code SC_DUPLICATE_ROW}, {@code SC_ASSIGNMENT_NOT_FOUND},
+   *     {@code SC_ASSIGNMENT_ACTIVITY_MISMATCH}, or {@code SC_INVALID_QUANTITY}.
+   */
+  private List<DprSubContractor> saveSubContractors(
+      UUID dprId, UUID dprActivityId, BigDecimal dprQtyExecuted, List<DprSubContractorRow> rows) {
     if (rows == null || rows.isEmpty()) return List.of();
+
+    // 1. Sum-vs-workdone check.
+    BigDecimal sum = rows.stream()
+        .map(r -> r.quantity() == null ? BigDecimal.ZERO : r.quantity())
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (dprQtyExecuted != null && sum.compareTo(dprQtyExecuted) > 0) {
+      throw new BusinessRuleException("SC_EXCEEDS_WORKDONE",
+          "Sub-contractor total (" + sum + ") cannot exceed activity workdone ("
+              + dprQtyExecuted + ").");
+    }
+
+    // 2. Duplicate assignment id check + null id check.
+    java.util.Set<UUID> seen = new java.util.HashSet<>();
+    for (DprSubContractorRow r : rows) {
+      if (r.activitySubContractorAssignmentId() == null) {
+        throw new BusinessRuleException("SC_ASSIGNMENT_NOT_FOUND",
+            "Sub-contractor row is missing activitySubContractorAssignmentId.");
+      }
+      if (!seen.add(r.activitySubContractorAssignmentId())) {
+        throw new BusinessRuleException("SC_DUPLICATE_ROW",
+            "Sub-contractor assignment " + r.activitySubContractorAssignmentId()
+                + " is referenced by more than one row in this DPR.");
+      }
+    }
+
+    // 3. Per-row validation + entity build.
     List<DprSubContractor> entities = new ArrayList<>(rows.size());
     for (DprSubContractorRow row : rows) {
-      String name = null;
-      String code = null;
-      if (em != null && row.subContractorMasterId() != null) {
+      if (row.quantity() == null || row.quantity().signum() <= 0) {
+        throw new BusinessRuleException("SC_INVALID_QUANTITY",
+            "Sub-contractor quantity must be greater than zero.");
+      }
+
+      ScAssignmentSnapshot a = lookupScAssignment(row.activitySubContractorAssignmentId());
+      if (a == null) {
+        throw new BusinessRuleException("SC_ASSIGNMENT_NOT_FOUND",
+            "Sub-contractor assignment "
+                + row.activitySubContractorAssignmentId() + " not found.");
+      }
+      if (dprActivityId != null && !dprActivityId.equals(a.activityId())) {
+        throw new BusinessRuleException("SC_ASSIGNMENT_ACTIVITY_MISMATCH",
+            "Sub-contractor assignment belongs to a different activity.");
+      }
+
+      // Snapshot master name/code from native lookup.
+      String name = null, code = null;
+      if (em != null && a.subContractorMasterId() != null) {
         @SuppressWarnings("unchecked")
         List<Object[]> masterRows = em.createNativeQuery(
                 "SELECT name, code FROM resource.sub_contractor_master WHERE id = :id")
-            .setParameter("id", row.subContractorMasterId())
+            .setParameter("id", a.subContractorMasterId())
             .getResultList();
         if (!masterRows.isEmpty()) {
           name = (String) masterRows.get(0)[0];
           code = (String) masterRows.get(0)[1];
         }
       }
+
       DprSubContractor entity = row.toEntity(dprId);
+      entity.setSubContractorMasterId(a.subContractorMasterId());
       entity.setSubContractorName(name != null ? name : row.subContractorName());
       entity.setSubContractorCode(code != null ? code : row.subContractorCode());
       entities.add(entity);
     }
     return subContractorRepository.saveAll(entities);
+  }
+
+  /**
+   * Recompute {@code actual_units} / {@code actual_cost} for every assignment touched by a
+   * DPR mutation. Caller passes the union of (old assignment ids, new assignment ids) so
+   * both the removed assignment (now potentially summing to less / zero) and the newly
+   * referenced assignment are refreshed.
+   *
+   * <p>Cross-schema write via native SQL — see {@link #lookupScAssignment} for the dep-cycle
+   * rationale. Should run AFTER the in-flight DPR rows have been persisted/deleted so the
+   * SUM reflects post-mutation state.
+   */
+  private void recomputeScActuals(java.util.Set<UUID> assignmentIds) {
+    if (assignmentIds == null || assignmentIds.isEmpty() || em == null) return;
+    for (UUID id : assignmentIds) {
+      if (id == null) continue;
+      BigDecimal sum = subContractorRepository
+          .sumQuantityByActivitySubContractorAssignmentId(id);
+      BigDecimal qty = sum != null ? sum : BigDecimal.ZERO;
+      @SuppressWarnings("unchecked")
+      List<Object> rateRows = em.createNativeQuery(
+              "SELECT rate_per_unit FROM resource.activity_sub_contractor_assignments "
+                  + "WHERE id = :id")
+          .setParameter("id", id)
+          .getResultList();
+      if (rateRows.isEmpty()) continue;
+      BigDecimal rate = rateRows.get(0) == null ? BigDecimal.ZERO : (BigDecimal) rateRows.get(0);
+      BigDecimal actualCost = qty.multiply(rate);
+      em.createNativeQuery(
+              "UPDATE resource.activity_sub_contractor_assignments "
+                  + "SET actual_units = :qty, actual_cost = :cost, updated_at = now() "
+                  + "WHERE id = :id")
+          .setParameter("qty", qty)
+          .setParameter("cost", actualCost)
+          .setParameter("id", id)
+          .executeUpdate();
+    }
+  }
+
+  /**
+   * Map a list of {@link DprSubContractor} entities to {@link DprSubContractorRow} responses,
+   * enriching each with its assignment's work-activity name, unit, and rate snapshot. Batches
+   * the assignment lookup so a list of N rows costs one SQL round-trip.
+   */
+  @SuppressWarnings("unchecked")
+  private List<DprSubContractorRow> toScResponseRows(List<DprSubContractor> entities) {
+    if (entities == null || entities.isEmpty()) return List.of();
+    java.util.Set<UUID> assignmentIds = entities.stream()
+        .map(DprSubContractor::getActivitySubContractorAssignmentId)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toSet());
+    Map<UUID, Object[]> byId = new HashMap<>();
+    if (em != null && !assignmentIds.isEmpty()) {
+      List<Object[]> rows = em.createNativeQuery(
+              "SELECT id, work_activity_name, unit, rate_per_unit "
+                  + "FROM resource.activity_sub_contractor_assignments "
+                  + "WHERE id IN (:ids)")
+          .setParameter("ids", assignmentIds)
+          .getResultList();
+      for (Object[] r : rows) {
+        byId.put((UUID) r[0], r);
+      }
+    }
+    return entities.stream()
+        .map(e -> {
+          Object[] r = e.getActivitySubContractorAssignmentId() == null
+              ? null : byId.get(e.getActivitySubContractorAssignmentId());
+          String waName = r == null ? null : (String) r[1];
+          String unit = r == null ? null : (String) r[2];
+          BigDecimal rate = r == null || r[3] == null ? null : (BigDecimal) r[3];
+          return DprSubContractorRow.withAssignmentSnapshot(e, waName, unit, rate);
+        })
+        .toList();
   }
 
   /**
@@ -1670,10 +1883,10 @@ public class DailyProgressReportService {
     if (reqSize != existing.size()) return false;
     if (reqSize == 0) return true;
     List<String> a = req.stream().map(r ->
-        s(r.subContractorMasterId()) + "|" + nz(r.remarks())
+        s(r.activitySubContractorAssignmentId()) + "|" + b(r.quantity()) + "|" + nz(r.remarks())
     ).sorted().toList();
     List<String> e = existing.stream().map(r ->
-        s(r.getSubContractorMasterId()) + "|" + nz(r.getRemarks())
+        s(r.getActivitySubContractorAssignmentId()) + "|" + b(r.getQuantity()) + "|" + nz(r.getRemarks())
     ).sorted().toList();
     return a.equals(e);
   }

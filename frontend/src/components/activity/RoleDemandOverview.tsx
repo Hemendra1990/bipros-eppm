@@ -81,7 +81,7 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
 
   const scDisplay = (r: ActivitySubContractorAssignment) => {
     const planned = r.plannedUnits ?? 0;
-    const actual = 0; // actual tracking not yet implemented for sub-contractors
+    const actual = r.actualUnits ?? 0;
     return { planned, actual, remaining: Math.max(planned - actual, 0) };
   };
 
@@ -102,8 +102,11 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
           acc.actualUnits += d.actual;
           acc.remainingUnits += d.remaining;
           acc.plannedCost += row.data.plannedCost ?? 0;
-          // actual/remaining cost not tracked yet for sub-contractors
-          acc.remainingCost += row.data.plannedCost ?? 0;
+          acc.actualCost += row.data.actualCost ?? 0;
+          // SC API may omit remainingCost on legacy responses — fall back to planned − actual.
+          acc.remainingCost +=
+            row.data.remainingCost ??
+            Math.max((row.data.plannedCost ?? 0) - (row.data.actualCost ?? 0), 0);
         }
         return acc;
       },
@@ -116,7 +119,6 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
         remainingCost: 0,
       },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows]);
 
   const sz = compact ? "text-xs" : "text-sm";
@@ -222,8 +224,8 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
                   <td className={`${pad} text-right tabular-nums ${cellActual}`}>{fmtNum(d.actual)}</td>
                   <td className={`${pad} text-right tabular-nums ${cellRemaining}`}>{fmtNum(d.remaining)}</td>
                   <td className={`${pad} text-right tabular-nums ${cellPlanned}`}>{fmtCost(r.plannedCost)}</td>
-                  <td className={`${pad} text-right tabular-nums ${cellActual}`}>{fmtCost(0)}</td>
-                  <td className={`${pad} text-right tabular-nums ${cellRemaining}`}>{fmtCost(r.plannedCost)}</td>
+                  <td className={`${pad} text-right tabular-nums ${cellActual}`}>{fmtCost(r.actualCost ?? 0)}</td>
+                  <td className={`${pad} text-right tabular-nums ${cellRemaining}`}>{fmtCost(r.remainingCost ?? Math.max((r.plannedCost ?? 0) - (r.actualCost ?? 0), 0))}</td>
                 </tr>
               );
             })}

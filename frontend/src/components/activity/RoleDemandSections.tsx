@@ -23,6 +23,7 @@ import {
   activitySubContractorApi,
   type ActivitySubContractorAssignment,
 } from "@/lib/api/activitySubContractorApi";
+import { activityApi } from "@/lib/api/activityApi";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 
 interface Props {
@@ -86,6 +87,15 @@ export function RoleDemandSections({
     () => (Array.isArray(mastersResp?.data) ? mastersResp.data : []),
     [mastersResp],
   );
+
+  // The activity's workdone unit (mirror of WorkActivity.defaultUnit) is needed to
+  // filter the sub-contractor's work-activity dropdown so only mappings with the
+  // matching unit are offered for planning.
+  const { data: activityResp } = useQuery({
+    queryKey: ["activity", projectId, activityId],
+    queryFn: () => activityApi.getActivity(projectId, activityId),
+  });
+  const activityUnit = activityResp?.data?.workActivityDefaultUnit ?? null;
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["role-assignments", projectId, activityId] });
@@ -154,6 +164,7 @@ export function RoleDemandSections({
         activityId={activityId}
         masters={subContractorMasters}
         rows={subContractorAssignments}
+        activityUnit={activityUnit}
         onChanged={refresh}
         locked={locked}
       />
@@ -666,6 +677,11 @@ interface SubContractorSectionProps {
   activityId: string;
   masters: SubContractorMaster[];
   rows: ActivitySubContractorAssignment[];
+  /** Activity's workdone unit (from WorkActivity.defaultUnit). When set, the
+   *  Work Activity dropdown is filtered to mappings whose unit matches
+   *  (case-insensitive). Null means "no filter" (e.g. activity has no linked
+   *  work activity). */
+  activityUnit: string | null;
   onChanged: () => void;
   locked: boolean;
 }
@@ -675,6 +691,7 @@ function SubContractorSection({
   activityId,
   masters,
   rows,
+  activityUnit,
   onChanged,
   locked,
 }: SubContractorSectionProps) {
@@ -694,16 +711,31 @@ function SubContractorSection({
   );
 
   const mappings = useMemo<SubContractorWorkActivityMappingRow[]>(
-    () => selectedMaster?.workActivityMappings ?? [],
-    [selectedMaster],
+    () => {
+      const all = selectedMaster?.workActivityMappings ?? [];
+      if (!activityUnit) return all;
+      return all.filter(
+        (m) => m.unit && m.unit.toLowerCase() === activityUnit.toLowerCase(),
+      );
+    },
+    [selectedMaster, activityUnit],
   );
+
+  const noMatchingMappings =
+    !!selectedMaster && !!activityUnit && mappings.length === 0;
 
   const mappingOptions = useMemo(
     () =>
-      mappings.map((m) => ({
-        value: m.workActivityId,
-        label: `${m.workActivityName ?? m.workActivityId}${m.unit ? ` (${m.unit})` : ""}`,
-      })),
+      mappings.map((m) => {
+        const name = m.workActivityName ?? m.workActivityId;
+        const tail: string[] = [];
+        if (m.unit) tail.push(m.unit);
+        if (m.ratePerUnit != null) tail.push(`@ ₹${m.ratePerUnit.toFixed(2)}`);
+        return {
+          value: m.workActivityId,
+          label: tail.length ? `${name} — ${tail.join(" ")}` : name,
+        };
+      }),
     [mappings],
   );
 
@@ -770,8 +802,14 @@ function SubContractorSection({
             value={workActivityId}
             onChange={(val) => setWorkActivityId(val)}
             placeholder={masterId ? "— pick work activity —" : "Select sub-contractor first"}
-            disabled={locked || !masterId}
+            disabled={locked || !masterId || noMatchingMappings}
           />
+          {noMatchingMappings && (
+            <span className="mt-1 block text-[11px] text-danger">
+              This sub-contractor has no work activity mappings with unit
+              {" "}&quot;{activityUnit}&quot;.
+            </span>
+          )}
         </label>
         <label className="text-xs">
           <span className="text-text-muted">
@@ -784,7 +822,7 @@ function SubContractorSection({
             value={plannedUnits}
             onChange={(e) => setPlannedUnits(parseFloat(e.target.value) || 0)}
             disabled={locked}
-            className="mt-1 w-full rounded-md border border-border bg-surface-hover px-2 py-1.5 text-xs disabled:opacity-50"
+            className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm disabled:opacity-50"
           />
         </label>
         <button

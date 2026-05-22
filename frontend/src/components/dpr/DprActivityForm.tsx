@@ -504,7 +504,10 @@ export function DprActivityForm({
     [state.materials],
   );
   const subContractorsFilledCount = useMemo(
-    () => (state.subContractors ?? []).filter((r) => !!r.subContractorMasterId).length,
+    () =>
+      (state.subContractors ?? []).filter(
+        (r) => !!r.activitySubContractorAssignmentId,
+      ).length,
     [state.subContractors],
   );
   const issuesFilledCount = useMemo(
@@ -629,7 +632,7 @@ export function DprActivityForm({
       (r) => !!r.materialRoleVariantId || !!r.resourceAssignmentId,
     );
     const subContractors = (state.subContractors ?? []).filter(
-      (r) => !!r.subContractorMasterId,
+      (r) => !!r.activitySubContractorAssignmentId,
     );
     // Issues use merge-by-id server-side: rows present in the DB but absent from this
     // payload are deleted, so we must include EVERY issue the user can still see —
@@ -1005,6 +1008,10 @@ export function DprActivityForm({
             <ProductivityPreviewBanner
               preview={preview}
               workdone={state.qtyExecuted ?? null}
+              subContractorQty={(state.subContractors ?? []).reduce(
+                (s, r) => s + (r.quantity ?? 0),
+                0,
+              )}
               unit={state.unit}
             />
           </Field>
@@ -1145,6 +1152,7 @@ export function DprActivityForm({
               activityId={state.activityId ?? null}
               rows={state.subContractors ?? []}
               onChange={(rows: DprSubContractorRow[]) => patch({ subContractors: rows })}
+              workdoneQty={state.qtyExecuted ?? null}
             />
           )}
           {tab === "issues" && (
@@ -1191,6 +1199,7 @@ export function DprActivityForm({
               manpower={state.manpower ?? []}
               equipment={state.equipment ?? []}
               materials={state.materials ?? []}
+              subContractors={state.subContractors ?? []}
               qtyExecuted={state.qtyExecuted}
               unit={state.unit}
             />
