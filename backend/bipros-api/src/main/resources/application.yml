@@ -224,6 +224,17 @@ bipros:
     docling:
       url: ${DOCLING_URL:http://localhost:5001}
       timeout-minutes: 60
+    # PDF parser routing. PDFBox handles text-extractable PDFs (the common HDS case)
+    # with ~200 MB peak memory regardless of file size. Docling stays as the fallback
+    # for image/scanned PDFs that need layout + OCR analysis.
+    parser:
+      text-mode-enabled: ${HDS_PARSER_TEXT_MODE:true}
+      min-chars-per-page: 200
+      probe-sample-size: 5
+      # Any PDF this size or larger goes through PDFBox regardless of probe outcome.
+      # Set 0 to disable. Tuned for a 10-12 GiB Docker VM where Docling OOMs above
+      # ~150 MB inputs.
+      force-pdfbox-over-mb: 100
     embedding:
       model: text-embedding-3-large
       dimensions: 1536

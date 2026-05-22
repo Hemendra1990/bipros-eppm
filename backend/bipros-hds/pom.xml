@@ -60,6 +60,15 @@
             <artifactId>s3</artifactId>
         </dependency>
 
+        <!-- PDFBox: native text extraction for text-based PDFs. Streams page-by-page
+             with bounded memory (~200 MB peak regardless of file size) so we don't pay
+             the Docling rasterization/layout-model cost on documents that are already
+             text-extractable. Docling remains the fallback for image-heavy PDFs. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

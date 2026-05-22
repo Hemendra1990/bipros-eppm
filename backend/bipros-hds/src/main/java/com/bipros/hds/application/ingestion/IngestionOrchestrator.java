@@ -10,6 +10,7 @@ import com.bipros.hds.domain.repo.HdsVersionRepository;
 import com.bipros.hds.application.library.VersionStatusListener;
 import com.bipros.hds.infrastructure.docling.DoclingClient;
 import com.bipros.hds.infrastructure.docling.dto.DoclingResponse;
+import com.bipros.hds.infrastructure.parser.RoutingPdfParser;
 import com.bipros.hds.infrastructure.retrieval.HybridSearchRepository;
 import com.bipros.hds.infrastructure.retrieval.HybridSearchRepository.ChunkInsert;
 import com.bipros.hds.infrastructure.storage.HdsStorageService;
@@ -32,6 +33,7 @@ public class IngestionOrchestrator {
     private final HdsIngestionJobRepository jobRepo;
     private final HdsStorageService storage;
     private final DoclingClient docling;
+    private final RoutingPdfParser parser;
     private final ChunkingService chunking;
     private final EmbeddingService embedding;
     private final HybridSearchRepository hybridRepo;
@@ -53,7 +55,7 @@ public class IngestionOrchestrator {
                 advance(job, version, HdsIngestionStage.PARSING, 0, "Parsing PDF…");
                 try (var pdf = storage.download(version.getStorageKey())) {
                     Long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
-                    parsed = docling.parse(pdf, sz, version.getFileName());
+                    parsed = parser.parse(pdf, sz, version.getFileName());
                 }
                 if (parsed.getPages() != null) {
                     Integer pages = parsed.getPages();
@@ -73,7 +75,7 @@ public class IngestionOrchestrator {
                     // Resumed mid-pipeline — re-parse (Docling is idempotent on the same bytes)
                     try (var pdf = storage.download(version.getStorageKey())) {
                         long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
-                        parsed = docling.parse(pdf, sz, version.getFileName());
+                        parsed = parser.parse(pdf, sz, version.getFileName());
                     }
                 }
                 advance(job, version, HdsIngestionStage.CHUNKING, 65, "Chunking…");
@@ -87,7 +89,7 @@ public class IngestionOrchestrator {
                     if (parsed == null) {
                         try (var pdf = storage.download(version.getStorageKey())) {
                             long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
-                            parsed = docling.parse(pdf, sz, version.getFileName());
+                            parsed = parser.parse(pdf, sz, version.getFileName());
                         }
                     }
                     chunks = chunking.chunk(parsed);
@@ -108,7 +110,7 @@ public class IngestionOrchestrator {
                     if (parsed == null) {
                         try (var pdf = storage.download(version.getStorageKey())) {
                             long sz = version.getFileSizeBytes() == null ? -1L : version.getFileSizeBytes();
-                            parsed = docling.parse(pdf, sz, version.getFileName());
+                            parsed = parser.parse(pdf, sz, version.getFileName());
                         }
                     }
                     if (chunks == null) chunks = chunking.chunk(parsed);

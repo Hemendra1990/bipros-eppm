@@ -11,6 +11,7 @@ import com.bipros.hds.infrastructure.docling.DoclingClient;
 import com.bipros.hds.infrastructure.docling.dto.DoclingBlock;
 import com.bipros.hds.infrastructure.docling.dto.DoclingResponse;
 import com.bipros.hds.infrastructure.embedding.EmbeddingClient;
+import com.bipros.hds.infrastructure.parser.RoutingPdfParser;
 import com.bipros.hds.infrastructure.retrieval.HybridSearchRepository;
 import com.bipros.hds.infrastructure.storage.HdsStorageService;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ class IngestionOrchestratorTest {
         HdsIngestionJobRepository jobRepo = mock(HdsIngestionJobRepository.class);
         HdsStorageService storage = mock(HdsStorageService.class);
         DoclingClient docling = mock(DoclingClient.class);
+        RoutingPdfParser parser = mock(RoutingPdfParser.class);
         ChunkingService chunking = new ChunkingService();
         EmbeddingClient embedClient = new EmbeddingClient() {
             @Override public List<float[]> embedBatch(List<String> inputs) {
@@ -60,7 +62,9 @@ class IngestionOrchestratorTest {
         var b1 = new DoclingBlock(); b1.setType("heading"); b1.setLevel(1); b1.setPage(1); b1.setText("Title"); b1.setSectionNumber("1");
         var b2 = new DoclingBlock(); b2.setType("paragraph"); b2.setPage(1); b2.setText("Body text here.");
         doclingResp.setBlocks(List.of(b1, b2));
-        when(docling.parse(any(), any())).thenReturn(doclingResp);
+        try {
+            when(parser.parse(any(), anyLong(), any())).thenReturn(doclingResp);
+        } catch (java.io.IOException e) { throw new AssertionError(e); }
 
         var job = new HdsIngestionJob();
         job.setId(UUID.randomUUID());
@@ -69,7 +73,7 @@ class IngestionOrchestratorTest {
 
         var listener = mock(com.bipros.hds.application.library.VersionStatusListener.class);
         var orch = new IngestionOrchestrator(props, versionRepo, jobRepo, storage, docling,
-            chunking, embedSvc, hybrid, progress, listener);
+            parser, chunking, embedSvc, hybrid, progress, listener);
         orch.run(job);
 
         ArgumentCaptor<HdsVersion> verCap = ArgumentCaptor.forClass(HdsVersion.class);
