@@ -11,7 +11,9 @@ import java.util.List;
 @ConditionalOnMissingBean(LlmGateway.class)
 public class StubLlmGateway implements LlmGateway {
     @Override public String completeStructured(List<ChatMessage> messages, String fmt) {
-        return "{\"is_compound\":false,\"sub_questions\":[],\"search_queries\":[\"stub\"],\"passed\":true,\"sufficient\":true,\"follow_up_queries\":[],\"issues\":[]}";
+        return "{\"intent\":\"specific\",\"is_compound\":false,\"sub_questions\":[]," +
+            "\"search_queries\":[\"stub\"],\"passed\":true,\"sufficient\":true," +
+            "\"follow_up_queries\":[],\"issues\":[]}";
     }
     @Override public String completeStreaming(List<ChatMessage> messages, StreamCallback cb) {
         String t = "Per the provided chunks [c1], answer is X.";

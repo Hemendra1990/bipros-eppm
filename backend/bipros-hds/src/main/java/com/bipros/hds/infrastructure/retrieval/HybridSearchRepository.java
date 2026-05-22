@@ -61,6 +61,33 @@ public class HybridSearchRepository {
         }, (rs, n) -> (UUID) rs.getObject("id"));
     }
 
+    /**
+     * Structural sample for overview-intent questions. Returns up to {@code perVersionLimit}
+     * chunks from each selected version ordered by chunk_index — typically the table of
+     * contents, intro, and first few section starts. No vector search; no similarity floor.
+     * Result is ordered by version then chunk_index so the answer reads as a coherent map
+     * of each document in turn.
+     */
+    public List<UUID> sampleOverviewChunks(List<UUID> selectedVersionIds, int perVersionLimit) {
+        if (selectedVersionIds.isEmpty() || perVersionLimit <= 0) return List.of();
+        return jdbc.query(con -> {
+            Array versions = con.createArrayOf("uuid", selectedVersionIds.toArray());
+            // ROW_NUMBER per version, take the first N — keeps the result short even
+            // when the corpus is large.
+            var ps = con.prepareStatement(
+                "WITH ranked AS (" +
+                "  SELECT id, hds_version_id, chunk_index, " +
+                "         ROW_NUMBER() OVER (PARTITION BY hds_version_id ORDER BY chunk_index) AS rn " +
+                "  FROM hds.hds_chunk " +
+                "  WHERE hds_version_id = ANY(?)" +
+                ") " +
+                "SELECT id FROM ranked WHERE rn <= ? ORDER BY hds_version_id, chunk_index");
+            ps.setArray(1, versions);
+            ps.setInt(2, perVersionLimit);
+            return ps;
+        }, (rs, n) -> (UUID) rs.getObject("id"));
+    }
+
     /** Fetch chunks by IDs preserving the given order. */
     public List<ChunkRow> fetchChunks(List<UUID> chunkIds) {
         if (chunkIds.isEmpty()) return List.of();

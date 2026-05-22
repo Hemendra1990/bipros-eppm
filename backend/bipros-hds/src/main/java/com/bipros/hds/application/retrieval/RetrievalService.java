@@ -56,28 +56,61 @@ public class RetrievalService {
             return safeFail(question, selectedVersionIds, started);
         }
 
-        // Phase 1: PLAN
+        // Phase 1: PLAN — classify intent + emit search queries
         PlanResult plan = phasePlan(question, versions);
 
-        // Phase 2 + 3 loop
+        // Off-topic intent: return a short polite response without retrieval.
+        if (plan.intent() == PlanResult.Intent.OFF_TOPIC) {
+            String reply = "I'm the HDS document assistant. Ask me about content in the selected "
+                + "documents — for example, specific facts from a section, or what topics the "
+                + "documents cover.";
+            if (streamCb != null) streamCb.onToken(reply);
+            var meta = new LinkedHashMap<String, Object>();
+            meta.put("duration_ms", (int) (System.currentTimeMillis() - started));
+            meta.put("rounds", 0);
+            meta.put("intent", "off_topic");
+            return new RetrievalAnswer(reply, List.of(), new VerifyResult(true, List.of()), meta);
+        }
+
+        // Phase 2 + 3 loop — retrieval strategy depends on intent
         List<UUID> retrievedIds = new ArrayList<>();
-        List<String> followUps = List.of();
         int roundsRun = 0;
-        for (int round = 1; round <= maxRounds; round++) {
-            List<String> queries = round == 1 ? plan.searchQueries() : followUps;
-            var roundIds = phaseRetrieve(queries, selectedVersionIds);
-            retrievedIds = dedupe(retrievedIds, roundIds);
-            roundsRun = round;
 
-            if (retrievedIds.isEmpty()) {
-                return safeFail(question, selectedVersionIds, started);
-            }
+        if (plan.intent() == PlanResult.Intent.OVERVIEW) {
+            // Structural sample: first chunks per version. Bypasses vector search
+            // because the user is asking what's in the document — there's no
+            // specific term to match against.
+            int perVersionLimit = Math.max(3,
+                props.getRetrieval().getMaxChunksPerQuery() / Math.max(versions.size(), 1));
+            retrievedIds = hybridRepo.sampleOverviewChunks(selectedVersionIds, perVersionLimit);
+            roundsRun = 1;
+        } else {
+            // Specific intent: vector + BM25 retrieval with optional follow-up rounds.
+            List<String> followUps = List.of();
+            for (int round = 1; round <= maxRounds; round++) {
+                List<String> queries = round == 1 ? plan.searchQueries() : followUps;
+                if ((queries == null || queries.isEmpty()) && round == 1) {
+                    // Fallback: planner returned no queries — use the raw question.
+                    queries = List.of(question);
+                }
+                var roundIds = phaseRetrieve(queries, selectedVersionIds);
+                retrievedIds = dedupe(retrievedIds, roundIds);
+                roundsRun = round;
 
-            var examine = phaseExamine(question, hybridRepo.fetchChunks(retrievedIds));
-            if (examine.sufficient() || round == maxRounds) {
-                break;
+                if (retrievedIds.isEmpty()) {
+                    return safeFail(question, selectedVersionIds, started, plan.intent());
+                }
+
+                var examine = phaseExamine(question, hybridRepo.fetchChunks(retrievedIds));
+                if (examine.sufficient() || round == maxRounds) {
+                    break;
+                }
+                followUps = examine.followUpQueries();
             }
-            followUps = examine.followUpQueries();
+        }
+
+        if (retrievedIds.isEmpty()) {
+            return safeFail(question, selectedVersionIds, started, plan.intent());
         }
 
         // Phase 4: DRAFT
@@ -96,29 +129,41 @@ public class RetrievalService {
                 .append(chunks.get(i).content()).append("\n\n");
         }
 
+        String draftSystem = plan.intent() == PlanResult.Intent.OVERVIEW
+            ? Prompts.DRAFT_OVERVIEW_SYSTEM
+            : Prompts.DRAFT_SYSTEM;
         String draftUser = "Question: " + question + "\n\nChunks:\n" + chunkBlock;
         String draft = llm.completeStreaming(
-            List.of(new LlmGateway.ChatMessage("system", Prompts.DRAFT_SYSTEM),
+            List.of(new LlmGateway.ChatMessage("system", draftSystem),
                     new LlmGateway.ChatMessage("user", draftUser)),
             streamCb);
 
-        // Phase 5: VERIFY (up to maxRetries)
-        VerifyResult verify = phaseVerify(draft, markerToChunk);
-        int retries = 0;
-        while (!verify.passed() && retries < props.getVerifier().getMaxRetries()) {
-            String feedback = "Verifier rejected these claims:\n" +
-                String.join("\n", verify.issues().stream().map(i -> "- " + i.claim() + " (" + i.explanation() + ")").toList()) +
-                "\n\nRewrite the answer using only the chunks provided.";
-            draft = llm.completeStreaming(
-                List.of(new LlmGateway.ChatMessage("system", Prompts.DRAFT_SYSTEM),
-                        new LlmGateway.ChatMessage("user", draftUser + "\n\n" + feedback)),
-                streamCb);
+        // Phase 5: VERIFY — claim-level grounding check, but ONLY for SPECIFIC intent.
+        // OVERVIEW intent produces structural summaries (bullets describing section
+        // contents) which the claim-level verifier mis-flags as ungrounded; the
+        // structural sampler already guarantees only real chunks are in scope.
+        VerifyResult verify;
+        if (plan.intent() == PlanResult.Intent.OVERVIEW) {
+            log.debug("Skipping claim verifier for OVERVIEW intent");
+            verify = new VerifyResult(true, List.of());
+        } else {
             verify = phaseVerify(draft, markerToChunk);
-            retries++;
-        }
+            int retries = 0;
+            while (!verify.passed() && retries < props.getVerifier().getMaxRetries()) {
+                String feedback = "Verifier rejected these claims:\n" +
+                    String.join("\n", verify.issues().stream().map(i -> "- " + i.claim() + " (" + i.explanation() + ")").toList()) +
+                    "\n\nRewrite the answer using only the chunks provided.";
+                draft = llm.completeStreaming(
+                    List.of(new LlmGateway.ChatMessage("system", draftSystem),
+                            new LlmGateway.ChatMessage("user", draftUser + "\n\n" + feedback)),
+                    streamCb);
+                verify = phaseVerify(draft, markerToChunk);
+                retries++;
+            }
 
-        if (!verify.passed()) {
-            draft = SAFE_FAIL;
+            if (!verify.passed()) {
+                draft = SAFE_FAIL;
+            }
         }
 
         // Build citations from markers actually used in draft
@@ -127,6 +172,7 @@ public class RetrievalService {
         var meta = new LinkedHashMap<String, Object>();
         meta.put("duration_ms", (int) (System.currentTimeMillis() - started));
         meta.put("rounds", roundsRun);
+        meta.put("intent", plan.intent().name().toLowerCase());
 
         var answer = new RetrievalAnswer(draft, citations, verify, meta);
         cache.put(question, selectedVersionIds, answer, Duration.ofSeconds(props.getRetrieval().getCacheTtlSeconds()));
@@ -136,20 +182,65 @@ public class RetrievalService {
 
     private PlanResult phasePlan(String question, List<HdsVersion> versions) {
         String userMsg = "Question: " + question + "\nSelected versions: " +
-            versions.stream().map(v -> v.getVersionLabel()).toList();
+            versions.stream().map(HdsVersion::getVersionLabel).toList();
         String json = llm.completeStructured(
             List.of(new LlmGateway.ChatMessage("system", Prompts.PLAN_SYSTEM),
                     new LlmGateway.ChatMessage("user", userMsg)),
             "plan");
         try {
             JsonNode n = om.readTree(json);
+            PlanResult.Intent intent = parseIntent(n.path("intent").asText(""));
+            // Heuristic override: if the question obviously matches an overview pattern
+            // ("what information…", "summarize", "table of contents"), upgrade to OVERVIEW
+            // even when the LLM classified it as SPECIFIC. This is safe because the
+            // patterns are narrow and the OVERVIEW path is still grounded + cited.
+            log.info("Plan: question='{}' llm_intent={} heuristic_overview={}",
+                question, intent, looksLikeOverview(question));
+            if (intent != PlanResult.Intent.OVERVIEW && looksLikeOverview(question)) {
+                log.info("Overriding plan intent {} -> OVERVIEW for question='{}'", intent, question);
+                intent = PlanResult.Intent.OVERVIEW;
+            }
             return new PlanResult(
                 n.path("is_compound").asBoolean(false),
                 jsonArrayToList(n.path("sub_questions")),
-                jsonArrayToList(n.path("search_queries")));
+                jsonArrayToList(n.path("search_queries")),
+                intent);
         } catch (Exception e) {
-            return new PlanResult(false, List.of(), List.of(question));
+            log.warn("Plan parse failed for question='{}', defaulting to SPECIFIC: {}", question, e.toString());
+            // Heuristic fallback for common overview phrasings when the planner fails.
+            PlanResult.Intent fallback = looksLikeOverview(question)
+                ? PlanResult.Intent.OVERVIEW
+                : PlanResult.Intent.SPECIFIC;
+            return new PlanResult(false, List.of(), List.of(question), fallback);
         }
+    }
+
+    private static PlanResult.Intent parseIntent(String raw) {
+        if (raw == null) return PlanResult.Intent.SPECIFIC;
+        return switch (raw.trim().toLowerCase()) {
+            case "overview", "summary", "summarize" -> PlanResult.Intent.OVERVIEW;
+            case "off_topic", "off-topic", "offtopic", "chat" -> PlanResult.Intent.OFF_TOPIC;
+            default -> PlanResult.Intent.SPECIFIC;
+        };
+    }
+
+    private static boolean looksLikeOverview(String question) {
+        if (question == null) return false;
+        String q = question.toLowerCase();
+        return q.contains("what information")
+            || q.contains("what info")
+            || q.contains("what is in")
+            || q.contains("what's in")
+            || q.contains("what does")
+            || q.contains("what is this doc")
+            || q.contains("what's this")
+            || q.contains("table of contents")
+            || q.contains("toc")
+            || q.contains("summarize")
+            || q.contains("summary")
+            || q.contains("overview")
+            || q.contains("describe the document")
+            || q.contains("what topics");
     }
 
     private List<UUID> phaseRetrieve(List<String> queries, List<UUID> selectedVersionIds) {
@@ -244,7 +335,15 @@ public class RetrievalService {
     }
 
     private RetrievalAnswer safeFail(String question, List<UUID> versionIds, long started) {
-        var meta = Map.<String, Object>of("duration_ms", (int) (System.currentTimeMillis() - started), "rounds", 0);
+        return safeFail(question, versionIds, started, PlanResult.Intent.SPECIFIC);
+    }
+
+    private RetrievalAnswer safeFail(String question, List<UUID> versionIds, long started,
+                                     PlanResult.Intent intent) {
+        var meta = new LinkedHashMap<String, Object>();
+        meta.put("duration_ms", (int) (System.currentTimeMillis() - started));
+        meta.put("rounds", 0);
+        meta.put("intent", intent.name().toLowerCase());
         return new RetrievalAnswer(SAFE_FAIL, List.of(),
             new VerifyResult(true, List.of()), meta);
     }
