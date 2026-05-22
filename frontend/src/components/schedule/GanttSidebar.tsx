@@ -7,9 +7,11 @@ import type { ActivityResponse } from "@/lib/types";
 interface GanttSidebarProps {
   activities: ActivityResponse[];
   rowHeight: number;
+  onActivityClick?: (id: string) => void;
+  onActivityContextMenu?: (id: string, x: number, y: number) => void;
 }
 
-export function GanttSidebar({ activities, rowHeight }: GanttSidebarProps) {
+export function GanttSidebar({ activities, rowHeight, onActivityClick, onActivityContextMenu }: GanttSidebarProps) {
   const headerHeight = 80;
 
   return (
@@ -49,8 +51,13 @@ export function GanttSidebar({ activities, rowHeight }: GanttSidebarProps) {
         return (
           <div
             key={a.id}
-            className="flex border-b border-border hover:bg-surface-hover/50"
+            className="flex border-b border-border hover:bg-surface-hover/50 cursor-pointer"
             style={{ height: rowHeight }}
+            onClick={() => onActivityClick?.(a.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onActivityContextMenu?.(a.id, e.clientX, e.clientY);
+            }}
           >
             <div style={{ minWidth: "60px" }} className="p-2 flex items-center border-r border-border overflow-hidden">
               <span className="text-xs font-medium text-text-primary truncate">{a.code}</span>

@@ -25,6 +25,7 @@ interface GanttTaskRowProps {
   timelineStartY: number;
   baselineData?: BaselineActivityData;
   onActivityClick?: (id: string) => void;
+  onActivityContextMenu?: (id: string, x: number, y: number) => void;
   onActivityReschedule?: (
     id: string,
     newStart: string,
@@ -41,6 +42,7 @@ export function GanttTaskRow({
   timelineStartY,
   baselineData,
   onActivityClick,
+  onActivityContextMenu,
   onActivityReschedule,
 }: GanttTaskRowProps) {
   const [dragState, setDragState] = useState<{
@@ -188,6 +190,10 @@ export function GanttTaskRow({
           if (!isDragging) {
             onActivityClick?.(activity.id);
           }
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onActivityContextMenu?.(activity.id, e.clientX, e.clientY);
         }}
       />
 
