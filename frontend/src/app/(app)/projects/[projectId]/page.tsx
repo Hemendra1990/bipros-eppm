@@ -15,13 +15,11 @@ import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
-import { GanttChart } from "@/components/schedule/GanttChart";
 import { ResourcesTab } from "@/components/resource/ResourcesTab";
 import { CostsTab } from "@/components/cost/CostsTab";
 import { EvmTab } from "@/components/evm/EvmTab";
 import { PeriodPerformanceTab } from "@/components/cost/PeriodPerformanceTab";
 import { CostAccountRollupTab } from "@/components/cost/CostAccountRollupTab";
-import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
 import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree, Sparkles, AlertTriangle } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { costApi } from "@/lib/api/costApi";
@@ -99,7 +97,7 @@ export default function ProjectDetailPage() {
   const { data: activitiesData, isLoading: isLoadingActivities, refetch: refetchActivities } = useQuery({
     queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 100),
-    enabled: ["activities", "gantt", "network"].includes(tab),
+    enabled: tab === "activities",
   });
 
   const { data: wbsData, isLoading: isLoadingWbs } = useQuery({
@@ -117,13 +115,13 @@ export default function ProjectDetailPage() {
   const { data: relationshipsData, isLoading: isLoadingRelationships } = useQuery({
     queryKey: ["relationships", projectId],
     queryFn: () => activityApi.getRelationships(projectId),
-    enabled: ["activities", "network", "gantt"].includes(tab),
+    enabled: false,
   });
 
   const { data: baselinesData, isLoading: isLoadingBaselines, refetch: refetchBaselines } = useQuery({
     queryKey: ["baselines", projectId],
     queryFn: () => baselineApi.listBaselines(projectId),
-    enabled: ["baselines", "gantt"].includes(tab),
+    enabled: tab === "baselines",
   });
 
   // Phase 3: prefer the project's PRIMARY slot (project.primaryBaselineId) over scanning the
@@ -142,7 +140,7 @@ export default function ProjectDetailPage() {
       primaryBaseline
         ? baselineApi.getBaseline(projectId, primaryBaseline.id)
         : Promise.resolve({ data: null, error: null, meta: { timestamp: "", version: "" } } as unknown as ApiResponse<BaselineDetailResponse>),
-    enabled: tab === "gantt" && !!primaryBaseline,
+    enabled: false,
   });
 
   const scheduleMutation = useMutation({
@@ -425,30 +423,7 @@ export default function ProjectDetailPage() {
       {tab === "wbs" && (
         <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} project={project} />
       )}
-      {tab === "gantt" && project && (
-        <GanttTab
-          activities={activities}
-          isLoading={isLoadingActivities || isLoadingRelationships || isLoadingBaselineActivities}
-          relationships={relationshipsData?.data ?? []}
-          baselineActivities={(baselineDetailData?.data?.activities ?? []).map((a: BaselineActivityResponse) => ({
-            activityId: a.activityId,
-            baselineStartDate: a.earlyStart,
-            baselineFinishDate: a.earlyFinish,
-          }))}
-          projectId={projectId}
-          project={project}
-          onRunSchedule={() => scheduleMutation.mutate()}
-          isRunningSchedule={scheduleMutation.isPending}
-        />
-      )}
-      {tab === "network" && (
-        <NetworkTab
-          projectId={projectId}
-          activities={activities}
-          relationships={relationshipsData?.data ?? []}
-          isLoading={isLoadingActivities || isLoadingRelationships}
-        />
-      )}
+
       {tab === "baselines" && (
         <BaselinesTab
           projectId={projectId}
@@ -1209,86 +1184,6 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
   );
 }
 
-function GanttTab({
-  activities,
-  isLoading,
-  relationships = [],
-  baselineActivities = [],
-  projectId,
-  project,
-  onRunSchedule,
-  isRunningSchedule = false,
-}: {
-  activities: ActivityResponse[];
-  isLoading: boolean;
-  relationships?: Array<{ predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
-  baselineActivities?: Array<{ activityId: string; baselineStartDate: string | null; baselineFinishDate: string | null }>;
-  projectId: string;
-  project: ProjectResponse;
-  onRunSchedule?: () => void;
-  isRunningSchedule?: boolean;
-}) {
-  const isStale = useScheduleStaleStore((s) => s.isScheduleStale(projectId));
-  // Progress Spotlight (Phase 1.4 of the baseline-progress roadmap). The Gantt already accepts
-  // spotlightStartDate / spotlightEndDate props; the toggle here just decides whether to feed
-  // them from the project's planned-start + data-date pair.
-  const [spotlightOn, setSpotlightOn] = useState(false);
-  const spotlightAvailable = !!project.dataDate;
-
-  if (isLoading) {
-    return <div className="text-center text-text-muted">Loading activities...</div>;
-  }
-
-  if (activities.length === 0) {
-    return (
-      <EmptyState
-        icon={ListTodo}
-        title="No activities"
-        description="This project has no activities yet. Create activities to display the Gantt chart."
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <label
-          className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface/60 px-3 py-1.5 text-xs font-medium ${
-            spotlightAvailable ? "cursor-pointer text-text-secondary hover:text-text-primary" : "cursor-not-allowed text-text-muted"
-          }`}
-          title={
-            spotlightAvailable
-              ? "Highlight activities between project start and data date"
-              : "Set Data Date on the project to enable Progress Spotlight"
-          }
-        >
-          <input
-            type="checkbox"
-            disabled={!spotlightAvailable}
-            checked={spotlightOn && spotlightAvailable}
-            onChange={(e) => setSpotlightOn(e.target.checked)}
-          />
-          Progress Spotlight
-        </label>
-        {spotlightOn && spotlightAvailable && (
-          <span className="text-xs text-text-muted">
-            Showing {project.plannedStartDate} → {project.dataDate}
-          </span>
-        )}
-      </div>
-      <GanttChart
-        activities={activities}
-        relationships={relationships}
-        baselineActivities={baselineActivities}
-        isStale={isStale}
-        onRunSchedule={onRunSchedule}
-        isRunningSchedule={isRunningSchedule}
-        spotlightStartDate={spotlightOn && spotlightAvailable ? project.plannedStartDate : undefined}
-        spotlightEndDate={spotlightOn && spotlightAvailable ? project.dataDate : undefined}
-      />
-    </div>
-  );
-}
 
 function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeResponse[]; isLoading: boolean; projectId: string; project: ProjectResponse }) {
   const queryClient = useQueryClient();
@@ -1790,55 +1685,6 @@ function WbsTree({
   );
 }
 
-function NetworkTab({
-  projectId,
-  activities,
-  relationships,
-  isLoading,
-}: {
-  projectId: string;
-  activities: ActivityResponse[];
-  relationships: Array<{
-    predecessorActivityId: string;
-    successorActivityId: string;
-    relationshipType: string;
-  }>;
-  isLoading: boolean;
-}) {
-  const router = useRouter();
-
-  if (isLoading) {
-    return <div className="text-center text-text-muted">Loading network diagram...</div>;
-  }
-
-  if (activities.length === 0) {
-    return (
-      <EmptyState
-        icon={ListTodo}
-        title="No activities"
-        description="This project has no activities yet. Create activities to display the network diagram."
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-text-secondary">
-          {relationships.length} relationship(s) defined
-        </p>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/relationships`)}
-          className="flex items-center gap-1 rounded-md bg-accent/20 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/30 transition-colors"
-        >
-          Manage Relationships
-          <ArrowRight size={14} />
-        </button>
-      </div>
-      <NetworkDiagram activities={activities} relationships={relationships} />
-    </div>
-  );
-}
 
 function BaselinesTab({
   projectId,

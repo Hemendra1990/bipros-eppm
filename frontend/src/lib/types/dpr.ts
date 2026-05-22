@@ -82,6 +82,24 @@ export interface DprMaterialRow {
   roleId?: string | null;
 }
 
+export interface DprSubContractorRow {
+  id?: string | null;
+  /** Required FK to a planned ActivitySubContractorAssignment for this activity. */
+  activitySubContractorAssignmentId: string;
+  // Snapshots — populated by server on read.
+  subContractorMasterId?: string | null;
+  subContractorName?: string | null;
+  subContractorCode?: string | null;
+  workActivityName?: string | null;
+  unit?: string | null;
+  ratePerUnit?: number | null;
+  /** Required — units delivered by this sub-contractor on this DPR's date. */
+  quantity: number;
+  /** Computed = quantity × ratePerUnit. Response-only. */
+  lineCost?: number | null;
+  remarks?: string | null;
+}
+
 export type IssueCategory =
   | "SAFETY"
   | "QUALITY"
@@ -199,6 +217,7 @@ export interface DprBaseFields {
   manpower?: DprManpowerRow[];
   equipment?: DprEquipmentRow[];
   materials?: DprMaterialRow[];
+  subContractors?: DprSubContractorRow[];
   issues?: DprIssueRow[];
 }
 
@@ -226,6 +245,7 @@ export interface DailyProgressReportResponse extends DprBaseFields {
   manpower: DprManpowerRow[];
   equipment: DprEquipmentRow[];
   materials: DprMaterialRow[];
+  subContractors: DprSubContractorRow[];
   attachments?: DprAttachment[];
   issues?: DprIssueRow[];
   /** Server-side warnings (e.g. rate-missing:trade-name, assignment-not-found:uuid). */

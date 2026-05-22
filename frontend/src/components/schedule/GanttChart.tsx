@@ -31,6 +31,7 @@ interface GanttChartProps {
   relationships?: ActivityRelationship[];
   baselineActivities?: BaselineActivityData[];
   onActivityClick?: (id: string) => void;
+  onActivityContextMenu?: (id: string, x: number, y: number) => void;
   onActivityReschedule?: (id: string, newStart: string, newEnd: string) => void;
   spotlightStartDate?: string | null;
   spotlightEndDate?: string | null;
@@ -50,6 +51,7 @@ export function GanttChart({
   relationships = [],
   baselineActivities = [],
   onActivityClick,
+  onActivityContextMenu,
   onActivityReschedule,
   spotlightStartDate,
   spotlightEndDate,
@@ -216,7 +218,12 @@ export function GanttChart({
           className="w-[480px] shrink-0 overflow-y-auto border-r border-border"
           onScroll={handleSidebarScroll}
         >
-          <GanttSidebar activities={activities} rowHeight={rowHeight} />
+          <GanttSidebar
+            activities={activities}
+            rowHeight={rowHeight}
+            onActivityClick={onActivityClick}
+            onActivityContextMenu={onActivityContextMenu}
+          />
         </div>
 
         {/* Chart */}
@@ -289,6 +296,7 @@ export function GanttChart({
                       timelineStartY={timelineStartY}
                       baselineData={baselineData}
                       onActivityClick={onActivityClick}
+                      onActivityContextMenu={onActivityContextMenu}
                       onActivityReschedule={onActivityReschedule}
                     />
                   </g>
