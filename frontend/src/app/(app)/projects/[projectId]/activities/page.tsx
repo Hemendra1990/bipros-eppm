@@ -50,7 +50,7 @@ import {
 import { ScheduleLogPanel } from "@/components/schedule/ScheduleLogPanel";
 import type { ScheduleResultResponse } from "@/lib/api/scheduleApi";
 import { useAuthStore } from "@/lib/state/store";
-import type { ProjectResponse } from "@/lib/types";
+import type { ProjectResponse, WbsNodeResponse } from "@/lib/types";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -691,6 +691,7 @@ export default function ActivitiesPage() {
       ) : viewMode === "gantt" ? (
         <ActivityGanttView
           activities={activities}
+          wbsNodes={wbsNodes}
           relationships={relationships}
           baselineActivities={(baselineDetail?.data?.activities ?? []).map((a: BaselineActivityResponse) => ({
             activityId: a.activityId,
@@ -1249,6 +1250,7 @@ function ActivitiesListTable({
 
 function ActivityGanttView({
   activities,
+  wbsNodes = [],
   relationships,
   baselineActivities = [],
   project,
@@ -1259,6 +1261,7 @@ function ActivityGanttView({
   onActivityContextMenu,
 }: {
   activities: ActivityResponse[];
+  wbsNodes?: WbsNodeResponse[];
   relationships: Array<{ predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
   baselineActivities?: Array<{ activityId: string; baselineStartDate: string | null; baselineFinishDate: string | null }>;
   project: ProjectResponse | null;
@@ -1311,6 +1314,7 @@ function ActivityGanttView({
       </div>
       <GanttChart
         activities={activities}
+        wbsNodes={wbsNodes}
         relationships={relationships}
         baselineActivities={baselineActivities}
         isStale={isStale}
