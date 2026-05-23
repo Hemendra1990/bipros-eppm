@@ -219,7 +219,7 @@ export function RoleDemandOverview({ projectId, activityId, title = "Resource Pl
                       Sub-Contractor
                     </span>
                   </td>
-                  <td className={`${pad} text-text-secondary`}>{r.workActivityName ?? "—"}</td>
+                  <td className={`${pad} text-text-secondary`}>{scVariantLabel(r)}</td>
                   <td className={`${pad} text-right tabular-nums ${cellPlanned}`}>{fmtNum(d.planned)}</td>
                   <td className={`${pad} text-right tabular-nums ${cellActual}`}>{fmtNum(d.actual)}</td>
                   <td className={`${pad} text-right tabular-nums ${cellRemaining}`}>{fmtNum(d.remaining)}</td>
@@ -253,4 +253,25 @@ function fmtNum(n: number | null | undefined): string {
 function fmtCost(n: number | null | undefined): string {
   if (n == null) return "—";
   return `₹${n.toFixed(2)}`;
+}
+
+/**
+ * Mirrors the role-row "Skilled / Grade A — Hr @ 0.5700" format using the sub-contractor's
+ * work-type name, unit, and rate. Falls back gracefully when any piece is missing — at
+ * minimum the work-type label shows so the variant column is never blank.
+ */
+function scVariantLabel(r: ActivitySubContractorAssignment): string {
+  const workType = r.workTypeName?.trim();
+  const unit = r.unit?.trim();
+  const rate = r.ratePerUnit;
+  if (!workType && !unit && rate == null) return "—";
+  const parts: string[] = [];
+  if (workType) parts.push(workType);
+  if (unit || rate != null) {
+    const unitPart = unit ?? "";
+    const ratePart = rate != null ? `@ ${rate.toFixed(4)}` : "";
+    const tail = [unitPart, ratePart].filter(Boolean).join(" ");
+    if (tail) parts.push(tail);
+  }
+  return parts.join(" — ");
 }

@@ -197,3 +197,5 @@ databaseChangeLog:
       file: db/changelog/changesets/2026-05-21-hds-pgvector-indexes.sql
   - include:
       file: db/changelog/105-add-dpr-sub-contractor-quantity-and-assignment-fk.xml
+  - include:
+      file: db/changelog/changeset-2026-05-add-dbs-project-subcontract-lines.xml

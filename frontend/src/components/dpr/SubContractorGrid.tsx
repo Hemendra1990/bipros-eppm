@@ -57,7 +57,7 @@ export function SubContractorGrid({ projectId, activityId, rows, onChange, workd
       .filter((a) => a.id === currentId || !selectedAssignmentIds.has(a.id))
       .map((a) => ({
         value: a.id,
-        label: `${a.subContractorName ?? "—"} — ${a.workActivityName ?? "—"} (planned)`,
+        label: `${a.subContractorName ?? "—"} — ${a.workTypeName ?? "—"} (planned)`,
       }));
   };
 
@@ -80,7 +80,8 @@ export function SubContractorGrid({ projectId, activityId, rows, onChange, workd
       subContractorMasterId: a.subContractorMasterId,
       subContractorName: a.subContractorName,
       subContractorCode: a.subContractorCode,
-      workActivityName: a.workActivityName,
+      // Bridge old wire field name on the DPR row to the renamed assignment field.
+      workActivityName: a.workTypeName,
       unit: a.unit,
       ratePerUnit: rate,
       lineCost: qty * rate,

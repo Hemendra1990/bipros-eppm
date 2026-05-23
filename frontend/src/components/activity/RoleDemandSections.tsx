@@ -24,6 +24,7 @@ import {
   type ActivitySubContractorAssignment,
 } from "@/lib/api/activitySubContractorApi";
 import { activityApi } from "@/lib/api/activityApi";
+import { extractApiError } from "@/lib/api/extractApiError";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 
 interface Props {
@@ -230,13 +231,13 @@ function ManpowerSection({
       onChanged();
     },
     onError: (e: unknown) =>
-      setError(e instanceof Error ? e.message : "Failed to add manpower"),
+      setError(extractApiError(e, "Failed to add manpower")),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => roleAssignmentApi.delete(id),
     onSuccess: () => onChanged(),
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to remove row"),
+    onError: (e: unknown) => setError(extractApiError(e, "Failed to remove row")),
   });
 
   const update = useMutation({
@@ -254,7 +255,7 @@ function ManpowerSection({
         headcount: value,
       }),
     onSuccess: () => onChanged(),
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to update row"),
+    onError: (e: unknown) => setError(extractApiError(e, "Failed to update row")),
   });
 
   return (
@@ -397,13 +398,13 @@ function EquipmentSection({
       onChanged();
     },
     onError: (e: unknown) =>
-      setError(e instanceof Error ? e.message : "Failed to add equipment"),
+      setError(extractApiError(e, "Failed to add equipment")),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => roleAssignmentApi.delete(id),
     onSuccess: () => onChanged(),
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to remove row"),
+    onError: (e: unknown) => setError(extractApiError(e, "Failed to remove row")),
   });
 
   const update = useMutation({
@@ -421,7 +422,7 @@ function EquipmentSection({
         headcount: value,
       }),
     onSuccess: () => onChanged(),
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to update row"),
+    onError: (e: unknown) => setError(extractApiError(e, "Failed to update row")),
   });
 
   return (
@@ -562,13 +563,13 @@ function MaterialSection({
       onChanged();
     },
     onError: (e: unknown) =>
-      setError(e instanceof Error ? e.message : "Failed to add material"),
+      setError(extractApiError(e, "Failed to add material")),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => roleAssignmentApi.delete(id),
     onSuccess: () => onChanged(),
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to remove row"),
+    onError: (e: unknown) => setError(extractApiError(e, "Failed to remove row")),
   });
 
   const update = useMutation({
@@ -580,7 +581,7 @@ function MaterialSection({
         quantity: value,
       }),
     onSuccess: () => onChanged(),
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to update row"),
+    onError: (e: unknown) => setError(extractApiError(e, "Failed to update row")),
   });
 
   return (
@@ -763,13 +764,13 @@ function SubContractorSection({
       onChanged();
     },
     onError: (e: unknown) =>
-      setError(e instanceof Error ? e.message : "Failed to add sub-contractor"),
+      setError(extractApiError(e, "Failed to add sub-contractor")),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => activitySubContractorApi.delete(id),
     onSuccess: () => onChanged(),
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed to remove row"),
+    onError: (e: unknown) => setError(extractApiError(e, "Failed to remove row")),
   });
 
   return (
