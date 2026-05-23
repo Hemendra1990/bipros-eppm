@@ -37,6 +37,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "@/
 import { ProjectDocumentsPanel } from "@/components/document/ProjectDocumentsPanel";
 import { ProjectSetupProgress } from "@/components/project/ProjectSetupProgress";
 import { ProjectTeamCard } from "@/components/project/ProjectTeamCard";
+import { ProjectDashboardTab } from "@/components/dashboards/project/ProjectDashboardTab";
 import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
 import type { ContractType } from "@/lib/types";
@@ -419,7 +420,17 @@ export default function ProjectDetailPage() {
       )}
 
       {currentTip && <TabTip title={currentTip.title} description={currentTip.description} steps={currentTip.steps} />}
-      {tab === "overview" && <OverviewTab project={project} projectId={projectId} />}
+      {tab === "overview" && (
+        <div className="space-y-10">
+          <ProjectDashboardTab project={project} projectId={projectId} />
+          <div className="border-t border-hairline pt-8">
+            <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate">
+              Project Details
+            </div>
+            <OverviewTab project={project} projectId={projectId} />
+          </div>
+        </div>
+      )}
       {tab === "wbs" && (
         <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} project={project} />
       )}
