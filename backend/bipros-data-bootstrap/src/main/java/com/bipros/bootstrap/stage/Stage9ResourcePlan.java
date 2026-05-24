@@ -48,12 +48,17 @@ import java.util.UUID;
  * <p>Aggregation, per activity:
  * <ul>
  *   <li>Manpower (role, category, grade): headcount = max sum-of-nos observed on any one DPR date;
- *       plannedUnits = headcount × duration days.</li>
- *   <li>Equipment (role, make, model): plannedUnits = max workingHours observed on any one DPR date
- *       × duration days (unit = Day; rate-units captured on the variant).</li>
+ *       plannedUnits = headcount × duration days (person-days).</li>
+ *   <li>Equipment (role, make, model): nos = max sum-of-nos observed on any one DPR date;
+ *       plannedUnits = nos × duration days (machine-days). Mirrors manpower because variant rate
+ *       is stored as OMR per Day; working hours are logging-only.</li>
  *   <li>Material (role, specGrade): quantity = total observed quantity across all DPRs for the
  *       activity (unit lifted from variant).</li>
  * </ul>
+ *
+ * <p>Every path guards against zero-unit assignments — a resource that resolves to
+ * plannedUnits ≤ 0 is dropped with a warning rather than inserted, because such rows
+ * carry no information and pollute downstream dashboards.
  *
  * <p>Idempotent: existing rows keyed by (activityId, roleId, variantId) are left as-is.
  */
@@ -143,9 +148,10 @@ public class Stage9ResourcePlan implements Stage {
         }
 
         log.info("Stage 9 — project {}: inserted manpower {}, equipment {}, material {} assignments "
-                        + "(skipped existing: {}, unresolved variants: {}, missing activities: {})",
+                        + "(skipped existing: {}, unresolved variants: {}, zero-units dropped: {}, "
+                        + "missing activities: {})",
                 project.getCode(), c.manpowerInserted, c.equipmentInserted, c.materialInserted,
-                c.skippedExisting, c.unresolvedVariants, c.activitiesMissing);
+                c.skippedExisting, c.unresolvedVariants, c.zeroUnitsDropped, c.activitiesMissing);
     }
 
     // ─────────────────────────── Manpower ───────────────────────────
@@ -206,6 +212,14 @@ public class Stage9ResourcePlan implements Stage {
 
             BigDecimal headcount = BigDecimal.valueOf(maxNos);
             BigDecimal plannedUnits = headcount.multiply(durationDays);
+            if (plannedUnits.signum() <= 0) {
+                log.warn("Stage 9 — activity {} manpower {}/{}/{} resolves to 0 plannedUnits "
+                                + "(maxNos={}, duration={}), dropping",
+                        activity.getCode(), mk.roleCode, mk.categoryCode, mk.gradeCode,
+                        maxNos, durationDays);
+                c.zeroUnitsDropped++;
+                continue;
+            }
             BigDecimal rate = effectiveRate(project.getId(), "MANPOWER", variantId, variant.get().getRate());
             BigDecimal plannedCost = plannedUnits.multiply(rate);
 
@@ -242,30 +256,30 @@ public class Stage9ResourcePlan implements Stage {
                                     ResourceType equipmentType,
                                     Map<String, UUID> roleIdByCode,
                                     Counters c) {
-        Map<String, Map<LocalDate, BigDecimal>> dailyHours = new LinkedHashMap<>();
+        // Per-day nos count, keyed by role|make|model. A row with hours but null/zero nos still
+        // represents "1 of this equipment ran on this day" — we floor nos to 1 in that case so
+        // the equipment is reflected in the plan instead of being silently dropped.
+        Map<String, Map<LocalDate, Integer>> dailyNos = new LinkedHashMap<>();
         Map<String, EquipmentKey> keyMeta = new HashMap<>();
 
         for (ParsedDataset.DprRecord dpr : dprs) {
             if (dpr.equipment == null) continue;
             for (ParsedDataset.DprEquipmentRow row : dpr.equipment) {
                 if (row.roleCode == null) continue;
+                int nos = (row.nos == null || row.nos <= 0) ? 1 : row.nos;
                 String make = row.make == null ? "GENERIC" : row.make;
                 String model = row.model == null ? "STD" : row.model;
-                BigDecimal hours = row.workingHours == null ? BigDecimal.ZERO : row.workingHours;
-                int nos = row.nos == null ? 1 : row.nos;
-                BigDecimal totalHours = hours.multiply(BigDecimal.valueOf(nos));
                 String key = row.roleCode + "|" + make + "|" + model;
                 keyMeta.putIfAbsent(key, new EquipmentKey(row.roleCode, make, model));
-                dailyHours.computeIfAbsent(key, k -> new HashMap<>())
-                        .merge(dpr.date, totalHours, BigDecimal::add);
+                dailyNos.computeIfAbsent(key, k -> new HashMap<>())
+                        .merge(dpr.date, nos, Integer::sum);
             }
         }
 
-        for (Map.Entry<String, Map<LocalDate, BigDecimal>> e : dailyHours.entrySet()) {
+        for (Map.Entry<String, Map<LocalDate, Integer>> e : dailyNos.entrySet()) {
             EquipmentKey ek = keyMeta.get(e.getKey());
-            BigDecimal maxHoursPerDay = e.getValue().values().stream()
-                    .max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-            if (maxHoursPerDay.signum() <= 0) continue;
+            int maxNos = e.getValue().values().stream().mapToInt(Integer::intValue).max().orElse(0);
+            if (maxNos <= 0) continue;
 
             UUID roleId = resolveRoleId(ek.roleCode, roleIdByCode);
             if (roleId == null) {
@@ -289,7 +303,15 @@ public class Stage9ResourcePlan implements Stage {
                 continue;
             }
 
-            BigDecimal plannedUnits = maxHoursPerDay.multiply(durationDays);
+            BigDecimal nos = BigDecimal.valueOf(maxNos);
+            BigDecimal plannedUnits = nos.multiply(durationDays);
+            if (plannedUnits.signum() <= 0) {
+                log.warn("Stage 9 — activity {} equipment {}/{}/{} resolves to 0 plannedUnits "
+                                + "(maxNos={}, duration={}), dropping",
+                        activity.getCode(), ek.roleCode, ek.make, ek.model, maxNos, durationDays);
+                c.zeroUnitsDropped++;
+                continue;
+            }
             BigDecimal rate = effectiveRate(project.getId(), "EQUIPMENT", variantId, variant.get().getRate());
             BigDecimal plannedCost = plannedUnits.multiply(rate);
 
@@ -298,6 +320,7 @@ public class Stage9ResourcePlan implements Stage {
                     .activityId(activity.getId())
                     .roleId(roleId)
                     .equipmentRoleVariantId(variantId)
+                    .headcount(maxNos)
                     .duration(durationDays)
                     .plannedUnits(plannedUnits.doubleValue())
                     .budgetedUnits(plannedUnits.doubleValue())
@@ -367,6 +390,12 @@ public class Stage9ResourcePlan implements Stage {
                 continue;
             }
 
+            if (quantity.signum() <= 0) {
+                log.warn("Stage 9 — activity {} material {}/{} resolves to 0 quantity, dropping",
+                        activity.getCode(), mk.roleCode, mk.specGrade);
+                c.zeroUnitsDropped++;
+                continue;
+            }
             BigDecimal rate = effectiveRate(project.getId(), "MATERIAL", variantId, variant.get().getRate());
             BigDecimal plannedCost = quantity.multiply(rate);
 
@@ -458,6 +487,7 @@ public class Stage9ResourcePlan implements Stage {
         int materialInserted;
         int skippedExisting;
         int unresolvedVariants;
+        int zeroUnitsDropped;
         int activitiesMissing;
     }
 }

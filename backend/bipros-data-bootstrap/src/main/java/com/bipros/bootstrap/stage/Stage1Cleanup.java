@@ -5,6 +5,7 @@ import com.bipros.bootstrap.Stage;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,15 @@ public class Stage1Cleanup implements Stage {
 
     @PersistenceContext
     private EntityManager em;
+
+    /**
+     * Hard safety guard. Stage 1 wipes every business table — running it against a
+     * database that holds real data is destructive. The default is {@code false} so
+     * the only way to actually wipe is to set this explicitly via env var or JVM arg
+     * (e.g., {@code -Dbootstrap.allow-cleanup=true} or {@code BOOTSTRAP_ALLOW_CLEANUP=true}).
+     */
+    @Value("${bootstrap.allow-cleanup:false}")
+    private boolean allowCleanup;
 
     /** Tables to wipe, in dependency-safe order (deepest first). */
     private static final List<String> TABLES_IN_ORDER = List.of(
@@ -77,6 +87,11 @@ public class Stage1Cleanup implements Stage {
     @Override
     @Transactional
     public void run() {
+        if (!allowCleanup) {
+            throw new IllegalStateException(
+                    "Stage 1 cleanup is gated. To run it, pass -Dbootstrap.allow-cleanup=true "
+                    + "(or set BOOTSTRAP_ALLOW_CLEANUP=true). Refusing — no rows touched.");
+        }
         log.warn("CLEANUP — wiping business data. Users, roles, calendars and global masters are preserved.");
         for (String table : TABLES_IN_ORDER) {
             if (!tableExists(table)) {

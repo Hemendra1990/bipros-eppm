@@ -379,8 +379,13 @@ export default function ProjectDetailPage() {
     },
     costs: {
       title: "Cost Tracking",
-      description: "Monitor your project budget. Budget = what you planned to spend. Actual = what you've spent so far. The S-Curve chart shows spending over time.",
-      steps: ["Budget is set via cost accounts linked to WBS nodes", "Actual costs come from recorded expenses on activities", "Cash Flow S-Curve visualizes planned vs actual spending trends"],
+      description: "Track planned vs actual spend. Budget = total commitment from activity plans. Actual = costs accumulated from supervisor DPRs as work is recorded each day.",
+      steps: [
+        "Total Budget = planned costs from resource assignments (manpower, equipment, material) + sub-contractor allocations on each activity",
+        "Total Actual = sum of DPR line costs (manpower nos × rate, equipment nos × rate, material qty × rate, sub-contractor qty × rate)",
+        "BAC (Budget at Completion) is a manual project-level figure set by the PM; CV and CPI compare earned value against actual cost",
+        "Cash Flow S-Curve plots planned, actual, and forecast spend across financial periods",
+      ],
     },
     evm: {
       title: "Earned Value Management (EVM)",

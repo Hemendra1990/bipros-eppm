@@ -20,10 +20,12 @@ import com.bipros.resource.domain.repository.role.ManpowerRoleRateRepository;
 import com.bipros.resource.domain.repository.role.MaterialRoleVariantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +55,113 @@ public class Stage2ResourceRoles implements Stage {
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager em;
 
+    /**
+     * Gate for the duplicate-master cleanup passes. They mutate global tables
+     * ({@code manpower_category_masters}, {@code grade_masters}) and re-point FKs in
+     * {@code manpower_role_rates}, so they should not run silently in environments that
+     * already contain real data. Default is {@code false} (skip) — set
+     * {@code -Dbootstrap.cleanup-duplicate-masters=true} (or
+     * {@code BOOTSTRAP_CLEANUP_DUPLICATE_MASTERS=true}) only when you want to repair
+     * a known duplicate situation.
+     */
+    @Value("${bootstrap.cleanup-duplicate-masters:false}")
+    private boolean cleanupDuplicateMasters;
+
+    // ─────────────────────────── Oman OMR rate card ───────────────────────────
+    // The Khasab daily-data file records rates per *hour* in fractional OMR (Helper 0.57 OMR/hr,
+    // Foreman 2.01 OMR/hr, etc.). Stored as-is they look unrealistic in the UI because the rest
+    // of the app treats the variant rate as a per-unit-of-deployment figure (one deployment =
+    // one person-day for manpower, one machine-day for equipment). The cards below restate the
+    // same wages as OMR per 8-hour day so cost roll-ups and DBS numbers come out at realistic
+    // magnitudes. Unit = "Day" for manpower/equipment everywhere.
+    //
+    // Material concrete grades stay in OMR per m3 — those file values are already realistic for
+    // Oman ready-mix and the unit is intrinsic to the material, not a deployment basis.
+
+    /** Base (Skilled, Grade A) day rate per role, in OMR. */
+    private static final Map<String, BigDecimal> MANPOWER_DAY_RATE_OMR = Map.ofEntries(
+            Map.entry("HELPER",      bd(8.00)),
+            Map.entry("MASON",       bd(18.00)),
+            Map.entry("CARPENTER",   bd(18.00)),
+            Map.entry("STEEL_FIXER", bd(18.00)),
+            Map.entry("SCAFFOLDER",  bd(16.00)),
+            Map.entry("RIGGER",      bd(16.00)),
+            Map.entry("BANKMAN",     bd(15.00)),
+            Map.entry("CHARGEHAND",  bd(22.00)),
+            Map.entry("FOREMAN",     bd(30.00)),
+            Map.entry("SUPERVISOR",  bd(45.00))
+    );
+
+    /** Equipment hire/operating day rate per role, in OMR for an 8-hour shift. */
+    private static final Map<String, BigDecimal> EQUIPMENT_DAY_RATE_OMR = Map.ofEntries(
+            Map.entry("AIR_COMPRESSOR",  bd(30.00)),
+            Map.entry("ASPHALT_CUTLER",  bd(40.00)),
+            Map.entry("BACK_HOE",        bd(90.00)),
+            Map.entry("BOB_CAT",         bd(65.00)),
+            Map.entry("CONCRETE_MIXER",  bd(50.00)),
+            Map.entry("CRANE",           bd(200.00)),
+            Map.entry("CRUSHER",         bd(250.00)),
+            Map.entry("DOZER",           bd(220.00)),
+            Map.entry("DUMPER",          bd(100.00)),
+            Map.entry("EXCAVATOR",       bd(180.00)),
+            Map.entry("GRADER",          bd(180.00)),
+            Map.entry("HIAB",            bd(150.00)),
+            Map.entry("MOBILE_CRANE",    bd(220.00)),
+            Map.entry("PLATE_COMPACTOR", bd(25.00)),
+            Map.entry("POWERSCREEN",     bd(280.00)),
+            Map.entry("ROLLER",          bd(120.00)),
+            Map.entry("TIPPER",          bd(95.00)),
+            Map.entry("TOWER_LIGHT",     bd(20.00)),
+            Map.entry("WATER_TANKER",    bd(95.00)),
+            Map.entry("WHEEL_LOADER",    bd(140.00)),
+            Map.entry("BABY_ROLLER",     bd(60.00)),
+            Map.entry("HAND_DRILLING",   bd(25.00))
+    );
+
+    /** Material rate per physical unit, keyed by {@code ROLE|SPEC}. */
+    private static final Map<String, BigDecimal> MATERIAL_RATE_OMR = Map.ofEntries(
+            Map.entry("CONCRETE|C15", bd(35.00)),
+            Map.entry("CONCRETE|C25", bd(50.00)),
+            Map.entry("CONCRETE|C30", bd(55.00)),
+            Map.entry("CONCRETE|C35", bd(62.00))
+    );
+
+    /** Material unit (physical), keyed by role code. */
+    private static final Map<String, String> MATERIAL_UNIT = Map.ofEntries(
+            Map.entry("CONCRETE", "m3")
+    );
+
+    /** Multiplier applied to the base Skilled+A rate, keyed by category code (uppercased). */
+    private static final Map<String, BigDecimal> CATEGORY_MULTIPLIER = Map.ofEntries(
+            Map.entry("UNSKILLED",       bd(0.60)),
+            Map.entry("MC-UNSKILLED",    bd(0.60)),
+            Map.entry("SEMISKILLED",     bd(0.80)),
+            Map.entry("SEMI-SKILLED",    bd(0.80)),
+            Map.entry("MC-SEMISKILLED",  bd(0.80)),
+            Map.entry("SKILLED",         bd(1.00)),
+            Map.entry("MC-SKILLED",      bd(1.00)),
+            Map.entry("HIGHLYSKILLED",   bd(1.20)),
+            Map.entry("HIGHLY-SKILLED",  bd(1.20)),
+            Map.entry("MC-HIGHLYSKILLED", bd(1.20)),
+            Map.entry("STAFF",           bd(1.50)),
+            Map.entry("MC-STAFF",        bd(1.50))
+    );
+
+    /** Grade multiplier applied on top of category. A=1.00 (top), descending. */
+    private static final Map<String, BigDecimal> GRADE_MULTIPLIER = Map.ofEntries(
+            Map.entry("A", bd(1.00)),
+            Map.entry("B", bd(0.85)),
+            Map.entry("C", bd(0.75))
+    );
+
+    private static final BigDecimal MANPOWER_DEFAULT_DAY_OMR = bd(10.00);
+    private static final BigDecimal EQUIPMENT_DEFAULT_DAY_OMR = bd(50.00);
+    private static final String MANPOWER_EQUIPMENT_UNIT = "Day";
+
+    private static BigDecimal bd(double v) {
+        return BigDecimal.valueOf(v);
+    }
+
     public static void main(String[] args) {
         BootstrapApplication.runStage(Stage2ResourceRoles.class, args);
     }
@@ -63,9 +172,16 @@ public class Stage2ResourceRoles implements Stage {
         // Earlier Stage 2 runs (before the name-aware lookup fix) created shadow categories
         // like SKILLED / UNSKILLED / STAFF alongside the canonical MC-SKILLED / MC-UNSKILLED
         // already seeded by ManpowerMasterSeeder. Same name → duplicate entries in dropdowns.
-        // Merge them first, then proceed.
-        cleanupDuplicateCategoryMasters();
-        cleanupDuplicateGradeMasters();
+        // Gated behind bootstrap.cleanup-duplicate-masters because the merge mutates shared
+        // masters and re-points FKs — a no-op on a clean DB, but should not run silently in
+        // an environment that may have real data referencing those masters from elsewhere.
+        if (cleanupDuplicateMasters) {
+            cleanupDuplicateCategoryMasters();
+            cleanupDuplicateGradeMasters();
+        } else {
+            log.info("Stage 2 — skipping duplicate-master cleanup "
+                    + "(bootstrap.cleanup-duplicate-masters=false).");
+        }
 
         ParsedDataset d = store.load();
         log.info("Stage 2 — processing {} manpower / {} equipment / {} material variants",
@@ -105,8 +221,8 @@ public class Stage2ResourceRoles implements Stage {
                 continue;
             }
 
-            upsertManpowerRate(role.getId(), cat.getId(), grade.getId(),
-                    v.unit, v.rate, c);
+            upsertManpowerRate(v.roleCode, role.getId(), cat.getId(), grade.getId(),
+                    catCode, gradeCode, c);
         }
 
         // ---- Equipment ----
@@ -115,7 +231,7 @@ public class Stage2ResourceRoles implements Stage {
             ResourceRole role = upsertRole(v.roleCode, v.roleName, typesByCode.get("EQUIPMENT"),
                     rolesByCode, c, sortSeed++);
             if (role == null) continue;
-            upsertEquipmentVariant(role.getId(), v.make, v.model, v.unit, v.rate,
+            upsertEquipmentVariant(v.roleCode, role.getId(), v.make, v.model,
                     v.standardOutputPerDay, c);
         }
 
@@ -125,7 +241,7 @@ public class Stage2ResourceRoles implements Stage {
             ResourceRole role = upsertRole(v.roleCode, v.roleName, typesByCode.get("MATERIAL"),
                     rolesByCode, c, sortSeed++);
             if (role == null) continue;
-            upsertMaterialVariant(role.getId(), v.specGrade, v.unit, v.rate, c);
+            upsertMaterialVariant(v.roleCode, role.getId(), v.specGrade, v.unit, v.rate, c);
         }
 
         log.info("Stage 2 done — roles: {} inserted, {} updated, {} unchanged. "
@@ -374,11 +490,11 @@ public class Stage2ResourceRoles implements Stage {
 
     // ─────────────────────────── Variant upserts ───────────────────────────
 
-    private void upsertManpowerRate(java.util.UUID roleId, java.util.UUID categoryId,
-                                    java.util.UUID gradeId, String unit, BigDecimal rate,
-                                    Counters c) {
-        String safeUnit = (unit == null || unit.isBlank()) ? "Day" : unit;
-        BigDecimal safeRate = rate != null ? rate : BigDecimal.ZERO;
+    private void upsertManpowerRate(String roleCode, java.util.UUID roleId,
+                                    java.util.UUID categoryId, java.util.UUID gradeId,
+                                    String categoryCode, String gradeCode, Counters c) {
+        BigDecimal safeRate = computeManpowerDayRate(roleCode, categoryCode, gradeCode);
+        String safeUnit = MANPOWER_EQUIPMENT_UNIT;
         ManpowerRoleRate existing = manpowerRoleRateRepository
                 .findByRoleIdAndCategoryIdAndGradeId(roleId, categoryId, gradeId).orElse(null);
         if (existing == null) {
@@ -412,13 +528,13 @@ public class Stage2ResourceRoles implements Stage {
         }
     }
 
-    private void upsertEquipmentVariant(java.util.UUID roleId, String make, String model,
-                                        String unit, BigDecimal rate,
+    private void upsertEquipmentVariant(String roleCode, java.util.UUID roleId,
+                                        String make, String model,
                                         BigDecimal standardOutputPerDay, Counters c) {
         String safeMake = (make == null || make.isBlank()) ? "GENERIC" : make.trim();
         String safeModel = (model == null || model.isBlank()) ? "STD" : model.trim();
-        String safeUnit = (unit == null || unit.isBlank()) ? "Day" : unit;
-        BigDecimal safeRate = rate != null ? rate : BigDecimal.ZERO;
+        String safeUnit = MANPOWER_EQUIPMENT_UNIT;
+        BigDecimal safeRate = computeEquipmentDayRate(roleCode);
 
         EquipmentRoleVariant existing = equipmentRoleVariantRepository
                 .findByRoleIdAndMakeAndModel(roleId, safeMake, safeModel).orElse(null);
@@ -460,11 +576,19 @@ public class Stage2ResourceRoles implements Stage {
         }
     }
 
-    private void upsertMaterialVariant(java.util.UUID roleId, String specGrade, String unit,
-                                       BigDecimal rate, Counters c) {
+    private void upsertMaterialVariant(String roleCode, java.util.UUID roleId,
+                                       String specGrade, String fileUnit,
+                                       BigDecimal fileRate, Counters c) {
         String safeSpec = (specGrade == null || specGrade.isBlank()) ? "STD" : specGrade.trim();
-        String safeUnit = (unit == null || unit.isBlank()) ? "Unit" : unit;
-        BigDecimal safeRate = rate != null ? rate : BigDecimal.ZERO;
+        BigDecimal cardRate = MATERIAL_RATE_OMR.get(
+                roleCode.toUpperCase() + "|" + safeSpec.toUpperCase());
+        BigDecimal safeRate = cardRate != null
+                ? cardRate
+                : (fileRate != null ? fileRate : BigDecimal.ZERO);
+        String cardUnit = MATERIAL_UNIT.get(roleCode.toUpperCase());
+        String safeUnit = cardUnit != null
+                ? cardUnit
+                : ((fileUnit == null || fileUnit.isBlank()) ? "Unit" : fileUnit);
 
         MaterialRoleVariant existing = materialRoleVariantRepository
                 .findByRoleIdAndSpecGrade(roleId, safeSpec).orElse(null);
@@ -496,6 +620,38 @@ public class Stage2ResourceRoles implements Stage {
             materialRoleVariantRepository.save(existing);
             c.materialUpdated++;
         }
+    }
+
+    // ─────────────────────────── Rate card lookup ───────────────────────────
+
+    private BigDecimal computeManpowerDayRate(String roleCode, String categoryCode, String gradeCode) {
+        String key = roleCode == null ? "" : roleCode.trim().toUpperCase();
+        BigDecimal base = MANPOWER_DAY_RATE_OMR.get(key);
+        if (base == null) {
+            log.warn("Manpower role '{}' is not in the OMR day-rate card — defaulting to {} OMR/day. "
+                    + "Add it to MANPOWER_DAY_RATE_OMR in Stage2ResourceRoles to set a realistic value.",
+                    roleCode, MANPOWER_DEFAULT_DAY_OMR);
+            base = MANPOWER_DEFAULT_DAY_OMR;
+        }
+        BigDecimal catMult = CATEGORY_MULTIPLIER.getOrDefault(
+                categoryCode == null ? "SKILLED" : categoryCode.trim().toUpperCase(),
+                BigDecimal.ONE);
+        BigDecimal gradeMult = GRADE_MULTIPLIER.getOrDefault(
+                gradeCode == null ? "A" : gradeCode.trim().toUpperCase(),
+                BigDecimal.ONE);
+        return base.multiply(catMult).multiply(gradeMult).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal computeEquipmentDayRate(String roleCode) {
+        String key = roleCode == null ? "" : roleCode.trim().toUpperCase();
+        BigDecimal rate = EQUIPMENT_DAY_RATE_OMR.get(key);
+        if (rate == null) {
+            log.warn("Equipment role '{}' is not in the OMR day-rate card — defaulting to {} OMR/day. "
+                    + "Add it to EQUIPMENT_DAY_RATE_OMR in Stage2ResourceRoles to set a realistic value.",
+                    roleCode, EQUIPMENT_DEFAULT_DAY_OMR);
+            rate = EQUIPMENT_DEFAULT_DAY_OMR;
+        }
+        return rate.setScale(2, RoundingMode.HALF_UP);
     }
 
     // ─────────────────────────── Counters ───────────────────────────
