@@ -297,3 +297,106 @@ nohup python3 scripts/import_khasab_dprs.py all > /tmp/dpr-import.log 2>&1 &
 # 4. After import: BOQ + MCL + norms + EVM + DBS
 python3 scripts/fix_demo_v2.py
 ```
+
+## Productivity Norms tuned to realistic values
+
+After REDO, Capacity Utilization showed 200-7000% utilization (norms too conservative). Tuned per activity family based on observed throughput from 3,431 DPRs:
+
+| Family | Manpower output/man/day | Equipment output/hour |
+|---|---:|---:|
+| Excavation (2.3, 2.4, 2.6, 2.7, 2.8) | 350 cum/day | 80 cum/hr (640/day) |
+| GSB / ABC (3.x) | 100 cum/day | 18 cum/hr (150/day) |
+| Concrete / steel / barriers (5.x, 13.1) | 70 cum/day | 5 cum/hr (40/day) |
+| Drainage / service ducts (9.1, 18.x) | 30 cum/day | 10 cum/hr (120/day) |
+| Preliminaries (1, 1.1, 1.2) | 100 m/day | 18 m/hr (150/day) |
+
+Resulting Capacity Utilization (cumulative across Jan 24 → Mar 29):
+
+| Resource | Qty | Util % | Color |
+|---|---:|---:|---|
+| Helper | 208,437 cum | 85% | yellow |
+| Steel Fixer | 15,626 cum | 114% | green |
+| Excavator | 79,493 cum | 81% | yellow |
+| Wheel Loader | 50,328 cum | 103% | green |
+| Mason | 5,492 cum | 47% | red (under-utilized) |
+| Carpenter | 3,865 cum | 21% | red (under-utilized) |
+| Foreman | 58,028 cum | 285% | over-utilized (oversee large qty) |
+| Supervisor | 82,342 cum | 210% | over-utilized |
+| Dozer | 55,670 cum | 213% | over-utilized |
+
+This gives a realistic demo narrative: some teams well-utilized (Helper, Wheel Loader), some have spare capacity (Mason, Carpenter), some over-stressed (Dozer, Foreman) — typical of a real road project.
+
+SQL: `docs/khasab-e2e-2026-05-24/scripts/tune_productivity_norms.sql`
+
+---
+
+## REDO v2 — REAL activity names from "Code" sheet + Risks + Weather
+
+User flagged that prior REDO used names from the DBS workbook's "DPR" tab (BOQ items) instead of the actual activity master in the "Code" sheet of the Khasab daily-data workbook.
+
+### Activity names fixed (33 activities)
+
+Pulled from `docs/ActualData/1. Daily Data-Khasab  Jan, Feb, Mar 2026.xlsx` → "Code" sheet, columns C (code) + D (name):
+
+| Code | Real name |
+|---|---|
+| 1 | **Camp work** |
+| 1.1 | Diversion of existing roads and construction of graded slip roads/access roads |
+| 1.2 | Access to site including protection |
+| 1.3 | Soil Investigation |
+| 2.1.5(i) | Clearing and Grubbing |
+| 2.3.6(i) | Unclassified Excavation |
+| 2.3.6(i)a | **Mechanical Excavation** |
+| 2.3.6(i)b | **Blasting** |
+| 2.3.6(i)c | **Mocking for Blasting** |
+| 2.3.6(i)d | **Slope dressing** |
+| 2.4.6(i) | Borrow Excavation |
+| 2.6.6(i) | Subgrade Preparation in Cut |
+| 2.7.6(i) | Unclassified structural excavation (Depth 0 to 2m) |
+| 2.8.6(i) | Trench excavation and backfilling (Depth 0 to 2m) |
+| 3.2.6(ii) | GSB mixing |
+| 3.3.6(ii) | Aggregate Base Course Class B |
+| 5.1.7(iii) | Concrete (Class 30) in Culvert structures & Retaining walls — Concrete Placing |
+| 5.1.7(iii)a | Culvert & Retaining wall Shuttering & De-Shuttering |
+| 5.2.6(ii) | High tensile steel bar reinforcement — Cut & Bend |
+| 5.10.6(i) | Applying Bituminious paint 02 coats for structures |
+| 9.1.6(ii) | Mortared stone RipRap |
+| 13.1.7(ix)a | **Concrete Barrier, Single face, Type B.-shuttering & De-shuttering** |
+| 13.1.7(ix)b | Concrete Barrier, Single face, Type E.-shuttering & De-shuttering |
+| 13.1.7(ix)b1 | Concrete Barrier, Single face, Type E..-Steel Fixing |
+| 13.1.7(ix)b2 | Concrete Barrier, Single face, Type E.-Concreting |
+| 18.3 | Future Utility Crossing |
+| 18.3.6 | Upvc Future Ducts |
+| 18.3.6(i) | 05 way 32mm HDPE Silicore Straight / Spiral RIP Duct for Broadband Ducts |
+| 18.3.6(ii) | 2way 200mm dia & 2way 50mm dia Upvc Future Ducts |
+
+SQL-updated 33 `activity.activities.name` + 33 `resource.work_activities.name` rows. Both surfaces (Project Overview Work Package table, Activities tree) now show these real names.
+
+### Weather added to 3,431 DPRs
+
+Deterministic by day-of-week so it's consistent:
+| Condition | DPR count |
+|---|---:|
+| CLEAR | 1,513 (44%) |
+| PARTLY_CLOUDY | 526 (15%) |
+| RAIN | 470 (14%) |
+| CLOUDY | 461 (13%) |
+| WINDY | 461 (13%) |
+
+### Risk register — 8 entries
+
+POSTed to `/v1/projects/{pid}/risks` with valid `risk_category_master` codes:
+1. Monsoon / weather delays in March-April (MW-GENERIC, P=4, IC=3, IS=4)
+2. Excavator fleet availability (RES-EQUIPMENT-MOBILISATION, P=3, IC=3, IS=4)
+3. Blasting / explosive permit lead time (MIN-EXPLOSIVE-PROCUREMENT, P=3, IC=2, IS=5)
+4. Concrete supply continuity for bridge (CG-PROCUREMENT-LEAD-TIME, P=2, IC=4, IS=3)
+5. Skilled labour shortage — Steel Fixers (RES-PROCUREMENT-DELAY, P=3, IC=2, IS=3)
+6. Underground utility strike risk (HSE-GENERIC, P=3, IC=4, IS=3)
+7. Borrow pit yield variability (CG-PROCUREMENT-LEAD-TIME, P=4, IC=3, IS=2)
+8. Bridge bearing import customs delay (CG-IMPORTED-EQUIPMENT-CUSTOMS, P=3, IC=2, IS=4)
+
+### New findings
+
+- **Finding 30**: Activity master names live in the daily-data workbook's "Code" sheet, NOT the DBS workbook's "DPR" sheet (which has BOQ items with descriptive bid-item names). Code sheet is the source of truth for activity descriptions.
+- **Finding 31**: Risk `status` enum is `{IDENTIFIED, ANALYZING, MITIGATING, RESOLVED, CLOSED, ACCEPTED, REJECTED, REA...}` — `OPEN` is NOT valid.
+- **Finding 32**: Risk `category` must be a code from `risk.risk_category_master` (22 industry-specific codes like `MW-GENERIC`, `HSE-GENERIC`, `CG-PROCUREMENT-LEAD-TIME`) — not free-text.

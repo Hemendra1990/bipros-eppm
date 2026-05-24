@@ -50,7 +50,7 @@ img.screenshot { max-width: 100%; border: 1px solid #e5e5e5; border-radius: 8px;
 <div class='hero'>
   <div class='muted' style='opacity:0.7; font-size: 0.9rem;'>Bipros EPPM · Execution Log</div>
   <h1>Khasab Real-Data DPR→DBS E2E — 2026-05-24</h1>
-  <div class='muted' style='color: rgba(255,255,255,0.7);'>Generated 2026-05-24T22:09:11</div>
+  <div class='muted' style='color: rgba(255,255,255,0.7);'>Generated 2026-05-24T22:57:46</div>
   <div class='meta'>
     <div><div class='label'>Project</div><div class='value'>KHASAB-2026</div></div>
     <div><div class='label'>DPRs imported</div><div class='value'>3431</div></div>
@@ -595,7 +595,96 @@ nohup python3 scripts/import_khasab_dprs.py all &gt; /tmp/dpr-import.log 2&gt;&a
 
 # 4. After import: BOQ + MCL + norms + EVM + DBS
 python3 scripts/fix_demo_v2.py
-</code></pre></div>
+</code></pre>
+<h2>Productivity Norms tuned to realistic values</h2>
+<p>After REDO, Capacity Utilization showed 200-7000% utilization (norms too conservative). Tuned per activity family based on observed throughput from 3,431 DPRs:</p>
+<table>
+<tr><th>Family</th><th>Manpower output/man/day</th><th>Equipment output/hour</th></tr>
+<tr><td>Excavation (2.3, 2.4, 2.6, 2.7, 2.8)</td><td>350 cum/day</td><td>80 cum/hr (640/day)</td></tr>
+<tr><td>GSB / ABC (3.x)</td><td>100 cum/day</td><td>18 cum/hr (150/day)</td></tr>
+<tr><td>Concrete / steel / barriers (5.x, 13.1)</td><td>70 cum/day</td><td>5 cum/hr (40/day)</td></tr>
+<tr><td>Drainage / service ducts (9.1, 18.x)</td><td>30 cum/day</td><td>10 cum/hr (120/day)</td></tr>
+<tr><td>Preliminaries (1, 1.1, 1.2)</td><td>100 m/day</td><td>18 m/hr (150/day)</td></tr>
+</table>
+<p>Resulting Capacity Utilization (cumulative across Jan 24 → Mar 29):</p>
+<table>
+<tr><th>Resource</th><th>Qty</th><th>Util %</th><th>Color</th></tr>
+<tr><td>Helper</td><td>208,437 cum</td><td>85%</td><td>yellow</td></tr>
+<tr><td>Steel Fixer</td><td>15,626 cum</td><td>114%</td><td>green</td></tr>
+<tr><td>Excavator</td><td>79,493 cum</td><td>81%</td><td>yellow</td></tr>
+<tr><td>Wheel Loader</td><td>50,328 cum</td><td>103%</td><td>green</td></tr>
+<tr><td>Mason</td><td>5,492 cum</td><td>47%</td><td>red (under-utilized)</td></tr>
+<tr><td>Carpenter</td><td>3,865 cum</td><td>21%</td><td>red (under-utilized)</td></tr>
+<tr><td>Foreman</td><td>58,028 cum</td><td>285%</td><td>over-utilized (oversee large qty)</td></tr>
+<tr><td>Supervisor</td><td>82,342 cum</td><td>210%</td><td>over-utilized</td></tr>
+<tr><td>Dozer</td><td>55,670 cum</td><td>213%</td><td>over-utilized</td></tr>
+</table>
+<p>This gives a realistic demo narrative: some teams well-utilized (Helper, Wheel Loader), some have spare capacity (Mason, Carpenter), some over-stressed (Dozer, Foreman) — typical of a real road project.</p>
+<p>SQL: `docs/khasab-e2e-2026-05-24/scripts/tune_productivity_norms.sql`</p>
+<p>---</p>
+<h2>REDO v2 — REAL activity names from &quot;Code&quot; sheet + Risks + Weather</h2>
+<p>User flagged that prior REDO used names from the DBS workbook&#x27;s &quot;DPR&quot; tab (BOQ items) instead of the actual activity master in the &quot;Code&quot; sheet of the Khasab daily-data workbook.</p>
+<h3>Activity names fixed (33 activities)</h3>
+<p>Pulled from `docs/ActualData/1. Daily Data-Khasab  Jan, Feb, Mar 2026.xlsx` → &quot;Code&quot; sheet, columns C (code) + D (name):</p>
+<table>
+<tr><th>Code</th><th>Real name</th></tr>
+<tr><td>1</td><td>**Camp work**</td></tr>
+<tr><td>1.1</td><td>Diversion of existing roads and construction of graded slip roads/access roads</td></tr>
+<tr><td>1.2</td><td>Access to site including protection</td></tr>
+<tr><td>1.3</td><td>Soil Investigation</td></tr>
+<tr><td>2.1.5(i)</td><td>Clearing and Grubbing</td></tr>
+<tr><td>2.3.6(i)</td><td>Unclassified Excavation</td></tr>
+<tr><td>2.3.6(i)a</td><td>**Mechanical Excavation**</td></tr>
+<tr><td>2.3.6(i)b</td><td>**Blasting**</td></tr>
+<tr><td>2.3.6(i)c</td><td>**Mocking for Blasting**</td></tr>
+<tr><td>2.3.6(i)d</td><td>**Slope dressing**</td></tr>
+<tr><td>2.4.6(i)</td><td>Borrow Excavation</td></tr>
+<tr><td>2.6.6(i)</td><td>Subgrade Preparation in Cut</td></tr>
+<tr><td>2.7.6(i)</td><td>Unclassified structural excavation (Depth 0 to 2m)</td></tr>
+<tr><td>2.8.6(i)</td><td>Trench excavation and backfilling (Depth 0 to 2m)</td></tr>
+<tr><td>3.2.6(ii)</td><td>GSB mixing</td></tr>
+<tr><td>3.3.6(ii)</td><td>Aggregate Base Course Class B</td></tr>
+<tr><td>5.1.7(iii)</td><td>Concrete (Class 30) in Culvert structures &amp; Retaining walls — Concrete Placing</td></tr>
+<tr><td>5.1.7(iii)a</td><td>Culvert &amp; Retaining wall Shuttering &amp; De-Shuttering</td></tr>
+<tr><td>5.2.6(ii)</td><td>High tensile steel bar reinforcement — Cut &amp; Bend</td></tr>
+<tr><td>5.10.6(i)</td><td>Applying Bituminious paint 02 coats for structures</td></tr>
+<tr><td>9.1.6(ii)</td><td>Mortared stone RipRap</td></tr>
+<tr><td>13.1.7(ix)a</td><td>**Concrete Barrier, Single face, Type B.-shuttering &amp; De-shuttering**</td></tr>
+<tr><td>13.1.7(ix)b</td><td>Concrete Barrier, Single face, Type E.-shuttering &amp; De-shuttering</td></tr>
+<tr><td>13.1.7(ix)b1</td><td>Concrete Barrier, Single face, Type E..-Steel Fixing</td></tr>
+<tr><td>13.1.7(ix)b2</td><td>Concrete Barrier, Single face, Type E.-Concreting</td></tr>
+<tr><td>18.3</td><td>Future Utility Crossing</td></tr>
+<tr><td>18.3.6</td><td>Upvc Future Ducts</td></tr>
+<tr><td>18.3.6(i)</td><td>05 way 32mm HDPE Silicore Straight / Spiral RIP Duct for Broadband Ducts</td></tr>
+<tr><td>18.3.6(ii)</td><td>2way 200mm dia &amp; 2way 50mm dia Upvc Future Ducts</td></tr>
+</table>
+<p>SQL-updated 33 `activity.activities.name` + 33 `resource.work_activities.name` rows. Both surfaces (Project Overview Work Package table, Activities tree) now show these real names.</p>
+<h3>Weather added to 3,431 DPRs</h3>
+<p>Deterministic by day-of-week so it&#x27;s consistent:</p>
+<table>
+<tr><th>Condition</th><th>DPR count</th></tr>
+<tr><td>CLEAR</td><td>1,513 (44%)</td></tr>
+<tr><td>PARTLY_CLOUDY</td><td>526 (15%)</td></tr>
+<tr><td>RAIN</td><td>470 (14%)</td></tr>
+<tr><td>CLOUDY</td><td>461 (13%)</td></tr>
+<tr><td>WINDY</td><td>461 (13%)</td></tr>
+</table>
+<h3>Risk register — 8 entries</h3>
+<p>POSTed to `/v1/projects/{pid}/risks` with valid `risk_category_master` codes:</p>
+<p>1. Monsoon / weather delays in March-April (MW-GENERIC, P=4, IC=3, IS=4)</p>
+<p>2. Excavator fleet availability (RES-EQUIPMENT-MOBILISATION, P=3, IC=3, IS=4)</p>
+<p>3. Blasting / explosive permit lead time (MIN-EXPLOSIVE-PROCUREMENT, P=3, IC=2, IS=5)</p>
+<p>4. Concrete supply continuity for bridge (CG-PROCUREMENT-LEAD-TIME, P=2, IC=4, IS=3)</p>
+<p>5. Skilled labour shortage — Steel Fixers (RES-PROCUREMENT-DELAY, P=3, IC=2, IS=3)</p>
+<p>6. Underground utility strike risk (HSE-GENERIC, P=3, IC=4, IS=3)</p>
+<p>7. Borrow pit yield variability (CG-PROCUREMENT-LEAD-TIME, P=4, IC=3, IS=2)</p>
+<p>8. Bridge bearing import customs delay (CG-IMPORTED-EQUIPMENT-CUSTOMS, P=3, IC=2, IS=4)</p>
+<h3>New findings</h3>
+<ul>
+<li>**Finding 30**: Activity master names live in the daily-data workbook&#x27;s &quot;Code&quot; sheet, NOT the DBS workbook&#x27;s &quot;DPR&quot; sheet (which has BOQ items with descriptive bid-item names). Code sheet is the source of truth for activity descriptions.</li>
+<li>**Finding 31**: Risk `status` enum is `{IDENTIFIED, ANALYZING, MITIGATING, RESOLVED, CLOSED, ACCEPTED, REJECTED, REA...}` — `OPEN` is NOT valid.</li>
+<li>**Finding 32**: Risk `category` must be a code from `risk.risk_category_master` (22 industry-specific codes like `MW-GENERIC`, `HSE-GENERIC`, `CG-PROCUREMENT-LEAD-TIME`) — not free-text.</li>
+</ul></div>
 </details>
 
 </div>
