@@ -6,7 +6,6 @@ import { projectInsightsApi } from "@/lib/api/projectInsightsApi";
 import { dprIssueApi } from "@/lib/api/dprIssueApi";
 import { dailyWeatherApi } from "@/lib/api/dailyWeatherApi";
 import type { ProjectResponse } from "@/lib/types";
-import { DashboardHero } from "./DashboardHero";
 import { KpiRow } from "./KpiRow";
 import { ProjectTimelinePreview } from "./ProjectTimelinePreview";
 import { ProjectHealthDonut } from "./ProjectHealthDonut";
@@ -73,11 +72,6 @@ export function ProjectDashboardTab({
 
   return (
     <div className="space-y-6">
-      <DashboardHero
-        projectName={project.name}
-        projectCode={project.code}
-      />
-
       <KpiRow
         snapshot={snapshot}
         deltas={deltas}
