@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
 import { formatDate, getPriorityInfo, formatBudget, budgetUnit } from "@/lib/utils/format";
 import { projectApi } from "@/lib/api/projectApi";
@@ -30,6 +30,7 @@ import { Breadcrumb } from "@/components/common/Breadcrumb";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
+import { WorkPackagesListView } from "@/components/wbs/WorkPackagesListView";
 import { TabTip } from "@/components/common/TabTip";
 import { WbsAiGenerateDialog } from "@/components/wbs/WbsAiGenerateDialog";
 import { useAuthStore } from "@/lib/state/store";
@@ -1203,6 +1204,17 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
   // can't act on (clean UX, not security).
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canEditWbs = hasPermission("PROJECT.UPDATE");
+  // Tree vs flat list — URL-backed so ?tab=wbs&view=list is shareable and survives reloads.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const view: "tree" | "list" = searchParams.get("view") === "list" ? "list" : "tree";
+  const setView = (next: "tree" | "list") => {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (next === "tree") sp.delete("view");
+    else sp.set("view", "list");
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
   const [showForm, setShowForm] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showAiDialog, setShowAiDialog] = useState(false);
@@ -1329,31 +1341,59 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
 
   return (
     <div className="space-y-4">
-      {canEditWbs && (
-        <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex overflow-hidden rounded-md border border-border bg-surface-hover/40 text-sm">
           <button
-            onClick={() => setShowTemplateSelector(!showTemplateSelector)}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            type="button"
+            onClick={() => setView("tree")}
+            aria-pressed={view === "tree"}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors ${
+              view === "tree"
+                ? "bg-accent text-accent-foreground"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            }`}
           >
-            <FileText size={16} />
-            Apply Template
+            <FolderTree size={14} /> Tree
           </button>
           <button
-            onClick={() => setShowAiDialog(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
+            type="button"
+            onClick={() => setView("list")}
+            aria-pressed={view === "list"}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors ${
+              view === "list"
+                ? "bg-accent text-accent-foreground"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            }`}
           >
-            <Sparkles size={16} />
-            Generate with AI
-          </button>
-          <button
-            onClick={handleAddRoot}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-          >
-            <Plus size={16} />
-            Add WBS Node
+            <List size={14} /> List
           </button>
         </div>
-      )}
+        {canEditWbs && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            >
+              <FileText size={16} />
+              Apply Template
+            </button>
+            <button
+              onClick={() => setShowAiDialog(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
+            >
+              <Sparkles size={16} />
+              Generate with AI
+            </button>
+            <button
+              onClick={handleAddRoot}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              <Plus size={16} />
+              Add WBS Node
+            </button>
+          </div>
+        )}
+      </div>
 
       {showTemplateSelector && (
         <div className="rounded-xl border border-border bg-surface/50 p-4 shadow-lg">
@@ -1489,7 +1529,9 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
         </div>
       )}
 
-      {wbsTree.length === 0 ? (
+      {view === "list" ? (
+        <WorkPackagesListView projectId={projectId} />
+      ) : wbsTree.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-12 text-center">
           <h3 className="text-lg font-medium text-text-primary">No WBS Structure</h3>
           <p className="mt-2 text-text-muted">
@@ -1513,7 +1555,7 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
         </div>
       )}
 
-      {selectedWbs && (
+      {view === "tree" && selectedWbs && (
         <div className="space-y-2">
           <div className="text-sm text-text-secondary">
             Custom fields for: <span className="font-medium text-accent">{selectedWbs.code} — {selectedWbs.name}</span>

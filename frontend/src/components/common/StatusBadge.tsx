@@ -13,6 +13,8 @@ type StatusType =
   | "IN_PROGRESS"
   | "SUSPENDED"
   | "DELAYED"
+  | "AT_RISK"
+  | "ON_TRACK"
   | "ON_HOLD"
   | "CANCELLED"
   | "DONE"
@@ -36,6 +38,8 @@ const statusStyles: Record<string, string> = {
   IN_PROGRESS: "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20",
   SUSPENDED: "bg-danger/10 text-danger ring-1 ring-danger/20",
   DELAYED: "bg-danger/15 text-danger ring-1 ring-danger/30",
+  AT_RISK: "bg-warning/15 text-warning ring-1 ring-warning/30",
+  ON_TRACK: "bg-success/10 text-success ring-1 ring-success/20",
   ON_HOLD: "bg-warning/10 text-warning ring-1 ring-warning/20",
   CANCELLED: "bg-danger/10 text-danger ring-1 ring-danger/20",
   DONE: "bg-success/15 text-success ring-1 ring-success/30",
@@ -55,6 +59,8 @@ const statusLabels: Record<string, string> = {
   IN_PROGRESS: "In Progress",
   SUSPENDED: "Suspended",
   DELAYED: "Delayed",
+  AT_RISK: "At Risk",
+  ON_TRACK: "On Track",
   ON_HOLD: "On Hold",
   CANCELLED: "Cancelled",
   DONE: "Done",
