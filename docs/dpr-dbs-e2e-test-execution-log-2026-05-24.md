@@ -217,3 +217,83 @@ User reviewed the run and flagged:
 - **Finding 20**: `activity.duration_type` constraint requires `{FIXED_DURATION_AND_UNITS, FIXED_DURATION_AND_UNITS_PER_TIME, FIXED_UNITS, FIXED_UNITS_PER_TIME}` — `FIXED_DURATION` is NOT valid.
 - **Finding 21**: AI chat response field is `data.text`, not `data.responseText` or `data.message`.
 - **Finding 22**: `POST /v1/projects/{pid}/dpr` requires both `activityName` AND `supervisorName` as text fields (not just IDs) — was the first DPR test rejection.
+
+---
+
+## REDO (after user feedback round 2)
+
+User flagged 3 issues:
+1. Activities named "Khasab X.Y.Z" instead of real engineering descriptions from the Excel master sheet
+2. NO planned resources (Resource Plan was empty, just locked activities with no manpower/equipment/material demand rows)
+3. Demanded clean DB + redo
+
+### Fixes (`rebuild_demo.py` + `fix_role_assignments.py` + `fix_demo_v2.py`)
+
+**Used master sheet `3. Supervisor-Engineer-CM-PM DBS (2).xlsx` → DPR sheet**
+- Parsed 205 master activity rows with REAL descriptions
+- Built fuzzy resolver: if Khasab code doesn't match master exactly, fall back to closest parent code's literal name (NO synthesis from my knowledge)
+- 9 exact matches; 24 via parent fallback (e.g. `2.3.6(i)b` → master `2.3.6(i)` = "Unclassified excavation")
+
+**New activity names** (vs old "Khasab X.Y.Z"):
+- 1, 1.1, 1.2 → "Preliminaries"
+- 2.3.6(i), 2.3.6(i)a/b/d → "Unclassified excavation"
+- 2.4.6(i), 2.4.6(i)a → "Borrow excavation to embankment-Extraction and screening"
+- 2.6.6(i), 2.6.6(i)a → "Subgrade preparation in cut"
+- 2.7.6(i) → "Unclassified structural excavation (depth 0m to 2.0m)"
+- 5.1.7(iii) → "Concrete (Class15), blinding for culverts..."
+- 5.10.6(i) → "Bituminous paint 3 coats to concrete face"
+- 9.1.6(ii) → "Mortared stone riprap including 100mm thick cement mortar bed"
+- 13.1.7(ix)* → "Concrete barrier, transition section"
+- 18.3.6(i)/(ii) → "Service ducts uPVC 100mm dia two way"
+
+**229 role-assignments created** (THE big missing piece):
+- For each activity, derived typical crew from DPR data (median across all DPRs of that code)
+- Manpower: matched via fuzzy map (e.g. "Helper" → "Helper / Handyman", "Steel Fixer" → "Rebar Fixer")
+- Equipment: matched + create-on-fly for missing variants (Tipper, Dumper, Roller, etc. — created as new resource_role + equipment_role_variant rows)
+- Material: synthetic for concrete activities (Cement + Steel + Aggregate)
+
+**work_activities table:** real master names (NOT "KHASAB_*" anymore)
+
+**BOQ items:** 30 created with real master descriptions (e.g. "Soil Investigation and report", "Concrete (class30) for Bridge foundation")
+
+**Final state after REDO**:
+| Metric | Value |
+|---|---:|
+| DPRs | 3,431 (591 + 1,151 + 1,689) |
+| Role assignments (planned resources) | **229** |
+| Activities with real master names | 33 |
+| Activities linked to work_activity | 33 |
+| BOQ items (real descriptions) | 30 |
+| Material Consumption Logs | 76 |
+| Productivity Norms | 66 |
+| Total project cost | ~₹1.26 Cr |
+| Avg activity % complete | 95.5% |
+| Activities marked COMPLETED | 3 |
+
+**New project ID** (rebuild created new): `e5aec1b8-80eb-48e3-9148-55573305546a`
+
+### New findings round
+
+- **Finding 23**: ProductivityNorm enum is `{MANPOWER, EQUIPMENT}` not `{MANPOWER_UTILIZATION, EQUIPMENT_UTILIZATION}` (confirmed from earlier).
+- **Finding 24**: `activity.duration_type` valid enum: `FIXED_DURATION_AND_UNITS`, etc. — not `FIXED_DURATION`.
+- **Finding 25**: Role-assignments require activities in DRAFT status (need to unlock → POST → re-lock).
+- **Finding 26**: HikariCP default pool=20 is too small for concurrent DPR import (8 threads × multiple background tasks). Bumped to 60 via `DB_POOL_MAX=60` env var.
+- **Finding 27**: `resource.resource_roles` has `resource_type_id` FK (not `role_type` column). Equipment role creation needs FK to `resource_types.id` where `code='EQUIPMENT'`.
+- **Finding 28**: DPR-import worker_count=8 overwhelms backend even with pool=60 occasionally. Reduced to 4 workers; still completes 3,431 DPRs in ~30 minutes.
+- **Finding 29**: Backend `/dbs/recompute?date=` API has intermittent ConnectionTimeoutException under load — only 40/65 days recomputed first pass.
+
+### Master script flow (for repro)
+
+```bash
+# 1. Wipe + restore profile_permissions + variant tables
+python3 scripts/rebuild_demo.py  # Steps 1-7 (no DPR import yet)
+
+# 2. Add role-assignments (the big fix)
+python3 scripts/fix_role_assignments.py
+
+# 3. Import DPRs (~30min with pool=60, 4 workers)
+nohup python3 scripts/import_khasab_dprs.py all > /tmp/dpr-import.log 2>&1 &
+
+# 4. After import: BOQ + MCL + norms + EVM + DBS
+python3 scripts/fix_demo_v2.py
+```

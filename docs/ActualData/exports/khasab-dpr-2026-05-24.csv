@@ -246,7 +246,7 @@ report_date,supervisor,activity_code,wbs_code,wbs_name,qty_executed,unit,manpowe
 2026-01-27,vijaykumar,2.3.6(i)a,2.3,Bored Cast In-Situ Piling,0.010,cu.m.,0,0,0,0,Source qty=0 — resource deployment only (idle/no-output day)
 2026-01-27,vpgupta,2.3.6(i)a,2.3,Bored Cast In-Situ Piling,0.010,cu.m.,0,0,0,0,Source qty=0 — resource deployment only (idle/no-output day)
 2026-01-27,illayaraja,2.3.6(i)b,2.3,Bored Cast In-Situ Piling,0.010,cu.m.,0,0,0,0,Source qty=0 — resource deployment only (idle/no-output day)
-2026-01-27,ismaila,2.3.6(i)b,2.3,Bored Cast In-Situ Piling,100.000,cum,2500.00,5000.00,1,1,
+2026-01-27,ismaila,2.3.6(i)b,2.3,Bored Cast In-Situ Piling,650.000,cu.m.,500.00,16000.00,1,2,
 2026-01-27,kbarman,2.3.6(i)b,2.3,Bored Cast In-Situ Piling,0.010,cu.m.,0,0,0,0,Source qty=0 — resource deployment only (idle/no-output day)
 2026-01-27,saiffuddin,2.3.6(i)b,2.3,Bored Cast In-Situ Piling,400.000,cu.m.,3000.00,29000.00,2,3,
 2026-01-27,vijaykumar,2.3.6(i)b,2.3,Bored Cast In-Situ Piling,0.010,cu.m.,0,0,0,0,Source qty=0 — resource deployment only (idle/no-output day)
