@@ -297,3 +297,33 @@ nohup python3 scripts/import_khasab_dprs.py all > /tmp/dpr-import.log 2>&1 &
 # 4. After import: BOQ + MCL + norms + EVM + DBS
 python3 scripts/fix_demo_v2.py
 ```
+
+## Productivity Norms tuned to realistic values
+
+After REDO, Capacity Utilization showed 200-7000% utilization (norms too conservative). Tuned per activity family based on observed throughput from 3,431 DPRs:
+
+| Family | Manpower output/man/day | Equipment output/hour |
+|---|---:|---:|
+| Excavation (2.3, 2.4, 2.6, 2.7, 2.8) | 350 cum/day | 80 cum/hr (640/day) |
+| GSB / ABC (3.x) | 100 cum/day | 18 cum/hr (150/day) |
+| Concrete / steel / barriers (5.x, 13.1) | 70 cum/day | 5 cum/hr (40/day) |
+| Drainage / service ducts (9.1, 18.x) | 30 cum/day | 10 cum/hr (120/day) |
+| Preliminaries (1, 1.1, 1.2) | 100 m/day | 18 m/hr (150/day) |
+
+Resulting Capacity Utilization (cumulative across Jan 24 → Mar 29):
+
+| Resource | Qty | Util % | Color |
+|---|---:|---:|---|
+| Helper | 208,437 cum | 85% | yellow |
+| Steel Fixer | 15,626 cum | 114% | green |
+| Excavator | 79,493 cum | 81% | yellow |
+| Wheel Loader | 50,328 cum | 103% | green |
+| Mason | 5,492 cum | 47% | red (under-utilized) |
+| Carpenter | 3,865 cum | 21% | red (under-utilized) |
+| Foreman | 58,028 cum | 285% | over-utilized (oversee large qty) |
+| Supervisor | 82,342 cum | 210% | over-utilized |
+| Dozer | 55,670 cum | 213% | over-utilized |
+
+This gives a realistic demo narrative: some teams well-utilized (Helper, Wheel Loader), some have spare capacity (Mason, Carpenter), some over-stressed (Dozer, Foreman) — typical of a real road project.
+
+SQL: `docs/khasab-e2e-2026-05-24/scripts/tune_productivity_norms.sql`
