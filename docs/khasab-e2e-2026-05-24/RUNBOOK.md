@@ -395,3 +395,39 @@ After completing all steps, you should have:
 - [ ] DBS aggregates for 562 supervisor + 80 project rows
 - [ ] CSV/XLSX exports in `docs/ActualData/exports/`
 - [ ] HTML report in `docs/dpr-dbs-e2e-execution-log-2026-05-24.html`
+
+---
+
+## Path D — Step 9: Calendar + Dashboard population (REQUIRED for demo)
+
+After Path D step 8 (`tune_productivity_norms.sql`), run:
+
+```bash
+python3 scripts/populate_dashboard.py
+# Then create DPR issues for Open Issues / Active Alerts:
+python3 scripts/create_risks.py    # 8 risks (idempotent — deletes + re-inserts for this project)
+# And separately, DPR issues via SQL (script above does inline)
+```
+
+This:
+1. Links **Oman 5-day Construction Calendar** to project + all activities → "Run Schedule" succeeds
+2. Inserts 60 rows in `project.daily_weather` → Site Conditions tile populated
+3. Creates 6 future-dated milestones → Project Timeline Preview shows the schedule
+4. Creates 6 DPR issues → Open Issues / Active Alerts populated
+
+See [`CALENDAR-AND-DASHBOARD.md`](CALENDAR-AND-DASHBOARD.md) for full detail, including:
+- Every code path the calendar flows through
+- All valid enum values for `dpr_issues`, `risks`, `activities.activity_type`
+- Verification queries
+
+## Final DB backup
+
+`bipros-FINAL-backup.dump` (1.6 MB, custom format) — taken after all REDO v2 + dashboard population. Restore with:
+
+```bash
+PGPASSWORD=bipros_dev /Applications/Postgres.app/Contents/Versions/latest/bin/pg_restore \
+  -h 127.0.0.1 -U bipros -d bipros --clean --if-exists \
+  bipros-FINAL-backup.dump
+```
+
+This is the FASTEST way to get a demo-ready environment — single command, no script chain needed.

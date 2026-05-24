@@ -50,11 +50,11 @@ img.screenshot { max-width: 100%; border: 1px solid #e5e5e5; border-radius: 8px;
 <div class='hero'>
   <div class='muted' style='opacity:0.7; font-size: 0.9rem;'>Bipros EPPM · Execution Log</div>
   <h1>Khasab Real-Data DPR→DBS E2E — 2026-05-24</h1>
-  <div class='muted' style='color: rgba(255,255,255,0.7);'>Generated 2026-05-24T22:57:46</div>
+  <div class='muted' style='color: rgba(255,255,255,0.7);'>Generated 2026-05-24T23:03:24</div>
   <div class='meta'>
     <div><div class='label'>Project</div><div class='value'>KHASAB-2026</div></div>
     <div><div class='label'>DPRs imported</div><div class='value'>3431</div></div>
-    <div><div class='label'>Activities</div><div class='value'>33</div></div>
+    <div><div class='label'>Activities</div><div class='value'>39</div></div>
     <div><div class='label'>WBS nodes</div><div class='value'>23</div></div>
     <div><div class='label'>Users created</div><div class='value'>19</div></div>
     <div><div class='label'>Manpower lines</div><div class='value'>995</div></div>
@@ -90,7 +90,7 @@ img.screenshot { max-width: 100%; border: 1px solid #e5e5e5; border-radius: 8px;
 <tr><td>Project code</td><td>KHASAB-2026</td></tr>
 <tr><td>Project name</td><td>Khasab Road Project 2026</td></tr>
 <tr><td>Total DPRs</td><td>3431</td></tr>
-<tr><td>Activities</td><td>33</td></tr>
+<tr><td>Activities</td><td>39</td></tr>
 <tr><td>WBS nodes</td><td>23</td></tr>
 <tr><td>Users (total)</td><td>19</td></tr>
 <tr><td>Project team members</td><td>16</td></tr>
@@ -684,6 +684,29 @@ python3 scripts/fix_demo_v2.py
 <li>**Finding 30**: Activity master names live in the daily-data workbook&#x27;s &quot;Code&quot; sheet, NOT the DBS workbook&#x27;s &quot;DPR&quot; sheet (which has BOQ items with descriptive bid-item names). Code sheet is the source of truth for activity descriptions.</li>
 <li>**Finding 31**: Risk `status` enum is `{IDENTIFIED, ANALYZING, MITIGATING, RESOLVED, CLOSED, ACCEPTED, REJECTED, REA...}` — `OPEN` is NOT valid.</li>
 <li>**Finding 32**: Risk `category` must be a code from `risk.risk_category_master` (22 industry-specific codes like `MW-GENERIC`, `HSE-GENERIC`, `CG-PROCUREMENT-LEAD-TIME`) — not free-text.</li>
+</ul>
+<p>---</p>
+<h2>Calendar + Dashboard population (final round)</h2>
+<p>User flagged: &quot;Run Schedule&quot; fails (no calendar). Dashboard tiles blank (Project Timeline Preview, Site Conditions, Open Issues, Active Alerts).</p>
+<h3>Fixes</h3>
+<p>1. **Calendar wired up** — linked the pre-seeded `Oman 5-day Construction Calendar (Sun–Thu)` (`a74ca9d7-…`) to project + all 33 activities + 6 new milestones</p>
+<p>2. **Project Timeline Preview** — created 6 milestone activities (START/FINISH_MILESTONE) with dates today+7d through today+150d so the timeline preview populates</p>
+<p>3. **Site Conditions** — populated `project.daily_weather` with 60 rows (53 historical for DPR dates + 7 recent for &quot;latest reading&quot;); Khasab climate-based temp/wind/rainfall values</p>
+<p>4. **Open Issues + Active Alerts** — 6 DPR issues created with realistic operational scenarios (Excavator breakdown, RMC truck late, Safety near-miss, Slump test failed, Steel rebar delay, Wind &gt; 25 km/h)</p>
+<h3>Full detail</h3>
+<p>See [`docs/khasab-e2e-2026-05-24/CALENDAR-AND-DASHBOARD.md`](khasab-e2e-2026-05-24/CALENDAR-AND-DASHBOARD.md) for the complete write-up including:</p>
+<ul>
+<li>Every database column the calendar reads</li>
+<li>Every API endpoint that consumes it</li>
+<li>Every UI surface that exposes it</li>
+<li>Valid enum values for dpr_issues, risks (gotchas)</li>
+<li>Verification queries</li>
+</ul>
+<h3>Findings 33-35</h3>
+<ul>
+<li>**Finding 33**: Project + activity must both have `calendar_id` set or scheduler throws &quot;Calendar not set&quot;. Pre-seeded `Oman 5-day` calendar exists; just needs linking.</li>
+<li>**Finding 34**: Project Timeline Preview filter is `activity_type IN (&#x27;START_MILESTONE&#x27;,&#x27;FINISH_MILESTONE&#x27;) AND planned_finish_date &gt;= CURRENT_DATE`. Historical TASK_DEPENDENT activities don&#x27;t show.</li>
+<li>**Finding 35**: `dpr_issues.category` enum is `{SAFETY, QUALITY, MATERIAL_SHORTAGE, EQUIPMENT_BREAKDOWN, MANPOWER_SHORTAGE, WEATHER, DESIGN_CHANGE, LAND_ACCESS, UTILITY_CLASH, PERMIT_DELAY, SUBCONTRACTOR, ENVIRONMENTAL, OTHER}` — not free text like `EQUIPMENT`.</li>
 </ul></div>
 </details>
 

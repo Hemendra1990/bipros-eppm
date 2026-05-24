@@ -400,3 +400,30 @@ POSTed to `/v1/projects/{pid}/risks` with valid `risk_category_master` codes:
 - **Finding 30**: Activity master names live in the daily-data workbook's "Code" sheet, NOT the DBS workbook's "DPR" sheet (which has BOQ items with descriptive bid-item names). Code sheet is the source of truth for activity descriptions.
 - **Finding 31**: Risk `status` enum is `{IDENTIFIED, ANALYZING, MITIGATING, RESOLVED, CLOSED, ACCEPTED, REJECTED, REA...}` — `OPEN` is NOT valid.
 - **Finding 32**: Risk `category` must be a code from `risk.risk_category_master` (22 industry-specific codes like `MW-GENERIC`, `HSE-GENERIC`, `CG-PROCUREMENT-LEAD-TIME`) — not free-text.
+
+---
+
+## Calendar + Dashboard population (final round)
+
+User flagged: "Run Schedule" fails (no calendar). Dashboard tiles blank (Project Timeline Preview, Site Conditions, Open Issues, Active Alerts).
+
+### Fixes
+
+1. **Calendar wired up** — linked the pre-seeded `Oman 5-day Construction Calendar (Sun–Thu)` (`a74ca9d7-…`) to project + all 33 activities + 6 new milestones
+2. **Project Timeline Preview** — created 6 milestone activities (START/FINISH_MILESTONE) with dates today+7d through today+150d so the timeline preview populates
+3. **Site Conditions** — populated `project.daily_weather` with 60 rows (53 historical for DPR dates + 7 recent for "latest reading"); Khasab climate-based temp/wind/rainfall values
+4. **Open Issues + Active Alerts** — 6 DPR issues created with realistic operational scenarios (Excavator breakdown, RMC truck late, Safety near-miss, Slump test failed, Steel rebar delay, Wind > 25 km/h)
+
+### Full detail
+See [`docs/khasab-e2e-2026-05-24/CALENDAR-AND-DASHBOARD.md`](khasab-e2e-2026-05-24/CALENDAR-AND-DASHBOARD.md) for the complete write-up including:
+- Every database column the calendar reads
+- Every API endpoint that consumes it
+- Every UI surface that exposes it
+- Valid enum values for dpr_issues, risks (gotchas)
+- Verification queries
+
+### Findings 33-35
+
+- **Finding 33**: Project + activity must both have `calendar_id` set or scheduler throws "Calendar not set". Pre-seeded `Oman 5-day` calendar exists; just needs linking.
+- **Finding 34**: Project Timeline Preview filter is `activity_type IN ('START_MILESTONE','FINISH_MILESTONE') AND planned_finish_date >= CURRENT_DATE`. Historical TASK_DEPENDENT activities don't show.
+- **Finding 35**: `dpr_issues.category` enum is `{SAFETY, QUALITY, MATERIAL_SHORTAGE, EQUIPMENT_BREAKDOWN, MANPOWER_SHORTAGE, WEATHER, DESIGN_CHANGE, LAND_ACCESS, UTILITY_CLASH, PERMIT_DELAY, SUBCONTRACTOR, ENVIRONMENTAL, OTHER}` — not free text like `EQUIPMENT`.
