@@ -40,6 +40,13 @@ All artifacts from the fresh-environment + Khasab real-data import.
 | [`ai_grade.py`](scripts/ai_grade.py) | Run AI through 50 questions + grade vs ground truth |
 | [`build_html_report.py`](scripts/build_html_report.py) | Generate consolidated HTML report |
 | [`export_dpr_csv_xlsx.py`](scripts/export_dpr_csv_xlsx.py) | Generate CSV + 4-sheet XLSX exports |
+| [`parse_master_sheet.py`](scripts/parse_master_sheet.py) | **REDO** — parse DBS workbook DPR tab to extract real activity names/units/rates |
+| [`analyze_resource_demand.py`](scripts/analyze_resource_demand.py) | **REDO** — derive per-activity resource demand (manpower/equipment/material counts) from DPR aggregates |
+| [`rebuild_demo.py`](scripts/rebuild_demo.py) | **REDO master script** — wipe → re-import with real names + link to master work_activities |
+| [`fix_role_assignments.py`](scripts/fix_role_assignments.py) | **REDO** — POST 229 role-assignments (planned manpower/equipment/material per activity); creates missing variants on-the-fly |
+| [`fix_demo_v2.py`](scripts/fix_demo_v2.py) | **REDO** — DPR rates SQL update + EVM + BOQ from master + MCLs + norms + DBS recompute |
+| [`tune_productivity_norms.sql`](scripts/tune_productivity_norms.sql) | **REDO** — calibrate norms per activity family so Capacity Util % lands at demo-realistic 60-200% range |
+| [`check_capacity.py`](scripts/check_capacity.py) | Helper — print Capacity Util API output as formatted tables (for verification) |
 
 ## Runtime state (`state/`)
 
@@ -55,22 +62,28 @@ ID registry produced during the run — useful for re-running specific steps.
 
 ## Screenshots (`screenshots/`)
 
-11 PNG captures from Playwright runs:
-
-- **Pre-fix (Phase 2 + Phase 11):**
+- **Phase 1-11 (initial run):**
   - `2026-05-24-phase2-dashboard.png` — admin login + zero-state dashboard
-  - `2026-05-24-phase2-projects-list.png` — projects list
+  - `2026-05-24-phase2-projects-list.png`
   - `2026-05-24-phase11-dashboard.png` — executive dashboard
   - `2026-05-24-phase11-projects-list.png`
-  - `2026-05-24-phase11-project-overview.png` — pre-fix project overview (showed 0%)
-  - `2026-05-24-phase11-dpr-list.png` — DPR list page
+  - `2026-05-24-phase11-project-overview.png` — pre-fix project overview (0%)
+  - `2026-05-24-phase11-dpr-list.png`
   - `2026-05-24-phase11-wbs.png` — WBS tree (22 nodes)
   - `2026-05-24-phase11-dbs.png` — DBS supervisor tab
 
-- **Post-fix:**
-  - `2026-05-24-FIX-project-overview.png` — **shows 50% progress, ₹5 Cr budget, 3 of 33 completed**
-  - `2026-05-24-FIX-activities.png` — shows durations, % complete, status, planned dates
-  - `2026-05-24-FIX-capacity-utilization.png`
+- **FIX (first cleanup pass, before REDO):**
+  - `2026-05-24-FIX-project-overview.png` — 50% progress, ₹5 Cr budget, 3/33 completed
+  - `2026-05-24-FIX-activities.png` — durations, % complete, status, planned dates
+  - `2026-05-24-FIX-capacity-utilization.png` — empty (no norms)
+
+- **REDO (real master names + planned resources):**
+  - `2026-05-24-REDO-activities-with-real-names.png` — "Unclassified excavation" etc.
+  - `2026-05-24-REDO-FINAL-overview.png` — overview after REDO
+  - `2026-05-24-REDO-FINAL-activities.png` — activities tree with real names
+  - `2026-05-24-REDO-FINAL-activity-detail-with-resources.png` — drawer showing Manpower Requirements populated
+  - `2026-05-24-REDO-FINAL-capacity-with-data.png` — capacity util pre-tuning (high %)
+  - `2026-05-24-REDO-FINAL-capacity-tuned.png` — **Eff 88.6%, realistic per-role spread**
 
 ## Run statistics
 

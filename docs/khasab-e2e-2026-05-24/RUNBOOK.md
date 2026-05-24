@@ -60,7 +60,37 @@ Then start backend + frontend. The state you'll see is the **pre-run** state (3 
 Run all scripts top-to-bottom against your live backend. This recreates everything from source.
 
 ### Path C — Apply just the demo fix (15 minutes, assumes you have DPRs imported)
-Run only `scripts/fix_demo.py` + `scripts/create_norms_only.py` if you already have a project + DPRs and need to make it demo-ready.
+Run only `scripts/fix_demo_v2.py` + `scripts/create_norms_only.py` + the tune SQL if you already have a project + DPRs and need to make it demo-ready.
+
+### Path D — REDO (master names + planned resources, ~2 hours)
+The most-correct path. Uses the **master sheet's real activity descriptions** and creates **planned manpower/equipment/material per activity** (229 role-assignments) so the activity drawer + Capacity Utilization actually compute against plan-vs-actual:
+
+```bash
+PG=/Applications/Postgres.app/Contents/Versions/latest/bin
+export DB_POOL_MAX=60   # bigger HikariCP pool — DPR import is heavy
+# 1. Parse master sheet for real names
+/tmp/xlsx_venv/bin/python scripts/parse_master_sheet.py
+# 2. Analyze DPR data to derive per-activity resource demand
+/tmp/xlsx_venv/bin/python scripts/analyze_resource_demand.py
+# 3. Wipe + restore variant tables + create users/project/WBS/activities with REAL names + work_activity link
+python3 scripts/rebuild_demo.py
+# 4. POST 229 role-assignments (planned manpower + equipment + material per activity)
+python3 scripts/fix_role_assignments.py
+# 5. Import 3,431 DPRs (~30 min with pool=60, 4 workers)
+nohup python3 scripts/import_khasab_dprs.py all > /tmp/dpr-import.log 2>&1 &
+# 6. After import: DPR rates SQL + EVM + BOQ from master + MCLs + norms + DBS recompute
+python3 scripts/fix_demo_v2.py
+# 7. Tune productivity norms so Capacity Util % lands at demo-realistic 60-200%
+PGPASSWORD=bipros_dev $PG/psql -h 127.0.0.1 -U bipros -d bipros -f scripts/tune_productivity_norms.sql
+# 8. Verify
+python3 scripts/check_capacity.py
+```
+
+Expected final state (see Markdown log for full table):
+- 3,431 DPRs, 229 role-assignments, 30 BOQ items, 76 MCLs, 66 norms
+- Total project cost ~₹1.26 Cr
+- Avg activity % complete: 95.5%
+- Capacity Utilization Total Eff: 88.6% (yellow, with realistic per-role spread)
 
 The rest of this runbook is **Path B**.
 
