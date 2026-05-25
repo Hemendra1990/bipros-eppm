@@ -360,9 +360,22 @@ run_import_pre_dpr() {
   export BIPROS_EXCEL_DIR="$SCRIPT_DIR/data/khasab-excel"
   export BIPROS_PSQL="${SCRIPT_DIR}/scripts/psql-wrapper.sh"
 
-  # Quick sanity: python + openpyxl available
-  python3 -c 'import openpyxl' 2>/dev/null \
-    || { log_warn "python openpyxl missing — installing…"; python3 -m pip install --user --quiet openpyxl; }
+  # Quick sanity: python + openpyxl available. Handle Ubuntu 24.04+ PEP 668
+  # ("externally-managed-environment") which blocks plain `pip install --user`.
+  if ! python3 -c 'import openpyxl' 2>/dev/null; then
+    log_warn "python openpyxl missing — installing…"
+    if command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      # Cleanest: apt package (Debian/Ubuntu) — bypasses PEP 668 entirely
+      sudo apt-get install -y -qq python3-openpyxl 2>/dev/null \
+        || python3 -m pip install --user --break-system-packages --quiet openpyxl 2>/dev/null \
+        || python3 -m pip install --user --quiet openpyxl
+    else
+      python3 -m pip install --user --break-system-packages --quiet openpyxl 2>/dev/null \
+        || python3 -m pip install --user --quiet openpyxl
+    fi
+    python3 -c 'import openpyxl' 2>/dev/null \
+      || fatal "Could not install openpyxl. Try: sudo apt-get install -y python3-openpyxl"
+  fi
 
   local imp="$SCRIPT_DIR/imports"
   log_info "  parse_khasab.py"
