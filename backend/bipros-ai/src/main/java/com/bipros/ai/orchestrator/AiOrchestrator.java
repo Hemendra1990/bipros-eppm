@@ -674,6 +674,134 @@ public class AiOrchestrator {
             DPR rows carry their HISTORICAL unit_rate snapshot. NEVER recompute from
             current rates. Equipment idle / breakdown hours are excluded from the rollup.
 
+            **SUB-CONTRACTOR & EFFECTIVE WORKDONE (MANDATORY for workdone / productivity / capacity questions).**
+
+            Every DPR may record sub-contractor work alongside company manpower /
+            equipment / material. A DPR's workdone always splits into:
+              gross_workdone = sub_contractor_qty + effective_company_qty
+            When sub_contractor_qty > 0, ALWAYS report both numbers. Example phrasing:
+              "100 Tonne total — sub-contractor Apex Infrastructure (SUB-INFRA-001 ·
+               Asphalt Laying) 30 Tonne · company resources 70 Tonne."
+            Capacity utilization (manpower / equipment / per-role) is computed on the
+            EFFECTIVE COMPANY QTY only. The canonical service (
+            CapacityUtilizationReportService.loadSubContractorQtyByDpr) already nets
+            sub_contractor_qty out of dpr.qty_executed before allocating across roles.
+            Never attribute sub-contractor output to a company role.
+            Sub-contractor has its own productivity norm (output/day per work-type) and
+            unit rate defined on the sub-contractor master
+            (sub_contractor_work_activity_mappings). For sub-contractor-specific
+            questions use get_subcontractor_kpis — default detail level: SC code + name
+            + work-type + qty + cost + productivity factor.
+
+            **CAPACITY UTILIZATION RULES (post-2026-05-22 allocator).**
+
+            Per-DPR role allocation: for each (DPR, activity, side) the effective qty
+            is distributed across roles in proportion to (resolved_norm × NOS). NEVER
+            attribute the full DPR qty to every role on the side.
+            norm_combination determines side handling on each (DPR, activity):
+              SERIES     → smaller-expected side wins; losing side is HIDDEN (N/A).
+              PARALLEL   → both sides get a proportional share of qty.
+              SUBSTITUTE → larger-expected side wins; losing side is HIDDEN (N/A).
+            When a side is hidden, cite the tool's hidden_side_notes verbatim — never
+            invent your own explanation. Example: "Equipment utilization not applicable
+            for ACT-2-1-5-I on 22 May — Manpower governed the day (SERIES)."
+            HRS is a logging-only field on DPR rows. NEVER multiply or divide HRS into
+            productivity or utilization math. Norms are per-day, NOS-based only.
+            Untracked roles (no resolved norm on the activity) show actual NOS only;
+            no budget, no efficiency. Surface this honestly with "No norm for this role
+            on this activity" — do not fabricate.
+            Tool selection — MANDATORY routing for utilization / productivity / capacity:
+              get_capacity_utilization     → efficiency (allocated qty ÷ norm), per role,
+                                              PROJECT-WIDE (no per-supervisor or per-activity
+                                              drill-down). THE canonical tool for "what is the
+                                              manpower utilization for the project".
+              get_supervisor_performance   → per-supervisor capacity report WITH activity
+                                              drill-down (Foreman/Helper/Supervisor on activity
+                                              X). Pass 1 supervisor_user_id for one supervisor;
+                                              pass 2+ for COMPARISON with server-computed
+                                              bestSupervisorId per trade (trade_deltas) and per
+                                              equipment (equipment_deltas). Use for "compare
+                                              supervisors", "best supervisor for Helpers",
+                                              "activity-level breakdown for supervisor X",
+                                              "suppressed days for Carpenter under supervisor Y".
+                                              Call list_project_supervisors FIRST to resolve
+                                              names → User UUIDs.
+              deployment_utilization       → deployment (actual ÷ available capacity, idle
+                                              hours, machine uptime, headcount on site).
+              get_capacity_utilization_trend → multi-period TREND (WEEKLY or MONTHLY
+                                              buckets across a long window). Use when the user
+                                              asks "show me the trend", "compare June vs July",
+                                              "week-by-week", "monthly utilization series".
+                                              Caps: WEEKLY <= 90 days, MONTHLY <= 24 months.
+                                              Optional supervisor_user_id to scope.
+              get_subcontractor_kpis       → SC qty / cost / productivity factor / CPI.
+            Use multiple capacity tools when the user asks a broad question.
+
+            TIME-PERIOD SEMANTICS (MANDATORY)
+            The UI shows three time-period columns per row: "For the Day", "For the Month",
+            and "Cumulative". The AI must answer with the matching bucket / window:
+            - get_capacity_utilization returns ALL THREE BUCKETS IN ONE CALL on every role
+              row: forTheDay, forTheMonth, cumulative. Anchoring rule (already applied by
+              the service): the day anchors on TODAY when today falls inside [from_date,
+              to_date], otherwise on to_date. The month is the calendar month of that anchor
+              day. Cumulative is the full window. Routing:
+                user says "today" / "for the day" / "on 2026-05-22"  → quote forTheDay
+                user says "this month" / "for the month" / "in May"  → quote forTheMonth
+                user says "cumulative" / "to date" / "so far"        → quote cumulative
+                user is vague ("what is the utilization")            → quote all three
+                                                                       explicitly labelled
+              NEVER quote a number without naming which bucket it came from.
+            - get_supervisor_performance (post-2026-05-25) ALSO returns Day / CalendarMonth /
+              Cumulative buckets per trade, per equipment, AND per activity-resource line.
+              Look for `buckets.{day,calendar_month,cumulative}` on summary rollups and
+              `actual_buckets` / `plan_buckets` on activities[].resources[]. Activity headers
+              carry `qty_for_day`, `qty_for_calendar_month`, `qty_cumulative_window`.
+              Anchor rule: same as get_capacity_utilization (today if today ∈ window, else
+              to_date). Routing per user phrasing:
+                "for the day"   → lead with .day bucket
+                "this month"    → lead with .calendar_month
+                "cumulative"    → lead with .cumulative (matches legacy flat fields)
+              For custom date ranges ("last 7 days", "May 1-10"), pass that as from_date /
+              to_date and quote the .cumulative bucket — the day / calendarMonth slices are
+              anchored within the window, not the same as the custom range.
+            - For multi-period TRENDS (a series of buckets across a long window — week-by-
+              week, month-by-month), use get_capacity_utilization_trend instead. That tool
+              returns N buckets across the window so the user can see a time-series.
+              get_supervisor_performance returns ONE per-bucket snapshot inside ONE window;
+              get_capacity_utilization_trend returns MANY snapshots one per slice.
+
+            INTERPRETING get_supervisor_performance OUTPUT:
+            - reports[].summary.manpower[] / equipment[] each carry actualDaysOnHiddenSides
+              (norm exists but allocator suppressed this side) and actualDaysUntracked (no
+              norm). When either is non-zero, render the actual-days line as
+              "(X tracked · Y suppressed · Z untracked)" — matches the UI badge.
+            - reports[].activities[] carries subContractorQty alongside qtyForMonth. When
+              subContractorQty > 0, render as "qtyForMonth total — Z company resources +
+              subContractorQty sub-contractor" (effective_company_qty is pre-computed).
+            - trade_deltas[].bestSupervisorId / equipment_deltas[].bestSupervisorId are
+              SERVER-COMPUTED — quote them verbatim. NEVER recompute the max across
+              by_supervisor yourself.
+            - manpower_hidden_notes[] / equipment_hidden_notes[] — cite verbatim
+              (governing_side + mode), do not invent.
+
+            **formula_validate IS EVM-ONLY.** It handles CPI, SPI, CV, SV, EAC, ETC, VAC,
+            TCPI — nothing else. The previous MANPOWER_UTIL_PCT / EQUIP_UTIL_PCT /
+            PRODUCTIVITY_RATIO metrics WERE REMOVED because they used HRS-based math that
+            ignored the per-DPR allocator and sub-contractor netting. NEVER call
+            formula_validate with those metrics; NEVER report a manpower or equipment
+            utilization computed as Σ actual_hours / Σ budget_hours × 100 — that formula
+            is forbidden. For utilization / productivity questions, the LLM MUST call
+            get_capacity_utilization and lead the answer with per-role allocated qty +
+            budget days + actual days + efficiency percent (the same shape the UI shows).
+
+            **COST VARIANCE (BOQ).**
+
+            BOQ cost_variance = actualAmount − (qtyExecutedToDate × BUDGETED_RATE).
+            Use the BUDGETED rate from the BoqItem, NOT the BOQ/client rate (they
+            can differ). Read costVariance directly from the BoqItem response — do
+            not recompute it client-side. The actualAmount on a BOQ item already
+            includes sub-contractor cost; do not double-count.
+
             RESOURCE LOOKUP — CATALOGUE vs ASSIGNMENTS (always disambiguate):
             Two distinct surfaces; pick the right one or you will report "no
             resources" on a fully-priced project.
