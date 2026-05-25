@@ -296,6 +296,9 @@ export default function DprPage() {
       : await dprApi.create(projectId, payload);
     queryClient.invalidateQueries({ queryKey: ["dpr", projectId, from, to] });
     queryClient.invalidateQueries({ queryKey: ["boq", projectId] });
+    if (editing) {
+      queryClient.invalidateQueries({ queryKey: ["dpr-detail", projectId, editing.id] });
+    }
     return saved.data ?? undefined;
   };
 
@@ -311,6 +314,7 @@ export default function DprPage() {
       await dprApi.delete(projectId, row.id);
       queryClient.invalidateQueries({ queryKey: ["dpr", projectId, from, to] });
       queryClient.invalidateQueries({ queryKey: ["boq", projectId] });
+      queryClient.removeQueries({ queryKey: ["dpr-detail", projectId, row.id] });
     } catch (err: unknown) {
       setPageError(getErrorMessage(err, "Failed to delete DPR"));
     }
