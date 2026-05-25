@@ -100,10 +100,10 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
   @Query("""
       select distinct d.reportDate from DailyProgressReport d
       where d.projectId = :projectId
-        and (:from is null or d.reportDate >= :from)
-        and (:to is null or d.reportDate <= :to)
-        and (:before is null or d.reportDate < :before)
-        and (:activity is null or lower(d.activityName) = lower(:activity))
+        and (cast(:from as date) is null or d.reportDate >= :from)
+        and (cast(:to as date) is null or d.reportDate <= :to)
+        and (cast(:before as date) is null or d.reportDate < :before)
+        and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
       order by d.reportDate desc
       """)
   List<LocalDate> findDistinctReportDatesDesc(
@@ -119,7 +119,7 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       select d from DailyProgressReport d
       where d.projectId = :projectId
         and d.reportDate in :dates
-        and (:activity is null or lower(d.activityName) = lower(:activity))
+        and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
       order by d.reportDate desc, d.id asc
       """)
   List<DailyProgressReport> findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(
