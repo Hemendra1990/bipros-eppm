@@ -400,12 +400,29 @@ bootstrap_masters() {
 grab_token() {
   stage "Authenticate as admin"
   local WORK_DIR="${BIPROS_WORK_DIR:-/tmp/khasab}"; mkdir -p "$WORK_DIR"
+
+  # Backend health goes UP as soon as Tomcat starts, but DataSeeder
+  # (@Order(100) CommandLineRunner) runs ~15s later. Poll for the admin
+  # row so we don't hit /v1/auth/login during that window.
+  info "Waiting for DataSeeder to create the admin row (up to 90s)…"
+  local t=0
+  until [ "$(docker exec bipros-postgres psql -U "$PG_USER" -d "$PG_DB" -At \
+              -c "SELECT 1 FROM public.users WHERE username='admin' LIMIT 1" 2>/dev/null)" = "1" ]; do
+    sleep 3; t=$((t+3))
+    if [ $t -ge 90 ]; then
+      err "admin row never appeared in public.users after 90s."
+      err "Check DataSeeder log:  docker logs bipros-api | grep -i DataSeeder"
+      err "Current BIPROS_PROFILES = ${BIPROS_PROFILES:-prod,init-prod} (must include dev/seed/init-prod)"
+      fatal "admin user not seeded"
+    fi
+  done
+
   local token
   token=$(curl -sS -X POST "http://localhost:${API_HOST_PORT}/v1/auth/login" \
     -H "Content-Type: application/json" \
     -d '{"username":"admin","password":"admin123"}' \
     | python3 -c 'import sys,json; r=json.load(sys.stdin); print(r["data"]["accessToken"])' 2>/dev/null) || true
-  [ -n "$token" ] || fatal "admin login failed. Did DataSeeder run? Check BIPROS_PROFILES (was: ${BIPROS_PROFILES:-prod,init-prod})"
+  [ -n "$token" ] || fatal "admin row exists but login returned 401 — password mismatch or auth filter not ready"
   echo "$token" > "$WORK_DIR/admin-token.txt"
   ok "admin token saved → $WORK_DIR/admin-token.txt"
 }
