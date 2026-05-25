@@ -72,6 +72,23 @@ def safe_num(v):
         return 0
 
 
+# Canonical unit normalisation — must match rebuild_demo.py / create_activities.py so the
+# WorkActivity default_unit, the Activity, and the DPR all end up with the SAME unit string.
+UNIT_MAP = {
+    "cu.m.": "cum", "Cu.m.": "cum", "Cum": "cum", "CUM": "cum",
+    "sq.m.": "sqm", "Sqm": "sqm", "Sq.m": "sqm",
+    "lin.m.": "m", "Lin.m.": "m",
+    "Km": "km", "kg.": "kg", "Kg": "kg",
+    "t.": "MT", "tonne": "MT",
+    "Nos": "nos", "Nr.": "nos", "Nr": "nos", "nr.": "nos", "nr": "nos",
+    "LS": "LS", "Month": "month",
+}
+
+
+def norm_unit(u):
+    return UNIT_MAP.get((u or "").strip(), (u or "nos").lower().strip())
+
+
 wb = load_workbook(XLSX, data_only=True)
 unknown_sups = defaultdict(int)
 activity_codes = defaultdict(int)
@@ -219,6 +236,23 @@ dprs = list(groups.values())
 
 with open(OUT_JSON, "w") as f:
     json.dump(dprs, f, indent=2, default=str)
+
+# Canonical unit per activity code = the most common NORMALISED unit reported across that
+# code's DPRs. Written so the seeder can make the WorkActivity default_unit, the Activity, and
+# the DPR all agree on one unit (kills the "Master Work Activity unit is X but this DPR uses Y"
+# warning). Consumed by align_activity_units.py and import_khasab_dprs.py.
+OUT_UNITS = os.environ.get("BIPROS_WORK_DIR", "/tmp/khasab") + "/activity-units.json"
+unit_counts = defaultdict(lambda: defaultdict(int))
+for d in dprs:
+    if d.get("unit"):
+        unit_counts[d["activity_code"]][norm_unit(d["unit"])] += 1
+activity_units = {
+    code: max(counts.items(), key=lambda kv: kv[1])[0]
+    for code, counts in unit_counts.items()
+}
+with open(OUT_UNITS, "w") as f:
+    json.dump(activity_units, f, indent=2)
+print(f"Wrote {OUT_UNITS} ({len(activity_units)} activity-code units)")
 
 # DPR counts per month
 by_month = defaultdict(int)

@@ -37,3 +37,9 @@ python3 "$imp/reload_dprs.py"
 
 echo "==> Linking every DPR to a BOQ item (match by code, else random)"
 python3 "$imp/link_dprs_to_boq.py"
+
+echo "==> Assigning supervisors to activities (from DPR data)"
+python3 "$imp/assign_activity_supervisors.py"
+
+echo "==> Aligning units across WorkActivity / Activity / DPR"
+python3 "$imp/align_activity_units.py"

@@ -461,6 +461,11 @@ run_import_pre_dpr() {
   log_info "  seed_resource_catalog.py (rate-book variants for every DPR resource)"
   python3 "$imp/seed_resource_catalog.py" 2>&1 | grep -E "Seeding|Seed summary|Coverage|STILL" | tee -a "$DEPLOY_LOG" >&2 || true
 
+  # Assign each activity the supervisor(s) who actually file DPRs for it, so the DPR form
+  # filters activities by supervisor (instead of "No activities assigned … showing all").
+  log_info "  assign_activity_supervisors.py (activity ↔ supervisor mapping)"
+  python3 "$imp/assign_activity_supervisors.py" 2>&1 | tail -3 | tee -a "$DEPLOY_LOG" >&2 || true
+
   # fix_role_assignments unlocks activities; re-lock so DPRs can post
   log_info "  Re-locking activities for DPR ingest"
   local TOKEN PID
@@ -519,6 +524,10 @@ run_import_post_dpr() {
   # which (re)creates the BOQ items.
   log_info "  link_dprs_to_boq.py (BOQ item on every DPR)"
   python3 "$imp/link_dprs_to_boq.py" 2>&1 | tail -6 | tee -a "$DEPLOY_LOG" >&2 || true
+  # Make WorkActivity.default_unit, the Activity, and the DPR all carry one canonical unit
+  # per activity code (kills the "Master Work Activity unit is X but this DPR uses Y" warning).
+  log_info "  align_activity_units.py (consistent unit across WorkActivity/Activity/DPR)"
+  python3 "$imp/align_activity_units.py" 2>&1 | tail -3 | tee -a "$DEPLOY_LOG" >&2 || true
   log_info "  create_norms_only.py (idempotent)"
   python3 "$imp/create_norms_only.py" 2>&1 | tail -5 | tee -a "$DEPLOY_LOG" >&2 || true
   log_info "  tune_productivity_norms.sql"

@@ -21,6 +21,29 @@ PROJECT_ID = open(os.environ.get("BIPROS_WORK_DIR", "/tmp/khasab") + "/project-i
 USER_IDS = json.load(open(os.environ.get("BIPROS_WORK_DIR", "/tmp/khasab") + "/user-ids.json"))
 ACTIVITY_IDS = json.load(open(os.environ.get("BIPROS_WORK_DIR", "/tmp/khasab") + "/activity-ids.json"))
 DPRS = json.load(open(os.environ.get("BIPROS_WORK_DIR", "/tmp/khasab") + "/khasab-dpr-parsed.json"))
+# Canonical unit per activity code (written by parse_khasab.py) so the DPR's unit matches the
+# Activity's WorkActivity default_unit. Optional — fall back to normalising the row's own unit.
+try:
+    ACTIVITY_UNITS = json.load(open(os.environ.get("BIPROS_WORK_DIR", "/tmp/khasab") + "/activity-units.json"))
+except (OSError, ValueError):
+    ACTIVITY_UNITS = {}
+
+_UNIT_MAP = {
+    "cu.m.": "cum", "Cu.m.": "cum", "Cum": "cum", "CUM": "cum",
+    "sq.m.": "sqm", "Sqm": "sqm", "Sq.m": "sqm",
+    "lin.m.": "m", "Lin.m.": "m", "Km": "km", "kg.": "kg", "Kg": "kg",
+    "t.": "MT", "tonne": "MT", "Nos": "nos", "Nr.": "nos", "Nr": "nos",
+    "nr.": "nos", "nr": "nos", "LS": "LS", "Month": "month",
+}
+
+
+def canonical_unit(d):
+    """Unit for a DPR: the activity code's canonical unit, else the normalised row unit."""
+    code = d.get("activity_code")
+    if code in ACTIVITY_UNITS:
+        return ACTIVITY_UNITS[code]
+    raw = d.get("unit") or ""
+    return _UNIT_MAP.get(raw.strip(), (raw or "nos").lower().strip())
 
 # Per-activity pool of REAL (source>0) daily quantities, as whole numbers. Idle/no-output
 # source days (~74% — source qty 0) draw a realistic whole-number quantity from their own
@@ -205,7 +228,7 @@ def resolve_dpr(d):
         "supervisorUserId": sup_id,
         "supervisorName": SUP_DISPLAY.get(d["supervisor_username"], d["supervisor_username"]),
         "qtyExecuted": qty,
-        "unit": d.get("unit") or "nos",
+        "unit": canonical_unit(d),
         "manpower": [],
         "equipment": [],
         "materials": [],

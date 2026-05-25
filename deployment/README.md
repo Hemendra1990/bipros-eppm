@@ -274,10 +274,12 @@ issues to address before flipping back to `validate` — see
 | Build | `rebuild_demo.py` | Creates EPS node (if absent) → project → 16 users → project team → 23 WBS nodes → 33 activities (with REAL names) |
 | Plan | `fix_role_assignments.py` | 229 role-assignments (manpower role rates + equipment variants + material variants); creates missing variants on-the-fly |
 | Catalog | `seed_resource_catalog.py` | Ensures **every** DPR manpower/equipment name has an active rate-book variant (creates the role and/or variant if missing). Idempotent. Without this, resources whose role isn't planned on an activity import as free-text and show blank in the DPR resource dropdown. |
+| Supervisors | `assign_activity_supervisors.py` | Assigns each activity the supervisor(s) who actually file DPRs for it (`activity.activity_supervisors`). Without it the DPR form shows "No activities assigned to this supervisor — showing all". Idempotent. |
 | Lock | inline | Re-locks the 33 activities so DPR submission accepts them |
 | Ingest | `import_khasab_dprs.py` | Imports 3,431 DPRs **parallelised by date** (default 12 workers — see note below), resolving each manpower/equipment row to a role+variant (activity-planned first, then the global rate book) so it pre-selects in the DPR dropdown. Workdone Quantity is always a **whole number**: the rounded source qty on working days, or — for the ~74% idle/no-output source days — a realistic whole number sampled from that activity's real daily quantities (stable per DPR). |
 | Polish | `fix_demo_v2.py` | Sets BOQ items, EVM, MCLs, productivity norms, DBS recompute |
 | Polish | `link_dprs_to_boq.py` | Sets a BOQ item on **every** DPR — matching `boq.item_no == activity.code`, else a stable pseudo-random existing BOQ item. Race-free SQL (the import can't set `boqItemNo` itself — see note). Runs after `fix_demo_v2.py`. |
+| Polish | `align_activity_units.py` | Sets one canonical unit per activity code (from `activity-units.json`, written by `parse_khasab.py`) on both `resource.work_activities.default_unit` and `project.daily_progress_reports.unit`, so the WorkActivity, Activity, and DPR all agree — removing the "Master Work Activity unit is X but this DPR uses Y" warning. Race-free SQL, idempotent. |
 | Polish | `create_norms_only.py` | Per-activity productivity norms (66 total) |
 | Polish | `tune_productivity_norms.sql` | Calibrates norms per family for realistic Capacity Util % |
 | Polish | `populate_dashboard.py` | Links calendar, 60 weather rows, 6 milestones, 6 DPR issues |

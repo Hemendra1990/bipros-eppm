@@ -33,3 +33,9 @@ python3 imports/reload_dprs.py
 
 Write-Host "==> Linking every DPR to a BOQ item (match by code, else random)"
 python3 imports/link_dprs_to_boq.py
+
+Write-Host "==> Assigning supervisors to activities (from DPR data)"
+python3 imports/assign_activity_supervisors.py
+
+Write-Host "==> Aligning units across WorkActivity / Activity / DPR"
+python3 imports/align_activity_units.py

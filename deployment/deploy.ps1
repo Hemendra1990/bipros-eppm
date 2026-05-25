@@ -285,6 +285,9 @@ function RunImportPreDpr {
   # role+variant and pre-select in the DPR dropdown (idempotent).
   Write-Info '  seed_resource_catalog.py';   & python "$imp\seed_resource_catalog.py"   2>&1 | Select-String -Pattern 'Seeding|Seed summary|Coverage|STILL'
 
+  # Assign each activity the supervisor(s) who file DPRs for it (DPR form filters by supervisor).
+  Write-Info '  assign_activity_supervisors.py'; & python "$imp\assign_activity_supervisors.py" 2>&1 | Select-Object -Last 3
+
   Write-Info '  Re-locking activities for DPR ingest'
   $token = Get-Content -Raw (Join-Path $WorkDir 'admin-token.txt')
   $pid_   = Get-Content -Raw (Join-Path $WorkDir 'project-id.txt')
@@ -317,6 +320,8 @@ function RunImportPostDpr {
   if ($SkipImport) { Write-Info 'Skipped (-SkipImport)'; return }
   $imp = Join-Path $ScriptDir 'imports'
   Write-Info '  fix_demo_v2.py';           & python "$imp\fix_demo_v2.py" 2>&1 | Select-Object -Last 10
+  Write-Info '  link_dprs_to_boq.py';      & python "$imp\link_dprs_to_boq.py" 2>&1 | Select-Object -Last 6
+  Write-Info '  align_activity_units.py';  & python "$imp\align_activity_units.py" 2>&1 | Select-Object -Last 3
   Write-Info '  create_norms_only.py';     & python "$imp\create_norms_only.py" 2>&1 | Select-Object -Last 5
   Write-Info '  tune_productivity_norms.sql'; Get-Content "$imp\tune_productivity_norms.sql" | & docker exec -i bipros-postgres psql -U $PgUser -d $PgDb 2>&1 | Select-Object -Last 5
   Write-Info '  populate_dashboard.py';    & python "$imp\populate_dashboard.py" 2>&1 | Select-Object -Last 10
