@@ -221,6 +221,14 @@ force_wipe() {
   log_warn "Destroying existing containers + volumes…"
   docker compose down -v --remove-orphans 2>&1 | tee -a "$DEPLOY_LOG" >&2 || true
   log_ok "Tear-down complete"
+
+  # After a wipe the DB is empty again — DataSeeder must fire to recreate the
+  # admin user. Override BIPROS_PROFILES for this run if the caller (or .env)
+  # has trimmed it down to a profile that doesn't activate DataSeeder.
+  if [[ ! ",${BIPROS_PROFILES:-prod,init-prod}," =~ ,(dev|seed|init-prod), ]]; then
+    log_warn "BIPROS_PROFILES=${BIPROS_PROFILES} would skip DataSeeder on empty DB — appending init-prod for this run"
+    export BIPROS_PROFILES="${BIPROS_PROFILES},init-prod"
+  fi
 }
 
 # ─── Step 4: Build backend image ────────────────────────────────────────────
