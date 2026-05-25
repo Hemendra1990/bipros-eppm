@@ -167,20 +167,35 @@ preflight_docker() {
 # ─── Step 2: Port + disk preflight ──────────────────────────────────────────
 preflight_ports() {
   stage "Checking host ports + disk space"
-  local in_use=()
+  local conflicts=()
   for p in "${REQUIRED_PORTS[@]}"; do
     if (lsof -nP -iTCP:"$p" -sTCP:LISTEN 2>/dev/null | grep -q LISTEN) \
        || (ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${p}$"); then
-      # Allow ports occupied by our own containers
-      if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${p}->"; then
-        in_use+=("$p")
+      # Identify the owner (container name if a container holds it; PID otherwise).
+      local owner
+      owner=$(docker ps --filter "publish=$p" --format '{{.Names}}' 2>/dev/null | head -1)
+      if [ -z "$owner" ]; then
+        owner=$(lsof -nP -iTCP:"$p" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1}')
+        owner="${owner:-(unknown)}"
+      fi
+      # Allow ports owned by our own bipros-* containers (idempotent re-runs)
+      if [[ "$owner" != bipros-* ]]; then
+        conflicts+=("$p → $owner")
       fi
     fi
   done
-  if [ ${#in_use[@]} -gt 0 ]; then
-    log_warn "Ports in use by non-bipros processes: ${in_use[*]}"
-    log_warn "Edit configs/.env to override (e.g. API_HOST_PORT=8081) or stop the conflicting processes"
-    fatal "Port conflict — see warning above"
+  if [ ${#conflicts[@]} -gt 0 ]; then
+    log_err "Ports already in use by other processes:"
+    for c in "${conflicts[@]}"; do log_err "  $c"; done
+    log_err ""
+    log_err "Fix — pick one of:"
+    log_err "  (a) Stop the conflicting container/process, then re-run."
+    log_err "      e.g.  docker stop <name>"
+    log_err "  (b) Remap our port via $SCRIPT_DIR/configs/.env, then re-run. Example:"
+    log_err "      echo 'REDIS_HOST_PORT=6380' >> $SCRIPT_DIR/configs/.env"
+    log_err "      echo 'API_HOST_PORT=8081'   >> $SCRIPT_DIR/configs/.env"
+    log_err "      (every host port is overridable — see configs/.env.example)"
+    fatal "Port conflict"
   fi
   log_ok "All required ports free or owned by bipros containers"
 

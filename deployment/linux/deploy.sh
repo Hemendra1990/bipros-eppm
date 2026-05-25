@@ -175,17 +175,35 @@ preflight_docker() {
 # ─── Stage 2: Ports + disk + python ─────────────────────────────────────────
 preflight_env() {
   stage "Host preflight (ports + disk + python)"
-  local in_use=()
+  local conflicts=()
   for p in "${REQUIRED_PORTS[@]}"; do
     if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${p}\$"; then
-      if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${p}->"; then
-        in_use+=("$p")
+      # Identify what holds the port. Prefer container name (clearer than "some docker process").
+      local owner
+      owner=$(docker ps --filter "publish=$p" --format '{{.Names}}' 2>/dev/null | head -1)
+      if [ -z "$owner" ]; then
+        # Not a docker container — must be a host process
+        owner=$(ss -ltnp 2>/dev/null | awk -v port=":${p}" '$4 ~ port {print $6}' | head -1)
+        owner="${owner:-(unknown host process)}"
+      fi
+      if [[ "$owner" != bipros-* ]]; then
+        conflicts+=("$p → $owner")
       fi
     fi
   done
-  if [ ${#in_use[@]} -gt 0 ]; then
-    warn "Ports already listening (non-bipros): ${in_use[*]}"
-    warn "Edit configs/.env to remap (e.g. API_HOST_PORT=8081) or stop the conflicting processes."
+  if [ ${#conflicts[@]} -gt 0 ]; then
+    err "Ports already in use by other processes:"
+    for c in "${conflicts[@]}"; do err "  $c"; done
+    err ""
+    err "Fix — pick one of:"
+    err "  (a) Stop the conflicting container/process, then re-run."
+    err "      e.g. for a container:  docker stop <name>"
+    err "  (b) Remap our port in $DEPLOY_ROOT/configs/.env, then re-run. Example:"
+    err "      echo 'REDIS_HOST_PORT=6380' >> $DEPLOY_ROOT/configs/.env"
+    err "      echo 'API_HOST_PORT=8081'   >> $DEPLOY_ROOT/configs/.env"
+    err "      (variables: API_HOST_PORT PG_HOST_PORT REDIS_HOST_PORT"
+    err "       CLICKHOUSE_HTTP_PORT MINIO_API_PORT MINIO_CONSOLE_PORT"
+    err "       PGADMIN_PORT — see configs/.env.example)"
     fatal "Port conflict"
   fi
   ok "ports:         all required free"
