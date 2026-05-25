@@ -394,6 +394,16 @@ bootstrap_masters() {
   n=$(docker exec bipros-postgres psql -U "$PG_USER" -d "$PG_DB" -At \
         -c "SELECT COUNT(*) FROM resource.equipment_role_variants")
   ok "catalogue loaded: $n equipment role variants"
+
+  # Post-deploy schema patches (tsv column for HDS search, ui.* defaults).
+  # Idempotent. Without this, AI/HDS search throws "column tsv does not exist"
+  # on every query.
+  if [ -f "$DEPLOY_ROOT/data/sql/02-post-deploy-patches.sql" ]; then
+    info "Applying post-deploy schema patches…"
+    docker exec -i bipros-postgres psql -U "$PG_USER" -d "$PG_DB" \
+      < "$DEPLOY_ROOT/data/sql/02-post-deploy-patches.sql" >>"$DEPLOY_LOG" 2>&1
+    ok "post-deploy patches applied"
+  fi
 }
 
 # ─── Stage 10: Admin token ──────────────────────────────────────────────────

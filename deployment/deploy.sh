@@ -320,6 +320,16 @@ bootstrap_masters() {
   n=$(docker exec bipros-postgres psql -U "${POSTGRES_USER:-bipros}" -d "${POSTGRES_DB:-bipros}" -At \
         -c "SELECT COUNT(*) FROM resource.equipment_role_variants")
   log_ok "Catalogue loaded: $n equipment role variants, $(docker exec bipros-postgres psql -U "${POSTGRES_USER:-bipros}" -d "${POSTGRES_DB:-bipros}" -At -c "SELECT COUNT(*) FROM resource.resource_roles") resource roles"
+
+  # Apply post-deploy schema patches the backend assumes (tsv column for HDS
+  # search, default UI theme rows). Idempotent — guarded with IF NOT EXISTS /
+  # ON CONFLICT DO NOTHING.
+  if [ -f "$SCRIPT_DIR/data/sql/02-post-deploy-patches.sql" ]; then
+    log_info "Applying post-deploy schema patches…"
+    docker exec -i bipros-postgres psql -U "${POSTGRES_USER:-bipros}" -d "${POSTGRES_DB:-bipros}" \
+      < "$SCRIPT_DIR/data/sql/02-post-deploy-patches.sql" >> "$DEPLOY_LOG" 2>&1
+    log_ok "post-deploy patches applied (hds.hds_chunk.tsv + ui.* defaults)"
+  fi
 }
 
 # ─── Step 9: Verify admin + grab token ──────────────────────────────────────
