@@ -219,13 +219,24 @@ preflight_env() {
   fi
 
   python3 --version >/dev/null 2>&1 || fatal "python3 missing. Run ./bootstrap.sh first."
-  if ! python3 -c 'import openpyxl' 2>/dev/null; then
-    warn "openpyxl missing — installing (may take 30s)…"
-    python3 -m pip install --user --break-system-packages openpyxl 2>>"$DEPLOY_LOG" \
-      || python3 -m pip install --user openpyxl 2>>"$DEPLOY_LOG" \
-      || fatal "Could not install openpyxl. Run ./bootstrap.sh first."
+  local _missing=()
+  python3 -c 'import openpyxl'               2>/dev/null || _missing+=(openpyxl)
+  python3 -c 'import dateutil.relativedelta' 2>/dev/null || _missing+=(python-dateutil)
+  if [ ${#_missing[@]} -gt 0 ]; then
+    warn "python deps missing: ${_missing[*]} — installing…"
+    local _apt=()
+    for m in "${_missing[@]}"; do
+      case "$m" in
+        openpyxl)        _apt+=(python3-openpyxl) ;;
+        python-dateutil) _apt+=(python3-dateutil) ;;
+      esac
+    done
+    sudo apt-get install -y -qq "${_apt[@]}" 2>>"$DEPLOY_LOG" \
+      || python3 -m pip install --user --break-system-packages "${_missing[@]}" 2>>"$DEPLOY_LOG" \
+      || python3 -m pip install --user "${_missing[@]}" 2>>"$DEPLOY_LOG" \
+      || fatal "Could not install python deps. Try: sudo apt-get install -y ${_apt[*]}"
   fi
-  ok "python:        $(python3 --version) + openpyxl"
+  ok "python:        $(python3 --version) + openpyxl + dateutil"
 }
 
 # ─── Stage 3: Force tear-down ───────────────────────────────────────────────

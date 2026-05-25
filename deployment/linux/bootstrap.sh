@@ -115,20 +115,23 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
   DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq python3-pip
 fi
 
-if python3 -c 'import openpyxl' 2>/dev/null; then
-  ok "openpyxl already installed"
-else
-  info "Installing openpyxl via apt (preferred) then pip (fallback)…"
-  # On Ubuntu 22.04+: python3-openpyxl is in apt (avoids PEP 668 errors)
-  if DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq python3-openpyxl 2>/dev/null; then
-    ok "openpyxl installed via apt"
+for mod_spec in "openpyxl:python3-openpyxl" "dateutil:python3-dateutil"; do
+  pymod="${mod_spec%%:*}"
+  aptpkg="${mod_spec##*:}"
+  if python3 -c "import $pymod" 2>/dev/null; then
+    ok "$pymod already installed"
   else
-    # Fallback: pip install --break-system-packages (Ubuntu 22.04+ PEP 668)
-    python3 -m pip install --user --break-system-packages openpyxl 2>/dev/null \
-      || python3 -m pip install --user openpyxl
-    ok "openpyxl installed via pip"
+    info "Installing $aptpkg via apt (preferred) then pip (fallback)…"
+    if DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq "$aptpkg" 2>/dev/null; then
+      ok "$aptpkg installed via apt"
+    else
+      # Fallback: pip install --break-system-packages (Ubuntu 22.04+ PEP 668)
+      python3 -m pip install --user --break-system-packages "$pymod" 2>/dev/null \
+        || python3 -m pip install --user "$pymod"
+      ok "$pymod installed via pip"
+    fi
   fi
-fi
+done
 
 # ─── Misc tools ─────────────────────────────────────────────────────────────
 for pkg in curl jq lsof tmux git; do

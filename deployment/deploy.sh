@@ -368,21 +368,31 @@ run_import_pre_dpr() {
   export BIPROS_EXCEL_DIR="$SCRIPT_DIR/data/khasab-excel"
   export BIPROS_PSQL="${SCRIPT_DIR}/scripts/psql-wrapper.sh"
 
-  # Quick sanity: python + openpyxl available. Handle Ubuntu 24.04+ PEP 668
+  # Quick sanity: required python modules. Handle Ubuntu 24.04+ PEP 668
   # ("externally-managed-environment") which blocks plain `pip install --user`.
-  if ! python3 -c 'import openpyxl' 2>/dev/null; then
-    log_warn "python openpyxl missing — installing…"
+  local _missing=()
+  python3 -c 'import openpyxl'             2>/dev/null || _missing+=(openpyxl)
+  python3 -c 'import dateutil.relativedelta' 2>/dev/null || _missing+=(python-dateutil)
+  if [ ${#_missing[@]} -gt 0 ]; then
+    log_warn "python deps missing: ${_missing[*]} — installing…"
+    # Map pip names → apt package names
+    local _apt=()
+    for m in "${_missing[@]}"; do
+      case "$m" in
+        openpyxl)         _apt+=(python3-openpyxl) ;;
+        python-dateutil)  _apt+=(python3-dateutil) ;;
+      esac
+    done
     if command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-      # Cleanest: apt package (Debian/Ubuntu) — bypasses PEP 668 entirely
-      sudo apt-get install -y -qq python3-openpyxl 2>/dev/null \
-        || python3 -m pip install --user --break-system-packages --quiet openpyxl 2>/dev/null \
-        || python3 -m pip install --user --quiet openpyxl
+      sudo apt-get install -y -qq "${_apt[@]}" 2>/dev/null \
+        || python3 -m pip install --user --break-system-packages --quiet "${_missing[@]}" 2>/dev/null \
+        || python3 -m pip install --user --quiet "${_missing[@]}"
     else
-      python3 -m pip install --user --break-system-packages --quiet openpyxl 2>/dev/null \
-        || python3 -m pip install --user --quiet openpyxl
+      python3 -m pip install --user --break-system-packages --quiet "${_missing[@]}" 2>/dev/null \
+        || python3 -m pip install --user --quiet "${_missing[@]}"
     fi
-    python3 -c 'import openpyxl' 2>/dev/null \
-      || fatal "Could not install openpyxl. Try: sudo apt-get install -y python3-openpyxl"
+    python3 -c 'import openpyxl, dateutil.relativedelta' 2>/dev/null \
+      || fatal "Could not install python deps. Try: sudo apt-get install -y ${_apt[*]}"
   fi
 
   local imp="$SCRIPT_DIR/imports"
