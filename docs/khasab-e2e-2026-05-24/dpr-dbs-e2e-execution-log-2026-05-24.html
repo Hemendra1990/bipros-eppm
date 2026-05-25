@@ -175,7 +175,22 @@ img.screenshot { max-width: 100%; border: 1px solid #e5e5e5; border-radius: 8px;
       <div class='finding-meta'>Status: <span class='status-badge status-open'>OPEN</span></div>
       <div>Source data has 0 subcontractor rows and 0 material rows. Existing rate masters cover most equipment/manpower; some gaps (Chargehand, bankman, Wheel Loader, Tipper) but not blocking.</div>
     </div>
-    
+
+    <div class='finding'>
+      <div class='finding-title'>Finding 23 — DPR list groups by denormalized activity_name; raw-SQL renames drift the snapshot</div>
+      <div class='finding-meta'>Status: <span class='status-badge status-pass'>FIXED</span></div>
+      <div>
+        <strong>Symptom:</strong> DPR page kept showing &quot;Khasab 1&quot;, &quot;Khasab 1.1&quot; as group headers even after the Activities tab showed the real names (&quot;Camp work&quot;, &quot;Diversion of existing roads...&quot;).
+        <br/><strong>Root cause:</strong> <code>project.daily_progress_reports.activity_name</code> is a denormalized snapshot captured at DPR insert time. <code>rename_activities_add_risks_weather.py</code> did a raw SQL <code>UPDATE activity.activities SET name=...</code> and the snapshot was never refreshed (the frontend groups by this column, not by the activity FK).
+        <br/><strong>Fix:</strong>
+        <ul>
+          <li>One-shot data repair: <code>psql -f scripts/fix_dpr_activity_name_drift.sql</code> — updated 3,431 rows; idempotent.</li>
+          <li>Backend: new <code>ActivityRenameDprSyncListener</code> in <code>bipros-project</code> subscribes to <code>ActivityUpdatedEvent</code> (AFTER_COMMIT) and calls <code>DailyProgressReportRepository.renameActivity()</code> — future API renames stay in sync automatically.</li>
+          <li>Script: <code>rename_activities_add_risks_weather.py</code> now also <code>UPDATE</code>s the DPR snapshot inline so raw-SQL renames keep DPRs consistent.</li>
+        </ul>
+      </div>
+    </div>
+
 
 <h2>AI Validation (50 questions)</h2>
 <div style='display: flex; gap: 12px; margin-bottom: 16px;'>

@@ -503,6 +503,7 @@ PGPASSWORD=bipros_dev $PG/pg_restore -h 127.0.0.1 -U bipros -d bipros_test \
 | "Equipment governs this activity" yellow notes everywhere | SERIES norm combination (informational, not an error) | Leave SERIES; the notes are explanations. PARALLEL gave worse numbers. |
 | `pg_restore: violates check constraint` | Restoring into incompatible schema | Use a fresh `bipros` DB or `--clean --if-exists` |
 | Activities visible but DPRs rejected with `ACTIVITY_DRAFT_DPR_REJECTED` | Activities are in DRAFT, not LOCKED | `POST /v1/projects/{pid}/activities/{aid}/lock` for each |
+| DPR list groups show old names ("Khasab 1", "Khasab 1.1") even though Activities tab shows the real names | `daily_progress_reports.activity_name` is a denormalized snapshot. It drifts whenever an activity is renamed by a path that bypasses `ActivityRenameDprSyncListener` — raw SQL on `activity.activities`, a Liquibase migration, or an older `rename_activities_add_risks_weather.py`. | `psql -f scripts/fix_dpr_activity_name_drift.sql` — idempotent, safe to run any time. API renames (PUT /v1/projects/{pid}/activities/{aid}) auto-sync via the listener, no fix-up needed. |
 
 ---
 
@@ -552,7 +553,17 @@ UI verification:
 - Click activity → drawer shows populated **Manpower Requirements** + **Equipment Requirements**
 - `/projects/<id>/capacity-utilization` → set date to 2026-01-24 → 2026-03-29, Total Eff ≈ 88.6%
 - `/projects/<id>/risks` → 8 entries
-- `/projects/<id>/dpr` → 3,431 records
+- `/projects/<id>/dpr` → 3,431 records, grouped by real activity names (e.g. "Mechanical Excavation", "Blasting"), NOT placeholder codes
+
+Also verify no denormalized-name drift:
+```sql
+SELECT COUNT(*) AS stale_dpr_name_rows
+FROM project.daily_progress_reports d
+JOIN activity.activities a ON a.id = d.activity_id
+WHERE d.activity_name IS DISTINCT FROM a.name;
+-- expected: 0
+```
+If non-zero, run `scripts/fix_dpr_activity_name_drift.sql`.
 
 ---
 

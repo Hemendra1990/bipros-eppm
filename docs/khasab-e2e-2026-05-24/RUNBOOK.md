@@ -364,6 +364,7 @@ Numbered to match the markdown log:
 | 20 | `activity.duration_type` valid values: `FIXED_DURATION_AND_UNITS`, `FIXED_DURATION_AND_UNITS_PER_TIME`, `FIXED_UNITS`, `FIXED_UNITS_PER_TIME` — NOT `FIXED_DURATION` | Use `FIXED_DURATION_AND_UNITS` |
 | 21 | AI chat response field is `data.text`, not `data.responseText` | `ai_grade.py` updated |
 | 22 | `POST /v1/projects/{pid}/dpr` requires `activityName` + `supervisorName` text fields | Scripts include them |
+| 23 | DPR list groups by `daily_progress_reports.activity_name` (denormalized snapshot). Renaming an activity via raw SQL drifts the snapshot and the UI keeps showing the old label. | Backend now publishes `ActivityUpdatedEvent` → `ActivityRenameDprSyncListener` keeps the snapshot in sync for API renames (PUT /v1/projects/{pid}/activities/{aid}). For SQL renames or one-shot repair, run `scripts/fix_dpr_activity_name_drift.sql`. The current copy of `rename_activities_add_risks_weather.py` updates the snapshot inline. |
 
 ---
 
@@ -378,6 +379,7 @@ Numbered to match the markdown log:
 | Admin can't login after wipe | `user_roles` was truncated, profile_permissions cascade-deleted | Runbook step 2.2 restores them; verify with `SELECT * FROM public.user_roles WHERE user_id = (SELECT id FROM public.users WHERE username='admin');` |
 | DPR import is very slow (<0.5 DPR/s) | Sequential 1-by-1 POSTs through validation | Acceptable; ~80 min for 3,431 — run in background |
 | `psql` not found | Postgres.app not on PATH | `export PATH=/Applications/Postgres.app/Contents/Versions/latest/bin:$PATH` |
+| DPR list shows old "Khasab X.Y" group headers after rename | Denormalized `daily_progress_reports.activity_name` drift (see gotcha #23) | `psql -f scripts/fix_dpr_activity_name_drift.sql` |
 
 ---
 

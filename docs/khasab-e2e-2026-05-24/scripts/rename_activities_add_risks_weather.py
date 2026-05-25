@@ -101,6 +101,10 @@ for act_id, act_code, old_name, wa_id in acts:
     new_name = real["name"][:100].replace("'", "''")
     sql(f"UPDATE activity.activities SET name='{new_name}', updated_at=now() WHERE id='{act_id}'")
     updated_activities += 1
+    # Denormalized snapshot — daily_progress_reports holds activity_name at write time and is
+    # what the DPR list view groups by. A raw SQL rename bypasses ActivityRenameDprSyncListener
+    # (which only fires for API renames), so update the snapshot here too.
+    sql(f"UPDATE project.daily_progress_reports SET activity_name='{new_name}', updated_at=now() WHERE activity_id='{act_id}'")
     if wa_id and wa_id != "":
         sql(f"UPDATE resource.work_activities SET name='{new_name}', updated_at=now() WHERE id='{wa_id}'")
         updated_work_activities += 1

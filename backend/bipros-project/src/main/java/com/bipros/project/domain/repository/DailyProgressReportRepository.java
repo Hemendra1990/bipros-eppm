@@ -88,4 +88,14 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
 
   /** Actual DPR count for the (project, date) — drives the PM-tab "DPRs" KPI honestly. */
   long countByProjectIdAndReportDate(UUID projectId, LocalDate reportDate);
+
+  /**
+   * Refresh the denormalized {@code activityName} snapshot on every DPR for {@code activityId}.
+   * Called from the {@code ActivityUpdatedEvent} listener so renames in the Activities tab
+   * propagate to the DPR list group headers, which group on this column.
+   */
+  @Modifying
+  @Query("UPDATE DailyProgressReport d SET d.activityName = :newName "
+      + "WHERE d.activityId = :activityId")
+  int renameActivity(@Param("activityId") UUID activityId, @Param("newName") String newName);
 }

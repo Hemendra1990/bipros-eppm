@@ -71,6 +71,14 @@ New findings start at Finding 10.
 
 - **Finding 17**: skipped augmentation; used existing 16/57/33 manpower/equipment/material rate masters. Real data has gaps (Chargehand, bankman, Wheel Loader, Tipper, Powerscreen, etc.) but not blocking.
 
+## Post-REDO follow-up (2026-05-25)
+
+- **Finding 23** (FIXED): DPR list groups by denormalized `daily_progress_reports.activity_name` snapshot. `rename_activities_add_risks_weather.py` originally updated only `activity.activities.name`, so the DPR view kept the "Khasab X.Y" labels.
+  - Data repair: `psql -f scripts/fix_dpr_activity_name_drift.sql` (UPDATE 3431).
+  - Backend: added `ActivityRenameDprSyncListener` in `bipros-project/application/listener/` — subscribes to `ActivityUpdatedEvent` (AFTER_COMMIT) and refreshes the snapshot. Smoke-tested with PUT-rename → 253 DPRs synced instantly → PUT-revert → 253 DPRs reverted.
+  - Repo: `DailyProgressReportRepository.renameActivity(activityId, newName)` modifier added.
+  - Script: `rename_activities_add_risks_weather.py:102` now also `UPDATE`s `daily_progress_reports.activity_name`.
+
 ## Phase 7 — Subcontractors (N/A)
 
 - Source data has 0 subcontractor rows → phase no-op for Khasab

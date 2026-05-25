@@ -47,6 +47,7 @@ All artifacts from the fresh-environment + Khasab real-data import.
 | [`fix_demo_v2.py`](scripts/fix_demo_v2.py) | **REDO** — DPR rates SQL update + EVM + BOQ from master + MCLs + norms + DBS recompute |
 | [`tune_productivity_norms.sql`](scripts/tune_productivity_norms.sql) | **REDO** — calibrate norms per activity family so Capacity Util % lands at demo-realistic 60-200% range |
 | [`check_capacity.py`](scripts/check_capacity.py) | Helper — print Capacity Util API output as formatted tables (for verification) |
+| [`fix_dpr_activity_name_drift.sql`](scripts/fix_dpr_activity_name_drift.sql) | **POST-REDO** — one-shot repair for stale `daily_progress_reports.activity_name` snapshot after a SQL rename. Idempotent. Paired with new backend listener `ActivityRenameDprSyncListener` that prevents future drift on API renames. |
 
 ## Runtime state (`state/`)
 
