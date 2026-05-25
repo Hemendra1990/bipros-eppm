@@ -148,8 +148,14 @@ def import_month(month_prefix):
     t0 = time.time()
     counts = {"ok": 0, "fail": 0, "dup": 0, "skip_unresolved": 0}
     errors = []
-    # Sequential is safe (no in-memory ordering concerns). Parallelize cautiously.
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    # Sequential is safe (no in-memory ordering concerns). Parallelize cautiously:
+    # the DBS aggregation listener (RegisterAggregationService) does upserts
+    # against (project, date, supervisor) — concurrent DPRs on the same day
+    # race into duplicate-key + deadlocks + Hikari pool exhaustion.
+    # Default 2 = a little HTTP parallelism without DB contention.
+    # Override with BIPROS_DPR_IMPORT_WORKERS=N for tuning.
+    _workers = int(os.environ.get("BIPROS_DPR_IMPORT_WORKERS", "2"))
+    with ThreadPoolExecutor(max_workers=_workers) as ex:
         futures = {ex.submit(post_one, d): d for d in subset}
         for i, fut in enumerate(as_completed(futures), 1):
             result, ts, info = fut.result()
