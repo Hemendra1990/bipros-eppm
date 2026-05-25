@@ -13,7 +13,9 @@ import com.bipros.project.application.dto.DprEquipmentRow;
 import com.bipros.project.application.dto.DprIssueRow;
 import com.bipros.project.application.dto.DprManpowerRow;
 import com.bipros.project.application.dto.DprMaterialRow;
+import com.bipros.project.application.dto.DprPage;
 import com.bipros.project.application.dto.DprSubContractorRow;
+import com.bipros.project.application.dto.DprSummaryResponse;
 import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
 import com.bipros.project.application.util.DprCostFormulas;
 import com.bipros.project.domain.model.DailyProgressReport;
@@ -23,6 +25,7 @@ import com.bipros.project.domain.model.DprIssue;
 import com.bipros.project.domain.model.DprManpower;
 import com.bipros.project.domain.model.DprMaterial;
 import com.bipros.project.domain.model.DprSubContractor;
+import com.bipros.project.domain.model.IssueSeverity;
 import com.bipros.project.domain.model.IssueStatus;
 import com.bipros.project.domain.repository.BoqItemRepository;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
@@ -39,6 +42,7 @@ import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -362,6 +366,89 @@ public class DailyProgressReportService {
       rows = dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId);
     }
     return attachComputedCumulativeAndChildren(rows);
+  }
+
+  /**
+   * Day-cursored, slim DPR list for the DPR tab. Returns the most-recent {@code days} distinct
+   * report dates within the optional [from,to] window and strictly older than {@code before},
+   * with all rows for those days. Child detail is NOT hydrated — only cheap aggregates — so the
+   * collapsed list is light; full detail comes from {@link #get(UUID, UUID)} on expand.
+   */
+  @Transactional(readOnly = true)
+  public DprPage listPaged(UUID projectId, LocalDate from, LocalDate to, String activityName,
+                           LocalDate before, int days) {
+    ensureProjectExists(projectId);
+    int batch = days <= 0 ? 14 : days;
+    String activity = (activityName != null && !activityName.isBlank()) ? activityName : null;
+
+    List<LocalDate> dates = dprRepository.findDistinctReportDatesDesc(
+        projectId, from, to, before, activity, PageRequest.of(0, batch + 1));
+    boolean hasMore = dates.size() > batch;
+    if (hasMore) {
+      dates = dates.subList(0, batch);
+    }
+    if (dates.isEmpty()) {
+      return new DprPage(List.of(), null, false);
+    }
+    LocalDate nextCursor = dates.get(dates.size() - 1); // oldest date in this batch
+
+    List<DailyProgressReport> rows =
+        dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(projectId, dates, activity);
+    List<DprSummaryResponse> items = toSummaryRows(rows);
+    return new DprPage(items, hasMore ? nextCursor : null, hasMore);
+  }
+
+  /** Build slim rows for the given DPRs using cheap GROUP BY aggregate queries (no child hydration). */
+  private List<DprSummaryResponse> toSummaryRows(List<DailyProgressReport> rows) {
+    if (rows.isEmpty()) return List.of();
+    List<UUID> ids = rows.stream().map(DailyProgressReport::getId).toList();
+
+    Map<UUID, Long> manpowerNos = toLongMap(manpowerRepository.sumNosByDprIdIn(ids));
+    Map<UUID, Long> equipmentNos = toLongMap(equipmentRepository.sumNosByDprIdIn(ids));
+    Map<UUID, Long> materialCount = toLongMap(materialRepository.countByDprIdIn(ids));
+    Map<UUID, Long> photoCount = toLongMap(attachmentRepository.countByDprIdIn(ids));
+
+    Map<UUID, int[]> issueAgg = new HashMap<>(); // [issueCount, openIssueCount, hasCriticalOpen(0/1)]
+    for (Object[] r : issueRepository.findStatusSeverityByDprIdIn(ids)) {
+      UUID id = (UUID) r[0];
+      IssueStatus status = (IssueStatus) r[1];
+      IssueSeverity severity = (IssueSeverity) r[2];
+      if (status == IssueStatus.CANCELLED) continue;
+      int[] a = issueAgg.computeIfAbsent(id, k -> new int[3]);
+      a[0]++;
+      boolean open = status != IssueStatus.RESOLVED && status != IssueStatus.CLOSED;
+      if (open) {
+        a[1]++;
+        if (severity == IssueSeverity.CRITICAL) a[2] = 1;
+      }
+    }
+
+    List<DprSummaryResponse> out = new ArrayList<>(rows.size());
+    for (DailyProgressReport r : rows) {
+      UUID id = r.getId();
+      int[] ia = issueAgg.getOrDefault(id, new int[3]);
+      out.add(new DprSummaryResponse(
+          id, r.getProjectId(), r.getReportDate(),
+          r.getSupervisorUserId(), r.getSupervisorName(),
+          r.getChainageFromM(), r.getChainageToM(),
+          r.getActivityId(), r.getActivityName(), r.getBoqItemNo(),
+          r.getUnit(), r.getQtyExecuted(),
+          r.getSide(), r.getApprovalStatus(), r.getWeatherCondition(),
+          manpowerNos.getOrDefault(id, 0L),
+          equipmentNos.getOrDefault(id, 0L),
+          materialCount.getOrDefault(id, 0L).intValue(),
+          photoCount.getOrDefault(id, 0L).intValue(),
+          ia[0], ia[1], ia[2] == 1));
+    }
+    return out;
+  }
+
+  private static Map<UUID, Long> toLongMap(List<Object[]> rows) {
+    Map<UUID, Long> m = new HashMap<>();
+    for (Object[] r : rows) {
+      m.put((UUID) r[0], ((Number) r[1]).longValue());
+    }
+    return m;
   }
 
   @Transactional(readOnly = true)
