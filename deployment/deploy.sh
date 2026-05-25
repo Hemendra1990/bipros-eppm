@@ -368,14 +368,16 @@ run_import_pre_dpr() {
   export BIPROS_EXCEL_DIR="$SCRIPT_DIR/data/khasab-excel"
   export BIPROS_PSQL="${SCRIPT_DIR}/scripts/psql-wrapper.sh"
 
-  # Quick sanity: required python modules. Handle Ubuntu 24.04+ PEP 668
-  # ("externally-managed-environment") which blocks plain `pip install --user`.
+  # Quick sanity: required python modules. Install strategy adapts to the
+  # environment — venvs need plain `pip install`, system Python on Ubuntu 24.04+
+  # needs apt (or `pip --break-system-packages` for PEP 668), older systems
+  # tolerate `pip --user`. Errors are written to the deploy log instead of
+  # silently swallowed.
   local _missing=()
-  python3 -c 'import openpyxl'             2>/dev/null || _missing+=(openpyxl)
+  python3 -c 'import openpyxl'               2>/dev/null || _missing+=(openpyxl)
   python3 -c 'import dateutil.relativedelta' 2>/dev/null || _missing+=(python-dateutil)
   if [ ${#_missing[@]} -gt 0 ]; then
     log_warn "python deps missing: ${_missing[*]} — installing…"
-    # Map pip names → apt package names
     local _apt=()
     for m in "${_missing[@]}"; do
       case "$m" in
@@ -383,16 +385,33 @@ run_import_pre_dpr() {
         python-dateutil)  _apt+=(python3-dateutil) ;;
       esac
     done
-    if command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-      sudo apt-get install -y -qq "${_apt[@]}" 2>/dev/null \
-        || python3 -m pip install --user --break-system-packages --quiet "${_missing[@]}" 2>/dev/null \
-        || python3 -m pip install --user --quiet "${_missing[@]}"
-    else
-      python3 -m pip install --user --break-system-packages --quiet "${_missing[@]}" 2>/dev/null \
-        || python3 -m pip install --user --quiet "${_missing[@]}"
+
+    _install_ok=0
+    if [ -n "${VIRTUAL_ENV:-}" ]; then
+      # Inside a venv — pip install goes into venv/site-packages, which the
+      # venv's python WILL find. apt + --user both miss the venv's sys.path.
+      log_info "  detected venv $VIRTUAL_ENV — using plain pip install"
+      python3 -m pip install --quiet "${_missing[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
+    elif command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      log_info "  trying apt (no venv detected)…"
+      sudo apt-get install -y -qq "${_apt[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
     fi
-    python3 -c 'import openpyxl, dateutil.relativedelta' 2>/dev/null \
-      || fatal "Could not install python deps. Try: sudo apt-get install -y ${_apt[*]}"
+    if [ $_install_ok -ne 1 ]; then
+      log_info "  trying pip --break-system-packages…"
+      python3 -m pip install --user --break-system-packages --quiet "${_missing[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
+    fi
+    if [ $_install_ok -ne 1 ]; then
+      log_info "  trying pip --user…"
+      python3 -m pip install --user --quiet "${_missing[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
+    fi
+
+    if ! python3 -c 'import openpyxl, dateutil.relativedelta' 2>/dev/null; then
+      log_err "Could not install python deps. Manual fixes:"
+      log_err "  If inside venv:   pip install ${_missing[*]}"
+      log_err "  If system python: sudo apt-get install -y ${_apt[*]}"
+      log_err "  Then re-run with --skip-build"
+      fatal "python dependency setup failed (full output in $DEPLOY_LOG)"
+    fi
   fi
 
   local imp="$SCRIPT_DIR/imports"

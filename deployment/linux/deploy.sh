@@ -231,12 +231,35 @@ preflight_env() {
         python-dateutil) _apt+=(python3-dateutil) ;;
       esac
     done
-    sudo apt-get install -y -qq "${_apt[@]}" 2>>"$DEPLOY_LOG" \
-      || python3 -m pip install --user --break-system-packages "${_missing[@]}" 2>>"$DEPLOY_LOG" \
-      || python3 -m pip install --user "${_missing[@]}" 2>>"$DEPLOY_LOG" \
-      || fatal "Could not install python deps. Try: sudo apt-get install -y ${_apt[*]}"
+
+    _install_ok=0
+    if [ -n "${VIRTUAL_ENV:-}" ]; then
+      # Inside a venv — plain pip install lands in venv/site-packages.
+      # apt + --user both miss the venv's sys.path.
+      info "  detected venv $VIRTUAL_ENV — using plain pip install"
+      python3 -m pip install --quiet "${_missing[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
+    elif command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      info "  trying apt…"
+      sudo apt-get install -y -qq "${_apt[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
+    fi
+    if [ $_install_ok -ne 1 ]; then
+      info "  trying pip --break-system-packages…"
+      python3 -m pip install --user --break-system-packages --quiet "${_missing[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
+    fi
+    if [ $_install_ok -ne 1 ]; then
+      info "  trying pip --user…"
+      python3 -m pip install --user --quiet "${_missing[@]}" >>"$DEPLOY_LOG" 2>&1 && _install_ok=1
+    fi
+
+    if ! python3 -c 'import openpyxl, dateutil.relativedelta' 2>/dev/null; then
+      err "Could not install python deps. Manual fixes:"
+      err "  If inside venv ((venv) in your prompt):  pip install ${_missing[*]}"
+      err "  Outside venv on Ubuntu/Debian:           sudo apt-get install -y ${_apt[*]}"
+      err "  Then re-run with --skip-build"
+      fatal "python dependency setup failed (full output in $DEPLOY_LOG)"
+    fi
   fi
-  ok "python:        $(python3 --version) + openpyxl + dateutil"
+  ok "python:        $(python3 --version) + openpyxl + dateutil$( [ -n "${VIRTUAL_ENV:-}" ] && echo " (venv)")"
 }
 
 # ─── Stage 3: Force tear-down ───────────────────────────────────────────────
