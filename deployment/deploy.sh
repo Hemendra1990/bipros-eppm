@@ -108,6 +108,21 @@ fatal() { log_err "$*"; exit 1; }
 # ─── Step 1: Docker preflight ───────────────────────────────────────────────
 preflight_docker() {
   stage "Docker preflight"
+  # CRITICAL: the bipros-api image needs the Java sources at ../backend.
+  # If you only copied the deployment/ folder, the build will fail with
+  # "unable to prepare context: path ... /backend not found".
+  if [ ! -d "$SCRIPT_DIR/../backend" ]; then
+    log_err "Missing $SCRIPT_DIR/../backend (the Spring Boot source tree)."
+    log_err "You appear to have copied only the deployment/ folder."
+    log_err ""
+    log_err "Fix — clone the full repo:"
+    log_err "  cd $(dirname "$SCRIPT_DIR")"
+    log_err "  git clone https://github.com/Hemendra1990/bipros-eppm.git $(basename "$(dirname "$SCRIPT_DIR")")"
+    log_err "  cd $(basename "$(dirname "$SCRIPT_DIR")") && git checkout khasab-demo-ready-2026-05-24"
+    log_err "  cd deployment && ./deploy.sh"
+    fatal "Cannot continue without backend/ sources"
+  fi
+
   if ! command -v docker >/dev/null 2>&1; then
     fatal "Docker is not installed. Install Docker Engine or Docker Desktop and re-run."
   fi
@@ -201,9 +216,18 @@ build_image() {
     return
   fi
   log_info "Building bipros-api:prod (multi-stage, ~5-12 min first time)…"
-  DOCKER_BUILDKIT=1 docker compose build bipros-api 2>&1 \
-    | tee -a "$DEPLOY_LOG" >&2 \
-    | grep -E --line-buffered '^\#[0-9]+ DONE|ERROR|Built|build error' >&2 || true
+  # IMPORTANT: stream the build output and check the actual exit code
+  # (the previous version masked failures with `|| true`).
+  if ! DOCKER_BUILDKIT=1 docker compose build bipros-api 2>&1 | tee -a "$DEPLOY_LOG" >&2; then
+    log_err "Image build failed. Common causes:"
+    log_err "  • Missing ../backend/ sources (clone the full repo, not just deployment/)"
+    log_err "  • Out of disk space"
+    log_err "  • Network timeout to Maven Central / Docker Hub"
+    fatal "Build failure"
+  fi
+  if [ "${PIPESTATUS[0]:-0}" -ne 0 ]; then
+    fatal "Image build failed — see log: $DEPLOY_LOG"
+  fi
   log_ok "Image built"
 }
 
