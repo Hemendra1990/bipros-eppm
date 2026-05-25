@@ -74,7 +74,7 @@ export function SupervisorDbsTab({
     queryFn: () => dprApi.list(projectId, { from: date, to: date }),
     enabled: !!projectId && !!date && rosterEmpty,
   });
-  const dprsForDate = dprData?.data ?? [];
+  const dprsForDate = dprData?.data?.items ?? [];
 
   // Manual Recompute trigger for the roster-empty / DPRs-exist case. We do
   // NOT auto-fire — the user must opt in (the PM admin Recompute on the PM tab

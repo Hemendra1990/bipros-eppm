@@ -254,3 +254,42 @@ export interface DailyProgressReportResponse extends DprBaseFields {
 
 export type CreateDailyProgressReportRequest = DprBaseFields;
 export type UpdateDailyProgressReportRequest = DprBaseFields;
+
+/**
+ * Slim DPR list row returned by the paginated list endpoint. Carries parent fields used by the
+ * Day → Activity → Work-front grouping + collapsed row, plus precomputed child aggregates. Full
+ * child detail (manpower/equipment/material/sub-contractor/issue rows, cumulativeQty, landmark,
+ * remarks) comes from GET /dpr/{id} on row expand — see DailyProgressReportResponse.
+ */
+export interface DprSummaryRow {
+  id: string;
+  projectId: string;
+  reportDate: string;
+  supervisorUserId?: string | null;
+  supervisorName: string;
+  chainageFromM?: number | null;
+  chainageToM?: number | null;
+  activityId?: string | null;
+  activityName: string;
+  boqItemNo?: string | null;
+  unit: string;
+  qtyExecuted?: number | null;
+  side?: Side | null;
+  approvalStatus?: DprApprovalStatus | null;
+  weatherCondition?: string | null;
+  manpowerNos: number;
+  equipmentNos: number;
+  materialCount: number;
+  photoCount: number;
+  issueCount: number;
+  openIssueCount: number;
+  hasCriticalOpen: boolean;
+}
+
+/** One page of the day-cursored DPR list. */
+export interface DprPage {
+  items: DprSummaryRow[];
+  /** Oldest report date in this batch; pass as `before` for the next page. Null when no more. */
+  nextCursor: string | null;
+  hasMore: boolean;
+}
