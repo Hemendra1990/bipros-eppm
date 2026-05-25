@@ -281,6 +281,10 @@ function RunImportPreDpr {
   Write-Info '  rebuild_demo.py';            & python "$imp\rebuild_demo.py"            2>&1 | Select-Object -Last 15
   Write-Info '  fix_role_assignments.py';    & python "$imp\fix_role_assignments.py"    2>&1 | Select-String -Pattern 'Total|created'
 
+  # Ensure every DPR resource name has a rate-book variant so imported rows resolve to a
+  # role+variant and pre-select in the DPR dropdown (idempotent).
+  Write-Info '  seed_resource_catalog.py';   & python "$imp\seed_resource_catalog.py"   2>&1 | Select-String -Pattern 'Seeding|Seed summary|Coverage|STILL'
+
   Write-Info '  Re-locking activities for DPR ingest'
   $token = Get-Content -Raw (Join-Path $WorkDir 'admin-token.txt')
   $pid_   = Get-Content -Raw (Join-Path $WorkDir 'project-id.txt')

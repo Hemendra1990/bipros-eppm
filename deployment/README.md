@@ -144,9 +144,11 @@ on first run if `.env` doesn't exist.
 
 ### Re-run import (data refresh, containers stay)
 ```bash
-./scripts/reimport.sh       # = deploy.sh --skip-build --force
+./scripts/reimport.sh       # re-parse + seed catalog + WIPE & reload DPRs (by-date parallel)
 .\scripts\reimport.ps1
 ```
+Wipes the project's existing DPRs and rebuilds them from source (a plain import would only
+hit `dup`). Seeds any missing rate-book variants first so every resource resolves.
 
 ### Reset everything (destructive — drops volumes)
 ```bash
@@ -271,9 +273,11 @@ issues to address before flipping back to `validate` — see
 | Plan | `analyze_resource_demand.py` | Derives per-activity resource demand (manpower/equipment counts) |
 | Build | `rebuild_demo.py` | Creates EPS node (if absent) → project → 16 users → project team → 23 WBS nodes → 33 activities (with REAL names) |
 | Plan | `fix_role_assignments.py` | 229 role-assignments (manpower role rates + equipment variants + material variants); creates missing variants on-the-fly |
+| Catalog | `seed_resource_catalog.py` | Ensures **every** DPR manpower/equipment name has an active rate-book variant (creates the role and/or variant if missing). Idempotent. Without this, resources whose role isn't planned on an activity import as free-text and show blank in the DPR resource dropdown. |
 | Lock | inline | Re-locks the 33 activities so DPR submission accepts them |
-| Ingest | `import_khasab_dprs.py` | Bulk-POSTs 3,431 DPRs in batches of 25 (4 worker processes), idle-only days get `qty=0.01` + remarks marker |
+| Ingest | `import_khasab_dprs.py` | Imports 3,431 DPRs **parallelised by date** (default 12 workers — see note below), resolving each manpower/equipment row to a role+variant (activity-planned first, then the global rate book) so it pre-selects in the DPR dropdown. Workdone Quantity is always a **whole number**: the rounded source qty on working days, or — for the ~74% idle/no-output source days — a realistic whole number sampled from that activity's real daily quantities (stable per DPR). |
 | Polish | `fix_demo_v2.py` | Sets BOQ items, EVM, MCLs, productivity norms, DBS recompute |
+| Polish | `link_dprs_to_boq.py` | Sets a BOQ item on **every** DPR — matching `boq.item_no == activity.code`, else a stable pseudo-random existing BOQ item. Race-free SQL (the import can't set `boqItemNo` itself — see note). Runs after `fix_demo_v2.py`. |
 | Polish | `create_norms_only.py` | Per-activity productivity norms (66 total) |
 | Polish | `tune_productivity_norms.sql` | Calibrates norms per family for realistic Capacity Util % |
 | Polish | `populate_dashboard.py` | Links calendar, 60 weather rows, 6 milestones, 6 DPR issues |
@@ -282,6 +286,30 @@ issues to address before flipping back to `validate` — see
 
 If any step fails, the deploy script keeps going (the polish steps are
 independently useful) but logs `[WARN]` so you can re-run after fixing.
+
+**Why "parallelised by date":** each DPR write fires an `AFTER_COMMIT` DBS recompute that
+is serialised per `(project, date)` by a Postgres advisory lock. Parallelising arbitrarily
+makes workers on the same date queue/contend on that lock (~1 row/sec — a full reload would
+take ~1–2 h). Giving each worker a whole **date** (its rows posted sequentially) and running
+different dates in parallel means the lock is never contended → near-linear speedup (full
+3,431-row reload in ~6–7 min). Tune with `BIPROS_DPR_IMPORT_WORKERS=N`. This is safe because
+the import sends no `boqItemNo` (BOQ-sync is a no-op) and the activity-progress listeners are
+`AFTER_COMMIT` (a race there can't roll back a DPR write).
+
+**Refreshing DPRs on a populated DB:** a plain re-import only POSTs, so existing rows come
+back as `dup` and keep stale data. `scripts/reimport.sh` therefore re-parses, seeds the
+catalog, runs `imports/reload_dprs.py` which **wipes** the project's DPRs (also by-date
+parallel) and re-imports them, then re-links them to BOQ items.
+
+**Why BOQ linking is a separate SQL step (`link_dprs_to_boq.py`):** linking a DPR to a BOQ
+item fires the in-transaction `DprBoqSyncListener`, a `@Version` read-modify-write on the
+shared `boq_items` row. Under the by-date parallel import, concurrent DPRs for one activity
+(different dates) would collide on that row → optimistic-lock → failed POSTs. So the import
+sends no `boqItemNo` (keeping by-date parallelism safe) and the link is applied afterwards
+with a single race-free SQL `UPDATE` per activity. For the same reason `reload_dprs.py`
+NULLs the BOQ link before wiping: deleting a BOQ-linked DPR re-runs `BoqCalculator`, which
+can overflow the `numeric(9,6)` `percent_complete`/`cost_variance_percent` columns (409) and
+abort the delete — leaving stragglers that come back as `dup`.
 
 ---
 

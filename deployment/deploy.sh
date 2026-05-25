@@ -455,6 +455,12 @@ run_import_pre_dpr() {
   log_info "  fix_role_assignments.py (229 role-assignments)"
   python3 "$imp/fix_role_assignments.py" 2>&1 | grep -E "Total|created" | tee -a "$DEPLOY_LOG" >&2 || true
 
+  # Guarantee every DPR resource name has a rate-book variant so the imported
+  # manpower/equipment rows resolve to a role+variant and pre-select in the DPR
+  # dropdown on any activity (idempotent — skips names already covered).
+  log_info "  seed_resource_catalog.py (rate-book variants for every DPR resource)"
+  python3 "$imp/seed_resource_catalog.py" 2>&1 | grep -E "Seeding|Seed summary|Coverage|STILL" | tee -a "$DEPLOY_LOG" >&2 || true
+
   # fix_role_assignments unlocks activities; re-lock so DPRs can post
   log_info "  Re-locking activities for DPR ingest"
   local TOKEN PID
@@ -507,6 +513,12 @@ run_import_post_dpr() {
   local imp="$SCRIPT_DIR/imports"
   log_info "  fix_demo_v2.py (cost + EVM + BOQ + MCL + DBS recompute)"
   python3 "$imp/fix_demo_v2.py" 2>&1 | tail -10 | tee -a "$DEPLOY_LOG" >&2
+  # Every DPR must reference a BOQ item. This links each DPR to the BOQ whose item_no
+  # matches its activity code, or — if none matches — a stable pseudo-random existing BOQ
+  # item (race-free SQL; uses only the existing register). Must run AFTER fix_demo_v2,
+  # which (re)creates the BOQ items.
+  log_info "  link_dprs_to_boq.py (BOQ item on every DPR)"
+  python3 "$imp/link_dprs_to_boq.py" 2>&1 | tail -6 | tee -a "$DEPLOY_LOG" >&2 || true
   log_info "  create_norms_only.py (idempotent)"
   python3 "$imp/create_norms_only.py" 2>&1 | tail -5 | tee -a "$DEPLOY_LOG" >&2 || true
   log_info "  tune_productivity_norms.sql"
