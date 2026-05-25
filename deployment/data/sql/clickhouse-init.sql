@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS bipros_analytics.dim_activity (
     edit_status LowCardinality(String) DEFAULT 'LOCKED',
     uom LowCardinality(String),
     bq_quantity Float64,
-    planned_start Date,
-    planned_finish Date,
+    planned_start Nullable(Date),
+    planned_finish Nullable(Date),
     chainage_from_m Nullable(Float64),
     chainage_to_m Nullable(Float64),
     is_critical UInt8,
@@ -62,6 +62,14 @@ ALTER TABLE bipros_analytics.dim_activity
 
 ALTER TABLE bipros_analytics.dim_activity
     ADD COLUMN IF NOT EXISTS edit_status LowCardinality(String) DEFAULT 'LOCKED';
+
+-- planned_start/planned_finish are optional: unscheduled activities (e.g. freshly
+-- created BOQ items) have no dates. The columns were originally non-nullable Date, so
+-- the ETL upsert failed with "Cannot set null to non-nullable column". Convert them to
+-- Nullable(Date) — idempotent: a no-op once the column is already nullable.
+ALTER TABLE bipros_analytics.dim_activity
+    MODIFY COLUMN planned_start Nullable(Date),
+    MODIFY COLUMN planned_finish Nullable(Date);
 
 CREATE TABLE IF NOT EXISTS bipros_analytics.dim_resource (
     resource_id UUID,
