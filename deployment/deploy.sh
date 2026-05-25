@@ -431,7 +431,7 @@ SELECT
 ${C_BOLD}URLs:${C_RESET}
   Backend health:  http://localhost:${API_HOST_PORT}/actuator/health
   Swagger UI:      http://localhost:${API_HOST_PORT}/swagger-ui.html
-  pgAdmin:         http://localhost:${PGADMIN_PORT:-5050}    (${PGADMIN_EMAIL:-admin@bipros.local} / ${PGADMIN_PASSWORD:-admin})
+  pgAdmin:         http://localhost:${PGADMIN_PORT:-5050}    (${PGADMIN_EMAIL:-admin@bipros.io} / ${PGADMIN_PASSWORD:-admin})
   MinIO console:   http://localhost:${MINIO_CONSOLE_PORT:-9001}    (${MINIO_ROOT_USER:-minio} / ${MINIO_ROOT_PASSWORD:-minio123})
 
 ${C_BOLD}Admin login:${C_RESET}

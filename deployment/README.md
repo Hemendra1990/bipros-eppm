@@ -46,7 +46,7 @@ That's it. About **15 minutes** end-to-end on a warm box (first build), or
 URLs:
   Backend health:  http://localhost:8080/actuator/health
   Swagger UI:      http://localhost:8080/swagger-ui.html
-  pgAdmin:         http://localhost:5050    (admin@bipros.local / admin)
+  pgAdmin:         http://localhost:5050    (admin@bipros.io / admin)
   MinIO console:   http://localhost:9001    (minio / minio123)
 
 Admin login: admin / admin123     ← change immediately for prod

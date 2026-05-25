@@ -340,7 +340,7 @@ SELECT
   Write-Host "URLs:" -ForegroundColor White
   Write-Host "  Backend health:  http://localhost:$ApiPort/actuator/health"
   Write-Host "  Swagger UI:      http://localhost:$ApiPort/swagger-ui.html"
-  Write-Host "  pgAdmin:         http://localhost:$PgAdminPort   ($($env:PGADMIN_EMAIL ?? 'admin@bipros.local') / $($env:PGADMIN_PASSWORD ?? 'admin'))"
+  Write-Host "  pgAdmin:         http://localhost:$PgAdminPort   ($($env:PGADMIN_EMAIL ?? 'admin@bipros.io') / $($env:PGADMIN_PASSWORD ?? 'admin'))"
   Write-Host ""
   Write-Host "Admin login:      admin / admin123  " -NoNewline
   Write-Host "(change immediately for prod)" -ForegroundColor Yellow
