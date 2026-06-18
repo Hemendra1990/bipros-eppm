@@ -8,6 +8,7 @@ import { projectApi } from "@/lib/api/projectApi";
 import { cn } from "@/lib/utils/cn";
 import { useAuthStore } from "@/lib/state/store";
 import { useRecentProjects } from "@/hooks/useRecentProjects";
+import { ProjectCurrencyProvider } from "@/lib/currency/ProjectCurrencyProvider";
 
 function ProjectDetailLayoutInner({
   children,
@@ -164,6 +165,7 @@ function ProjectDetailLayoutInner({
   };
 
   return (
+    <ProjectCurrencyProvider currency={project.budgetCurrency}>
     <div className="min-w-0" style={{ ["--tab-nav-h" as string]: "53px" }}>
       <div className="mb-6 flex items-start justify-between gap-4 px-6 pt-6">
         <div className="min-w-0">
@@ -350,6 +352,7 @@ function ProjectDetailLayoutInner({
 
       <div className="mt-6 min-w-0">{children}</div>
     </div>
+    </ProjectCurrencyProvider>
   );
 }
 

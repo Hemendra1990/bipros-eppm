@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { dprApi, type DprVoicePatch } from "@/lib/api/dprApi";
 import { boqApi, type BoqItemResponse } from "@/lib/api/boqApi";
 import type {
@@ -216,6 +217,7 @@ export function DprActivityForm({
   onCancel,
   onSave,
 }: Props) {
+  const { money } = useProjectCurrency();
   const [state, setState] = useState<FormState>(() => {
     const s = initialState(editing, defaultDate, defaultPrefill, supervisorOptions);
     // Editing path: backend may not yet carry activityId on legacy rows. Resolve from name.
@@ -941,7 +943,7 @@ export function DprActivityForm({
                           {" · "}
                           <span className="font-medium">
                             Budgeted rate:{" "}
-                            {selectedBoq.budgetedRate.toLocaleString("en-IN")} /{" "}
+                            {money(selectedBoq.budgetedRate)} /{" "}
                             {selectedBoq.unit}
                           </span>
                         </>
