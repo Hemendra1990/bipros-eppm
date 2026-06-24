@@ -55,7 +55,9 @@ export function useLoginSubmit(): LoginState {
       if (!user) throw new Error("Failed to load current user");
       setAuth(user, accessToken, refreshToken);
 
-      window.location.href = safeNext;
+      // replace (not href/push) so /auth/login is not left in history — pressing Back after
+      // signing in must never return to the sign-in form.
+      window.location.replace(safeNext);
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 401) {
         setFieldError("Invalid username or password.");
