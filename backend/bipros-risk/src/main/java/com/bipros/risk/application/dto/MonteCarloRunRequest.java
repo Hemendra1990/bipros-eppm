@@ -20,7 +20,13 @@ public class MonteCarloRunRequest {
     /** 0..0.9 (e.g. 0.2 = ±20% band around originalDuration when no PERT row exists). */
     private Double fallbackVariancePct = 0.2;
 
-    /** Reserved for Phase 3 (risk-register drivers). */
+    /**
+     * When true, the project's open risk register is layered into the simulation as Bernoulli
+     * drivers: each open risk with probability &gt; 0, at least one resolvable affected activity
+     * (via the RiskActivityAssignment link table or the legacy affectedActivities field), and a
+     * non-zero schedule/cost impact fires per iteration, adding its sampled days/cost. Defaults to
+     * false, so a default run reflects schedule uncertainty only and excludes the register.
+     */
     private Boolean enableRisks = false;
 
     /** Optional — set for reproducible runs. */

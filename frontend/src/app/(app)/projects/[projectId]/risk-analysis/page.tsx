@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Play, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { monteCarloApi, type MonteCarloRunRequest, type DistributionType } from "@/lib/api/monteCarloApi";
+import { baselineApi } from "@/lib/api/baselineApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,19 @@ export default function RiskAnalysisPage() {
     retry: false,
   });
 
+  // Monte Carlo resolves the project's active (PRIMARY) baseline server-side and fails with
+  // BASELINE_REQUIRED / BASELINE_EMPTY when there isn't one. Pre-flight that here so the user is
+  // told up front and gets a link to the Baselines tab, instead of triggering a FAILED run blind.
+  const { data: baselinesResp } = useQuery({
+    queryKey: ["baselines", projectId],
+    queryFn: () => baselineApi.listBaselines(projectId),
+    retry: false,
+  });
+  const activeBaseline = (baselinesResp?.data ?? []).find(
+    (b) => b.isActive && b.totalActivities > 0
+  );
+  const hasActiveBaseline = !!activeBaseline;
+
   const runMutation = useMutation({
     mutationFn: (req: MonteCarloRunRequest) => monteCarloApi.runSimulation(projectId, req),
     onSuccess: () => {
@@ -150,13 +164,29 @@ export default function RiskAnalysisPage() {
           <h2 className="text-lg font-semibold text-text-primary">Monte Carlo Simulation</h2>
           <Button
             onClick={() => setShowRunDialog(!showRunDialog)}
-            disabled={runMutation.isPending}
+            disabled={runMutation.isPending || !hasActiveBaseline}
             className="flex items-center gap-2"
           >
             <Play className="w-4 h-4" />
             {runMutation.isPending ? "Running…" : "Run Simulation"}
           </Button>
         </div>
+
+        {!hasActiveBaseline && (
+          <div className="mb-4 flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/30 text-sm">
+            <AlertCircle className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+            <span className="text-text-primary">
+              An active project baseline is required before running Monte Carlo. The simulation is
+              anchored to the project&apos;s PRIMARY baseline.{" "}
+              <a
+                href={`/projects/${projectId}?tab=baselines`}
+                className="underline font-medium text-accent hover:opacity-80"
+              >
+                Create or activate a baseline →
+              </a>
+            </span>
+          </div>
+        )}
 
         {showRunDialog && (
           <div className="mb-2 p-4 bg-accent/10 border border-accent/30 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -226,7 +256,7 @@ export default function RiskAnalysisPage() {
             <div className="md:col-span-2 flex gap-2">
               <Button
                 onClick={() => runMutation.mutate(runRequest)}
-                disabled={runMutation.isPending}
+                disabled={runMutation.isPending || !hasActiveBaseline}
               >
                 {runMutation.isPending ? "Running…" : "Start Simulation"}
               </Button>
@@ -301,6 +331,18 @@ export default function RiskAnalysisPage() {
                   {sim.dataDate && <p className="text-xs text-text-muted mt-1">data date {sim.dataDate}</p>}
                 </div>
               </div>
+
+              {!!sim.activitiesNotInBaseline && sim.activitiesNotInBaseline > 0 && (
+                <div className="flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/30 text-sm">
+                  <AlertCircle className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+                  <span className="text-text-primary">
+                    {sim.activitiesNotInBaseline} activit{sim.activitiesNotInBaseline === 1 ? "y" : "ies"} in
+                    the current schedule {sim.activitiesNotInBaseline === 1 ? "is" : "are"} not in the active
+                    baseline — costed from current approved values, not the baseline. The baseline is the
+                    comparison reference only; re-capture it to fold this scope into variance reporting.
+                  </span>
+                </div>
+              )}
 
               {/* Duration percentiles table */}
               <div className="bg-surface/50 rounded-lg border border-border p-6">
@@ -587,16 +629,37 @@ export default function RiskAnalysisPage() {
 
           {tab === "drivers" && (
             <div className="bg-surface/50 rounded-lg border border-border p-6">
-              <h3 className="text-lg font-semibold text-text-primary mb-2">Risk-register contributions</h3>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-lg font-semibold text-text-primary">Risk-register contributions</h3>
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                    sim.risksEnabled
+                      ? "bg-success/10 border-success/30 text-success"
+                      : "bg-surface-hover/50 border-border text-text-muted"
+                  }`}
+                >
+                  {sim.risksEnabled ? "risks ON" : "risks OFF"}
+                </span>
+              </div>
               <p className="text-sm text-text-secondary mb-4">
                 Per risk: how often the Bernoulli draw fired across iterations (<em>Rate</em>), mean schedule and
                 cost impact when it did, and the activities it was wired to. Risks only contribute when the run
                 had &quot;Enable risk drivers&quot; on and the risk has a non-zero probability + affected activities.
               </p>
-              {!drivers?.data?.length && (
+              {sim.risksEnabled === false && (
+                <div className="mb-4 flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/30 text-sm">
+                  <AlertCircle className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+                  <span className="text-text-primary">
+                    This run was executed with risk drivers <strong>disabled</strong>, so the register was
+                    excluded and the percentiles reflect schedule uncertainty only. Re-run with{" "}
+                    <strong>Enable risk drivers</strong> checked to fold the risk register into the forecast.
+                  </span>
+                </div>
+              )}
+              {!drivers?.data?.length && sim.risksEnabled !== false && (
                 <p className="text-sm text-text-muted">
-                  No drivers recorded. Enable risk drivers on the Run dialog and ensure risks have probability,
-                  affected activities, and a non-zero schedule/cost impact.
+                  No drivers recorded. Ensure risks have probability, affected activities, and a non-zero
+                  schedule/cost impact.
                 </p>
               )}
               {drivers?.data?.length ? (

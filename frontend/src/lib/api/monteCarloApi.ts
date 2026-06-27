@@ -49,6 +49,8 @@ export interface MonteCarloSimulation {
   baselineDuration: number;
   baselineCost: string;
   baselineId?: string | null;
+  activitiesNotInBaseline?: number | null;
+  risksEnabled?: boolean | null;
   dataDate?: string | null;
   iterationsCompleted?: number | null;
   configJson?: string | null;

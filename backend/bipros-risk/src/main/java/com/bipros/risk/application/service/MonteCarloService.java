@@ -67,6 +67,7 @@ public class MonteCarloService {
         sim.setSimulationName("Monte Carlo " + Instant.now());
         sim.setIterations(iterations);
         sim.setStatus(MonteCarloSimulation.MonteCarloStatus.RUNNING);
+        sim.setRisksEnabled(enableRisks);
         // Required columns: populate before first save. Engine result overwrites these.
         sim.setBaselineDuration(0.0);
         sim.setBaselineCost(BigDecimal.ZERO);
@@ -82,6 +83,7 @@ public class MonteCarloService {
             sim.setBaselineId(result.baselineId());
             sim.setBaselineDuration(result.baselineDuration());
             sim.setBaselineCost(result.baselineCost());
+            sim.setActivitiesNotInBaseline(result.activitiesNotInBaseline());
             sim.setDataDate(result.dataDate());
 
             var d = result.durationStats();

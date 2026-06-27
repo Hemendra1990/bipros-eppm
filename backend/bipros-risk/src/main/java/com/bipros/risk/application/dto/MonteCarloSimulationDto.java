@@ -47,6 +47,10 @@ public class MonteCarloSimulationDto {
     private Double baselineDuration;
     private BigDecimal baselineCost;
     private UUID baselineId;
+    /** Live activities not present in the active baseline (costed from current values). >0 = scope drift. */
+    private Integer activitiesNotInBaseline;
+    /** Whether this run included the risk register as Bernoulli drivers. */
+    private Boolean risksEnabled;
     private LocalDate dataDate;
     private Integer iterationsCompleted;
     private String configJson;
@@ -89,6 +93,8 @@ public class MonteCarloSimulationDto {
         d.setBaselineDuration(s.getBaselineDuration());
         d.setBaselineCost(s.getBaselineCost());
         d.setBaselineId(s.getBaselineId());
+        d.setActivitiesNotInBaseline(s.getActivitiesNotInBaseline());
+        d.setRisksEnabled(s.getRisksEnabled());
         d.setDataDate(s.getDataDate());
         d.setIterationsCompleted(s.getIterationsCompleted());
         d.setConfigJson(s.getConfigJson());

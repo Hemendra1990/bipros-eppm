@@ -14,7 +14,9 @@ import java.util.UUID;
  * @param fallbackVariancePct  fractional variance (e.g. 0.2 = ±20%) used when neither an
  *                             {@code ActivityDurationDistribution} override nor a
  *                             {@code PertEstimate} row exists for an activity
- * @param enableRisks          reserved for Phase 3; currently ignored
+ * @param enableRisks          when true, layers the project's open risk register into the
+ *                             simulation as per-iteration Bernoulli drivers (schedule + cost
+ *                             impacts); when false the run reflects schedule uncertainty only
  * @param randomSeed           optional — if non-null, makes the run reproducible
  */
 public record MonteCarloInput(

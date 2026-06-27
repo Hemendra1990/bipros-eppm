@@ -135,7 +135,7 @@ function ProjectDetailLayoutInner({
     // { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
     // { label: "GRNs", href: `/projects/${projectId}/grns` },
     { label: "Issues", href: `/projects/${projectId}/issues` },
-    { label: "Baselines", href: `/projects/${projectId}/baselines` },
+    { label: "Baselines", href: `/projects/${projectId}?tab=baselines` },
     { label: "Contracts", href: `/projects/${projectId}/contracts` },
   ];
 

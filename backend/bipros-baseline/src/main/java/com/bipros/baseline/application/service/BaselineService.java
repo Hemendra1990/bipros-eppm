@@ -86,15 +86,13 @@ public class BaselineService {
             "DUPLICATE_CODE",
             "A baseline named '" + request.name() + "' already exists for this project and type");
       }
-      boolean wasActive = Boolean.TRUE.equals(baseline.getIsActive());
-      baseline.setIsActive(false);
-      baselineRepository.save(baseline);
-      if (wasActive) {
-        eventPublisher.publishEvent(
-            new BaselineDeactivatedEvent(projectId, baseline.getId())
-        );
-      }
     }
+    // NOTE: capturing a baseline no longer flips isActive on existing baselines. The single
+    // "active" baseline is whichever occupies the project's PRIMARY slot, and isActive tracks
+    // that slot (see assignBaselineToSlot / syncActiveFlagToPrimary). Deactivating here would
+    // make isActive drift from Project.primaryBaselineId, so Monte Carlo / AI tools / analytics
+    // (all of which resolve "the active baseline" via isActive) would silently run against a
+    // different baseline than the rest of the app considers primary.
 
     // Phase 4.3: when sourceProjectId is supplied, snapshot from THAT project's data instead of
     // the target's. The resulting baseline is still attached to the target — variance/comparison
@@ -104,6 +102,15 @@ public class BaselineService {
 
     // Load all activities for the snapshot source
     List<Activity> activities = activityRepository.findByProjectId(snapshotSourceId);
+    // Reject empty snapshots up front. An empty baseline used to be created successfully, then
+    // auto-activated, and would permanently block every Monte Carlo run with BASELINE_EMPTY at
+    // simulation time — with no hint the baseline itself was the problem.
+    if (activities.isEmpty()) {
+      throw new com.bipros.common.exception.BusinessRuleException(
+          "EMPTY_BASELINE",
+          "Cannot capture a baseline: the project has no activities to snapshot. "
+              + "Add activities to the schedule before creating a baseline.");
+    }
 
     // Load cost data
     List<ActivityExpense> allExpenses = activityExpenseRepository.findByProjectId(snapshotSourceId);
@@ -158,13 +165,21 @@ public class BaselineService {
       }
     }
 
+    // A newly captured baseline becomes the project's active PRIMARY reference only when none
+    // exists yet (first baseline). Subsequent captures are inert snapshots until the planner
+    // explicitly switches the PRIMARY slot. isActive must equal "is the PRIMARY baseline" so the
+    // legacy isActive readers (Monte Carlo, AI tools, analytics) stay in lockstep with the slot.
+    boolean becomesPrimary = projectRepository.findById(projectId)
+        .map(p -> p.getPrimaryBaselineId() == null)
+        .orElse(true);
+
     Baseline baseline = new Baseline();
     baseline.setProjectId(projectId);
     baseline.setName(request.name());
     baseline.setDescription(request.description());
     baseline.setBaselineType(request.baselineType());
     baseline.setBaselineDate(LocalDate.now());
-    baseline.setIsActive(true);
+    baseline.setIsActive(becomesPrimary);
     baseline.setTotalActivities(activities.size());
     baseline.setTotalCost(totalCost);
     baseline.setProjectStartDate(projectStart);
@@ -326,8 +341,34 @@ public class BaselineService {
       project.setActiveBaselineId(baselineId);
     }
     projectRepository.save(project);
+    if (slot == BaselineSlot.PRIMARY) {
+      // Mirror the PRIMARY choice onto Baseline.isActive so Monte Carlo, the AI baseline tools,
+      // and the analytics ETL — which all resolve "the active baseline" via isActive — follow the
+      // same baseline the planner just made primary.
+      syncActiveFlagToPrimary(projectId, baselineId);
+    }
     auditService.logUpdate("Project", projectId, slotFieldName(slot), previous, baselineId);
     return BaselineResponse.from(baseline);
+  }
+
+  /**
+   * Enforce the single-active invariant: exactly the project's PRIMARY baseline carries
+   * {@code isActive=true}. Monte Carlo ({@code resolveActiveBaseline}), the AI baseline tools, and
+   * the analytics ETL all resolve "the active baseline" via {@link Baseline#getIsActive()}. Without
+   * keeping that flag in lockstep with {@link Project#getPrimaryBaselineId()}, switching the
+   * PRIMARY slot would leave those consumers running against a different (stale) baseline.
+   */
+  private void syncActiveFlagToPrimary(UUID projectId, UUID primaryBaselineId) {
+    for (Baseline b : baselineRepository.findByProjectId(projectId)) {
+      boolean shouldBeActive = b.getId().equals(primaryBaselineId);
+      boolean isActive = Boolean.TRUE.equals(b.getIsActive());
+      if (isActive == shouldBeActive) continue;
+      b.setIsActive(shouldBeActive);
+      baselineRepository.save(b);
+      if (isActive && !shouldBeActive) {
+        eventPublisher.publishEvent(new BaselineDeactivatedEvent(projectId, b.getId()));
+      }
+    }
   }
 
   /** Phase 3: detach whichever baseline currently occupies the given slot. */
@@ -342,6 +383,17 @@ public class BaselineService {
       project.setActiveBaselineId(null);
     }
     projectRepository.save(project);
+    if (slot == BaselineSlot.PRIMARY) {
+      // No PRIMARY baseline means no active baseline — keep isActive in lockstep so Monte Carlo
+      // fails fast with BASELINE_REQUIRED rather than silently using a now-unreferenced snapshot.
+      baselineRepository.findById(previous).ifPresent(b -> {
+        if (Boolean.TRUE.equals(b.getIsActive())) {
+          b.setIsActive(false);
+          baselineRepository.save(b);
+          eventPublisher.publishEvent(new BaselineDeactivatedEvent(projectId, b.getId()));
+        }
+      });
+    }
     auditService.logUpdate("Project", projectId, slotFieldName(slot), previous, null);
   }
 
@@ -639,6 +691,18 @@ public class BaselineService {
     baselineResourceAssignmentRepository.deleteByBaselineId(baselineId);
     baselineExpenseRepository.deleteByBaselineId(baselineId);
     baselineRepository.delete(baseline);
+
+    // Clear any project slot that pointed at the deleted baseline, otherwise primaryBaselineId /
+    // activeBaselineId dangle and downstream resolution (Monte Carlo, variance, EVM) breaks.
+    projectRepository.findById(baseline.getProjectId()).ifPresent(p -> {
+      boolean dirty = false;
+      if (baselineId.equals(p.getPrimaryBaselineId())) { p.setPrimaryBaselineId(null); dirty = true; }
+      if (baselineId.equals(p.getActiveBaselineId())) { p.setActiveBaselineId(null); dirty = true; }
+      if (baselineId.equals(p.getSecondaryBaselineId())) { p.setSecondaryBaselineId(null); dirty = true; }
+      if (baselineId.equals(p.getTertiaryBaselineId())) { p.setTertiaryBaselineId(null); dirty = true; }
+      if (dirty) projectRepository.save(p);
+    });
+
     auditService.logDelete("Baseline", baselineId);
   }
 

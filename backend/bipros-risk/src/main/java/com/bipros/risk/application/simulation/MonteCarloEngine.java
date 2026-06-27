@@ -10,6 +10,11 @@ import com.bipros.baseline.domain.BaselineActivity;
 import com.bipros.baseline.infrastructure.repository.BaselineActivityRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.common.exception.BusinessRuleException;
+import com.bipros.cost.application.service.ActivityCostCalculator;
+import com.bipros.cost.domain.entity.ActivityExpense;
+import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.risk.domain.model.ActivityCorrelation;
 import com.bipros.risk.domain.model.MonteCarloActivityStat;
 import com.bipros.risk.domain.model.MonteCarloCashflowBucket;
@@ -19,6 +24,7 @@ import com.bipros.risk.domain.model.Risk;
 import com.bipros.risk.domain.model.RiskProbability;
 import com.bipros.risk.domain.model.RiskStatus;
 import com.bipros.risk.domain.repository.ActivityCorrelationRepository;
+import com.bipros.risk.domain.repository.RiskActivityAssignmentRepository;
 import com.bipros.risk.domain.repository.RiskRepository;
 import com.bipros.scheduling.domain.algorithm.CPMScheduler;
 import com.bipros.scheduling.domain.algorithm.CalendarCalculator;
@@ -37,6 +43,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.SplittableRandom;
 import java.util.random.RandomGenerator;
+import java.util.stream.Collectors;
 
 /**
  * Real PRA-style Monte Carlo engine. Per iteration:
@@ -71,8 +79,13 @@ public class MonteCarloEngine {
     private final ActivityRelationshipRepository relationshipRepository;
     private final PertEstimateRepository pertEstimateRepository;
     private final RiskRepository riskRepository;
+    private final RiskActivityAssignmentRepository riskActivityAssignmentRepository;
     private final ActivityCorrelationRepository activityCorrelationRepository;
     private final CalendarCalculator calendarCalculator;
+    // Live (current approved) cost sources. The forecast costs the CURRENT project state, not the
+    // baseline snapshot — the baseline is retained only as the variance/comparison reference.
+    private final ActivityExpenseRepository activityExpenseRepository;
+    private final ResourceAssignmentRepository resourceAssignmentRepository;
 
     public EngineResult run(MonteCarloInput input) {
         long startNs = System.nanoTime();
@@ -116,18 +129,86 @@ public class MonteCarloEngine {
                 .min(LocalDate::compareTo)
                 .orElseThrow(() -> new BusinessRuleException("NO_START_DATE",
                     "Cannot determine project start date.")));
-        LocalDate dataDate = Optional.ofNullable(baseline.getBaselineDate()).orElse(projectStartDate);
-
-        // Per-activity baseline cost. Fall back to proportional allocation of Baseline.totalCost
-        // by originalDuration if some activities lack a plannedCost snapshot.
-        Map<UUID, BigDecimal> activityBaselineCost = buildBaselineCostMap(activities, baseline, baselineByActivity);
-
-        // Per-activity sampler. PERT row → Triangular(O,M,P); else fallback band around originalDuration.
-        Map<UUID, DistributionSampler> samplers = new HashMap<>();
-        Map<UUID, Double> plannedDuration = new HashMap<>();
+        // EPPM data date: the "as of" point for the forecast. Work before it is actual/certain;
+        // only remaining work after it is simulated. Use the latest reported progress date
+        // (DPR-driven actuals); when no progress has been reported, fall back to the baseline /
+        // project start so a fresh project simulates its full schedule.
+        LocalDate latestActual = null;
         for (Activity a : activities) {
-            double planned = Optional.ofNullable(a.getOriginalDuration()).orElse(0.0);
-            plannedDuration.put(a.getId(), planned);
+            for (LocalDate d : new LocalDate[]{a.getActualFinishDate(), a.getActualStartDate()}) {
+                if (d != null && (latestActual == null || d.isAfter(latestActual))) latestActual = d;
+            }
+        }
+        LocalDate dataDate = latestActual != null
+            ? latestActual
+            : Optional.ofNullable(baseline.getBaselineDate()).orElse(projectStartDate);
+
+        // Per-activity cost for the forecast. EPPM: the forecast reflects the CURRENT approved
+        // project state, so cost is taken from the LIVE expenses + resource assignments, NOT the
+        // baseline snapshot (the baseline is the comparison/variance reference only). Activities
+        // absent from the active baseline are costed from their current approved values rather than
+        // contributing zero — and their count is reported so the planner can re-baseline.
+        Map<UUID, List<ActivityExpense>> expensesByActivity = activityExpenseRepository
+            .findByProjectId(input.projectId()).stream()
+            .filter(e -> e.getActivityId() != null)
+            .collect(Collectors.groupingBy(ActivityExpense::getActivityId));
+        Map<UUID, List<ResourceAssignment>> assignmentsByActivity = resourceAssignmentRepository
+            .findByProjectId(input.projectId()).stream()
+            .filter(r -> r.getActivityId() != null)
+            .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+        Map<UUID, BigDecimal> activityBaselineCost = buildForecastCostMap(
+            activities, baseline, baselineByActivity, expensesByActivity, assignmentsByActivity);
+
+        int activitiesNotInBaseline = (int) activities.stream()
+            .filter(a -> !baselineByActivity.containsKey(a.getId()))
+            .count();
+        if (activitiesNotInBaseline > 0) {
+            log.warn("Monte Carlo (project={}): {} of {} live activities are absent from the active "
+                + "baseline {} — costed from current approved values, not the baseline snapshot. "
+                + "Re-capture the baseline to fold them into the comparison.",
+                input.projectId(), activitiesNotInBaseline, activities.size(), baseline.getId());
+        }
+
+        // Per-activity sampler + progress-aware state. EPPM: only REMAINING work is uncertain.
+        //  - completed activities (actualFinish set or %=100): remaining = 0, no sampling, cost = actual.
+        //  - in-progress (actualStart set or 0<%<100): only the remaining fraction is sampled; the
+        //    already-incurred cost is certain, the remaining cost is at risk.
+        //  - not-started: full duration is uncertain (rf = 1) — identical to the pre-progress behaviour.
+        // The sampler keeps the activity's full-duration distribution shape; each draw is scaled by the
+        // remaining fraction so a half-done activity carries only half the duration uncertainty.
+        Map<UUID, DistributionSampler> samplers = new HashMap<>();
+        Map<UUID, Double> plannedDuration = new HashMap<>();          // planned REMAINING duration (cost + CPM basis)
+        Map<UUID, Double> remainingFraction = new HashMap<>();        // 0..1 share of work still uncertain
+        Map<UUID, BigDecimal> activityActualCost = new HashMap<>();   // certain, already incurred
+        Map<UUID, BigDecimal> activityRemainingCost = new HashMap<>(); // at risk = forecast - actual
+        for (Activity a : activities) {
+            double plannedFull = Optional.ofNullable(a.getOriginalDuration()).orElse(0.0);
+            double pct = Optional.ofNullable(a.getPercentComplete()).orElse(0.0);
+            boolean completed = a.getActualFinishDate() != null || pct >= 100.0;
+            boolean started = a.getActualStartDate() != null || pct > 0.0;
+            double rf;
+            if (completed) {
+                rf = 0.0;
+            } else if (started) {
+                Double rd = a.getRemainingDuration();
+                rf = (rd != null && plannedFull > 0)
+                    ? Math.max(0.0, Math.min(1.0, rd / plannedFull))
+                    : Math.max(0.0, Math.min(1.0, 1.0 - pct / 100.0));
+            } else {
+                rf = 1.0;
+            }
+            remainingFraction.put(a.getId(), rf);
+            plannedDuration.put(a.getId(), plannedFull * rf);
+
+            // EV cost split: actual incurred (certain) + remaining at risk (scales with sampled remaining).
+            BigDecimal forecast = activityBaselineCost.getOrDefault(a.getId(), BigDecimal.ZERO);
+            BigDecimal actual = ActivityCostCalculator.calculateActualCost(
+                a.getId(), expensesByActivity, assignmentsByActivity);
+            if (actual == null || actual.signum() < 0) actual = BigDecimal.ZERO;
+            if (actual.compareTo(forecast) > 0) actual = forecast; // never let remaining go negative
+            activityActualCost.put(a.getId(), actual);
+            activityRemainingCost.put(a.getId(), forecast.subtract(actual).max(BigDecimal.ZERO));
+
             PertEstimate pe = pertById.get(a.getId());
             DistributionSampler sampler;
             if (pe != null && pe.getOptimisticDuration() != null
@@ -135,8 +216,8 @@ public class MonteCarloEngine {
                 && pe.getPessimisticDuration() > pe.getOptimisticDuration()) {
                 sampler = DistributionSamplers.threePoint(input.defaultDistribution(),
                     pe.getOptimisticDuration(), pe.getMostLikelyDuration(), pe.getPessimisticDuration());
-            } else if (planned > 0.0) {
-                sampler = DistributionSamplers.fallback(planned, input.fallbackVariancePct(),
+            } else if (plannedFull > 0.0) {
+                sampler = DistributionSamplers.fallback(plannedFull, input.fallbackVariancePct(),
                     input.defaultDistribution());
             } else {
                 sampler = new ConstantSampler(0.0);
@@ -150,10 +231,22 @@ public class MonteCarloEngine {
         double plannedSum = activities.stream()
             .mapToDouble(a -> Optional.ofNullable(a.getOriginalDuration()).orElse(0.0))
             .sum();
-        double baselineProjectDuration = Optional.ofNullable(baseline.getProjectDuration()).orElse(plannedSum);
-        int horizonDays = (int) Math.max(365, baselineProjectDuration * 5);
+        // A baseline whose activities have sparse/null planned dates persists projectDuration=0.0,
+        // which (being non-null) slips past Optional and would collapse the horizon to the 365-day
+        // floor — truncating any simulated schedule longer than a year. Size off whichever is larger:
+        // the baseline calendar-day span or the raw sum of activity durations.
+        double baselineProjectDuration = Optional.ofNullable(baseline.getProjectDuration())
+            .filter(d -> d > 0)
+            .orElse(plannedSum);
+        // The forecast schedules in-progress/completed work from the data date, which can predate the
+        // planned project start. Anchor the calendar bitmap at the EARLIER of the two and pad the
+        // horizon by the gap — otherwise calendar lookups before projectStartDate miss the bitmap and
+        // fall through to the slow per-call DB path (activities × iterations), grinding for minutes.
+        LocalDate calendarAnchor = dataDate.isBefore(projectStartDate) ? dataDate : projectStartDate;
+        long anchorGap = Math.max(0, ChronoUnit.DAYS.between(calendarAnchor, projectStartDate));
+        int horizonDays = (int) (Math.max(365, Math.max(baselineProjectDuration, plannedSum) * 5) + anchorGap);
         CachingCalendarCalculator cachingCalendar =
-            new CachingCalendarCalculator(calendarCalculator, projectStartDate, horizonDays);
+            new CachingCalendarCalculator(calendarCalculator, calendarAnchor, horizonDays);
         // Pre-warm every distinct calendar referenced by the project's activities.
         activities.stream()
             .map(Activity::getCalendarId).filter(Objects::nonNull).distinct()
@@ -238,7 +331,7 @@ public class MonteCarloEngine {
             for (int ai = 0; ai < aN; ai++) {
                 UUID id = orderedIds[ai];
                 double u = correlatedU[iter][ai];
-                sampled.put(id, Math.max(0.0, samplers.get(id).sampleFromUniform(u)));
+                sampled.put(id, Math.max(0.0, samplers.get(id).sampleFromUniform(u)) * remainingFraction.get(id));
             }
 
             // Apply risk drivers: for each risk, Bernoulli-sample occurrence. If it occurs,
@@ -264,6 +357,13 @@ public class MonteCarloEngine {
             List<SchedulableActivity> schedulableActivities = new ArrayList<>(activities.size());
             for (Activity a : activities) {
                 double dur = sampled.get(a.getId());
+                // NOTE: progress is modelled through the sampled REMAINING duration ("dur" already
+                // carries only the remaining fraction; completed activities are 0), NOT by handing
+                // actuals to the scheduler. Pinning in-progress activities to their actual start in
+                // RETAINED_LOGIC drops predecessor logic for started work, which collapses the network's
+                // critical path and degenerates the Monte Carlo duration distribution to a single value.
+                // Keeping the logic intact while shortening durations preserves both the schedule
+                // variance and the "only remaining work is uncertain" principle.
                 schedulableActivities.add(new SchedulableActivity(
                     a.getId(),
                     dur,
@@ -304,9 +404,19 @@ public class MonteCarloEngine {
                 .filter(Objects::nonNull)
                 .max(LocalDate::compareTo)
                 .orElse(projectStartDate);
+            // Measure total duration from the EARLIEST scheduled start, not the planned project start:
+            // progressed activities anchor at their actual start / the data date, which can precede the
+            // planned start. Using the planned start would yield a negative span (clamped to 0) whenever
+            // the forecast finish falls before it.
+            LocalDate scheduleStart = out.activities().stream()
+                .map(ScheduledActivity::getEarlyStart)
+                .filter(Objects::nonNull)
+                .min(LocalDate::compareTo)
+                .orElse(projectStartDate);
+            if (scheduleStart.isAfter(projectStartDate)) scheduleStart = projectStartDate;
 
             double projectDuration = cachingCalendar.countWorkingDays(
-                defaultCalendarId, projectStartDate, projectFinish);
+                defaultCalendarId, scheduleStart, projectFinish);
             iterDurations[iter] = projectDuration;
 
             // Index scheduled activities for quick lookup in the cost + milestone + cashflow pass.
@@ -330,15 +440,20 @@ public class MonteCarloEngine {
                     earlyFinishEpoch[i][iter] = ef != null ? (int) ef.toEpochDay() : 0;
                 }
 
-                BigDecimal baseCost = activityBaselineCost.getOrDefault(id, BigDecimal.ZERO);
-                double activityCost = 0.0;
-                if (baseCost.signum() > 0) {
-                    double planned = plannedDuration.get(id);
-                    if (planned > 0.0) {
-                        activityCost = baseCost.doubleValue() * (dur / planned);
-                    } else {
-                        activityCost = baseCost.doubleValue();
-                    }
+                // EV-aware cost: already-incurred actual cost is certain; the remaining cost at risk
+                // scales with the sampled remaining duration vs the planned remaining duration. For a
+                // not-started activity this reduces to forecastCost × (sampled/planned) as before; for a
+                // completed one it is just the actual cost.
+                BigDecimal actualCost = activityActualCost.getOrDefault(id, BigDecimal.ZERO);
+                BigDecimal remCost = activityRemainingCost.getOrDefault(id, BigDecimal.ZERO);
+                double activityCost = actualCost.doubleValue();
+                if (remCost.signum() > 0) {
+                    double plannedRem = plannedDuration.get(id);
+                    activityCost += plannedRem > 0.0
+                        ? remCost.doubleValue() * (dur / plannedRem)
+                        : remCost.doubleValue();
+                }
+                if (activityCost != 0.0) {
                     iterCost = iterCost.add(BigDecimal.valueOf(activityCost));
                 }
                 activityCostIter[i][iter] = activityCost;
@@ -494,7 +609,8 @@ public class MonteCarloEngine {
             activityStats,
             milestoneStats,
             cashflow,
-            contributions);
+            contributions,
+            activitiesNotInBaseline);
     }
 
     /**
@@ -511,8 +627,19 @@ public class MonteCarloEngine {
             double probability = toProbability(r.getProbability());
             if (probability <= 0) continue;
 
-            List<UUID> affected = parseAffectedActivities(r.getAffectedActivities(), activityById);
-            if (affected.isEmpty()) continue;
+            // Resolve affected activities from BOTH the modern RiskActivityAssignment link table
+            // (used by RiskExposureService and the UI assignment flow) AND the legacy free-text
+            // Risk.affectedActivities field. Previously only the legacy field was read, so a risk
+            // linked to activities through the normal UI but with a blank free-text string
+            // contributed NOTHING to the simulation and silently vanished from risk contributions.
+            java.util.LinkedHashSet<UUID> affectedSet = new java.util.LinkedHashSet<>();
+            for (var ra : riskActivityAssignmentRepository.findByRiskId(r.getId())) {
+                UUID aid = ra.getActivityId();
+                if (aid != null && activityById.containsKey(aid)) affectedSet.add(aid);
+            }
+            affectedSet.addAll(parseAffectedActivities(r.getAffectedActivities(), activityById));
+            if (affectedSet.isEmpty()) continue;
+            List<UUID> affected = new ArrayList<>(affectedSet);
 
             double impactDays = r.getScheduleImpactDays() != null ? r.getScheduleImpactDays() : 0.0;
             BigDecimal impactCost = Optional.ofNullable(r.getCostImpact()).orElse(BigDecimal.ZERO);
@@ -623,23 +750,36 @@ public class MonteCarloEngine {
             .orElse(active.get(0));
     }
 
-    private Map<UUID, BigDecimal> buildBaselineCostMap(List<Activity> activities, Baseline baseline,
-                                                      Map<UUID, BaselineActivity> baselineByActivity) {
+    /**
+     * Per-activity cost basis for the forecast. EPPM principle: forecast the CURRENT approved
+     * project state. So each activity is costed from its LIVE planned cost (expenses + resource
+     * assignments via {@link ActivityCostCalculator}). The baseline snapshot is used only as a
+     * fallback when an activity has no live cost data, and the baseline total is used for a final
+     * proportional fill — never as the primary source. No activity is ever silently left at zero
+     * because it post-dates the baseline.
+     */
+    private Map<UUID, BigDecimal> buildForecastCostMap(List<Activity> activities, Baseline baseline,
+                                                      Map<UUID, BaselineActivity> baselineByActivity,
+                                                      Map<UUID, List<ActivityExpense>> expensesByActivity,
+                                                      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
         Map<UUID, BigDecimal> costs = new HashMap<>();
-        boolean anyExplicit = false;
         BigDecimal explicitTotal = BigDecimal.ZERO;
         for (Activity a : activities) {
-            BaselineActivity ba = baselineByActivity.get(a.getId());
-            BigDecimal c = ba != null ? ba.getPlannedCost() : null;
+            // 1) Live current approved cost (primary source).
+            BigDecimal c = ActivityCostCalculator.calculatePlannedCost(
+                a.getId(), expensesByActivity, assignmentsByActivity);
+            // 2) Fall back to the baseline snapshot cost only when the activity has no live cost.
+            if (c == null || c.signum() <= 0) {
+                BaselineActivity ba = baselineByActivity.get(a.getId());
+                c = ba != null ? ba.getPlannedCost() : null;
+            }
             if (c != null && c.signum() > 0) {
                 costs.put(a.getId(), c);
                 explicitTotal = explicitTotal.add(c);
-                anyExplicit = true;
             }
         }
-        // Fallback: proportionally allocate baseline.totalCost to activities lacking plannedCost,
-        // weighted by originalDuration. If no activity has an explicit cost, allocate the full
-        // total across everything.
+        // 3) Final fill: proportionally allocate any remaining baseline.totalCost to activities that
+        // still have no cost (neither live nor snapshot), weighted by originalDuration.
         BigDecimal remainingTotal = Optional.ofNullable(baseline.getTotalCost()).orElse(BigDecimal.ZERO)
             .subtract(explicitTotal);
         if (remainingTotal.signum() > 0) {
@@ -814,7 +954,8 @@ public class MonteCarloEngine {
         List<MonteCarloActivityStat> activityStats,
         List<MonteCarloMilestoneStat> milestoneStats,
         List<MonteCarloCashflowBucket> cashflow,
-        List<MonteCarloRiskContribution> riskContributions
+        List<MonteCarloRiskContribution> riskContributions,
+        int activitiesNotInBaseline
     ) {}
 
     /** Degenerate sampler used when an activity's planned duration is zero (e.g. milestones). */
