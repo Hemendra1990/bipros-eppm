@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -95,4 +96,23 @@ public interface DprMaterialRepository extends JpaRepository<DprMaterial, UUID> 
     java.math.BigDecimal sumLineCostByBoqItemIdApproved(
         @Param("projectId") UUID projectId,
         @Param("boqItemId") UUID boqItemId);
+
+    /**
+     * Approved DPR material lines for a project within a report-date window, projected for the
+     * Material Consumption Report. Returns rows: [reportDate (LocalDate), activityId (UUID),
+     * materialName (String), unit (String), quantity (BigDecimal), unitRate (BigDecimal),
+     * lineCost (BigDecimal)]. APPROVED only, consistent with how totalActual counts line_cost.
+     */
+    @Query("""
+        select d.reportDate, d.activityId, m.materialName, m.unit, m.quantity, m.unitRate, m.lineCost
+        from DprMaterial m, com.bipros.project.domain.model.DailyProgressReport d
+        where m.dprId = d.id
+          and d.projectId = :projectId
+          and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED
+          and d.reportDate between :from and :to
+        order by d.reportDate asc
+        """)
+    List<Object[]> findApprovedMaterialLines(@Param("projectId") UUID projectId,
+                                             @Param("from") LocalDate from,
+                                             @Param("to") LocalDate to);
 }

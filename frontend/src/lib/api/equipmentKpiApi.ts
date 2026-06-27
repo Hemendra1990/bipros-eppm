@@ -79,11 +79,11 @@ export interface EquipmentKpiResponse {
 }
 
 export const equipmentKpiApi = {
-  getKpis: (projectId: string, from: string, to: string) =>
+  getKpis: (projectId: string, from?: string, to?: string) =>
     apiClient
       .get<ApiResponse<EquipmentKpiResponse>>(
         `/v1/projects/${projectId}/kpis/equipment`,
-        { params: { from, to } },
+        { params: from && to ? { from, to } : {} },
       )
       .then((r) => r.data),
 };

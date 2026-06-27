@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface MaterialIssueRepository extends JpaRepository<MaterialIssue, UUID> {
 
     List<MaterialIssue> findByMaterialIdOrderByIssueDateDesc(UUID materialId);
+    List<MaterialIssue> findByProjectId(UUID projectId);
     List<MaterialIssue> findByProjectIdOrderByIssueDateDesc(UUID projectId);
     Optional<MaterialIssue> findByChallanNumber(String challanNumber);
     List<MaterialIssue> findByProjectIdAndIssueDateBetween(UUID projectId, LocalDate from, LocalDate to);

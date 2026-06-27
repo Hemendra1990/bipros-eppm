@@ -159,7 +159,7 @@ export class MaterialConsumptionPage {
 
   /** Returns the alert-chip codes visible on screen (may be empty). */
   async listAlertCodes(): Promise<string[]> {
-    const codes = ["EXCESS_CONSUMPTION", "NEGATIVE_BALANCE", "BUDGET_OVERCONSUMPTION", "MISSING_UNIT_RATE"];
+    const codes = ["NEGATIVE_BALANCE", "MISSING_UNIT_RATE"];
     const found: string[] = [];
     for (const c of codes) {
       const loc = this.page.getByText(new RegExp(c, "i")).first();

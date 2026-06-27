@@ -74,4 +74,10 @@ public interface ResourceAssignmentRepository extends JpaRepository<ResourceAssi
    */
   @Query("select coalesce(sum(ra.actualCost), 0) from ResourceAssignment ra where ra.projectId = :projectId")
   BigDecimal sumActualCostByProjectId(@Param("projectId") UUID projectId);
+
+  /** Sum of committed resource cost for one activity. Coalesces budgetedCost → plannedCost → 0,
+   *  matching ActivityCostCalculator's documented fallback for legacy rows. Returns 0 when none. */
+  @Query("select coalesce(sum(coalesce(ra.budgetedCost, ra.plannedCost, 0)), 0) "
+       + "from ResourceAssignment ra where ra.activityId = :activityId")
+  BigDecimal sumBudgetedCostByActivityId(@Param("activityId") UUID activityId);
 }

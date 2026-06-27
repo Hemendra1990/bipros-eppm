@@ -413,6 +413,13 @@ public class CostController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    // Per-WBS EVM Endpoint (cost basis)
+    @GetMapping("/projects/{projectId}/cost/wbs-evm")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")
+    public ResponseEntity<ApiResponse<List<WbsEvmRow>>> getEvmByWbs(@PathVariable UUID projectId) {
+        return ResponseEntity.ok(ApiResponse.ok(costService.getEvmByWbs(projectId)));
+    }
+
     // Period Cost Aggregation
     @GetMapping("/projects/{projectId}/cost-periods")
     @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")

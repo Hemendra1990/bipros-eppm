@@ -207,7 +207,9 @@ public class ProjectInsightsController {
 
     LocalDate today = LocalDate.now();
     double physicalPct = queryScalarDouble(
-        "SELECT COALESCE(AVG(percent_complete), 0) FROM activity.activities WHERE project_id = ?1",
+        "SELECT COALESCE(SUM(percent_complete * COALESCE(NULLIF(original_duration,0), 1)) "
+            + "/ NULLIF(SUM(COALESCE(NULLIF(original_duration,0), 1)), 0), 0) "
+            + "FROM activity.activities WHERE project_id = ?1",
         projectId);
     double plannedPct = 0.0;
     if (p.getPlannedStartDate() != null && p.getPlannedFinishDate() != null) {
@@ -252,7 +254,7 @@ public class ProjectInsightsController {
             scheduleRag, costRag, scopeRag, riskRag, hseRag,
             topIssues, nextMilestoneName, nextMilestoneDate,
             cpi, spi, physicalPct, plannedPct, activeRisks, 0L,
-            toCrores(bac), toCrores(eac),
+            toCrores(bac), toCrores(eac), toCrores(ac),
             p.getUpdatedAt()));
   }
 
@@ -468,23 +470,30 @@ public class ProjectInsightsController {
       return ApiResponse.ok(List.of());
     }
 
-    LocalDate today = LocalDate.now();
+    Project proj = projectRepository.findById(projectId).orElse(null);
+    LocalDate asOf = (proj != null && proj.getDataDate() != null)
+        ? proj.getDataDate()
+        : LocalDate.now();
     List<ActivityStatusRow> result = new ArrayList<>(rows.size());
     for (Object row : rows) {
       Object[] cols = (Object[]) row;
+      LocalDate plannedStart = cols[7] != null ? LocalDate.parse(cols[7].toString()) : null;
       LocalDate plannedFinish = cols[8] != null ? LocalDate.parse(cols[8].toString()) : null;
       LocalDate actualFinish = cols[10] != null ? LocalDate.parse(cols[10].toString()) : null;
       double pct = cols[16] != null ? ((Number) cols[16]).doubleValue() : 0.0;
       long daysDelay = 0;
-      if (plannedFinish != null && pct < 100 && today.isAfter(plannedFinish)) {
-        daysDelay = ChronoUnit.DAYS.between(plannedFinish, today);
+      if (plannedFinish != null && pct < 100 && asOf.isAfter(plannedFinish)) {
+        daysDelay = ChronoUnit.DAYS.between(plannedFinish, asOf);
       } else if (plannedFinish != null && actualFinish != null && actualFinish.isAfter(plannedFinish)) {
         daysDelay = ChronoUnit.DAYS.between(plannedFinish, actualFinish);
       }
       long daysRemaining = 0;
       if (plannedFinish != null && pct < 100) {
-        daysRemaining = Math.max(0, ChronoUnit.DAYS.between(today, plannedFinish));
+        daysRemaining = Math.max(0, ChronoUnit.DAYS.between(asOf, plannedFinish));
       }
+      double expectedProgressPct = (plannedStart != null && plannedFinish != null)
+          ? computePlannedPct(asOf, plannedStart, plannedFinish)
+          : 0.0;
       result.add(new ActivityStatusRow(
           UUID.fromString(cols[0].toString()),
           cols[1] != null ? cols[1].toString() : "",
@@ -493,7 +502,7 @@ public class ProjectInsightsController {
           cols[4] != null ? cols[4].toString() : "",
           cols[5] != null ? cols[5].toString() : "",
           cols[6] != null ? cols[6].toString() : "",
-          cols[7] != null ? LocalDate.parse(cols[7].toString()) : null,
+          plannedStart,
           plannedFinish,
           cols[9] != null ? LocalDate.parse(cols[9].toString()) : null,
           actualFinish,
@@ -504,7 +513,8 @@ public class ProjectInsightsController {
           cols[15] != null && (Boolean) cols[15],
           pct,
           daysDelay,
-          daysRemaining));
+          daysRemaining,
+          expectedProgressPct));
     }
     return ApiResponse.ok(result);
   }

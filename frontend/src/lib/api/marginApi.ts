@@ -1,8 +1,13 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
+/** Backend sentinel (MarginRollupService.OTHER_ROW_LABEL) for the reconciling row that books
+ *  non-execution cost (general expenses + procurement) so each breakdown foots to total actual cost.
+ *  MUST stay byte-identical to the backend constant. */
+export const OTHER_ROW_LABEL = "Other (general expenses & unattributed)";
+
 export interface MarginItem {
-  boqItemId: string;
+  boqItemId: string | null;
   itemNo: string;
   description: string;
   unit: string | null;

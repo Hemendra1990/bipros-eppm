@@ -37,7 +37,7 @@ function tone(value: number | null | undefined): "default" | "success" | "warnin
 export default function PerformanceDashboardPage() {
   const params = useParams();
   const projectId = params.projectId as string;
-  const { money } = useProjectCurrency();
+  const { money, moneyCompact } = useProjectCurrency();
   const [cadence, setCadence] = useState<Cadence>("M");
 
   const { data, isLoading, error } = useQuery({
@@ -87,9 +87,9 @@ export default function PerformanceDashboardPage() {
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
-        <KpiTile label="Actual Cost" value={money(totals.ac, { decimals: 0 })} hint="AC across selected cadence" />
-        <KpiTile label="Earned Value" value={money(totals.ev, { decimals: 0 })} hint="EV across selected cadence" />
-        <KpiTile label="Planned Value" value={money(totals.pv, { decimals: 0 })} hint="PV across selected cadence" />
+        <KpiTile label="Actual Cost" value={moneyCompact(totals.ac)} hint="AC across selected cadence" />
+        <KpiTile label="Earned Value" value={moneyCompact(totals.ev)} hint="EV across selected cadence" />
+        <KpiTile label="Planned Value" value={moneyCompact(totals.pv)} hint="PV across selected cadence" />
         <KpiTile
           label="CPI"
           value={fmtRatio(totals.cpi)}
@@ -118,8 +118,13 @@ export default function PerformanceDashboardPage() {
             <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="name" stroke="#64748b" style={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" style={{ fontSize: 12 }} />
-              <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={CHART_TOOLTIP_LABEL_STYLE} itemStyle={CHART_TOOLTIP_ITEM_STYLE} />
+              <YAxis stroke="#64748b" style={{ fontSize: 12 }} tickFormatter={(v: number) => moneyCompact(Number(v), { symbol: false })} />
+              <Tooltip
+                contentStyle={CHART_TOOLTIP_STYLE}
+                labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+                formatter={(value) => moneyCompact(Number(value))}
+              />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="PV" fill="#94a3b8" radius={[4, 4, 0, 0]} />
               <Bar dataKey="EV" fill="#16a34a" radius={[4, 4, 0, 0]} />

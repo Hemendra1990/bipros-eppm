@@ -3,8 +3,8 @@ package com.bipros.reporting.materialconsumption;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
-import com.bipros.project.domain.model.BoqItem;
-import com.bipros.project.domain.repository.BoqItemRepository;
+import com.bipros.project.application.dto.DprMaterialLine;
+import com.bipros.project.application.service.DprMaterialConsumptionLookup;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
 import com.bipros.resource.domain.model.MaterialIssue;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
@@ -30,8 +30,8 @@ import java.util.UUID;
 
 /**
  * Read-only Material Consumption Report. Joins {@link MaterialConsumptionLog} with optional
- * issued-quantity data from {@link MaterialIssue} and best-effort planned-qty from
- * {@link BoqItem}, then layers filtering / grouping / alerts on top.
+ * issued-quantity data from {@link MaterialIssue}, then layers filtering / grouping / alerts
+ * on top.
  *
  * <p>Defensive throughout: every cross-module lookup (supervisor name, storekeeper name, WBS
  * name) is wrapped so a missing row simply leaves the field null rather than failing the
@@ -50,9 +50,9 @@ public class MaterialConsumptionReportService {
 
   private final MaterialConsumptionLogRepository consumptionRepo;
   private final MaterialIssueRepository issueRepo;
-  private final BoqItemRepository boqItemRepo;
   private final ActivityRepository activityRepo;
   private final ActivitySupervisorRepository activitySupervisorRepo;
+  private final DprMaterialConsumptionLookup dprMaterialLookup;
 
   @PersistenceContext private EntityManager em;
 
@@ -79,13 +79,15 @@ public class MaterialConsumptionReportService {
     Map<UUID, String> wbsNameCache = new HashMap<>();
     Map<UUID, Activity> activityCache = new HashMap<>();
     Map<UUID, UUID> activityToSupervisorCache = new HashMap<>();
-    Map<UUID, BoqPlanned> plannedByActivity = buildPlannedByActivityCache(filter.projectId());
+    Map<UUID, String> supervisorsSeen = new LinkedHashMap<>();
 
     List<MaterialConsumptionRow> rawRows = new ArrayList<>(logs.size());
     for (MaterialConsumptionLog log : logs) {
       UUID supervisorUserId = resolveSupervisorUserId(log.getActivityId(), activityToSupervisorCache);
+      String supervisorName = supervisorUserId != null
+          ? resolveUserName(supervisorUserId, userNameCache) : null;
+      if (supervisorUserId != null) supervisorsSeen.putIfAbsent(supervisorUserId, supervisorName);
 
-      // Optional filter on supervisor — applied here because we needed the lookup first.
       if (filter.supervisorUserId() != null && !filter.supervisorUserId().equals(supervisorUserId)) {
         continue;
       }
@@ -103,39 +105,16 @@ public class MaterialConsumptionReportService {
       BigDecimal issuedQty = issuedByKey.getOrDefault(
           new IssueKey(log.getActivityId(), log.getResourceId()), null);
 
-      BoqPlanned planned = plannedByActivity.get(log.getActivityId());
-      BigDecimal plannedQty = planned != null && planned.qty() != null
-          ? planned.qty()
-          : BigDecimal.ZERO;
       BigDecimal unitRate = log.getUnitRate();
       BigDecimal actualCost = log.getLineCost();
       if (actualCost == null && unitRate != null) {
         actualCost = unitRate.multiply(consumed);
       }
-      BigDecimal plannedCost = null;
-      if (planned != null && planned.qty() != null && planned.rate() != null) {
-        plannedCost = planned.qty().multiply(planned.rate());
-      } else if (unitRate != null && plannedQty.signum() > 0) {
-        plannedCost = unitRate.multiply(plannedQty);
-      }
 
-      BigDecimal variance = null;
-      BigDecimal variancePercent = null;
-      if (actualCost != null && plannedCost != null) {
-        variance = actualCost.subtract(plannedCost);
-        if (plannedCost.signum() != 0) {
-          variancePercent = variance.divide(plannedCost, 6, RoundingMode.HALF_UP);
-        }
-      }
-
-      List<String> alerts = MaterialConsumptionAlertEvaluator.evaluate(
-          plannedQty, consumed, balance, plannedCost, actualCost, unitRate);
+      List<String> alerts = MaterialConsumptionAlertEvaluator.evaluate(consumed, balance, unitRate);
 
       String activityName = activity != null
           ? (activity.getName() != null ? activity.getName() : activity.getCode())
-          : null;
-      String supervisorName = supervisorUserId != null
-          ? resolveUserName(supervisorUserId, userNameCache)
           : null;
       String storekeeperName = log.getIssuedByUserId() != null
           ? resolveUserName(log.getIssuedByUserId(), userNameCache)
@@ -159,16 +138,73 @@ public class MaterialConsumptionReportService {
           log.getMaterialRateMasterId(),
           log.getMaterialName(),
           log.getUnit(),
-          plannedQty,
           issuedQty,
           consumed,
           balance,
           log.getWastagePercent(),
           unitRate,
-          plannedCost,
           actualCost,
-          variance,
-          variancePercent,
+          alerts));
+    }
+
+    // Append DPR-entered material consumption (projects that log material via DPRs rather than the
+    // resource material ledger). The two paths are mutually exclusive per project, so this is a
+    // plain union with no double-count. The DPR path has no separate issue/stock/wastage step, so
+    // Issued/Balance/Wastage% are left null; Consumed/Unit Rate/Actual Cost are computed exactly
+    // as for ledger rows.
+    for (DprMaterialLine line : safeFetchDprMaterial(filter.projectId(), from, to)) {
+      UUID activityId = line.activityId();
+      UUID supervisorUserId = resolveSupervisorUserId(activityId, activityToSupervisorCache);
+      String supervisorName = supervisorUserId != null
+          ? resolveUserName(supervisorUserId, userNameCache) : null;
+      if (supervisorUserId != null) supervisorsSeen.putIfAbsent(supervisorUserId, supervisorName);
+
+      if (filter.activityId() != null && !filter.activityId().equals(activityId)) continue;
+      if (filter.storekeeperUserId() != null) continue;
+      if (filter.materialRateMasterId() != null) continue;
+      if (filter.supervisorUserId() != null && !filter.supervisorUserId().equals(supervisorUserId)) {
+        continue;
+      }
+
+      Activity activity = safeFetchActivity(activityId, activityCache);
+      UUID wbsNodeId = activity != null ? activity.getWbsNodeId() : null;
+      if (filter.wbsNodeId() != null && !filter.wbsNodeId().equals(wbsNodeId)) continue;
+
+      BigDecimal consumed = nz(line.quantity());
+      BigDecimal unitRate = line.unitRate();
+      BigDecimal actualCost = line.lineCost();
+      if (actualCost == null && unitRate != null) {
+        actualCost = unitRate.multiply(consumed);
+      }
+
+      List<String> alerts = MaterialConsumptionAlertEvaluator.evaluate(consumed, null, unitRate);
+
+      String activityName = activity != null
+          ? (activity.getName() != null ? activity.getName() : activity.getCode())
+          : null;
+      String wbsName = wbsNodeId != null ? resolveWbsName(wbsNodeId, wbsNameCache) : null;
+
+      rawRows.add(new MaterialConsumptionRow(
+          filter.projectId(),
+          line.reportDate(),
+          line.reportDate(),
+          wbsNodeId,
+          wbsName,
+          activityId,
+          activityName,
+          supervisorUserId,
+          supervisorName,
+          null,
+          null,
+          null,
+          line.materialName(),
+          line.unit(),
+          null,
+          consumed,
+          null,
+          null,
+          unitRate,
+          actualCost,
           alerts));
     }
 
@@ -176,8 +212,14 @@ public class MaterialConsumptionReportService {
     Map<String, BigDecimal> totals = computeTotals(finalRows);
     Map<String, Integer> alertCounts = computeAlertCounts(finalRows);
 
+    List<MaterialConsumptionReportResponse.SupervisorOption> supervisors = supervisorsSeen.entrySet().stream()
+        .map(e -> new MaterialConsumptionReportResponse.SupervisorOption(e.getKey(), e.getValue()))
+        .sorted(java.util.Comparator.comparing(
+            o -> o.name() == null ? "" : o.name(), String.CASE_INSENSITIVE_ORDER))
+        .toList();
+
     return new MaterialConsumptionReportResponse(
-        from, to, filter.groupBy(), finalRows, totals, alertCounts);
+        from, to, filter.groupBy(), finalRows, totals, alertCounts, supervisors);
   }
 
   // ── Fetch helpers ────────────────────────────────────────────────────────────────────────
@@ -188,6 +230,15 @@ public class MaterialConsumptionReportService {
           projectId, from, to);
     } catch (Exception e) {
       log.warn("Material consumption log fetch failed for project {}: {}", projectId, e.getMessage());
+      return Collections.emptyList();
+    }
+  }
+
+  private List<DprMaterialLine> safeFetchDprMaterial(UUID projectId, LocalDate from, LocalDate to) {
+    try {
+      return dprMaterialLookup.findApprovedLines(projectId, from, to);
+    } catch (Exception e) {
+      log.warn("DPR material fetch failed for project {}: {}", projectId, e.getMessage());
       return Collections.emptyList();
     }
   }
@@ -218,42 +269,6 @@ public class MaterialConsumptionReportService {
       }
     } catch (Exception e) {
       log.debug("Material issue aggregation failed for project {}: {}", projectId, e.getMessage());
-    }
-    return out;
-  }
-
-  private Map<UUID, BoqPlanned> buildPlannedByActivityCache(UUID projectId) {
-    Map<UUID, BoqPlanned> out = new HashMap<>();
-    try {
-      // Best-effort: BOQ items don't directly carry activity_id, so map via WBS node when a
-      // join row exists in activity.activities → boq_items via wbs_node_id. For v1 we simply
-      // index BoqItems by wbs_node_id and rely on activity.wbs_node_id to find a match later;
-      // any unmatched activity gets a zero plannedQty.
-      List<BoqItem> items = boqItemRepo.findByProjectIdOrderByItemNoAsc(projectId);
-      // Group BoqItems by wbs_node_id (multiple may exist; sum qty).
-      Map<UUID, BigDecimal> qtyByWbs = new HashMap<>();
-      Map<UUID, BigDecimal> rateByWbs = new HashMap<>();
-      for (BoqItem b : items) {
-        if (b.getWbsNodeId() == null) continue;
-        qtyByWbs.merge(b.getWbsNodeId(), nz(b.getBoqQty()), BigDecimal::add);
-        // Rate: prefer budgetedRate, fall back to boqRate.
-        BigDecimal rate = b.getBudgetedRate() != null ? b.getBudgetedRate() : b.getBoqRate();
-        if (rate != null) {
-          rateByWbs.putIfAbsent(b.getWbsNodeId(), rate);
-        }
-      }
-      // Now resolve activities → wbs_node and look up.
-      List<Activity> activities = activityRepo.findByProjectId(projectId);
-      for (Activity a : activities) {
-        if (a.getWbsNodeId() == null) continue;
-        BigDecimal qty = qtyByWbs.get(a.getWbsNodeId());
-        BigDecimal rate = rateByWbs.get(a.getWbsNodeId());
-        if (qty != null || rate != null) {
-          out.put(a.getId(), new BoqPlanned(qty, rate));
-        }
-      }
-    } catch (Exception e) {
-      log.debug("Planned-qty cache build failed for project {}: {}", projectId, e.getMessage());
     }
     return out;
   }
@@ -369,26 +384,20 @@ public class MaterialConsumptionReportService {
       List<MaterialConsumptionRow> bucket, String key, LocalDate globalFrom, LocalDate globalTo) {
     MaterialConsumptionRow first = bucket.get(0);
 
-    BigDecimal plannedQty = BigDecimal.ZERO;
     BigDecimal issuedQty = null;
     BigDecimal consumedQty = BigDecimal.ZERO;
     BigDecimal balanceQty = BigDecimal.ZERO;
-    BigDecimal plannedCost = null;
     BigDecimal actualCost = null;
     BigDecimal wastageWeightedNum = BigDecimal.ZERO;
     BigDecimal wastageWeightedDen = BigDecimal.ZERO;
 
     List<String> aggAlerts = new ArrayList<>();
     for (MaterialConsumptionRow r : bucket) {
-      plannedQty = plannedQty.add(nz(r.plannedQty()));
       if (r.issuedQty() != null) {
         issuedQty = (issuedQty == null ? BigDecimal.ZERO : issuedQty).add(r.issuedQty());
       }
       consumedQty = consumedQty.add(nz(r.consumedQty()));
       balanceQty = balanceQty.add(nz(r.balanceQty()));
-      if (r.plannedCost() != null) {
-        plannedCost = (plannedCost == null ? BigDecimal.ZERO : plannedCost).add(r.plannedCost());
-      }
       if (r.actualCost() != null) {
         actualCost = (actualCost == null ? BigDecimal.ZERO : actualCost).add(r.actualCost());
       }
@@ -403,19 +412,10 @@ public class MaterialConsumptionReportService {
     BigDecimal wastagePercent = wastageWeightedDen.signum() > 0
         ? wastageWeightedNum.divide(wastageWeightedDen, 4, RoundingMode.HALF_UP)
         : null;
-    BigDecimal variance = null;
-    BigDecimal variancePercent = null;
-    if (actualCost != null && plannedCost != null) {
-      variance = actualCost.subtract(plannedCost);
-      if (plannedCost.signum() != 0) {
-        variancePercent = variance.divide(plannedCost, 6, RoundingMode.HALF_UP);
-      }
-    }
     BigDecimal unitRate = consumedQty.signum() > 0 && actualCost != null
         ? actualCost.divide(consumedQty, 6, RoundingMode.HALF_UP)
         : null;
 
-    // Carry only the bucket-defining dimensions.
     LocalDate fromDate = GROUP_DAY.equals(key) ? first.fromDate() : globalFrom;
     LocalDate toDate = GROUP_DAY.equals(key) ? first.fromDate() : globalTo;
     UUID activityId = GROUP_ACTIVITY.equals(key) ? first.activityId() : null;
@@ -427,47 +427,19 @@ public class MaterialConsumptionReportService {
     String unit = GROUP_MATERIAL.equals(key) ? first.unit() : null;
 
     return new MaterialConsumptionRow(
-        first.projectId(),
-        fromDate,
-        toDate,
-        null,
-        null,
-        activityId,
-        activityName,
-        supervisorUserId,
-        supervisorName,
-        null,
-        null,
-        materialRateMasterId,
-        materialName,
-        unit,
-        plannedQty,
-        issuedQty,
-        consumedQty,
-        balanceQty,
-        wastagePercent,
-        unitRate,
-        plannedCost,
-        actualCost,
-        variance,
-        variancePercent,
-        aggAlerts);
+        first.projectId(), fromDate, toDate, null, null, activityId, activityName,
+        supervisorUserId, supervisorName, null, null, materialRateMasterId, materialName, unit,
+        issuedQty, consumedQty, balanceQty, wastagePercent, unitRate, actualCost, aggAlerts);
   }
 
   // ── Totals & alert counts ────────────────────────────────────────────────────────────────
 
   private Map<String, BigDecimal> computeTotals(List<MaterialConsumptionRow> rows) {
-    BigDecimal plannedCost = BigDecimal.ZERO;
     BigDecimal actualCost = BigDecimal.ZERO;
     BigDecimal wastageNum = BigDecimal.ZERO;
     BigDecimal wastageDen = BigDecimal.ZERO;
-    boolean anyPlanned = false;
     boolean anyActual = false;
     for (MaterialConsumptionRow r : rows) {
-      if (r.plannedCost() != null) {
-        plannedCost = plannedCost.add(r.plannedCost());
-        anyPlanned = true;
-      }
       if (r.actualCost() != null) {
         actualCost = actualCost.add(r.actualCost());
         anyActual = true;
@@ -479,11 +451,7 @@ public class MaterialConsumptionReportService {
       }
     }
     Map<String, BigDecimal> out = new LinkedHashMap<>();
-    out.put("plannedCost", anyPlanned ? plannedCost : BigDecimal.ZERO);
     out.put("actualCost", anyActual ? actualCost : BigDecimal.ZERO);
-    out.put("variance", anyActual && anyPlanned
-        ? actualCost.subtract(plannedCost)
-        : BigDecimal.ZERO);
     out.put("wastagePercent_avg", wastageDen.signum() > 0
         ? wastageNum.divide(wastageDen, 4, RoundingMode.HALF_UP)
         : BigDecimal.ZERO);
@@ -506,7 +474,4 @@ public class MaterialConsumptionReportService {
 
   /** (activity_id, resource_id == material_id in the issue table) key for the issued-qty cache. */
   private record IssueKey(UUID activityId, UUID materialId) {}
-
-  /** Planned (qty, rate) lookup result. Either may be null. */
-  private record BoqPlanned(BigDecimal qty, BigDecimal rate) {}
 }

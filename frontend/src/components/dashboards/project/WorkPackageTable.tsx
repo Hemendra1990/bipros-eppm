@@ -17,7 +17,6 @@ interface WorkPackageRow {
   id: string;
   code: string;
   name: string;
-  contractor: string;
   pctComplete: number;
   status: string;
   plannedFinish: string | null;
@@ -28,7 +27,6 @@ function toRow(r: ActivityStatusRow): WorkPackageRow {
     id: r.activityId,
     code: r.wbsCode || r.code,
     name: r.name,
-    contractor: "—",
     pctComplete: r.pctComplete,
     status: mapWorkPackageStatus(r),
     plannedFinish: r.plannedFinish,
@@ -79,18 +77,10 @@ export function WorkPackageTable({
       },
       {
         id: "name",
-        header: "Package",
+        header: "Activity",
         accessorKey: "name",
         cell: ({ row }) => (
           <span className="font-medium text-charcoal">{row.original.name}</span>
-        ),
-      },
-      {
-        id: "contractor",
-        header: "Contractor",
-        accessorKey: "contractor",
-        cell: ({ row }) => (
-          <span className="text-slate">{row.original.contractor}</span>
         ),
       },
       {
@@ -139,7 +129,7 @@ export function WorkPackageTable({
   return (
     <SectionCard
       title="Work Package Status"
-      subtitle={`${rows.length} of ${activities.length} packages`}
+      subtitle={`${rows.length} of ${activities.length} activities`}
       icon={<Package size={16} />}
       accent
     >

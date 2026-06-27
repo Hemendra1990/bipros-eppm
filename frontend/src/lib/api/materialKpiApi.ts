@@ -43,11 +43,11 @@ export interface MaterialKpiResponse {
 }
 
 export const materialKpiApi = {
-  getKpis: (projectId: string, from: string, to: string) =>
+  getKpis: (projectId: string, from?: string, to?: string) =>
     apiClient
       .get<ApiResponse<MaterialKpiResponse>>(
         `/v1/projects/${projectId}/kpis/material`,
-        { params: { from, to } },
+        { params: from && to ? { from, to } : {} },
       )
       .then((r) => r.data),
 };

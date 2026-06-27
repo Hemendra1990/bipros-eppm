@@ -74,6 +74,91 @@ public class SchedulingService {
   // NOTE: a distributed lock (e.g. Redis SETNX) would be required for multi-node deployments.
   private final ConcurrentHashMap<UUID, ReentrantLock> projectLocks = new ConcurrentHashMap<>();
 
+  private record CpmInputs(ScheduleData data, CalendarCalculator calculator, UUID defaultCalendarId) {}
+
+  // -------------------------------------------------------------------------
+  // Nested types: CpmSimulation and CpmEvaluator
+  // -------------------------------------------------------------------------
+
+  /** Result of one in-memory CPM evaluation. */
+  public record CpmSimulation(LocalDate projectFinish, double finishSpanWorkingDays,
+                              List<ScheduledActivity> activities) {}
+
+  /**
+   * Loads a project's activities, relationships, calendar, PERT and dates ONCE, then evaluates
+   * arbitrary per-activity duration-override scenarios in memory (no DB, no persistence, no events).
+   * Non-final so it can be mocked in unit tests.
+   */
+  public static class CpmEvaluator {
+    private final CalendarCalculator calculator;
+    private final UUID defaultCalendarId;
+    private final LocalDate projectStart;
+    private final List<SchedulableActivity> baseActivities;
+    private final List<SchedulableRelationship> relationships;
+    private final Map<UUID, List<UUID>> summaryChildren;
+    private final LocalDate dataDate;
+    private final LocalDate mustFinishByDate;
+    private final UUID projectId;
+    private final SchedulingOption option;
+    private final Map<UUID, Double> baseDurations;
+
+    CpmEvaluator(CalendarCalculator calculator, UUID defaultCalendarId, LocalDate projectStart,
+                 List<SchedulableActivity> baseActivities, List<SchedulableRelationship> relationships,
+                 Map<UUID, List<UUID>> summaryChildren, LocalDate dataDate, LocalDate mustFinishByDate,
+                 UUID projectId, SchedulingOption option) {
+      this.calculator = calculator;
+      this.defaultCalendarId = defaultCalendarId;
+      this.projectStart = projectStart;
+      this.baseActivities = List.copyOf(baseActivities);
+      this.relationships = List.copyOf(relationships);
+      this.summaryChildren = Map.copyOf(summaryChildren);
+      this.dataDate = dataDate;
+      this.mustFinishByDate = mustFinishByDate;
+      this.projectId = projectId;
+      this.option = option;
+      Map<UUID, Double> bd = new HashMap<>();
+      for (SchedulableActivity a : baseActivities) {
+        bd.put(a.id(), a.remainingDuration());
+      }
+      this.baseDurations = Map.copyOf(bd);
+    }
+
+    /** Evaluate a scenario with per-activity duration overrides. Rebuilds only the activity list;
+     *  all other inputs are reused from the cached state. */
+    public CpmSimulation evaluate(Map<UUID, Double> overrides) {
+      List<SchedulableActivity> adjusted = new ArrayList<>();
+      for (SchedulableActivity a : baseActivities) {
+        Double ov = overrides.get(a.id());
+        adjusted.add(ov != null
+            ? new SchedulableActivity(a.id(), a.originalDuration(), ov, a.calendarId(),
+                a.activityType(), a.status(), a.percentComplete(), a.actualStartDate(),
+                a.actualFinishDate(), a.primaryConstraintType(), a.primaryConstraintDate(),
+                a.secondaryConstraintType(), a.secondaryConstraintDate())
+            : a);
+      }
+      ScheduleData data = new ScheduleData(projectId, dataDate, projectStart, mustFinishByDate,
+          adjusted, relationships, option, summaryChildren);
+      List<ScheduledActivity> scheduled = new CPMScheduler(calculator, defaultCalendarId).schedule(data);
+      LocalDate projectFinish = scheduled.stream()
+          .map(ScheduledActivity::getEarlyFinish)
+          .filter(d -> d != null)
+          .max(LocalDate::compareTo)
+          .orElse(projectStart);
+      double span = calculator.countWorkingDays(defaultCalendarId, projectStart, projectFinish);
+      return new CpmSimulation(projectFinish, span, scheduled);
+    }
+
+    /** Returns the scheduling duration (remainingDuration as used by CPM) for each activity
+     *  in the base scenario — the loop's starting point. */
+    public Map<UUID, Double> baseSchedulingDurations() {
+      return new HashMap<>(baseDurations);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Public API
+  // -------------------------------------------------------------------------
+
   public ScheduleResultResponse scheduleProject(UUID projectId, SchedulingOption option) {
     log.info("Scheduling project: id={}, option={}", projectId, option);
     long startTime = System.currentTimeMillis();
@@ -87,139 +172,16 @@ public class SchedulingService {
         throw new ResourceNotFoundException("Activities", projectId);
       }
 
-      List<ActivityRelationship> relationships = activityRelationshipRepository.findByProjectId(projectId);
+      // Build activityMap from the already-loaded activities for the persistence loop below.
+      Map<UUID, Activity> activityMap = activities.stream()
+          .collect(Collectors.toMap(Activity::getId, a -> a));
 
-      // Determine default calendar via fallback chain: activity → project → project-default → global-default
-      UUID defaultCalendarId = resolveDefaultCalendarId(projectId, activities);
-
-      // Load the project once to honour its schedule metadata (data date, planned start, must-finish-by).
-      Project project = projectRepository.findById(projectId).orElse(null);
-
-      // Use the project's data date for reproducible schedule runs; fall back to today only when unset.
-      LocalDate dataDate = (project != null && project.getDataDate() != null)
-          ? project.getDataDate()
-          : LocalDate.now();
-
-      // Prefer the project's own planned start; else derive from the earliest activity planned start.
-      LocalDate projectStartDate = (project != null && project.getPlannedStartDate() != null)
-          ? project.getPlannedStartDate()
-          : activities.stream()
-              .map(Activity::getPlannedStartDate)
-              .filter(date -> date != null)
-              .min(LocalDate::compareTo)
-              .orElse(LocalDate.now());
-
-      // Thread the contractual deadline into the backward pass (null = unconstrained).
-      // NOTE: The CPM engine currently anchors project finish to max(mustFinishByDate, maxEF),
-      // so a deadline earlier than the computed finish produces zero/positive float rather than
-      // negative float. Making an earlier deadline drive negative float requires a separate
-      // engine-semantics change in CPMScheduler and is deferred as a follow-up.
-      LocalDate mustFinishByDate = (project != null) ? project.getMustFinishByDate() : null;
-
-      // Map Activity entities to SchedulableActivity records
-      Map<UUID, Activity> activityMap = new HashMap<>();
-      List<SchedulableActivity> schedulableActivities = new ArrayList<>();
-
-      // Fetch all PERT estimates for this project's activities
-      List<UUID> activityIds = activities.stream().map(Activity::getId).toList();
-      var pertEstimates = pertEstimateService.getByActivities(activityIds);
-      var pertMap = pertEstimates.stream()
-          .collect(java.util.stream.Collectors.toMap(
-              pe -> pe.activityId(),
-              pe -> pe
-          ));
-
-      if (!pertEstimates.isEmpty()) {
-        log.debug("Found {} PERT estimates for project: id={}", pertEstimates.size(), projectId);
-      }
-
-      for (Activity activity : activities) {
-        activityMap.put(activity.getId(), activity);
-
-        // Use PERT expected duration if available, otherwise use remaining duration
-        // (fall back to originalDuration when remainingDuration is null — e.g. NOT_STARTED activities)
-        Double remDur = activity.getRemainingDuration();
-        Double origDur = activity.getOriginalDuration();
-        double durationToUse = remDur != null ? remDur : (origDur != null ? origDur : 0.0);
-        if (pertMap.containsKey(activity.getId())) {
-          durationToUse = pertMap.get(activity.getId()).expectedDuration();
-        }
-
-        SchedulableActivity schedulable = new SchedulableActivity(
-            activity.getId(),
-            activity.getOriginalDuration() != null ? activity.getOriginalDuration() : 0.0,
-            durationToUse,
-            activity.getCalendarId(),
-            activity.getActivityType() != null ? activity.getActivityType().name() : null,
-            activity.getStatus() != null ? activity.getStatus().name() : null,
-            activity.getPercentComplete() != null ? activity.getPercentComplete() : 0.0,
-            activity.getActualStartDate(),
-            activity.getActualFinishDate(),
-            activity.getPrimaryConstraintType() != null ? activity.getPrimaryConstraintType().name() : null,
-            activity.getPrimaryConstraintDate(),
-            activity.getSecondaryConstraintType() != null ? activity.getSecondaryConstraintType().name() : null,
-            activity.getSecondaryConstraintDate()
-        );
-        schedulableActivities.add(schedulable);
-      }
-
-      // Map ActivityRelationship entities to SchedulableRelationship records
-      List<SchedulableRelationship> schedulableRelationships = new ArrayList<>();
-      for (ActivityRelationship rel : relationships) {
-        SchedulableRelationship schedulable = new SchedulableRelationship(
-            rel.getPredecessorActivityId(),
-            rel.getSuccessorActivityId(),
-            rel.getRelationshipType().code(),
-            rel.getLag() != null ? rel.getLag() : 0.0
-        );
-        schedulableRelationships.add(schedulable);
-      }
-
-      // Build WBS_SUMMARY → children map for hammock/summary activity support
-      Map<UUID, List<UUID>> summaryChildren = new HashMap<>();
-      for (Activity activity : activities) {
-        if (activity.getActivityType() != null
-            && activity.getActivityType().name().equals("WBS_SUMMARY")
-            && activity.getWbsNodeId() != null) {
-          // Find all non-summary activities that share the same WBS node
-          List<UUID> children = activities.stream()
-              .filter(a -> activity.getWbsNodeId().equals(a.getWbsNodeId())
-                  && !a.getId().equals(activity.getId())
-                  && (a.getActivityType() == null || !a.getActivityType().name().equals("WBS_SUMMARY")))
-              .map(Activity::getId)
-              .toList();
-          if (!children.isEmpty()) {
-            summaryChildren.put(activity.getId(), children);
-          }
-        }
-      }
-
-      // Create schedule data
-      ScheduleData scheduleData = new ScheduleData(
-          projectId,
-          dataDate,
-          projectStartDate,
-          mustFinishByDate,
-          schedulableActivities,
-          schedulableRelationships,
-          option != null ? option : SchedulingOption.RETAINED_LOGIC,
-          summaryChildren
-      );
-
-      // Build a snapshot-backed calculator for this run.
-      // The window is intentionally generous (±1 year back, +10 years forward) so the
-      // engine never queries a date outside the snapshot's exception coverage. Construction
-      // schedules are far shorter in practice; the extra range has no performance cost
-      // because exceptions outside the range simply aren't loaded.
-      LocalDate windowFrom = (projectStartDate.isBefore(dataDate) ? projectStartDate : dataDate)
-          .minusYears(1);
-      LocalDate windowTo = projectStartDate.plusYears(10);
-      CalendarCalculator runCalculator =
-          new SnapshotCalendarCalculator(calendarService, windowFrom, windowTo);
+      CpmInputs inputs = buildCpmInputs(projectId, activities,
+          option != null ? option : SchedulingOption.RETAINED_LOGIC, Map.of());
 
       // Run CPM scheduler
-      CPMScheduler scheduler = new CPMScheduler(runCalculator, defaultCalendarId);
-      CPMScheduler.ScheduleOutput output = scheduler.scheduleWithWarnings(scheduleData);
+      CPMScheduler scheduler = new CPMScheduler(inputs.calculator(), inputs.defaultCalendarId());
+      CPMScheduler.ScheduleOutput output = scheduler.scheduleWithWarnings(inputs.data());
       List<ScheduledActivity> scheduledActivities = output.activities();
       List<String> scheduleWarnings = output.warnings();
       CPMScheduler.StatusBreakdown statusBreakdown = output.statusBreakdown();
@@ -228,7 +190,7 @@ public class SchedulingService {
       LocalDate projectFinish = scheduledActivities.stream()
           .map(ScheduledActivity::getEarlyFinish)
           .max(LocalDate::compareTo)
-          .orElse(projectStartDate);
+          .orElse(inputs.data().projectStartDate());
 
       int criticalCount = (int) scheduledActivities.stream()
           .filter(ScheduledActivity::isCritical)
@@ -242,8 +204,8 @@ public class SchedulingService {
       // Save ScheduleResult
       ScheduleResult scheduleResult = ScheduleResult.builder()
           .projectId(projectId)
-          .dataDate(dataDate)
-          .projectStartDate(projectStartDate)
+          .dataDate(inputs.data().dataDate())
+          .projectStartDate(inputs.data().projectStartDate())
           .projectFinishDate(projectFinish)
           .criticalPathLength(criticalPathLength)
           .totalActivities(scheduledActivities.size())
@@ -352,6 +314,143 @@ public class SchedulingService {
     }
   }
 
+  /** Build a load-once / evaluate-many CPM evaluator for iterative scenario analysis.
+   *  No persistence, no events, no Activity mutation. */
+  public CpmEvaluator newCpmEvaluator(UUID projectId) {
+    List<Activity> activities = activityRepository.findByProjectId(projectId);
+    if (activities.isEmpty()) {
+      throw new ResourceNotFoundException("Activities", projectId);
+    }
+    CpmInputs inputs = buildCpmInputs(projectId, activities, SchedulingOption.RETAINED_LOGIC, Map.of());
+    ScheduleData data = inputs.data();
+    return new CpmEvaluator(
+        inputs.calculator(), inputs.defaultCalendarId(), data.projectStartDate(),
+        data.activities(), data.relationships(), data.summaryChildren(),
+        data.dataDate(), data.mustFinishByDate(), projectId, data.schedulingOption()
+    );
+  }
+
+  private CpmInputs buildCpmInputs(UUID projectId, List<Activity> activities,
+      SchedulingOption option, Map<UUID, Double> durationOverrides) {
+
+    UUID defaultCalendarId = resolveDefaultCalendarId(projectId, activities);
+
+    // Load the project once to honour its schedule metadata (data date, planned start, must-finish-by).
+    Project project = projectRepository.findById(projectId).orElse(null);
+
+    // Use the project's data date for reproducible schedule runs; fall back to today only when unset.
+    LocalDate dataDate = (project != null && project.getDataDate() != null)
+        ? project.getDataDate()
+        : LocalDate.now();
+
+    // Prefer the project's own planned start; else derive from the earliest activity planned start.
+    LocalDate projectStartDate = (project != null && project.getPlannedStartDate() != null)
+        ? project.getPlannedStartDate()
+        : activities.stream()
+            .map(Activity::getPlannedStartDate)
+            .filter(date -> date != null)
+            .min(LocalDate::compareTo)
+            .orElse(LocalDate.now());
+
+    // Thread the contractual deadline into the backward pass (null = unconstrained).
+    LocalDate mustFinishByDate = (project != null) ? project.getMustFinishByDate() : null;
+
+    // Fetch all PERT estimates for this project's activities
+    List<UUID> activityIds = activities.stream().map(Activity::getId).toList();
+    var pertEstimates = pertEstimateService.getByActivities(activityIds);
+    var pertMap = pertEstimates.stream()
+        .collect(java.util.stream.Collectors.toMap(
+            pe -> pe.activityId(),
+            pe -> pe
+        ));
+
+    if (!pertEstimates.isEmpty()) {
+      log.debug("Found {} PERT estimates for project: id={}", pertEstimates.size(), projectId);
+    }
+
+    // Map Activity entities to SchedulableActivity records
+    List<SchedulableActivity> schedulableActivities = new ArrayList<>();
+    for (Activity activity : activities) {
+      Double remDur = activity.getRemainingDuration();
+      Double origDur = activity.getOriginalDuration();
+      double durationToUse = remDur != null ? remDur : (origDur != null ? origDur : 0.0);
+      if (pertMap.containsKey(activity.getId())) {
+        durationToUse = pertMap.get(activity.getId()).expectedDuration();
+      }
+      if (durationOverrides != null && durationOverrides.containsKey(activity.getId())) {
+        durationToUse = durationOverrides.get(activity.getId());
+      }
+
+      SchedulableActivity schedulable = new SchedulableActivity(
+          activity.getId(),
+          activity.getOriginalDuration() != null ? activity.getOriginalDuration() : 0.0,
+          durationToUse,
+          activity.getCalendarId(),
+          activity.getActivityType() != null ? activity.getActivityType().name() : null,
+          activity.getStatus() != null ? activity.getStatus().name() : null,
+          activity.getPercentComplete() != null ? activity.getPercentComplete() : 0.0,
+          activity.getActualStartDate(),
+          activity.getActualFinishDate(),
+          activity.getPrimaryConstraintType() != null ? activity.getPrimaryConstraintType().name() : null,
+          activity.getPrimaryConstraintDate(),
+          activity.getSecondaryConstraintType() != null ? activity.getSecondaryConstraintType().name() : null,
+          activity.getSecondaryConstraintDate()
+      );
+      schedulableActivities.add(schedulable);
+    }
+
+    // Map ActivityRelationship entities to SchedulableRelationship records
+    List<ActivityRelationship> relationships = activityRelationshipRepository.findByProjectId(projectId);
+    List<SchedulableRelationship> schedulableRelationships = new ArrayList<>();
+    for (ActivityRelationship rel : relationships) {
+      SchedulableRelationship schedulable = new SchedulableRelationship(
+          rel.getPredecessorActivityId(),
+          rel.getSuccessorActivityId(),
+          rel.getRelationshipType().code(),
+          rel.getLag() != null ? rel.getLag() : 0.0
+      );
+      schedulableRelationships.add(schedulable);
+    }
+
+    // Build WBS_SUMMARY → children map for hammock/summary activity support
+    Map<UUID, List<UUID>> summaryChildren = new HashMap<>();
+    for (Activity activity : activities) {
+      if (activity.getActivityType() != null
+          && activity.getActivityType().name().equals("WBS_SUMMARY")
+          && activity.getWbsNodeId() != null) {
+        List<UUID> children = activities.stream()
+            .filter(a -> activity.getWbsNodeId().equals(a.getWbsNodeId())
+                && !a.getId().equals(activity.getId())
+                && (a.getActivityType() == null || !a.getActivityType().name().equals("WBS_SUMMARY")))
+            .map(Activity::getId)
+            .toList();
+        if (!children.isEmpty()) {
+          summaryChildren.put(activity.getId(), children);
+        }
+      }
+    }
+
+    // Create schedule data
+    ScheduleData scheduleData = new ScheduleData(
+        projectId,
+        dataDate,
+        projectStartDate,
+        mustFinishByDate,
+        schedulableActivities,
+        schedulableRelationships,
+        option,
+        summaryChildren
+    );
+
+    LocalDate windowFrom = (projectStartDate.isBefore(dataDate) ? projectStartDate : dataDate)
+        .minusYears(1);
+    LocalDate windowTo = projectStartDate.plusYears(10);
+    CalendarCalculator runCalculator =
+        new SnapshotCalendarCalculator(calendarService, windowFrom, windowTo);
+
+    return new CpmInputs(scheduleData, runCalculator, defaultCalendarId);
+  }
+
   public ScheduleResultResponse getLatestSchedule(UUID projectId) {
     log.debug("Fetching latest schedule for project: id={}", projectId);
 
@@ -426,13 +525,11 @@ public class SchedulingService {
   /**
    * Resolves the calendar to use for CPM scheduling via a four-step fallback chain:
    * <ol>
-   *   <li>First non-null {@code Activity.calendarId} in the activity list (preserves current per-activity calendar behavior).</li>
-   *   <li>The project's own {@code Project.calendarId} (set on Overview → Calendar).</li>
-   *   <li>A project-scoped calendar from {@code CalendarRepository.findByProjectId}: prefers the one with {@code isDefault==true}, else the first in the list.</li>
-   *   <li>The global-default calendar: {@code CalendarRepository.findByCalendarTypeAndIsDefaultTrue(GLOBAL)}.</li>
+   *   <li>First non-null {@code Activity.calendarId} in the activity list.</li>
+   *   <li>The project's own {@code Project.calendarId}.</li>
+   *   <li>A project-scoped calendar from {@code CalendarRepository.findByProjectId}.</li>
+   *   <li>The global-default calendar.</li>
    * </ol>
-   * For steps 2-4 the candidate id is validated against {@code calendarRepository.findById} before being returned, so dangling ids are skipped.
-   * Throws {@link ResourceNotFoundException} with a clear message when no calendar can be resolved.
    */
   UUID resolveDefaultCalendarId(UUID projectId, List<Activity> activities) {
     // Step 1 — activity-level calendar
@@ -479,11 +576,6 @@ public class SchedulingService {
         "No calendar configured for this project — set one on the project (Overview → Calendar) or assign one to its activities.");
   }
 
-  /**
-   * Return the latest schedule for the project, running the scheduler on demand when none exists
-   * yet. Keeps GET endpoints useful for freshly-imported projects where nobody has clicked
-   * "Schedule" yet.
-   */
   private ScheduleResult ensureSchedule(UUID projectId) {
     return scheduleResultRepository.findTopByProjectIdAndStatusOrderByCalculatedAtDesc(projectId, ScheduleStatus.COMPLETED)
         .orElseGet(() -> {

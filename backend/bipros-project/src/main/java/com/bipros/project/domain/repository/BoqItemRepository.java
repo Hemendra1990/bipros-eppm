@@ -2,8 +2,11 @@ package com.bipros.project.domain.repository;
 
 import com.bipros.project.domain.model.BoqItem;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,4 +21,13 @@ public interface BoqItemRepository extends JpaRepository<BoqItem, UUID> {
   Optional<BoqItem> findByProjectIdAndItemNo(UUID projectId, String itemNo);
 
   boolean existsByProjectIdAndItemNo(UUID projectId, String itemNo);
+
+  /** Σ budgeted amount (boq_qty × budgeted_rate) across the project's BOQ — the EVM cost baseline. */
+  @Query("SELECT COALESCE(SUM(b.budgetedAmount), 0) FROM BoqItem b WHERE b.projectId = :projectId")
+  BigDecimal sumBudgetedAmount(@Param("projectId") UUID projectId);
+
+  /** Σ earned budgeted value (qty_executed × budgeted_rate) — the numerator of Cost % Complete. */
+  @Query("SELECT COALESCE(SUM(b.qtyExecutedToDate * b.budgetedRate), 0) FROM BoqItem b " +
+         "WHERE b.projectId = :projectId AND b.qtyExecutedToDate IS NOT NULL AND b.budgetedRate IS NOT NULL")
+  BigDecimal sumEarnedBudgetedValue(@Param("projectId") UUID projectId);
 }

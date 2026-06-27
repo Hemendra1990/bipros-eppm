@@ -71,7 +71,7 @@ test.describe("Material Consumption Report", () => {
     // Alert chips carry one of the known codes. We can't guarantee a row triggers
     // an alert in every environment — soft assert + skip if none visible.
     const alertChip = page
-      .getByText(/EXCESS_CONSUMPTION|NEGATIVE_BALANCE|BUDGET_OVERCONSUMPTION|MISSING_UNIT_RATE/i)
+      .getByText(/NEGATIVE_BALANCE|MISSING_UNIT_RATE/i)
       .first();
     const visible = await alertChip.isVisible({ timeout: 8_000 }).catch(() => false);
     test.skip(!visible, "No alert rows in current seed — wire a deliberate over-consumption row to assert");

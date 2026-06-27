@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  evmApi,
-  type EvmTechnique,
-  type EtcMethod,
-  type WbsEvmNode,
-  type EvmCalculationResult,
-} from "@/lib/api/evmApi";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { costApi, type WbsEvmRow, type CostSummary } from "@/lib/api/costApi";
+import { periodPerformanceApi, type PeriodPerformanceRollup } from "@/lib/api/periodPerformanceApi";
+
+// Only the forecast methods the EVM tab supports (Manual / Management-Override were removed —
+// they require an EAC input the tab does not collect).
+type EtcMethod = "CPI_BASED" | "SPI_BASED" | "CPI_SPI_COMPOSITE";
 import {
   LineChart,
   Line,
@@ -22,7 +21,6 @@ import {
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { KpiTile } from "@/components/common/KpiTile";
-import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { budgetApi } from "@/lib/api/budgetApi";
 import { formatMoney } from "@/lib/currency/format";
 import { CHART_TOOLTIP_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_TOOLTIP_ITEM_STYLE } from "@/components/common/dashboard/primitives";
@@ -39,46 +37,31 @@ function makeFormatter(currency: string) {
     formatMoney(value ?? 0, { code }, { compact: true });
 }
 
-const TECHNIQUES: { value: EvmTechnique; label: string }[] = [
-  { value: "ACTIVITY_PERCENT_COMPLETE", label: "Activity % Complete" },
-  { value: "ZERO_ONE_HUNDRED", label: "0/100" },
-  { value: "FIFTY_FIFTY", label: "50/50" },
-  { value: "WEIGHTED_STEPS", label: "Weighted Steps" },
-  { value: "LEVEL_OF_EFFORT", label: "Level of Effort" },
-];
+function etcForecast(s: CostSummary, method: EtcMethod) {
+  const { bac, earnedValue: ev, totalActual: ac,
+          costPerformanceIndex: cpi, schedulePerformanceIndex: spi } = s;
+  if (method === "CPI_BASED")
+    return { eac: s.estimateAtCompletion, etc: s.estimateToComplete, vac: s.varianceAtCompletion };
+  let eac = bac;
+  if (method === "SPI_BASED") eac = spi ? ac + (bac - ev) / spi : bac;
+  else if (method === "CPI_SPI_COMPOSITE") eac = cpi && spi ? ac + (bac - ev) / (cpi * spi) : bac;
+  return { eac, etc: eac - ac, vac: bac - eac };
+}
 
 const ETC_METHODS: { value: EtcMethod; label: string }[] = [
   { value: "CPI_BASED", label: "CPI-Based" },
   { value: "SPI_BASED", label: "SPI-Based" },
   { value: "CPI_SPI_COMPOSITE", label: "CPI × SPI Composite" },
-  { value: "MANUAL", label: "Manual" },
-  { value: "MANAGEMENT_OVERRIDE", label: "Management Override" },
 ];
 
 const fmtIdx = (v: number | null | undefined) => (v ?? 0).toFixed(2);
 const fmtPct = (v: number | null | undefined) => `${(v ?? 0).toFixed(1)}%`;
 
-function getVisibleWbsNodes(
-  nodes: WbsEvmNode[],
-  expandedIds: Set<string>,
-  depth = 0
-): Array<WbsEvmNode & { depth: number }> {
-  return nodes.flatMap((node) => {
-    const row = { ...node, depth };
-    const children = node.children ?? [];
-    if (expandedIds.has(node.wbsNodeId) && children.length > 0) {
-      return [row, ...getVisibleWbsNodes(children, expandedIds, depth + 1)];
-    }
-    return [row];
-  });
-}
 
 export function EvmTab({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
-  const [technique, setTechnique] = useState<EvmTechnique>("ACTIVITY_PERCENT_COMPLETE");
   const [etcMethod, setEtcMethod] = useState<EtcMethod>("CPI_BASED");
   const [activeTab, setActiveTab] = useState<"summary" | "wbs">("summary");
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const { data: budgetData } = useQuery({
     queryKey: ["project-budget", projectId],
@@ -89,77 +72,46 @@ export function EvmTab({ projectId }: { projectId: string }) {
   const fmt = makeFormatter(currency);
 
   const { data: metricsData, isLoading: isLoadingMetrics } = useQuery({
-    queryKey: ["evm-metrics", projectId],
-    queryFn: () => evmApi.getLatest(projectId),
+    queryKey: ["evm-cost-summary", projectId],
+    queryFn: () => costApi.getCostSummary(projectId),
   });
 
   const { data: historyData, isLoading: isLoadingHistory } = useQuery({
-    queryKey: ["evm-history", projectId],
-    queryFn: () => evmApi.getHistory(projectId),
+    queryKey: ["evm-perf-scurve", projectId],
+    queryFn: () => periodPerformanceApi.getPerformanceRollup(projectId, "M"),
   });
 
   const { data: wbsData, isLoading: isLoadingWbs } = useQuery({
-    queryKey: ["evm-wbs", projectId, technique, etcMethod],
-    queryFn: () => evmApi.getWbsTree(projectId, technique, etcMethod),
+    queryKey: ["evm-wbs-cost", projectId],
+    queryFn: () => costApi.getEvmByWbs(projectId),
     enabled: activeTab === "wbs",
   });
 
-  const calculateMutation = useMutation({
-    mutationFn: () => evmApi.calculateEvm(projectId, technique, etcMethod),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["evm-metrics", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["evm-history", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["evm-wbs", projectId] });
-    },
-  });
+  const summary = metricsData?.data as CostSummary | undefined;
+  const fc = summary ? etcForecast(summary, etcMethod) : null;
 
-  const metrics = metricsData?.data as EvmCalculationResult | undefined;
+  const chartData = (() => {
+    const rows = (historyData?.data as PeriodPerformanceRollup[] | undefined) ?? [];
+    let cumPv = 0, cumEv = 0, cumAc = 0;
+    return rows.map((p) => {
+      cumPv += p.plannedValue ?? 0;
+      cumEv += p.earnedValue ?? 0;
+      cumAc += p.actualCost ?? 0;
+      return { periodDate: p.periodName, pv: cumPv, ev: cumEv, ac: cumAc };
+    });
+  })();
 
-  const chartData =
-    (historyData?.data as EvmCalculationResult[] | undefined)?.map((h) => ({
-      periodDate: h.dataDate,
-      pv: h.plannedValue,
-      ev: h.earnedValue,
-      ac: h.actualCost,
-    })) ?? [];
+  const wbsRows = (wbsData?.data as WbsEvmRow[] | undefined) ?? [];
 
-  const wbsNodes = (wbsData?.data as WbsEvmNode[] | undefined) ?? [];
-
-  const visibleWbsNodes = useMemo(() => {
-    return getVisibleWbsNodes(wbsNodes, expandedIds);
-  }, [wbsNodes, expandedIds]);
-
-  const wbsColumns = useMemo<ColumnDef<WbsEvmNode & { depth: number }>[]>(
+  const wbsColumns = useMemo<ColumnDef<WbsEvmRow>[]>(
     () => [
       {
         accessorKey: "name",
         header: "WBS",
         cell: (info) => {
           const row = info.row.original;
-          const hasChildren = row.children && row.children.length > 0;
           return (
-            <div
-              className="text-sm"
-              style={{ paddingLeft: `${row.depth * 20 + 12}px` }}
-            >
-              {hasChildren && (
-                <button
-                  onClick={() => {
-                    setExpandedIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(row.wbsNodeId)) {
-                        next.delete(row.wbsNodeId);
-                      } else {
-                        next.add(row.wbsNodeId);
-                      }
-                      return next;
-                    });
-                  }}
-                  className="mr-1 text-text-secondary hover:text-text-primary"
-                >
-                  {expandedIds.has(row.wbsNodeId) ? "\u25BC" : "\u25B6"}
-                </button>
-              )}
+            <div className="text-sm px-3">
               <span className="text-text-secondary">{row.code}</span>{" "}
               <span className="text-text-primary">{row.name}</span>
             </div>
@@ -167,7 +119,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
         },
       },
       {
-        accessorKey: "budgetAtCompletion",
+        accessorKey: "bac",
         header: "BAC",
         cell: (info) => (
           <span className="block text-right text-sm">
@@ -247,7 +199,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
         ),
       },
     ],
-    [expandedIds]
+    []
   );
 
   return (
@@ -255,20 +207,6 @@ export function EvmTab({ projectId }: { projectId: string }) {
       {/* <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/evm/ai/insights`} /> */}
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-text-secondary">EVM Technique</label>
-          <select
-            value={technique}
-            onChange={(e) => setTechnique(e.target.value as EvmTechnique)}
-            className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
-          >
-            {TECHNIQUES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-text-secondary">ETC Method</label>
           <select
@@ -284,11 +222,14 @@ export function EvmTab({ projectId }: { projectId: string }) {
           </select>
         </div>
         <button
-          onClick={() => calculateMutation.mutate()}
-          disabled={calculateMutation.isPending}
+          onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ["evm-cost-summary", projectId] });
+            queryClient.invalidateQueries({ queryKey: ["evm-wbs-cost", projectId] });
+            queryClient.invalidateQueries({ queryKey: ["evm-perf-scurve", projectId] });
+          }}
           className="rounded-md bg-accent px-6 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active"
         >
-          {calculateMutation.isPending ? "Calculating..." : "Calculate EVM"}
+          Calculate EVM
         </button>
       </div>
 
@@ -325,9 +266,9 @@ export function EvmTab({ projectId }: { projectId: string }) {
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-text-secondary">Basic Values</h3>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <KpiTile label="PV (Planned Value)" value={fmt(metrics?.plannedValue)} />
-                  <KpiTile label="EV (Earned Value)" value={fmt(metrics?.earnedValue)} />
-                  <KpiTile label="AC (Actual Cost)" value={fmt(metrics?.actualCost)} />
+                  <KpiTile label="PV (Planned Value)" value={fmt(summary?.plannedValue)} />
+                  <KpiTile label="EV (Earned Value)" value={fmt(summary?.earnedValue)} />
+                  <KpiTile label="AC (Actual Cost)" value={fmt(summary?.totalActual)} />
                 </div>
               </div>
 
@@ -336,23 +277,23 @@ export function EvmTab({ projectId }: { projectId: string }) {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <KpiTile
                     label="SV (Schedule Var.)"
-                    value={fmt(metrics?.scheduleVariance)}
-                    tone={metrics && metrics.scheduleVariance >= 0 ? "success" : "danger"}
+                    value={fmt(summary?.scheduleVariance)}
+                    tone={summary && summary.scheduleVariance >= 0 ? "success" : "danger"}
                   />
                   <KpiTile
                     label="CV (Cost Var.)"
-                    value={fmt(metrics?.costVariance)}
-                    tone={metrics && metrics.costVariance >= 0 ? "success" : "danger"}
+                    value={fmt(summary?.costVariance)}
+                    tone={summary && summary.costVariance >= 0 ? "success" : "danger"}
                   />
                   <KpiTile
                     label="SPI"
-                    value={fmtIdx(metrics?.schedulePerformanceIndex)}
-                    tone={metrics && metrics.schedulePerformanceIndex >= 1 ? "success" : "danger"}
+                    value={fmtIdx(summary?.schedulePerformanceIndex)}
+                    tone={summary && (summary.schedulePerformanceIndex ?? 0) >= 1 ? "success" : "danger"}
                   />
                   <KpiTile
                     label="CPI"
-                    value={fmtIdx(metrics?.costPerformanceIndex)}
-                    tone={metrics && metrics.costPerformanceIndex >= 1 ? "success" : "danger"}
+                    value={fmtIdx(summary?.costPerformanceIndex)}
+                    tone={summary && (summary.costPerformanceIndex ?? 0) >= 1 ? "success" : "danger"}
                   />
                 </div>
               </div>
@@ -362,25 +303,25 @@ export function EvmTab({ projectId }: { projectId: string }) {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                   <KpiTile
                     label="EAC"
-                    value={fmt(metrics?.estimateAtCompletion)}
+                    value={fmt(fc?.eac)}
                     tone={
-                      metrics && metrics.estimateAtCompletion <= metrics.budgetAtCompletion
+                      fc && summary && fc.eac <= summary.bac
                         ? "success"
                         : "danger"
                     }
                   />
-                  <KpiTile label="ETC" value={fmt(metrics?.estimateToComplete)} />
+                  <KpiTile label="ETC" value={fmt(fc?.etc)} />
                   <KpiTile
                     label="VAC"
-                    value={fmt(metrics?.varianceAtCompletion)}
-                    tone={metrics && metrics.varianceAtCompletion >= 0 ? "success" : "danger"}
+                    value={fmt(fc?.vac)}
+                    tone={fc && fc.vac >= 0 ? "success" : "danger"}
                   />
                   <KpiTile
                     label="TCPI"
-                    value={fmtIdx(metrics?.toCompletePerformanceIndex)}
-                    tone={metrics && metrics.toCompletePerformanceIndex <= 1 ? "success" : "danger"}
+                    value={fmtIdx(summary?.toCompletePerformanceIndex)}
+                    tone={summary && (summary.toCompletePerformanceIndex ?? 0) <= 1 ? "success" : "danger"}
                   />
-                  <KpiTile label="Perf. %" value={fmtPct(metrics?.performancePercentComplete)} tone="accent" />
+                  <KpiTile label="Perf. %" value={fmtPct((summary?.costPercentComplete ?? 0) * 100)} tone="accent" />
                 </div>
               </div>
             </>
@@ -451,7 +392,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
         <div className="rounded-lg border border-border bg-surface/50 shadow-sm">
           {isLoadingWbs ? (
             <div className="py-12 text-center text-text-secondary">Loading WBS EVM data...</div>
-          ) : wbsNodes.length === 0 ? (
+          ) : wbsRows.length === 0 ? (
             <div className="py-12 text-center">
               <h3 className="text-lg font-medium text-text-primary">No WBS Data</h3>
               <p className="mt-2 text-text-secondary">
@@ -461,7 +402,7 @@ export function EvmTab({ projectId }: { projectId: string }) {
           ) : (
             <VirtualDataTable
               columns={wbsColumns}
-              data={visibleWbsNodes}
+              data={wbsRows}
               sortable={false}
               resizable
               searchable={false}

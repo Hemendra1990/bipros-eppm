@@ -92,6 +92,9 @@ public class SubContractorKpiService {
       return emptyResponse(projectId, from, to);
     }
 
+    boolean windowed = (from != null && to != null);
+    String dateClause = windowed ? " AND d.report_date BETWEEN :fromDate AND :toDate " : " ";
+
     // Aggregate in two CTEs so the join doesn't multiply actual qty when multiple activities
     // share the same (sc, work-type). Plan CTE sums planned qty/cost across all activities of
     // a (sc, work-type) pair. Actual CTE sums DPR qty/cost and distinct days for the same pair.
@@ -114,7 +117,7 @@ public class SubContractorKpiService {
         + "    JOIN project.daily_progress_reports d ON d.id = c.dpr_id "
         + "    JOIN resource.activity_sub_contractor_assignments a ON a.id = c.activity_sub_contractor_assignment_id "
         + "   WHERE d.project_id = :projectId "
-        + "     AND d.report_date BETWEEN :fromDate AND :toDate "
+        + dateClause
         + "     AND d.approval_status = 'APPROVED' "
         + "   GROUP BY a.sub_contractor_master_id, a.sc_work_type_id "
         + ") "
@@ -134,24 +137,20 @@ public class SubContractorKpiService {
         + "  LEFT JOIN actual ON actual.sub_contractor_master_id = plan.sub_contractor_master_id "
         + "                 AND actual.sc_work_type_id = plan.sc_work_type_id";
 
-    List<Object[]> rows = em.createNativeQuery(sql)
-        .setParameter("projectId", projectId)
-        .setParameter("fromDate", from)
-        .setParameter("toDate", to)
-        .getResultList();
+    var q = em.createNativeQuery(sql).setParameter("projectId", projectId);
+    if (windowed) { q.setParameter("fromDate", from).setParameter("toDate", to); }
+    List<Object[]> rows = q.getResultList();
 
     // Count orphan DPR SC rows (FK to assignment is null — see spec §8 / out-of-scope ticket E)
     String orphanSql = "SELECT COUNT(*) FROM project.dpr_sub_contractor c "
         + "JOIN project.daily_progress_reports d ON d.id = c.dpr_id "
         + "WHERE d.project_id = :projectId "
-        + "  AND d.report_date BETWEEN :fromDate AND :toDate "
+        + dateClause
         + "  AND d.approval_status = 'APPROVED' "
         + "  AND c.activity_sub_contractor_assignment_id IS NULL";
-    Number orphan = (Number) em.createNativeQuery(orphanSql)
-        .setParameter("projectId", projectId)
-        .setParameter("fromDate", from)
-        .setParameter("toDate", to)
-        .getSingleResult();
+    var oq = em.createNativeQuery(orphanSql).setParameter("projectId", projectId);
+    if (windowed) { oq.setParameter("fromDate", from).setParameter("toDate", to); }
+    Number orphan = (Number) oq.getSingleResult();
     int unmatchedDprRows = orphan == null ? 0 : orphan.intValue();
 
     List<SubContractorWorkTypeRow> perScWorkType = new ArrayList<>();

@@ -33,10 +33,14 @@ export function MarginTrendChart({
   data,
   revenueLabel = "Revenue",
   costLabel = "Actual Cost",
+  formatAxis = (v: number) => String(v),
+  formatTooltip = (v: number) => String(v),
 }: {
   data: MarginPeriodPoint[];
   revenueLabel?: string;
   costLabel?: string;
+  formatAxis?: (v: number) => string;
+  formatTooltip?: (v: number) => string;
 }) {
   const chartData = data.map((d) => ({
     name: d.periodName,
@@ -50,11 +54,12 @@ export function MarginTrendChart({
       <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
         <XAxis dataKey="name" stroke="#64748b" style={{ fontSize: 11 }} />
-        <YAxis stroke="#64748b" style={{ fontSize: 12 }} />
+        <YAxis stroke="#64748b" style={{ fontSize: 12 }} tickFormatter={(v) => formatAxis(Number(v))} />
         <Tooltip
           contentStyle={CHART_TOOLTIP_STYLE}
           labelStyle={CHART_TOOLTIP_LABEL_STYLE}
           itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+          formatter={(value) => formatTooltip(Number(value))}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="Revenue" name={revenueLabel} fill="#16a34a" radius={[4, 4, 0, 0]} />

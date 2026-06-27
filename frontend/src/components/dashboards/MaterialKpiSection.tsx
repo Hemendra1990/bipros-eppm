@@ -12,13 +12,6 @@ interface Props {
   density?: "compact" | "full";
 }
 
-function defaultRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const fmt = (d: Date) => d.toISOString().split("T")[0];
-  return { from: fmt(from), to: fmt(to) };
-}
-
 function formatPct(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   return `${(value * 100).toFixed(1)}%`;
@@ -34,14 +27,11 @@ function formatNumber(value: number | null | undefined, fractionDigits = 2): str
 
 export function MaterialKpiSection({ projectId, from, to, density = "compact" }: Props) {
   const { money, symbol } = useProjectCurrency();
-  const range = useMemo(() => {
-    if (from && to) return { from, to };
-    return defaultRange();
-  }, [from, to]);
+  const range = useMemo(() => (from && to ? { from, to } : null), [from, to]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["material-kpis", projectId, range.from, range.to],
-    queryFn: () => materialKpiApi.getKpis(projectId, range.from, range.to),
+    queryKey: ["material-kpis", projectId, range?.from ?? null, range?.to ?? null],
+    queryFn: () => materialKpiApi.getKpis(projectId, range?.from, range?.to),
     enabled: !!projectId,
   });
 
@@ -67,7 +57,7 @@ export function MaterialKpiSection({ projectId, from, to, density = "compact" }:
     <section className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold text-text-primary">
-          Material KPIs <span className="text-xs font-normal text-text-muted">({range.from} → {range.to})</span>
+          Material KPIs <span className="text-xs font-normal text-text-muted">{range ? `(${range.from} → ${range.to})` : "(project to date)"}</span>
         </h2>
         <div className="text-[11px] text-text-muted">
           {kpis.byMaterial.length} materials tracked

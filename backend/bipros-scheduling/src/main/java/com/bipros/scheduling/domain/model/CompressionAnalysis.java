@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -48,4 +49,10 @@ public class CompressionAnalysis extends BaseEntity {
 
   @Column(columnDefinition = "TEXT")
   private String recommendations;
+
+  @Column(name = "original_finish_date")
+  private LocalDate originalFinishDate;
+
+  @Column(name = "compressed_finish_date")
+  private LocalDate compressedFinishDate;
 }

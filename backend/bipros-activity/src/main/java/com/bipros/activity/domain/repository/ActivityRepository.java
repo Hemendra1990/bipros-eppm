@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -78,6 +79,8 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
   List<Activity> findByPercentCompleteTypeAndStatusIn(PercentCompleteType percentCompleteType, List<ActivityStatus> statuses);
 
   boolean existsByProjectIdAndCode(UUID projectId, String code);
+
+  boolean existsByProjectIdAndUpdatedAtAfter(UUID projectId, Instant updatedAt);
 
   Optional<Activity> findByProjectIdAndCode(UUID projectId, String code);
 

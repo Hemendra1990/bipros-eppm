@@ -25,7 +25,7 @@ export function KpiRow({
   tasksDelta,
   criticalIssueCount,
 }: KpiRowProps) {
-  // bacCrores is the BAC in crore units (raw ÷ 1e7); recover raw and render in the
+  // acCrores is the Actual Cost in crore units (raw ÷ 1e7); recover raw and render in the
   // project currency. Optional hook + INR fallback so this is safe if the row is
   // ever rendered outside a project route.
   const cur = useProjectCurrencyOptional();
@@ -34,8 +34,7 @@ export function KpiRow({
     : (v: number | null | undefined) => formatMoney(v, { code: "INR" }, { compact: true });
   const isIndian = cur?.isIndian ?? true;
   const physicalPct = snapshot?.physicalPct ?? 0;
-  const bacCrores = snapshot?.bacCrores ?? 0;
-  const activeRisks = snapshot?.activeRisksCount ?? 0;
+  const acCrores = snapshot?.acCrores ?? 0;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -51,22 +50,13 @@ export function KpiRow({
       />
       <KpiTile
         label="Budget Utilised"
-        value={moneyCompact(bacCrores * 1e7)}
+        value={moneyCompact(acCrores * 1e7)}
         tone="accent"
         icon={<Wallet size={14} />}
-        delta={formatDelta(
-          bacCrores * (isIndian ? 1 : 10),
-          deltas?.bacCroresDelta != null
-            ? deltas.bacCroresDelta * (isIndian ? 1 : 10)
-            : deltas?.bacCroresDelta,
-          {
-            // INR shows the delta in crores; other currencies in millions
-            // (1 crore = 10 million), so the suffix matches the value's scale.
-            unit: isIndian ? " Cr" : " M",
-            digits: 1,
-            invertColor: true,
-          }
-        )}
+        delta={formatDelta(acCrores * (isIndian ? 1 : 10), deltas?.acCroresDelta ?? null, {
+          unit: isIndian ? " Cr" : " M",
+          digits: 1,
+        })}
       />
       <KpiTile
         label="Tasks Completed"
@@ -79,14 +69,9 @@ export function KpiRow({
       <KpiTile
         label="Open Issues"
         value={`${criticalIssueCount}`}
-        hint={criticalIssueCount === 1 ? "critical" : "critical"}
+        hint={criticalIssueCount === 1 ? "critical issue" : "critical issues"}
         tone="danger"
         icon={<AlertOctagon size={14} />}
-        delta={formatDelta(activeRisks, deltas?.activeRisksDelta, {
-          unit: "",
-          digits: 0,
-          invertColor: true,
-        })}
       />
     </div>
   );

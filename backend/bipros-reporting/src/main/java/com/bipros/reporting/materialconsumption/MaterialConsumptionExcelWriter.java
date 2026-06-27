@@ -34,9 +34,8 @@ public class MaterialConsumptionExcelWriter {
 
   private static final String[] HEADERS = {
       "Date Range", "WBS", "Activity", "Supervisor", "Storekeeper",
-      "Material", "Unit", "Planned Qty", "Issued Qty", "Consumed Qty",
-      "Balance Qty", "Wastage %", "Unit Rate", "Planned Cost", "Actual Cost",
-      "Variance", "Variance %", "Alerts"
+      "Material", "Unit", "Issued Qty", "Consumed Qty", "Balance Qty",
+      "Wastage %", "Unit Rate", "Actual Cost", "Alerts"
   };
 
   public byte[] write(MaterialConsumptionReportResponse report) {
@@ -70,17 +69,13 @@ public class MaterialConsumptionExcelWriter {
           setText(body, 4, r.storekeeperName(), s.plain);
           setText(body, 5, r.materialName(), s.plain);
           setText(body, 6, r.unit(), s.plain);
-          setBigDecimal(body, 7, r.plannedQty(), s.numCell);
-          setBigDecimal(body, 8, r.issuedQty(), s.numCell);
-          setBigDecimal(body, 9, r.consumedQty(), s.numCell);
-          setBigDecimal(body, 10, r.balanceQty(), s.numCell);
-          setBigDecimal(body, 11, r.wastagePercent(), s.numCell);
-          setBigDecimal(body, 12, r.unitRate(), s.numCell);
-          setBigDecimal(body, 13, r.plannedCost(), s.numCell);
-          setBigDecimal(body, 14, r.actualCost(), s.numCell);
-          setBigDecimal(body, 15, r.variance(), s.numCell);
-          setBigDecimal(body, 16, r.variancePercent(), s.pctCell);
-          setText(body, 17, formatAlerts(r.alerts()),
+          setBigDecimal(body, 7, r.issuedQty(), s.numCell);
+          setBigDecimal(body, 8, r.consumedQty(), s.numCell);
+          setBigDecimal(body, 9, r.balanceQty(), s.numCell);
+          setBigDecimal(body, 10, r.wastagePercent(), s.numCell);
+          setBigDecimal(body, 11, r.unitRate(), s.numCell);
+          setBigDecimal(body, 12, r.actualCost(), s.numCell);
+          setText(body, 13, formatAlerts(r.alerts()),
               r.alerts() != null && !r.alerts().isEmpty() ? s.alertCell : s.plain);
         }
       }
@@ -90,10 +85,8 @@ public class MaterialConsumptionExcelWriter {
         rowNum++; // spacer
         XSSFRow totalsRow = sh.createRow(rowNum++);
         setText(totalsRow, 0, "TOTALS", s.groupBold);
-        setBigDecimal(totalsRow, 11, report.totals().get("wastagePercent_avg"), s.numCell);
-        setBigDecimal(totalsRow, 13, report.totals().get("plannedCost"), s.numCell);
-        setBigDecimal(totalsRow, 14, report.totals().get("actualCost"), s.numCell);
-        setBigDecimal(totalsRow, 15, report.totals().get("variance"), s.numCell);
+        setBigDecimal(totalsRow, 10, report.totals().get("wastagePercent_avg"), s.numCell);
+        setBigDecimal(totalsRow, 12, report.totals().get("actualCost"), s.numCell);
       }
 
       // Alert summary.
@@ -109,8 +102,8 @@ public class MaterialConsumptionExcelWriter {
       }
 
       setColumnWidths(sh, new int[] {
-          5200, 5200, 6200, 4400, 4400, 6200, 1800, 2800, 2800, 3000,
-          3000, 2400, 3000, 3400, 3400, 3400, 2600, 6000
+          5200, 5200, 6200, 4400, 4400, 6200, 1800, 2800, 3000, 3000,
+          2400, 3000, 3400, 6000
       });
 
       return toByteArray(wb);
@@ -166,7 +159,6 @@ public class MaterialConsumptionExcelWriter {
     final CellStyle headerCenter;
     final CellStyle groupBold;
     final CellStyle numCell;
-    final CellStyle pctCell;
     final CellStyle alertCell;
 
     Styles(XSSFWorkbook wb) {
@@ -206,12 +198,6 @@ public class MaterialConsumptionExcelWriter {
       numCell.setDataFormat(df.getFormat("#,##0.00"));
       numCell.setAlignment(HorizontalAlignment.RIGHT);
       borderAll(numCell);
-
-      pctCell = wb.createCellStyle();
-      pctCell.setFont(fontPlain);
-      pctCell.setDataFormat(df.getFormat("0.00%"));
-      pctCell.setAlignment(HorizontalAlignment.RIGHT);
-      borderAll(pctCell);
 
       alertCell = wb.createCellStyle();
       alertCell.setFont(fontBold);

@@ -23,6 +23,7 @@ export interface ProjectStatusSnapshot {
   activeRisksCount: number;
   openHseIncidents: number;
   bacCrores: number;
+  acCrores: number;
   eacCrores: number;
   lastUpdatedAt: string;
 }
@@ -82,6 +83,7 @@ export interface ActivityStatusRow {
   freeFloat: number | null;
   isCritical: boolean;
   pctComplete: number;
+  expectedProgressPct: number;
   daysDelay: number;
   daysRemaining: number;
 }
@@ -130,6 +132,7 @@ export interface ScheduleQuality {
 export interface SnapshotDeltas {
   physicalPctDelta: number | null;
   bacCroresDelta: number | null;
+  acCroresDelta: number | null;
   activeRisksDelta: number | null;
   tasksCompletedDelta: number | null;
 }

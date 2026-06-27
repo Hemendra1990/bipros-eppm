@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { marginApi, type MarginScope } from "@/lib/api/marginApi";
+import { marginApi, type MarginScope, OTHER_ROW_LABEL } from "@/lib/api/marginApi";
 import { KpiTile } from "@/components/common/KpiTile";
 import { CadenceToggle, type Cadence } from "@/components/financials/CadenceToggle";
 import { MarginTrendChart } from "@/components/financials/MarginTrendChart";
@@ -35,7 +35,7 @@ export function PnlView({
   description: string;
   revenueLabel: string;
 }) {
-  const { money } = useProjectCurrency();
+  const { money, moneyCompact } = useProjectCurrency();
   const [cadence, setCadence] = useState<Cadence>("M");
 
   const summary = useQuery({
@@ -81,11 +81,15 @@ export function PnlView({
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiTile label={revenueLabel} value={money(summaryRow?.revenue, { decimals: 0 })} hint="Σ rate × qty" />
-        <KpiTile label="Actual Cost" value={money(summaryRow?.actualCost, { decimals: 0 })} hint="Σ cost from DPR / DBS" />
+        <KpiTile label={revenueLabel} value={moneyCompact(summaryRow?.revenue)} hint="Σ rate × qty" />
+        <KpiTile
+          label="Actual Cost"
+          value={moneyCompact(summaryRow?.actualCost)}
+          hint="Σ DPR + activity-expense costs"
+        />
         <KpiTile
           label="Margin"
-          value={money(summaryRow?.margin, { decimals: 0 })}
+          value={moneyCompact(summaryRow?.margin)}
           hint="Revenue − Cost"
           tone={marginTone(summaryRow?.marginPct)}
         />
@@ -116,6 +120,8 @@ export function PnlView({
               margin: p.margin,
             }))}
             revenueLabel={revenueLabel}
+            formatAxis={(v) => moneyCompact(v, { symbol: false })}
+            formatTooltip={(v) => moneyCompact(v)}
           />
         )}
       </div>
@@ -170,8 +176,13 @@ export function PnlView({
               </tr>
             </thead>
             <tbody>
-              {activityRows.map((a, idx) => (
-                <tr key={`${a.activity}-${idx}`} className="border-t border-hairline">
+              {activityRows.map((a, idx) => {
+                const isOther = a.activity === OTHER_ROW_LABEL;
+                return (
+                <tr
+                  key={`${a.activity}-${idx}`}
+                  className={`border-t border-hairline ${isOther ? "italic text-slate" : ""}`}
+                >
                   <td className="py-2 pr-3 font-medium">{a.activity}</td>
                   <td className="py-2 pr-3 text-right">{money(a.revenue, { decimals: 0 })}</td>
                   <td className="py-2 pr-3 text-right">{money(a.actualCost, { decimals: 0 })}</td>
@@ -182,7 +193,8 @@ export function PnlView({
                     {fmtPct(a.marginPct)}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -206,8 +218,13 @@ export function PnlView({
               </tr>
             </thead>
             <tbody>
-              {itemRows.map((i) => (
-                <tr key={i.boqItemId} className="border-t border-hairline">
+              {itemRows.map((i) => {
+                const isOther = i.boqItemId == null;
+                return (
+                <tr
+                  key={i.boqItemId ?? "other-reconciling"}
+                  className={`border-t border-hairline ${isOther ? "italic text-slate" : ""}`}
+                >
                   <td className="py-2 pr-3 font-mono">{i.itemNo}</td>
                   <td className="py-2 pr-3">{i.description}</td>
                   <td className="py-2 pr-3 text-right">
@@ -224,7 +241,8 @@ export function PnlView({
                     {fmtPct(i.marginPct)}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

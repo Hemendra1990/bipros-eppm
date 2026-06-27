@@ -102,9 +102,13 @@ public class MaterialKpiService {
 
   @Transactional(readOnly = true)
   public MaterialKpiResponse compute(UUID projectId, LocalDate from, LocalDate to) {
-    List<MaterialIssue> issues = issueRepository.findByProjectIdAndIssueDateBetween(projectId, from, to);
-    List<MaterialConsumptionLog> logs = consumptionLogRepository
-        .findByProjectIdAndLogDateBetweenOrderByLogDateAscIdAsc(projectId, from, to);
+    boolean windowed = (from != null && to != null);
+    List<MaterialIssue> issues = windowed
+        ? issueRepository.findByProjectIdAndIssueDateBetween(projectId, from, to)
+        : issueRepository.findByProjectId(projectId);
+    List<MaterialConsumptionLog> logs = windowed
+        ? consumptionLogRepository.findByProjectIdAndLogDateBetweenOrderByLogDateAscIdAsc(projectId, from, to)
+        : consumptionLogRepository.findByProjectIdOrderByLogDateAscIdAsc(projectId);
     List<DprMaterial> dprMaterials = fetchDprMaterials(projectId, from, to);
 
     double issuedQty = issues.stream()
@@ -142,9 +146,11 @@ public class MaterialKpiService {
     List<MaterialBreakdownRow> breakdown = computeBreakdown(issues, logs, dprMaterials);
 
     // KPI 9.5 — Material Cost / Unit Finished Work
-    List<DailyProgressReport> dprs = dprRepository
-        .findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
-            projectId, DprApprovalStatus.APPROVED, from, to);
+    List<DailyProgressReport> dprs = windowed
+        ? dprRepository.findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED, from, to)
+        : dprRepository.findByProjectIdAndApprovalStatusOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED);
     List<BoqItem> boqItems = boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId);
     List<CostPerUnitRow> costRows = computeCostPerUnitFinished(dprs, dprMaterials, boqItems);
     double weightedCpu = computeWeightedCpu(costRows);
@@ -244,9 +250,11 @@ public class MaterialKpiService {
   }
 
   private List<DprMaterial> fetchDprMaterials(UUID projectId, LocalDate from, LocalDate to) {
-    List<DailyProgressReport> dprs = dprRepository
-        .findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
-            projectId, DprApprovalStatus.APPROVED, from, to);
+    List<DailyProgressReport> dprs = (from != null && to != null)
+        ? dprRepository.findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED, from, to)
+        : dprRepository.findByProjectIdAndApprovalStatusOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED);
     if (dprs.isEmpty()) return List.of();
     Set<UUID> dprIds = dprs.stream().map(DailyProgressReport::getId).collect(Collectors.toSet());
     return dprMaterialRepository.findByDprIdIn(dprIds);

@@ -211,3 +211,5 @@ databaseChangeLog:
       file: db/changelog/109-dpr-escalated-at.yaml
   - include:
       file: db/changelog/110-user-notifications.yaml
+  - include:
+      file: db/changelog/111-compression-finish-dates.yaml

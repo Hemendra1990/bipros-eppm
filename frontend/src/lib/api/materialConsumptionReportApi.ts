@@ -14,9 +14,7 @@ export type MaterialConsumptionGroupBy =
   | "SUPERVISOR";
 
 export type MaterialConsumptionAlertCode =
-  | "EXCESS_CONSUMPTION"
   | "NEGATIVE_BALANCE"
-  | "BUDGET_OVERCONSUMPTION"
   | "MISSING_UNIT_RATE";
 
 export interface MaterialConsumptionRow {
@@ -34,17 +32,18 @@ export interface MaterialConsumptionRow {
   materialRateMasterId: string | null;
   materialName: string | null;
   unit: string | null;
-  plannedQty: number | null;
   issuedQty: number | null;
   consumedQty: number | null;
   balanceQty: number | null;
   wastagePercent: number | null;
   unitRate: number | null;
-  plannedCost: number | null;
   actualCost: number | null;
-  variance: number | null;
-  variancePercent: number | null;
   alerts: string[];
+}
+
+export interface MaterialConsumptionSupervisor {
+  userId: string;
+  name: string | null;
 }
 
 export interface MaterialConsumptionReportResponse {
@@ -54,6 +53,7 @@ export interface MaterialConsumptionReportResponse {
   rows: MaterialConsumptionRow[];
   totals: Record<string, number>;
   alertCounts: Record<string, number>;
+  supervisors: MaterialConsumptionSupervisor[];
 }
 
 export interface MaterialConsumptionFilters {

@@ -15,7 +15,9 @@ import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.BoqItemRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
+import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.GoodsReceiptNoteRepository;
 import com.bipros.resource.domain.repository.MaterialStockRepository;
@@ -30,6 +32,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +74,8 @@ public class CostService {
     // on projects that report cost only via DPRs. See FIX7 / A9–A10.
     private final DprActualCostLookup dprActualCostLookup;
     private final FinancialPeriodAutoGenerator financialPeriodAutoGenerator;
+    private final BoqItemRepository boqItemRepository;
+    private final WbsNodeRepository wbsNodeRepository;
 
     // Cost Account Operations
     @Transactional
@@ -626,14 +633,6 @@ public class CostService {
         BigDecimal dprActual = dprActualCostLookup.sumByProject(projectId);
         totalActual = totalActual.add(dprActual);
 
-        BigDecimal totalRemaining = expenses.stream()
-                .map(e -> e.getRemainingCost() != null ? e.getRemainingCost() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal atCompletion = expenses.stream()
-                .map(e -> e.getAtCompletionCost() != null ? e.getAtCompletionCost() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         // PMS MasterData: pull material procurement + stock value so the summary reflects the
         // procurement ledger even when it hasn't been copied into ActivityExpense rows.
         BigDecimal materialProcurement = goodsReceiptNoteRepository
@@ -651,33 +650,148 @@ public class CostService {
         // canonical planned-cost total so the field is never null on a project that has
         // resource assignments. This matches what EVM BAC uses as its baseline.
         Project project = projectRepository.findById(projectId).orElse(null);
-        // OBS-5 unit fix: project.originalBudget / currentBudget are stored in the currency's
-        // "major-scale" unit (crores for INR = 1e7, millions for every other currency = 1e6) —
-        // matches the Set-Budget UI, formatBudget helper, and seeders. The rest of the cost
-        // summary (totalBudget, totalActual, materialProcurement, etc.) is in raw currency units,
-        // so we convert the project budget to raw units here to mirror EvmService (lines 108-128).
-        // Without this, /cost-summary returns projectOriginalBudget=0.02 alongside totals in lakhs.
+        // OBS-5 unit fix: project.originalBudget is stored in the currency's "major-scale" unit
+        // (crores for INR = 1e7, millions for every other currency = 1e6). Convert to raw units
+        // for the DTO's projectOriginalBudget field.
         BigDecimal projectOriginalBudget = project != null ? project.getOriginalBudget() : null;
-        BigDecimal projectCurrentBudget = project != null ? project.getCurrentBudget() : null;
         if (project != null) {
-            String currency = project.getBudgetCurrency();
-            BigDecimal majorUnitFactor = "INR".equalsIgnoreCase(currency)
-                    ? new BigDecimal("10000000")   // 1 crore = 10^7
-                    : new BigDecimal("1000000");   // 1 million = 10^6 (OMR and all others)
-            if (projectOriginalBudget != null && projectOriginalBudget.signum() > 0) {
+            BigDecimal majorUnitFactor = "INR".equalsIgnoreCase(project.getBudgetCurrency())
+                    ? new BigDecimal("10000000") : new BigDecimal("1000000");
+            if (projectOriginalBudget != null && projectOriginalBudget.signum() > 0)
                 projectOriginalBudget = projectOriginalBudget.multiply(majorUnitFactor);
-            }
-            if (projectCurrentBudget != null && projectCurrentBudget.signum() > 0) {
-                projectCurrentBudget = projectCurrentBudget.multiply(majorUnitFactor);
-            }
         }
-        if (projectOriginalBudget == null) {
+        if (projectOriginalBudget == null)
             projectOriginalBudget = totalBudget.compareTo(BigDecimal.ZERO) > 0 ? totalBudget : null;
+
+        // BAC = configured project budget (raw units), falling back to original budget then bottom-up plan.
+        BigDecimal bac = resolveBac(project, totalBudget);
+
+        // Earned value comes from the BOQ ledger: executed × budgeted_rate over total budgeted.
+        BigDecimal boqBudgetedTotal = boqItemRepository.sumBudgetedAmount(projectId);
+        BigDecimal boqEarnedValue = boqItemRepository.sumEarnedBudgetedValue(projectId);
+
+        // Planned %-complete: linear across the project's planned window, clamped to [0,1].
+        BigDecimal plannedPercentComplete = plannedPercentComplete(project);
+
+        return CostSummaryDto.ofEvm(
+                bac, totalBudget, totalActual,
+                boqBudgetedTotal, boqEarnedValue, plannedPercentComplete,
+                expenses.size(), materialProcurement, openStock, materialIssued,
+                projectOriginalBudget, /* contractValue */ null);
+    }
+
+    /** Configured project BAC in raw currency units (currentBudget → originalBudget → bottom-up plan). */
+    private BigDecimal resolveBac(Project project, BigDecimal totalBudgetFallback) {
+        BigDecimal original = project != null ? project.getOriginalBudget() : null;
+        BigDecimal current  = project != null ? project.getCurrentBudget()  : null;
+        if (project != null) {
+            BigDecimal factor = "INR".equalsIgnoreCase(project.getBudgetCurrency())
+                    ? new BigDecimal("10000000") : new BigDecimal("1000000");
+            if (original != null && original.signum() > 0) original = original.multiply(factor);
+            if (current  != null && current.signum()  > 0) current  = current.multiply(factor);
+        }
+        return firstNonNull(current, original,
+                totalBudgetFallback != null && totalBudgetFallback.signum() > 0 ? totalBudgetFallback : BigDecimal.ZERO);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WbsEvmRow> getEvmByWbs(UUID projectId) {
+        Project project = projectRepository.findById(projectId).orElse(null);
+        BigDecimal projectBudgeted = boqItemRepository.sumBudgetedAmount(projectId);   // Σ boq budgeted
+        BigDecimal bac = resolveBac(project, /* fallback */ projectBudgeted);
+        BigDecimal plannedPct = plannedPercentComplete(project);
+
+        // WBS tree. Group by top-level node — but when the project has a SINGLE root (e.g. one
+        // "Civil Works" parent over several phases) group one level down, at the root's children,
+        // so the table breaks down by phase instead of collapsing into one project-total row.
+        var nodes = wbsNodeRepository.findByProjectId(projectId);
+        Map<UUID, com.bipros.project.domain.model.WbsNode> byId = new HashMap<>();
+        Map<UUID, UUID> parentById = new HashMap<>();
+        for (var n : nodes) { byId.put(n.getId(), n); parentById.put(n.getId(), n.getParentId()); }
+        UUID soleRoot = soleRootOf(parentById);
+
+        // A null group key is the "(Unmapped)" bucket: BOQ/AC with no WBS link still counts toward
+        // the totals, so Σ rows always reconciles to the project BAC/EV/AC shown on the cards.
+        Map<UUID, BigDecimal[]> agg = new LinkedHashMap<>();   // group node (or null) -> [budgeted, earned, ac]
+        for (var b : boqItemRepository.findByProjectId(projectId)) {
+            UUID group = groupAncestor(b.getWbsNodeId(), parentById, soleRoot);
+            BigDecimal budg = b.getBudgetedAmount() != null ? b.getBudgetedAmount() : BigDecimal.ZERO;
+            BigDecimal earned = (b.getQtyExecutedToDate() != null && b.getBudgetedRate() != null)
+                    ? b.getQtyExecutedToDate().multiply(b.getBudgetedRate()) : BigDecimal.ZERO;
+            BigDecimal[] cell = agg.computeIfAbsent(group, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
+            cell[0] = cell[0].add(budg); cell[1] = cell[1].add(earned);
+        }
+        // AC by group node (DPR cost per activity → activity's WBS → group)
+        Map<UUID, BigDecimal> acByActivity = dprActualCostLookup.sumByActivity(projectId);
+        Map<UUID, UUID> activityToWbs = new HashMap<>();
+        for (var a : activityRepository.findByProjectId(projectId)) activityToWbs.put(a.getId(), a.getWbsNodeId());
+        for (var entry : acByActivity.entrySet()) {
+            UUID group = groupAncestor(activityToWbs.get(entry.getKey()), parentById, soleRoot);
+            BigDecimal[] cell = agg.computeIfAbsent(group, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
+            cell[2] = cell[2].add(entry.getValue() != null ? entry.getValue() : BigDecimal.ZERO);
         }
 
-        return CostSummaryDto.of(totalBudget, totalActual, totalRemaining, atCompletion,
-            expenses.size(), materialProcurement, openStock, materialIssued,
-            projectOriginalBudget, projectCurrentBudget);
+        List<WbsEvmRow> rows = new ArrayList<>();
+        boolean hasBudget = projectBudgeted != null && projectBudgeted.signum() > 0;
+        for (var e : agg.entrySet()) {
+            var node = e.getKey() != null ? byId.get(e.getKey()) : null;
+            BigDecimal nb = e.getValue()[0], ne = e.getValue()[1], nac = e.getValue()[2];
+            BigDecimal nodeBac = hasBudget ? bac.multiply(nb).divide(projectBudgeted, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal nodeEv  = hasBudget ? bac.multiply(ne).divide(projectBudgeted, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal nodePv  = nodeBac.multiply(plannedPct);
+            String code = node != null ? node.getCode() : "(Unmapped)";
+            String name = node != null ? node.getName() : "Unmapped";
+            rows.add(WbsEvmRow.of(code, name, nodeBac, nodeEv, nodePv, nac));
+        }
+        rows.sort(Comparator.comparing(WbsEvmRow::code));
+        return rows;
+    }
+
+    /** The single top-level WBS root id, or null when there are zero or several roots. A node is a
+     *  root when its parent is null or points outside the project's node set. */
+    static UUID soleRootOf(Map<UUID, UUID> parentById) {
+        UUID root = null;
+        for (var e : parentById.entrySet()) {
+            UUID parent = e.getValue();
+            if (parent == null || !parentById.containsKey(parent)) {
+                if (root != null) return null;   // more than one root → group by roots
+                root = e.getKey();
+            }
+        }
+        return root;
+    }
+
+    /** Walk up to the grouping node: the highest ancestor that is NOT the sole root, so a single-root
+     *  tree groups at its phases (the root's children); with several roots (soleRoot == null) it rolls
+     *  to the root. Returns null for an unknown/unmapped node so it lands in the "(Unmapped)" bucket. */
+    static UUID groupAncestor(UUID nodeId, Map<UUID, UUID> parentById, UUID soleRoot) {
+        UUID cur = nodeId;
+        for (int guard = 0; cur != null && guard < 50; guard++) {
+            if (!parentById.containsKey(cur)) return null;                       // unknown / unmapped
+            UUID parent = parentById.get(cur);
+            if (parent == null || !parentById.containsKey(parent)) return cur;   // cur is a root
+            if (parent.equals(soleRoot)) return cur;                             // direct child of the sole root
+            cur = parent;
+        }
+        return cur;
+    }
+
+    private static BigDecimal firstNonNull(BigDecimal... values) {
+        for (BigDecimal v : values) if (v != null) return v;
+        return BigDecimal.ZERO;
+    }
+
+    /** Linear planned %-complete from the project's planned window to today, clamped to [0,1]. */
+    private static BigDecimal plannedPercentComplete(Project project) {
+        if (project == null) return BigDecimal.ZERO;
+        LocalDate start = project.getPlannedStartDate();
+        LocalDate finish = project.getPlannedFinishDate();
+        if (start == null || finish == null || !finish.isAfter(start)) return BigDecimal.ZERO;
+        long total = ChronoUnit.DAYS.between(start, finish);
+        long elapsed = ChronoUnit.DAYS.between(start, LocalDate.now());
+        if (elapsed <= 0) return BigDecimal.ZERO;
+        if (elapsed >= total) return BigDecimal.ONE;
+        return BigDecimal.valueOf(elapsed).divide(BigDecimal.valueOf(total), 6, RoundingMode.HALF_UP);
     }
 
     // Period Aggregation — combines two ledgers per financial period:

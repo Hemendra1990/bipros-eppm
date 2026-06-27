@@ -12,6 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -50,4 +51,22 @@ public class ScheduleHealthIndex extends BaseEntity {
   @Column(name = "risk_level", nullable = false)
   @Enumerated(EnumType.STRING)
   private RiskLevel riskLevel;
+
+  @Column(name = "missing_logic_pct")
+  private Double missingLogicPct;
+
+  @Column(name = "high_float_pct")
+  private Double highFloatPct;
+
+  @Column(name = "deadline_slip_ratio")
+  private Double deadlineSlipRatio;
+
+  @Column(name = "deadline_slip_days")
+  private Integer deadlineSlipDays;
+
+  @Column(name = "planned_finish_date")
+  private LocalDate plannedFinishDate;
+
+  @Column(name = "scheduled_finish_date")
+  private LocalDate scheduledFinishDate;
 }

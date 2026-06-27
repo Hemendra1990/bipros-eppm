@@ -193,9 +193,11 @@ public class ManpowerKpiService {
 
   @Transactional(readOnly = true)
   public ManpowerKpiResponse compute(UUID projectId, LocalDate from, LocalDate to) {
-    List<DailyProgressReport> dprs = dprRepository
-        .findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
-            projectId, DprApprovalStatus.APPROVED, from, to);
+    List<DailyProgressReport> dprs = (from != null && to != null)
+        ? dprRepository.findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED, from, to)
+        : dprRepository.findByProjectIdAndApprovalStatusOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED);
 
     if (dprs.isEmpty()) {
       return emptyResponse(projectId, from, to);
@@ -272,8 +274,13 @@ public class ManpowerKpiService {
     }
 
     // KPI computations
+    long manpowerActiveDays = dprs.stream()
+        .filter(d -> manpowerByDpr.containsKey(d.getId()))
+        .map(DailyProgressReport::getReportDate)
+        .filter(java.util.Objects::nonNull)
+        .distinct().count();
     WorkforceUtilization workforce = computeWorkforceUtilization(
-        manpowerRows, projectAssignments, resourcesById, deployedIdentities);
+        manpowerRows, projectAssignments, resourcesById, deployedIdentities, manpowerActiveDays);
     List<ProductivityFactorRow> productivity =
         computeProductivityFactor(aggByActivity, activitiesById, scQtyByActivity);
     double headlineFactor = computeHeadlineProductivityFactor(productivity);
@@ -421,19 +428,20 @@ public class ManpowerKpiService {
       List<DprManpower> manpowerRows,
       List<ResourceAssignment> assignments,
       Map<UUID, Resource> resourcesById,
-      Set<UUID> deployedIdentities) {
+      Set<UUID> deployedIdentities,
+      long activeDays) {
 
-    int actualNos = manpowerRows.stream()
+    int totalNos = manpowerRows.stream()
         .mapToInt(m -> m.getNos() != null ? m.getNos() : 0).sum();
-
     int plannedNos = assignments.stream()
         .filter(ra -> isManpowerAssignment(ra, resourcesById))
         .mapToInt(ra -> ra.getHeadcount() != null ? ra.getHeadcount() : 0)
         .sum();
-
-    double rawPct = plannedNos > 0 ? (double) actualNos / plannedNos : 0d;
-    boolean overflow = rawPct > 1.0d;
-    double cappedPct = Math.min(rawPct, 1.0d);
+    var util = com.bipros.api.service.kpi.DeploymentUtilisation.of(totalNos, activeDays, plannedNos);
+    int actualNos = util.avgDailyNos();
+    double rawPct = util.rawPct();
+    boolean overflow = util.overflow();
+    double cappedPct = util.cappedPct();
 
     int totalIdentities = (int) assignments.stream()
         .filter(ra -> isManpowerAssignment(ra, resourcesById))

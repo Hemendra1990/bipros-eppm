@@ -4,6 +4,7 @@ import com.bipros.activity.domain.model.ActivityRelationship;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,4 +17,6 @@ public interface ActivityRelationshipRepository extends JpaRepository<ActivityRe
   List<ActivityRelationship> findByProjectId(UUID projectId);
 
   boolean existsByPredecessorActivityIdAndSuccessorActivityId(UUID predecessorId, UUID successorId);
+
+  boolean existsByProjectIdAndUpdatedAtAfter(UUID projectId, Instant updatedAt);
 }

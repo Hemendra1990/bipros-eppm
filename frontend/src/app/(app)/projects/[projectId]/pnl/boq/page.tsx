@@ -12,7 +12,7 @@ export default function PnlBoqPage() {
       projectId={projectId}
       scope="boq"
       title="P&L vs BOQ Rates"
-      description="Revenue is priced at the contract BOQ rate — the rate the client pays; cost is total expense computed daily by the DBS module. Period margin equals the DBS contribution rolled up to weekly/monthly buckets."
+      description="Revenue is priced at the contract BOQ rate (BOQ.boqRate) — the rate the client pays. Actual Cost is the project's total actual cost — DPR line costs plus activity expenses. Margin tells you whether revenue is covering cost."
       revenueLabel="BOQ Revenue"
     />
   );

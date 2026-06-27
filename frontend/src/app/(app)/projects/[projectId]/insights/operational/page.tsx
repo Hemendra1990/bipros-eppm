@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "@/lib/api/dashboardApi";
@@ -8,9 +8,11 @@ import { raBillApi } from "@/lib/api/raBillApi";
 import { budgetApi } from "@/lib/api/budgetApi";
 import {
   reportDataApi,
-  type ResourceUtilRow,
   type WbsProgressRow,
 } from "@/lib/api/reportDataApi";
+import { manpowerKpiApi } from "@/lib/api/manpowerKpiApi";
+import { equipmentKpiApi } from "@/lib/api/equipmentKpiApi";
+import { materialKpiApi } from "@/lib/api/materialKpiApi";
 import {
   CircleDollarSign,
   Layers,
@@ -24,7 +26,7 @@ import { EquipmentKpiSection } from "@/components/dashboards/EquipmentKpiSection
 import { EvmKpiSection } from "@/components/dashboards/EvmKpiSection";
 import { MaterialKpiSection } from "@/components/dashboards/MaterialKpiSection";
 import { SubContractorKpiSection } from "@/components/dashboards/SubContractorKpiSection";
-import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
+import { Field, Label, Input } from "@/components/ui/input";
 
 interface RaBillRow {
   id: string;
@@ -82,6 +84,11 @@ export default function ProjectOperationalInsightsPage() {
   const params = useParams();
   const projectId = params.projectId as string;
 
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const fromProp = rangeFrom && rangeTo ? rangeFrom : undefined;
+  const toProp = rangeFrom && rangeTo ? rangeTo : undefined;
+
   const { isLoading: isLoadingConfig } = useQuery({
     queryKey: ["dashboard-config", "OPERATIONAL"],
     queryFn: () => dashboardApi.getDashboardByTier("OPERATIONAL"),
@@ -101,11 +108,20 @@ export default function ProjectOperationalInsightsPage() {
     enabled: !!projectId,
   });
 
-  const { data: resourceUtilizationRaw } = useQuery({
-    queryKey: ["report-resource-utilization", projectId],
-    queryFn: () => reportDataApi.getResourceUtilization(projectId),
+  const { data: mpKpi } = useQuery({
+    queryKey: ["manpower-kpis", projectId, fromProp ?? null, toProp ?? null],
+    queryFn: () => manpowerKpiApi.getKpis(projectId, fromProp, toProp),
     enabled: !!projectId,
-    retry: false,
+  });
+  const { data: eqKpi } = useQuery({
+    queryKey: ["equipment-kpis", projectId, fromProp ?? null, toProp ?? null],
+    queryFn: () => equipmentKpiApi.getKpis(projectId, fromProp, toProp),
+    enabled: !!projectId,
+  });
+  const { data: mtKpi } = useQuery({
+    queryKey: ["material-kpis", projectId, fromProp ?? null, toProp ?? null],
+    queryFn: () => materialKpiApi.getKpis(projectId, fromProp, toProp),
+    enabled: !!projectId,
   });
 
   const { data: wbsProgress } = useQuery({
@@ -118,22 +134,13 @@ export default function ProjectOperationalInsightsPage() {
   const raBills = Array.isArray(raBillsData?.data) ? raBillsData.data : [];
 
   const resourceUtilization: ResourceUtilizationGroup[] = useMemo(() => {
-    const rows = (resourceUtilizationRaw?.resources ?? []) as ResourceUtilRow[];
-    const groups = new Map<string, { allocated: number; utilized: number }>();
-    rows.forEach((r) => {
-      const key = r.type || "Other";
-      const g = groups.get(key) ?? { allocated: 0, utilized: 0 };
-      g.allocated += r.plannedHours ?? 0;
-      g.utilized += r.actualHours ?? 0;
-      groups.set(key, g);
-    });
-    return Array.from(groups.entries()).map(([resourceType, g]) => ({
-      resourceType,
-      allocated: g.allocated,
-      utilized: g.utilized,
-      percentage: g.allocated > 0 ? (g.utilized / g.allocated) * 100 : 0,
-    }));
-  }, [resourceUtilizationRaw]);
+    const rows: ResourceUtilizationGroup[] = [];
+    const wu = mpKpi?.data?.workforceUtilization;
+    if (wu) rows.push({ resourceType: "MANPOWER", utilized: wu.actualNos, allocated: wu.plannedNos, percentage: wu.utilizationPct * 100 });
+    if (eqKpi?.data) rows.push({ resourceType: "EQUIPMENT", utilized: eqKpi.data.actualNos, allocated: eqKpi.data.plannedNos, percentage: eqKpi.data.nosUtilizationPct * 100 });
+    if (mtKpi?.data) rows.push({ resourceType: "MATERIAL", utilized: 0, allocated: 0, percentage: (mtKpi.data.materialUtilizationPct ?? 0) * 100 });
+    return rows;
+  }, [mpKpi, eqKpi, mtKpi]);
 
   const wbsRows: WbsProgressRow[] = wbsProgress ?? [];
 
@@ -157,20 +164,34 @@ export default function ProjectOperationalInsightsPage() {
 
   return (
     <div>
+      <div className="mb-5 flex flex-wrap items-end gap-3">
+        <Field><Label>From</Label><Input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} /></Field>
+        <Field><Label>To</Label><Input type="date" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} /></Field>
+        {(rangeFrom || rangeTo) && (
+          <button
+            type="button"
+            onClick={() => { setRangeFrom(""); setRangeTo(""); }}
+            className="h-9 rounded-[10px] border border-hairline px-3 text-sm text-text-muted hover:bg-surface-hover"
+          >
+            Clear (project to date)
+          </button>
+        )}
+      </div>
+
       <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
-        <ManpowerKpiSection projectId={projectId} density="full" />
+        <ManpowerKpiSection projectId={projectId} from={fromProp} to={toProp} density="full" />
       </section>
 
       <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
-        <EquipmentKpiSection projectId={projectId} density="full" />
+        <EquipmentKpiSection projectId={projectId} from={fromProp} to={toProp} density="full" />
       </section>
 
       <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
-        <MaterialKpiSection projectId={projectId} density="full" />
+        <MaterialKpiSection projectId={projectId} from={fromProp} to={toProp} density="full" />
       </section>
 
       <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
-        <SubContractorKpiSection projectId={projectId} density="full" />
+        <SubContractorKpiSection projectId={projectId} from={fromProp} to={toProp} density="full" />
       </section>
 
       <section className="mb-7 rounded-xl border border-hairline bg-ivory p-5">
@@ -247,7 +268,7 @@ export default function ProjectOperationalInsightsPage() {
         <SectionHeading
           kicker="Capacity"
           title="Resource utilisation"
-          subtitle="Actual vs planned nos rolled up by resource category"
+          subtitle="Deployment vs plan, capped at 100% (matches the KPI cards)"
           icon={<Wrench size={14} strokeWidth={1.75} />}
         />
         <div className="rounded-2xl border border-hairline bg-paper p-5">
@@ -264,7 +285,7 @@ export default function ProjectOperationalInsightsPage() {
                     </div>
                     <span className="text-xs text-slate tabular-nums">
                       <span className="font-semibold text-charcoal">{resource.utilized.toFixed(0)}</span>
-                      {" "}/ {resource.allocated.toFixed(0)} nos ·{" "}
+                      {resource.allocated > 0 ? <>{" "}/ {resource.allocated.toFixed(0)} nos ·{" "}</> : " · "}
                       <span className="font-semibold text-charcoal">{resource.percentage.toFixed(1)}%</span>
                     </span>
                   </div>
@@ -305,9 +326,14 @@ export default function ProjectOperationalInsightsPage() {
                         </div>
                         <h3 className="truncate font-semibold text-charcoal">{row.wbsName}</h3>
                       </div>
-                      <Badge variant={activityStatusBadge(status)} withDot>
-                        {status.replace("_", " ")}
-                      </Badge>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        {row.plannedPct >= 100 && row.actualPct < 100 && (
+                          <Badge variant="neutral">past planned end</Badge>
+                        )}
+                        <Badge variant={activityStatusBadge(status)} withDot>
+                          {status.replace("_", " ")}
+                        </Badge>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                       <ProgressRow
@@ -333,24 +359,6 @@ export default function ProjectOperationalInsightsPage() {
         </div>
       </section>
 
-      <section className="mt-7 rounded-xl border border-hairline bg-ivory p-5">
-        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">
-          Optional · Narrative analysis
-        </div>
-        <AiInsightsPanel
-          projectId={projectId}
-          endpoint={`/v1/projects/${projectId}/insights/manpower-kpi`}
-          autoLoad={false}
-          defaultCollapsed
-        />
-        <div className="h-4" />
-        <AiInsightsPanel
-          projectId={projectId}
-          endpoint={`/v1/projects/${projectId}/insights/equipment-kpi`}
-          autoLoad={false}
-          defaultCollapsed
-        />
-      </section>
     </div>
   );
 }

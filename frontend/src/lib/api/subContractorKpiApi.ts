@@ -52,11 +52,11 @@ export const subContractorKpiApi = {
    * equipment / material KPI endpoints — single network call returns the headline
    * tile data plus side-panel tables.
    */
-  getKpis: (projectId: string, from: string, to: string) =>
+  getKpis: (projectId: string, from?: string, to?: string) =>
     apiClient
       .get<ApiResponse<SubContractorKpiResponse>>(
         `/v1/projects/${projectId}/kpis/sub-contractor`,
-        { params: { from, to } },
+        { params: from && to ? { from, to } : {} },
       )
       .then((r) => r.data),
 };

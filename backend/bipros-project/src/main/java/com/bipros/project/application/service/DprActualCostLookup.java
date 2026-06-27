@@ -89,6 +89,62 @@ public class DprActualCostLookup {
         return out;
     }
 
+    /**
+     * Per-DPR sum of child {@code line_cost} for the project (manpower + equipment + material +
+     * sub-contractor), keyed by {@code dpr_id}, APPROVED only. Σ of the values equals
+     * {@link #sumByProject(UUID)} exactly, so it is a strict subset of {@code totalActual} — the
+     * P&L breakdowns use it to attribute execution cost to BOQ items / activities / periods while
+     * staying reconcilable to the canonical actual cost.
+     */
+    public Map<UUID, BigDecimal> sumByDpr(UUID projectId) {
+        Map<UUID, BigDecimal> out = new HashMap<>();
+        if (projectId == null) return out;
+        accumulateByDpr(out, "project.dpr_manpower", projectId);
+        accumulateByDpr(out, "project.dpr_equipment", projectId);
+        accumulateByDpr(out, "project.dpr_material", projectId);
+        accumulateSubContractorByDpr(out, projectId);
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void accumulateByDpr(Map<UUID, BigDecimal> sink, String childTable, UUID projectId) {
+        String sql = "SELECT c.dpr_id, COALESCE(SUM(c.line_cost), 0) "
+                + "FROM " + childTable + " c "
+                + "JOIN project.daily_progress_reports d ON d.id = c.dpr_id "
+                + "WHERE d.project_id = :projectId "
+                + "  AND c.line_cost IS NOT NULL "
+                + "  AND d.approval_status = 'APPROVED' "
+                + "GROUP BY c.dpr_id";
+        List<Object[]> rows = em.createNativeQuery(sql)
+                .setParameter("projectId", projectId)
+                .getResultList();
+        for (Object[] r : rows) {
+            UUID dprId = (UUID) r[0];
+            BigDecimal amount = r[1] instanceof BigDecimal b ? b : new BigDecimal(r[1].toString());
+            sink.merge(dprId, amount, BigDecimal::add);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void accumulateSubContractorByDpr(Map<UUID, BigDecimal> sink, UUID projectId) {
+        String sql = "SELECT c.dpr_id, COALESCE(SUM(c.quantity * COALESCE(a.rate_per_unit, 0)), 0) "
+                + "FROM project.dpr_sub_contractor c "
+                + "JOIN project.daily_progress_reports d ON d.id = c.dpr_id "
+                + "JOIN resource.activity_sub_contractor_assignments a "
+                + "       ON a.id = c.activity_sub_contractor_assignment_id "
+                + "WHERE d.project_id = :projectId "
+                + "  AND d.approval_status = 'APPROVED' "
+                + "GROUP BY c.dpr_id";
+        List<Object[]> rows = em.createNativeQuery(sql)
+                .setParameter("projectId", projectId)
+                .getResultList();
+        for (Object[] r : rows) {
+            UUID dprId = (UUID) r[0];
+            BigDecimal amount = r[1] instanceof BigDecimal b ? b : new BigDecimal(r[1].toString());
+            sink.merge(dprId, amount, BigDecimal::add);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void accumulateByDate(Map<LocalDate, BigDecimal> sink, String childTable, UUID projectId) {
         String sql = "SELECT d.report_date, COALESCE(SUM(c.line_cost), 0) "

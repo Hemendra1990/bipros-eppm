@@ -11,17 +11,13 @@ import {
   type MaterialConsumptionRow,
 } from "@/lib/api/materialConsumptionReportApi";
 import { projectApi } from "@/lib/api/projectApi";
-import { projectTeamApi } from "@/lib/api/projectTeamApi";
 import { materialRateMasterApi } from "@/lib/api/materialRateMasterApi";
 import { userApi, type UserSummary } from "@/lib/api/userApi";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { getErrorMessage } from "@/lib/utils/error";
 
-// Alert chip colour map. Codes match
-// MaterialConsumptionAlertEvaluator's public constants.
 const ALERT_STYLES: Record<string, string> = {
-  EXCESS_CONSUMPTION: "bg-amber-500/10 text-amber-600 border-amber-500/30",
   NEGATIVE_BALANCE: "bg-rose-500/10 text-rose-600 border-rose-500/30",
-  BUDGET_OVERCONSUMPTION: "bg-red-500/15 text-red-700 border-red-500/40",
   MISSING_UNIT_RATE: "bg-blue-500/10 text-blue-600 border-blue-500/30",
 };
 
@@ -33,17 +29,14 @@ const GROUP_BY_OPTIONS: Array<{ value: "" | MaterialConsumptionGroupBy; label: s
   { value: "SUPERVISOR", label: "By supervisor" },
 ];
 
+const PAGE_SIZES = [25, 50, 100, 0]; // 0 = all
+
 function fmtNum(v: number | null | undefined, digits = 2): string {
   if (v === null || v === undefined) return "—";
   return Number(v).toLocaleString("en-IN", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-}
-
-function fmtPercent(v: number | null | undefined): string {
-  if (v === null || v === undefined) return "—";
-  return (Number(v) * 100).toFixed(2) + "%";
 }
 
 function AlertChip({ code }: { code: string }) {
@@ -60,6 +53,7 @@ function AlertChip({ code }: { code: string }) {
 export default function MaterialConsumptionReportPage() {
   const params = useParams();
   const projectId = params.projectId as string;
+  const { money, moneyCompact } = useProjectCurrency();
 
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
@@ -68,7 +62,6 @@ export default function MaterialConsumptionReportPage() {
   });
   const project = projectData?.data;
 
-  // Filters in draft + applied form, so the user can edit without re-querying.
   const [draft, setDraft] = useState<MaterialConsumptionFilters>({});
   const [applied, setApplied] = useState<MaterialConsumptionFilters>({});
 
@@ -78,32 +71,23 @@ export default function MaterialConsumptionReportPage() {
       const from = project.plannedStartDate;
       const to = project.plannedFinishDate ?? new Date().toISOString().split("T")[0];
       const seeded: MaterialConsumptionFilters = { from, to };
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(seeded);
       setApplied(seeded);
     }
   }, [project, draft.from]);
 
-  // Supervisor dropdown: project_team SUPERVISOR rows.
-  const { data: supervisorTeam } = useQuery({
-    queryKey: ["project-team-supervisors", projectId],
-    queryFn: () => projectTeamApi.list(projectId, "SUPERVISOR"),
-    enabled: !!projectId,
-  });
-
-  // Storekeeper picker: prefer directory users with STOREKEEPER role; fall back to text
-  // input when none are returned.
   const { data: storekeepers } = useQuery<UserSummary[]>({
     queryKey: ["users-by-role", "STOREKEEPER"],
     queryFn: () => userApi.listByRoles(["STOREKEEPER"]),
   });
 
-  // Material rate master dropdown — used so the user can scope the report to one SKU.
   const { data: materialRates } = useQuery({
     queryKey: ["material-rate-masters"],
     queryFn: () => materialRateMasterApi.list(),
   });
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ["material-consumption-report", projectId, applied],
     queryFn: () => materialConsumptionReportApi.generate(projectId, applied),
     enabled: !!projectId && !!applied.from && !!applied.to,
@@ -111,13 +95,25 @@ export default function MaterialConsumptionReportPage() {
 
   const report: MaterialConsumptionReportResponse | undefined = data?.data ?? undefined;
   const rows = useMemo(() => report?.rows ?? [], [report]);
+  const supervisors = useMemo(() => report?.supervisors ?? [], [report]);
+
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setPage(0), [applied, rows.length, pageSize]);
+  const total = rows.length;
+  const pagedRows = useMemo(
+    () => (pageSize === 0 ? rows : rows.slice(page * pageSize, page * pageSize + pageSize)),
+    [rows, page, pageSize],
+  );
+  const pageCount = pageSize === 0 ? 1 : Math.max(1, Math.ceil(total / pageSize));
+  const rangeStart = total === 0 ? 0 : pageSize === 0 ? 1 : page * pageSize + 1;
+  const rangeEnd = pageSize === 0 ? total : Math.min(total, page * pageSize + pageSize);
 
   const handleApply = () => setApplied({ ...draft });
   const handleReset = () => {
-    const cleared: MaterialConsumptionFilters = {
-      from: draft.from,
-      to: draft.to,
-    };
+    const cleared: MaterialConsumptionFilters = { from: draft.from, to: draft.to };
     setDraft(cleared);
     setApplied(cleared);
   };
@@ -134,26 +130,9 @@ export default function MaterialConsumptionReportPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      // Quiet — the report itself surfaces any error state.
       console.error("Material consumption Excel export failed", err);
     }
   };
-
-  const supervisorOptions = (supervisorTeam?.data ?? []).map((m) => ({
-    value: m.userId,
-    label: m.reportsToName || m.username || m.userId,
-  }));
-  // Project team rows don't always carry the supervisor's display name — fall back to
-  // the firstName/lastName the API does project, then the username, then the raw UUID.
-  const supervisorDisplay = (supervisorTeam?.data ?? []).map((m) => {
-    const display =
-      [m.firstName, m.lastName].filter(Boolean).join(" ").trim() ||
-      m.username ||
-      m.userId;
-    return { value: m.userId, label: display };
-  });
-  // Prefer the display variant when present.
-  const supOptions = supervisorDisplay.length > 0 ? supervisorDisplay : supervisorOptions;
 
   return (
     <div className="space-y-4 p-4">
@@ -161,8 +140,7 @@ export default function MaterialConsumptionReportPage() {
         <div>
           <h1 className="text-2xl font-semibold">Material Consumption Report</h1>
           <p className="text-sm text-text-muted">
-            Planned vs issued vs consumed across the project window, with cost variance and
-            alerts. Read-only.
+            Issued vs consumed material across the project window, with cost and alerts. Read-only.
           </p>
         </div>
       </div>
@@ -199,9 +177,9 @@ export default function MaterialConsumptionReportPage() {
               className="rounded border border-border bg-background px-2 py-1"
             >
               <option value="">All supervisors</option>
-              {supOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {supervisors.map((sv) => (
+                <option key={sv.userId} value={sv.userId}>
+                  {sv.name || sv.userId}
                 </option>
               ))}
             </select>
@@ -284,9 +262,7 @@ export default function MaterialConsumptionReportPage() {
               onChange={(e) =>
                 setDraft({
                   ...draft,
-                  groupBy: (e.target.value || undefined) as
-                    | MaterialConsumptionGroupBy
-                    | undefined,
+                  groupBy: (e.target.value || undefined) as MaterialConsumptionGroupBy | undefined,
                 })
               }
               className="rounded border border-border bg-background px-2 py-1"
@@ -329,22 +305,10 @@ export default function MaterialConsumptionReportPage() {
         </div>
       </div>
 
-      {/* Totals + alert summary */}
+      {/* Totals */}
       {report && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard label="Planned Cost" value={fmtNum(report.totals?.plannedCost)} />
-          <SummaryCard label="Actual Cost" value={fmtNum(report.totals?.actualCost)} />
-          <SummaryCard
-            label="Variance"
-            value={fmtNum(report.totals?.variance)}
-            tone={
-              (report.totals?.variance ?? 0) > 0
-                ? "negative"
-                : (report.totals?.variance ?? 0) < 0
-                  ? "positive"
-                  : undefined
-            }
-          />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <SummaryCard label="Actual Cost" value={moneyCompact(report.totals?.actualCost)} />
           <SummaryCard
             label="Wastage % (avg)"
             value={
@@ -393,32 +357,74 @@ export default function MaterialConsumptionReportPage() {
               <Th>Storekeeper</Th>
               <Th>Material</Th>
               <Th>Unit</Th>
-              <Th align="right">Planned</Th>
               <Th align="right">Issued</Th>
               <Th align="right">Consumed</Th>
               <Th align="right">Balance</Th>
               <Th align="right">Wastage%</Th>
               <Th align="right">Unit Rate</Th>
-              <Th align="right">Plan Cost</Th>
               <Th align="right">Actual Cost</Th>
-              <Th align="right">Variance</Th>
-              <Th align="right">Var%</Th>
               <Th>Alerts</Th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && !isLoading ? (
+            {total === 0 && !isLoading ? (
               <tr>
-                <td colSpan={18} className="py-6 text-center text-text-muted">
+                <td colSpan={14} className="py-6 text-center text-text-muted">
                   No data for the selected filters.
                 </td>
               </tr>
             ) : (
-              rows.map((r, idx) => <Row key={idx} row={r} />)
+              pagedRows.map((r, idx) => (
+                <Row key={idx} row={r} money={money} />
+              ))
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-text-muted">Rows per page</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded border border-border bg-background px-2 py-1"
+            >
+              {PAGE_SIZES.map((sz) => (
+                <option key={sz} value={sz}>
+                  {sz === 0 ? "All" : sz}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-text-muted">
+              {rangeStart}–{rangeEnd} of {total}
+            </span>
+            <button
+              type="button"
+              disabled={pageSize === 0 || page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="rounded border border-border bg-surface px-2 py-1 disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <span className="text-text-muted">
+              {page + 1} / {pageCount}
+            </span>
+            <button
+              type="button"
+              disabled={pageSize === 0 || page >= pageCount - 1}
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              className="rounded border border-border bg-surface px-2 py-1 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -439,7 +445,13 @@ function Th({
   );
 }
 
-function Row({ row }: { row: MaterialConsumptionRow }) {
+function Row({
+  row,
+  money,
+}: {
+  row: MaterialConsumptionRow;
+  money: (amount: number | null | undefined, opts?: { decimals?: number }) => string;
+}) {
   const dateLabel =
     row.fromDate && row.toDate && row.fromDate === row.toDate
       ? row.fromDate
@@ -453,18 +465,12 @@ function Row({ row }: { row: MaterialConsumptionRow }) {
       <Td>{row.storekeeperName ?? "—"}</Td>
       <Td>{row.materialName ?? "—"}</Td>
       <Td>{row.unit ?? "—"}</Td>
-      <Td align="right">{fmtNum(row.plannedQty)}</Td>
       <Td align="right">{fmtNum(row.issuedQty)}</Td>
       <Td align="right">{fmtNum(row.consumedQty)}</Td>
       <Td align="right">{fmtNum(row.balanceQty)}</Td>
       <Td align="right">{fmtNum(row.wastagePercent)}</Td>
-      <Td align="right">{fmtNum(row.unitRate, 4)}</Td>
-      <Td align="right">{fmtNum(row.plannedCost)}</Td>
-      <Td align="right">{fmtNum(row.actualCost)}</Td>
-      <Td align="right" className={(row.variance ?? 0) > 0 ? "text-rose-600" : ""}>
-        {fmtNum(row.variance)}
-      </Td>
-      <Td align="right">{fmtPercent(row.variancePercent)}</Td>
+      <Td align="right">{money(row.unitRate)}</Td>
+      <Td align="right">{money(row.actualCost)}</Td>
       <Td>
         <div className="flex flex-wrap gap-1">
           {row.alerts?.map((c) => <AlertChip key={c} code={c} />)}
@@ -492,25 +498,11 @@ function Td({
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "positive" | "negative";
-}) {
-  const toneClass =
-    tone === "positive"
-      ? "text-emerald-600"
-      : tone === "negative"
-        ? "text-rose-600"
-        : "text-text-primary";
+function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border bg-surface p-3">
       <div className="text-xs uppercase tracking-wide text-text-muted">{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${toneClass}`}>{value}</div>
+      <div className="mt-1 text-lg font-semibold text-text-primary">{value}</div>
     </div>
   );
 }

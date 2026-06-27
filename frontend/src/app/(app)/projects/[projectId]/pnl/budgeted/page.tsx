@@ -12,7 +12,7 @@ export default function PnlBudgetedPage() {
       projectId={projectId}
       scope="budgeted"
       title="P&L vs Budgeted Unit Rates"
-      description="Revenue is priced at the project team's internal budgeted unit rate (BOQ.budgetedRate); cost is the actual cost rolled up from DPR rows via the Daily Cost Report. Margin tells you whether site execution is beating the internal plan."
+      description="Revenue is priced at the project team's internal budgeted unit rate (BOQ.budgetedRate). Actual Cost is the project's total actual cost — DPR line costs plus activity expenses. Margin tells you whether site execution is beating the internal plan."
       revenueLabel="Budgeted Revenue"
     />
   );

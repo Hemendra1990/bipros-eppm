@@ -1,6 +1,6 @@
 "use client";
 
-import { CloudSun, Wind, Droplets, Gauge } from "lucide-react";
+import { CloudSun, Wind, Droplets } from "lucide-react";
 import {
   SectionCard,
 } from "@/components/common/dashboard/primitives";
@@ -45,13 +45,6 @@ export function SiteConditionsPanel({ weather }: SiteConditionsPanelProps) {
       icon: <Droplets size={14} />,
       accent: "from-emerald/15 to-paper border-emerald/30 text-emerald",
     },
-    {
-      label: "AQI",
-      value: "—",
-      caption: "Not available",
-      icon: <Gauge size={14} />,
-      accent: "from-burgundy/10 to-paper border-burgundy/30 text-burgundy",
-    },
   ];
 
   return (
@@ -61,7 +54,7 @@ export function SiteConditionsPanel({ weather }: SiteConditionsPanelProps) {
       icon={<CloudSun size={16} />}
       accent
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {tiles.map((t) => (
           <div
             key={t.label}
@@ -77,7 +70,7 @@ export function SiteConditionsPanel({ weather }: SiteConditionsPanelProps) {
             </div>
             <div
               className="mt-2 font-display text-2xl font-semibold leading-none tracking-tight text-charcoal"
-              data-testid={t.label === "AQI" ? "site-conditions-aqi" : undefined}
+              data-testid={`site-conditions-${t.label.toLowerCase()}`}
             >
               {t.value}
             </div>

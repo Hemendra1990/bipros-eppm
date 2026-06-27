@@ -18,13 +18,6 @@ interface Props {
   density?: "compact" | "full";
 }
 
-function defaultRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const fmt = (d: Date) => d.toISOString().split("T")[0];
-  return { from: fmt(from), to: fmt(to) };
-}
-
 function formatPct(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   return `${(value * 100).toFixed(1)}%`;
@@ -40,14 +33,11 @@ function formatNumber(value: number | null | undefined, fractionDigits = 2): str
 
 export function ManpowerKpiSection({ projectId, from, to, density = "compact" }: Props) {
   const { money, moneyCompact, code } = useProjectCurrency();
-  const range = useMemo(() => {
-    if (from && to) return { from, to };
-    return defaultRange();
-  }, [from, to]);
+  const range = useMemo(() => (from && to ? { from, to } : null), [from, to]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["manpower-kpis", projectId, range.from, range.to],
-    queryFn: () => manpowerKpiApi.getKpis(projectId, range.from, range.to),
+    queryKey: ["manpower-kpis", projectId, range?.from ?? null, range?.to ?? null],
+    queryFn: () => manpowerKpiApi.getKpis(projectId, range?.from, range?.to),
     enabled: !!projectId,
   });
 
@@ -94,7 +84,7 @@ export function ManpowerKpiSection({ projectId, from, to, density = "compact" }:
     <section className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold text-text-primary">
-          Manpower KPIs <span className="text-xs font-normal text-text-muted">({range.from} → {range.to})</span>
+          Manpower KPIs <span className="text-xs font-normal text-text-muted">{range ? `(${range.from} → ${range.to})` : "(project to date)"}</span>
         </h2>
         <div className="text-[11px] text-text-muted">
           {wu.activeResourceCount} of {wu.laborResourceCount} manpower active · {kpis.productivityFactor.length} activities tracked · {kpis.labourCostPerUnit.length} BOQ items costed
@@ -143,7 +133,7 @@ export function ManpowerKpiSection({ projectId, from, to, density = "compact" }:
           </div>
           <div
             className="mt-1 text-xs text-text-secondary"
-            title="Σ actual nos (DPR deployment) ÷ Σ planned headcount across manpower assignments × 100. Hours are logging-only and do not enter this metric."
+            title="Avg daily deployed nos ÷ planned headcount × 100 (capped at 100%). Hours are logging-only."
           >
             {wu.actualNos} of {wu.plannedNos} nos
             {wu.overflow && ` · raw ${formatPct(wu.rawUtilizationPct)}`}

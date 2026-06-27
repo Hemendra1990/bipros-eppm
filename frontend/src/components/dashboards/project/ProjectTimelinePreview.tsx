@@ -8,6 +8,7 @@ import {
   EmptyBlock,
 } from "@/components/common/dashboard/primitives";
 import type { ActivityStatusRow } from "@/lib/api/projectInsightsApi";
+import { mapWorkPackageStatus } from "./dashboardDerivations";
 
 interface ProjectTimelinePreviewProps {
   activities: ActivityStatusRow[];
@@ -82,7 +83,7 @@ export function ProjectTimelinePreview({
   return (
     <SectionCard
       title="Project Timeline Preview"
-      subtitle={`Top WBS phases · ${windowMonths}-month window`}
+      subtitle={`Upcoming Activities · ${windowMonths}-month window`}
       icon={<Calendar size={16} />}
       accent
     >
@@ -186,7 +187,7 @@ export function ProjectTimelinePreview({
                       }}
                     >
                       <div
-                        className={`relative h-full overflow-hidden rounded-md shadow-[0_1px_2px_rgba(28,28,28,0.10)] ring-1 ring-black/5 ${toneClassFor(row.status)}`}
+                        className={`relative h-full overflow-hidden rounded-md shadow-[0_1px_2px_rgba(28,28,28,0.10)] ring-1 ring-black/5 ${toneClassFor(mapWorkPackageStatus(row))}`}
                         title={`${row.name} · ${format(start, "d MMM")} → ${format(finish, "d MMM")}`}
                       >
                         {row.pctComplete > 0 && row.pctComplete < 100 && (

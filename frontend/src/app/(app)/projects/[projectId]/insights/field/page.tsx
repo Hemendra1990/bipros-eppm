@@ -83,6 +83,29 @@ export default function ProjectFieldInsightsPage() {
   const reorderBreaches = fieldSummary?.reorderBreachCount ?? 0;
   const stockTracked = fieldSummary?.stockTrackedMaterialCount ?? 0;
 
+  // DPRs report a day's work (filed that evening / next morning), so the live counts are a
+  // snapshot of the latest DPR date — stamp them with that date so "0" reads as "none that
+  // day", not a glitch.
+  const asOfLabel = fieldSummary?.asOfDate
+    ? `as of ${new Date(fieldSummary.asOfDate + "T00:00:00Z").toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      })}`
+    : "no DPRs yet";
+
+  // "On the wire" = live first: activities with a recent DPR (active-site cards) lead, then
+  // IN_PROGRESS, then the rest — newest-touched first within each group.
+  const activeSiteIds = new Set(activeSites.map((s) => s.activityId));
+  const wireRank = (a: ActivityResponse) =>
+    activeSiteIds.has(a.id) ? 0 : a.status === "IN_PROGRESS" ? 1 : 2;
+  const wireActivities = [...activities]
+    .sort((a, b) => {
+      const r = wireRank(a) - wireRank(b);
+      return r !== 0 ? r : (b.updatedAt || "").localeCompare(a.updatedAt || "");
+    })
+    .slice(0, 10);
+
   if (isLoadingConfig) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -93,39 +116,52 @@ export default function ProjectFieldInsightsPage() {
 
   return (
     <div>
-      {/* KPI strip */}
-      <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiCard label="Workers on site" value={totalWorkers} icon={<Users size={16} />} />
+      {/* KPI strip — only KPIs we can source are shown (stock cards appear once stock is tracked) */}
+      <div
+        className={`mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-3 ${
+          stockTracked > 0 ? "xl:grid-cols-6" : "xl:grid-cols-4"
+        }`}
+      >
+        <KpiCard label="Workers on site" value={totalWorkers} sub={asOfLabel} icon={<Users size={16} />} />
         <KpiCard
           label="Equipment deployed"
           value={totalEquipment}
+          sub={asOfLabel}
           icon={<Truck size={16} />}
           accent="gold"
         />
         <KpiCard
-          label="Operating hours · 4d"
+          label="Operating hours"
           value={`${totalOperatingHours.toFixed(0)}h`}
+          sub="last 4 days"
           icon={<Clock size={16} />}
           accent="emerald"
         />
         <KpiCard
           label="Safety incidents"
           value={totalIncidents}
+          sub="last 7 days"
           icon={<ShieldCheck size={16} />}
           accent={totalIncidents > 0 ? "burgundy" : "emerald"}
         />
-        <KpiCard
-          label="Stock availability"
-          value={stockTracked === 0 ? "—" : `${(stockAvailability * 100).toFixed(0)}%`}
-          icon={<Package size={16} />}
-          accent={stockAvailability >= 0.95 ? "emerald" : stockAvailability >= 0.8 ? "gold" : "burgundy"}
-        />
-        <KpiCard
-          label="Re-order breaches"
-          value={reorderBreaches}
-          icon={<AlertTriangle size={16} />}
-          accent={reorderBreaches > 0 ? "burgundy" : "emerald"}
-        />
+        {stockTracked > 0 && (
+          <>
+            <KpiCard
+              label="Stock availability"
+              value={`${(stockAvailability * 100).toFixed(0)}%`}
+              sub="live"
+              icon={<Package size={16} />}
+              accent={stockAvailability >= 0.95 ? "emerald" : stockAvailability >= 0.8 ? "gold" : "burgundy"}
+            />
+            <KpiCard
+              label="Re-order breaches"
+              value={reorderBreaches}
+              sub="live"
+              icon={<AlertTriangle size={16} />}
+              accent={reorderBreaches > 0 ? "burgundy" : "emerald"}
+            />
+          </>
+        )}
       </div>
 
       <section className="mb-6">
@@ -174,8 +210,8 @@ export default function ProjectFieldInsightsPage() {
 
       <section className="mb-6">
         <SectionHeading
-          kicker={fieldSummary?.asOfDate ? `As of ${fieldSummary.asOfDate}` : "Live"}
-          title="Active sites"
+          kicker={fieldSummary?.asOfDate ? `Last 7 days · to ${fieldSummary.asOfDate}` : "Last 7 days"}
+          title="Active work fronts"
           icon={<HardHat size={14} strokeWidth={1.75} />}
         />
         {isLoadingFieldSummary ? (
@@ -227,7 +263,7 @@ export default function ProjectFieldInsightsPage() {
             <EmptyState label="No activities available" />
           ) : (
             <ul className="divide-y divide-hairline">
-              {activities.slice(0, 10).map((activity: ActivityResponse) => (
+              {wireActivities.map((activity: ActivityResponse) => (
                 <li key={activity.id} className="p-5">
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
@@ -283,11 +319,13 @@ export default function ProjectFieldInsightsPage() {
 function KpiCard({
   label,
   value,
+  sub,
   icon,
   accent = "default",
 }: {
   label: string;
   value: number | string;
+  sub?: string;
   icon?: React.ReactNode;
   accent?: "default" | "emerald" | "burgundy" | "gold";
 }) {
@@ -311,6 +349,9 @@ function KpiCard({
       >
         {value}
       </div>
+      {sub && (
+        <div className="mt-1.5 text-[10px] font-medium lowercase tracking-[0.08em] text-slate">{sub}</div>
+      )}
     </div>
   );
 }

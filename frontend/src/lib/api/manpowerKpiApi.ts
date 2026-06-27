@@ -99,11 +99,11 @@ export const manpowerKpiApi = {
    * Composite manpower KPIs for the period [from..to]. Single network call returns all
    * the metrics the dashboards need; the components pick which slices to render.
    */
-  getKpis: (projectId: string, from: string, to: string) =>
+  getKpis: (projectId: string, from?: string, to?: string) =>
     apiClient
       .get<ApiResponse<ManpowerKpiResponse>>(
         `/v1/projects/${projectId}/kpis/manpower`,
-        { params: { from, to } },
+        { params: from && to ? { from, to } : {} },
       )
       .then((r) => r.data),
 };

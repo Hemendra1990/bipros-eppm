@@ -3,15 +3,18 @@ import type { ActivityStatusRow } from "@/lib/api/projectInsightsApi";
 export type HealthBucket = "onTrack" | "atRisk" | "delayed";
 
 export function bucketActivityHealth(r: ActivityStatusRow): HealthBucket {
-  if (r.daysDelay > 7) return "delayed";
-  if (r.daysDelay >= 1) return "atRisk";
-  if (r.isCritical && r.daysDelay >= 0 && r.pctComplete < 100) return "atRisk";
+  if (r.pctComplete >= 100) return "onTrack";
+  const variance = r.pctComplete - (r.expectedProgressPct ?? 0);
+  if (variance <= -20) return "delayed";
+  if (variance <= -5) return "atRisk";
+  if (r.isCritical && variance < 0) return "atRisk";
   return "onTrack";
 }
 
 export function mapWorkPackageStatus(r: ActivityStatusRow): string {
   if (r.pctComplete >= 100) return "COMPLETED";
-  if (r.daysDelay > 7) return "DELAYED";
+  const variance = r.pctComplete - (r.expectedProgressPct ?? 0);
+  if (variance <= -20) return "DELAYED";
   if (r.pctComplete > 0) return "IN_PROGRESS";
   return r.status || "NOT_STARTED";
 }

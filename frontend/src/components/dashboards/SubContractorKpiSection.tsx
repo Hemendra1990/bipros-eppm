@@ -12,13 +12,6 @@ interface Props {
   density?: "compact" | "full";
 }
 
-function defaultRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const fmt = (d: Date) => d.toISOString().split("T")[0];
-  return { from: fmt(from), to: fmt(to) };
-}
-
 function formatPct(value: number | null | undefined, digits = 1): string {
   if (value == null || Number.isNaN(value)) return "—";
   return `${value.toFixed(digits)}%`;
@@ -43,14 +36,11 @@ export function SubContractorKpiSection({ projectId, from, to, density = "compac
   const { money: moneyFull, moneyCompact } = useProjectCurrency();
   // Line-level costs keep the prior whole-number (no-decimals) display.
   const money = (v: number | null | undefined) => moneyFull(v, { decimals: 0 });
-  const range = useMemo(() => {
-    if (from && to) return { from, to };
-    return defaultRange();
-  }, [from, to]);
+  const range = useMemo(() => (from && to ? { from, to } : null), [from, to]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["sub-contractor-kpis", projectId, range.from, range.to],
-    queryFn: () => subContractorKpiApi.getKpis(projectId, range.from, range.to),
+    queryKey: ["sub-contractor-kpis", projectId, range?.from ?? null, range?.to ?? null],
+    queryFn: () => subContractorKpiApi.getKpis(projectId, range?.from, range?.to),
     enabled: !!projectId,
   });
 
@@ -75,7 +65,7 @@ export function SubContractorKpiSection({ projectId, from, to, density = "compac
     return (
       <section className="rounded-lg border border-border bg-surface/40 p-4">
         <h3 className="text-sm font-semibold text-text-primary">
-          Sub-Contractor KPIs <span className="text-text-muted">({range.from} → {range.to})</span>
+          Sub-Contractor KPIs <span className="text-text-muted">{range ? `(${range.from} → ${range.to})` : "(project to date)"}</span>
         </h3>
         <p className="mt-2 text-sm text-text-muted">No sub-contractors assigned to this project.</p>
       </section>
@@ -86,7 +76,7 @@ export function SubContractorKpiSection({ projectId, from, to, density = "compac
     <section className="space-y-4 rounded-lg border border-border bg-surface/40 p-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-text-primary">
-          Sub-Contractor KPIs <span className="text-text-muted font-normal">({range.from} → {range.to})</span>
+          Sub-Contractor KPIs <span className="text-text-muted font-normal">{range ? `(${range.from} → ${range.to})` : "(project to date)"}</span>
         </h3>
         <div className="text-xs text-text-muted">
           {kpis.activeSubContractors} sub-contractor{kpis.activeSubContractors === 1 ? "" : "s"} active ·

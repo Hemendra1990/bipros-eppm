@@ -119,6 +119,41 @@ export default function ScheduleHealthPage() {
           </div>
         </div>
 
+        {/* What's driving the score */}
+        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-text-primary">What&apos;s driving the score</h3>
+            {health.computedAt && (
+              <span className="text-xs text-text-muted">
+                Last run: {new Date(health.computedAt).toLocaleString()}
+                {health.stale ? " — schedule changed since; re-run to refresh" : ""}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <ScoreFactor
+              label="Missing logic"
+              detail={pct(health.missingLogicPct)}
+              penaltyText={penalty(health.missingLogicPct, 40)}
+            />
+            <ScoreFactor
+              label="High float (>44d)"
+              detail={pct(health.highFloatPct)}
+              penaltyText={penalty(health.highFloatPct, 25)}
+            />
+            <ScoreFactor
+              label="Deadline slip"
+              detail={health.deadlineSlipDays != null ? `${health.deadlineSlipDays} days` : "—"}
+              penaltyText={penalty(health.deadlineSlipRatio, 25)}
+            />
+            <ScoreFactor
+              label="Critical concentration"
+              detail={pct(health.totalActivities ? health.criticalActivities / health.totalActivities : null)}
+              penaltyText={penalty(health.totalActivities ? health.criticalActivities / health.totalActivities : null, 10)}
+            />
+          </div>
+        </div>
+
         {/* Key Metrics */}
         <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
           <MetricCard
@@ -213,6 +248,28 @@ export default function ScheduleHealthPage() {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+function pct(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return `${(v * 100).toFixed(0)}%`;
+}
+
+function penalty(v: number | null | undefined, weight: number): string {
+  if (v === null || v === undefined) return "—";
+  if (v === 0) return "0";
+  return `−${(v * weight).toFixed(1)}`;
+}
+
+function ScoreFactor({ label, detail, penaltyText }: { label: string; detail: string; penaltyText: string }) {
+  const isPenalty = penaltyText.startsWith("−");
+  return (
+    <div className="rounded-lg border border-border bg-surface/30 p-3">
+      <p className="text-xs font-medium text-text-secondary">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-text-primary">{detail}</p>
+      <p className={`mt-0.5 text-xs ${isPenalty ? "text-danger" : "text-text-muted"}`}>{penaltyText}</p>
     </div>
   );
 }

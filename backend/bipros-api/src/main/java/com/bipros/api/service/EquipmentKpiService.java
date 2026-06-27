@@ -166,9 +166,11 @@ public class EquipmentKpiService {
 
   @Transactional(readOnly = true)
   public EquipmentKpiResponse compute(UUID projectId, LocalDate from, LocalDate to) {
-    List<DailyProgressReport> dprs = dprRepository
-        .findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
-            projectId, DprApprovalStatus.APPROVED, from, to);
+    List<DailyProgressReport> dprs = (from != null && to != null)
+        ? dprRepository.findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED, from, to)
+        : dprRepository.findByProjectIdAndApprovalStatusOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED);
     if (dprs.isEmpty()) {
       return emptyResponse(projectId, from, to);
     }
@@ -207,15 +209,20 @@ public class EquipmentKpiService {
 
     double epiPct = computeEpiHeadline(availPerf);
 
-    // Nos-based equipment utilisation: Σ actual nos (DPR) ÷ Σ planned headcount (assignments).
-    // Mirrors the Workforce Deployment metric in ManpowerKpiService.
+    // Nos-based equipment utilisation: avg daily deployed nos ÷ planned headcount (assignments).
+    long equipmentActiveDays = dprs.stream()
+        .filter(d -> equipmentByDpr.containsKey(d.getId()))
+        .map(DailyProgressReport::getReportDate)
+        .filter(java.util.Objects::nonNull)
+        .distinct().count();
     List<ResourceAssignment> assignments = resourceAssignmentRepository.findByProjectId(projectId);
-    int actualNos = equipmentRows.stream()
-        .mapToInt(r -> r.getNos() != null ? r.getNos() : 0).sum();
+    int totalNos = equipmentRows.stream().mapToInt(r -> r.getNos() != null ? r.getNos() : 0).sum();
     int plannedNos = assignments.stream()
         .filter(ra -> isEquipmentAssignment(ra, resourcesById))
         .mapToInt(ra -> ra.getHeadcount() != null ? ra.getHeadcount() : 0).sum();
-    double nosUtilPct = plannedNos > 0 ? Math.min(1.0d, (double) actualNos / plannedNos) : 0d;
+    var equipUtil = com.bipros.api.service.kpi.DeploymentUtilisation.of(totalNos, equipmentActiveDays, plannedNos);
+    int actualNos = equipUtil.avgDailyNos();
+    double nosUtilPct = equipUtil.cappedPct();
 
     // Idle / breakdown / mechanical-availability KPIs were removed when those DPR fields were
     // dropped from the supervisor UI. Return zero so back-compat clients still parse the shape.

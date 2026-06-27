@@ -158,17 +158,10 @@ export function CostsTab({ projectId }: { projectId: string }) {
   const projectCurrency = projectCurrencyEarly;
   const fmt = makeFormatter(projectCurrency);
 
-  // BAC (currentBudget) is stored in the currency's MAJOR unit (crore for INR,
-  // million otherwise); expand it to a raw amount before formatting so it shows
-  // e.g. "50 M OMR", not "50 OMR". Display-only — no calculation uses this.
-  const bacMajorUnitFactor =
-    projectCurrency.toUpperCase() === "INR" ? 10_000_000 : 1_000_000;
-
-  // cost-summary is the source of truth for budget and actual (absolute amounts in project currency).
-  const totalBudget = summary?.totalBudget ?? 0;
-  const totalActual = summary?.totalActual ?? 0;
-  const totalRemaining = Math.max(totalBudget - totalActual, 0);
-  const atCompletion = Math.max(totalBudget, totalActual);
+  // cost-summary is the source of truth — all EVM values are computed server-side now.
+  const bac = summary?.bac ?? 0;
+  const ac = summary?.totalActual ?? 0;
+  const ev = summary?.earnedValue ?? 0;
 
   const chartData = forecastItems.map((item) => ({
     period: item.period,
@@ -180,60 +173,36 @@ export function CostsTab({ projectId }: { projectId: string }) {
     cumulativeForecast: item.cumulativeForecast || 0,
   }));
 
-  const summaryCards: SummaryCard[] = [
-    {
-      label: "Budget at Completion (BAC)",
-      value: projectBudgetData?.data?.currentBudget != null
-        ? fmt(projectBudgetData.data.currentBudget * bacMajorUnitFactor)
-        : "Not set",
-      color: "indigo",
-    },
-    {
-      label: "Total Budget (Expenses)",
-      value: summary?.totalBudget != null && summary.totalBudget > 0
-        ? fmt(totalBudget)
-        : "—",
-      color: "blue",
-    },
-    {
-      label: "Total Actual",
-      value: summary?.totalActual != null && summary.totalActual > 0
-        ? fmt(totalActual)
-        : "—",
-      color: "green",
-    },
-    {
-      label: "Total Remaining",
-      value: fmt(totalRemaining),
-      color: "yellow",
-    },
-    {
-      label: "At Completion",
-      value: fmt(atCompletion),
-      color: "purple",
-    },
-  ];
+  const pct = (v: number | null | undefined) =>
+    v == null ? "—" : `${(v * 100).toFixed(1)}%`;
+  const ratio = (v: number | null | undefined) =>
+    v == null ? "—" : v.toFixed(4);
 
-  const evmCards: SummaryCard[] = summary
+  const summaryCards: SummaryCard[] = summary
     ? [
-        {
-          label: "Cost Variance (CV)",
-          value: fmt(summary.costVariance),
-          color: summary.costVariance >= 0 ? "green" : "red",
-        },
-        {
-          label: "CPI",
-          value: summary.costPerformanceIndex != null
-            ? summary.costPerformanceIndex.toFixed(4)
-            : "—",
-          color: summary.costPerformanceIndex != null
-            ? summary.costPerformanceIndex >= 1
-              ? "green"
-              : "red"
-            : "slate",
-        },
+        { label: "Contract Value", value: summary.contractValue != null ? fmt(summary.contractValue) : "—", color: "slate" },
+        { label: "Budget at Completion (BAC)", value: bac > 0 ? fmt(bac) : "Not set", color: "indigo" },
+        { label: "Earned Value (EV)", value: fmt(ev), color: "blue" },
+        { label: "Actual Cost (AC)", value: fmt(ac), color: "green" },
+        { label: "Cost Variance (CV)", value: fmt(summary.costVariance), color: summary.costVariance >= 0 ? "green" : "red" },
+        { label: "CPI", value: ratio(summary.costPerformanceIndex), color: summary.costPerformanceIndex == null ? "slate" : summary.costPerformanceIndex >= 1 ? "green" : "red" },
+        { label: "Estimate at Completion (EAC)", value: fmt(summary.estimateAtCompletion), color: "purple" },
+        { label: "Variance at Completion (VAC)", value: fmt(summary.varianceAtCompletion), color: summary.varianceAtCompletion >= 0 ? "green" : "red" },
       ]
     : [];
+
+  // Secondary EVM strip (smaller tiles).
+  const secondaryCards: SummaryCard[] = summary
+    ? [
+        { label: "% Complete (cost)", value: pct(summary.costPercentComplete), color: "blue" },
+        { label: "Estimate to Complete (ETC)", value: fmt(summary.estimateToComplete), color: "yellow" },
+        { label: "Schedule Variance (SV)", value: fmt(summary.scheduleVariance), color: summary.scheduleVariance >= 0 ? "green" : "red" },
+        { label: "SPI", value: ratio(summary.schedulePerformanceIndex), color: summary.schedulePerformanceIndex == null ? "slate" : summary.schedulePerformanceIndex >= 1 ? "green" : "red" },
+        { label: "Planned Cost (bottom-up)", value: fmt(summary.plannedCost), color: "slate" },
+      ]
+    : [];
+
+  const evmCards: SummaryCard[] = [];
 
   // PMS MasterData procurement roll-up — shown only when the project has material activity.
   const procurementCards: SummaryCard[] = summary && (summary.materialProcurementCost ?? 0) > 0
@@ -299,6 +268,20 @@ export function CostsTab({ projectId }: { projectId: string }) {
               </div>
             ))}
           </div>{/* CV/CPI tiles flow into the same 4-col grid → wraps 4+3 */}
+
+          {secondaryCards.length > 0 && (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+              {secondaryCards.map((card) => (
+                <div
+                  key={card.label}
+                  className={`rounded-lg border border-border bg-surface-hover/40 p-4 ${accentMap[card.color]}`}
+                >
+                  <h4 className="text-xs font-medium uppercase tracking-wide text-text-secondary">{card.label}</h4>
+                  <p className={`mt-2 text-lg font-bold ${textColorMap[card.color]}`}>{card.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {procurementCards.length > 0 && (
             <div>

@@ -45,6 +45,19 @@ export interface CostSummary {
   materialIssuedCost: number | null;
   projectOriginalBudget: number | null;
   projectCurrentBudget: number | null;
+  // EVM (true earned-value)
+  bac: number;
+  plannedCost: number;
+  earnedValue: number;
+  plannedValue: number;
+  costPercentComplete: number;
+  scheduleVariance: number;
+  schedulePerformanceIndex: number | null;
+  estimateAtCompletion: number;
+  estimateToComplete: number;
+  varianceAtCompletion: number;
+  contractValue: number | null;
+  toCompletePerformanceIndex: number | null;
 }
 
 export interface CashFlowForecastItem {
@@ -84,6 +97,21 @@ export interface CreateExpenseRequest {
   currency?: string;
   actualStartDate: string | null;
   expenseCategory: string;
+}
+
+export interface WbsEvmRow {
+  code: string;
+  name: string;
+  bac: number;
+  plannedValue: number;
+  earnedValue: number;
+  actualCost: number;
+  scheduleVariance: number;
+  costVariance: number;
+  schedulePerformanceIndex: number | null;
+  costPerformanceIndex: number | null;
+  estimateAtCompletion: number;
+  varianceAtCompletion: number;
 }
 
 export const costApi = {
@@ -162,5 +190,10 @@ export const costApi = {
       .get<ApiResponse<ActivityCostSummaryRow[]>>(
         `/v1/projects/${projectId}/activities/cost-summary`
       )
+      .then((r) => r.data),
+
+  getEvmByWbs: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<WbsEvmRow[]>>(`/v1/projects/${projectId}/cost/wbs-evm`)
       .then((r) => r.data),
 };

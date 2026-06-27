@@ -220,21 +220,22 @@ public class FieldDashboardSummaryService {
       List<DailyProgressReport> dayDprs = dprsByDate.getOrDefault(day, List.of());
       int headCount = 0;
       double opHours = 0d;
-      Set<UUID> equipmentResources = new HashSet<>();
-      int equipmentRowFallback = 0;
+      int equipmentNos = 0;
+      int equipmentRows = 0;
+      int equipmentRowsWithNos = 0;
       for (DailyProgressReport d : dayDprs) {
         for (DprManpower m : manpowerByDpr.getOrDefault(d.getId(), List.of())) {
           if (m.getNos() != null) headCount += m.getNos();
         }
         for (DprEquipment e : equipmentByDpr.getOrDefault(d.getId(), List.of())) {
           if (e.getWorkingHours() != null) opHours += e.getWorkingHours().doubleValue();
-          if (e.getResourceId() != null) equipmentResources.add(e.getResourceId());
-          else equipmentRowFallback++;
+          equipmentRows++;
+          if (e.getNos() != null) { equipmentNos += e.getNos(); equipmentRowsWithNos++; }
         }
       }
-      int equipmentCount = equipmentResources.isEmpty()
-          ? equipmentRowFallback
-          : equipmentResources.size();
+      // Equipment count = Σ nos (total machines on site) — the SAME definition as the top-strip
+      // card and the active-site cards. Falls back to row count only when every row lacks nos.
+      int equipmentCount = equipmentRowsWithNos > 0 ? equipmentNos : equipmentRows;
       out.add(new DailyWorklog(day, headCount, equipmentCount, round2(opHours)));
     }
     return out;
