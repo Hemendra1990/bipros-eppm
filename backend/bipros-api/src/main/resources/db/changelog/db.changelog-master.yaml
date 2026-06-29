@@ -213,3 +213,5 @@ databaseChangeLog:
       file: db/changelog/110-user-notifications.yaml
   - include:
       file: db/changelog/111-compression-finish-dates.yaml
+  - include:
+      file: db/changelog/112-dpr-issue-status-history.yaml

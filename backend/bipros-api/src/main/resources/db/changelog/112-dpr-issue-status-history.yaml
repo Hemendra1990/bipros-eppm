@@ -1,0 +1,43 @@
+databaseChangeLog:
+  # Append-only audit log of each DprIssue status transition. Soft FK (issue_id) to
+  # project.dpr_issues.id. createdAt records the transition time; the row is never mutated.
+  - changeSet:
+      id: 112-1-dpr-issue-status-history-table
+      author: bipros
+      comment: |
+        Append-only status-change history for field issues. One row is written by
+        DprIssueService on create (from_status null) and on every status transition.
+        Dev ddl-auto:update creates this table automatically; this changeset is the
+        prod source of truth.
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: dpr_issue_status_history
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints: { primaryKey: true, nullable: false }
+              - column: { name: issue_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: from_status, type: VARCHAR(20) }
+              - column:
+                  name: to_status
+                  type: VARCHAR(20)
+                  constraints: { nullable: false }
+              - column: { name: actor_user_id, type: UUID }
+              - column: { name: reason, type: VARCHAR(1000) }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+        - createIndex:
+            schemaName: project
+            tableName: dpr_issue_status_history
+            indexName: idx_dpr_issue_status_history_issue
+            columns:
+              - column: { name: issue_id }
+      rollback:
+        - dropTable:
+            schemaName: project
+            tableName: dpr_issue_status_history
