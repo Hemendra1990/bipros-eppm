@@ -178,7 +178,7 @@ export default function IssuesDashboardPage() {
           {/* KPI row */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <KpiTile label="Total Issues" value={rows.length} tone="default" />
-            <KpiTile label="Open / Blocked" value={totalOpen} tone="warning" />
+            <KpiTile label="Open / On Hold" value={totalOpen} tone="warning" />
             <KpiTile label="Critical" value={totalCritical} tone="danger" />
             <KpiTile label="Resolved" value={totalResolved} tone="success" />
           </div>

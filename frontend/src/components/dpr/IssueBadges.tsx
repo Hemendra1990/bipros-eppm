@@ -27,7 +27,7 @@ export const SEVERITY_OPTIONS: Array<{ value: IssueSeverity; label: string }> = 
 export const STATUS_OPTIONS: Array<{ value: IssueStatus; label: string }> = [
   { value: "OPEN", label: "Open" },
   { value: "IN_PROGRESS", label: "In progress" },
-  { value: "BLOCKED", label: "Blocked" },
+  { value: "BLOCKED", label: "On Hold" },
   { value: "RESOLVED", label: "Resolved" },
   { value: "CLOSED", label: "Closed" },
   { value: "CANCELLED", label: "Cancelled" },
@@ -53,4 +53,10 @@ export const CATEGORY_OPTIONS: Array<{ value: IssueCategory; label: string }> = 
 export function categoryLabel(c: IssueCategory | null | undefined): string {
   if (!c) return "—";
   return CATEGORY_OPTIONS.find((o) => o.value === c)?.label ?? c;
+}
+
+/** Friendly status label used in list rows and read-only summaries. */
+export function statusLabel(s: IssueStatus | null | undefined): string {
+  if (!s) return "—";
+  return STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s;
 }

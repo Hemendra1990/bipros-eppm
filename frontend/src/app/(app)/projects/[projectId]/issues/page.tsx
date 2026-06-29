@@ -18,6 +18,7 @@ import {
   STATUS_OPTIONS,
   CATEGORY_OPTIONS,
   categoryLabel,
+  statusLabel,
 } from "@/components/dpr/IssueBadges";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -189,7 +190,7 @@ export default function ProjectIssuesPage() {
                       title="Click to change status"
                     >
                       <Badge variant={STATUS_VARIANT[row.status]} withDot>
-                        {row.status.replace("_", " ")}
+                        {statusLabel(row.status)}
                       </Badge>
                     </button>
                     {statusMenu === row.id && (
