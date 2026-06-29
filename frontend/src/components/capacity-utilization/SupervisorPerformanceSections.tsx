@@ -18,6 +18,7 @@ import {
   efficiencyFormula,
   hiddenSideSentence,
   reconciliationText,
+  SHOW_HIDDEN_SIDE_NOTES,
 } from "@/lib/capacity/reconciliation";
 
 function fmt(n: number | null | undefined, digits = 2): string {
@@ -59,6 +60,7 @@ function HiddenSideBanner({
 }: {
   notes: HiddenSideNote[] | undefined;
 }) {
+  if (!SHOW_HIDDEN_SIDE_NOTES) return null;
   if (!notes || notes.length === 0) return null;
   return (
     <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning space-y-1">

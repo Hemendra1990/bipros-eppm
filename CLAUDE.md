@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The frontend has its own `frontend/AGENTS.md` and `frontend/CLAUDE.md` — both important; see the Next.js 16 note below.
 
+For the **end-to-end business/domain walkthrough** — the full lifecycle (project → WBS → activities → plan → productivity norms → resource plan → DPR → approval → BOQ → capacity utilization → DBS → reports → resource roles → RBAC → currency), each step grounded in the real entities/services/formulas/endpoints/tabs, plus the narrative-vs-code "reality checks" — invoke the **`business-domain`** skill. Read it before touching any DPR / cost / EVM / capacity / DBS / BOQ / resource-plan logic.
+
 ## Working discipline
 
 Behavioral guidelines to reduce common LLM coding mistakes.

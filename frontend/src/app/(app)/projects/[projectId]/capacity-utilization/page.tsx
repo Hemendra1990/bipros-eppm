@@ -20,6 +20,7 @@ import { SupervisorComparisonSections } from "@/components/capacity-utilization/
 import { PeriodCell as RolePeriodCellShared } from "@/components/capacity/PeriodCell";
 import {
   hiddenSideSentence,
+  SHOW_HIDDEN_SIDE_NOTES,
   type CapacitySide,
 } from "@/lib/capacity/reconciliation";
 import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
@@ -252,7 +253,7 @@ const Sc180SectionTable = memo(function Sc180SectionTable({
           </tbody>
         </table>
       </div>
-      {section.hiddenSideNotes && section.hiddenSideNotes.length > 0 && (
+      {SHOW_HIDDEN_SIDE_NOTES && section.hiddenSideNotes && section.hiddenSideNotes.length > 0 && (
         <div className="mt-2 mx-4 mb-4 rounded border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-text-muted space-y-1">
           {section.hiddenSideNotes.map((n) => (
             <div key={n.activityId}>

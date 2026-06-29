@@ -16,6 +16,22 @@
 
 export type CapacitySide = "MANPOWER" | "EQUIPMENT";
 
+// ── Temporary visibility flags (hide-don't-remove) ──────────────────────────────────────────
+// The client found the dual-norm "measured under the other side" vocabulary confusing on the
+// Capacity Utilization screen: on a Manpower row, "+1 measured under Equipment" reads to them as
+// an equipment operator being double-counted, when it actually means the day was attributed to
+// the Equipment section because Equipment led that activity (SERIES/SUBSTITUTE). They don't
+// configure both a manpower AND an equipment norm on the same work activity, so this
+// cross-measurement never applies for them. Both surfaces below are HIDDEN for now while the
+// producing code is left fully intact — flip a flag to `true` to bring it back if dual-norm
+// activities are ever used.
+//
+//   SHOW_RECONCILIATION_LINE → the per-row "X counted + Y measured under Z = N deployed" line.
+//   SHOW_HIDDEN_SIDE_NOTES   → the per-section "<Activity> (SERIES): <side> led this activity…"
+//                              note boxes at the bottom of each Manpower/Equipment table.
+export const SHOW_RECONCILIATION_LINE = false;
+export const SHOW_HIDDEN_SIDE_NOTES = false;
+
 function fmt(n: number | null | undefined, digits = 1): string {
   if (n === null || n === undefined) return "—";
   return n.toLocaleString("en-IN", { maximumFractionDigits: digits });
@@ -48,6 +64,7 @@ export function reconciliationText(
   noNorm: number | null | undefined,
   side?: CapacitySide,
 ): string | null {
+  if (!SHOW_RECONCILIATION_LINE) return null;
   const total = deployed ?? 0;
   if (total <= 0) return null;
   const elsewhere = measuredElsewhere ?? 0;
