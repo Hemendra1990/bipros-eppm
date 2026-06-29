@@ -162,9 +162,20 @@ export interface CreateDprIssueRequest {
   supervisorName?: string | null;
   assignedToResourceId?: string | null;
   assignedToName?: string | null;
+  assignedToUserId?: string | null;
   activityId?: string | null;
   activityName?: string | null;
   reportDate?: string | null;
+}
+
+/** One status transition in an issue's append-only history timeline. */
+export interface DprIssueStatusHistoryRow {
+  id: string;
+  fromStatus: IssueStatus | null;
+  toStatus: IssueStatus;
+  actorUserId?: string | null;
+  reason?: string | null;
+  createdAt: string;
 }
 
 /** Picker-mode option returned by GET .../resource-assignments/activity/{id}/picker?kind=… */

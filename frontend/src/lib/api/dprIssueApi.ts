@@ -8,6 +8,7 @@ import type { ApiResponse } from "../types";
 import type {
   CreateDprIssueRequest,
   DprIssueRow,
+  DprIssueStatusHistoryRow,
   IssueCategory,
   IssueSeverity,
   IssueStatus,
@@ -16,6 +17,7 @@ import type {
 export type {
   CreateDprIssueRequest,
   DprIssueRow,
+  DprIssueStatusHistoryRow,
   IssueCategory,
   IssueSeverity,
   IssueStatus,
@@ -29,6 +31,7 @@ export interface DprIssueFilters {
   activityId?: string;
   dateFrom?: string;
   dateTo?: string;
+  q?: string;
 }
 
 /** Partial-update request — only non-null fields are applied server-side. */
@@ -56,6 +59,7 @@ function toQuery(filters: DprIssueFilters): string {
   if (filters.activityId) params.set("activityId", filters.activityId);
   if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) params.set("dateTo", filters.dateTo);
+  if (filters.q) params.set("q", filters.q);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -74,6 +78,11 @@ export const dprIssueApi = {
   get: (projectId: string, id: string) =>
     apiClient
       .get<ApiResponse<DprIssueRow>>(`/v1/projects/${projectId}/dpr-issues/${id}`)
+      .then((r) => r.data),
+
+  history: (projectId: string, id: string) =>
+    apiClient
+      .get<ApiResponse<DprIssueStatusHistoryRow[]>>(`/v1/projects/${projectId}/dpr-issues/${id}/history`)
       .then((r) => r.data),
 
   patch: (projectId: string, id: string, body: UpdateDprIssueRequest) =>
