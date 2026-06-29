@@ -4,15 +4,19 @@ import com.bipros.common.event.DprIssueChangedEvent;
 import com.bipros.common.event.DprMutationType;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.application.dto.CreateDprIssueRequest;
 import com.bipros.project.application.dto.DprIssueRow;
+import com.bipros.project.application.dto.DprIssueStatusHistoryRow;
 import com.bipros.project.application.dto.UpdateDprIssueRequest;
 import com.bipros.project.domain.model.DprIssue;
+import com.bipros.project.domain.model.DprIssueStatusHistory;
 import com.bipros.project.domain.model.IssueCategory;
 import com.bipros.project.domain.model.IssueSeverity;
 import com.bipros.project.domain.model.IssueStatus;
 import com.bipros.project.domain.repository.DprIssueRepository;
+import com.bipros.project.domain.repository.DprIssueStatusHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,8 +45,10 @@ import java.util.UUID;
 public class DprIssueService {
 
     private final DprIssueRepository issueRepository;
+    private final DprIssueStatusHistoryRepository historyRepository;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProjectAccessGuard projectAccessGuard;
 
     @Transactional(readOnly = true)
     public List<DprIssueRow> list(
@@ -108,6 +114,8 @@ public class DprIssueService {
             } else if (wasTerminal && !isTerminal) {
                 issue.setResolvedAt(null);
             }
+            appendStatusHistory(issue.getId(), oldStatus, newStatus,
+                    newStatus.resolvedAtTerminal() ? issue.getResolutionNotes() : null);
         }
 
         DprIssue saved = issueRepository.save(issue);
@@ -158,10 +166,30 @@ public class DprIssueService {
                 .resolvedAt(status.resolvedAtTerminal() ? Instant.now() : null)
                 .build();
         DprIssue saved = issueRepository.save(issue);
+        appendStatusHistory(saved.getId(), null, saved.getStatus(),
+                saved.getStatus().resolvedAtTerminal() ? saved.getResolutionNotes() : null);
         auditService.logCreate("DprIssue", saved.getId(), DprIssueRow.from(saved));
         eventPublisher.publishEvent(new DprIssueChangedEvent(
                 projectId, null, saved.getId(), null, status.name(), DprMutationType.CREATED));
         return DprIssueRow.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DprIssueStatusHistoryRow> history(UUID projectId, UUID id) {
+        findIssue(projectId, id); // scope check — throws if not in project
+        return historyRepository.findByIssueIdOrderByCreatedAtAsc(id).stream()
+                .map(DprIssueStatusHistoryRow::from)
+                .toList();
+    }
+
+    private void appendStatusHistory(UUID issueId, IssueStatus from, IssueStatus to, String reason) {
+        historyRepository.save(DprIssueStatusHistory.builder()
+                .issueId(issueId)
+                .fromStatus(from)
+                .toStatus(to)
+                .actorUserId(projectAccessGuard.currentUserId())
+                .reason(reason)
+                .build());
     }
 
     private DprIssue findIssue(UUID projectId, UUID id) {

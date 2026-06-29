@@ -3,6 +3,7 @@ package com.bipros.project.api;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.project.application.dto.CreateDprIssueRequest;
 import com.bipros.project.application.dto.DprIssueRow;
+import com.bipros.project.application.dto.DprIssueStatusHistoryRow;
 import com.bipros.project.application.dto.UpdateDprIssueRequest;
 import com.bipros.project.application.service.DprIssueService;
 import com.bipros.project.domain.model.IssueCategory;
@@ -74,6 +75,13 @@ public class DprIssueController {
             @PathVariable UUID projectId,
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(service.get(projectId, id)));
+    }
+
+    @GetMapping("/{id}/history")
+    public ResponseEntity<ApiResponse<List<DprIssueStatusHistoryRow>>> history(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(service.history(projectId, id)));
     }
 
     @PatchMapping("/{id}")
