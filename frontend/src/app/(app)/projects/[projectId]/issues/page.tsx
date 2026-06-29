@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Pencil, Trash2 } from "lucide-react";
+import { LayoutDashboard, Pencil, Trash2, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import { dprIssueApi, type DprIssueFilters, type UpdateDprIssueRequest } from "@/lib/api/dprIssueApi";
 import type { DprIssueRow, IssueStatus, IssueSeverity, IssueCategory } from "@/lib/types/dpr";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
+import { Drawer } from "@/components/common/Drawer";
 import {
   SEVERITY_VARIANT,
   STATUS_VARIANT,
@@ -20,21 +21,37 @@ import {
   categoryLabel,
   statusLabel,
 } from "@/components/dpr/IssueBadges";
+import { IssueForm } from "@/components/dpr/IssueForm";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
+import { ResourceAvatar } from "@/components/resource/supervisor-assign/ResourceAvatar";
 import { getErrorMessage } from "@/lib/utils/error";
 
 const inputCls =
   "rounded-md border border-border bg-surface-hover px-3 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none";
 
+const TERMINAL: IssueStatus[] = ["RESOLVED", "CLOSED"];
+
 export default function ProjectIssuesPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
-  const router = useRouter();
   const queryClient = useQueryClient();
 
   const [filters, setFilters] = useState<DprIssueFilters>({});
   const [statusMenu, setStatusMenu] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
+
+  // Create/edit happen in a right-side drawer launched from this page.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<DprIssueRow | null>(null);
+
+  const openNew = () => {
+    setEditing(null);
+    setDrawerOpen(true);
+  };
+  const openEdit = (row: DprIssueRow) => {
+    setEditing(row);
+    setDrawerOpen(true);
+  };
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -93,12 +110,14 @@ export default function ProjectIssuesPage() {
               <LayoutDashboard className="h-4 w-4" />
               Dashboard
             </Link>
-            <Link
-              href={`/projects/${projectId}/issues/new`}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+            <button
+              type="button"
+              onClick={openNew}
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
             >
-              + New Issue
-            </Link>
+              <Plus className="h-4 w-4" />
+              New Issue
+            </button>
           </div>
         }
       />
@@ -218,8 +237,8 @@ export default function ProjectIssuesPage() {
                             key={opt.value}
                             onClick={() => {
                               setStatusMenu(null);
-                              if (opt.value === "RESOLVED" || opt.value === "CLOSED") {
-                                router.push(`/projects/${projectId}/issues/${row.id}/edit`);
+                              if (TERMINAL.includes(opt.value)) {
+                                openEdit(row);
                                 return;
                               }
                               patchMutation.mutate({ id: row.id!, body: { status: opt.value } });
@@ -233,7 +252,20 @@ export default function ProjectIssuesPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
-                    {row.assignedToName ?? "—"}
+                    {row.assignedToName ? (
+                      <span className="inline-flex items-center gap-2">
+                        {row.assignedToUserId && (
+                          <ResourceAvatar
+                            id={row.assignedToUserId}
+                            name={row.assignedToName}
+                            size="sm"
+                          />
+                        )}
+                        <span>{row.assignedToName}</span>
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">
                     {row.reportDate
@@ -246,9 +278,7 @@ export default function ProjectIssuesPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() =>
-                          router.push(`/projects/${projectId}/issues/${row.id}/edit`)
-                        }
+                        onClick={() => openEdit(row)}
                         className="text-text-muted hover:text-accent"
                         title="Edit issue"
                       >
@@ -281,6 +311,23 @@ export default function ProjectIssuesPage() {
           onClick={() => setStatusMenu(null)}
         />
       )}
+
+      <Drawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title={editing ? "Edit Issue" : "New Issue"}
+        widthClass="max-w-2xl"
+      >
+        {drawerOpen && (
+          <IssueForm
+            key={editing?.id ?? "new"}
+            projectId={projectId}
+            issue={editing}
+            onSaved={() => setDrawerOpen(false)}
+            onCancel={() => setDrawerOpen(false)}
+          />
+        )}
+      </Drawer>
     </div>
   );
 }

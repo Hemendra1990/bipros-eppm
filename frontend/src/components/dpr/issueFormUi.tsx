@@ -97,50 +97,6 @@ export function MetaStat({
   );
 }
 
-/**
- * The form shell: an elevated card with a severity-coloured left rail and a
- * header band carrying the page kicker/title plus live status + severity pills.
- */
-export function IssueFormShell({
-  severity,
-  kicker,
-  title,
-  pills,
-  children,
-}: {
-  severity: IssueSeverity;
-  kicker: string;
-  title: string;
-  pills?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.12)]">
-      <div className="flex">
-        <div
-          className="w-1.5 shrink-0"
-          style={{ backgroundColor: SEVERITY_ACCENT[severity] }}
-          aria-hidden
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5 sm:px-8">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-                {kicker}
-              </div>
-              <h1 className="mt-1 text-xl font-semibold tracking-tight text-text-primary">
-                {title}
-              </h1>
-            </div>
-            {pills && <div className="flex shrink-0 items-center gap-2">{pills}</div>}
-          </div>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** A subtle accent panel used for the conditional Resolution block. */
 export function AccentPanel({
   tone = "gold",
