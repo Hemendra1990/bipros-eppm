@@ -33,4 +33,5 @@ public record ProjectStatusSnapshotDto(
     BigDecimal bacCrores,
     BigDecimal eacCrores,
     BigDecimal acCrores,
-    Instant lastUpdatedAt) {}
+    Instant lastUpdatedAt,
+    LocalDate dataDate) {}

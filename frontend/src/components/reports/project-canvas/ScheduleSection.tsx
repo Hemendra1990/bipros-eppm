@@ -60,7 +60,11 @@ export function ScheduleSection({ projectId }: { projectId: string }) {
             <DlRow label="Missing logic" value={data.missingLogicCount} danger={data.missingLogicCount > 0} />
             <DlRow label="Leads (negative lag)" value={data.leadRelationshipsCount} danger={data.leadRelationshipsCount > 0} />
             <DlRow label="Lags" value={data.lagsCount} />
-            <DlRow label="FS relationships %" value={`${data.fsRelationshipPct.toFixed(0)}%`} danger={data.fsRelationshipPct < 90} />
+            <DlRow
+              label="FS relationships %"
+              value={data.fsRelationshipPct != null ? `${data.fsRelationshipPct.toFixed(0)}%` : "N/A"}
+              danger={data.fsRelationshipPct == null || data.fsRelationshipPct < 90}
+            />
             <DlRow label="Hard constraints" value={data.hardConstraintsCount} danger={data.hardConstraintsCount > 0} />
             <DlRow label="High float (>44d)" value={data.highFloatCount} danger={data.highFloatCount > 0} />
             <DlRow label="Negative float" value={data.negativeFloatCount} danger={data.negativeFloatCount > 0} />

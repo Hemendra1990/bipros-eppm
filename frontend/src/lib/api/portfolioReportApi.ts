@@ -109,10 +109,10 @@ export interface RiskHeatmap {
 
 export interface CashFlowOutlookPoint {
   yearMonth: string;
-  plannedOutflowCrores: number;
-  plannedInflowCrores: number;
-  netCrores: number;
-  cumulativeCrores: number;
+  plannedOutflowRaw: number;
+  plannedInflowRaw: number;
+  netRaw: number;
+  cumulativeRaw: number;
   currency: string | null;
 }
 

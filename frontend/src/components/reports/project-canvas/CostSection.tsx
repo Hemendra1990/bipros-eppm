@@ -92,7 +92,7 @@ export function CostSection({ projectId }: { projectId: string }) {
           <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 38)}>
             <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis type="number" stroke="#64748b" style={{ fontSize: "12px" }} />
+              <XAxis type="number" stroke="#64748b" style={{ fontSize: "12px" }} tickFormatter={(v) => moneyCompact(Number(v) * 1e7)} />
               <YAxis type="category" dataKey="name" stroke="#64748b" style={{ fontSize: "11px" }} width={120} />
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}
@@ -115,7 +115,7 @@ export function CostSection({ projectId }: { projectId: string }) {
           <ResponsiveContainer width="100%" height={Math.max(220, varianceData.length * 38)}>
             <BarChart data={varianceData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis type="number" stroke="#64748b" style={{ fontSize: "12px" }} />
+              <XAxis type="number" stroke="#64748b" style={{ fontSize: "12px" }} tickFormatter={(v) => moneyCompact(Number(v) * 1e7)} />
               <YAxis type="category" dataKey="name" stroke="#64748b" style={{ fontSize: "11px" }} width={120} />
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}

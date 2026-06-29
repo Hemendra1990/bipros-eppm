@@ -50,8 +50,10 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
 
   const variance = useMemo(() => {
     return {
-      planned: totals.totalPlanned - totals.totalActual,
-      forecast: totals.totalForecast - totals.totalActual,
+      // VAC = BAC − EAC: positive means under budget at completion.
+      vac: totals.totalPlanned - totals.totalForecast,
+      // ETC = EAC − AC: remaining spend to project completion.
+      etc: totals.totalForecast - totals.totalActual,
     };
   }, [totals]);
 
@@ -186,40 +188,42 @@ export function CashFlowReport({ data }: CashFlowReportProps) {
       {/* Variance Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-surface/50 border border-border rounded-lg p-4">
-          <h4 className="font-semibold text-text-primary mb-3">Planned vs Actual</h4>
+          <h4 className="font-semibold text-text-primary mb-3">Forecast vs Budget (VAC)</h4>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-text-secondary">Variance</span>
-              <span className={`font-semibold ${variance.planned >= 0 ? "text-success" : "text-danger"}`}>
-                {moneyCompact(variance.planned)}
+              <span className="text-text-secondary">Variance (BAC − EAC)</span>
+              <span className={`font-semibold ${variance.vac >= 0 ? "text-success" : "text-danger"}`}>
+                {moneyCompact(variance.vac)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Status</span>
               <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                variance.planned >= 0 ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+                variance.vac >= 0 ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
               }`}>
-                {variance.planned >= 0 ? "Under Budget" : "Over Budget"}
+                {variance.vac >= 0 ? "Under Budget" : "Over Budget"}
               </span>
             </div>
           </div>
         </div>
 
         <div className="bg-surface/50 border border-border rounded-lg p-4">
-          <h4 className="font-semibold text-text-primary mb-3">Forecast vs Actual</h4>
+          <h4 className="font-semibold text-text-primary mb-3">Forecast vs Actual (ETC)</h4>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-text-secondary">Remaining</span>
-              <span className={`font-semibold ${variance.forecast >= 0 ? "text-success" : "text-danger"}`}>
-                {moneyCompact(variance.forecast)}
+              <span className="text-text-secondary">Remaining (EAC − AC)</span>
+              <span className={`font-semibold ${variance.etc <= 0 ? "text-success" : "text-text-primary"}`}>
+                {moneyCompact(variance.etc)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Status</span>
               <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                variance.forecast >= 0 ? "bg-success/10 text-success" : "bg-orange-500/10 text-orange-400"
+                variance.etc <= 0
+                  ? "bg-success/10 text-success"
+                  : "bg-orange-500/10 text-orange-400"
               }`}>
-                {variance.forecast >= 0 ? "On Track" : "At Risk"}
+                {variance.etc <= 0 ? "Completed" : "In Progress"}
               </span>
             </div>
           </div>

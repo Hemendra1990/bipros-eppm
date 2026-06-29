@@ -31,10 +31,10 @@ import {
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatCrore,
   formatPct,
 } from "@/components/common/dashboard/primitives";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
+import { formatMoney, resolveCurrencyMeta } from "@/lib/currency/format";
 
 interface ProjectData {
   id: string;
@@ -251,6 +251,24 @@ export default function DashboardPage() {
 
   useEffect(() => setIsClient(true), []);
 
+  // Per-currency money state
+  const budgetList = scorecard?.budgetByCurrency ?? [];
+  const spentList = scorecard?.spentByCurrency ?? [];
+  const currencies = Array.from(
+    new Set([...budgetList.map((c) => c.currency), ...spentList.map((c) => c.currency)]),
+  );
+  const defaultCurrency =
+    [...budgetList].sort((a, b) => (b.totalBudgetRaw ?? 0) - (a.totalBudgetRaw ?? 0))[0]?.currency ??
+    currencies[0] ?? "INR";
+  const [manualCurrency, setManualCurrency] = useState<string | null>(null);
+  // Effective currency: user's pick if still available, otherwise largest-budget default
+  const selectedCurrency =
+    manualCurrency !== null && currencies.includes(manualCurrency) ? manualCurrency : defaultCurrency;
+  const curMeta = resolveCurrencyMeta(selectedCurrency);
+  const money = (raw: number) => formatMoney(raw, curMeta, { compact: true });
+  const rawFor = (list: { currency: string; totalBudgetRaw: number }[], cur: string) =>
+    list.find((c) => c.currency === cur)?.totalBudgetRaw ?? 0;
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await qc.invalidateQueries();
@@ -279,13 +297,15 @@ export default function DashboardPage() {
 
   if (!isClient) return null;
 
-  // Derived values
-  const budget = scorecard?.totalBudgetCrores ?? 0;
-  const committed = scorecard?.totalCommittedCrores ?? 0;
-  const spent = scorecard?.totalSpentCrores ?? 0;
+  // Derived values (per selected currency)
+  const budget = rawFor(budgetList, selectedCurrency);
+  const spent = rawFor(spentList, selectedCurrency);
+  const committed = Math.max(budget - spent, 0);
   const utilizationPct = budget > 0 ? (spent / budget) * 100 : 0;
   const commitmentPct = budget > 0 ? (committed / budget) * 100 : 0;
-  const remaining = Math.max(budget - spent, 0);
+
+  // Cash-flow series for the selected currency only
+  const cashFlowFiltered = (cashFlow ?? []).filter((p) => p.currency === selectedCurrency);
 
   const ragGreen = scorecard?.rag.green ?? 0;
   const ragAmber = scorecard?.rag.amber ?? 0;
@@ -377,17 +397,31 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
-                <span className="hidden items-center gap-1 rounded-full border border-gold/30 bg-paper/80 px-2.5 py-1 text-[10px] font-semibold text-gold-deep backdrop-blur md:inline-flex">
-                  <Sparkles size={11} />
-                  Live
-                </span>
+                <div className="flex items-center gap-2">
+                  {currencies.length > 1 && (
+                    <select
+                      value={selectedCurrency}
+                      onChange={(e) => setManualCurrency(e.target.value)}
+                      className="rounded-md border border-hairline bg-paper px-2 py-1 text-xs text-charcoal"
+                      aria-label="Display currency"
+                    >
+                      {currencies.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="hidden items-center gap-1 rounded-full border border-gold/30 bg-paper/80 px-2.5 py-1 text-[10px] font-semibold text-gold-deep backdrop-blur md:inline-flex">
+                    <Sparkles size={11} />
+                    Live
+                  </span>
+                </div>
               </div>
               <div className="relative mt-5">
                 <div
                   className="font-display text-[42px] font-semibold leading-none tracking-tight text-charcoal"
                   style={{ fontVariationSettings: "'opsz' 144" }}
                 >
-                  {formatCrore(budget)}
+                  {money(budget)}
                 </div>
                 <div className="mt-1.5 text-xs text-slate">
                   Spent <span className="font-semibold text-charcoal">{formatPct(utilizationPct)}</span>
@@ -405,22 +439,18 @@ export default function DashboardPage() {
                     className="absolute inset-y-0 rounded-full bg-gradient-to-r from-gold to-gold-deep opacity-70"
                     style={{
                       left: `${Math.min(utilizationPct, 100)}%`,
-                      width: `${Math.max(Math.min(commitmentPct - utilizationPct, 100 - utilizationPct), 0)}%`,
+                      width: `${Math.max(Math.min(commitmentPct, 100 - utilizationPct), 0)}%`,
                     }}
                   />
                 </div>
                 <div className="mt-2.5 flex items-center justify-between text-[10px] font-medium text-slate">
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-emerald" />
-                    Spent {formatCrore(spent, 1)}
+                    Spent {money(spent)}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-gold" />
-                    Committed {formatCrore(committed, 1)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-ivory ring-1 ring-hairline" />
-                    Remaining {formatCrore(remaining, 1)}
+                    Committed {money(committed)}
                   </span>
                 </div>
               </div>
@@ -495,14 +525,14 @@ export default function DashboardPage() {
         />
         <KpiTile
           label="Spent"
-          value={formatCrore(spent, 1)}
+          value={money(spent)}
           hint={`${formatPct(utilizationPct)} of budget`}
           tone="success"
           icon={<Banknote size={14} />}
         />
         <KpiTile
           label="Committed"
-          value={formatCrore(committed, 1)}
+          value={money(committed)}
           hint={`${formatPct(commitmentPct)} of budget`}
           icon={<TrendingUp size={14} />}
         />
@@ -786,7 +816,7 @@ export default function DashboardPage() {
         {/* Cash flow next 6 months */}
         <SectionCard
           title="Next 6 months · cash"
-          subtitle="Net monthly position (₹ Cr)"
+          subtitle={`Net monthly position (${selectedCurrency})`}
           icon={<Banknote size={16} />}
           actions={
             <Link
@@ -797,8 +827,8 @@ export default function DashboardPage() {
             </Link>
           }
         >
-          {cashFlow && cashFlow.length > 0 ? (
-            <CashFlowSparkline data={cashFlow} />
+          {cashFlowFiltered.length > 0 ? (
+            <CashFlowSparkline data={cashFlowFiltered} money={money} />
           ) : (
             <EmptyBlock label="No cash forecast yet" />
           )}
@@ -924,18 +954,20 @@ function RagMini({
 
 function CashFlowSparkline({
   data,
+  money,
 }: {
   data: Array<{
     yearMonth: string;
-    plannedOutflowCrores: number;
-    plannedInflowCrores: number;
-    netCrores: number;
+    plannedOutflowRaw: number;
+    plannedInflowRaw: number;
+    netRaw: number;
   }>;
+  money: (raw: number) => string;
 }) {
   const points = data.slice(0, 6);
   const maxAbs = Math.max(
-    ...points.map((p) => Math.abs(p.netCrores)),
-    Math.abs(points[points.length - 1]?.netCrores ?? 0),
+    ...points.map((p) => Math.abs(p.netRaw)),
+    Math.abs(points[points.length - 1]?.netRaw ?? 0),
     1,
   );
 
@@ -943,13 +975,13 @@ function CashFlowSparkline({
     <div>
       <div className="flex h-32 items-end gap-1.5">
         {points.map((p) => {
-          const heightPct = (Math.abs(p.netCrores) / maxAbs) * 100;
-          const isPositive = p.netCrores >= 0;
+          const heightPct = (Math.abs(p.netRaw) / maxAbs) * 100;
+          const isPositive = p.netRaw >= 0;
           return (
             <div
               key={p.yearMonth}
               className="group relative flex flex-1 flex-col items-center justify-end"
-              title={`${p.yearMonth}: net ₹${p.netCrores.toFixed(1)} Cr`}
+              title={`${p.yearMonth}: net ${money(p.netRaw)}`}
             >
               <div
                 className={`w-full rounded-t-md transition-all duration-300 ${
@@ -968,7 +1000,7 @@ function CashFlowSparkline({
       </div>
       <div className="mt-3 flex items-center justify-between border-t border-hairline pt-3 text-[11px] text-slate">
         <span>
-          Net {formatCrore(points.reduce((s, p) => s + p.netCrores, 0), 1)}
+          Net {money(points.reduce((s, p) => s + p.netRaw, 0))}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-gold-deep" /> Surplus

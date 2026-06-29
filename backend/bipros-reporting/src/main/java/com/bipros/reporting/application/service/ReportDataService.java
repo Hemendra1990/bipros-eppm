@@ -1,7 +1,7 @@
 package com.bipros.reporting.application.service;
 
-import com.bipros.evm.application.service.EvmService;
-import com.bipros.evm.domain.entity.EvmCalculation;
+import com.bipros.cost.application.dto.CostSummaryDto;
+import com.bipros.cost.application.service.CostService;
 import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.reporting.application.dto.*;
 import lombok.RequiredArgsConstructor;
@@ -52,7 +52,7 @@ public class ReportDataService {
 
   @PersistenceContext private EntityManager em;
 
-  private final EvmService evmService;
+  private final CostService costService;
   private final DprActualCostLookup dprActualCostLookup;
 
   // =========================================================================
@@ -72,18 +72,18 @@ public class ReportDataService {
     LocalDate monthStart = ym.atDay(1);
     LocalDate monthEnd = ym.atEndOfMonth();
 
-    EvmCalculation snap = evmService.computeEvmSnapshot(projectId);
+    CostSummaryDto cs = costService.getCostSummary(projectId);
 
     int totalActivities = scalarInt(
         "SELECT CAST(COUNT(*) AS INTEGER) FROM activity.activities WHERE project_id = ?1",
         projectId);
     int completedActivities = countCompletedActivities(projectId, monthEnd);
     int inProgressActivities = countInProgressActivities(projectId);
-    double overallPercentComplete = computeOverallPercentComplete(projectId, monthEnd);
+    double overallPercentComplete = cs.costPercentComplete() != null ? cs.costPercentComplete().doubleValue() * 100 : 0.0;
 
     BigDecimal budgetAmount = getProjectBudget(projectId);
-    BigDecimal actualCost = nz(snap.getActualCost());
-    BigDecimal forecastCost = nz(snap.getEstimateAtCompletion());
+    BigDecimal actualCost = nz(cs.totalActual());
+    BigDecimal forecastCost = nz(cs.estimateAtCompletion());
 
     int totalMilestones = getTotalMilestones(projectId);
     int achievedMilestones = getAchievedMilestones(projectId, monthEnd);
@@ -110,18 +110,17 @@ public class ReportDataService {
   public EvmReportData getEvmReport(UUID projectId) {
     String projectName = getProjectName(projectId);
 
-    EvmCalculation snap = evmService.computeEvmSnapshot(projectId);
-    BigDecimal pv = nz(snap.getPlannedValue());
-    BigDecimal ev = nz(snap.getEarnedValue());
-    BigDecimal ac = nz(snap.getActualCost());
-    BigDecimal bac = nz(snap.getBudgetAtCompletion());
-
-    double spi = snap.getSchedulePerformanceIndex() != null ? snap.getSchedulePerformanceIndex() : 0.0;
-    double cpi = snap.getCostPerformanceIndex() != null ? snap.getCostPerformanceIndex() : 0.0;
-    BigDecimal eac = nz(snap.getEstimateAtCompletion());
-    BigDecimal etc = nz(snap.getEstimateToComplete());
-    BigDecimal vac = nz(snap.getVarianceAtCompletion());
-    double tcpi = snap.getToCompletePerformanceIndex() != null ? snap.getToCompletePerformanceIndex() : 0.0;
+    CostSummaryDto cs = costService.getCostSummary(projectId);
+    BigDecimal pv = nz(cs.plannedValue());
+    BigDecimal ev = nz(cs.earnedValue());
+    BigDecimal ac = nz(cs.totalActual());
+    BigDecimal bac = nz(cs.bac());
+    double spi = dbl(cs.schedulePerformanceIndex());
+    double cpi = dbl(cs.costPerformanceIndex());
+    BigDecimal eac = nz(cs.estimateAtCompletion());
+    BigDecimal etc = nz(cs.estimateToComplete());
+    BigDecimal vac = nz(cs.varianceAtCompletion());
+    double tcpi = dbl(cs.toCompletePerformanceIndex());
 
     return new EvmReportData(projectName, pv, ev, ac, bac, spi, cpi, eac, etc, vac, tcpi);
   }
@@ -248,6 +247,7 @@ public class ReportDataService {
   // EVM helpers
   // =========================================================================
   private static BigDecimal nz(BigDecimal v) { return v != null ? v : BigDecimal.ZERO; }
+  private static double dbl(BigDecimal v) { return v != null ? v.doubleValue() : 0.0; }
 
   /** Compact value object for the latest EVM snapshot. */
   private record EvmSnapshot(
@@ -399,26 +399,115 @@ public class ReportDataService {
       allMonths.addAll(plannedByMonth.keySet());
       if (allMonths.isEmpty()) return new ArrayList<>();
 
-      BigDecimal cumPlanned = BigDecimal.ZERO;
-      BigDecimal cumActual = BigDecimal.ZERO;
-      BigDecimal cumForecast = BigDecimal.ZERO;
-      List<CashFlowEntry> result = new ArrayList<>(allMonths.size());
-      for (String month : allMonths) {
-        BigDecimal planned = plannedByMonth.getOrDefault(month, BigDecimal.ZERO);
-        BigDecimal actual = actualByMonth.getOrDefault(month, BigDecimal.ZERO);
-        BigDecimal forecast = planned; // forecast = plan (best-effort)
-        cumPlanned = cumPlanned.add(planned);
-        cumActual = cumActual.add(actual);
-        cumForecast = cumForecast.add(forecast);
-        result.add(new CashFlowEntry(month, planned, actual, forecast,
-            cumPlanned, cumActual, cumForecast));
-      }
-      return result;
+      // Fetch canonical EVM snapshot once for BAC (planned scale anchor) and EAC (forecast target).
+      CostSummaryDto cs = costService.getCostSummary(projectId);
+      BigDecimal bac = nz(cs.bac());
+      BigDecimal eac = nz(cs.estimateAtCompletion());
+
+      return buildCashFlowSeries(allMonths, plannedByMonth, actualByMonth, bac, eac);
     } catch (Exception e) {
       log.warn("Failed to derive cash flow from DPR for projectId={}: {}",
           projectId, e.getMessage());
       return new ArrayList<>();
     }
+  }
+
+  /**
+   * Pure helper: builds a monthly cash-flow series from raw planned/actual maps.
+   *
+   * <ul>
+   *   <li>Planned is scaled so its total equals {@code bac} (budget-anchored).</li>
+   *   <li>Forecast = actual for months that have actual data; for remaining months
+   *       the ETC ({@code eac − Σactual}) is distributed in proportion to the
+   *       scaled-planned shape. Cumulative forecast is always ≥ cumulative actual.</li>
+   * </ul>
+   *
+   * Package-private so {@code CashFlowForecastTest} can call it directly.
+   */
+  static List<CashFlowEntry> buildCashFlowSeries(
+      Set<String> allMonths,
+      Map<String, BigDecimal> plannedByMonth,
+      Map<String, BigDecimal> actualByMonth,
+      BigDecimal bac,
+      BigDecimal eac) {
+
+    // (a) Scale planned to BAC. Use high-precision division (10dp) so that
+    //     the per-month values sum back to BAC within rounding noise < 1 unit.
+    BigDecimal plannedTotal = BigDecimal.ZERO;
+    for (String m : allMonths) plannedTotal = plannedTotal.add(
+        plannedByMonth.getOrDefault(m, BigDecimal.ZERO));
+    BigDecimal plannedScale = (bac.signum() > 0 && plannedTotal.signum() > 0)
+        ? bac.divide(plannedTotal, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
+
+    // Keep full intermediate precision; rounding happens in the emit loop.
+    Map<String, BigDecimal> scaledPlanned = new LinkedHashMap<>();
+    for (String m : allMonths) {
+      scaledPlanned.put(m, plannedByMonth.getOrDefault(m, BigDecimal.ZERO)
+          .multiply(plannedScale));
+    }
+
+    // (b) Compute ETC = EAC − Σactual; sum remaining scaled-planned weight
+    //     (months where actual == 0) for proportional distribution.
+    BigDecimal totalActual = BigDecimal.ZERO;
+    for (String m : allMonths) totalActual = totalActual.add(
+        actualByMonth.getOrDefault(m, BigDecimal.ZERO));
+    BigDecimal etc = eac.subtract(totalActual);
+    if (etc.signum() < 0) etc = BigDecimal.ZERO;
+
+    BigDecimal remainingWeight = BigDecimal.ZERO;
+    for (String m : allMonths) {
+      if (actualByMonth.getOrDefault(m, BigDecimal.ZERO).signum() == 0) {
+        remainingWeight = remainingWeight.add(scaledPlanned.getOrDefault(m, BigDecimal.ZERO));
+      }
+    }
+
+    // Emit loop.
+    BigDecimal cumPlanned = BigDecimal.ZERO;
+    BigDecimal cumActual = BigDecimal.ZERO;
+    BigDecimal cumForecast = BigDecimal.ZERO;
+    String lastMonth = null;
+    List<CashFlowEntry> result = new ArrayList<>(allMonths.size());
+    for (String month : allMonths) {
+      BigDecimal sp = scaledPlanned.getOrDefault(month, BigDecimal.ZERO);
+      BigDecimal actual = actualByMonth.getOrDefault(month, BigDecimal.ZERO);
+      BigDecimal forecastMonth;
+      if (actual.signum() > 0) {
+        // Past month with real expenditure: forecast tracks actual.
+        forecastMonth = actual;
+      } else {
+        // Future month: distribute remaining ETC by scaled-planned weight.
+        // Scale 4 matches plannedScale precision; keeps long-horizon cumulative drift minimal.
+        forecastMonth = remainingWeight.signum() > 0
+            ? etc.multiply(sp).divide(remainingWeight, 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+      }
+      cumPlanned = cumPlanned.add(sp);
+      cumActual = cumActual.add(actual);
+      BigDecimal prevCumForecast = cumForecast;
+      cumForecast = cumForecast.add(forecastMonth);
+      // Defensive clamp: cumForecast >= cumActual invariant already holds by
+      // construction (past months: forecastMonth==actual; future: ETC >= 0).
+      if (cumForecast.compareTo(cumActual) < 0) cumForecast = cumActual;
+      BigDecimal emittedMonthly = cumForecast.subtract(prevCumForecast);
+      result.add(new CashFlowEntry(month, sp, actual, emittedMonthly,
+          cumPlanned, cumActual, cumForecast));
+      lastMonth = month;
+    }
+
+    // Trailing-period fix: when all months are past (remainingWeight == 0) and ETC > 0,
+    // the loop above sets cumForecast == Σactual < eac. Append a synthetic trailing period
+    // so that cumulative forecast reaches EAC — matching the EVM card figure.
+    if (etc.signum() > 0 && remainingWeight.signum() == 0 && cumForecast.compareTo(eac) < 0) {
+      BigDecimal etcRemainder = eac.subtract(cumForecast);
+      String trailingMonth = lastMonth != null
+          ? YearMonth.parse(lastMonth).plusMonths(1).toString()
+          : "9999-01";
+      result.add(new CashFlowEntry(
+          trailingMonth, BigDecimal.ZERO, BigDecimal.ZERO, etcRemainder,
+          cumPlanned, cumActual, eac));
+    }
+
+    return result;
   }
 
   // =========================================================================
@@ -482,16 +571,21 @@ public class ReportDataService {
               "  WHERE a.project_id = ?1 AND a.resource_id IS NOT NULL " +
               "  GROUP BY r.id, r.code, r.name, rt.code " +
               "), role_only AS (" +
-              // nos × rate cost model: planned = Σ headcount (one row per assignment),
-              // actual = Σ DPR nos (already aggregated in actual_units). Duration is excluded
-              // so this matches the Workforce Deployment / Equipment Utilisation tiles on the
-              // Insights tab.
+              // Put planned and actual on the SAME cumulative basis so the ratio is meaningful.
+              // MANPOWER: planned = Σ(headcount × duration) man-days; actual = Σ DPR man-days.
+              // EQUIPMENT: planned_units already stores cumulative hours per assignment row;
+              //   actual = Σ DPR hours. Using headcount for equipment is wrong (it is sometimes
+              //   set to an hours-per-day figure, not a count), so use planned_units instead.
+              // MATERIAL: excluded from the final result — no man-day/headcount basis applies.
               "  SELECT COALESCE(rr.code, rr.name) AS code, rr.name AS name, " +
               "         CASE WHEN a.manpower_role_rate_id  IS NOT NULL THEN 'MANPOWER' " +
               "              WHEN a.equipment_role_variant_id IS NOT NULL THEN 'EQUIPMENT' " +
               "              WHEN a.material_role_variant_id  IS NOT NULL THEN 'MATERIAL' " +
               "              ELSE '' END AS type_code, " +
-              "         COALESCE(SUM(a.headcount), 0)    AS planned_units, " +
+              "         CASE WHEN a.manpower_role_rate_id IS NOT NULL " +
+              "              THEN COALESCE(SUM(COALESCE(a.headcount, 0) * COALESCE(a.duration, 0.0)), 0.0) " +
+              "              ELSE COALESCE(SUM(a.planned_units), 0.0) " +
+              "         END AS planned_units, " +
               "         COALESCE(SUM(a.actual_units), 0) AS actual_units " +
               "  FROM resource.resource_assignments a " +
               "  JOIN resource.resource_roles rr ON rr.id = a.role_id " +
@@ -503,6 +597,7 @@ public class ReportDataService {
               "  CASE WHEN planned_units > 0 " +
               "    THEN ROUND((100.0 * actual_units / planned_units)::numeric, 2) ELSE 0 END AS util_pct " +
               "FROM (SELECT * FROM legacy UNION ALL SELECT * FROM role_only) u " +
+              "WHERE u.type_code != 'MATERIAL' " +
               "ORDER BY util_pct DESC")
           .setParameter(1, projectId)
           .getResultList();
@@ -548,31 +643,6 @@ public class ReportDataService {
         "SELECT CAST(COUNT(*) AS INTEGER) FROM activity.activities " +
         "WHERE project_id = ?1 AND status = 'IN_PROGRESS'",
         projectId);
-  }
-
-  private double computeOverallPercentComplete(UUID projectId, LocalDate asOf) {
-    // Prefer the weighted roll-up from WBS summary_percent_complete × budget_crores.
-    try {
-      Object[] row = (Object[]) em.createNativeQuery(
-              "SELECT " +
-              "  COALESCE(SUM(summary_percent_complete * COALESCE(budget_crores, 1)), 0), " +
-              "  COALESCE(SUM(COALESCE(budget_crores, 1)), 0) " +
-              "FROM project.wbs_nodes " +
-              "WHERE project_id = ?1 AND summary_percent_complete IS NOT NULL")
-          .setParameter(1, projectId)
-          .getSingleResult();
-      BigDecimal weighted = toBigDecimal(row[0]);
-      BigDecimal totalBudget = toBigDecimal(row[1]);
-      if (totalBudget.signum() > 0) {
-        return weighted.divide(totalBudget, 2, RoundingMode.HALF_UP).doubleValue();
-      }
-    } catch (Exception ignored) {
-      // fall through
-    }
-    // Fall back to average percent_complete across all activities.
-    return scalarDecimal(
-        "SELECT COALESCE(AVG(percent_complete), 0) FROM activity.activities WHERE project_id = ?1",
-        projectId).doubleValue();
   }
 
   private List<MonthlyProgressData.ActivitySummaryRow> getTopDelayedActivities(

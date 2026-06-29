@@ -19,16 +19,18 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
     currency ? currency.moneyCompact(v) : formatMoney(v, { code: "INR" }, { compact: true });
 
   const costVariance = useMemo(() => {
-    const variance = data.budgetAmount - data.actualCost;
+    const variance = data.budgetAmount - data.forecastCost;
     const percentage = data.budgetAmount > 0 ? (variance / data.budgetAmount) * 100 : 0;
     return { amount: variance, percentage };
-  }, [data.budgetAmount, data.actualCost]);
+  }, [data.budgetAmount, data.forecastCost]);
 
+  // Drive the badge off schedule performance: delayed activities signal "Behind Schedule".
+  // This is more honest than a raw 50%-complete threshold that fires early for long projects.
   const scheduleStatus = useMemo(() => {
     if (data.overallPercentComplete >= 100) return "completed";
-    if (data.overallPercentComplete >= 50) return "progressing";
-    return "at-risk";
-  }, [data.overallPercentComplete]);
+    if ((data.topDelayedActivities ?? []).length > 0) return "behind";
+    return "on-track";
+  }, [data.overallPercentComplete, data.topDelayedActivities]);
 
   const columns = useMemo<ColumnDef<ActivitySummaryRow>[]>(
     () => [
@@ -73,7 +75,7 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
         header: "Planned Finish",
         cell: (info) => (
           <span className="text-text-secondary">
-            {new Date(String(info.getValue())).toLocaleDateString()}
+            {String(info.getValue()).slice(0, 10)}
           </span>
         ),
       },
@@ -92,12 +94,12 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
           </div>
           <div className={`px-3 py-1 rounded-full text-sm font-semibold ${
             scheduleStatus === "completed" ? "bg-success/10 text-success" :
-            scheduleStatus === "progressing" ? "bg-accent/10 text-accent" :
+            scheduleStatus === "on-track" ? "bg-accent/10 text-accent" :
             "bg-danger/10 text-danger"
           }`}>
             {scheduleStatus === "completed" ? "Completed" :
-             scheduleStatus === "progressing" ? "In Progress" :
-             "At Risk"}
+             scheduleStatus === "on-track" ? "On Track" :
+             "Behind Schedule"}
           </div>
         </div>
       </div>
@@ -182,7 +184,7 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
             <div className="border-t pt-4">
               <div className="flex justify-between text-sm">
                 <span className={costVariance.percentage >= 0 ? "text-success" : "text-danger"}>
-                  Variance
+                  Variance (Budget &minus; Forecast)
                 </span>
                 <span className={`font-semibold ${costVariance.percentage >= 0 ? "text-success" : "text-danger"}`}>
                   {moneyCompact(costVariance.amount)} ({costVariance.percentage.toFixed(1)}%)
@@ -233,7 +235,7 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
       </div>
 
       {/* Top Delayed Activities */}
-      {data.topDelayedActivities.length > 0 && (
+      {(data.topDelayedActivities ?? []).length > 0 && (
         <div className="bg-surface/50 border border-border rounded-lg p-4">
           <h4 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
             <AlertCircle className="text-orange-500" size={20} />
@@ -241,7 +243,7 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
           </h4>
           <SimpleTable
             columns={columns}
-            data={data.topDelayedActivities}
+            data={data.topDelayedActivities ?? []}
             sortable={false}
           />
         </div>

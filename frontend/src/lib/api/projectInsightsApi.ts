@@ -26,6 +26,7 @@ export interface ProjectStatusSnapshot {
   acCrores: number;
   eacCrores: number;
   lastUpdatedAt: string;
+  dataDate: string | null; // project's data_date (ISO date); falls back to today when null
 }
 
 export interface CostVarianceRow {
@@ -114,7 +115,7 @@ export interface ScheduleQuality {
   missingLogicCount: number;
   leadRelationshipsCount: number;
   lagsCount: number;
-  fsRelationshipPct: number;
+  fsRelationshipPct: number | null; // null when there are 0 relationships (N/A)
   hardConstraintsCount: number;
   highFloatCount: number;
   negativeFloatCount: number;

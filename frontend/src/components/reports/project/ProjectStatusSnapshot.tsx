@@ -218,10 +218,7 @@ export function ProjectStatusSnapshot({ projectId }: { projectId: string }) {
           <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-2.5 py-1">
               <CalendarClock size={11} />
-              Data date {new Date(s.lastUpdatedAt).toLocaleString("en-IN", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+              Data date {s.dataDate ?? s.lastUpdatedAt?.slice(0, 10)}
             </span>
           </div>
         </div>

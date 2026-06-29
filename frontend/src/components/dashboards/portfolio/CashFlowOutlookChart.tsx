@@ -13,7 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
-import { formatMoney } from "@/lib/currency/format";
+import { formatMoney, resolveCurrencyMeta } from "@/lib/currency/format";
 import {
   CHART_COLORS,
   CHART_TOOLTIP_STYLE,
@@ -44,8 +44,21 @@ export function CashFlowOutlookChart() {
       </SectionCard>
     );
 
-  const hasData = data.some(
-    (r) => r.plannedOutflowCrores !== 0 || r.plannedInflowCrores !== 0,
+  // Pick dominant currency (most data points), filter to it — no FX, never mix currencies
+  const all = data;
+  const counts = all.reduce(
+    (m, p) => {
+      const c = p.currency ?? "INR";
+      m[c] = (m[c] ?? 0) + 1;
+      return m;
+    },
+    {} as Record<string, number>,
+  );
+  const cur = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "INR";
+  const series = all.filter((p) => (p.currency ?? cur) === cur);
+
+  const hasData = series.some(
+    (r) => r.plannedOutflowRaw !== 0 || r.plannedInflowRaw !== 0,
   );
   if (!hasData) {
     return (
@@ -58,15 +71,14 @@ export function CashFlowOutlookChart() {
     );
   }
 
-  const currencyCode = data[0]?.currency ?? "USD";
-  const currencyMeta = { code: currencyCode };
+  const currencyMeta = resolveCurrencyMeta(cur);
 
-  const chartData = data.map((r) => ({
+  const chartData = series.map((r) => ({
     month: r.yearMonth,
-    Outflow: -r.plannedOutflowCrores,
-    Inflow: r.plannedInflowCrores,
-    Net: r.netCrores,
-    Cumulative: r.cumulativeCrores,
+    Outflow: -r.plannedOutflowRaw,
+    Inflow: r.plannedInflowRaw,
+    Net: r.netRaw,
+    Cumulative: r.cumulativeRaw,
   }));
 
   return (

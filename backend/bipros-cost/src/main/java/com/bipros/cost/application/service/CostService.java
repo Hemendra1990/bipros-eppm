@@ -781,14 +781,16 @@ public class CostService {
         return BigDecimal.ZERO;
     }
 
-    /** Linear planned %-complete from the project's planned window to today, clamped to [0,1]. */
+    /** Linear planned %-complete from the project's planned window to the project's data_date
+     *  (falls back to today when data_date is null), clamped to [0,1]. */
     private static BigDecimal plannedPercentComplete(Project project) {
         if (project == null) return BigDecimal.ZERO;
         LocalDate start = project.getPlannedStartDate();
         LocalDate finish = project.getPlannedFinishDate();
         if (start == null || finish == null || !finish.isAfter(start)) return BigDecimal.ZERO;
         long total = ChronoUnit.DAYS.between(start, finish);
-        long elapsed = ChronoUnit.DAYS.between(start, LocalDate.now());
+        LocalDate asOf = project.getDataDate() != null ? project.getDataDate() : LocalDate.now();
+        long elapsed = ChronoUnit.DAYS.between(start, asOf);
         if (elapsed <= 0) return BigDecimal.ZERO;
         if (elapsed >= total) return BigDecimal.ONE;
         return BigDecimal.valueOf(elapsed).divide(BigDecimal.valueOf(total), 6, RoundingMode.HALF_UP);

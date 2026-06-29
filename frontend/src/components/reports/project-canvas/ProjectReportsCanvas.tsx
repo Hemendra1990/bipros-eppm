@@ -2,7 +2,6 @@
 
 import { SectionNav, type SectionNavItem } from "@/components/common/dashboard/SectionNav";
 import { ProjectStatusSnapshot } from "@/components/reports/project/ProjectStatusSnapshot";
-import { ComplianceChecklist } from "@/components/reports/project/ComplianceChecklist";
 import { MilestoneTracker } from "@/components/reports/project/MilestoneTracker";
 import { TasksSection } from "./TasksSection";
 import { ScheduleSection } from "./ScheduleSection";
@@ -22,7 +21,6 @@ const sections: SectionNavItem[] = [
   { id: "risks", label: "Risks" },
   { id: "milestones", label: "Milestones" },
   { id: "bills-vos", label: "Bills & VOs" },
-  { id: "compliance", label: "Compliance" },
 ];
 
 export function ProjectReportsCanvas({ projectId }: { projectId: string }) {
@@ -65,10 +63,6 @@ export function ProjectReportsCanvas({ projectId }: { projectId: string }) {
 
         <section id="bills-vos" className="scroll-mt-20">
           <BillsVosSection projectId={projectId} />
-        </section>
-
-        <section id="compliance" className="scroll-mt-20">
-          <ComplianceChecklist projectId={projectId} />
         </section>
       </div>
     </div>

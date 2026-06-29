@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AlertTriangle } from "lucide-react";
 import type { RiskRegisterData } from "@/lib/api/reportDataApi";
 import { CHART_TOOLTIP_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_TOOLTIP_ITEM_STYLE } from "@/components/common/dashboard/primitives";
@@ -19,6 +19,7 @@ export function RiskRegisterReport({ data }: RiskRegisterReportProps) {
   }, [data.risksByCategory]);
 
   const overallRiskLevel = useMemo(() => {
+    if (data.totalRisks === 0) return { level: "No risks logged", color: "bg-surface border border-border text-text-muted" };
     if (data.highRisks > 3 || data.totalRisks > 20) return { level: "Critical", color: "bg-danger/10 text-danger" };
     if (data.highRisks > 0 || data.mediumRisks > 10) return { level: "High", color: "bg-orange-500/10 text-orange-400" };
     return { level: "Moderate", color: "bg-warning/10 text-warning" };

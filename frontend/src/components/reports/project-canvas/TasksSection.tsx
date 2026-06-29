@@ -212,7 +212,7 @@ export function TasksSection({ projectId }: { projectId: string }) {
         <KpiTile label="Total" value={summary.total} />
         <KpiTile label="Critical" value={summary.critical} tone={summary.critical > 0 ? "warning" : "default"} />
         <KpiTile label="Overdue" value={summary.overdue} tone={summary.overdue > 0 ? "danger" : "success"} />
-        <KpiTile label="Avg % complete" value={`${summary.avgPct.toFixed(1)}%`} tone="accent" />
+        <KpiTile label="Avg task completion" value={`${summary.avgPct.toFixed(1)}%`} tone="accent" />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
