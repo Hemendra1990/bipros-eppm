@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +34,14 @@ export default function ProjectIssuesPage() {
 
   const [filters, setFilters] = useState<DprIssueFilters>({});
   const [statusMenu, setStatusMenu] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFilters((f) => ({ ...f, q: searchInput.trim() || undefined }));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dpr-issues", projectId, filters],
@@ -65,7 +73,10 @@ export default function ProjectIssuesPage() {
   const setFilter = <K extends keyof DprIssueFilters>(k: K, v: DprIssueFilters[K]) =>
     setFilters((f) => ({ ...f, [k]: v || undefined }));
 
-  const clearFilters = () => setFilters({});
+  const clearFilters = () => {
+    setFilters({});
+    setSearchInput("");
+  };
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
@@ -94,6 +105,13 @@ export default function ProjectIssuesPage() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search title or description…"
+          className={`${inputCls} w-64`}
+        />
         <SearchableSelect
           options={[{ value: "", label: "All statuses" }, ...STATUS_OPTIONS]}
           value={filters.status ?? ""}
@@ -198,12 +216,14 @@ export default function ProjectIssuesPage() {
                         {STATUS_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
-                            onClick={() =>
-                              patchMutation.mutate({
-                                id: row.id!,
-                                body: { status: opt.value },
-                              })
-                            }
+                            onClick={() => {
+                              setStatusMenu(null);
+                              if (opt.value === "RESOLVED" || opt.value === "CLOSED") {
+                                router.push(`/projects/${projectId}/issues/${row.id}/edit`);
+                                return;
+                              }
+                              patchMutation.mutate({ id: row.id!, body: { status: opt.value } });
+                            }}
                             className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-hover text-text-primary"
                           >
                             {opt.label}
@@ -216,8 +236,8 @@ export default function ProjectIssuesPage() {
                     {row.assignedToName ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">
-                    {row.openedAt
-                      ? new Date(row.openedAt).toLocaleDateString()
+                    {row.reportDate
+                      ? new Date(row.reportDate).toLocaleDateString()
                       : "—"}
                   </td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap max-w-[160px] truncate">
