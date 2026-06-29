@@ -30,6 +30,8 @@ public record UpdateDprIssueRequest(
     UUID supervisorUserId,
     UUID assignedToUserId,
     UUID activityId,
-    @Size(max = 150) String activityName
+    @Size(max = 150) String activityName,
+    /** Optional free-text reason recorded on the status-change history row (non-terminal moves). */
+    @Size(max = 1000) String statusChangeReason
 ) {
 }

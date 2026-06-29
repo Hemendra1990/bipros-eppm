@@ -123,8 +123,11 @@ public class DprIssueService {
             } else if (wasTerminal && !isTerminal) {
                 issue.setResolvedAt(null);
             }
-            appendStatusHistory(issue.getId(), oldStatus, newStatus,
-                    newStatus.resolvedAtTerminal() ? issue.getResolutionNotes() : null);
+            String historyReason =
+                    request.statusChangeReason() != null && !request.statusChangeReason().isBlank()
+                            ? request.statusChangeReason()
+                            : (newStatus.resolvedAtTerminal() ? issue.getResolutionNotes() : null);
+            appendStatusHistory(issue.getId(), oldStatus, newStatus, historyReason);
         }
 
         validateConditionalFields(newStatus, issue.getAssignedToUserId(), issue.getResolutionNotes());

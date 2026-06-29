@@ -48,6 +48,8 @@ export interface UpdateDprIssueRequest {
   resolutionNotes?: string | null;
   activityId?: string | null;
   activityName?: string | null;
+  /** Free-text reason recorded on the status-change history row (non-terminal moves). */
+  statusChangeReason?: string | null;
 }
 
 function toQuery(filters: DprIssueFilters): string {

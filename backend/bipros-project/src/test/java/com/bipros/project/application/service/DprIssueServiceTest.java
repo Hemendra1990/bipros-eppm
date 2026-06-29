@@ -74,13 +74,29 @@ class DprIssueServiceTest {
 
         service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null));
+                null, null, null, null, null, null, null, null, null, null));
 
         ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
         verify(historyRepository).save(cap.capture());
         assertThat(cap.getValue().getFromStatus()).isEqualTo(IssueStatus.OPEN);
         assertThat(cap.getValue().getToStatus()).isEqualTo(IssueStatus.IN_PROGRESS);
         assertThat(cap.getValue().getActorUserId()).isEqualTo(actorId);
+    }
+
+    @Test
+    void patch_statusChange_recordsProvidedReasonOnHistoryRow() {
+        DprIssue issue = openIssue();
+        issue.setAssignedToUserId(assigneeId);
+        when(issueRepository.findByIdAndProjectId(issueId, projectId)).thenReturn(Optional.of(issue));
+
+        service.patch(projectId, issueId, new UpdateDprIssueRequest(
+                null, null, null, null, IssueStatus.IN_PROGRESS,
+                null, null, null, null, null, null, null, null, null,
+                "Awaiting customs clearance"));
+
+        ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
+        verify(historyRepository).save(cap.capture());
+        assertThat(cap.getValue().getReason()).isEqualTo("Awaiting customs clearance");
     }
 
     @Test
@@ -92,7 +108,7 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.RESOLVED,
-                null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
             .hasMessageContaining("Resolution notes");
     }
@@ -105,7 +121,7 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
             .hasMessageContaining("Assigned");
     }

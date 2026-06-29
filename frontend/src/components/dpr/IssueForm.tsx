@@ -47,6 +47,7 @@ interface FormState {
   assignedToName: string;
   resolutionNotes: string;
   reportDate: string;
+  statusChangeReason: string;
 }
 
 function initialState(issue: DprIssueRow | null): FormState {
@@ -62,6 +63,7 @@ function initialState(issue: DprIssueRow | null): FormState {
     assignedToName: issue?.assignedToName ?? "",
     resolutionNotes: issue?.resolutionNotes ?? "",
     reportDate: issue?.reportDate ?? today(),
+    statusChangeReason: "",
   };
 }
 
@@ -157,6 +159,10 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
           resolutionNotes: form.resolutionNotes || null,
           activityId: form.activityId || null,
           activityName: form.activityName || null,
+          statusChangeReason:
+            issue && form.status !== issue.status && !TERMINAL.includes(form.status)
+              ? form.statusChangeReason || null
+              : null,
         };
         return dprIssueApi.patch(projectId, issue!.id!, body);
       }
@@ -203,6 +209,9 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
 
   const showResolution = TERMINAL.includes(form.status);
   const assigneeRequired = ASSIGNEE_REQUIRED.includes(form.status);
+  const statusChanged = isEdit && !!issue && form.status !== issue.status;
+  // Terminal moves already capture a reason via the required Resolution Notes.
+  const showStatusReason = statusChanged && !TERMINAL.includes(form.status);
   const history = historyData?.data ?? [];
 
   return (
@@ -316,6 +325,23 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
               className={fieldInput}
             />
           </div>
+
+          {showStatusReason && (
+            <AccentPanel tone="gold">
+              <FieldLabel>Reason for status change</FieldLabel>
+              <textarea
+                maxLength={1000}
+                value={form.statusChangeReason}
+                onChange={(e) => set("statusChangeReason", e.target.value)}
+                rows={2}
+                placeholder={`Why is this issue moving to "${statusLabel(form.status)}"? (optional)`}
+                className={fieldInput}
+              />
+              <p className="mt-1.5 text-xs text-text-muted">
+                Recorded on the status-history timeline.
+              </p>
+            </AccentPanel>
+          )}
         </div>
 
         <div className="space-y-5">
