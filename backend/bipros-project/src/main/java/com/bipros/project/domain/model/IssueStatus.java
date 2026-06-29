@@ -23,6 +23,14 @@ public enum IssueStatus {
         return RESOLVED_TERMINAL.contains(this);
     }
 
+    private static final Set<IssueStatus> REQUIRES_ASSIGNEE =
+        EnumSet.of(IN_PROGRESS, BLOCKED, RESOLVED, CLOSED);
+
+    /** Statuses where an issue must have an owner (assigned-to user). */
+    public boolean requiresAssignee() {
+        return REQUIRES_ASSIGNEE.contains(this);
+    }
+
     @JsonCreator
     public static IssueStatus fromString(String value) {
         if (value == null || value.isBlank()) return OPEN;
