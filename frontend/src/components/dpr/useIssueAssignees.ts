@@ -86,9 +86,13 @@ export function useIssueAssignees(projectId: string) {
 
   const nameByUserId = useMemo(() => {
     const map = new Map<string, string>();
+    // Roster first so any actor (supervisor/engineer who isn't on the project
+    // team) still resolves to a real name in the history timeline…
+    for (const u of roster ?? []) map.set(u.id, u.name || u.username);
+    // …then team members override with their project-scoped display name.
     for (const m of members) map.set(m.userId, memberDisplayName(m, usersById));
     return map;
-  }, [members, usersById]);
+  }, [members, usersById, roster]);
 
   return { options, nameByUserId, isLoading: teamLoading || rosterLoading };
 }
