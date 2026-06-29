@@ -3,23 +3,33 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, CalendarDays, CheckCircle2, Clock, History, UserRound } from "lucide-react";
 import { dprIssueApi, type UpdateDprIssueRequest } from "@/lib/api/dprIssueApi";
 import { activityApi } from "@/lib/api/activityApi";
-import { PageHeader } from "@/components/common/PageHeader";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
+import { Badge } from "@/components/ui/badge";
 import {
   CATEGORY_OPTIONS,
   SEVERITY_OPTIONS,
   STATUS_OPTIONS,
+  SEVERITY_VARIANT,
+  STATUS_VARIANT,
   statusLabel,
 } from "@/components/dpr/IssueBadges";
 import { useIssueAssignees } from "@/components/dpr/useIssueAssignees";
+import {
+  IssueFormShell,
+  SectionHeading,
+  FieldLabel,
+  InlineError,
+  MetaStat,
+  AccentPanel,
+  fieldInput,
+  STATUS_DOT,
+} from "@/components/dpr/issueFormUi";
+import { ResourceAvatar } from "@/components/resource/supervisor-assign/ResourceAvatar";
 import { getErrorMessage } from "@/lib/utils/error";
 import type { IssueCategory, IssueSeverity, IssueStatus } from "@/lib/types/dpr";
-
-const inputCls =
-  "mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none text-sm";
-const errCls = "mt-1 text-xs text-danger";
 
 const ASSIGNEE_REQUIRED: IssueStatus[] = ["IN_PROGRESS", "BLOCKED", "RESOLVED", "CLOSED"];
 const TERMINAL: IssueStatus[] = ["RESOLVED", "CLOSED"];
@@ -124,6 +134,7 @@ export default function EditIssuePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dpr-issues", projectId] });
       queryClient.invalidateQueries({ queryKey: ["dpr-issue", projectId, issueId] });
+      queryClient.invalidateQueries({ queryKey: ["dpr-issue-history", projectId, issueId] });
       router.push(`/projects/${projectId}/issues`);
     },
     onError: (err) => setFormError(getErrorMessage(err)),
@@ -172,182 +183,255 @@ export default function EditIssuePage() {
   const history = historyData?.data ?? [];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <PageHeader title="Edit Issue" description="Update the details of this issue." />
-
-      {/* Read-only context strip */}
-      <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface-hover px-4 py-3 text-sm sm:grid-cols-4">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-text-muted">Logged by</div>
-          <div className="text-text-primary">{issue?.supervisorName ?? "—"}</div>
-        </div>
-        <div>
-          <div className="text-xs uppercase tracking-wide text-text-muted">Report date</div>
-          <div className="text-text-primary">{fmtDate(issue?.reportDate)}</div>
-        </div>
-        <div>
-          <div className="text-xs uppercase tracking-wide text-text-muted">Opened</div>
-          <div className="text-text-primary">{fmtDate(issue?.openedAt)}</div>
-        </div>
-        <div>
-          <div className="text-xs uppercase tracking-wide text-text-muted">Resolved</div>
-          <div className="text-text-primary">{fmtDate(issue?.resolvedAt)}</div>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-border bg-surface p-6">
-        {formError && (
-          <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-            {formError}
-          </div>
-        )}
-
-        <div>
-          <label className="block text-sm font-medium text-text-secondary">Title *</label>
-          <input
-            type="text"
-            maxLength={150}
-            value={form.title}
-            onChange={(e) => set("title", e.target.value)}
-            className={inputCls}
+    <div className="mx-auto max-w-3xl space-y-5 py-2">
+      <IssueFormShell
+        severity={form.severity}
+        kicker="Edit Issue"
+        title={form.title || "Untitled issue"}
+        pills={
+          <>
+            <Badge variant={SEVERITY_VARIANT[form.severity]}>
+              {SEVERITY_OPTIONS.find((o) => o.value === form.severity)?.label ?? form.severity}
+            </Badge>
+            <Badge variant={STATUS_VARIANT[form.status]} withDot>
+              {statusLabel(form.status)}
+            </Badge>
+          </>
+        }
+      >
+        {/* Read-only context strip */}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-4 border-b border-border bg-surface-hover/40 px-6 py-4 sm:grid-cols-4 sm:px-8">
+          <MetaStat
+            icon={<UserRound className="h-4 w-4" />}
+            label="Logged by"
+            value={issue?.supervisorName ?? "—"}
           />
-          {errors.title && <p className={errCls}>{errors.title}</p>}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">Category *</label>
-            <SearchableSelect
-              options={CATEGORY_OPTIONS}
-              value={form.category}
-              onChange={(v) => set("category", v as IssueCategory)}
-              placeholder="Select category"
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">Severity *</label>
-            <SearchableSelect
-              options={SEVERITY_OPTIONS}
-              value={form.severity}
-              onChange={(v) => set("severity", v as IssueSeverity)}
-              placeholder="Select severity"
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">Status *</label>
-            <SearchableSelect
-              options={STATUS_OPTIONS}
-              value={form.status}
-              onChange={(v) => set("status", v as IssueStatus)}
-              placeholder="Select status"
-              className="mt-1"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-text-secondary">Description</label>
-          <textarea
-            maxLength={2000}
-            value={form.description}
-            onChange={(e) => set("description", e.target.value)}
-            rows={3}
-            className={inputCls}
+          <MetaStat
+            icon={<CalendarDays className="h-4 w-4" />}
+            label="Report date"
+            value={fmtDate(issue?.reportDate)}
+          />
+          <MetaStat
+            icon={<Clock className="h-4 w-4" />}
+            label="Opened"
+            value={fmtDate(issue?.openedAt)}
+          />
+          <MetaStat
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="Resolved"
+            value={fmtDate(issue?.resolvedAt)}
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">Activity</label>
-            <SearchableSelect
-              options={activityOptions}
-              value={form.activityId}
-              onChange={handleActivityChange}
-              placeholder="Search activities…"
-              loading={activitiesLoading}
-              selectedLabel={
-                form.activityId
-                  ? activityOptions.find((o) => o.value === form.activityId)?.label ?? form.activityName
-                  : undefined
-              }
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">
-              Assigned To{assigneeRequired ? " *" : ""}
-            </label>
-            <SearchableSelect
-              options={assigneeOptions}
-              value={form.assignedToUserId}
-              onChange={handleAssigneeChange}
-              placeholder="Select a project team member…"
-              loading={assigneesLoading}
-              selectedLabel={form.assignedToName || undefined}
-              className="mt-1"
-            />
-            {errors.assignedTo && <p className={errCls}>{errors.assignedTo}</p>}
-          </div>
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-7 px-6 py-6 sm:px-8">
+            {formError && (
+              <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-sm text-danger">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
 
-        {showResolution && (
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">Resolution Notes *</label>
-            <textarea
-              maxLength={1000}
-              value={form.resolutionNotes}
-              onChange={(e) => set("resolutionNotes", e.target.value)}
-              rows={2}
-              placeholder="How was this issue resolved?"
-              className={inputCls}
-            />
-            {errors.resolutionNotes && <p className={errCls}>{errors.resolutionNotes}</p>}
-          </div>
-        )}
+            <div className="space-y-5">
+              <SectionHeading>Details</SectionHeading>
 
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => router.push(`/projects/${projectId}/issues`)}
-            className="rounded-md border border-border bg-surface-hover px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-          >
-            {mutation.isPending ? "Saving…" : "Save Changes"}
-          </button>
-        </div>
-      </form>
+              <div>
+                <FieldLabel required>Title</FieldLabel>
+                <input
+                  type="text"
+                  maxLength={150}
+                  value={form.title}
+                  onChange={(e) => set("title", e.target.value)}
+                  className={fieldInput}
+                />
+                <InlineError message={errors.title} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <FieldLabel required>Category</FieldLabel>
+                  <SearchableSelect
+                    options={CATEGORY_OPTIONS}
+                    value={form.category}
+                    onChange={(v) => set("category", v as IssueCategory)}
+                    placeholder="Select category"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <FieldLabel required>Severity</FieldLabel>
+                  <SearchableSelect
+                    options={SEVERITY_OPTIONS}
+                    value={form.severity}
+                    onChange={(v) => set("severity", v as IssueSeverity)}
+                    placeholder="Select severity"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <FieldLabel required>Status</FieldLabel>
+                  <SearchableSelect
+                    options={STATUS_OPTIONS}
+                    value={form.status}
+                    onChange={(v) => set("status", v as IssueStatus)}
+                    placeholder="Select status"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel>Description</FieldLabel>
+                <textarea
+                  maxLength={2000}
+                  value={form.description}
+                  onChange={(e) => set("description", e.target.value)}
+                  rows={3}
+                  className={fieldInput}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <SectionHeading>Assignment &amp; context</SectionHeading>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel>Activity</FieldLabel>
+                  <SearchableSelect
+                    options={activityOptions}
+                    value={form.activityId}
+                    onChange={handleActivityChange}
+                    placeholder="Search activities…"
+                    loading={activitiesLoading}
+                    selectedLabel={
+                      form.activityId
+                        ? activityOptions.find((o) => o.value === form.activityId)?.label ??
+                          form.activityName
+                        : undefined
+                    }
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <FieldLabel required={assigneeRequired}>Assigned To</FieldLabel>
+                  <SearchableSelect
+                    options={assigneeOptions}
+                    value={form.assignedToUserId}
+                    onChange={handleAssigneeChange}
+                    placeholder="Select a project team member…"
+                    loading={assigneesLoading}
+                    selectedLabel={form.assignedToName || undefined}
+                    className="mt-1.5"
+                  />
+                  {form.assignedToUserId && (
+                    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-surface-hover/70 py-1 pl-1 pr-3">
+                      <ResourceAvatar
+                        id={form.assignedToUserId}
+                        name={form.assignedToName}
+                        size="sm"
+                      />
+                      <span className="text-sm text-text-primary">{form.assignedToName}</span>
+                    </div>
+                  )}
+                  <InlineError message={errors.assignedTo} />
+                </div>
+              </div>
+            </div>
+
+            {showResolution && (
+              <div className="space-y-3">
+                <SectionHeading>Resolution</SectionHeading>
+                <AccentPanel tone="emerald">
+                  <FieldLabel required>Resolution Notes</FieldLabel>
+                  <textarea
+                    maxLength={1000}
+                    value={form.resolutionNotes}
+                    onChange={(e) => set("resolutionNotes", e.target.value)}
+                    rows={3}
+                    placeholder="How was this issue resolved?"
+                    className={fieldInput}
+                  />
+                  <InlineError message={errors.resolutionNotes} />
+                </AccentPanel>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 border-t border-border bg-surface-hover/50 px-6 py-4 sm:px-8">
+            <button
+              type="button"
+              onClick={() => router.push(`/projects/${projectId}/issues`)}
+              className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
+            >
+              {mutation.isPending ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </IssueFormShell>
 
       {/* Status history timeline */}
-      <div className="rounded-lg border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-text-primary">Status history</h2>
+      <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-7">
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-text-muted" />
+          <h2 className="text-sm font-semibold text-text-primary">Status history</h2>
+        </div>
         {history.length === 0 ? (
-          <p className="mt-2 text-sm text-text-muted">No status changes recorded yet.</p>
+          <p className="mt-3 text-sm text-text-muted">No status changes recorded yet.</p>
         ) : (
-          <ol className="mt-3 space-y-3">
-            {history.map((h) => (
-              <li key={h.id} className="flex gap-3 text-sm">
-                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />
-                <div>
-                  <div className="text-text-primary">
-                    {h.fromStatus ? `${statusLabel(h.fromStatus)} → ` : "Created as "}
-                    <span className="font-medium">{statusLabel(h.toStatus)}</span>
+          <ol className="mt-4 space-y-0">
+            {history.map((h, i) => {
+              const actor = (h.actorUserId && nameByUserId.get(h.actorUserId)) || "System";
+              const last = i === history.length - 1;
+              return (
+                <li key={h.id} className="relative flex gap-4 pb-5 last:pb-0">
+                  {!last && (
+                    <span
+                      className="absolute left-[7px] top-5 bottom-0 w-px bg-border"
+                      aria-hidden
+                    />
+                  )}
+                  <span
+                    className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full ring-4 ring-surface"
+                    style={{ backgroundColor: STATUS_DOT[h.toStatus] }}
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-text-primary">
+                      {h.fromStatus ? (
+                        <>
+                          <span className="text-text-secondary">{statusLabel(h.fromStatus)}</span>
+                          <span className="mx-1.5 text-text-muted">→</span>
+                          <span className="font-semibold">{statusLabel(h.toStatus)}</span>
+                        </>
+                      ) : (
+                        <>
+                          Created as <span className="font-semibold">{statusLabel(h.toStatus)}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
+                      <ResourceAvatar id={h.actorUserId ?? "system"} name={actor} size="sm" />
+                      <span className="font-medium text-text-secondary">{actor}</span>
+                      <span>·</span>
+                      <span>{new Date(h.createdAt).toLocaleString()}</span>
+                    </div>
+                    {h.reason && (
+                      <div className="mt-1.5 rounded-md border border-border bg-surface-hover/50 px-3 py-2 text-sm text-text-secondary">
+                        {h.reason}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xs text-text-muted">
-                    {(h.actorUserId && nameByUserId.get(h.actorUserId)) || "System"} ·{" "}
-                    {new Date(h.createdAt).toLocaleString()}
-                  </div>
-                  {h.reason && <div className="mt-0.5 text-text-secondary">{h.reason}</div>}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ol>
         )}
       </div>
