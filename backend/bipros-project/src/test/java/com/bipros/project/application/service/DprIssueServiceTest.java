@@ -126,4 +126,25 @@ class DprIssueServiceTest {
                 null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class);
     }
+
+    @Test
+    void list_qFiltersTitleAndDescriptionCaseInsensitive() {
+        DprIssue a = openIssue(); a.setTitle("Steel rebar delay"); a.setDescription("customs");
+        DprIssue b = openIssue(); b.setTitle("Crane breakdown"); b.setDescription("hydraulic");
+        b.setReportDate(java.time.LocalDate.now());
+        a.setReportDate(java.time.LocalDate.now());
+        when(issueRepository.findByProjectIdOrderByOpenedAtDesc(projectId))
+                .thenReturn(java.util.List.of(a, b));
+
+        var byTitle = service.list(projectId, null, null, null, null, null, null, null, "REBAR");
+        assertThat(byTitle).hasSize(1);
+        assertThat(byTitle.get(0).title()).isEqualTo("Steel rebar delay");
+
+        var byDesc = service.list(projectId, null, null, null, null, null, null, null, "hydraulic");
+        assertThat(byDesc).hasSize(1);
+        assertThat(byDesc.get(0).title()).isEqualTo("Crane breakdown");
+
+        var noQ = service.list(projectId, null, null, null, null, null, null, null, null);
+        assertThat(noQ).hasSize(2);
+    }
 }

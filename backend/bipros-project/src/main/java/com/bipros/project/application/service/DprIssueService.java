@@ -59,7 +59,8 @@ public class DprIssueService {
             UUID supervisorUserId,
             UUID activityId,
             LocalDate dateFrom,
-            LocalDate dateTo) {
+            LocalDate dateTo,
+            String q) {
         return issueRepository.findByProjectIdOrderByOpenedAtDesc(projectId).stream()
                 .filter(i -> status == null || i.getStatus() == status)
                 .filter(i -> severity == null || i.getSeverity() == severity)
@@ -69,8 +70,16 @@ public class DprIssueService {
                 .filter(i -> activityId == null || activityId.equals(i.getActivityId()))
                 .filter(i -> dateFrom == null || !i.getReportDate().isBefore(dateFrom))
                 .filter(i -> dateTo == null || !i.getReportDate().isAfter(dateTo))
+                .filter(i -> q == null || q.isBlank() || matchesQ(i, q))
                 .map(DprIssueRow::from)
                 .toList();
+    }
+
+    private static boolean matchesQ(DprIssue i, String q) {
+        String needle = q.toLowerCase();
+        boolean inTitle = i.getTitle() != null && i.getTitle().toLowerCase().contains(needle);
+        boolean inDesc = i.getDescription() != null && i.getDescription().toLowerCase().contains(needle);
+        return inTitle || inDesc;
     }
 
     @Transactional(readOnly = true)

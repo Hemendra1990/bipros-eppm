@@ -65,9 +65,10 @@ public class DprIssueController {
             @RequestParam(required = false) UUID supervisorUserId,
             @RequestParam(required = false) UUID activityId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false) String q) {
         return ResponseEntity.ok(ApiResponse.ok(service.list(
-                projectId, status, severity, category, supervisorUserId, activityId, dateFrom, dateTo)));
+                projectId, status, severity, category, supervisorUserId, activityId, dateFrom, dateTo, q)));
     }
 
     @GetMapping("/{id}")
