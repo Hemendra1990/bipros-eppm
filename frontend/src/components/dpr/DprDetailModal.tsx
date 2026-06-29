@@ -84,7 +84,7 @@ interface Props {
 export function DprDetailModal({ projectId, row, open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-5xl flex-col p-0">
+      <DialogContent className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden p-0">
         {/* Body lives in its own component so it mounts fresh on each open —
             the active tab resets to Details with no setState-in-effect. */}
         <DprDetailBody projectId={projectId} row={row} />
@@ -119,22 +119,24 @@ function DprDetailBody({ projectId, row }: { projectId: string; row: DprSummaryR
   return (
     <>
       <div className="flex-1 overflow-y-auto">
-        <div className="space-y-4 p-4 sm:p-5">
-          <Hero row={row} detail={detail} status={status} />
-          <KpiStrip row={row} detail={detail} money={money} />
-          <DetailCard
-            row={row}
-            detail={detail}
-            isLoading={isLoading}
-            isError={isError}
-            onRetry={() => refetch()}
-            tab={tab}
-            setTab={setTab}
-            money={money}
-          />
-          {detail && <MediaRow projectId={projectId} detail={detail} />}
-          {detail && <ApprovalTrail detail={detail} status={status} />}
-        </div>
+        <Hero row={row} detail={detail} status={status} />
+        <KpiStrip row={row} detail={detail} money={money} />
+        <DetailCard
+          row={row}
+          detail={detail}
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={() => refetch()}
+          tab={tab}
+          setTab={setTab}
+          money={money}
+        />
+        {detail && (
+          <div className="space-y-3 border-t border-hairline px-4 py-4">
+            <MediaRow projectId={projectId} detail={detail} />
+            <ApprovalTrail detail={detail} status={status} />
+          </div>
+        )}
       </div>
 
       {showApprovalActions && (
@@ -158,68 +160,43 @@ function Hero({
   status: DprApprovalStatus;
 }) {
   const pill = STATUS_PILL[status];
+  const shift = detail?.shift ? (detail.shift === "DAY" ? "Day shift" : "Night shift") : null;
   const chainage =
     row.chainageFromM != null || row.chainageToM != null
       ? `CH ${chainageLabel(row.chainageFromM)} → ${chainageLabel(row.chainageToM)}`
       : null;
-  const contractor = detail?.contractorName ?? null;
-  const shift = detail?.shift ? (detail.shift === "DAY" ? "Day shift" : "Night shift") : null;
+  const sub = [
+    "Daily Progress Report",
+    row.reportDate,
+    shift,
+    chainage,
+    row.side ? `${SIDE_LABEL[row.side] ?? row.side} side` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-charcoal px-6 py-6 text-paper">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(720px 280px at 88% -40%, rgba(0,88,202,0.45), transparent 60%)",
-        }}
-      />
-      <div className="relative flex flex-wrap items-start justify-between gap-4 pr-8">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-parchment/80">
-            <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-            Daily Progress Report
-          </div>
-          <h2 className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight">
-            {row.activityName || "Daily Progress Report"}
-          </h2>
-          <div className="mt-1.5 text-sm text-parchment/70">
-            {row.reportDate}
-            {shift && <span> · {shift}</span>}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {chainage && <HeroChip mono>{chainage}</HeroChip>}
-            {row.side && <HeroChip>{SIDE_LABEL[row.side] ?? row.side} side</HeroChip>}
-            {row.boqItemNo && <HeroChip mono>BOQ {row.boqItemNo}</HeroChip>}
-            {contractor && <HeroChip>Contractor · {contractor}</HeroChip>}
-          </div>
+    <div className="flex items-center gap-3 bg-charcoal px-4 py-3 pr-10 text-paper sm:gap-4 sm:px-5 sm:pr-12">
+      <span className="h-9 w-1 shrink-0 rounded-full bg-gold" />
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate font-display text-lg font-bold leading-tight tracking-tight sm:text-xl">
+          {row.activityName || "Daily Progress Report"}
+        </h2>
+        <div className="mt-0.5 truncate text-[11px] text-parchment/70">{sub}</div>
+      </div>
+      <span
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-paper/10 px-3 py-1 text-[11px] font-bold ${pill.text}`}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
+        {status.charAt(0) + status.slice(1).toLowerCase()}
+      </span>
+      <div className="hidden shrink-0 border-l border-paper/15 pl-3 text-right sm:block">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-parchment/55">
+          Supervisor
         </div>
-        <div className="flex flex-col items-end gap-3">
-          <span
-            className={`inline-flex items-center gap-2 rounded-full bg-paper/10 px-3.5 py-1.5 text-xs font-bold ${pill.text}`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
-            {status.charAt(0) + status.slice(1).toLowerCase()}
-          </span>
-          <div className="text-right">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-parchment/60">
-              Supervisor
-            </div>
-            <div className="mt-0.5 text-sm font-bold">{row.supervisorName || "—"}</div>
-          </div>
-        </div>
+        <div className="text-[13px] font-bold leading-tight">{row.supervisorName || "—"}</div>
       </div>
     </div>
-  );
-}
-
-function HeroChip({ children, mono }: { children: ReactNode; mono?: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-lg border border-paper/15 bg-paper/10 px-2.5 py-1 text-xs font-semibold text-parchment ${mono ? "font-mono tabular-nums" : ""}`}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -251,7 +228,7 @@ function KpiStrip({
       : null;
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+    <div className="grid grid-cols-2 sm:grid-cols-5">
       <Kpi
         accent
         label="Work Done"
@@ -308,16 +285,16 @@ function Kpi({
 }) {
   return (
     <div
-      className={`rounded-2xl border p-4 ${accent ? "border-gold/30 bg-gold-tint" : "border-hairline bg-paper"}`}
+      className={`border-b border-r border-hairline px-4 py-2.5 ${accent ? "bg-gold-tint" : "bg-ivory"}`}
     >
       <div className="text-[10px] font-bold uppercase tracking-wider text-slate">{label}</div>
       <div
-        className={`mt-2 text-2xl font-bold tracking-tight ${valueMono ? "font-mono tabular-nums" : "font-display"} ${accent ? "text-gold-deep" : "text-charcoal"}`}
+        className={`mt-1 text-lg font-bold tracking-tight ${valueMono ? "font-mono tabular-nums" : "font-display"} ${accent ? "text-gold-deep" : "text-charcoal"}`}
       >
         {value}
-        {unit && <span className="ml-1 text-xs font-medium text-ash">{unit}</span>}
+        {unit && <span className="ml-1 text-[11px] font-medium text-ash">{unit}</span>}
       </div>
-      {sub && <div className="mt-1 text-[11px] font-medium text-ash">{sub}</div>}
+      {sub && <div className="text-[10px] font-medium text-ash">{sub}</div>}
     </div>
   );
 }
@@ -363,7 +340,7 @@ function DetailCard({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
+    <div className="bg-paper">
       {/* Tab bar */}
       <div className="flex gap-1 overflow-x-auto border-b border-hairline px-2">
         {TABS.map((t) => {
@@ -399,7 +376,7 @@ function DetailCard({
         })}
       </div>
 
-      <div className="p-5">
+      <div className="p-4">
         {isError && (
           <div className="flex items-center gap-2 text-xs text-burgundy">
             Failed to load detail.
@@ -437,22 +414,26 @@ function DetailCard({
 function Section({ color, title, children }: { color: string; title: string; children: ReactNode }) {
   return (
     <section>
-      <div className="mb-4 flex items-center gap-2.5">
-        <span className="h-1.5 w-1.5 rounded-sm" style={{ background: color }} />
-        <h3 className="text-xs font-bold uppercase tracking-wider text-charcoal">{title}</h3>
+      <div className="mb-3 flex items-center gap-2.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-sm" style={{ background: color }} />
+        <h3 className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-charcoal">
+          {title}
+        </h3>
+        <span className="h-px flex-1 bg-hairline" />
       </div>
       {children}
     </section>
   );
 }
 
-function Field({ label, value, mono, muted }: { label: string; value: ReactNode; mono?: boolean; muted?: boolean }) {
+/** Renders nothing when the value is absent — keeps the compact grid free of
+ *  placeholder dashes. Pass real values or `null`; never the literal "—". */
+function Field({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+  if (value == null || value === "" || value === "—") return null;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       <span className="text-[10px] font-bold uppercase tracking-wider text-slate">{label}</span>
-      <span
-        className={`text-sm font-semibold ${mono ? "font-mono tabular-nums" : ""} ${muted ? "text-ash" : "text-charcoal"}`}
-      >
+      <span className={`text-[13px] font-semibold text-charcoal ${mono ? "font-mono tabular-nums" : ""}`}>
         {value}
       </span>
     </div>
@@ -460,7 +441,7 @@ function Field({ label, value, mono, muted }: { label: string; value: ReactNode;
 }
 
 function Grid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-2 gap-x-7 gap-y-5 sm:grid-cols-4">{children}</div>;
+  return <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">{children}</div>;
 }
 
 function DetailsTab({
@@ -485,78 +466,73 @@ function DetailsTab({
       ])
     : null;
   const incidentOk = !d?.safetyIncidentType || d.safetyIncidentType === "NONE";
+  const unit = row.unit ? ` ${row.unit}` : "";
+  const times =
+    d?.startTime || d?.endTime ? `${d?.startTime || "—"} / ${d?.endTime || "—"}` : null;
+  const chainageStr =
+    row.chainageFromM != null || row.chainageToM != null
+      ? `${chainageLabel(row.chainageFromM)} → ${chainageLabel(row.chainageToM)}`
+      : null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Section color="#0058CA" title="Schedule & Conditions">
         <Grid>
-          <Field label="Report Date" value={row.reportDate} />
-          <Field label="Shift" value={d?.shift ? (d.shift === "DAY" ? "Day" : "Night") : "—"} />
-          <Field label="Weather" value={d?.weatherCondition || row.weatherCondition || "—"} />
-          <Field label="Start / End" value={`${d?.startTime || "—"} / ${d?.endTime || "—"}`} mono />
-          <Field label="Supervisor" value={row.supervisorName || "—"} />
-          <Field label="Contractor" value={d?.contractorName || "—"} />
+          <Field label="Shift" value={d?.shift ? (d.shift === "DAY" ? "Day" : "Night") : null} />
+          <Field label="Weather" value={d?.weatherCondition || row.weatherCondition || null} />
+          <Field label="Start / End" value={times} mono />
+          <Field label="Contractor" value={d?.contractorName || null} />
         </Grid>
       </Section>
-
-      <div className="h-px bg-hairline" />
 
       <Section color="#0FA3A3" title="Location & Activity">
         <Grid>
-          <Field label="Activity" value={row.activityName || "—"} />
-          <Field label="BOQ Item" value={row.boqItemNo || "—"} mono />
-          <Field
-            label="Chainage"
-            value={`${chainageLabel(row.chainageFromM)} → ${chainageLabel(row.chainageToM)}`}
-            mono
-          />
-          <Field label="Side" value={row.side ? SIDE_LABEL[row.side] ?? row.side : "—"} />
-          <div className="col-span-2">
-            <Field label="Landmark" value={d?.landmark || "—"} muted={!d?.landmark} />
-          </div>
+          <Field label="Activity" value={row.activityName || null} />
+          <Field label="BOQ Item" value={row.boqItemNo || null} mono />
+          <Field label="Chainage" value={chainageStr} mono />
+          <Field label="Side" value={row.side ? SIDE_LABEL[row.side] ?? row.side : null} />
+          <Field label="Landmark" value={d?.landmark || null} />
         </Grid>
       </Section>
-
-      <div className="h-px bg-hairline" />
 
       <Section color="#0F8A4A" title="Progress & Cost">
         <Grid>
-          <Field label="Qty Executed" value={`${num(qty)} ${row.unit}`} mono />
-          <Field label="Cumulative" value={d ? `${num(d.cumulativeQty)} ${row.unit}` : "…"} mono />
+          <Field label="Qty Executed" value={`${num(qty)}${unit}`} mono />
+          <Field label="Cumulative" value={d ? `${num(d.cumulativeQty)}${unit}` : null} mono />
           <Field
             label="Productivity"
-            value={productivity != null ? `${num(productivity)} ${row.unit}/mh` : "—"}
+            value={productivity != null ? `${num(productivity)}${unit}/mh` : null}
             mono
           />
-          <Field label="Day Cost" value={money(dayCost)} mono />
+          <Field label="Day Cost" value={d ? money(dayCost) : null} mono />
         </Grid>
       </Section>
 
-      <div className="h-px bg-hairline" />
-
       <Section color="#C2392B" title="Safety, Delay & Remarks">
         <Grid>
-          <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate">Safety Incident</span>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate">
+              Safety Incident
+            </span>
             {incidentOk ? (
               <span className="inline-flex items-center gap-1.5 self-start rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
                 <Check className="h-3.5 w-3.5" /> No incidents
               </span>
             ) : (
-              <Badge variant="danger" withDot>
-                {d?.safetyIncidentType?.replace("_", " ")}
-              </Badge>
+              <span className="self-start">
+                <Badge variant="danger" withDot>
+                  {d?.safetyIncidentType?.replace("_", " ")}
+                </Badge>
+              </span>
             )}
           </div>
-          <Field label="Safety Observation" value={d?.safetyObservation || "None recorded"} muted={!d?.safetyObservation} />
-          <Field label="Delay Reason" value={d?.delayReason || "No delay"} muted={!d?.delayReason} />
-          <div className="col-span-2 sm:col-span-4">
-            <Field
-              label="Remarks"
-              value={d?.remarks || "No remarks were added to this report."}
-              muted={!d?.remarks}
-            />
-          </div>
+          <Field label="Safety Observation" value={d?.safetyObservation || null} />
+          <Field label="Delay Reason" value={d?.delayReason || null} />
+          {d?.remarks && (
+            <div className="col-span-2 sm:col-span-3">
+              <Field label="Remarks" value={d.remarks} />
+            </div>
+          )}
         </Grid>
       </Section>
     </div>
