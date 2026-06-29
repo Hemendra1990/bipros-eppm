@@ -15,6 +15,7 @@ import {
 interface ProjectHealthDonutProps {
   buckets: { onTrack: number; atRisk: number; delayed: number };
   physicalPct: number;
+  onSelect?: (bucket: "onTrack" | "atRisk" | "delayed") => void;
 }
 
 const LEGEND = [
@@ -26,11 +27,12 @@ const LEGEND = [
 export function ProjectHealthDonut({
   buckets,
   physicalPct,
+  onSelect,
 }: ProjectHealthDonutProps) {
   const data = [
-    { name: "On Track", value: buckets.onTrack, color: CHART_COLORS.good },
-    { name: "At Risk", value: buckets.atRisk, color: CHART_COLORS.amber },
-    { name: "Delayed", value: buckets.delayed, color: CHART_COLORS.red },
+    { name: "On Track", value: buckets.onTrack, color: CHART_COLORS.good, bucket: "onTrack" as const },
+    { name: "At Risk", value: buckets.atRisk, color: CHART_COLORS.amber, bucket: "atRisk" as const },
+    { name: "Delayed", value: buckets.delayed, color: CHART_COLORS.red, bucket: "delayed" as const },
   ].filter((d) => d.value > 0);
 
   const total = buckets.onTrack + buckets.atRisk + buckets.delayed;
@@ -46,7 +48,9 @@ export function ProjectHealthDonut({
         <EmptyBlock label="No activity data yet" />
       ) : (
         <div className="grid grid-cols-1 items-center gap-6 sm:grid-cols-[180px_1fr]">
-          <div className="relative mx-auto h-[180px] w-[180px]">
+          <div
+            className={`relative mx-auto h-[180px] w-[180px]${onSelect ? " cursor-pointer" : ""}`}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -58,9 +62,23 @@ export function ProjectHealthDonut({
                   paddingAngle={3}
                   stroke="#fff"
                   strokeWidth={2}
+                  // Slices are clickable too (the legend rows already are): map the clicked
+                  // sector back to its bucket via the data index and open the same drawer.
+                  onClick={
+                    onSelect
+                      ? (_, index) => {
+                          const entry = data[index];
+                          if (entry) onSelect(entry.bucket);
+                        }
+                      : undefined
+                  }
                 >
                   {data.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
+                    <Cell
+                      key={entry.name}
+                      fill={entry.color}
+                      className={onSelect ? "cursor-pointer outline-none" : undefined}
+                    />
                   ))}
                 </Pie>
                 <Tooltip
@@ -90,11 +108,8 @@ export function ProjectHealthDonut({
           <ul className="space-y-2">
             {LEGEND.map((seg) => {
               const count = buckets[seg.key];
-              return (
-                <li
-                  key={seg.key}
-                  className="flex items-center justify-between rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-hairline hover:bg-paper"
-                >
+              const inner = (
+                <>
                   <div className="flex items-center gap-2">
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -110,6 +125,23 @@ export function ProjectHealthDonut({
                   >
                     {count}
                   </span>
+                </>
+              );
+              return (
+                <li key={seg.key}>
+                  {onSelect ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelect(seg.key)}
+                      className="flex w-full items-center justify-between rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-hairline hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-hairline hover:bg-paper">
+                      {inner}
+                    </div>
+                  )}
                 </li>
               );
             })}

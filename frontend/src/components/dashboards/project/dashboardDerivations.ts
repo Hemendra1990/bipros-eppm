@@ -61,12 +61,50 @@ export function tasksCompleted(rows: ActivityStatusRow[]) {
   return { done, total: rows.length };
 }
 
-const CRITICAL_ISSUE_STATUSES = new Set(["OPEN", "IN_PROGRESS"]);
+// Non-terminal ("open") issue statuses — the single source shared by the open count, the
+// critical sub-count, and the drawer list, so the tile value, its "N critical" hint, and the
+// drilled-in list can never disagree on what counts as open.
+const OPEN_ISSUE_STATUSES = new Set(["OPEN", "IN_PROGRESS", "BLOCKED"]);
 
 export function criticalIssueCount(
   issues: { severity: string; status: string }[],
 ): number {
   return issues.filter(
-    (i) => i.severity === "CRITICAL" && CRITICAL_ISSUE_STATUSES.has(i.status),
+    (i) => i.severity === "CRITICAL" && OPEN_ISSUE_STATUSES.has(i.status),
   ).length;
+}
+
+export function completedActivities(rows: ActivityStatusRow[]): ActivityStatusRow[] {
+  return rows.filter(
+    (r) => r.pctComplete >= 100 || r.status === "DONE" || r.status === "COMPLETED",
+  );
+}
+
+export function activitiesByHealth(
+  rows: ActivityStatusRow[],
+  bucket: HealthBucket,
+): ActivityStatusRow[] {
+  return rows.filter((r) => bucketActivityHealth(r) === bucket);
+}
+
+export function openIssueCount(issues: { status: string }[]): number {
+  return issues.filter((i) => OPEN_ISSUE_STATUSES.has(i.status)).length;
+}
+
+const SEVERITY_ORDER: Record<string, number> = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};
+
+export function openIssues<T extends { status: string; severity: string }>(
+  issues: T[],
+): T[] {
+  return issues
+    .filter((i) => OPEN_ISSUE_STATUSES.has(i.status))
+    .sort(
+      (a, b) =>
+        (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
+    );
 }
