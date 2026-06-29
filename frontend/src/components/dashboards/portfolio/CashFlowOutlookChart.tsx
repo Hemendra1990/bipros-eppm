@@ -24,7 +24,7 @@ import {
   SectionCard,
 } from "@/components/common/dashboard/primitives";
 
-export function CashFlowOutlookChart() {
+export function CashFlowOutlookChart({ currency }: { currency?: string }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-cash-flow"],
     queryFn: () => portfolioReportApi.getCashFlowOutlook(12),
@@ -54,7 +54,7 @@ export function CashFlowOutlookChart() {
     },
     {} as Record<string, number>,
   );
-  const cur = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "INR";
+  const cur = currency ?? Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "INR";
   const series = all.filter((p) => (p.currency ?? cur) === cur);
 
   const hasData = series.some(

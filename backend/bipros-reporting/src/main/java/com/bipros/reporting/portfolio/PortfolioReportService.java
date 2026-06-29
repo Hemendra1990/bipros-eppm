@@ -142,12 +142,20 @@ public class PortfolioReportService {
     long green = 0, amber = 0, red = 0, grey = 0;
     long activeWithCritical = 0;
     long openCriticalRisks = 0;
+    List<BigDecimal> costPercents = new ArrayList<>();
+    // Spent is the canonical Actual Cost (CostService.totalActual) summed per currency, so the
+    // portfolio "Spent" tile equals the AC shown on the Costs/EVM tabs and reports — not a
+    // separate DPR query that drifts from it.
+    java.util.Map<String, BigDecimal> acByCurrency = new java.util.HashMap<>();
 
     for (Project p : projects) {
       CostSummaryDto cs = costService.getCostSummary(p.getId());
+      costPercents.add(cs.costPercentComplete());
       BigDecimal snapBac = nullToZero(cs.bac());
       BigDecimal snapEv = nullToZero(cs.earnedValue());
       BigDecimal snapAc = nullToZero(cs.totalActual());
+      String acCur = p.getBudgetCurrency() != null ? p.getBudgetCurrency() : "INR";
+      acByCurrency.merge(acCur, snapAc, BigDecimal::add);
       String rag;
       if (snapBac.signum() == 0 && snapEv.signum() == 0 && snapAc.signum() == 0) {
         rag = "GREY";
@@ -190,40 +198,19 @@ public class PortfolioReportService {
       BigDecimal raw = r[1] instanceof BigDecimal b ? b : new BigDecimal(r[1].toString());
       budgetByCurrency.add(new CurrencyBudget(cur, raw));
     }
-    Double avgPct = queryScalarBigDecimal(
-        "SELECT COALESCE(AVG(p_avg),0) FROM ("
-            + "  SELECT AVG(a.percent_complete) AS p_avg FROM activity.activities a "
-            + "  JOIN project.projects p ON p.id = a.project_id "
-            + "  WHERE p.archived_at IS NULL GROUP BY a.project_id) t").doubleValue();
+    double avgPct = avgCostPercent(costPercents);
 
-    @SuppressWarnings("unchecked")
-    List<Object[]> spentRows = em.createNativeQuery(
-        "SELECT cur, SUM(amt) FROM ("
-      + "  SELECT p.budget_currency AS cur, COALESCE(SUM(t.line_cost),0) AS amt FROM ("
-      + "    SELECT dpr_id, line_cost FROM project.dpr_manpower WHERE line_cost IS NOT NULL"
-      + "    UNION ALL SELECT dpr_id, line_cost FROM project.dpr_equipment WHERE line_cost IS NOT NULL"
-      + "    UNION ALL SELECT dpr_id, line_cost FROM project.dpr_material WHERE line_cost IS NOT NULL) t"
-      + "  JOIN project.daily_progress_reports d ON d.id=t.dpr_id"
-      + "  JOIN project.projects p ON p.id=d.project_id"
-      + "  WHERE p.archived_at IS NULL AND d.approval_status='APPROVED' GROUP BY p.budget_currency"
-      + "  UNION ALL"
-      + "  SELECT p.budget_currency AS cur, COALESCE(SUM(c.quantity*COALESCE(a.rate_per_unit,0)),0) AS amt"
-      + "  FROM project.dpr_sub_contractor c JOIN project.daily_progress_reports d ON d.id=c.dpr_id"
-      + "  JOIN resource.activity_sub_contractor_assignments a ON a.id=c.activity_sub_contractor_assignment_id"
-      + "  JOIN project.projects p ON p.id=d.project_id"
-      + "  WHERE p.archived_at IS NULL AND d.approval_status='APPROVED' GROUP BY p.budget_currency"
-      + ") x GROUP BY cur HAVING SUM(amt) > 0 ORDER BY cur").getResultList();
-    List<CurrencyBudget> spentByCurrency = new ArrayList<>();
-    for (Object[] r : spentRows) {
-      spentByCurrency.add(new CurrencyBudget(r[0] != null ? r[0].toString() : "INR",
-          r[1] instanceof BigDecimal b ? b : new BigDecimal(r[1].toString())));
-    }
+    List<CurrencyBudget> spentByCurrency = acByCurrency.entrySet().stream()
+        .filter(e -> e.getValue() != null && e.getValue().signum() > 0)
+        .sorted(java.util.Map.Entry.comparingByKey())
+        .map(e -> new CurrencyBudget(e.getKey(), e.getValue()))
+        .collect(java.util.stream.Collectors.toList());
 
     @SuppressWarnings("unchecked")
     List<Object[]> commRows = em.createNativeQuery(
-        "SELECT p.budget_currency, COALESCE(SUM(c.contract_value),0) FROM contract.contracts c "
+        "SELECT c.currency, COALESCE(SUM(c.contract_value),0) FROM contract.contracts c "
       + "JOIN project.projects p ON p.id=c.project_id WHERE p.archived_at IS NULL "
-      + "GROUP BY p.budget_currency HAVING COALESCE(SUM(c.contract_value),0) > 0 ORDER BY p.budget_currency").getResultList();
+      + "GROUP BY c.currency HAVING COALESCE(SUM(c.contract_value),0) > 0 ORDER BY c.currency").getResultList();
     List<CurrencyBudget> committedByCurrency = new ArrayList<>();
     for (Object[] r : commRows) {
       committedByCurrency.add(new CurrencyBudget(r[0] != null ? r[0].toString() : "INR",
@@ -607,6 +594,7 @@ public class PortfolioReportService {
     List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<ScheduleHealthRow> rows = new ArrayList<>();
     for (Project p : projects) {
+      LocalDate asOf = p.getDataDate() != null ? p.getDataDate() : LocalDate.now();
       long missingLogic = queryScalarLong(
           "SELECT COUNT(a.id) FROM activity.activities a "
               + "LEFT JOIN activity.activity_relationships r "
@@ -657,9 +645,9 @@ public class PortfolioReportService {
           p.getId());
       long missedTasks = queryScalarLong(
           "SELECT COUNT(*) FROM activity.activities "
-              + "WHERE project_id = ?1 AND planned_finish_date < CURRENT_DATE "
+              + "WHERE project_id = ?1 AND planned_finish_date < ?2 "
               + "  AND (percent_complete IS NULL OR percent_complete < 100)",
-          p.getId());
+          p.getId(), asOf);
       long cpLength = queryScalarLong(
           "SELECT COUNT(*) FROM activity.activities WHERE project_id = ?1 AND is_critical = TRUE",
           p.getId());
@@ -672,8 +660,8 @@ public class PortfolioReportService {
           p.getId());
       long shouldHaveCompleted = queryScalarLong(
           "SELECT COUNT(*) FROM activity.activities "
-              + "WHERE project_id = ?1 AND planned_finish_date <= CURRENT_DATE",
-          p.getId());
+              + "WHERE project_id = ?1 AND planned_finish_date <= ?2",
+          p.getId(), asOf);
       if (shouldHaveCompleted > 0) {
         beiActual = (completedByNow * 1.0) / shouldHaveCompleted;
       }
@@ -721,6 +709,14 @@ public class PortfolioReportService {
     return num.multiply(new BigDecimal("100"))
         .divide(den, 2, RoundingMode.HALF_UP)
         .doubleValue();
+  }
+
+  /** Mean of per-project cost-percent-complete (0..1) expressed as a percentage (0..100). */
+  static double avgCostPercent(List<BigDecimal> costPercents) {
+    List<BigDecimal> vals = costPercents.stream().filter(java.util.Objects::nonNull).toList();
+    if (vals.isEmpty()) return 0.0;
+    double sum = vals.stream().mapToDouble(v -> v.doubleValue() * 100.0).sum();
+    return sum / vals.size();
   }
 
   private static String bandRag(Double cpi, Double spi) {

@@ -71,11 +71,12 @@ export function PortfolioStatusMix() {
       ? [{ key: "grey", label: "No EVM", count: data.rag.grey, color: "#94a3b8" }]
       : []),
   ];
+  const ragScored = data.rag.green + data.rag.amber + data.rag.red;
   const healthScore =
-    ragTotal > 0
+    ragScored > 0
       ? Math.round(
-          ((data.rag.green * 100 + data.rag.amber * 60 + data.rag.red * 20) /
-            ragTotal),
+          (data.rag.green * 100 + data.rag.amber * 60 + data.rag.red * 20) /
+            ragScored,
         )
       : 0;
   const healthBand =

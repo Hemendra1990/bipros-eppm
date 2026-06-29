@@ -43,7 +43,7 @@ const STATUS_META: Record<
   CANCELLED: { label: "Cancelled", icon: <XCircle size={14} />, color: "text-burgundy" },
 };
 
-export function PortfolioKpiRow() {
+export function PortfolioKpiRow({ currency }: { currency?: string } = {}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-scorecard"],
     queryFn: () => portfolioReportApi.getScorecard(),
@@ -58,6 +58,16 @@ export function PortfolioKpiRow() {
   const completed = data.byStatus?.COMPLETED ?? 0;
   const onHold = data.byStatus?.ON_HOLD ?? 0;
   const cancelled = data.byStatus?.CANCELLED ?? 0;
+
+  const pick = (items: CurrencyBudget[]) =>
+    currency ? (items ?? []).filter((i) => i.currency === currency) : (items ?? []);
+
+  // Committed = Budget − Spent, per currency (relabel-only; never converted across currencies).
+  const committedDerived: CurrencyBudget[] = (data.budgetByCurrency ?? []).map((b) => {
+    const sp =
+      (data.spentByCurrency ?? []).find((s) => s.currency === b.currency)?.totalBudgetRaw ?? 0;
+    return { currency: b.currency, totalBudgetRaw: Math.max((b.totalBudgetRaw ?? 0) - sp, 0) };
+  });
 
   return (
     <div className="space-y-5">
@@ -89,9 +99,9 @@ export function PortfolioKpiRow() {
 
             <div className="relative mt-5">
               <div className="space-y-2">
-                <MoneyRow label="Budget"    items={data.budgetByCurrency ?? []} />
-                <MoneyRow label="Spent"     items={data.spentByCurrency ?? []} />
-                <MoneyRow label="Committed" items={data.committedByCurrency ?? []} />
+                <MoneyRow label="Budget"    items={pick(data.budgetByCurrency ?? [])} />
+                <MoneyRow label="Spent"     items={pick(data.spentByCurrency ?? [])} />
+                <MoneyRow label="Committed" items={pick(committedDerived)} />
               </div>
               <div className="mt-1.5 text-xs text-slate">
                 {data.totalProjects} project{data.totalProjects === 1 ? "" : "s"}
@@ -105,7 +115,7 @@ export function PortfolioKpiRow() {
           <KpiTile
             label="Avg progress"
             value={`${Math.round(data.avgPercentComplete ?? 0)}%`}
-            hint="Across all projects"
+            hint="Cost % · across all projects"
             icon={<TrendingUp size={14} />}
             tone="default"
           />

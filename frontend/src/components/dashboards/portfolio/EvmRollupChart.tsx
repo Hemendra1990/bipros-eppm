@@ -44,7 +44,7 @@ function EvmTooltip({ active, payload, label }: {
   );
 }
 
-export function EvmRollupChart() {
+export function EvmRollupChart({ currency }: { currency?: string } = {}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-evm-rollup"],
     queryFn: () => portfolioReportApi.getEvmRollup(),
@@ -65,7 +65,8 @@ export function EvmRollupChart() {
     );
 
   const rows = data?.data ?? [];
-  if (rows.length === 0) {
+  const src = rows.filter((r) => !currency || (r.budgetCurrency ?? "USD") === currency);
+  if (src.length === 0) {
     return (
       <SectionCard title="EVM Performance" subtitle="Planned vs Earned vs Actual per project">
         <EmptyBlock label="No EVM data" />
@@ -74,13 +75,13 @@ export function EvmRollupChart() {
   }
 
   // Weighted CPI/SPI: EV-share mean of per-project ratios (currency-neutral)
-  const wsum = rows.reduce((s, r) => s + (r.bac > 0 ? r.ev / r.bac : 0), 0);
-  const wCpi = wsum > 0 ? rows.reduce((s, r) => s + (r.bac > 0 ? (r.ev / r.bac) * (r.cpi ?? 0) : 0), 0) / wsum : 0;
-  const wSpi = wsum > 0 ? rows.reduce((s, r) => s + (r.bac > 0 ? (r.ev / r.bac) * (r.spi ?? 0) : 0), 0) / wsum : 0;
+  const wsum = src.reduce((s, r) => s + (r.bac > 0 ? r.ev / r.bac : 0), 0);
+  const wCpi = wsum > 0 ? src.reduce((s, r) => s + (r.bac > 0 ? (r.ev / r.bac) * (r.cpi ?? 0) : 0), 0) / wsum : 0;
+  const wSpi = wsum > 0 ? src.reduce((s, r) => s + (r.bac > 0 ? (r.ev / r.bac) * (r.spi ?? 0) : 0), 0) / wsum : 0;
 
   // Per-currency PV/EV sums for the breakdown chips
   const byCurrency = new Map<string, { pv: number; ev: number }>();
-  for (const r of rows) {
+  for (const r of src) {
     const code = r.budgetCurrency ?? "?";
     const existing = byCurrency.get(code) ?? { pv: 0, ev: 0 };
     byCurrency.set(code, {
@@ -89,7 +90,8 @@ export function EvmRollupChart() {
     });
   }
 
-  const chartData = rows.map((r) => ({
+  const evmCurrency = src[0]?.budgetCurrency ?? currency ?? "USD";
+  const chartData = src.map((r) => ({
     name: truncate(r.projectName, 24),
     PV: r.pv,
     EV: r.ev,
@@ -113,13 +115,9 @@ export function EvmRollupChart() {
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis dataKey="name" stroke="#64748b" style={{ fontSize: "11px" }} />
           <YAxis stroke="#64748b" style={{ fontSize: "12px" }}
-            tickFormatter={(v: number) => {
-              const n = Math.abs(v);
-              if (n >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
-              if (n >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
-              if (n >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
-              return `${v}`;
-            }} />
+            tickFormatter={(v: number) =>
+              formatMoney(v, { code: evmCurrency }, { compact: true })
+            } />
           <Tooltip content={<EvmTooltip />} />
           <Legend wrapperStyle={{ fontSize: "12px" }} />
           <Bar dataKey="PV" fill={CHART_COLORS.pv} radius={[4, 4, 0, 0]} />

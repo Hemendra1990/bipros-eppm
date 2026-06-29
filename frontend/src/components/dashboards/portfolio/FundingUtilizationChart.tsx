@@ -53,7 +53,7 @@ function FundingTooltip({ active, payload, label, currencyByName }: FundingToolt
   );
 }
 
-export function FundingUtilizationChart() {
+export function FundingUtilizationChart({ currency }: { currency?: string } = {}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-funding"],
     queryFn: () => portfolioReportApi.getFundingUtilization(),
@@ -73,18 +73,25 @@ export function FundingUtilizationChart() {
       </SectionCard>
     );
 
-  const rows: FundingUtilizationRow[] = data ?? [];
-  if (rows.length === 0) {
+  const src: FundingUtilizationRow[] = (data ?? []).filter(
+    (r) => !currency || r.currency === currency,
+  );
+
+  const hasFunding = src.some((r) => (r.totalSanctionedCrores ?? 0) > 0);
+  if (!hasFunding) {
     return (
-      <SectionCard title="Funding Utilization">
-        <EmptyBlock label="No funding data" />
+      <SectionCard
+        title="Funding Utilization"
+        subtitle="Sanctioned vs released vs utilised per project"
+      >
+        <EmptyBlock label="No funding data yet" />
       </SectionCard>
     );
   }
 
-  const stuck = rows.filter((r) => r.utilizationPct < 50 && r.totalSanctionedCrores > 0);
+  const stuck = src.filter((r) => r.utilizationPct < 50 && r.totalSanctionedCrores > 0);
 
-  const chartData = rows.map((r) => ({
+  const chartData = src.map((r) => ({
     name: truncate(r.projectName, 24),
     Sanctioned: r.totalSanctionedCrores,
     Released: r.totalReleasedCrores,
@@ -94,7 +101,7 @@ export function FundingUtilizationChart() {
 
   // Map truncated name → currency code for the tooltip
   const currencyByName = new Map<string, string>(
-    rows.map((r) => [truncate(r.projectName, 24), r.currency ?? "USD"]),
+    src.map((r) => [truncate(r.projectName, 24), r.currency ?? "USD"]),
   );
 
   return (

@@ -24,7 +24,7 @@ import {
 } from "@/components/common/dashboard/primitives";
 import { formatMoney } from "@/lib/currency/format";
 
-export function CostOverrunChart() {
+export function CostOverrunChart({ currency }: { currency?: string } = {}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-cost-overrun"],
     queryFn: () => portfolioReportApi.getCostOverrunProjects(10),
@@ -44,7 +44,9 @@ export function CostOverrunChart() {
       </SectionCard>
     );
 
-  const rows = (data ?? []).filter((r) => Math.abs(r.varianceCrores ?? 0) > 0);
+  const rows = (data ?? [])
+    .filter((r) => Math.abs(r.varianceCrores ?? 0) > 0)
+    .filter((r) => !currency || (r.budgetCurrency ?? "USD") === currency);
   if (rows.length === 0) {
     return (
       <SectionCard
@@ -66,6 +68,12 @@ export function CostOverrunChart() {
     budgetCurrency: r.budgetCurrency ?? "USD",
   }));
 
+  const chartCurrency = chartData[0]?.budgetCurrency ?? currency ?? "USD";
+  const variances = chartData.map((d) => d.variance ?? 0);
+  const lo = Math.min(0, ...variances);
+  const hi = Math.max(0, ...variances);
+  const pad = (hi - lo || Math.abs(hi) || 1) * 0.08;
+
   return (
     <SectionCard
       title="Cost Overruns"
@@ -82,7 +90,10 @@ export function CostOverrunChart() {
             type="number"
             stroke="#64748b"
             style={{ fontSize: "12px" }}
-            tickFormatter={(v: number) => v.toLocaleString()}
+            domain={[lo - pad, hi + pad]}
+            tickFormatter={(v: number) =>
+              formatMoney(v, { code: chartCurrency }, { compact: true })
+            }
           />
           <YAxis
             type="category"

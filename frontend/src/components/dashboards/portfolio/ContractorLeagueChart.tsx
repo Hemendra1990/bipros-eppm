@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { formatMoney } from "@/lib/currency/format";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
 import { ragFill, ragFromScore } from "@/lib/utils/rag";
 import {
@@ -44,10 +45,10 @@ export function ContractorLeagueChart() {
     );
 
   const rows = data ?? [];
-  if (rows.length === 0) {
+  if (rows.length === 0 || rows.every((r) => (r.avgPerformance ?? 0) <= 0)) {
     return (
-      <SectionCard title="Contractor Performance">
-        <EmptyBlock label="No contractor data" />
+      <SectionCard title="Contractor Performance" subtitle="Average performance score across all contracts">
+        <EmptyBlock label="No contractor scores yet" />
       </SectionCard>
     );
   }
@@ -96,13 +97,8 @@ export function ContractorLeagueChart() {
             formatter={(value, _name, props) => {
               const row = props.payload as (typeof chartData)[number];
               const cv = row.contractValue;
-              const absCv = Math.abs(cv);
-              const compactCv =
-                absCv >= 1_000_000
-                  ? `${(cv / 1_000_000).toFixed(2)} M`
-                  : absCv >= 1_000
-                  ? `${(cv / 1_000).toFixed(2)} K`
-                  : cv.toFixed(2);
+              // totalContractValueCrores is crore-scaled (×1e7); INR-relabelled (contractor money is mixed-currency/incidental)
+              const compactCv = formatMoney((cv ?? 0) * 1e7, { code: "INR" }, { compact: true });
               return [
                 `${Number(value ?? 0).toFixed(1)} · ${row.projects} projects · ${compactCv}`,
                 "Perf",
