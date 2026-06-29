@@ -82,4 +82,48 @@ class DprIssueServiceTest {
         assertThat(cap.getValue().getToStatus()).isEqualTo(IssueStatus.IN_PROGRESS);
         assertThat(cap.getValue().getActorUserId()).isEqualTo(actorId);
     }
+
+    @Test
+    void patch_toTerminalWithoutNotes_throws() {
+        DprIssue issue = openIssue();
+        issue.setAssignedToUserId(assigneeId);
+        when(issueRepository.findByIdAndProjectId(issueId, projectId)).thenReturn(Optional.of(issue));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            service.patch(projectId, issueId, new UpdateDprIssueRequest(
+                null, null, null, null, IssueStatus.RESOLVED,
+                null, null, null, null, null, null, null, null, null)))
+            .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
+            .hasMessageContaining("Resolution notes");
+    }
+
+    @Test
+    void patch_toInProgressWithoutAssignee_throws() {
+        DprIssue issue = openIssue();   // no assignee
+        when(issueRepository.findByIdAndProjectId(issueId, projectId)).thenReturn(Optional.of(issue));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            service.patch(projectId, issueId, new UpdateDprIssueRequest(
+                null, null, null, null, IssueStatus.IN_PROGRESS,
+                null, null, null, null, null, null, null, null, null)))
+            .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
+            .hasMessageContaining("Assigned");
+    }
+
+    @Test
+    void create_openWithoutAssignee_ok() {
+        var row = service.create(projectId, new CreateDprIssueRequest(
+            "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.OPEN,
+            null, null, null, null, null, null, null, null, null));
+        assertThat(row.title()).isEqualTo("title");
+    }
+
+    @Test
+    void create_inProgressWithoutAssignee_throws() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            service.create(projectId, new CreateDprIssueRequest(
+                "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.IN_PROGRESS,
+                null, null, null, null, null, null, null, null, null)))
+            .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class);
+    }
 }

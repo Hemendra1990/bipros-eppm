@@ -27,5 +27,7 @@ public record CreateDprIssueRequest(
     String assignedToName,
     UUID activityId,
     @Size(max = 150) String activityName,
-    LocalDate reportDate
+    LocalDate reportDate,
+    UUID supervisorUserId,
+    UUID assignedToUserId
 ) {}

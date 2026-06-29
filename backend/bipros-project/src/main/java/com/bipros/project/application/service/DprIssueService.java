@@ -118,6 +118,7 @@ public class DprIssueService {
                     newStatus.resolvedAtTerminal() ? issue.getResolutionNotes() : null);
         }
 
+        validateConditionalFields(newStatus, issue.getAssignedToUserId(), issue.getResolutionNotes());
         DprIssue saved = issueRepository.save(issue);
         DprIssueRow after = DprIssueRow.from(saved);
         auditService.logUpdate("DprIssue", saved.getId(), "row", before, after);
@@ -143,6 +144,7 @@ public class DprIssueService {
 
     public DprIssueRow create(UUID projectId, CreateDprIssueRequest req) {
         IssueStatus status = req.status() != null ? req.status() : IssueStatus.OPEN;
+        validateConditionalFields(status, req.assignedToUserId(), null /* no resolution notes on create */);
         DprIssue issue = DprIssue.builder()
                 .dprId(null)
                 .projectId(projectId)
@@ -156,6 +158,8 @@ public class DprIssueService {
                                 : req.supervisorResourceId())
                 .assignedToName(
                         req.assignedToName() != null ? req.assignedToName() : req.supervisorName())
+                .supervisorUserId(req.supervisorUserId())
+                .assignedToUserId(req.assignedToUserId())
                 .reportDate(req.reportDate() != null ? req.reportDate() : LocalDate.now())
                 .category(req.category())
                 .severity(req.severity())
@@ -190,6 +194,22 @@ public class DprIssueService {
                 .actorUserId(projectAccessGuard.currentUserId())
                 .reason(reason)
                 .build());
+    }
+
+    /**
+     * Cross-field mandatory rules enforced authoritatively here (not via bean annotations)
+     * because they depend on the resulting status. Owner required for working/terminal
+     * statuses; resolution notes required for terminal statuses.
+     */
+    private void validateConditionalFields(IssueStatus status, UUID assignedToUserId, String resolutionNotes) {
+        if (status.requiresAssignee() && assignedToUserId == null) {
+            throw new BusinessRuleException("DPR_ISSUE_INVALID",
+                "Assigned To is required when status is " + status.name() + ".");
+        }
+        if (status.resolvedAtTerminal() && (resolutionNotes == null || resolutionNotes.isBlank())) {
+            throw new BusinessRuleException("DPR_ISSUE_INVALID",
+                "Resolution notes are required to mark an issue " + status.name() + ".");
+        }
     }
 
     private DprIssue findIssue(UUID projectId, UUID id) {
