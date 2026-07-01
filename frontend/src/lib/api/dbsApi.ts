@@ -346,7 +346,17 @@ export interface DbsRecomputeJob {
 
 const base = (projectId: string) => `/v1/projects/${projectId}/dbs`;
 
+/** App-wide DBS tunables (global, not project-scoped). */
+export interface DbsConfigResponse {
+  /** Decimal fraction, e.g. 0.35 = 35%. Fuel cost = ratio × equipment cost. */
+  fuelMachineryCostRatio: number;
+}
+
 export const dbsApi = {
+  /** Reads global DBS config — used by the DPR totals bar to derive Fuel from equipment cost. */
+  getConfig: () =>
+    apiClient.get<ApiResponse<DbsConfigResponse>>(`/v1/dbs/config`).then((r) => r.data),
+
   getSupervisorDay: (projectId: string, supervisorUserId: string, date: string) =>
     apiClient
       .get<ApiResponse<DbsSupervisorDayResponse>>(

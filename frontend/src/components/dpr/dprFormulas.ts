@@ -46,3 +46,30 @@ export function rateBasisSuffix(basis: RateBasis | null | undefined): string {
   if (basis === "DAY") return "/day";
   return "";
 }
+
+/** Minimal norm-preview shape needed to pick the winning ("bottleneck") side. Compatible with both
+ *  the form's {@code ProductivityPreviewData} and the API's {@code ProductivityPreviewResponse}. */
+type PreviewSideInput =
+  | {
+      source: "BOTH" | "MANPOWER_ONLY" | "EQUIPMENT_ONLY" | "NONE";
+      expectedFromManpower: number | null;
+      expectedFromEquipment: number | null;
+      expectedBottleneck: number | null;
+    }
+  | null
+  | undefined;
+
+/**
+ * Winning ("bottleneck") side for the totals-bar Productivity cell: the side whose norm-based
+ * expected output equals the "Expected today" value. For BOTH-tracked activities it's the side
+ * whose expected is closest to the bottleneck — resolving to min (SERIES), max (SUBSTITUTE) or the
+ * larger contributor (PARALLEL). Null when no norm / side can be determined.
+ */
+export function productivitySideFromPreview(p: PreviewSideInput): "MANPOWER" | "EQUIPMENT" | null {
+  if (!p || p.source === "NONE") return null;
+  if (p.source === "MANPOWER_ONLY") return "MANPOWER";
+  if (p.source === "EQUIPMENT_ONLY") return "EQUIPMENT";
+  const { expectedFromManpower: mp, expectedFromEquipment: eq, expectedBottleneck: b } = p;
+  if (mp == null || eq == null || b == null) return "MANPOWER";
+  return Math.abs(mp - b) <= Math.abs(eq - b) ? "MANPOWER" : "EQUIPMENT";
+}
