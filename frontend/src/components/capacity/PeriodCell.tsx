@@ -6,7 +6,6 @@ import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import {
   COUNTED_TOOLTIP,
   countedDays,
-  efficiencyFormula,
   reconciliationText,
   type CapacitySide,
 } from "@/lib/capacity/reconciliation";
@@ -14,6 +13,12 @@ import {
 function fmt(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined) return "—";
   return n.toLocaleString("en-IN", { maximumFractionDigits: digits });
+}
+
+/** Budget days, always padded to exactly 3 decimals (e.g. "8.900"). */
+function fmtBudget(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "—";
+  return n.toLocaleString("en-IN", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
 
 export function utilBand(util: number | null | undefined): string {
@@ -61,9 +66,10 @@ export const PeriodCell = memo(function PeriodCell({
     period.actualDaysUntracked,
     side,
   );
-  const formula = untracked
-    ? null
-    : efficiencyFormula(period.budgetDays, counted, 1, 1);
+  const formula =
+    untracked || period.budgetDays == null || counted <= 0
+      ? null
+      : `${fmtBudget(period.budgetDays)} ÷ ${fmt(counted, 1)}`;
   return (
     <div className="space-y-0.5 text-xs">
       {period.qty != null && period.qty > 0 && (
@@ -73,7 +79,7 @@ export const PeriodCell = memo(function PeriodCell({
       )}
       <div>
         <span className="text-text-muted">Budget:</span>{" "}
-        {untracked ? "—" : fmt(period.budgetDays, 1)}
+        {untracked ? "—" : fmtBudget(period.budgetDays)}
       </div>
       {untracked ? (
         <div>

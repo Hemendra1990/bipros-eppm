@@ -573,7 +573,7 @@ export default function CapacityUtilizationPage() {
             <em>Admin → Productivity Norms</em>.
           </p>
 
-          <div className="bg-surface/50 p-4 rounded-lg border border-border grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div className="bg-surface/50 p-4 rounded-lg border border-border grid grid-cols-1 md:grid-cols-[1fr_1fr_1.1fr_0.7fr_2fr_1fr] gap-3">
             <div>
               <label className="block text-xs font-medium mb-1 text-text-secondary">
                 From

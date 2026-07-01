@@ -91,6 +91,9 @@ export default function BoqPage() {
   // quantity columns keep the bare-number formatAmount (no symbol).
   const formatMoney = (value: number | null | undefined): string =>
     value === null || value === undefined ? "—" : money(value, { decimals: 0 });
+  // Actual Rate is shown with 3 decimals so fine-grained site rates aren't rounded to whole units.
+  const formatRate = (value: number | null | undefined): string =>
+    value === null || value === undefined ? "—" : money(value, { decimals: 3 });
 
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<BoqForm>(initialFormState);
@@ -224,7 +227,7 @@ export default function BoqPage() {
         className="block w-full text-right hover:text-gold focus:text-gold focus:outline-none"
         title="Click to edit"
       >
-        {field === "actualRate" ? formatMoney(item[field]) : formatAmount(item[field])}
+        {field === "actualRate" ? formatRate(item[field]) : formatAmount(item[field])}
       </button>
     );
   };
