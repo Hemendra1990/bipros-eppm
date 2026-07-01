@@ -51,8 +51,8 @@ export function DprTotalsBar({
   const fuelLitres = sum(equipment.map((e) => e.fuelLitres));
   const productivity = manpowerHours > 0 && qtyExecuted > 0 ? qtyExecuted / manpowerHours : null;
 
-  const manpowerCost = sum(manpower.map((m) => manpowerLineCost(m, m.unitRateBasis)));
-  const equipmentCost = sum(equipment.map((e) => equipmentLineCost(e, e.unitRateBasis ?? "HOUR")));
+  const manpowerCost = sum(manpower.map((m) => manpowerLineCost(m)));
+  const equipmentCost = sum(equipment.map((e) => equipmentLineCost(e)));
   const materialCost = sum(materials.map((m) => materialLineCost(m)));
   const subContractorCost = sum(
     subContractors.map((s) => (s.quantity ?? 0) * (s.ratePerUnit ?? 0)),
