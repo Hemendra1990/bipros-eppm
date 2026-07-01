@@ -365,8 +365,8 @@ export default function BoqPage() {
     : 0;
 
   const grandTotalFooter = summary ? (
-    <tr className="text-text-primary font-semibold">
-      <td className="px-4 py-3" colSpan={7}>
+<tr className="text-text-primary dark:text-[#F5F2E8] font-semibold">
+  <td className="px-4 py-3" colSpan={7}>
         Grand Total
       </td>
       <td className="px-4 py-3 text-right tabular-nums">{formatAmount(boqQtyGrandTotal)}</td>

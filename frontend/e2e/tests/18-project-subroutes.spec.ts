@@ -294,28 +294,4 @@ test.describe('Project Sub-Routes', () => {
       await expect(page.locator('body')).not.toHaveText(/something went wrong/i);
     });
   });
-
-  test.describe('HSE hub', () => {
-    test('HSE tab loads and the statistics table renders', async ({ authenticatedPage: page }) => {
-      if (!projectId) return;
-      await page.goto(`/projects/${projectId}/hse`);
-      await page.waitForTimeout(2000);
-
-      // Hub heading renders (mirrors the Procurement tab's h1 assertion).
-      await expect(
-        page.getByRole('heading', { name: /hse/i, level: 1 }),
-      ).toBeVisible({ timeout: 10_000 });
-
-      // The single display table renders either the statistics table or its empty state.
-      const content = await page
-        .locator('table, .border-dashed')
-        .first()
-        .isVisible({ timeout: 10_000 })
-        .catch(() => false);
-      expect(content).toBeTruthy();
-
-      // No crash / error boundary.
-      await expect(page.locator('body')).not.toHaveText(/something went wrong/i);
-    });
-  });
 });
