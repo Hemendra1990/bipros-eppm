@@ -20,13 +20,14 @@ import {
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatINR,
 } from "@/components/common/dashboard/primitives";
+import { formatMoney } from "@/lib/currency/format";
 import type { CashFlowForecastItem } from "@/lib/api/costApi";
 
 interface Props {
   data: CashFlowForecastItem[] | undefined;
   isLoading: boolean;
+  currencyCode: string;
 }
 
 function fmtPeriod(period: string): string {
@@ -38,7 +39,8 @@ function fmtPeriod(period: string): string {
   return date.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 }
 
-export function CostSCurveChart({ data, isLoading }: Props) {
+export function CostSCurveChart({ data, isLoading, currencyCode }: Props) {
+  const fmt = (n: number) => formatMoney(n, { code: currencyCode }, { compact: true });
   const rows = (data ?? [])
     .slice()
     .sort((a, b) => (a.period ?? "").localeCompare(b.period ?? ""))
@@ -72,7 +74,7 @@ export function CostSCurveChart({ data, isLoading }: Props) {
                 tickLine={false}
               />
               <YAxis
-                tickFormatter={(v: number) => formatINR(v, 0)}
+                tickFormatter={(v: number) => fmt(v)}
                 tick={{ fill: "#7a7368", fontSize: 11 }}
                 axisLine={{ stroke: "#E6E0CF" }}
                 tickLine={false}
@@ -82,7 +84,7 @@ export function CostSCurveChart({ data, isLoading }: Props) {
                 contentStyle={CHART_TOOLTIP_STYLE}
                 labelStyle={CHART_TOOLTIP_LABEL_STYLE}
                 itemStyle={CHART_TOOLTIP_ITEM_STYLE}
-                formatter={(value, name) => [formatINR(Number(value)), String(name)]}
+                formatter={(value, name) => [fmt(Number(value)), String(name)]}
               />
               <Legend
                 wrapperStyle={{ fontSize: 11, paddingTop: 8 }}

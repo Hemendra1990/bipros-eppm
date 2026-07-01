@@ -7,8 +7,8 @@ import {
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatINR,
 } from "@/components/common/dashboard/primitives";
+import { formatMoney } from "@/lib/currency/format";
 import type { RaBill, RaBillStatus } from "@/lib/api/raBillApi";
 
 const STATUS_VARIANT: Record<RaBillStatus, BadgeVariant> = {
@@ -46,9 +46,10 @@ interface Props {
   bills: RaBill[] | undefined;
   isLoading: boolean;
   projectId: string | null;
+  currencyCode: string;
 }
 
-export function InvoiceSummaryTable({ bills, isLoading, projectId }: Props) {
+export function InvoiceSummaryTable({ bills, isLoading, projectId, currencyCode }: Props) {
   const rows = (bills ?? [])
     .slice()
     .sort((a, b) => (b.billPeriodFrom ?? "").localeCompare(a.billPeriodFrom ?? ""))
@@ -95,7 +96,7 @@ export function InvoiceSummaryTable({ bills, isLoading, projectId }: Props) {
                   <td className="px-2 py-2.5 font-medium text-charcoal">{b.billNumber}</td>
                   <td className="px-2 py-2.5 text-slate">{fmtDate(b.billPeriodFrom)}</td>
                   <td className="px-2 py-2.5 text-right font-display font-semibold text-charcoal">
-                    {formatINR(b.grossAmount)}
+                    {formatMoney(b.grossAmount, { code: currencyCode }, { compact: true })}
                   </td>
                   <td className="px-2 py-2.5 text-right">
                     <Badge variant={STATUS_VARIANT[b.status]} withDot>

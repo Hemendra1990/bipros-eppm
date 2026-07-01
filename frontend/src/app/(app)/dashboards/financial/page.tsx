@@ -32,7 +32,6 @@ import { contractApi } from "@/lib/api/contractApi";
 import { costApi } from "@/lib/api/costApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { raBillApi } from "@/lib/api/raBillApi";
-import { evmKpiApi } from "@/lib/api/evmKpiApi";
 import {
   aggregateBudgetByCategory,
   billingRaisedTotal,
@@ -124,12 +123,6 @@ export default function FinancialDashboardPage() {
     enabled,
     staleTime: 60_000,
   });
-  const { data: evmEnv } = useQuery({
-    queryKey: ["financial-dashboard", pid, "evm"],
-    queryFn: () => evmKpiApi.getKpis(pid),
-    enabled,
-    staleTime: 60_000,
-  });
   const { data: projectEnv } = useQuery({
     queryKey: ["financial-dashboard", pid, "project"],
     queryFn: () => projectApi.getProject(pid),
@@ -142,7 +135,6 @@ export default function FinancialDashboardPage() {
   const boqSummary = boqEnv?.data ?? undefined;
   const raBills = raBillsEnv?.data ?? undefined;
   const contracts = contractsEnv?.data?.content ?? [];
-  const evm = evmEnv?.data ?? undefined;
 
   // KPI derivations (see the plan §3 for sources).
   const contractValueOriginal = contracts.reduce((s, c) => s + (c.contractValue ?? 0), 0);
@@ -358,7 +350,8 @@ export default function FinancialDashboardPage() {
               <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
                 <KpiTile
                   label="Contract Value"
-                  value={fmt(contractValue)}
+                  // Match the Costs tab: no Primary Contract → em-dash, not "0 OMR".
+                  value={contracts.length === 0 ? "—" : fmt(contractValue)}
                   hint={contractValueOriginal > 0 && contractValue !== contractValueOriginal
                     ? `Original ${fmt(contractValueOriginal)}`
                     : `${contracts.length} contract${contracts.length === 1 ? "" : "s"}`}
@@ -387,10 +380,10 @@ export default function FinancialDashboardPage() {
                 <KpiTile
                   label="Expenditure to Date"
                   value={fmt(expenditure)}
-                  // Budget reference instead of CPI — keeps CPI in one place (the EVM
-                  // footer) so two different CPI bases (cost-summary vs EVM) don't appear
-                  // on the same screen with conflicting numbers.
-                  hint={`of ${fmt(costSummary?.totalBudget)} budget`}
+                  // Reference is the bottom-up planned cost (costSummary.totalBudget),
+                  // labelled "planned cost" to match the Costs tab and avoid reading as
+                  // the BAC. CPI/SPI live once in the EVM footer (canonical CostService).
+                  hint={`of ${fmt(costSummary?.totalBudget)} planned cost`}
                   tone={expenditureDelta != null && expenditureDelta > 0 ? "warning" : "default"}
                   icon={<TrendingDown size={14} strokeWidth={1.75} />}
                   delta={
@@ -430,55 +423,65 @@ export default function FinancialDashboardPage() {
 
             <section id="curve" className="scroll-mt-24 grid grid-cols-1 gap-6 xl:grid-cols-3">
               <div className="xl:col-span-2">
-                <CostSCurveChart data={cashFlow} isLoading={isLoadingCashFlow} />
+                <CostSCurveChart
+                  data={cashFlow}
+                  isLoading={isLoadingCashFlow}
+                  currencyCode={currencyCode}
+                />
               </div>
               <div id="invoices" className="scroll-mt-24 xl:col-span-1">
                 <InvoiceSummaryTable
                   bills={raBills}
                   isLoading={isLoadingBills}
                   projectId={projectId}
+                  currencyCode={currencyCode}
                 />
               </div>
             </section>
 
             <section id="breakdown" className="scroll-mt-24 grid grid-cols-1 gap-6 xl:grid-cols-3">
               <div className="xl:col-span-2">
-                <BudgetByCategoryList rows={categoryRows} isLoading={isLoadingBoq} />
+                <BudgetByCategoryList
+                  rows={categoryRows}
+                  isLoading={isLoadingBoq}
+                  currencyCode={currencyCode}
+                />
               </div>
               <div id="variance" className="scroll-mt-24 xl:col-span-1">
                 <CostVarianceDonut summary={boqSummary} isLoading={isLoadingBoq} />
               </div>
             </section>
 
-            {/* Footer note when EVM rollup is available — keeps the BIPROS habit of */}
-            {/* surfacing CPI/SPI right next to financial summaries. */}
-            {evm && evm.costPerformanceIndex != null && (
+            {/* Footer note — CPI/SPI/EAC/VAC from the canonical CostService summary */}
+            {/* (same source as the Costs, EVM, and Performance tabs), so every screen */}
+            {/* agrees. EAC is CPI-based, matching the Costs tab default. */}
+            {costSummary && costSummary.costPerformanceIndex != null && (
               <div className="rounded-2xl border border-hairline bg-paper px-5 py-3 text-xs text-slate">
                 EVM snapshot:{" "}
                 <span className="font-semibold text-charcoal">
-                  CPI {evm.costPerformanceIndex.toFixed(2)}
+                  CPI {costSummary.costPerformanceIndex.toFixed(2)}
                 </span>
-                {evm.schedulePerformanceIndex != null && (
+                {costSummary.schedulePerformanceIndex != null && (
                   <>
                     {" · "}
                     <span className="font-semibold text-charcoal">
-                      SPI {evm.schedulePerformanceIndex.toFixed(2)}
+                      SPI {costSummary.schedulePerformanceIndex.toFixed(2)}
                     </span>
                   </>
                 )}
-                {evm.estimateAtCompletion != null && (
+                {costSummary.estimateAtCompletion != null && (
                   <>
                     {" · EAC "}
                     <span className="font-semibold text-charcoal">
-                      {fmt(evm.estimateAtCompletion)}
+                      {fmt(costSummary.estimateAtCompletion)}
                     </span>
                   </>
                 )}
-                {evm.varianceAtCompletion != null && (
+                {costSummary.varianceAtCompletion != null && (
                   <>
                     {" · VAC "}
                     <span className="font-semibold text-charcoal">
-                      {fmt(evm.varianceAtCompletion)}
+                      {fmt(costSummary.varianceAtCompletion)}
                     </span>
                   </>
                 )}

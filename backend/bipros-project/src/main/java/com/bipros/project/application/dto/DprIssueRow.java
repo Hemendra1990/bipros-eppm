@@ -1,6 +1,7 @@
 package com.bipros.project.application.dto;
 
 import com.bipros.project.domain.model.DprIssue;
+import com.bipros.project.domain.model.HseIncidentType;
 import com.bipros.project.domain.model.IssueCategory;
 import com.bipros.project.domain.model.IssueSeverity;
 import com.bipros.project.domain.model.IssueStatus;
@@ -55,7 +56,8 @@ public record DprIssueRow(
     Instant resolvedAt,
     @Size(max = 1000) String resolutionNotes,
     UUID supervisorUserId,
-    UUID assignedToUserId
+    UUID assignedToUserId,
+    HseIncidentType hseIncidentType
 ) {
     @SuppressWarnings("deprecation")
     public static DprIssueRow from(DprIssue e) {
@@ -78,6 +80,7 @@ public record DprIssueRow(
             e.getResolvedAt(),
             e.getResolutionNotes(),
             e.getSupervisorUserId(),
-            e.getAssignedToUserId());
+            e.getAssignedToUserId(),
+            e.getHseIncidentType());
     }
 }

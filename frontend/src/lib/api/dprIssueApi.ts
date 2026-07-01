@@ -9,6 +9,7 @@ import type {
   CreateDprIssueRequest,
   DprIssueRow,
   DprIssueStatusHistoryRow,
+  HseIncidentType,
   IssueCategory,
   IssueSeverity,
   IssueStatus,
@@ -18,6 +19,7 @@ export type {
   CreateDprIssueRequest,
   DprIssueRow,
   DprIssueStatusHistoryRow,
+  HseIncidentType,
   IssueCategory,
   IssueSeverity,
   IssueStatus,
@@ -34,7 +36,13 @@ export interface DprIssueFilters {
   q?: string;
 }
 
-/** Partial-update request — only non-null fields are applied server-side. */
+/**
+ * Partial-update request. Only non-null fields are applied server-side, with ONE EXCEPTION:
+ * `hseIncidentType` is applied UNCONDITIONALLY (null explicitly clears the HSE classification).
+ * Any partial-PATCH caller that omits `hseIncidentType` will silently wipe the classification —
+ * always pass `hseIncidentType: row.hseIncidentType ?? null` when sending a status-only or
+ * other partial body.
+ */
 export interface UpdateDprIssueRequest {
   title?: string;
   description?: string | null;
@@ -48,6 +56,7 @@ export interface UpdateDprIssueRequest {
   resolutionNotes?: string | null;
   activityId?: string | null;
   activityName?: string | null;
+  hseIncidentType?: HseIncidentType | null;
   /** Free-text reason recorded on the status-change history row (non-terminal moves). */
   statusChangeReason?: string | null;
 }

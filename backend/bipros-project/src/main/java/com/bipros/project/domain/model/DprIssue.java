@@ -135,4 +135,12 @@ public class DprIssue extends BaseEntity {
 
     @Column(name = "resolution_notes", length = 1000)
     private String resolutionNotes;
+
+    /**
+     * Optional HSE sub-classification. Only meaningful for {@code SAFETY} / {@code ENVIRONMENTAL}
+     * category issues; null everywhere else. Drives the HSE statistics tab incident counts.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hse_incident_type", length = 20)
+    private HseIncidentType hseIncidentType;
 }

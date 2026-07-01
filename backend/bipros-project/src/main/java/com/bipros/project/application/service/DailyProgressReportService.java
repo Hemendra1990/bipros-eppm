@@ -1074,6 +1074,7 @@ public class DailyProgressReportService {
     target.setAssignedToUserId(row.assignedToUserId());
     if (row.assignedToName() != null) target.setAssignedToName(row.assignedToName());
     target.setResolutionNotes(row.resolutionNotes());
+    target.setHseIncidentType(row.hseIncidentType());
     boolean wasTerminal = oldStatus != null && oldStatus.resolvedAtTerminal();
     boolean isTerminal = row.status() != null && row.status().resolvedAtTerminal();
     if (!wasTerminal && isTerminal) {
@@ -1117,6 +1118,7 @@ public class DailyProgressReportService {
         .openedAt(now)
         .resolvedAt(status.resolvedAtTerminal() ? now : null)
         .resolutionNotes(row.resolutionNotes())
+        .hseIncidentType(row.hseIncidentType())
         .build();
     return issue;
   }

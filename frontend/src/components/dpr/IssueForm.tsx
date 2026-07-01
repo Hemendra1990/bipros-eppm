@@ -10,6 +10,7 @@ import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Badge } from "@/components/ui/badge";
 import {
   CATEGORY_OPTIONS,
+  HSE_INCIDENT_TYPE_OPTIONS,
   SEVERITY_OPTIONS,
   STATUS_OPTIONS,
   SEVERITY_VARIANT,
@@ -29,7 +30,7 @@ import {
 } from "@/components/dpr/issueFormUi";
 import { ResourceAvatar } from "@/components/resource/supervisor-assign/ResourceAvatar";
 import { getErrorMessage } from "@/lib/utils/error";
-import type { IssueCategory, IssueSeverity, IssueStatus } from "@/lib/types/dpr";
+import type { HseIncidentType, IssueCategory, IssueSeverity, IssueStatus } from "@/lib/types/dpr";
 
 const ASSIGNEE_REQUIRED: IssueStatus[] = ["IN_PROGRESS", "BLOCKED", "RESOLVED", "CLOSED"];
 const TERMINAL: IssueStatus[] = ["RESOLVED", "CLOSED"];
@@ -39,6 +40,7 @@ interface FormState {
   title: string;
   description: string;
   category: IssueCategory;
+  hseIncidentType: HseIncidentType | "";
   severity: IssueSeverity;
   status: IssueStatus;
   activityId: string;
@@ -55,6 +57,7 @@ function initialState(issue: DprIssueRow | null): FormState {
     title: issue?.title ?? "",
     description: issue?.description ?? "",
     category: issue?.category ?? "OTHER",
+    hseIncidentType: issue?.hseIncidentType ?? "",
     severity: issue?.severity ?? "MEDIUM",
     status: issue?.status ?? "OPEN",
     activityId: issue?.activityId ?? "",
@@ -159,6 +162,10 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
           resolutionNotes: form.resolutionNotes || null,
           activityId: form.activityId || null,
           activityName: form.activityName || null,
+          hseIncidentType:
+            form.category === "SAFETY" || form.category === "ENVIRONMENTAL"
+              ? form.hseIncidentType || null
+              : null,
           statusChangeReason:
             issue && form.status !== issue.status && !TERMINAL.includes(form.status)
               ? form.statusChangeReason || null
@@ -176,6 +183,10 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
         assignedToName: form.assignedToName || null,
         activityId: form.activityId || null,
         activityName: form.activityName || null,
+        hseIncidentType:
+          form.category === "SAFETY" || form.category === "ENVIRONMENTAL"
+            ? form.hseIncidentType || null
+            : null,
         reportDate: form.reportDate || today(),
       };
       return dprIssueApi.create(projectId, body);
@@ -313,6 +324,23 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
               />
             </div>
           </div>
+
+          {(form.category === "SAFETY" || form.category === "ENVIRONMENTAL") && (
+            <div>
+              <FieldLabel>HSE incident type</FieldLabel>
+              <SearchableSelect
+                options={HSE_INCIDENT_TYPE_OPTIONS}
+                value={form.hseIncidentType}
+                onChange={(v) => set("hseIncidentType", v as HseIncidentType | "")}
+                placeholder="Select HSE incident type"
+                className="mt-1.5"
+              />
+              <p className="mt-1.5 text-xs text-text-muted">
+                Classifies this issue for the project HSE statistics. Leave blank if it is not a
+                reportable HSE incident.
+              </p>
+            </div>
+          )}
 
           <div>
             <FieldLabel>Description</FieldLabel>

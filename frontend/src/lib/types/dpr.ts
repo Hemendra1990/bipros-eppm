@@ -125,6 +125,13 @@ export type IssueStatus =
   | "CLOSED"
   | "CANCELLED";
 
+export type HseIncidentType =
+  | "LTI"
+  | "MTC"
+  | "NEAR_MISS"
+  | "FATALITY"
+  | "PROPERTY_DAMAGE";
+
 /**
  * Field-issue row attached to a DPR. {@code id} is null on insert, non-null on update; the
  * backend uses merge-by-id semantics (rows absent from a re-save are deleted). Status
@@ -149,6 +156,9 @@ export interface DprIssueRow {
   openedAt?: string | null;
   resolvedAt?: string | null;
   resolutionNotes?: string | null;
+  /** Sub-classification of a SAFETY/ENVIRONMENTAL issue, feeding the HSE statistics. Null for
+   *  non-HSE issues and for legacy safety issues logged before classification existed. */
+  hseIncidentType?: HseIncidentType | null;
 }
 
 /** Request body for creating a standalone DprIssue not tied to a parent DPR. */
@@ -166,6 +176,7 @@ export interface CreateDprIssueRequest {
   activityId?: string | null;
   activityName?: string | null;
   reportDate?: string | null;
+  hseIncidentType?: HseIncidentType | null;
 }
 
 /** One status transition in an issue's append-only history timeline. */

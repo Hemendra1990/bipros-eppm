@@ -1,5 +1,6 @@
 package com.bipros.project.application.dto;
 
+import com.bipros.project.domain.model.HseIncidentType;
 import com.bipros.project.domain.model.IssueCategory;
 import com.bipros.project.domain.model.IssueSeverity;
 import com.bipros.project.domain.model.IssueStatus;
@@ -32,6 +33,16 @@ public record UpdateDprIssueRequest(
     UUID activityId,
     @Size(max = 150) String activityName,
     /** Optional free-text reason recorded on the status-change history row (non-terminal moves). */
-    @Size(max = 1000) String statusChangeReason
+    @Size(max = 1000) String statusChangeReason,
+    /**
+     * Optional HSE sub-classification; only set for SAFETY/ENVIRONMENTAL issues.
+     *
+     * <p><strong>EXCEPTION to the "non-null fields only" rule:</strong> this field is applied
+     * UNCONDITIONALLY by {@code DprIssueService.patch} — a {@code null} value explicitly clears
+     * the classification (required for the IssueForm re-classify / clear flow). Any partial-PATCH
+     * caller (e.g. a quick status-change) MUST include this field with the row's existing value so
+     * it is not inadvertently wiped.
+     */
+    HseIncidentType hseIncidentType
 ) {
 }

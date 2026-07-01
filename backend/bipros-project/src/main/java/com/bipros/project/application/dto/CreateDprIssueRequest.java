@@ -1,5 +1,6 @@
 package com.bipros.project.application.dto;
 
+import com.bipros.project.domain.model.HseIncidentType;
 import com.bipros.project.domain.model.IssueCategory;
 import com.bipros.project.domain.model.IssueSeverity;
 import com.bipros.project.domain.model.IssueStatus;
@@ -29,5 +30,6 @@ public record CreateDprIssueRequest(
     @Size(max = 150) String activityName,
     LocalDate reportDate,
     UUID supervisorUserId,
-    UUID assignedToUserId
+    UUID assignedToUserId,
+    HseIncidentType hseIncidentType
 ) {}

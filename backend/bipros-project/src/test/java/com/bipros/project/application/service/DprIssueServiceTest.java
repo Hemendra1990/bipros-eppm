@@ -7,6 +7,7 @@ import com.bipros.project.application.dto.CreateDprIssueRequest;
 import com.bipros.project.application.dto.UpdateDprIssueRequest;
 import com.bipros.project.domain.model.DprIssue;
 import com.bipros.project.domain.model.DprIssueStatusHistory;
+import com.bipros.project.domain.model.HseIncidentType;
 import com.bipros.project.domain.model.IssueCategory;
 import com.bipros.project.domain.model.IssueSeverity;
 import com.bipros.project.domain.model.IssueStatus;
@@ -74,7 +75,7 @@ class DprIssueServiceTest {
 
         service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null, null));
+                null, null, null, null, null, null, null, null, null, null, null));
 
         ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
         verify(historyRepository).save(cap.capture());
@@ -92,7 +93,7 @@ class DprIssueServiceTest {
         service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
                 null, null, null, null, null, null, null, null, null,
-                "Awaiting customs clearance"));
+                "Awaiting customs clearance", null));
 
         ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
         verify(historyRepository).save(cap.capture());
@@ -108,7 +109,7 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.RESOLVED,
-                null, null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
             .hasMessageContaining("Resolution notes");
     }
@@ -121,7 +122,7 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
             .hasMessageContaining("Assigned");
     }
@@ -130,7 +131,7 @@ class DprIssueServiceTest {
     void create_openWithoutAssignee_ok() {
         var row = service.create(projectId, new CreateDprIssueRequest(
             "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.OPEN,
-            null, null, null, null, null, null, null, null, null));
+            null, null, null, null, null, null, null, null, null, null));
         assertThat(row.title()).isEqualTo("title");
     }
 
@@ -139,8 +140,18 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.create(projectId, new CreateDprIssueRequest(
                 "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class);
+    }
+
+    @Test
+    void create_withHseIncidentType_persistsAndReturnsIt() {
+        var row = service.create(projectId, new CreateDprIssueRequest(
+            "gas leak near manifold", null, IssueCategory.SAFETY, IssueSeverity.MEDIUM, IssueStatus.OPEN,
+            null, null, null, null, null, null, null, null, null,
+            HseIncidentType.NEAR_MISS));
+
+        assertThat(row.hseIncidentType()).isEqualTo(HseIncidentType.NEAR_MISS);
     }
 
     @Test

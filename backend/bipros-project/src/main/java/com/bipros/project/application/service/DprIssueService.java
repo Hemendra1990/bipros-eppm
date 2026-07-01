@@ -112,6 +112,11 @@ public class DprIssueService {
         if (request.resolutionNotes() != null) issue.setResolutionNotes(request.resolutionNotes());
         if (request.activityId() != null) issue.setActivityId(request.activityId());
         if (request.activityName() != null) issue.setActivityName(request.activityName());
+        // Unconditional (NOT null-guarded): the IssueForm always sends the full body, so clearing the
+        // HSE-type dropdown to blank OR re-categorizing away from SAFETY/ENVIRONMENTAL (both send
+        // hseIncidentType=null) correctly UN-classifies the incident and lowers the headline count.
+        // A future partial-PATCH caller must therefore always include hseIncidentType in its body.
+        issue.setHseIncidentType(request.hseIncidentType());
 
         IssueStatus newStatus = request.status() != null ? request.status() : oldStatus;
         if (request.status() != null && newStatus != oldStatus) {
@@ -180,6 +185,7 @@ public class DprIssueService {
                 .description(req.description())
                 .openedAt(Instant.now())
                 .resolvedAt(status.resolvedAtTerminal() ? Instant.now() : null)
+                .hseIncidentType(req.hseIncidentType())
                 .build();
         DprIssue saved = issueRepository.save(issue);
         appendStatusHistory(saved.getId(), null, saved.getStatus(),

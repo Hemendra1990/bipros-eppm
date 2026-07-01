@@ -5,13 +5,14 @@ import {
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatINR,
 } from "@/components/common/dashboard/primitives";
+import { formatMoney } from "@/lib/currency/format";
 import type { CategoryRow } from "@/lib/dashboard/financialAggregators";
 
 interface Props {
   rows: CategoryRow[];
   isLoading: boolean;
+  currencyCode: string;
 }
 
 function barTone(actual: number, budget: number): string {
@@ -22,7 +23,8 @@ function barTone(actual: number, budget: number): string {
   return "bg-emerald";
 }
 
-export function BudgetByCategoryList({ rows, isLoading }: Props) {
+export function BudgetByCategoryList({ rows, isLoading, currencyCode }: Props) {
+  const fmt = (n: number) => formatMoney(n, { code: currencyCode }, { compact: true });
   // Scale all bars against the largest budget so visual lengths are comparable.
   const maxBudget = rows.reduce((m, r) => Math.max(m, r.budget, r.actual), 0);
 
@@ -59,13 +61,13 @@ export function BudgetByCategoryList({ rows, isLoading }: Props) {
                     <span>
                       Budget{" "}
                       <span className="font-display font-semibold text-charcoal">
-                        {formatINR(r.budget)}
+                        {fmt(r.budget)}
                       </span>
                     </span>
                     <span>
                       Actual{" "}
                       <span className="font-display font-semibold text-charcoal">
-                        {formatINR(r.actual)}
+                        {fmt(r.actual)}
                       </span>
                     </span>
                     {variancePct != null && (

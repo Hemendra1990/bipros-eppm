@@ -1,6 +1,7 @@
 package com.bipros.project.domain.repository;
 
 import com.bipros.project.domain.model.DprIssue;
+import com.bipros.project.domain.model.HseIncidentType;
 import com.bipros.project.domain.model.IssueStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -40,4 +41,24 @@ public interface DprIssueRepository extends JpaRepository<DprIssue, UUID> {
      *  Returns [dprId (UUID), status (IssueStatus), severity (IssueSeverity)]. */
     @Query("select i.dprId, i.status, i.severity from DprIssue i where i.dprId in :ids")
     List<Object[]> findStatusSeverityByDprIdIn(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * Count classified HSE incidents of a given type for the project, EXCLUDING one status
+     * (pass {@link IssueStatus#CANCELLED}). Rows with a null {@code hseIncidentType} never match
+     * {@code = :hseIncidentType}, so unclassified SAFETY issues are not counted.
+     */
+    long countByProjectIdAndHseIncidentTypeAndStatusNot(
+        UUID projectId, HseIncidentType hseIncidentType, IssueStatus status);
+
+    /**
+     * Anchor date for the "without-LTI" figures: the latest {@code reportDate} of any LTI issue
+     * for the project ({@link Optional#empty()} when none). Excludes {@code CANCELLED} issues so a
+     * mistakenly-logged-then-cancelled LTI does NOT suppress the without-LTI streak — consistent with
+     * the incident counts, which also exclude CANCELLED.
+     */
+    @Query("select max(i.reportDate) from DprIssue i "
+        + "where i.projectId = :projectId "
+        + "and i.hseIncidentType = com.bipros.project.domain.model.HseIncidentType.LTI "
+        + "and i.status <> com.bipros.project.domain.model.IssueStatus.CANCELLED")
+    Optional<LocalDate> findLastLtiDate(@Param("projectId") UUID projectId);
 }

@@ -241,7 +241,7 @@ export default function ProjectIssuesPage() {
                                 openEdit(row);
                                 return;
                               }
-                              patchMutation.mutate({ id: row.id!, body: { status: opt.value } });
+                              patchMutation.mutate({ id: row.id!, body: { status: opt.value, hseIncidentType: row.hseIncidentType ?? null } });
                             }}
                             className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-hover text-text-primary"
                           >

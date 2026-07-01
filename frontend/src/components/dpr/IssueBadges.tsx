@@ -1,5 +1,5 @@
 import type { BadgeVariant } from "@/components/ui/badge";
-import type { IssueCategory, IssueSeverity, IssueStatus } from "@/lib/types/dpr";
+import type { HseIncidentType, IssueCategory, IssueSeverity, IssueStatus } from "@/lib/types/dpr";
 
 export const SEVERITY_VARIANT: Record<IssueSeverity, BadgeVariant> = {
   LOW: "neutral",
@@ -47,6 +47,18 @@ export const CATEGORY_OPTIONS: Array<{ value: IssueCategory; label: string }> = 
   { value: "SUBCONTRACTOR", label: "Subcontractor" },
   { value: "ENVIRONMENTAL", label: "Environmental" },
   { value: "OTHER", label: "Other" },
+];
+
+/** Options for the HSE-incident sub-classification dropdown on SAFETY/ENVIRONMENTAL issues.
+ *  The leading blank clears the classification (a safety issue that is not a reportable HSE
+ *  incident). Values match the backend HseIncidentType enum. */
+export const HSE_INCIDENT_TYPE_OPTIONS: Array<{ value: HseIncidentType | ""; label: string }> = [
+  { value: "", label: "—" },
+  { value: "LTI", label: "Lost Time Injury (LTI)" },
+  { value: "MTC", label: "Medical Treatment Case (MTC)" },
+  { value: "NEAR_MISS", label: "Near Miss (NMC)" },
+  { value: "PROPERTY_DAMAGE", label: "Property / Asset Damage" },
+  { value: "FATALITY", label: "Fatality" },
 ];
 
 /** Compact label lookup used in card chips and read-only summaries. */
