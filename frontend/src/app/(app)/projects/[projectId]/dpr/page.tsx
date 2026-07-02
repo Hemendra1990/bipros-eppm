@@ -473,9 +473,13 @@ export default function DprPage() {
   // (one sheet per month, APPROVED DPRs only) and downloads it.
   const handleGenerateReport = async () => {
     setPageError(null);
+    // Honour the dates shown in the From/To boxes even if the user didn't hit Refresh first,
+    // and sync the applied range so the feed matches the report.
+    if (fromInput !== from) setFrom(fromInput);
+    if (toInput !== to) setTo(toInput);
     setIsGenerating(true);
     try {
-      await dprApi.downloadMonthlyReport(projectId, from, to);
+      await dprApi.downloadMonthlyReport(projectId, fromInput, toInput);
     } catch (err) {
       setPageError(getErrorMessage(err, "Failed to generate report"));
     } finally {
