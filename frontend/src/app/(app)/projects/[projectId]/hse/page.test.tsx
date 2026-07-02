@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import HsePage from "./page";
 import type { HseStatisticsResponse } from "@/lib/api/hseApi";
@@ -20,6 +20,7 @@ vi.mock("@/lib/api/hseApi", () => ({
 
 import { hseApi } from "@/lib/api/hseApi";
 const statistics = hseApi.statistics as unknown as ReturnType<typeof vi.fn>;
+const getMetrics = hseApi.getMetrics as unknown as ReturnType<typeof vi.fn>;
 
 const zeroStats: HseStatisticsResponse = {
   manHoursWorked: 0,
@@ -33,6 +34,8 @@ const zeroStats: HseStatisticsResponse = {
   fatalityCount: 0,
   lastLtiDate: null,
   calendarHoursPerDay: 8,
+  directManHours: 0,
+  indirectManHours: 0,
 };
 
 const fullStats: HseStatisticsResponse = {
@@ -47,6 +50,8 @@ const fullStats: HseStatisticsResponse = {
   nearMissCount: 7,
   fatalityCount: 1,
   lastLtiDate: "2026-05-01",
+  directManHours: 1204567,
+  indirectManHours: 30000,
 };
 
 function renderPage() {
@@ -61,6 +66,7 @@ function renderPage() {
 beforeEach(() => {
   hasPermission.mockReturnValue(true);
   statistics.mockReset();
+  getMetrics.mockReset();
 });
 afterEach(cleanup);
 
@@ -105,5 +111,49 @@ describe("HsePage", () => {
     expect(
       screen.queryByRole("button", { name: /edit hse inputs/i }),
     ).toBeNull();
+  });
+
+  it("shows the direct/indirect split caption when indirect man-hours are present", async () => {
+    statistics.mockResolvedValue({ data: fullStats });
+    renderPage();
+    await screen.findByText("Total Man Hours Worked");
+    expect(screen.getByText(/Direct \(site DPR\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Indirect \(office\)/)).toBeInTheDocument();
+    expect(screen.getByText(/1,204,567/)).toBeInTheDocument();
+    expect(screen.getByText(/30,000/)).toBeInTheDocument();
+  });
+
+  it("hides the split caption when there are no indirect man-hours", async () => {
+    statistics.mockResolvedValue({ data: zeroStats });
+    renderPage();
+    await screen.findByText("Total Man Hours Worked");
+    expect(screen.queryByText(/Direct \(site DPR\)/)).toBeNull();
+  });
+
+  it("shows the indirect man-hours input in the edit drawer", async () => {
+    statistics.mockResolvedValue({ data: zeroStats });
+    getMetrics.mockResolvedValue({ data: { kmDistanceDriven: 0, indirectManHours: 5000 } });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /edit hse inputs/i }));
+    expect(await screen.findByLabelText(/indirect man-hours/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/indirect man-hours/i)).toHaveValue(5000);
+  });
+
+  it("disables Save while the metrics query is still loading", async () => {
+    statistics.mockResolvedValue({ data: zeroStats });
+    getMetrics.mockReturnValue(new Promise(() => {}));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /edit hse inputs/i }));
+    expect(await screen.findByRole("button", { name: /^save$/i })).toBeDisabled();
+  });
+
+  it("enables Save once the metrics query has resolved", async () => {
+    statistics.mockResolvedValue({ data: zeroStats });
+    getMetrics.mockResolvedValue({ data: { kmDistanceDriven: 0, indirectManHours: 5000 } });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /edit hse inputs/i }));
+    const indirectInput = await screen.findByLabelText(/indirect man-hours/i);
+    await waitFor(() => expect(indirectInput).toHaveValue(5000));
+    expect(screen.getByRole("button", { name: /^save$/i })).not.toBeDisabled();
   });
 });

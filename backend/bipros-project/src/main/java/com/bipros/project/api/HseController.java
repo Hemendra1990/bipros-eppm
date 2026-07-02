@@ -54,7 +54,8 @@ public class HseController {
     public ResponseEntity<ApiResponse<ProjectHseMetricsResponse>> putMetrics(
             @PathVariable UUID projectId,
             @Valid @RequestBody UpdateProjectHseMetricsRequest request) {
-        log.info("PUT /v1/projects/{}/hse/metrics - km={}", projectId, request.kmDistanceDriven());
+        log.info("PUT /v1/projects/{}/hse/metrics - km={} indirectManHours={}",
+            projectId, request.kmDistanceDriven(), request.indirectManHours());
         return ResponseEntity.ok(ApiResponse.ok(metricsService.upsert(projectId, request)));
     }
 }

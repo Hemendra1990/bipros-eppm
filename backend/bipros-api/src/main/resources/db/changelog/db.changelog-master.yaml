@@ -217,3 +217,9 @@ databaseChangeLog:
       file: db/changelog/112-dpr-issue-status-history.yaml
   - include:
       file: db/changelog/113-ncr-source-links.yaml
+  - include:
+      file: db/changelog/114-dpr-issue-hse-type.yaml
+  - include:
+      file: db/changelog/115-project-hse-metrics.yaml
+  - include:
+      file: db/changelog/116-project-hse-indirect-manhours.yaml

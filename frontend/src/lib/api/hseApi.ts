@@ -20,16 +20,22 @@ export interface HseStatisticsResponse {
   lastLtiDate: string | null;
   /** Calendar hours/day used as the man-hour fallback when a DPR row logs no working hours. */
   calendarHoursPerDay: number;
+  /** DPR-derived (site/direct) man-hours — the auto-computed portion of manHoursWorked. */
+  directManHours: number;
+  /** Manual office/indirect man-hours added on top of the derived direct figure. */
+  indirectManHours: number;
 }
 
 /** The manual, per-project HSE inputs (KM driven). */
 export interface ProjectHseMetricsResponse {
   kmDistanceDriven: number;
+  indirectManHours: number;
 }
 
 /** Upsert payload for the gated HSE inputs editor. */
 export interface UpdateProjectHseMetricsRequest {
   kmDistanceDriven: number;
+  indirectManHours: number;
 }
 
 export const hseApi = {

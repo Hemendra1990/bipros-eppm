@@ -48,7 +48,7 @@ class ProjectHseMetricsServiceTest {
         when(repository.save(any(ProjectHseMetrics.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var res = service.upsert(projectId,
-            new UpdateProjectHseMetricsRequest(new BigDecimal("15460000")));
+            new UpdateProjectHseMetricsRequest(new BigDecimal("15460000"), null));
 
         assertThat(res.kmDistanceDriven()).isEqualByComparingTo("15460000");
 
@@ -63,7 +63,7 @@ class ProjectHseMetricsServiceTest {
         when(repository.findByProjectId(projectId)).thenReturn(Optional.empty());
         when(repository.save(any(ProjectHseMetrics.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var res = service.upsert(projectId, new UpdateProjectHseMetricsRequest(null));
+        var res = service.upsert(projectId, new UpdateProjectHseMetricsRequest(null, null));
 
         assertThat(res.kmDistanceDriven()).isEqualByComparingTo("0");
     }
@@ -83,7 +83,7 @@ class ProjectHseMetricsServiceTest {
 
         // Act: upsert with new values
         var res = service.upsert(projectId,
-            new UpdateProjectHseMetricsRequest(new BigDecimal("9999")));
+            new UpdateProjectHseMetricsRequest(new BigDecimal("9999"), null));
 
         // Assert: saved entity is the same instance (same id) with updated fields
         ArgumentCaptor<ProjectHseMetrics> cap = ArgumentCaptor.forClass(ProjectHseMetrics.class);
@@ -93,5 +93,30 @@ class ProjectHseMetricsServiceTest {
         assertThat(saved.getId()).isEqualTo(existingId);
         assertThat(saved.getKmDistanceDriven()).isEqualByComparingTo("9999");
         assertThat(res.kmDistanceDriven()).isEqualByComparingTo("9999");
+    }
+
+    @Test
+    void upsert_persistsIndirectManHours() {
+        when(repository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(repository.save(any(ProjectHseMetrics.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var res = service.upsert(projectId,
+            new UpdateProjectHseMetricsRequest(new BigDecimal("15460000"), new BigDecimal("30000")));
+
+        assertThat(res.indirectManHours()).isEqualByComparingTo("30000");
+
+        ArgumentCaptor<ProjectHseMetrics> cap = ArgumentCaptor.forClass(ProjectHseMetrics.class);
+        verify(repository).save(cap.capture());
+        assertThat(cap.getValue().getIndirectManHours()).isEqualByComparingTo("30000");
+    }
+
+    @Test
+    void upsert_nullIndirect_defaultsToZero() {
+        when(repository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(repository.save(any(ProjectHseMetrics.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var res = service.upsert(projectId, new UpdateProjectHseMetricsRequest(null, null));
+
+        assertThat(res.indirectManHours()).isEqualByComparingTo("0");
     }
 }
