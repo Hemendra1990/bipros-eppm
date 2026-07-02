@@ -95,7 +95,6 @@ function ProjectDetailLayoutInner({
     { id: "insights",           label: "Insights",            href: `/projects/${projectId}/insights` },
     { id: "risks",              label: "Risks",               href: `/projects/${projectId}/risks`, permission: "RISK.READ" },
     { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption` },
-    { id: "gis",                label: "GIS",                 href: `/projects/${projectId}/gis-viewer` },
   ];
 
   const tabs = allTabs.filter((t) => !t.permission || hasPermission(t.permission));
@@ -110,6 +109,7 @@ function ProjectDetailLayoutInner({
   ];
 
   const moreLinks: { label: string; href: string; permission?: string }[] = [
+    { label: "GIS", href: `/projects/${projectId}/gis-viewer` },
     { label: "Quality", href: `/projects/${projectId}/quality`, permission: "NCR.READ" },
     { label: "Procurement", href: `/projects/${projectId}/procurement`, permission: "RESOURCE.READ" },
     { label: "HSE", href: `/projects/${projectId}/hse`, permission: "DPR.READ" },
