@@ -27,7 +27,7 @@ public class ProjectHseMetricsService {
     public ProjectHseMetricsResponse getOrDefault(UUID projectId) {
         return repository.findByProjectId(projectId)
             .map(ProjectHseMetricsResponse::from)
-            .orElseGet(() -> new ProjectHseMetricsResponse(BigDecimal.ZERO));
+            .orElseGet(() -> new ProjectHseMetricsResponse(BigDecimal.ZERO, BigDecimal.ZERO));
     }
 
     public ProjectHseMetricsResponse upsert(UUID projectId, UpdateProjectHseMetricsRequest req) {
@@ -35,6 +35,8 @@ public class ProjectHseMetricsService {
             .orElseGet(() -> ProjectHseMetrics.builder().projectId(projectId).build());
         entity.setKmDistanceDriven(
             req.kmDistanceDriven() != null ? req.kmDistanceDriven() : BigDecimal.ZERO);
+        entity.setIndirectManHours(
+            req.indirectManHours() != null ? req.indirectManHours() : BigDecimal.ZERO);
         return ProjectHseMetricsResponse.from(repository.save(entity));
     }
 }

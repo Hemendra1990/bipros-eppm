@@ -39,4 +39,9 @@ public class ProjectHseMetrics extends BaseEntity {
     @Column(name = "km_distance_driven", precision = 19, scale = 3, nullable = false)
     @Builder.Default
     private BigDecimal kmDistanceDriven = BigDecimal.ZERO;
+
+    /** Manual cumulative man-hours for office/support staff (PM, planning, cost, draughting,
+     * QA/QS) who work off-site and aren't captured in daily DPRs. Nullable = treated as 0. */
+    @Column(name = "indirect_man_hours", precision = 19, scale = 2)
+    private BigDecimal indirectManHours;
 }

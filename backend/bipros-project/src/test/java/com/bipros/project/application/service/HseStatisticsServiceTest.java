@@ -207,6 +207,74 @@ class HseStatisticsServiceTest {
             projectId, HseIncidentType.MTC, IssueStatus.CANCELLED);
     }
 
+    // ---- indirect (office) man-hours ----
+
+    @Test
+    void indirectManHours_addedToWorkedAndWithoutLti_whenNoLti() {
+        UUID d1 = UUID.randomUUID();
+        stubApproved(List.of(dpr(d1, LocalDate.of(2026, 1, 1))));
+        when(manpowerRepository.findByDprIdIn(any())).thenReturn(List.of(manpower(d1, 10, "6"))); // 60
+        when(calendarResolver.resolveHoursPerDay(projectId)).thenReturn(new BigDecimal("9"));
+        when(metricsRepository.findByProjectId(projectId)).thenReturn(Optional.of(
+            ProjectHseMetrics.builder().projectId(projectId)
+                .kmDistanceDriven(BigDecimal.ZERO)
+                .indirectManHours(new BigDecimal("40")).build()));
+        when(issueRepository.findLastLtiDate(projectId)).thenReturn(Optional.empty());
+        stubZeroCounts();
+
+        var r = service.compute(projectId);
+
+        assertThat(r.directManHours()).isEqualByComparingTo("60");
+        assertThat(r.indirectManHours()).isEqualByComparingTo("40");
+        assertThat(r.manHoursWorked()).isEqualByComparingTo("100");     // 60 direct + 40 indirect
+        assertThat(r.manHoursWithoutLti()).isEqualByComparingTo("100"); // no LTI -> equals worked
+    }
+
+    @Test
+    void indirectManHours_countsInBothWorkedAndWithoutLti_afterLti() {
+        UUID d1 = UUID.randomUUID();
+        UUID d2 = UUID.randomUUID();
+        LocalDate lti = LocalDate.of(2026, 1, 1);
+        stubApproved(List.of(
+            dpr(d1, lti),                        // on lastLtiDate -> excluded from without-LTI
+            dpr(d2, LocalDate.of(2026, 1, 2)))); // after -> included
+        when(manpowerRepository.findByDprIdIn(any())).thenReturn(List.of(
+            manpower(d1, 10, "6"),   // 60 direct (before/at LTI)
+            manpower(d2, 5, "8")));  // 40 direct (after LTI)
+        when(calendarResolver.resolveHoursPerDay(projectId)).thenReturn(new BigDecimal("9"));
+        when(metricsRepository.findByProjectId(projectId)).thenReturn(Optional.of(
+            ProjectHseMetrics.builder().projectId(projectId)
+                .kmDistanceDriven(BigDecimal.ZERO)
+                .indirectManHours(new BigDecimal("1000")).build()));
+        when(issueRepository.findLastLtiDate(projectId)).thenReturn(Optional.of(lti));
+        stubZeroCounts();
+
+        var r = service.compute(projectId);
+
+        assertThat(r.directManHours()).isEqualByComparingTo("100");        // 60 + 40
+        assertThat(r.manHoursWorked()).isEqualByComparingTo("1100");       // 100 direct + 1000 indirect
+        assertThat(r.manHoursWithoutLti()).isEqualByComparingTo("1040");   // 40 direct-after-LTI + 1000 indirect
+        assertThat(r.manHoursWorked()).isGreaterThanOrEqualTo(r.manHoursWithoutLti()); // invariant
+    }
+
+    @Test
+    void indirectManHours_nullOnMetricsRow_treatedAsZero() {
+        UUID d1 = UUID.randomUUID();
+        stubApproved(List.of(dpr(d1, LocalDate.of(2026, 1, 1))));
+        when(manpowerRepository.findByDprIdIn(any())).thenReturn(List.of(manpower(d1, 10, "6"))); // 60
+        when(calendarResolver.resolveHoursPerDay(projectId)).thenReturn(new BigDecimal("9"));
+        when(metricsRepository.findByProjectId(projectId)).thenReturn(Optional.of(
+            ProjectHseMetrics.builder().projectId(projectId)
+                .kmDistanceDriven(BigDecimal.ZERO).build())); // indirectManHours left null
+        when(issueRepository.findLastLtiDate(projectId)).thenReturn(Optional.empty());
+        stubZeroCounts();
+
+        var r = service.compute(projectId);
+
+        assertThat(r.indirectManHours()).isEqualByComparingTo("0");
+        assertThat(r.manHoursWorked()).isEqualByComparingTo("60");
+    }
+
     // ---- empty project ----
 
     @Test

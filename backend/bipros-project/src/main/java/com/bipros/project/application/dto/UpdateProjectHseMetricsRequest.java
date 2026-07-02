@@ -5,8 +5,9 @@ import jakarta.validation.constraints.PositiveOrZero;
 import java.math.BigDecimal;
 
 /**
- * Upsert body for the HSE inputs. {@code kmDistanceDriven} optional; defaults to 0 when null.
+ * Upsert body for the HSE inputs. Both fields optional; each defaults to 0 when null.
  */
 public record UpdateProjectHseMetricsRequest(
-    @PositiveOrZero BigDecimal kmDistanceDriven
+    @PositiveOrZero BigDecimal kmDistanceDriven,
+    @PositiveOrZero BigDecimal indirectManHours
 ) {}

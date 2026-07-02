@@ -127,6 +127,13 @@ export default function HsePage() {
             </table>
           </div>
 
+          {stats.indirectManHours > 0 && (
+            <p className="text-xs text-text-muted">
+              Man-hours worked = Direct (site DPR) {fmtNum(stats.directManHours)} + Indirect
+              (office) {fmtNum(stats.indirectManHours)}.
+            </p>
+          )}
+
           <p className="text-xs text-text-muted">
             Last lost-time injury (LTI): {fmtDate(stats.lastLtiDate)} · Calendar hours/day used for
             the man-hour fallback: {fmtNum(stats.calendarHoursPerDay)}
@@ -156,9 +163,10 @@ function HseInputsDrawer({
 }) {
   const queryClient = useQueryClient();
   const [km, setKm] = useState("");
+  const [indirect, setIndirect] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: metricsData } = useQuery({
+  const { data: metricsData, isLoading: metricsLoading } = useQuery({
     queryKey: ["hse-metrics", projectId],
     queryFn: () => hseApi.getMetrics(projectId),
     enabled: open && !!projectId,
@@ -169,12 +177,14 @@ function HseInputsDrawer({
   useEffect(() => {
     if (!metrics) return;
     setKm(metrics.kmDistanceDriven != null ? String(metrics.kmDistanceDriven) : "");
+    setIndirect(metrics.indirectManHours != null ? String(metrics.indirectManHours) : "");
   }, [metrics]);
 
   const mutation = useMutation({
     mutationFn: () => {
       const body: UpdateProjectHseMetricsRequest = {
         kmDistanceDriven: km.trim() === "" ? 0 : Number(km),
+        indirectManHours: indirect.trim() === "" ? 0 : Number(indirect),
       };
       return hseApi.putMetrics(projectId, body);
     },
@@ -221,6 +231,30 @@ function HseInputsDrawer({
               Distinct from project chainage.
             </p>
           </div>
+
+          <div>
+            <label
+              className="block text-[13px] font-medium text-text-secondary"
+              htmlFor="hse-indirect"
+            >
+              Indirect man-hours (office / support staff)
+            </label>
+            <input
+              id="hse-indirect"
+              type="number"
+              min={0}
+              step="any"
+              value={indirect}
+              onChange={(e) => setIndirect(e.target.value)}
+              placeholder="0"
+              className={fieldInput}
+            />
+            <p className="mt-1.5 text-xs text-text-muted">
+              Cumulative man-hours for office / support staff (PM, planning, cost, draughting,
+              QA/QS) who work off-site and aren&apos;t captured in daily DPRs. Added on top of the
+              DPR-derived site man-hours.
+            </p>
+          </div>
         </div>
 
         <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border bg-surface/95 px-5 py-4">
@@ -233,7 +267,7 @@ function HseInputsDrawer({
           </button>
           <button
             type="submit"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || metricsLoading}
             className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {mutation.isPending ? "Saving…" : "Save"}

@@ -32,8 +32,9 @@ import java.util.stream.Collectors;
  * <p>Man-hours per manpower row = {@code nos × effectiveHoursPerPerson}, where
  * {@code effectiveHoursPerPerson} is the row's logged {@code workingHours} when {@code > 0}
  * (logged-hours-first), else the project Calendar {@code hoursPerDay} (default 8) resolved once by
- * {@link HseCalendarResolver}. Man-hours worked is always the derived sum. When an LTI exists, the
- * without-LTI figures are recomputed over APPROVED DPRs strictly after {@code lastLtiDate}; with no
+ * {@link HseCalendarResolver}. Man-hours worked is the derived direct (DPR) sum PLUS the manual
+ * indirect (office) man-hours from ProjectHseMetrics. When an LTI exists, the without-LTI
+ * figures are recomputed over APPROVED DPRs strictly after {@code lastLtiDate}; with no
  * LTI they equal the Worked totals.
  */
 @Service
@@ -62,12 +63,16 @@ public class HseStatisticsService {
             : manpowerRepository.findByDprIdIn(dprIds).stream()
                 .collect(Collectors.groupingBy(DprManpower::getDprId));
 
-        BigDecimal manHoursWorked = sumManHours(approved, manpowerByDpr, calendarHoursPerDay);
+        BigDecimal directManHours = sumManHours(approved, manpowerByDpr, calendarHoursPerDay);
         long projectDaysWorked = distinctDays(approved);
 
         ProjectHseMetrics metrics = metricsRepository.findByProjectId(projectId).orElse(null);
         BigDecimal kmDistanceDriven = metrics != null && metrics.getKmDistanceDriven() != null
             ? metrics.getKmDistanceDriven() : BigDecimal.ZERO;
+        BigDecimal indirectManHours = metrics != null && metrics.getIndirectManHours() != null
+            ? metrics.getIndirectManHours() : BigDecimal.ZERO;
+
+        BigDecimal manHoursWorked = directManHours.add(indirectManHours);
 
         LocalDate lastLtiDate = issueRepository.findLastLtiDate(projectId).orElse(null);
 
@@ -81,7 +86,10 @@ public class HseStatisticsService {
             List<DailyProgressReport> afterLti = approved.stream()
                 .filter(d -> d.getReportDate() != null && d.getReportDate().isAfter(lastLtiDate))
                 .toList();
-            manHoursWithoutLti = sumManHours(afterLti, manpowerByDpr, calendarHoursPerDay);
+            // Indirect (office) man-hours count as safe hours in both totals: office staff aren't
+            // exposed to the site injury, and a lump figure has no date to slice by lastLtiDate.
+            manHoursWithoutLti =
+                sumManHours(afterLti, manpowerByDpr, calendarHoursPerDay).add(indirectManHours);
             projectDaysWithoutLti = distinctDays(afterLti);
         }
 
@@ -105,7 +113,9 @@ public class HseStatisticsService {
             nearMissCount,
             fatalityCount,
             lastLtiDate,
-            calendarHoursPerDay);
+            calendarHoursPerDay,
+            directManHours,
+            indirectManHours);
     }
 
     /** Σ over the given DPRs' manpower rows of {@code nos × (workingHours>0 ? workingHours : calHours)}. */

@@ -19,5 +19,7 @@ public record HseStatisticsResponse(
     long nearMissCount,
     long fatalityCount,
     LocalDate lastLtiDate,
-    BigDecimal calendarHoursPerDay
+    BigDecimal calendarHoursPerDay,
+    BigDecimal directManHours,
+    BigDecimal indirectManHours
 ) {}
