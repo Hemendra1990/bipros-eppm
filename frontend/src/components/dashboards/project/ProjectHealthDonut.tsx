@@ -1,7 +1,7 @@
 "use client";
 
 import { Activity } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
 import {
   CHART_COLORS,
   CHART_TOOLTIP_ITEM_STYLE,
@@ -51,8 +51,7 @@ export function ProjectHealthDonut({
           <div
             className={`relative mx-auto h-[180px] w-[180px]${onSelect ? " cursor-pointer" : ""}`}
           >
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+            <PieChart width={180} height={180}>
                 <Pie
                   data={data}
                   dataKey="value"
@@ -91,7 +90,6 @@ export function ProjectHealthDonut({
                   ]}
                 />
               </PieChart>
-            </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
               <div
                 className="font-display text-3xl font-semibold leading-none text-emerald"

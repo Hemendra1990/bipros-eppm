@@ -304,6 +304,10 @@ export interface DailyProgressReportResponse extends DprBaseFields {
   rejectedByUserId?: string | null;
   rejectedAt?: string | null;
   rejectionReason?: string | null;
+  /** Read-only display names resolved by the GET detail endpoint (null on write paths). */
+  submittedByName?: string | null;
+  approvedByName?: string | null;
+  assignedApproverName?: string | null;
 }
 
 /** Request body for approve / reject / revoke actions. {@code reason} is optional for approve and revoke; required for reject. */

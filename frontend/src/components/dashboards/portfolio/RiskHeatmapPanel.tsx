@@ -1,10 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
 import { ragCls } from "@/lib/utils/rag";
-import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import {
   EmptyBlock,
   LoadingBlock,
@@ -53,98 +51,46 @@ export function RiskHeatmapPanel() {
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
             5×5 heatmap
           </div>
-          <VirtualDataTable
-            data={[5, 4, 3, 2, 1].map((p) => ({
-              probability: p,
-              i1: grid.get(`${p}-1`) ?? 0,
-              i2: grid.get(`${p}-2`) ?? 0,
-              i3: grid.get(`${p}-3`) ?? 0,
-              i4: grid.get(`${p}-4`) ?? 0,
-              i5: grid.get(`${p}-5`) ?? 0,
-            }))}
-            columns={[
-              {
-                accessorKey: "probability",
-                header: "P \\ I",
-                size: 40,
-                cell: ({ row }) => (
-                  <div className="text-right text-text-muted w-full">
-                    {row.original.probability}
-                  </div>
-                ),
-              },
-              {
-                accessorKey: "i1",
-                header: "1",
-                size: 56,
-                cell: ({ row }) => {
-                  const n = row.original.i1;
-                  return (
-                    <div className={`-mx-4 -my-3 h-12 flex items-center justify-center ${cellColor(row.original.probability, 1)}`}>
-                      {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
-                    </div>
-                  );
-                },
-              },
-              {
-                accessorKey: "i2",
-                header: "2",
-                size: 56,
-                cell: ({ row }) => {
-                  const n = row.original.i2;
-                  return (
-                    <div className={`-mx-4 -my-3 h-12 flex items-center justify-center ${cellColor(row.original.probability, 2)}`}>
-                      {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
-                    </div>
-                  );
-                },
-              },
-              {
-                accessorKey: "i3",
-                header: "3",
-                size: 56,
-                cell: ({ row }) => {
-                  const n = row.original.i3;
-                  return (
-                    <div className={`-mx-4 -my-3 h-12 flex items-center justify-center ${cellColor(row.original.probability, 3)}`}>
-                      {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
-                    </div>
-                  );
-                },
-              },
-              {
-                accessorKey: "i4",
-                header: "4",
-                size: 56,
-                cell: ({ row }) => {
-                  const n = row.original.i4;
-                  return (
-                    <div className={`-mx-4 -my-3 h-12 flex items-center justify-center ${cellColor(row.original.probability, 4)}`}>
-                      {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
-                    </div>
-                  );
-                },
-              },
-              {
-                accessorKey: "i5",
-                header: "5",
-                size: 56,
-                cell: ({ row }) => {
-                  const n = row.original.i5;
-                  return (
-                    <div className={`-mx-4 -my-3 h-12 flex items-center justify-center ${cellColor(row.original.probability, 5)}`}>
-                      {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
-                    </div>
-                  );
-                },
-              },
-            ]}
-            sortable={false}
-            searchable={false}
-            resizable={false}
-            maxHeight="none"
-            className="border-0 rounded-none"
-          />
+          {/* Static 5×5 matrix — a fixed grid must NOT use the virtualized table
+              (an unbounded virtualizer scroll element froze the whole page). */}
+          <div className="overflow-hidden rounded-xl border border-hairline">
+            <table className="w-full border-collapse text-sm">
+              <thead className="bg-ivory dark:bg-[#161616] border-b border-hairline">
+                <tr>
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.10em] text-slate dark:text-[#A1A1A6]">
+                    P \ I
+                  </th>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <th
+                      key={i}
+                      className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.10em] text-slate dark:text-[#A1A1A6]"
+                    >
+                      {i}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[5, 4, 3, 2, 1].map((p) => (
+                  <tr key={p} className="border-b border-hairline/50 last:border-b-0">
+                    <td className="px-4 text-right text-text-muted">{p}</td>
+                    {[1, 2, 3, 4, 5].map((i) => {
+                      const n = grid.get(`${p}-${i}`) ?? 0;
+                      return (
+                        <td key={i} className="p-0">
+                          <div
+                            className={`flex h-12 items-center justify-center ${cellColor(p, i)}`}
+                          >
+                            {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-2 text-[10px] text-text-muted">
             Bottom-left = low exposure. Top-right = extreme.
           </div>

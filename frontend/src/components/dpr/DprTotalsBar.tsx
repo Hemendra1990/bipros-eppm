@@ -109,7 +109,7 @@ export function DprTotalsBar({
       />
       <Cell
         label="Productivity"
-        value={productivity != null ? `${fmt(productivity, 2)} ${unit}` : "—"}
+        value={productivity != null ? `${fmt(productivity, 2)} ${unit} / unit` : "—"}
         hint={
           productivity != null
             ? productivitySide === "MANPOWER"

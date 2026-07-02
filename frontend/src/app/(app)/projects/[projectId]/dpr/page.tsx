@@ -351,6 +351,7 @@ export default function DprPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("feed");
   const [statusFilter, setStatusFilter] = useState<DprApprovalStatus | "ALL">("ALL");
+  const [supervisorFilter, setSupervisorFilter] = useState<string>("ALL");
 
   // "Create DPR" deep-link from the Activities page lands here as ?new=1&activityId=<aid>.
   // We wait until both activities and the supervisor pool have loaded so the form's
@@ -414,14 +415,29 @@ export default function DprPage() {
     [listPages],
   );
 
-  // Client-side status filter — lightweight since rows are already loaded.
-  const rows: DprSummaryRow[] = useMemo(
-    () =>
-      statusFilter === "ALL"
-        ? allRows
-        : allRows.filter((r) => (r.approvalStatus ?? "DRAFT") === statusFilter),
-    [allRows, statusFilter],
-  );
+  // Supervisor options come from the loaded rows within the selected range (dedup, sorted).
+  // Stable key handles free-text supervisors that have no user id.
+  const supKey = (r: DprSummaryRow) => r.supervisorUserId || r.supervisorName || "";
+  const supervisorFilterOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of allRows) {
+      if (r.supervisorName === "System") continue; // never offer the system/seed supervisor
+      const k = supKey(r);
+      if (k) m.set(k, r.supervisorName ?? k);
+    }
+    return Array.from(m, ([value, label]) => ({ value, label })).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [allRows]);
+
+  // Client-side filters (supervisor + status) — lightweight since rows are already loaded.
+  const rows: DprSummaryRow[] = useMemo(() => {
+    let out = allRows;
+    if (supervisorFilter !== "ALL") out = out.filter((r) => supKey(r) === supervisorFilter);
+    if (statusFilter !== "ALL")
+      out = out.filter((r) => (r.approvalStatus ?? "DRAFT") === statusFilter);
+    return out;
+  }, [allRows, statusFilter, supervisorFilter]);
 
   // Pending approvals count for the badge (always fetched when user has DPR.APPROVE).
   const { data: pendingBadgeData } = useQuery({
@@ -627,6 +643,23 @@ export default function DprPage() {
                     onChange={(e) => setToInput(e.target.value)}
                     className="rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
                   />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate">
+                    Supervisor
+                  </label>
+                  <select
+                    value={supervisorFilter}
+                    onChange={(e) => setSupervisorFilter(e.target.value)}
+                    className="rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
+                  >
+                    <option value="ALL">All supervisors</option>
+                    {supervisorFilterOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <button
                   type="submit"

@@ -53,6 +53,10 @@ public record DailyProgressReportResponse(
     UUID rejectedByUserId,
     Instant rejectedAt,
     String rejectionReason,
+    // Resolved display names for the identity strip (read path only; null on write paths).
+    String submittedByName,
+    String approvedByName,
+    String assignedApproverName,
 
     List<DprManpowerRow> manpower,
     List<DprEquipmentRow> equipment,
@@ -102,11 +106,12 @@ public record DailyProgressReportResponse(
       List<DprIssueRow> issues,
       List<String> warnings) {
     return from(r, cumulativeQty, manpower, equipment, materials, subContractors,
-        attachments, voiceNotes, issues, warnings, null);
+        attachments, voiceNotes, issues, warnings, null, null, null, null);
   }
 
-  /** Full read-path overload — additionally carries the linked BOQ item's description (resolved by
-   *  the service from {@code BoqItem}). {@code boqItemDescription} is null on write paths. */
+  /** Full read-path overload — additionally carries the linked BOQ item's description and the
+   *  resolved submitter / approver / assigned-approver display names (all resolved by the service).
+   *  These extras are null on write paths. */
   public static DailyProgressReportResponse from(
       DailyProgressReport r,
       BigDecimal cumulativeQty,
@@ -118,7 +123,10 @@ public record DailyProgressReportResponse(
       List<DprVoiceNoteResponse> voiceNotes,
       List<DprIssueRow> issues,
       List<String> warnings,
-      String boqItemDescription) {
+      String boqItemDescription,
+      String submittedByName,
+      String approvedByName,
+      String assignedApproverName) {
     return new DailyProgressReportResponse(
         r.getId(),
         r.getProjectId(),
@@ -156,6 +164,9 @@ public record DailyProgressReportResponse(
         r.getRejectedByUserId(),
         r.getRejectedAt(),
         r.getRejectionReason(),
+        submittedByName,
+        approvedByName,
+        assignedApproverName,
         manpower,
         equipment,
         materials,

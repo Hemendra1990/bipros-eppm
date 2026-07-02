@@ -504,8 +504,26 @@ public class DailyProgressReportService {
         voiceNoteRepository.findByDprIdOrderByCreatedAtAsc(id).stream().map(DprVoiceNoteResponse::from).toList(),
         issueRepository.findByDprIdOrderByOpenedAtAsc(id).stream().map(DprIssueRow::from).toList(),
         List.of(),
-        boqItemDescription
+        boqItemDescription,
+        resolveUserName(dpr.getSubmittedByUserId()),
+        resolveUserName(dpr.getApprovedByUserId()),
+        resolveUserName(dpr.getAssignedApproverUserId())
     );
+  }
+
+  /** Resolves a user's display name (first+last, else username) from {@code public.users}.
+   *  Null-safe: returns null when the id is null or no matching user exists. */
+  private String resolveUserName(UUID userId) {
+    if (userId == null) return null;
+    @SuppressWarnings("unchecked")
+    List<Object> rows = em.createNativeQuery(
+            "SELECT COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.username) "
+                + "FROM public.users u WHERE u.id = :id")
+        .setParameter("id", userId)
+        .setMaxResults(1)
+        .getResultList();
+    if (rows.isEmpty() || rows.get(0) == null) return null;
+    return rows.get(0).toString();
   }
 
   public void delete(UUID projectId, UUID id) {

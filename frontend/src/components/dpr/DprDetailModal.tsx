@@ -13,7 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/lib/state/store";
 import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
 import { chainageLabel } from "@/lib/format/chainage";
@@ -37,12 +37,13 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 // ─── Small helpers ──────────────────────────────────────────────────────────────
 
-const STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
-  DRAFT: "neutral",
-  SUBMITTED: "info",
-  APPROVED: "success",
-  REJECTED: "danger",
-};
+// STATUS_VARIANT retained for the (currently hidden) Approval Trail — see below.
+// const STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
+//   DRAFT: "neutral",
+//   SUBMITTED: "info",
+//   APPROVED: "success",
+//   REJECTED: "danger",
+// };
 
 const STATUS_PILL: Record<DprApprovalStatus, { dot: string; text: string }> = {
   DRAFT: { dot: "bg-ash", text: "text-parchment" },
@@ -147,7 +148,7 @@ function DprDetailBody({ projectId, row }: { projectId: string; row: DprSummaryR
     <>
       <div className="flex-1 overflow-y-auto">
         <Hero row={row} detail={detail} status={status} />
-        <KpiStrip row={row} detail={detail} money={money} fuelCostRatio={fuelCostRatio} />
+        <KpiStrip row={row} detail={detail} money={money} fuelCostRatio={fuelCostRatio} status={status} />
         <DetailCard
           row={row}
           detail={detail}
@@ -157,20 +158,40 @@ function DprDetailBody({ projectId, row }: { projectId: string; row: DprSummaryR
           tab={tab}
           setTab={setTab}
           money={money}
-          productivitySide={productivitySide}
-          fuelCostRatio={fuelCostRatio}
         />
         {detail && (
           <div className="space-y-3 border-t border-hairline px-4 py-4">
             <MediaRow projectId={projectId} detail={detail} />
-            <ApprovalTrail detail={detail} status={status} />
+            {/* Approval trail hidden per request — keep for future use.
+            <ApprovalTrail detail={detail} status={status} /> */}
           </div>
         )}
       </div>
 
+      {/* Pinned summary strip — always visible regardless of the active tab. */}
+      {detail && (
+        <div className="shrink-0 border-t border-hairline bg-paper px-4 py-3">
+          <DprTotalsBar
+            manpower={detail.manpower ?? []}
+            equipment={detail.equipment ?? []}
+            materials={detail.materials ?? []}
+            subContractors={detail.subContractors ?? []}
+            qtyExecuted={detail.qtyExecuted ?? row.qtyExecuted ?? 0}
+            unit={row.unit}
+            productivitySide={productivitySide}
+            fuelCostRatio={fuelCostRatio}
+            showDayCost={false}
+          />
+        </div>
+      )}
+
       {showApprovalActions && (
         <div className="shrink-0 rounded-b-2xl border-t border-hairline bg-ivory px-3 py-2">
-          <DprApprovalActions projectId={projectId} row={row} />
+          <DprApprovalActions
+            projectId={projectId}
+            row={row}
+            className="flex items-center justify-end gap-1.5"
+          />
         </div>
       )}
     </>
@@ -219,12 +240,6 @@ function Hero({
         <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
         {status.charAt(0) + status.slice(1).toLowerCase()}
       </span>
-      <div className="hidden shrink-0 border-l border-paper/15 pl-3 text-right sm:block">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-parchment/55">
-          Supervisor
-        </div>
-        <div className="text-[13px] font-bold leading-tight">{row.supervisorName || "—"}</div>
-      </div>
     </div>
   );
 }
@@ -236,15 +251,14 @@ function KpiStrip({
   detail,
   money,
   fuelCostRatio,
+  status,
 }: {
   row: DprSummaryRow;
   detail?: DailyProgressReportResponse;
   money: (n: number | null | undefined) => string;
   fuelCostRatio: number;
+  status: DprApprovalStatus;
 }) {
-  const manpower = detail?.manpower ?? [];
-  const workers = sum(manpower.map((m) => m.nos));
-  const manHours = sum(manpower.map((m) => (m.nos ?? 0) * (m.workingHours ?? 0)));
   // Day cost includes derived Fuel = equipment cost × ratio (matches the create-page totals bar).
   const equipmentCost = sum((detail?.equipment ?? []).map((r) => r.lineCost));
   const dayCost =
@@ -260,10 +274,21 @@ function KpiStrip({
       ? Math.abs(row.chainageToM - row.chainageFromM)
       : null;
 
+  // Identity (submitted by / approver) shown as leading KPI boxes.
+  const submittedBy = detail?.submittedByName ?? row.supervisorName ?? "—";
+  const submittedWhen = detail?.submittedAt ? fmtDateTime(detail.submittedAt) : "—";
+  const approverName = detail?.approvedByName ?? detail?.assignedApproverName ?? "—";
+  const approverWhen = detail?.approvedAt
+    ? fmtDateTime(detail.approvedAt)
+    : status === "SUBMITTED"
+      ? "Pending"
+      : "—";
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <Kpi label="Submitted By" value={submittedBy} sub={submittedWhen} valueMono={false} />
+      <Kpi label="Approver" value={approverName} sub={approverWhen} valueMono={false} />
       <Kpi
-        accent
         label="Work Done"
         value={num(row.qtyExecuted ?? detail?.qtyExecuted)}
         unit={row.unit}
@@ -276,18 +301,6 @@ function KpiStrip({
         sub="to date"
       />
       <Kpi
-        label="Workforce"
-        value={detail ? num(workers, 0) : "…"}
-        unit="ppl"
-        sub={detail ? `${num(manHours, 1)} man-hours` : ""}
-      />
-      <Kpi
-        label="Day Cost"
-        value={detail ? money(dayCost ?? 0) : "…"}
-        sub="all resources"
-        valueMono={false}
-      />
-      <Kpi
         label="Chainage"
         value={length != null ? num(length, 0) : "—"}
         unit={length != null ? "m" : undefined}
@@ -297,9 +310,16 @@ function KpiStrip({
             : ""
         }
       />
+      <Kpi
+        label="Day Cost"
+        value={detail ? money(dayCost ?? 0) : "…"}
+        sub="all resources"
+        valueMono={false}
+      />
     </div>
   );
 }
+
 
 function Kpi({
   label,
@@ -352,8 +372,6 @@ function DetailCard({
   tab,
   setTab,
   money,
-  productivitySide,
-  fuelCostRatio,
 }: {
   row: DprSummaryRow;
   detail?: DailyProgressReportResponse;
@@ -363,8 +381,6 @@ function DetailCard({
   tab: TabKey;
   setTab: (t: TabKey) => void;
   money: (n: number | null | undefined) => string;
-  productivitySide: "MANPOWER" | "EQUIPMENT" | null;
-  fuelCostRatio: number;
 }) {
   const liveIssues = (detail?.issues ?? []).filter((i) => i.status !== "CANCELLED");
   const counts: Record<TabKey, number | null> = {
@@ -435,14 +451,7 @@ function DetailCard({
           </div>
         )}
 
-        {tab === "details" && (
-          <DetailsTab
-            row={row}
-            detail={detail}
-            productivitySide={productivitySide}
-            fuelCostRatio={fuelCostRatio}
-          />
-        )}
+        {tab === "details" && <DetailsTab row={row} detail={detail} />}
         {tab === "manpower" && <ManpowerTab detail={detail} money={money} />}
         {tab === "equipment" && <EquipmentTab detail={detail} money={money} />}
         {tab === "material" && <MaterialTab detail={detail} money={money} />}
@@ -491,13 +500,9 @@ function Grid({ children }: { children: ReactNode }) {
 function DetailsTab({
   row,
   detail,
-  productivitySide,
-  fuelCostRatio,
 }: {
   row: DprSummaryRow;
   detail?: DailyProgressReportResponse;
-  productivitySide: "MANPOWER" | "EQUIPMENT" | null;
-  fuelCostRatio: number;
 }) {
   const d = detail;
   const incidentOk = !d?.safetyIncidentType || d.safetyIncidentType === "NONE";
@@ -522,30 +527,21 @@ function DetailsTab({
       <Section color="#0FA3A3" title="Location & Activity">
         <Grid>
           <Field label="Activity" value={row.activityName || null} />
-          <Field label="BOQ Item" value={d?.boqItemDescription || null} />
+          <Field
+            label="BOQ Item"
+            value={
+              d?.boqItemNo && d?.boqItemDescription
+                ? `${d.boqItemNo} : ${d.boqItemDescription}`
+                : d?.boqItemDescription || d?.boqItemNo || null
+            }
+          />
           <Field label="Chainage" value={chainageStr} mono />
           <Field label="Side" value={row.side ? SIDE_LABEL[row.side] ?? row.side : null} />
           <Field label="Landmark" value={d?.landmark || null} />
         </Grid>
       </Section>
 
-      <Section color="#0F8A4A" title="Summary">
-        {d && (
-          <DprTotalsBar
-            manpower={d.manpower ?? []}
-            equipment={d.equipment ?? []}
-            materials={d.materials ?? []}
-            subContractors={d.subContractors ?? []}
-            qtyExecuted={d.qtyExecuted ?? row.qtyExecuted ?? 0}
-            unit={row.unit}
-            productivitySide={productivitySide}
-            fuelCostRatio={fuelCostRatio}
-            showDayCost={false}
-          />
-        )}
-      </Section>
-
-      <Section color="#C2392B" title="Safety, Delay & Remarks">
+      <Section color="#C2392B" title="Issues: Safety, Delay & Remarks">
         <Grid>
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate">
@@ -1007,8 +1003,9 @@ function PhotosPanel({
   );
 }
 
-// ─── Approval trail ─────────────────────────────────────────────────────────────
+// ─── Approval trail (hidden per request — retained for future use) ───────────────
 
+/*
 function ApprovalTrail({
   detail,
   status,
@@ -1082,6 +1079,7 @@ function TrailStep({
     </div>
   );
 }
+*/
 
 // ─── Voice-note player (auth blob → object URL) ─────────────────────────────────
 
