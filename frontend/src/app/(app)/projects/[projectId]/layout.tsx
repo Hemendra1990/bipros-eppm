@@ -112,7 +112,6 @@ function ProjectDetailLayoutInner({
     { label: "GIS", href: `/projects/${projectId}/gis-viewer` },
     { label: "Quality", href: `/projects/${projectId}/quality`, permission: "NCR.READ" },
     { label: "Procurement", href: `/projects/${projectId}/procurement`, permission: "RESOURCE.READ" },
-    { label: "HSE", href: `/projects/${projectId}/hse`, permission: "DPR.READ" },
     { label: "EVM", href: `/projects/${projectId}/evm` },
     // Team is now a top-level tab (see allTabs above).
     { label: "Budget Changes", href: `/projects/${projectId}/budget-changes` },
