@@ -728,7 +728,7 @@ public class ManpowerKpiService {
 
       double qtyExecuted = agg.qtyExecuted();
       double boqQty = boq.getBoqQty().doubleValue();
-      double pct = boqQty > 0 ? qtyExecuted / boqQty : 0d;
+      double pct = boqQty > 0 ? Math.min(qtyExecuted, boqQty) / boqQty : 0d;
 
       rows.add(new OutputAchievementRow(
           activity.getId(),
@@ -872,7 +872,7 @@ public class ManpowerKpiService {
       if (b.getBoqQty() == null || b.getBoqQty().signum() <= 0) continue;
       totalBoqQty += b.getBoqQty().doubleValue();
       if (b.getQtyExecutedToDate() != null) {
-        totalExecuted += b.getQtyExecutedToDate().doubleValue();
+        totalExecuted += Math.min(b.getQtyExecutedToDate().doubleValue(), b.getBoqQty().doubleValue());
       }
     }
     return totalBoqQty > 0d ? totalExecuted / totalBoqQty : 0d;

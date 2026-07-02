@@ -201,7 +201,8 @@ public class QueryBoqTool extends ProjectScopedTool {
         n.put("qty_executed_to_date", item.getQtyExecutedToDate());
         n.put("actual_rate", item.getActualRate());
         n.put("actual_amount", item.getActualAmount());
-        n.put("percent_complete", item.getPercentComplete());
+        BigDecimal percentComplete = item.getPercentComplete();
+        n.put("percent_complete", percentComplete == null ? null : percentComplete.min(BigDecimal.ONE));
         n.put("cost_variance", item.getCostVariance());
         n.put("cost_variance_percent", item.getCostVariancePercent());
         n.put("manual_override", Boolean.TRUE.equals(item.getManualOverride()));
@@ -210,6 +211,9 @@ public class QueryBoqTool extends ProjectScopedTool {
 
     private static String summariseOne(BoqItem item) {
         BigDecimal pct = item.getPercentComplete();
+        if (pct != null && pct.compareTo(BigDecimal.ONE) > 0) {
+            pct = BigDecimal.ONE;
+        }
         String pctStr = pct == null
                 ? "—"
                 : pct.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).toPlainString() + "%";

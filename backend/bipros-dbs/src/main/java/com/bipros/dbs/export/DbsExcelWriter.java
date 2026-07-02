@@ -371,7 +371,7 @@ public class DbsExcelWriter {
         setBigDecimal(boqTotals, 5, nz(sup.boqPlannedAmount()), s.groupBoldNum);
         setBigDecimal(boqTotals, 7, nz(sup.boqAchievedAmount()), s.groupBoldNum);
         setBigDecimal(boqTotals, 8,
-            ratio(sup.boqAchievedAmount(), sup.boqPlannedAmount()), s.groupBoldPct);
+            ratio(sup.boqAchievedAmount(), sup.boqPlannedAmount()).min(BigDecimal.ONE), s.groupBoldPct);
 
         rowNum++; // spacer
 

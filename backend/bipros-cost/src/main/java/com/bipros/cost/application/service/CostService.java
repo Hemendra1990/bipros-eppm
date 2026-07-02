@@ -13,6 +13,7 @@ import com.bipros.cost.domain.entity.*;
 import com.bipros.cost.domain.repository.*;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.project.application.service.BoqCalculator;
 import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.BoqItemRepository;
@@ -716,8 +717,8 @@ public class CostService {
         for (var b : boqItemRepository.findByProjectId(projectId)) {
             UUID group = groupAncestor(b.getWbsNodeId(), parentById, soleRoot);
             BigDecimal budg = b.getBudgetedAmount() != null ? b.getBudgetedAmount() : BigDecimal.ZERO;
-            BigDecimal earned = (b.getQtyExecutedToDate() != null && b.getBudgetedRate() != null)
-                    ? b.getQtyExecutedToDate().multiply(b.getBudgetedRate()) : BigDecimal.ZERO;
+            BigDecimal earned = BoqCalculator
+                    .cappedEarned(b.getQtyExecutedToDate(), b.getBoqQty(), b.getBudgetedRate());
             BigDecimal[] cell = agg.computeIfAbsent(group, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
             cell[0] = cell[0].add(budg); cell[1] = cell[1].add(earned);
         }
@@ -738,6 +739,7 @@ public class CostService {
             BigDecimal nb = e.getValue()[0], ne = e.getValue()[1], nac = e.getValue()[2];
             BigDecimal nodeBac = hasBudget ? bac.multiply(nb).divide(projectBudgeted, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
             BigDecimal nodeEv  = hasBudget ? bac.multiply(ne).divide(projectBudgeted, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            if (nodeEv.compareTo(nodeBac) > 0) nodeEv = nodeBac;
             BigDecimal nodePv  = nodeBac.multiply(plannedPct);
             String code = node != null ? node.getCode() : "(Unmapped)";
             String name = node != null ? node.getName() : "Unmapped";

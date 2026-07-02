@@ -146,7 +146,7 @@ public class DbsAggregationService {
         row.setDirectCost(directCost);
         row.setPrelimCost(prelimCost);
         row.setTotalCostInclPrelims(directCost.add(prelimCost));
-        row.setPctAchieved(percentage(supCum.achieved(), supCum.planned()));
+        row.setPctAchieved(SectionFBoqCalculator.cappedPctAchieved(supCum.achieved(), supCum.planned()));
 
         BigDecimal totalExpense = sum(manpower.totalAmount(), admin.totalAmount(), machinery.totalAmount(),
             fuel.totalAmount(), material.totalAmount(), BigDecimal.ZERO);
@@ -236,7 +236,7 @@ public class DbsAggregationService {
         row.setDirectCost(directCost);
         row.setPrelimCost(prelimCost);
         row.setTotalCostInclPrelims(directCost.add(prelimCost));
-        row.setPctAchieved(percentage(row.getBoqAchievedAmount(), row.getBoqPlannedAmount()));
+        row.setPctAchieved(SectionFBoqCalculator.cappedPctAchieved(row.getBoqAchievedAmount(), row.getBoqPlannedAmount()));
 
         BigDecimal contribution = nz(row.getTotalIncome()).subtract(nz(row.getTotalExpense()));
         row.setContribution(contribution);
@@ -320,9 +320,7 @@ public class DbsAggregationService {
             : BigDecimal.ZERO;
         row.setContributionPct(contributionPct);
 
-        BigDecimal pctAchieved = boqPlanned.compareTo(BigDecimal.ZERO) > 0
-            ? boqAchieved.multiply(HUNDRED).divide(boqPlanned, 4, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO;
+        BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAchieved, boqPlanned);
         row.setPctAchieved(pctAchieved);
 
         // TODO collect once Phase 7 wires it in — leaving siteManagerIds empty for now.
@@ -446,9 +444,7 @@ public class DbsAggregationService {
         totals.setBoqPlannedToDate(boqPlanned);
         totals.setBoqAchievedToDate(boqAchieved);
 
-        BigDecimal pctAchieved = boqPlanned.compareTo(BigDecimal.ZERO) > 0
-            ? boqAchieved.multiply(HUNDRED).divide(boqPlanned, 4, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO;
+        BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAchieved, boqPlanned);
         totals.setPctAchieved(pctAchieved);
 
         BigDecimal boqForDay = totals.getBoqForTheDayAmount();
@@ -546,7 +542,7 @@ public class DbsAggregationService {
         row.setDirectCost(projectDirect);
         row.setPrelimCost(projectPrelim);
         row.setTotalCostInclPrelims(projectDirect.add(projectPrelim));
-        row.setPctAchieved(percentage(row.getBoqAchievedAmount(), row.getBoqPlannedAmount()));
+        row.setPctAchieved(SectionFBoqCalculator.cappedPctAchieved(row.getBoqAchievedAmount(), row.getBoqPlannedAmount()));
 
         // Section G — daily-prorated overhead. monthlyTotal is also stored on the
         // row for the period view (sum of dailyAmount across the month equals
@@ -649,17 +645,6 @@ public class DbsAggregationService {
     private BigDecimal fuelFromMachinery(BigDecimal machineryAmount) {
         BigDecimal m = nz(machineryAmount);
         return m.multiply(dbsProperties.getFuelMachineryCostRatio()).setScale(2, java.math.RoundingMode.HALF_UP);
-    }
-
-    /**
-     * Phase 7: safe-divide helper that returns {@code numerator / denominator * 100} as a
-     * percentage scaled to 4 decimal places. Returns {@code 0} when the denominator is
-     * null, zero, or negative — never throws an {@link ArithmeticException}.
-     */
-    private static BigDecimal percentage(BigDecimal numerator, BigDecimal denominator) {
-        BigDecimal d = nz(denominator);
-        if (d.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
-        return nz(numerator).multiply(HUNDRED).divide(d, 4, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal sum(BigDecimal... parts) {

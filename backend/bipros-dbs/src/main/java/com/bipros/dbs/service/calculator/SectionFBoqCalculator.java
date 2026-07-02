@@ -238,6 +238,15 @@ public class SectionFBoqCalculator {
         }
     }
 
+    /** Progress KPI capped at 100%: min((boqAchieved × 100 / boqPlanned), 100). 0 when planned ≤ 0. */
+    public static BigDecimal cappedPctAchieved(BigDecimal boqAchieved, BigDecimal boqPlanned) {
+        if (boqPlanned == null || boqPlanned.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
+        BigDecimal achieved = boqAchieved == null ? BigDecimal.ZERO : boqAchieved;
+        BigDecimal pct = achieved.multiply(BigDecimal.valueOf(100))
+            .divide(boqPlanned, 4, java.math.RoundingMode.HALF_UP);
+        return pct.min(BigDecimal.valueOf(100));
+    }
+
     private static BigDecimal toBigDecimal(Object v) {
         if (v == null) return BigDecimal.ZERO;
         if (v instanceof BigDecimal bd) return bd;

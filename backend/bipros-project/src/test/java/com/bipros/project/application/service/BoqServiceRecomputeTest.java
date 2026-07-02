@@ -17,8 +17,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import com.bipros.project.application.dto.BoqSummaryResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -130,6 +133,64 @@ class BoqServiceRecomputeTest {
 
     verify(boqItemRepository).save(item);
     assertThat(item.getQtyExecutedToDate()).isEqualByComparingTo("10");
+  }
+
+  @Test
+  @DisplayName("grand total caps overall % complete but leaves cost variance uncapped")
+  void grand_total_caps_overall_percent_but_not_variance() {
+    BoqItem item = BoqItem.builder()
+        .projectId(projectId)
+        .boqQty(new BigDecimal("100"))
+        .boqRate(new BigDecimal("10"))
+        .budgetedRate(new BigDecimal("10"))
+        .qtyExecutedToDate(new BigDecimal("250"))
+        .actualRate(new BigDecimal("11"))
+        .build();
+    BoqCalculator.recompute(item);
+    when(projectRepository.existsById(projectId)).thenReturn(true);
+    when(boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId)).thenReturn(List.of(item));
+
+    BoqSummaryResponse r = boqService.getProjectBoqSummary(projectId);
+
+    // overall % = capped earned (min(250,100)×10 = 1000) ÷ budgeted (100×10 = 1000) = 1.0
+    assertThat(r.overallPercentComplete()).isEqualByComparingTo("1.000000");
+    // grand cost variance UNCAPPED: actual 250×11=2750 − uncapped earned 250×10=2500 = 250
+    assertThat(r.grandCostVariance()).isEqualByComparingTo("250.00");
+  }
+
+  @Test
+  @DisplayName("overall % stays capped (≤ 1) when a null-boqQty line has executed qty")
+  void overall_percent_stays_capped_with_null_boq_qty_line() {
+    // itemA: over-executed normal line: boqQty=100, budgetedRate=10, qtyExecuted=250
+    //        budgetedAmount=1000, cappedEarned=min(250,100)×10=1000
+    BoqItem itemA = BoqItem.builder()
+        .projectId(projectId)
+        .boqQty(new BigDecimal("100"))
+        .boqRate(new BigDecimal("10"))
+        .budgetedRate(new BigDecimal("10"))
+        .qtyExecutedToDate(new BigDecimal("250"))
+        .actualRate(new BigDecimal("11"))
+        .build();
+    BoqCalculator.recompute(itemA);
+
+    // itemB: null-boqQty line WITH executed qty — the defect case.
+    //        budgetedAmount=0 (zero-BAC), cappedEarned must be 0 (not 50×10=500)
+    BoqItem itemB = BoqItem.builder()
+        .projectId(projectId)
+        .budgetedRate(new BigDecimal("10"))
+        .qtyExecutedToDate(new BigDecimal("50"))
+        .actualRate(new BigDecimal("10"))
+        .build();
+    BoqCalculator.recompute(itemB);
+
+    when(projectRepository.existsById(projectId)).thenReturn(true);
+    when(boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId)).thenReturn(List.of(itemA, itemB));
+
+    BoqSummaryResponse r = boqService.getProjectBoqSummary(projectId);
+
+    // overall % = cappedEarned(1000 + 0) ÷ budgeted(1000 + 0) = 1.0
+    // WITHOUT the fix: cappedEarned for B = 500, overallPct = 1500/1000 = 1.5
+    assertThat(r.overallPercentComplete()).isEqualByComparingTo("1.000000");
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────

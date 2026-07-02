@@ -160,4 +160,53 @@ class DbsAggregationServiceCmTest {
 
         assertThat(result).isSameAs(saved);
     }
+
+    @Test
+    @DisplayName("recomputeCmDay caps pctAchieved at 100 when achieved exceeds planned")
+    void recomputeCmDay_caps_pct_achieved_at_100() {
+        UUID projectId = UUID.randomUUID();
+        UUID cmId = UUID.randomUUID();
+        UUID sup1 = UUID.randomUUID();
+        LocalDate date = LocalDate.of(2026, 6, 1);
+
+        org.mockito.Mockito.lenient().when(dbsProperties.getFuelMachineryCostRatio())
+            .thenReturn(new java.math.BigDecimal("0.35"));
+
+        DbsDailySupervisor row1 = DbsDailySupervisor.builder()
+            .projectId(projectId)
+            .supervisorUserId(sup1)
+            .constructionManagerUserId(cmId)
+            .reportDate(date)
+            .manpowerAmount(new BigDecimal("1000.00"))
+            .adminAmount(BigDecimal.ZERO)
+            .machineryAmount(BigDecimal.ZERO)
+            .fuelAmount(BigDecimal.ZERO)
+            .materialAmount(BigDecimal.ZERO)
+            .boqForTheDayAmount(new BigDecimal("240000.00"))
+            .boqPlannedAmount(new BigDecimal("200000.00"))
+            .boqAchievedAmount(new BigDecimal("240000.00"))
+            .totalExpense(new BigDecimal("1000.00"))
+            .totalIncome(new BigDecimal("240000.00"))
+            .directCost(new BigDecimal("240000.00"))
+            .prelimCost(BigDecimal.ZERO)
+            .build();
+
+        when(supervisorRepo.findByProjectIdAndReportDateAndConstructionManagerUserId(projectId, date, cmId))
+            .thenReturn(List.of(row1));
+        when(cmRepo.findByProjectIdAndCmUserIdAndReportDate(projectId, cmId, date))
+            .thenReturn(Optional.empty());
+        when(cmRepo.save(any(DbsDailyCm.class))).thenAnswer(inv -> inv.getArgument(0));
+        // achieved (240000) exceeds planned (200000) → raw would be 120%; must be capped at 100
+        when(boqCalc.computeCumulativeForScope(eq(projectId), eq(date), any()))
+            .thenReturn(new BoqCumulative(new BigDecimal("200000.00"), new BigDecimal("240000.00")));
+
+        service.recomputeCmDay(projectId, cmId, date);
+
+        ArgumentCaptor<DbsDailyCm> captor = ArgumentCaptor.forClass(DbsDailyCm.class);
+        org.mockito.Mockito.verify(cmRepo).save(captor.capture());
+        DbsDailyCm saved = captor.getValue();
+
+        // Without the cap: 240000 / 200000 * 100 = 120.0000; must be capped at 100.0000
+        assertThat(saved.getPctAchieved()).isEqualByComparingTo("100.0000");
+    }
 }

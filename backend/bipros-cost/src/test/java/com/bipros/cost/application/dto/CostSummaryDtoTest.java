@@ -57,6 +57,24 @@ class CostSummaryDtoTest {
     }
 
     @Test
+    void ofEvm_clamps_cost_pct_and_ev_when_earned_slightly_exceeds_budgeted() {
+        // Simulates rounding-precision drift: earned (100.01) > budgeted (100.00) by 0.01.
+        // costPct would be ~1.000100 without the clamp; EV would be ~1000.10 against BAC=1000.
+        // After the clamp: costPercentComplete == 1 and earnedValue == BAC == 1000.
+        CostSummaryDto dto = CostSummaryDto.ofEvm(
+                bd("1000"),    // bac
+                bd("0"),       // plannedCost
+                bd("0"),       // actualCost (AC)
+                bd("100.00"),  // boqBudgetedTotal
+                bd("100.01"),  // boqEarnedValue — slightly over (rounding drift)
+                bd("0"),       // plannedPercentComplete
+                0, null, null, null, null, null);
+
+        assertThat(dto.costPercentComplete()).isEqualByComparingTo("1");
+        assertThat(dto.earnedValue()).isEqualByComparingTo("1000");
+    }
+
+    @Test
     void zero_boq_budgeted_total_yields_zero_progress_and_zero_ev() {
         CostSummaryDto dto = CostSummaryDto.ofEvm(
                 bd("100000000"), bd("3380000"), bd("4820000"),

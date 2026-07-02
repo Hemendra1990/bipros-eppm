@@ -67,6 +67,7 @@ public record CostSummaryDto(
 
         BigDecimal costPct = budgetedTotal.signum() > 0
                 ? earned.divide(budgetedTotal, 6, HALF_UP) : ZERO;
+        if (costPct.compareTo(java.math.BigDecimal.ONE) > 0) costPct = java.math.BigDecimal.ONE;
         BigDecimal ev = safeBac.multiply(costPct);
         BigDecimal pv = safeBac.multiply(plannedPct);
 

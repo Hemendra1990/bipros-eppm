@@ -168,4 +168,104 @@ class ManpowerKpiServiceProductivitySubContractorTest {
         assertThat(response.labourCostPerUnit().get(0).costPerUnit()).isEqualTo(2.0d);
         assertThat(response.labourCostPerUnit().get(0).qtyExecuted()).isEqualTo(50.0d);
     }
+
+    /** KPI 2.2 – per-activity output achievement pct must be capped at 1.0 (100 %). */
+    @Test
+    void outputAchievementPctCappedAtOneWhenOverrun() {
+        UUID projectId = UUID.randomUUID();
+        UUID activityId = UUID.randomUUID();
+        UUID boqItemId = UUID.randomUUID();
+
+        // 600 executed against a BOQ of 500 → raw ratio = 1.2, capped to 1.0
+        DailyProgressReport dpr = new DailyProgressReport();
+        dpr.setProjectId(projectId);
+        dpr.setActivityId(activityId);
+        dpr.setBoqItemId(boqItemId);
+        dpr.setQtyExecuted(new BigDecimal("600"));
+        dpr.setReportDate(LocalDate.of(2026, 5, 23));
+        dpr.setId(UUID.randomUUID());
+
+        Activity activity = new Activity();
+        activity.setId(activityId);
+        activity.setName("Earthworks");
+
+        BoqItem boq = new BoqItem();
+        boq.setId(boqItemId);
+        boq.setItemNo("1.1");
+        boq.setDescription("Earthworks");
+        boq.setUnit("m3");
+        boq.setBoqQty(new BigDecimal("500"));
+
+        when(dprRepository.findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(any(), any(), any(), any()))
+                .thenReturn(List.of(dpr));
+        when(dprManpowerRepository.findByDprIdIn(any())).thenReturn(List.of());
+        when(activityRepository.findAllById(any())).thenReturn(List.of(activity));
+        when(boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId)).thenReturn(List.of(boq));
+        when(resourceAssignmentRepository.findByProjectId(projectId)).thenReturn(List.of());
+        when(dprSubContractorRepository.sumQuantityByProjectGroupedByActivityApproved(projectId)).thenReturn(List.of());
+        when(dprSubContractorRepository.sumQuantityByProjectGroupedByBoqItemApproved(projectId)).thenReturn(List.of());
+
+        ManpowerKpiService service = new ManpowerKpiService(
+                boqItemRepository, activityRepository, resourceRepository,
+                attendanceRepository, financialsRepository, productivityNormRepository,
+                resourceAssignmentRepository, dprRepository, dprManpowerRepository,
+                dprSubContractorRepository);
+
+        var response = service.compute(projectId, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31));
+
+        // Without cap: achievementPct = 600/500 = 1.2; with cap: min(600,500)/500 = 1.0
+        assertThat(response.outputAchievement()).hasSize(1);
+        assertThat(response.outputAchievement().get(0).achievementPct()).isEqualTo(1.0d);
+    }
+
+    /** KPI 2.7 – cumulative progress pct must be capped at 1.0 (100 %) even when qty_executed_to_date exceeds boq_qty. */
+    @Test
+    void cumulativeProgressPctCappedAtOneWhenOverrun() {
+        UUID projectId = UUID.randomUUID();
+        UUID boqItemId = UUID.randomUUID();
+
+        // Placeholder DPR — needed to pass the dprs.isEmpty() early-exit guard in compute().
+        // computeCumulativeProgressPct reads boqItems directly from the repository, not from DPRs.
+        DailyProgressReport placeholder = new DailyProgressReport();
+        placeholder.setProjectId(projectId);
+        placeholder.setReportDate(LocalDate.of(2026, 5, 23));
+        placeholder.setId(UUID.randomUUID());
+
+        // Two BOQ lines: one normal (80/100), one overrun (150/100); capped sum = (80+100)/(100+100) = 0.9
+        BoqItem normal = new BoqItem();
+        normal.setId(boqItemId);
+        normal.setItemNo("1.1");
+        normal.setDescription("Normal");
+        normal.setUnit("m3");
+        normal.setBoqQty(new BigDecimal("100"));
+        normal.setQtyExecutedToDate(new BigDecimal("80"));
+
+        BoqItem overrun = new BoqItem();
+        overrun.setId(UUID.randomUUID());
+        overrun.setItemNo("1.2");
+        overrun.setDescription("Overrun");
+        overrun.setUnit("m3");
+        overrun.setBoqQty(new BigDecimal("100"));
+        overrun.setQtyExecutedToDate(new BigDecimal("150"));
+
+        when(dprRepository.findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(any(), any(), any(), any()))
+                .thenReturn(List.of(placeholder));
+        when(dprManpowerRepository.findByDprIdIn(any())).thenReturn(List.of());
+        when(activityRepository.findAllById(any())).thenReturn(List.of());
+        when(boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId)).thenReturn(List.of(normal, overrun));
+        when(resourceAssignmentRepository.findByProjectId(projectId)).thenReturn(List.of());
+        when(dprSubContractorRepository.sumQuantityByProjectGroupedByActivityApproved(projectId)).thenReturn(List.of());
+        when(dprSubContractorRepository.sumQuantityByProjectGroupedByBoqItemApproved(projectId)).thenReturn(List.of());
+
+        ManpowerKpiService service = new ManpowerKpiService(
+                boqItemRepository, activityRepository, resourceRepository,
+                attendanceRepository, financialsRepository, productivityNormRepository,
+                resourceAssignmentRepository, dprRepository, dprManpowerRepository,
+                dprSubContractorRepository);
+
+        var response = service.compute(projectId, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31));
+
+        // Without cap: (80+150)/200 = 1.15; with per-line cap: (80+100)/200 = 0.9
+        assertThat(response.cumulativeProgressPct()).isEqualTo(0.9d);
+    }
 }

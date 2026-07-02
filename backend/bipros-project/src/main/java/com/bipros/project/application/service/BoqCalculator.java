@@ -41,9 +41,10 @@ public final class BoqCalculator {
     BigDecimal actualAmount = round(qtyExecuted.multiply(actualRate));
     BigDecimal earnedBudget = qtyExecuted.multiply(budgetedRate);
 
+    BigDecimal cappedQty = boqQty.signum() == 0 ? qtyExecuted : qtyExecuted.min(boqQty);
     BigDecimal percentComplete = boqQty.signum() == 0
         ? null
-        : qtyExecuted.divide(boqQty, RATIO_SCALE, RoundingMode.HALF_UP);
+        : cappedQty.divide(boqQty, RATIO_SCALE, RoundingMode.HALF_UP);
 
     BigDecimal costVariance = round(actualAmount.subtract(earnedBudget));
 
@@ -57,6 +58,14 @@ public final class BoqCalculator {
     item.setPercentComplete(percentComplete);
     item.setCostVariance(costVariance);
     item.setCostVariancePercent(costVariancePercent);
+  }
+
+  /** Concept-A "progress/EVM earned" for one line: min(qty, boqQty) × budgetedRate, UNROUNDED
+   *  to match the SQL SUM aggregates. A null boqQty is a zero-BAC line ⇒ earns 0 (matches the
+   *  `boqQty IS NOT NULL` guards in sumEarnedBudgetedValue / sumQtyByBoqItemAndDate). Null qty/rate ⇒ 0. */
+  public static BigDecimal cappedEarned(BigDecimal qtyExecuted, BigDecimal boqQty, BigDecimal budgetedRate) {
+    if (boqQty == null) return BigDecimal.ZERO;
+    return nz(qtyExecuted).min(boqQty).multiply(nz(budgetedRate));
   }
 
   private static BigDecimal nz(BigDecimal v) {

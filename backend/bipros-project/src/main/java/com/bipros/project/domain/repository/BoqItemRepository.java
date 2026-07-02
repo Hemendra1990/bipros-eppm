@@ -26,8 +26,9 @@ public interface BoqItemRepository extends JpaRepository<BoqItem, UUID> {
   @Query("SELECT COALESCE(SUM(b.budgetedAmount), 0) FROM BoqItem b WHERE b.projectId = :projectId")
   BigDecimal sumBudgetedAmount(@Param("projectId") UUID projectId);
 
-  /** Σ earned budgeted value (qty_executed × budgeted_rate) — the numerator of Cost % Complete. */
-  @Query("SELECT COALESCE(SUM(b.qtyExecutedToDate * b.budgetedRate), 0) FROM BoqItem b " +
-         "WHERE b.projectId = :projectId AND b.qtyExecutedToDate IS NOT NULL AND b.budgetedRate IS NOT NULL")
+  /** Σ capped earned value (min(qty_executed, boq_qty) × budgeted_rate) — the numerator of
+   *  Cost % Complete. Capped so EV can never exceed BAC when a line is over-executed. */
+  @Query("SELECT COALESCE(SUM((CASE WHEN b.qtyExecutedToDate < b.boqQty THEN b.qtyExecutedToDate ELSE b.boqQty END) * b.budgetedRate), 0) FROM BoqItem b " +
+         "WHERE b.projectId = :projectId AND b.qtyExecutedToDate IS NOT NULL AND b.budgetedRate IS NOT NULL AND b.boqQty IS NOT NULL")
   BigDecimal sumEarnedBudgetedValue(@Param("projectId") UUID projectId);
 }

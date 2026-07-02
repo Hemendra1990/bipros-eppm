@@ -167,16 +167,17 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       @org.springframework.data.repository.query.Param("projectId") UUID projectId,
       @org.springframework.data.repository.query.Param("boqItemId") UUID boqItemId);
 
-  /** Approved DPR earned value (qtyExecuted × BOQ budgetedRate) grouped by report date.
-   *  Σ over all dates reconciles to BoqItemRepository.sumEarnedBudgetedValue (the project EV). */
+  /** Approved DPR executed qty per BOQ item per date, with that item's boqQty and budgetedRate.
+   *  Feeds cumulative earned-value capping in {@link com.bipros.project.application.service.DprEarnedValueLookup}. */
   @org.springframework.data.jpa.repository.Query(
-      "select d.reportDate, coalesce(sum(d.qtyExecuted * b.budgetedRate), 0) "
+      "select d.boqItemId, d.reportDate, coalesce(sum(d.qtyExecuted), 0), b.boqQty, b.budgetedRate "
           + "from DailyProgressReport d, BoqItem b "
           + "where d.projectId = :projectId and d.boqItemId = b.id "
           + "and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED "
-          + "and d.reportDate is not null and d.qtyExecuted is not null and b.budgetedRate is not null "
-          + "group by d.reportDate")
-  java.util.List<Object[]> sumEarnedValueGroupedByDate(
+          + "and d.reportDate is not null and d.qtyExecuted is not null "
+          + "and b.budgetedRate is not null and b.boqQty is not null "
+          + "group by d.boqItemId, d.reportDate, b.boqQty, b.budgetedRate")
+  java.util.List<Object[]> sumQtyByBoqItemAndDate(
       @org.springframework.data.repository.query.Param("projectId") java.util.UUID projectId);
 
   /**

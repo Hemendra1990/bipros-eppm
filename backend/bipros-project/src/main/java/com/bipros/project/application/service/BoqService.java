@@ -334,6 +334,7 @@ public class BoqService {
     BigDecimal budgetedTotal = BigDecimal.ZERO;
     BigDecimal actualTotal = BigDecimal.ZERO;
     BigDecimal earnedBudgetTotal = BigDecimal.ZERO;
+    BigDecimal cappedEarnedTotal = BigDecimal.ZERO;
 
     for (BoqItem i : items) {
       boqTotal = boqTotal.add(nz(i.getBoqAmount()));
@@ -341,6 +342,8 @@ public class BoqService {
       actualTotal = actualTotal.add(nz(i.getActualAmount()));
       BigDecimal earned = nz(i.getQtyExecutedToDate()).multiply(nz(i.getBudgetedRate()));
       earnedBudgetTotal = earnedBudgetTotal.add(earned);
+      cappedEarnedTotal = cappedEarnedTotal.add(
+          BoqCalculator.cappedEarned(i.getQtyExecutedToDate(), i.getBoqQty(), i.getBudgetedRate()));
     }
 
     BigDecimal grandVariance = actualTotal.subtract(earnedBudgetTotal).setScale(2, RoundingMode.HALF_UP);
@@ -349,7 +352,8 @@ public class BoqService {
         : grandVariance.divide(earnedBudgetTotal, RATIO_SCALE, RoundingMode.HALF_UP);
     BigDecimal overallPct = budgetedTotal.signum() == 0
         ? null
-        : earnedBudgetTotal.divide(budgetedTotal, RATIO_SCALE, RoundingMode.HALF_UP);
+        : cappedEarnedTotal.divide(budgetedTotal, RATIO_SCALE, RoundingMode.HALF_UP);
+    if (overallPct != null && overallPct.compareTo(BigDecimal.ONE) > 0) overallPct = BigDecimal.ONE;
 
     List<BoqItemResponse> responses = items.stream().map(BoqItemResponse::from).toList();
     return new BoqSummaryResponse(

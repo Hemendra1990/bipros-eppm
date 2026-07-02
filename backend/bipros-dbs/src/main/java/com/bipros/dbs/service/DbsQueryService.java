@@ -20,6 +20,7 @@ import com.bipros.dbs.domain.repository.DbsDailyCmRepository;
 import com.bipros.dbs.domain.repository.DbsDailyEngineerRepository;
 import com.bipros.dbs.domain.repository.DbsDailyProjectRepository;
 import com.bipros.dbs.domain.repository.DbsDailySupervisorRepository;
+import com.bipros.dbs.service.calculator.SectionFBoqCalculator;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -339,10 +340,7 @@ public class DbsQueryService {
                     : BigDecimal.ZERO;
                 BigDecimal boqPlanned = sumRows(daily, DbsDailySupervisor::getBoqPlannedAmount);
                 BigDecimal boqAchieved = sumRows(daily, DbsDailySupervisor::getBoqAchievedAmount);
-                BigDecimal pctAchieved = boqPlanned.compareTo(BigDecimal.ZERO) > 0
-                    ? boqAchieved.multiply(BigDecimal.valueOf(100))
-                        .divide(boqPlanned, 4, RoundingMode.HALF_UP)
-                    : BigDecimal.ZERO;
+                BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAchieved, boqPlanned);
                 return new DbsSupervisorSummaryDto(
                     supId,
                     nameByUser.get(supId),
@@ -651,7 +649,7 @@ public class DbsQueryService {
         BigDecimal direct = sumDtos(daily, DbsSupervisorDayResponse::directCost);
         BigDecimal prelim = sumDtos(daily, DbsSupervisorDayResponse::prelimCost);
         BigDecimal totalIncl = direct.add(prelim);
-        BigDecimal pctAchieved = pct(boqAch, boqPlanned);
+        BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAch, boqPlanned);
         BigDecimal expense = sumDtos(daily, DbsSupervisorDayResponse::totalExpense);
         BigDecimal income = sumDtos(daily, DbsSupervisorDayResponse::totalIncome);
         BigDecimal contribution = income.subtract(expense).setScale(2, RoundingMode.HALF_UP);
@@ -726,7 +724,7 @@ public class DbsQueryService {
         BigDecimal direct = sumDtos(daily, DbsEngineerDayResponse::directCost);
         BigDecimal prelim = sumDtos(daily, DbsEngineerDayResponse::prelimCost);
         BigDecimal totalIncl = direct.add(prelim);
-        BigDecimal pctAchieved = pct(boqAch, boqPlanned);
+        BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAch, boqPlanned);
         BigDecimal expense = sumDtos(daily, DbsEngineerDayResponse::totalExpense);
         BigDecimal income = sumDtos(daily, DbsEngineerDayResponse::totalIncome);
         BigDecimal contribution = income.subtract(expense).setScale(2, RoundingMode.HALF_UP);
@@ -771,7 +769,7 @@ public class DbsQueryService {
         BigDecimal direct = sumDtos(daily, DbsProjectDayResponse::directCost);
         BigDecimal prelim = sumDtos(daily, DbsProjectDayResponse::prelimCost);
         BigDecimal totalIncl = direct.add(prelim);
-        BigDecimal pctAchieved = pct(boqAch, boqPlanned);
+        BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAch, boqPlanned);
         BigDecimal expense = sumDtos(daily, DbsProjectDayResponse::totalExpense);
         BigDecimal income = sumDtos(daily, DbsProjectDayResponse::totalIncome);
         BigDecimal contribution = income.subtract(expense).setScale(2, RoundingMode.HALF_UP);
@@ -931,13 +929,6 @@ public class DbsQueryService {
 
     private static BigDecimal nz(BigDecimal v) {
         return v == null ? BigDecimal.ZERO : v;
-    }
-
-    /** Phase 7: percentage helper — {@code num/denom * 100} or {@code 0} when denom <= 0. */
-    private static BigDecimal pct(BigDecimal numerator, BigDecimal denominator) {
-        BigDecimal d = nz(denominator);
-        if (d.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
-        return nz(numerator).multiply(BigDecimal.valueOf(100)).divide(d, 4, RoundingMode.HALF_UP);
     }
 
     private static <T> BigDecimal sum(List<T> rows, java.util.function.Function<T, BigDecimal> extractor) {

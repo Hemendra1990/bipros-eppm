@@ -44,7 +44,7 @@ public record BoqItemResponse(
         b.getQtyExecutedToDate(),
         b.getActualRate(),
         b.getActualAmount(),
-        b.getPercentComplete(),
+        b.getPercentComplete() == null ? null : b.getPercentComplete().min(BigDecimal.ONE),
         b.getCostVariance(),
         b.getCostVariancePercent(),
         b.getChapter(),

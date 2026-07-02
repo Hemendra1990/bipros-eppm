@@ -123,6 +123,42 @@ class BoqCalculatorTest {
     assertThat(item.getCostVariancePercent()).isNull();
   }
 
+  @Test
+  void over_executed_line_caps_percent_complete_but_not_cost_variance() {
+    // boq 100 @ budget 10; executed 250 @ actual 11.
+    BoqItem item = BoqItem.builder()
+        .boqQty(bd("100"))
+        .boqRate(bd("10"))
+        .budgetedRate(bd("10"))
+        .qtyExecutedToDate(bd("250"))
+        .actualRate(bd("11"))
+        .build();
+
+    BoqCalculator.recompute(item);
+
+    // progress capped at 100% (min(250,100)/100 = 1)
+    assertThat(item.getPercentComplete()).isEqualByComparingTo("1.000000");
+    // cost variance stays UNCAPPED: 250×11 − 250×10 = 250
+    assertThat(item.getActualAmount()).isEqualByComparingTo("2750.00");
+    assertThat(item.getCostVariance()).isEqualByComparingTo("250.00");
+  }
+
+  @Test
+  void capped_earned_uses_min_of_qty_and_boq_qty() {
+    // over-executed: min(250,100)×10 = 1000
+    assertThat(BoqCalculator.cappedEarned(bd("250"), bd("100"), bd("10")))
+        .isEqualByComparingTo("1000.00");
+    // under-executed: min(40,100)×10 = 400
+    assertThat(BoqCalculator.cappedEarned(bd("40"), bd("100"), bd("10")))
+        .isEqualByComparingTo("400.00");
+    // null boqQty ⇒ zero-BAC line earns 0 (matches boqQty IS NOT NULL guards in SQL aggregates)
+    assertThat(BoqCalculator.cappedEarned(bd("250"), null, bd("10")))
+        .isEqualByComparingTo("0");
+    // null qty ⇒ 0
+    assertThat(BoqCalculator.cappedEarned(null, bd("100"), bd("10")))
+        .isEqualByComparingTo("0.00");
+  }
+
   private static BigDecimal bd(String s) {
     return new BigDecimal(s);
   }
