@@ -182,7 +182,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
 
   const summaryCards: SummaryCard[] = summary
     ? [
-        { label: "Contract Value", value: summary.contractValue != null ? fmt(summary.contractValue) : "—", color: "slate" },
+        { label: "Contract Value", value: (summary.contractValue ?? summary.projectOriginalBudget) != null ? fmt((summary.contractValue ?? summary.projectOriginalBudget)!) : "—", color: "slate" },
         { label: "Budget at Completion (BAC)", value: bac > 0 ? fmt(bac) : "Not set", color: "indigo" },
         { label: "Earned Value (EV)", value: fmt(ev), color: "blue" },
         { label: "Actual Cost (AC)", value: fmt(ac), color: "green" },

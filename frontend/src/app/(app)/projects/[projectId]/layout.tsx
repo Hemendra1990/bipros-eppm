@@ -92,7 +92,7 @@ function ProjectDetailLayoutInner({
     { id: "capacity",           label: "Capacity Util.",      href: `/projects/${projectId}/capacity-utilization` },
     { id: "dbs",                label: "DBS",                 href: `/projects/${projectId}/dbs` },
     { id: "costs",              label: "Costs",               href: null, permission: "COST.READ" },
-    { id: "insights",           label: "Insights",            href: `/projects/${projectId}/insights` },
+    { id: "evm",                label: "EVM",                 href: `/projects/${projectId}/evm` },
     { id: "risks",              label: "Risks",               href: `/projects/${projectId}/risks`, permission: "RISK.READ" },
     { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption` },
   ];
@@ -112,7 +112,7 @@ function ProjectDetailLayoutInner({
     { label: "GIS", href: `/projects/${projectId}/gis-viewer` },
     { label: "Quality", href: `/projects/${projectId}/quality`, permission: "NCR.READ" },
     { label: "Procurement", href: `/projects/${projectId}/procurement`, permission: "RESOURCE.READ" },
-    { label: "EVM", href: `/projects/${projectId}/evm` },
+    { label: "Insights", href: `/projects/${projectId}/insights` },
     // Team is now a top-level tab (see allTabs above).
     { label: "Budget Changes", href: `/projects/${projectId}/budget-changes` },
     { label: "Relationships", href: `/projects/${projectId}/relationships` },

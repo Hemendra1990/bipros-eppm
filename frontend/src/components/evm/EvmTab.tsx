@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { costApi, type WbsEvmRow, type CostSummary } from "@/lib/api/costApi";
 import { periodPerformanceApi, type PeriodPerformanceRollup } from "@/lib/api/periodPerformanceApi";
@@ -18,8 +18,6 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { VirtualDataTable } from "@/components/common/VirtualDataTable";
-import type { ColumnDef } from "@tanstack/react-table";
 import { KpiTile } from "@/components/common/KpiTile";
 import { budgetApi } from "@/lib/api/budgetApi";
 import { formatMoney } from "@/lib/currency/format";
@@ -102,105 +100,6 @@ export function EvmTab({ projectId }: { projectId: string }) {
   })();
 
   const wbsRows = (wbsData?.data as WbsEvmRow[] | undefined) ?? [];
-
-  const wbsColumns = useMemo<ColumnDef<WbsEvmRow>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: "WBS",
-        cell: (info) => {
-          const row = info.row.original;
-          return (
-            <div className="text-sm px-3">
-              <span className="text-text-secondary">{row.code}</span>{" "}
-              <span className="text-text-primary">{row.name}</span>
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: "bac",
-        header: "BAC",
-        cell: (info) => (
-          <span className="block text-right text-sm">
-            {fmt(Number(info.getValue()))}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "plannedValue",
-        header: "PV",
-        cell: (info) => (
-          <span className="block text-right text-sm text-accent">
-            {fmt(Number(info.getValue()))}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "earnedValue",
-        header: "EV",
-        cell: (info) => (
-          <span className="block text-right text-sm text-success">
-            {fmt(Number(info.getValue()))}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "actualCost",
-        header: "AC",
-        cell: (info) => (
-          <span className="block text-right text-sm text-danger">
-            {fmt(Number(info.getValue()))}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "scheduleVariance",
-        header: "SV",
-        cell: (info) => {
-          const val = Number(info.getValue());
-          const color = val >= 0 ? "text-success" : "text-danger";
-          return (
-            <span className={`block text-right text-sm ${color}`}>
-              {fmt(val)}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "costVariance",
-        header: "CV",
-        cell: (info) => {
-          const val = Number(info.getValue());
-          const color = val >= 0 ? "text-success" : "text-danger";
-          return (
-            <span className={`block text-right text-sm ${color}`}>
-              {fmt(val)}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "schedulePerformanceIndex",
-        header: "SPI",
-        cell: (info) => (
-          <span className="block text-right text-sm">
-            {fmtIdx(Number(info.getValue()))}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "costPerformanceIndex",
-        header: "CPI",
-        cell: (info) => (
-          <span className="block text-right text-sm">
-            {fmtIdx(Number(info.getValue()))}
-          </span>
-        ),
-      },
-    ],
-    []
-  );
 
   return (
     <div className="space-y-6">
@@ -400,13 +299,53 @@ export function EvmTab({ projectId }: { projectId: string }) {
               </p>
             </div>
           ) : (
-            <VirtualDataTable
-              columns={wbsColumns}
-              data={wbsRows}
-              sortable={false}
-              resizable
-              searchable={false}
-            />
+            // Plain table (not VirtualDataTable): WBS-EVM is one bounded row per WBS
+            // node, and the virtualizer's re-measurement starves React 19 router
+            // transitions here — clicking any tab would freeze the app. Mirrors the
+            // ActivityWbsTreeView fix (commit 64f3ba18). Money is formatted inline with
+            // the current `fmt` so a non-INR project always renders its own currency.
+            <div className="max-h-[600px] overflow-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead className="sticky top-0 z-10 bg-surface">
+                  <tr className="border-b border-border text-xs uppercase tracking-wide text-text-secondary">
+                    <th className="px-4 py-3 text-left font-medium">WBS</th>
+                    <th className="px-4 py-3 text-right font-medium">BAC</th>
+                    <th className="px-4 py-3 text-right font-medium">PV</th>
+                    <th className="px-4 py-3 text-right font-medium">EV</th>
+                    <th className="px-4 py-3 text-right font-medium">AC</th>
+                    <th className="px-4 py-3 text-right font-medium">SV</th>
+                    <th className="px-4 py-3 text-right font-medium">CV</th>
+                    <th className="px-4 py-3 text-right font-medium">SPI</th>
+                    <th className="px-4 py-3 text-right font-medium">CPI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {wbsRows.map((row, i) => (
+                    <tr
+                      key={row.code ?? i}
+                      className="border-b border-border/60 hover:bg-surface-hover/30"
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-text-secondary">{row.code}</span>{" "}
+                        <span className="text-text-primary">{row.name}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">{fmt(Number(row.bac))}</td>
+                      <td className="px-4 py-3 text-right text-accent">{fmt(Number(row.plannedValue))}</td>
+                      <td className="px-4 py-3 text-right text-success">{fmt(Number(row.earnedValue))}</td>
+                      <td className="px-4 py-3 text-right text-danger">{fmt(Number(row.actualCost))}</td>
+                      <td className={`px-4 py-3 text-right ${Number(row.scheduleVariance) >= 0 ? "text-success" : "text-danger"}`}>
+                        {fmt(Number(row.scheduleVariance))}
+                      </td>
+                      <td className={`px-4 py-3 text-right ${Number(row.costVariance) >= 0 ? "text-success" : "text-danger"}`}>
+                        {fmt(Number(row.costVariance))}
+                      </td>
+                      <td className="px-4 py-3 text-right">{fmtIdx(Number(row.schedulePerformanceIndex))}</td>
+                      <td className="px-4 py-3 text-right">{fmtIdx(Number(row.costPerformanceIndex))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
