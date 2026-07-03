@@ -36,7 +36,16 @@ public class AiContextResolver {
         try {
             userId = securityContextHelper.getCurrentUserId();
         } catch (Exception e) {
-            userId = null;
+            // The seeded admin (and some other seed users) authenticate with a
+            // username principal, not a UUID, so getCurrentUserId() throws. Fall
+            // back to a username lookup so their profile — and therefore AI tool
+            // visibility — still resolves. Without this, profileCode stays null
+            // and ToolRegistry drops every role-restricted tool (list_issues,
+            // analyze_risk, …), leaving admin able to ask about projects but not
+            // risks or issues.
+            userId = userRepository.findByUsername(securityContextHelper.getCurrentUsername())
+                    .map(u -> u.getId())
+                    .orElse(null);
         }
         String role = securityContextHelper.hasRole("ADMIN") ? "ADMIN"
                 : securityContextHelper.hasRole("PROJECT_MANAGER") ? "PROJECT_MANAGER" : "USER";

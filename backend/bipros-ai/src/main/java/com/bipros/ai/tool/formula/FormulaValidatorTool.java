@@ -5,8 +5,12 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolResult;
+import com.bipros.cost.application.dto.CostSummaryDto;
+import com.bipros.cost.application.service.CostService;
 import com.bipros.evm.domain.entity.EvmCalculation;
 import com.bipros.evm.domain.repository.EvmCalculationRepository;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -44,6 +48,8 @@ public class FormulaValidatorTool implements Tool {
 
     private final EvmCalculationRepository evmRepository;
     private final ActivityRepository activityRepository;
+    private final CostService costService;
+    private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -57,7 +63,12 @@ public class FormulaValidatorTool implements Tool {
                 + "(project / activity / date range), return the formula, the named numeric "
                 + "inputs, the computed value, and the source rows so callers can verify the "
                 + "math. Use this any time the user asks 'how did you compute CPI', 'show the "
-                + "formula for SPI', 'why is variance Y', or any EVM audit question. Numbers "
+                + "formula for SPI', 'why is variance Y', or any EVM audit question. For the "
+                + "headline VALUE of a project-level metric prefer `project_cost_summary` (the "
+                + "Costs-tab source); this tool is for showing the formula + inputs. At PROJECT "
+                + "scope (no activityCode) the inputs BAC/PV/EV/AC are sourced live from the Costs "
+                + "tab so the computed CPI/SPI matches it exactly; at ACTIVITY scope they come from "
+                + "the activity-level EvmCalculation snapshot. Numbers "
                 + "are returned exactly as stored — no rounding, no recomputation in prose. "
                 + "EVM SCOPE — IMPORTANT: the response carries `source.scope` ∈ "
                 + "{activity | project | project_fallback}. "
@@ -183,31 +194,55 @@ public class FormulaValidatorTool implements Tool {
                 if (row != null) activityEvmMatched = true;
             }
         }
-        if (row == null) {
-            row = evmRepository.findTopByProjectIdOrderByDataDateDesc(projectId).orElse(null);
-        }
-        if (row == null) {
-            return ToolResult.error("No EvmCalculation rows for this scope. Run the EVM job first.");
-        }
-        // If the user asked about an activity but we only have project-level EVM,
-        // record that fact explicitly so the caller (AI) doesn't quote the project
-        // numbers as if they were activity-specific.
+        // Scope semantics:
+        //   activity        → activity-level EvmCalculation row matched.
+        //   project         → no activityCode; use the live Costs-tab summary.
+        //   project_fallback→ activityCode asked but no activity-level EVM row;
+        //                     fall back to the live Costs-tab project summary.
         String evmScope = activityEvmMatched ? "activity"
                 : (activityRequested ? "project_fallback" : "project");
         String fallbackNote = null;
         if ("project_fallback".equals(evmScope)) {
             fallbackNote = activityResolved
-                    ? "No activity-level EvmCalculation row exists for " + activityCode
-                            + ". The numbers below are the latest PROJECT-level EVM snapshot — "
-                            + "they are NOT specific to " + activityCode + "."
+                    ? "No activity-level earned value exists for " + activityCode
+                            + ". The numbers below are the PROJECT-level figures shown on the Costs "
+                            + "tab — they are NOT specific to " + activityCode + "."
                     : "Activity code '" + activityCode + "' could not be resolved on this project. "
-                            + "Returning the latest project-level EVM snapshot.";
+                            + "Returning the project-level figures shown on the Costs tab.";
         }
 
-        BigDecimal bac = nz(row.getBudgetAtCompletion());
-        BigDecimal pv = nz(row.getPlannedValue());
-        BigDecimal ev = nz(row.getEarnedValue());
-        BigDecimal ac = nz(row.getActualCost());
+        BigDecimal bac;
+        BigDecimal pv;
+        BigDecimal ev;
+        BigDecimal ac;
+        String dataDateStr;
+        String sourceEntity;
+        if (activityEvmMatched) {
+            // Activity-level audit — EvmCalculation is the only per-activity EVM source.
+            bac = nz(row.getBudgetAtCompletion());
+            pv = nz(row.getPlannedValue());
+            ev = nz(row.getEarnedValue());
+            ac = nz(row.getActualCost());
+            dataDateStr = row.getDataDate() == null ? null : row.getDataDate().toString();
+            sourceEntity = "EvmCalculation";
+        } else {
+            // Project scope (or activity fallback) — source the SAME live figures the
+            // Costs tab renders (CostService.getCostSummary), so the AI's CPI/SPI never
+            // disagrees with the tab. Previously this read the latest EvmCalculation
+            // snapshot, a separate lineage whose BAC/EV/PV/AC could differ from the tab.
+            row = null;
+            CostSummaryDto s = costService.getCostSummary(projectId);
+            bac = nz(s.bac());
+            pv = nz(s.plannedValue());
+            ev = nz(s.earnedValue());
+            ac = nz(s.totalActual());
+            dataDateStr = null; // live figure, no snapshot data_date
+            sourceEntity = "CostSummary (Costs tab, live)";
+        }
+
+        String currency = projectRepository.findById(projectId)
+                .map(Project::getBudgetCurrency)
+                .orElse("INR");
 
         ObjectNode out = objectMapper.createObjectNode();
         out.put("metric", metric.name());
@@ -217,8 +252,8 @@ public class FormulaValidatorTool implements Tool {
         inputs.put("PV", pv.toPlainString());
         inputs.put("EV", ev.toPlainString());
         inputs.put("AC", ac.toPlainString());
-        inputs.put("currency", "OMR");
-        inputs.put("data_date", row.getDataDate() == null ? null : row.getDataDate().toString());
+        inputs.put("currency", currency);
+        inputs.put("data_date", dataDateStr);
 
         String formula;
         String computed;
@@ -234,7 +269,7 @@ public class FormulaValidatorTool implements Tool {
                     computed = cpi.toPlainString();
                     interpretation = cpi.compareTo(BigDecimal.ONE) >= 0
                             ? "At or above 1.0 → on / under budget."
-                            : "Below 1.0 → over budget; for every 1 OMR spent we earned " + computed + " OMR of work.";
+                            : "Below 1.0 → over budget; for every 1 " + currency + " spent we earned " + computed + " " + currency + " of work.";
                 }
             }
             case SPI -> {
@@ -255,16 +290,16 @@ public class FormulaValidatorTool implements Tool {
                 BigDecimal cv = ev.subtract(ac);
                 computed = cv.toPlainString();
                 interpretation = cv.signum() >= 0
-                        ? "Positive → under budget by " + cv.abs().toPlainString() + " OMR."
-                        : "Negative → over budget by " + cv.abs().toPlainString() + " OMR.";
+                        ? "Positive → under budget by " + cv.abs().toPlainString() + " " + currency + "."
+                        : "Negative → over budget by " + cv.abs().toPlainString() + " " + currency + ".";
             }
             case SV -> {
                 formula = "SV = EV − PV";
                 BigDecimal sv = ev.subtract(pv);
                 computed = sv.toPlainString();
                 interpretation = sv.signum() >= 0
-                        ? "Positive → ahead of schedule by " + sv.abs().toPlainString() + " OMR of work."
-                        : "Negative → behind schedule by " + sv.abs().toPlainString() + " OMR of work.";
+                        ? "Positive → ahead of schedule by " + sv.abs().toPlainString() + " " + currency + " of work."
+                        : "Negative → behind schedule by " + sv.abs().toPlainString() + " " + currency + " of work.";
             }
             case EAC -> {
                 formula = "EAC = BAC / CPI";
@@ -308,7 +343,7 @@ public class FormulaValidatorTool implements Tool {
                     computed = vac.toPlainString();
                     interpretation = vac.signum() >= 0
                             ? "Positive → expected to finish under budget."
-                            : "Negative → expected to overrun by " + vac.abs().toPlainString() + " OMR.";
+                            : "Negative → expected to overrun by " + vac.abs().toPlainString() + " " + currency + ".";
                 }
             }
             case TCPI -> {
@@ -338,20 +373,23 @@ public class FormulaValidatorTool implements Tool {
         out.put("interpretation", interpretation);
 
         ObjectNode source = objectMapper.createObjectNode();
-        source.put("entity", "EvmCalculation");
-        source.put("evmRowId", row.getId() == null ? null : row.getId().toString());
-        // Scope tells the caller whether the EVM row matches the requested activity
-        // (`activity`), was project-wide because no activity was asked (`project`),
-        // or was a project-level fallback because no activity-level EVM exists for
+        source.put("entity", sourceEntity);
+        // For activity scope `row` is the matched EvmCalculation; for project scope
+        // `row` is null because the figures come live from CostService (the Costs tab).
+        source.put("evmRowId", row == null || row.getId() == null ? null : row.getId().toString());
+        // Scope tells the caller whether the numbers match the requested activity
+        // (`activity`), were project-wide because no activity was asked (`project`),
+        // or were a project-level fallback because no activity-level EVM exists for
         // the requested activity (`project_fallback`). The AI MUST treat the
         // `project_fallback` numbers as project-level, not activity-level.
         source.put("scope", evmScope);
         if (activityRequested) source.put("requestedActivityCode", activityCode);
         if (activityId != null) source.put("resolvedActivityId", activityId.toString());
-        source.put("evmRowProjectId", row.getProjectId() == null ? null : row.getProjectId().toString());
+        source.put("evmRowProjectId",
+                row == null || row.getProjectId() == null ? null : row.getProjectId().toString());
         source.put("evmRowActivityId",
-                row.getActivityId() == null ? null : row.getActivityId().toString());
-        source.put("dataDate", row.getDataDate() == null ? null : row.getDataDate().toString());
+                row == null || row.getActivityId() == null ? null : row.getActivityId().toString());
+        source.put("dataDate", dataDateStr);
         if (fallbackNote != null) source.put("note", fallbackNote);
         out.set("source", source);
 
@@ -361,7 +399,8 @@ public class FormulaValidatorTool implements Tool {
         out.set("dateRange", dateRange);
 
         String summary = metric.name() + " = " + computed
-                + " (" + formula + ") on data_date " + (row.getDataDate() == null ? "?" : row.getDataDate())
+                + " (" + formula + ")"
+                + (dataDateStr != null ? " on data_date " + dataDateStr : "")
                 + " · scope=" + evmScope
                 + (fallbackNote != null ? " — NOTE: " + fallbackNote : "");
         return ToolResult.ok(summary, out);

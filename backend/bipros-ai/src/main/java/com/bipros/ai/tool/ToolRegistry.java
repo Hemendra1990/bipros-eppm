@@ -52,7 +52,19 @@ public class ToolRegistry {
      * {@link Tool#allowedRoles()} are always included. SYSTEM_ADMIN sees every tool.
      */
     public List<Tool> toolsForProfile(String profileCode) {
-        if (SYSTEM_ADMIN.equals(profileCode)) {
+        return toolsForProfile(profileCode, null);
+    }
+
+    /**
+     * Role-aware overload. In addition to the {@code SYSTEM_ADMIN} profile, a
+     * caller with the {@code ADMIN} role is treated as a superuser and sees
+     * every tool — mirroring how tool <em>execution</em> already bypasses the
+     * project-scope check for {@code ADMIN}. This keeps an admin from silently
+     * losing role-restricted tools when their profile does not resolve (e.g. the
+     * seeded admin authenticates with a username principal, not a UUID).
+     */
+    public List<Tool> toolsForProfile(String profileCode, String role) {
+        if (isSuperuser(profileCode, role)) {
             return List.copyOf(tools.values());
         }
         return tools.values().stream()
@@ -67,10 +79,19 @@ public class ToolRegistry {
      * existing "Unknown tool" error path in the orchestrator still fires.
      */
     public boolean isAllowed(String toolName, String profileCode) {
+        return isAllowed(toolName, profileCode, null);
+    }
+
+    /** Role-aware overload of {@link #isAllowed(String, String)}. */
+    public boolean isAllowed(String toolName, String profileCode, String role) {
         Tool t = tools.get(toolName);
         if (t == null) return true;
-        if (SYSTEM_ADMIN.equals(profileCode)) return true;
+        if (isSuperuser(profileCode, role)) return true;
         return t.allowedRoles().isEmpty()
                 || (profileCode != null && t.allowedRoles().contains(profileCode));
+    }
+
+    private static boolean isSuperuser(String profileCode, String role) {
+        return SYSTEM_ADMIN.equals(profileCode) || "ADMIN".equals(role);
     }
 }

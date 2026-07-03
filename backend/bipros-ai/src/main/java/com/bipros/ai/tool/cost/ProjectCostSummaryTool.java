@@ -41,13 +41,18 @@ public class ProjectCostSummaryTool implements Tool {
 
     @Override
     public String description() {
-        return "Use this for any question about the project's overall cost KPIs — total "
-                + "budgeted cost, total actual cost, total remaining, BAC, CPI, cost variance, "
-                + "material procurement / open stock / issued. Sources include ActivityExpense "
-                + "rows, ResourceAssignment planned cost, DPR-sourced actuals, and the material "
-                + "ledger. Does NOT require any cost_account to exist — prefer this over "
-                + "`cost_breakdown` whenever the user asks about the project's overall "
-                + "budget / actual / CPI / variance. Project-scoped (no input).";
+        return "Use this for any question about the project's overall cost + earned-value KPIs — "
+                + "total budgeted cost, total actual cost, total remaining, BAC, CPI, SPI, cost "
+                + "variance (CV), schedule variance (SV), earned value (EV), planned value (PV), "
+                + "cost %% complete, EAC, ETC, VAC, TCPI, and material procurement / open stock / "
+                + "issued. These are the SAME numbers the Costs tab renders (computed live from BOQ "
+                + "earned value + BAC + actual cost) — ALWAYS use this tool for project-level "
+                + "CPI/SPI/CV/SV/EAC/BAC so the answer matches the Costs tab. Do NOT use "
+                + "`formula_validate` or `analyze_cost` for headline project CPI/SPI — those read a "
+                + "different (snapshot / warehouse) lineage and will disagree with the tab. Sources "
+                + "include ActivityExpense rows, ResourceAssignment planned cost, DPR-sourced "
+                + "actuals, and the material ledger. Does NOT require any cost_account to exist. "
+                + "Project-scoped (no input).";
     }
 
     @Override
@@ -91,13 +96,35 @@ public class ProjectCostSummaryTool implements Tool {
         putAmount(out, "project_original_budget", s.projectOriginalBudget());
         putAmount(out, "project_current_budget", s.projectCurrentBudget());
 
+        // Full live EVM block — identical to what the Cost tab renders. Exposing
+        // SPI / EV / PV / BAC here means the AI can answer project-level CPI AND
+        // SPI (and the rest of the EVM family) from THIS single Cost-tab-consistent
+        // source, instead of routing SPI to formula_validate (the EvmCalculation
+        // snapshot lineage), which produced numbers that disagreed with the tab.
+        putAmount(out, "bac", s.bac());
+        putAmount(out, "planned_cost", s.plannedCost());
+        putAmount(out, "earned_value", s.earnedValue());
+        putAmount(out, "planned_value", s.plannedValue());
+        putAmount(out, "cost_percent_complete", s.costPercentComplete());
+        putAmount(out, "schedule_variance", s.scheduleVariance());
+        out.put("spi", s.schedulePerformanceIndex() == null ? null
+                : s.schedulePerformanceIndex().doubleValue());
+        putAmount(out, "estimate_at_completion", s.estimateAtCompletion());
+        putAmount(out, "estimate_to_complete", s.estimateToComplete());
+        putAmount(out, "variance_at_completion", s.varianceAtCompletion());
+        putAmount(out, "contract_value", s.contractValue());
+        out.put("tcpi", s.toCompletePerformanceIndex() == null ? null
+                : s.toCompletePerformanceIndex().doubleValue());
+
         String cpiTxt = s.costPerformanceIndex() == null ? "N/A"
                 : String.format("%.4f", s.costPerformanceIndex().doubleValue());
+        String spiTxt = s.schedulePerformanceIndex() == null ? "N/A"
+                : String.format("%.4f", s.schedulePerformanceIndex().doubleValue());
         String summary = String.format(
-                "Total budget %,.0f %s; total actual %,.0f %s; CPI %s.",
+                "Total budget %,.0f %s; total actual %,.0f %s; CPI %s; SPI %s.",
                 nz(s.totalBudget()).doubleValue(), currency,
                 nz(s.totalActual()).doubleValue(), currency,
-                cpiTxt);
+                cpiTxt, spiTxt);
         return ToolResult.ok(summary, out);
     }
 

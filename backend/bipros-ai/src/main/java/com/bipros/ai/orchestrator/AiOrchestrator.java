@@ -127,7 +127,7 @@ public class AiOrchestrator {
             sink.tryEmitComplete();
             return;
         }
-        if (!toolRegistry.isAllowed(toolName, ctx.profile())) {
+        if (!toolRegistry.isAllowed(toolName, ctx.profile(), ctx.role())) {
             sink.tryEmitNext(new ChatEvent("error",
                     Map.of("code", "HDS_TOOL_FORBIDDEN",
                             "message", "Your role cannot use the HDS retrieval tool.")));
@@ -196,7 +196,7 @@ public class AiOrchestrator {
                               Sinks.Many<ChatEvent> sink) {
         int cap = "general".equals(ctx.module()) ? generalRounds : defaultRounds;
 
-        List<LlmProvider.ToolSpec> toolSpecs = toolRegistry.toolsForProfile(ctx.profile()).stream()
+        List<LlmProvider.ToolSpec> toolSpecs = toolRegistry.toolsForProfile(ctx.profile(), ctx.role()).stream()
                 .map(t -> new LlmProvider.ToolSpec(t.name(), t.description(), t.inputSchema()))
                 .toList();
 
@@ -399,7 +399,7 @@ public class AiOrchestrator {
                     if (tool == null) {
                         return new ToolCallResult(tc.name(), false, "Unknown tool: " + tc.name(), null, 0);
                     }
-                    if (!toolRegistry.isAllowed(tc.name(), ctx.profile())) {
+                    if (!toolRegistry.isAllowed(tc.name(), ctx.profile(), ctx.role())) {
                         return new ToolCallResult(tc.name(), false,
                                 "Tool '" + tc.name() + "' is not available for your role.", null, 0);
                     }
@@ -814,6 +814,17 @@ public class AiOrchestrator {
               by_supervisor yourself.
             - manpower_hidden_notes[] / equipment_hidden_notes[] — cite verbatim
               (governing_side + mode), do not invent.
+
+            **PROJECT-LEVEL EVM (CPI / SPI / CV / SV / EAC / ETC / VAC / TCPI / BAC / EV / PV) —
+            MANDATORY ROUTING.** For a project's headline earned-value numbers, call
+            `project_cost_summary`. It returns the SAME figures the Costs tab shows (cpi, spi, cv,
+            schedule_variance, earned_value, planned_value, bac, eac, etc, vac, tcpi), computed live
+            from BOQ earned value + BAC + actual cost. Quote those values verbatim. Do NOT answer a
+            project-level CPI or SPI from `formula_validate` or `analyze_cost` — `formula_validate`
+            reads a separate EvmCalculation snapshot lineage and `analyze_cost` reads the analytics
+            warehouse; both can disagree with the Costs tab. Use `formula_validate` only to SHOW the
+            formula + inputs (it now sources project-scope inputs from the same Costs-tab figures) or
+            for ACTIVITY-level EVM (pass activityCode).
 
             **formula_validate IS EVM-ONLY.** It handles CPI, SPI, CV, SV, EAC, ETC, VAC,
             TCPI — nothing else. The previous MANPOWER_UTIL_PCT / EQUIP_UTIL_PCT /

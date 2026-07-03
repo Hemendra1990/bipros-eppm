@@ -67,4 +67,29 @@ class ToolRegistryFilterTest {
         ToolRegistry r = new ToolRegistry(List.of());
         assertTrue(r.isAllowed("nonexistent", "SITE_MANAGER"));
     }
+
+    @Test
+    void adminRole_seesEveryTool_evenWithNullProfile() {
+        // Admin authenticates with a username principal, so profileCode can be null.
+        // The ADMIN role must still act as a tool-visibility superuser, mirroring the
+        // execution-time project-scope bypass — otherwise admin loses list_issues,
+        // analyze_risk, and every other role-restricted tool.
+        Tool pmOnly = new StubTool("pm_only", Set.of("PROJECT_MANAGER"));
+        Tool qcOnly = new StubTool("qc_only", Set.of("QC_MANAGER"));
+        ToolRegistry r = new ToolRegistry(List.of(pmOnly, qcOnly));
+
+        assertEquals(2, r.toolsForProfile(null, "ADMIN").size());
+        assertTrue(r.isAllowed("pm_only", null, "ADMIN"));
+        assertTrue(r.isAllowed("qc_only", null, "ADMIN"));
+    }
+
+    @Test
+    void nonAdminRole_stillFiltersByProfile() {
+        Tool pmOnly = new StubTool("pm_only", Set.of("PROJECT_MANAGER"));
+        Tool open = new StubTool("open", Set.of());
+        ToolRegistry r = new ToolRegistry(List.of(pmOnly, open));
+
+        assertEquals(1, r.toolsForProfile("SITE_MANAGER", "USER").size());
+        assertFalse(r.isAllowed("pm_only", "SITE_MANAGER", "USER"));
+    }
 }

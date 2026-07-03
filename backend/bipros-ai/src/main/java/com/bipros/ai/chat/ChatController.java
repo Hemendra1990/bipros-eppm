@@ -78,21 +78,46 @@ public class ChatController {
                 resolveConfig());
         List<com.bipros.ai.orchestrator.AiOrchestrator.ChatEvent> events = flux.collectList().block();
 
-        StringBuilder text = new StringBuilder();
+        String finalText = reduceFinalText(events);
+
+        conversationService.appendAssistantMessage(conv.getId(), finalText);
+
+        return ResponseEntity.ok(ApiResponse.ok(new ChatResponse(conv.getId(), finalText)));
+    }
+
+    /**
+     * Reduces the orchestrator's event stream to the single final answer.
+     *
+     * <p>The orchestrator does NOT emit incremental tokens — each ReAct round emits one
+     * {@code token} event carrying that round's ENTIRE content, and several rounds may run
+     * (the initial draft plus re-draft rounds forced by the tool-use / verification / chart
+     * gates), followed by a terminal {@code done} event with the finished answer. So the naive
+     * "append every token and the done text" approach concatenated every draft, making the
+     * answer appear multiple times.
+     *
+     * <p>Rule: the terminal {@code done} text wins WHEN IT IS NON-BLANK. It can legitimately be
+     * blank — e.g. the model returns empty content on the post-verification round (Gate C), so
+     * {@code done} carries {@code ""} even though a good pre-verification draft was already emitted
+     * as a {@code token}. In that case (and on the error path, which emits tokens but no done) we
+     * fall back to the LAST non-blank {@code token}, i.e. the most refined draft. Only when nothing
+     * usable was emitted do we return an empty string.
+     */
+    static String reduceFinalText(List<com.bipros.ai.orchestrator.AiOrchestrator.ChatEvent> events) {
+        String doneText = null;
+        String lastToken = null;
         if (events != null) {
             for (var e : events) {
-                if ("token".equals(e.event()) && e.data().get("delta") != null) {
-                    text.append(e.data().get("delta"));
-                }
                 if ("done".equals(e.event()) && e.data().get("text") != null) {
-                    text.append(e.data().get("text"));
+                    doneText = e.data().get("text").toString();
+                } else if ("token".equals(e.event()) && e.data().get("delta") != null) {
+                    String delta = e.data().get("delta").toString();
+                    if (!delta.isBlank()) lastToken = delta;
                 }
             }
         }
-
-        conversationService.appendAssistantMessage(conv.getId(), text.toString());
-
-        return ResponseEntity.ok(ApiResponse.ok(new ChatResponse(conv.getId(), text.toString())));
+        if (doneText != null && !doneText.isBlank()) return doneText;
+        if (lastToken != null) return lastToken;
+        return doneText != null ? doneText : "";
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
