@@ -80,6 +80,7 @@ export interface VarianceBuckets {
   onBudget: number;
   over: number;
   under: number;
+  noBudget: number;
   total: number;
 }
 
@@ -91,12 +92,13 @@ export function bucketVariance(items: BoqItemResponse[]): VarianceBuckets {
   let onBudget = 0;
   let over = 0;
   let under = 0;
+  let noBudget = 0;
   for (const it of items) {
     const pct = it.costVariancePercent;
-    if (pct == null) continue;
+    if (pct == null) { noBudget += 1; continue; }
     if (Math.abs(pct) <= 5) onBudget += 1;
     else if (pct < -5) over += 1;
     else under += 1;
   }
-  return { onBudget, over, under, total: onBudget + over + under };
+  return { onBudget, over, under, noBudget, total: onBudget + over + under + noBudget };
 }
