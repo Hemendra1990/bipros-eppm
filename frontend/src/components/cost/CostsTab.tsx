@@ -76,12 +76,14 @@ export function CostsTab({ projectId }: { projectId: string }) {
       const cu = projectCurrencyEarly;
       const fmtPeriod = makeFormatter(cu);
       return [
-        { accessorKey: "periodName", header: "Period" },
+        { accessorKey: "periodName", header: "Period", cell: (info) => (
+          <span className="block text-left">{String(info.getValue())}</span>
+        ) },
         {
           accessorKey: "budget",
           header: `Budget (${cu})`,
           cell: (info) => (
-            <span className="block text-right text-accent">
+            <span className="block text-left text-accent">
               {fmtPeriod(Number(info.getValue()))}
             </span>
           ),
@@ -90,7 +92,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
           accessorKey: "actual",
           header: `Actual (${cu})`,
           cell: (info) => (
-            <span className="block text-right text-success">
+            <span className="block text-left text-success">
               {fmtPeriod(Number(info.getValue()))}
             </span>
           ),
@@ -102,7 +104,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
             const v = Number(info.getValue());
             return (
               <span
-                className={`block text-right ${
+                className={`block text-left ${
                   v >= 0 ? "text-success" : "text-danger"
                 }`}
               >
@@ -115,7 +117,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
           accessorKey: "earnedValue",
           header: `Earned Value (${cu})`,
           cell: (info) => (
-            <span className="block text-right text-warning">
+            <span className="block text-left text-warning">
               {fmtPeriod(Number(info.getValue()))}
             </span>
           ),
@@ -124,7 +126,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
           accessorKey: "plannedValue",
           header: `Planned Value (${cu})`,
           cell: (info) => (
-            <span className="block text-right text-info">
+            <span className="block text-left text-info">
               {fmtPeriod(Number(info.getValue()))}
             </span>
           ),

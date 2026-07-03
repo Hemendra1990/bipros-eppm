@@ -11,6 +11,7 @@ import {
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { formatDate } from "@/lib/utils/format";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useAuthStore } from "@/lib/state/store";
@@ -139,7 +140,7 @@ export default function WeatherLogPage() {
   };
 
   const columns = useMemo<ColumnDef<DailyWeatherResponse>[]>(() => [
-    { accessorKey: "logDate", header: "Date" },
+    { accessorKey: "logDate", header: "Date", cell: ({ getValue }) => formatDate(getValue<string>()) },
     {
       accessorKey: "tempMaxC",
       header: "Temp Max (°C)",
