@@ -26,12 +26,15 @@ export function CostVarianceDonut({ summary, isLoading }: Props) {
   const onBudgetPct = buckets.total > 0 ? (buckets.onBudget / buckets.total) * 100 : 0;
   const overPct = buckets.total > 0 ? (buckets.over / buckets.total) * 100 : 0;
   const underPct = buckets.total > 0 ? (buckets.under / buckets.total) * 100 : 0;
+  const noBudgetPct = buckets.total > 0 ? (buckets.noBudget / buckets.total) * 100 : 0;
 
-  const slices = [
+  const allSlices = [
     { name: "On Budget", value: buckets.onBudget, color: CHART_COLORS.good },
     { name: "Over", value: buckets.over, color: CHART_COLORS.red },
     { name: "Under", value: buckets.under, color: CHART_COLORS.amber },
-  ].filter((s) => s.value > 0);
+    { name: "No Budget", value: buckets.noBudget, color: CHART_COLORS.muted },
+  ];
+  const slices = allSlices.filter((s) => s.value > 0);
 
   // BIPROS sign convention: grandCostVariance > 0 ⇒ under budget. The donut centre
   // label reads from the grand percent so the verdict matches the project rollup,
@@ -65,8 +68,9 @@ export function CostVarianceDonut({ summary, isLoading }: Props) {
                   nameKey="name"
                   innerRadius={62}
                   outerRadius={86}
-                  paddingAngle={2}
-                  strokeWidth={0}
+                  paddingAngle={slices.length > 1 ? 2 : 0}
+                  stroke="#fff"
+                  strokeWidth={2}
                 >
                   {slices.map((s) => (
                     <Cell key={s.name} fill={s.color} />
@@ -108,6 +112,12 @@ export function CostVarianceDonut({ summary, isLoading }: Props) {
               label="Under"
               count={buckets.under}
               pct={underPct}
+            />
+            <LegendRow
+              swatch={CHART_COLORS.muted}
+              label="No Budget"
+              count={buckets.noBudget}
+              pct={noBudgetPct}
             />
           </ul>
         </div>

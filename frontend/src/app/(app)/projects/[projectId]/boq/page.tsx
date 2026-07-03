@@ -199,7 +199,7 @@ export default function BoqPage() {
               cancelEdit();
             }
           }}
-          className="w-full rounded border border-gold/40 bg-paper px-2 py-1 text-right text-sm text-charcoal focus:outline-none focus:ring-1 focus:ring-gold dark:text-[#F5F2E8]"
+          className="w-full rounded border border-gold/40 bg-paper px-2 py-1 text-left text-sm text-charcoal focus:outline-none focus:ring-1 focus:ring-gold dark:text-[#F5F2E8]"
         />
       );
     }
@@ -210,7 +210,7 @@ export default function BoqPage() {
           e.stopPropagation();
           beginEdit(item, field);
         }}
-        className="block w-full text-right hover:text-gold focus:text-gold focus:outline-none"
+        className="block w-full text-left hover:text-gold focus:text-gold focus:outline-none"
         title="Click to edit"
       >
         {field === "actualRate" ? formatRate(item[field]) : formatAmount(item[field])}
@@ -269,70 +269,70 @@ export default function BoqPage() {
         accessorKey: "boqQty",
         header: () => <span className="flex flex-col leading-tight">BOQ Qty<span className="text-[10px] font-normal text-text-muted">(from client)</span></span>,
         size: 90,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => formatAmount(info.getValue() as number | null | undefined),
       },
       {
         accessorKey: "boqRate",
         header: () => <span className="flex flex-col leading-tight">BOQ Rate<span className="text-[10px] font-normal text-text-muted">(from client)</span></span>,
         size: 100,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => formatMoney(info.getValue() as number | null | undefined),
       },
       {
         accessorKey: "boqAmount",
         header: "BOQ Amount",
         size: 120,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => formatMoney(info.getValue() as number | null | undefined),
       },
       {
         accessorKey: "budgetedRate",
         header: "Budgeted Rate",
         size: 120,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => formatMoney(info.getValue() as number | null | undefined),
       },
       {
         accessorKey: "budgetedAmount",
         header: "Budgeted Amt",
         size: 130,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => formatMoney(info.getValue() as number | null | undefined),
       },
       {
         accessorKey: "qtyExecutedToDate",
         header: "Qty Executed",
         size: 120,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => renderEditableNumberCell(info.row.original, "qtyExecutedToDate"),
       },
       {
         accessorKey: "actualRate",
         header: "Actual Rate",
         size: 110,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => renderEditableNumberCell(info.row.original, "actualRate"),
       },
       {
         accessorKey: "actualAmount",
         header: "Actual Amount",
         size: 130,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => formatMoney(info.getValue() as number | null | undefined),
       },
       {
         accessorKey: "percentComplete",
         header: "% Complete",
         size: 110,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => formatPercent(info.getValue() as number | null | undefined),
       },
       {
         accessorKey: "costVariance",
         header: "Cost Variance",
         size: 130,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => {
           const v = info.getValue() as number | null | undefined;
           return <span className={varianceClass(v)}>{formatMoney(v)}</span>;
@@ -342,7 +342,7 @@ export default function BoqPage() {
         accessorKey: "costVariancePercent",
         header: "Var %",
         size: 90,
-        meta: { className: "text-right tabular-nums" },
+        meta: { className: "text-left" },
         cell: (info) => {
           const v = info.getValue() as number | null | undefined;
           return <span className={varianceClass(v)}>{formatPercent(v)}</span>;
@@ -366,22 +366,22 @@ export default function BoqPage() {
 
   const grandTotalFooter = summary ? (
 <tr className="text-text-primary dark:text-[#F5F2E8] font-semibold">
-  <td className="px-4 py-3" colSpan={7}>
+  <td className="px-4 py-3" colSpan={5}>
         Grand Total
       </td>
-      <td className="px-4 py-3 text-right tabular-nums">{formatAmount(boqQtyGrandTotal)}</td>
+      <td className="px-4 py-3 text-left">{formatAmount(boqQtyGrandTotal)}</td>
       <td className="px-4 py-3" />
-      <td className="px-4 py-3 text-right tabular-nums">{formatMoney(summary.boqGrandTotal)}</td>
+      <td className="px-4 py-3 text-left">{formatMoney(summary.boqGrandTotal)}</td>
       <td className="px-4 py-3" />
-      <td className="px-4 py-3 text-right tabular-nums">{formatMoney(summary.budgetedGrandTotal)}</td>
-      <td className="px-4 py-3 text-right tabular-nums">{formatAmount(qtyExecutedGrandTotal)}</td>
+      <td className="px-4 py-3 text-left">{formatMoney(summary.budgetedGrandTotal)}</td>
+      <td className="px-4 py-3 text-left">{formatAmount(qtyExecutedGrandTotal)}</td>
       <td className="px-4 py-3" />
-      <td className="px-4 py-3 text-right tabular-nums">{formatMoney(summary.actualGrandTotal)}</td>
-      <td className="px-4 py-3 text-right tabular-nums">{formatPercent(summary.overallPercentComplete)}</td>
-      <td className={cn("px-4 py-3 text-right tabular-nums", varianceClass(summary.grandCostVariance))}>
+      <td className="px-4 py-3 text-left">{formatMoney(summary.actualGrandTotal)}</td>
+      <td className="px-4 py-3 text-left">{formatPercent(summary.overallPercentComplete)}</td>
+      <td className={cn("px-4 py-3 text-left", varianceClass(summary.grandCostVariance))}>
         {formatMoney(summary.grandCostVariance)}
       </td>
-      <td className={cn("px-4 py-3 text-right tabular-nums", varianceClass(summary.grandCostVariancePercent))}>
+      <td className={cn("px-4 py-3 text-left", varianceClass(summary.grandCostVariancePercent))}>
         {formatPercent(summary.grandCostVariancePercent)}
       </td>
     </tr>

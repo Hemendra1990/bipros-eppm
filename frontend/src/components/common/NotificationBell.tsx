@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -55,7 +56,11 @@ export function NotificationBell() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => setMounted(true), []);
 
   // Unread badge — polls every 45 s
   const { data: unreadCount = 0 } = useQuery({
@@ -77,7 +82,9 @@ export function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const insideWrap = wrapRef.current?.contains(e.target as Node);
+      const insideMenu = menuRef.current?.contains(e.target as Node);
+      if (!insideWrap && !insideMenu) {
         setOpen(false);
       }
     };
@@ -144,11 +151,20 @@ export function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-12 z-40 w-[360px] overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
-        >
+      {open &&
+        mounted &&
+        createPortal(
+          (() => {
+            const btnRect = wrapRef.current?.getBoundingClientRect();
+            const top = btnRect ? btnRect.bottom + 4 : 0;
+            const right = btnRect ? window.innerWidth - btnRect.right : 0;
+            return (
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{ top: `${top}px`, right: `${right}px` }}
+            className="fixed z-50 w-[360px] overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
+          >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
             <span className="text-[13px] font-semibold text-charcoal">Notifications</span>
@@ -223,8 +239,11 @@ export function NotificationBell() {
                 </button>
               ))}
           </div>
-        </div>
-      )}
+          </div>
+          );
+          })(),
+          document.body,
+        )}
     </div>
   );
 }

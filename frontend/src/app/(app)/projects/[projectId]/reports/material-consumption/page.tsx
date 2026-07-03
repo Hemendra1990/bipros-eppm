@@ -14,6 +14,7 @@ import { projectApi } from "@/lib/api/projectApi";
 import { materialRateMasterApi } from "@/lib/api/materialRateMasterApi";
 import { userApi, type UserSummary } from "@/lib/api/userApi";
 import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
+import { formatDate } from "@/lib/utils/format";
 import { getErrorMessage } from "@/lib/utils/error";
 
 const ALERT_STYLES: Record<string, string> = {
@@ -454,8 +455,8 @@ function Row({
 }) {
   const dateLabel =
     row.fromDate && row.toDate && row.fromDate === row.toDate
-      ? row.fromDate
-      : [row.fromDate, row.toDate].filter(Boolean).join(" → ");
+      ? formatDate(row.fromDate)
+      : [row.fromDate, row.toDate].filter(Boolean).map(formatDate).join(" → ");
   return (
     <tr className="border-t border-border hover:bg-surface-active/40">
       <Td>{dateLabel || "—"}</Td>

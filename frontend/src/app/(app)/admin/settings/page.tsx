@@ -283,7 +283,7 @@ function CurrenciesSection() {
           <div className="mt-4 flex gap-2">
             <button
               onClick={() => createMutation.mutate()}
-              disabled={!formData.code || !formData.name || !formData.symbol || createMutation.isPending}
+              disabled={!formData.code.trim() || !formData.name.trim() || !formData.symbol.trim() || createMutation.isPending}
               className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               {createMutation.isPending ? "Adding..." : "Add Currency"}

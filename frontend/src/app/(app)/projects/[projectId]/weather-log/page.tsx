@@ -11,6 +11,7 @@ import {
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { formatDate } from "@/lib/utils/format";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useAuthStore } from "@/lib/state/store";
@@ -68,6 +69,7 @@ export default function WeatherLogPage() {
   const [toDate, setToDate] = useState("");
   const [appliedFrom, setAppliedFrom] = useState("");
   const [appliedTo, setAppliedTo] = useState("");
+  const [rangeError, setRangeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!project) return;
@@ -95,6 +97,11 @@ export default function WeatherLogPage() {
   const entries: DailyWeatherResponse[] = useMemo(() => data?.data ?? [], [data]);
 
   const handleApply = () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setRangeError("From date cannot be later than To date.");
+      return;
+    }
+    setRangeError(null);
     setAppliedFrom(fromDate);
     setAppliedTo(toDate);
   };
@@ -139,7 +146,7 @@ export default function WeatherLogPage() {
   };
 
   const columns = useMemo<ColumnDef<DailyWeatherResponse>[]>(() => [
-    { accessorKey: "logDate", header: "Date" },
+    { accessorKey: "logDate", header: "Date", cell: ({ getValue }) => formatDate(getValue<string>()) },
     {
       accessorKey: "tempMaxC",
       header: "Temp Max (°C)",
@@ -209,7 +216,8 @@ export default function WeatherLogPage() {
             <input
               type="date"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              onChange={(e) => { setFromDate(e.target.value); setRangeError(null); }}
+              max={toDate || undefined}
               className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
             />
           </div>
@@ -218,7 +226,8 @@ export default function WeatherLogPage() {
             <input
               type="date"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => { setToDate(e.target.value); setRangeError(null); }}
+              min={fromDate || undefined}
               className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
             />
           </div>
@@ -241,6 +250,7 @@ export default function WeatherLogPage() {
           )}
         </div>
 
+        {rangeError && <div className="text-danger mb-4 text-sm">{rangeError}</div>}
         {error && <div className="text-danger mb-4">{error}</div>}
         {isError && (
           <div className="text-danger mb-4">

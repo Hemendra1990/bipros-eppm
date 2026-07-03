@@ -65,7 +65,7 @@ export function CostSCurveChart({ data, isLoading, currencyCode }: Props) {
       ) : (
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={rows} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+            <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E6E0CF" vertical={false} />
               <XAxis
                 dataKey="period"
@@ -78,7 +78,7 @@ export function CostSCurveChart({ data, isLoading, currencyCode }: Props) {
                 tick={{ fill: "#7a7368", fontSize: 11 }}
                 axisLine={{ stroke: "#E6E0CF" }}
                 tickLine={false}
-                width={70}
+                width={80}
               />
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}
