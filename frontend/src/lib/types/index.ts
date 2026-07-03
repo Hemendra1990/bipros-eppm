@@ -613,6 +613,7 @@ export interface BaselineVarianceRow {
   finishVarianceDays: number;
   durationVariance: number;
   costVariance: number;
+  comparable: boolean;
 }
 
 // === Portfolio ===

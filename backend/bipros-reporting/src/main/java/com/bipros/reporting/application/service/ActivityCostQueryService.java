@@ -27,8 +27,11 @@ import java.util.UUID;
  *   <li>Manpower / equipment / material split.
  * </ul>
  *
- * <p>Planned cost is sourced from {@code resource.resource_assignments.planned_cost} (snapshot
- * at assignment creation). Actual cost canonical source is
+ * <p>Planned cost is the canonical composition also used by {@code ActivityCostCalculator} /
+ * {@code CostService}: {@code resource.resource_assignments.planned_cost} (snapshot at
+ * assignment creation) + {@code cost.activity_expenses.budgeted_cost} +
+ * {@code resource.activity_sub_contractor_assignments.planned_cost}. Actual cost canonical
+ * source is
  * {@code resource.resource_assignments.actual_cost} — maintained by
  * {@code ResourceAssignmentCostRollupListener} as {@code effective_rate × actual_units}
  * whenever DPRs are submitted or edited. This is exactly what the Resource Plan UI on the
@@ -237,10 +240,19 @@ public class ActivityCostQueryService {
     return out;
   }
 
+  /**
+   * Canonical planned-cost composition (matches {@code ActivityCostCalculator} /
+   * {@code CostService}): resource-assignment planned + activity-expense budgeted +
+   * sub-contractor planned. All three sources are scoped to this activity.
+   */
   private BigDecimal sumPlannedCost(UUID activityId) {
     Query q = em.createNativeQuery(
-        "SELECT COALESCE(SUM(planned_cost), 0) FROM resource.resource_assignments "
-            + "WHERE activity_id = :activityId");
+        "SELECT (SELECT COALESCE(SUM(planned_cost), 0) FROM resource.resource_assignments "
+            + "        WHERE activity_id = :activityId) "
+            + "     + (SELECT COALESCE(SUM(budgeted_cost), 0) FROM cost.activity_expenses "
+            + "        WHERE activity_id = :activityId) "
+            + "     + (SELECT COALESCE(SUM(planned_cost), 0) FROM resource.activity_sub_contractor_assignments "
+            + "        WHERE activity_id = :activityId)");
     q.setParameter("activityId", activityId);
     return toBigDecimal(q.getSingleResult());
   }

@@ -11,15 +11,18 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.List;
 
 @Slf4j
@@ -87,6 +90,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleConcurrency(ConcurrencyException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("CONFLICT", ex.getMessage()));
+    }
+
+    /**
+     * Transaction was rolled back — typically {@link org.springframework.transaction.UnexpectedRollbackException}
+     * thrown when an earlier statement in the same transaction (e.g. a poisoned row during an
+     * import) already marked it rollback-only. Nothing was persisted.
+     */
+    @ExceptionHandler(TransactionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTransactionRolledBack(TransactionException ex) {
+        log.warn("Transaction rolled back: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("TRANSACTION_ROLLED_BACK",
+                        "The operation could not be completed and was rolled back — no changes were saved. "
+                                + "Please fix any flagged issues and try again."));
     }
 
     @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
@@ -164,6 +181,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("MISSING_PARAMETER",
                         "Required parameter '" + ex.getParameterName() + "' is missing"));
+    }
+
+    /** Uploaded file or request body could not be read (e.g. client disconnect mid-upload). */
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIoError(IOException ex) {
+        log.warn("IO error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("IO_ERROR",
+                        "The uploaded file or request could not be read. Please try again."));
+    }
+
+    /** Multipart endpoint expected a file part that the client didn't send. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingFile(MissingServletRequestPartException ex) {
+        log.warn("Missing file part: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("MISSING_FILE", "A required file was not provided."));
     }
 
     /**

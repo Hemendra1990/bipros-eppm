@@ -148,6 +148,59 @@ class GlobalExceptionHandlerTest {
     }
 
     @Nested
+    @DisplayName("TransactionException (transaction rolled back)")
+    class TransactionRolledBack {
+
+        @Test
+        @DisplayName("returns HTTP 409 with TRANSACTION_ROLLED_BACK error code")
+        void returns409() {
+            org.springframework.transaction.UnexpectedRollbackException ex =
+                    new org.springframework.transaction.UnexpectedRollbackException("x");
+
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleTransactionRolledBack(ex);
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            ApiError err = resp.getBody().error();
+            assertThat(err.code()).isEqualTo("TRANSACTION_ROLLED_BACK");
+        }
+    }
+
+    @Nested
+    @DisplayName("IOException (unreadable file/request)")
+    class IoError {
+
+        @Test
+        @DisplayName("returns HTTP 400 with IO_ERROR error code")
+        void returns400() {
+            java.io.IOException ex = new java.io.IOException("x");
+
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleIoError(ex);
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            ApiError err = resp.getBody().error();
+            assertThat(err.code()).isEqualTo("IO_ERROR");
+        }
+    }
+
+    @Nested
+    @DisplayName("MissingServletRequestPartException (required file not provided)")
+    class MissingFile {
+
+        @Test
+        @DisplayName("returns HTTP 400 with MISSING_FILE error code")
+        void returns400() {
+            org.springframework.web.multipart.support.MissingServletRequestPartException ex =
+                    new org.springframework.web.multipart.support.MissingServletRequestPartException("file");
+
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleMissingFile(ex);
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            ApiError err = resp.getBody().error();
+            assertThat(err.code()).isEqualTo("MISSING_FILE");
+        }
+    }
+
+    @Nested
     @DisplayName("Generic Exception handler")
     class Generic {
 

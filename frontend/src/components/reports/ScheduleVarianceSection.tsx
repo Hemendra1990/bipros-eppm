@@ -104,7 +104,7 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
   const filtered = useMemo(() => {
     let r = rows;
     if (showOnlyNonZero) {
-      r = r.filter((x) => x.startVarianceDays !== 0 || x.finishVarianceDays !== 0);
+      r = r.filter((x) => (x.startVarianceDays ?? 0) !== 0 || (x.finishVarianceDays ?? 0) !== 0);
     }
     if (milestonesOnly) {
       r = r.filter((x) => x.isMilestone);
@@ -116,13 +116,16 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
       r = r.filter((x) => statusFilter.has(x.status));
     }
     if (threshold > 0) {
-      r = r.filter((x) => Math.abs(x.finishVarianceDays) >= threshold);
+      r = r.filter((x) => x.finishVarianceDays !== null && Math.abs(x.finishVarianceDays) >= threshold);
     }
     return r;
   }, [rows, showOnlyNonZero, milestonesOnly, criticalOnly, statusFilter, threshold]);
 
   const distribution = useMemo(() => {
-    const visible = filtered;
+    const visible = filtered.filter(
+      (r): r is ScheduleVarianceRow & { finishVarianceDays: number } =>
+        r.comparable && r.finishVarianceDays !== null
+    );
     return VARIANCE_BUCKETS.map((b) => ({
       label: b.label,
       count: visible.filter((r) => b.test(r.finishVarianceDays)).length,
@@ -241,7 +244,10 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
         accessorKey: "startVarianceDays",
         header: "Var start",
         cell: (info) => {
-          const val = Number(info.getValue());
+          const raw = info.getValue();
+          if (raw == null || info.row.original.comparable === false)
+            return <span className="block text-right text-slate">—</span>;
+          const val = Number(raw);
           return (
             <span
               className={`block text-right ${varianceClass(val)}`}
@@ -274,7 +280,10 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
         accessorKey: "finishVarianceDays",
         header: "Var finish",
         cell: (info) => {
-          const val = Number(info.getValue());
+          const raw = info.getValue();
+          if (raw == null || info.row.original.comparable === false)
+            return <span className="block text-right text-slate">—</span>;
+          const val = Number(raw);
           return (
             <span
               className={`block text-right ${varianceClass(val)}`}
@@ -365,9 +374,12 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
     return <EmptyBaselineState />;
   }
 
+  const comparableCount = summary
+    ? summary.totalActivities - summary.notComparableCount
+    : 0;
   const onTrackPct =
-    summary && summary.totalActivities > 0
-      ? Math.round((summary.onTrackCount / summary.totalActivities) * 100)
+    summary && comparableCount > 0
+      ? Math.round((summary.onTrackCount / comparableCount) * 100)
       : 0;
 
   return (
@@ -383,6 +395,10 @@ export function ScheduleVarianceSection({ projectId, baselineId }: Props) {
           value={`${onTrackPct}%`}
           accent="emerald"
           hint={`${summary?.onTrackCount ?? 0} activities`}
+        />
+        <Kpi
+          label="Not comparable"
+          value={summary?.notComparableCount ?? 0}
         />
         <Kpi
           label="Slipped"

@@ -30,6 +30,7 @@ public record ScheduleVarianceReport(
       int slippedCount,        // finish variance > 0
       int aheadCount,          // finish variance < 0
       int onTrackCount,        // finish variance == 0
+      int notComparableCount,  // undated rows excluded from the classification above
       int criticalSlippedCount,
       int milestoneSlippedCount,
       double avgStartVarianceDays,
@@ -56,5 +57,6 @@ public record ScheduleVarianceReport(
       double durationVarianceDays,
       Double totalFloat,
       Boolean isCritical,
-      boolean isMilestone) {}
+      boolean isMilestone,
+      boolean comparable) {}
 }

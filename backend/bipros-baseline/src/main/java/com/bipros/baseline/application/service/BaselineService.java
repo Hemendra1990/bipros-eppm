@@ -32,11 +32,14 @@ import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.service.ActivityCostCalculator;
 import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +76,8 @@ public class BaselineService {
   private final WbsNodeRepository wbsNodeRepository;
   private final AuditService auditService;
   private final ApplicationEventPublisher eventPublisher;
+  private final DprActualCostLookup dprActualCostLookup;
+  private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
 
   @Transactional
   public BaselineResponse createBaseline(UUID projectId, CreateBaselineRequest request) {
@@ -122,6 +127,10 @@ public class BaselineService {
     Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
         .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
 
+    Map<UUID, List<ActivitySubContractorAssignment>> scByActivity =
+        activitySubContractorAssignmentRepository.findByProjectId(snapshotSourceId).stream()
+            .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
+
     // Compute project-level metrics BEFORE the first save so totalActivities/totalCost/
     // project dates land in the initial INSERT — otherwise the response DTO may be serialised
     // from a stale entity reference and render as 0/null (BUG-038).
@@ -132,7 +141,7 @@ public class BaselineService {
 
     for (Activity activity : activities) {
       BigDecimal plannedCost = ActivityCostCalculator.calculatePlannedCost(
-          activity.getId(), expensesByActivity, assignmentsByActivity);
+          activity.getId(), expensesByActivity, assignmentsByActivity, scByActivity);
       BigDecimal actualCost = ActivityCostCalculator.calculateActualCost(
           activity.getId(), expensesByActivity, assignmentsByActivity);
 
@@ -568,6 +577,9 @@ public class BaselineService {
     Map<UUID, List<ResourceAssignment>> assignmentsByActivity = resourceAssignmentRepository
         .findByProjectId(projectId).stream()
         .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+    Map<UUID, List<ActivitySubContractorAssignment>> scByActivity =
+        activitySubContractorAssignmentRepository.findByProjectId(projectId).stream()
+            .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
 
     int updated = 0;
     int inserted = 0;
@@ -593,7 +605,7 @@ public class BaselineService {
       }
       if (request.resourceCosts() || request.expenseCosts()) {
         BigDecimal planned = ActivityCostCalculator.calculatePlannedCost(
-            a.getId(), expensesByActivity, assignmentsByActivity);
+            a.getId(), expensesByActivity, assignmentsByActivity, scByActivity);
         BigDecimal actual = ActivityCostCalculator.calculateActualCost(
             a.getId(), expensesByActivity, assignmentsByActivity);
         ba.setPlannedCost(planned);
@@ -729,12 +741,10 @@ public class BaselineService {
         .filter(e -> e.getActivityId() != null)
         .collect(Collectors.groupingBy(ActivityExpense::getActivityId));
 
-    List<ResourceAssignment> allAssignments = resourceAssignmentRepository.findByProjectId(projectId);
-    Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
-        .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+    Map<UUID, BigDecimal> dprByActivity = dprActualCostLookup.sumByActivity(projectId);
 
     return baselineActivities.stream()
-        .map(ba -> calculateVariance(ba, activityMap, expensesByActivity, assignmentsByActivity))
+        .map(ba -> calculateVariance(ba, activityMap, expensesByActivity, dprByActivity))
         .toList();
   }
 
@@ -742,7 +752,7 @@ public class BaselineService {
       BaselineActivity baselineActivity,
       Map<UUID, Activity> currentActivityMap,
       Map<UUID, List<ActivityExpense>> expensesByActivity,
-      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+      Map<UUID, BigDecimal> dprByActivity) {
 
     Activity currentActivity = currentActivityMap.get(baselineActivity.getActivityId());
     String activityName = currentActivity != null ? currentActivity.getName() : "Deleted Activity";
@@ -754,15 +764,15 @@ public class BaselineService {
 
     if (currentActivity != null) {
       // Schedule variance (positive = delayed)
-      if (baselineActivity.getEarlyStart() != null && currentActivity.getPlannedStartDate() != null) {
+      if (baselineActivity.getEarlyStart() != null && currentActivity.currentStartDate() != null) {
         startVarianceDays = ChronoUnit.DAYS.between(
             baselineActivity.getEarlyStart(),
-            currentActivity.getPlannedStartDate());
+            currentActivity.currentStartDate());
       }
-      if (baselineActivity.getEarlyFinish() != null && currentActivity.getPlannedFinishDate() != null) {
+      if (baselineActivity.getEarlyFinish() != null && currentActivity.currentFinishDate() != null) {
         finishVarianceDays = ChronoUnit.DAYS.between(
             baselineActivity.getEarlyFinish(),
-            currentActivity.getPlannedFinishDate());
+            currentActivity.currentFinishDate());
       }
 
       // Duration variance
@@ -771,12 +781,16 @@ public class BaselineService {
       }
 
       // Cost variance = current actual cost - baseline planned cost
-      BigDecimal currentActualCost = ActivityCostCalculator.calculateActualCost(
-          currentActivity.getId(), expensesByActivity, assignmentsByActivity);
+      BigDecimal currentActualCost = ActivityCostCalculator
+          .calculateExpenseActualCost(currentActivity.getId(), expensesByActivity)
+          .add(dprByActivity.getOrDefault(currentActivity.getId(), BigDecimal.ZERO));
       BigDecimal baselinePlannedCost = baselineActivity.getPlannedCost() != null
           ? baselineActivity.getPlannedCost() : BigDecimal.ZERO;
       costVariance = currentActualCost.subtract(baselinePlannedCost);
     }
+
+    boolean comparable = baselineActivity.getEarlyFinish() != null
+        && currentActivity != null && currentActivity.currentFinishDate() != null;
 
     return new BaselineVarianceResponse(
         baselineActivity.getActivityId(),
@@ -784,7 +798,8 @@ public class BaselineService {
         startVarianceDays,
         finishVarianceDays,
         durationVariance,
-        costVariance);
+        costVariance,
+        comparable);
   }
 
   public List<ScheduleComparisonResponse> getScheduleComparison(UUID projectId, UUID baselineId) {
@@ -817,10 +832,10 @@ public class BaselineService {
             "Deleted Activity",
             null,
             ba.getEarlyStart(),
-            0L,
+            null,
             null,
             ba.getEarlyFinish(),
-            0L,
+            null,
             ScheduleComparisonResponse.ComparisonStatus.DELETED));
       }
     }
@@ -830,13 +845,16 @@ public class BaselineService {
 
   private ScheduleComparisonResponse compareActivity(Activity current, BaselineActivity baseline) {
     ScheduleComparisonResponse.ComparisonStatus status;
-    LocalDate currentStart = current.getPlannedStartDate();
+    LocalDate currentStart = current.currentStartDate();
     LocalDate baselineStart = baseline != null ? baseline.getEarlyStart() : null;
-    LocalDate currentFinish = current.getPlannedFinishDate();
+    LocalDate currentFinish = current.currentFinishDate();
     LocalDate baselineFinish = baseline != null ? baseline.getEarlyFinish() : null;
 
     if (baseline == null) {
       status = ScheduleComparisonResponse.ComparisonStatus.ADDED;
+    } else if (currentStart == null && currentFinish == null
+        && baselineStart == null && baselineFinish == null) {
+      status = ScheduleComparisonResponse.ComparisonStatus.NOT_COMPARABLE;
     } else if (areDatesEqual(currentStart, baselineStart) && areDatesEqual(currentFinish, baselineFinish)) {
       status = ScheduleComparisonResponse.ComparisonStatus.UNCHANGED;
     } else {
@@ -864,7 +882,7 @@ public class BaselineService {
   }
 
   private Long calculateDaysDifference(LocalDate from, LocalDate to) {
-    if (from == null || to == null) return 0L;
+    if (from == null || to == null) return null;
     return ChronoUnit.DAYS.between(from, to);
   }
 }

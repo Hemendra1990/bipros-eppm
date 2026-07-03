@@ -6,6 +6,8 @@ import com.bipros.baseline.infrastructure.repository.BaselineActivityRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.project.application.service.DprActualCostLookup;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.risk.application.simulation.MonteCarloEngine;
 import com.bipros.risk.application.simulation.MonteCarloInput;
@@ -37,13 +39,17 @@ class MonteCarloEngineBaselineRequiredTest {
         CalendarCalculator calendar = Mockito.mock(CalendarCalculator.class);
         ActivityExpenseRepository expenseRepo = Mockito.mock(ActivityExpenseRepository.class);
         ResourceAssignmentRepository assignmentRepo = Mockito.mock(ResourceAssignmentRepository.class);
+        ActivitySubContractorAssignmentRepository scAssignmentRepo =
+            Mockito.mock(ActivitySubContractorAssignmentRepository.class);
+        DprActualCostLookup dprActualCostLookup = Mockito.mock(DprActualCostLookup.class);
 
         UUID projectId = UUID.randomUUID();
         Mockito.when(baselineRepo.findByProjectIdAndIsActiveTrue(projectId)).thenReturn(List.of());
 
         MonteCarloEngine engine = new MonteCarloEngine(
             baselineRepo, baselineActivityRepo, activityRepo, relRepo, pertRepo, riskRepo,
-            riskAssignRepo, corrRepo, calendar, expenseRepo, assignmentRepo);
+            riskAssignRepo, corrRepo, calendar, expenseRepo, assignmentRepo, scAssignmentRepo,
+            dprActualCostLookup);
 
         MonteCarloInput input = MonteCarloInput.defaultsFor(projectId, 1000);
 

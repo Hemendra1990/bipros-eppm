@@ -22,6 +22,7 @@ export interface ScheduleVarianceSummary {
   onTrackCount: number;
   criticalSlippedCount: number;
   milestoneSlippedCount: number;
+  notComparableCount: number;
   avgStartVarianceDays: number;
   avgFinishVarianceDays: number;
   worstFinishVarianceDays: number;
@@ -55,16 +56,17 @@ export interface ScheduleVarianceRow {
   percentComplete: number | null;
   baselineStart: string | null;
   currentStart: string | null;
-  startVarianceDays: number;
+  startVarianceDays: number | null;
   baselineFinish: string | null;
   currentFinish: string | null;
-  finishVarianceDays: number;
+  finishVarianceDays: number | null;
   baselineOriginalDuration: number | null;
   currentOriginalDuration: number | null;
   durationVarianceDays: number;
   totalFloat: number | null;
   isCritical: boolean | null;
   isMilestone: boolean;
+  comparable: boolean;
 }
 
 export interface ScheduleVarianceReport {

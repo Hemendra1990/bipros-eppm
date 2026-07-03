@@ -20,7 +20,7 @@ function getVarianceBg(value: number): string {
 }
 
 export function VarianceDashboard({ data }: VarianceDashboardProps) {
-  const { money } = useProjectCurrency();
+  const { moneyCompact } = useProjectCurrency();
 
   if (data.length === 0) {
     return (
@@ -32,33 +32,44 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
 
   // Calculate summary metrics
   const totalActivities = data.length;
+  // Undated activities (no baseline early finish, or no current planned finish) can't be
+  // classified as on-time/ahead/delayed — exclude them from the schedule metrics below so they
+  // don't fall into "On Track" by default. Cost variance below stays over ALL rows since
+  // undated activities can still carry cost.
+  const comparableRows = data.filter((r) => r.comparable);
+  const comparableCount = comparableRows.length;
+  const notComparableCount = totalActivities - comparableCount;
   const delayedStart = data.filter((r) => r.startVarianceDays > 0).length;
-  const delayedFinish = data.filter((r) => r.finishVarianceDays > 0).length;
-  const onTrack = data.filter(
+  const delayedFinish = comparableRows.filter((r) => r.finishVarianceDays > 0).length;
+  const onTrack = comparableRows.filter(
     (r) => r.startVarianceDays === 0 && r.finishVarianceDays === 0
   ).length;
-  const ahead = data.filter(
+  const ahead = comparableRows.filter(
     (r) => r.startVarianceDays < 0 || r.finishVarianceDays < 0
   ).length;
 
   const avgStartVariance =
-    data.reduce((sum, r) => sum + r.startVarianceDays, 0) / totalActivities;
+    comparableCount > 0
+      ? comparableRows.reduce((sum, r) => sum + r.startVarianceDays, 0) / comparableCount
+      : 0;
   const avgFinishVariance =
-    data.reduce((sum, r) => sum + r.finishVarianceDays, 0) / totalActivities;
+    comparableCount > 0
+      ? comparableRows.reduce((sum, r) => sum + r.finishVarianceDays, 0) / comparableCount
+      : 0;
   const totalCostVariance = data.reduce((sum, r) => sum + r.costVariance, 0);
 
-  const onTrackPct = Math.round((onTrack / totalActivities) * 100);
-  const delayedPct = Math.round((delayedFinish / totalActivities) * 100);
-  const aheadPct = Math.round((ahead / totalActivities) * 100);
+  const onTrackPct = comparableCount > 0 ? Math.round((onTrack / comparableCount) * 100) : 0;
+  const delayedPct = comparableCount > 0 ? Math.round((delayedFinish / comparableCount) * 100) : 0;
+  const aheadPct = comparableCount > 0 ? Math.round((ahead / comparableCount) * 100) : 0;
 
-  // Variance distribution buckets
+  // Variance distribution buckets (comparable rows only)
   const buckets = [
-    { label: "> 10d early", count: data.filter((r) => r.finishVarianceDays < -10).length },
-    { label: "1-10d early", count: data.filter((r) => r.finishVarianceDays >= -10 && r.finishVarianceDays < 0).length },
-    { label: "On time", count: data.filter((r) => r.finishVarianceDays === 0).length },
-    { label: "1-10d late", count: data.filter((r) => r.finishVarianceDays > 0 && r.finishVarianceDays <= 10).length },
-    { label: "11-30d late", count: data.filter((r) => r.finishVarianceDays > 10 && r.finishVarianceDays <= 30).length },
-    { label: "> 30d late", count: data.filter((r) => r.finishVarianceDays > 30).length },
+    { label: "> 10d early", count: comparableRows.filter((r) => r.finishVarianceDays < -10).length },
+    { label: "1-10d early", count: comparableRows.filter((r) => r.finishVarianceDays >= -10 && r.finishVarianceDays < 0).length },
+    { label: "On time", count: comparableRows.filter((r) => r.finishVarianceDays === 0).length },
+    { label: "1-10d late", count: comparableRows.filter((r) => r.finishVarianceDays > 0 && r.finishVarianceDays <= 10).length },
+    { label: "11-30d late", count: comparableRows.filter((r) => r.finishVarianceDays > 10 && r.finishVarianceDays <= 30).length },
+    { label: "> 30d late", count: comparableRows.filter((r) => r.finishVarianceDays > 30).length },
   ];
   const maxBucket = Math.max(...buckets.map((b) => b.count), 1);
 
@@ -98,7 +109,7 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
             Total Cost Variance
           </p>
           <p className={`mt-1 text-2xl font-bold ${getVarianceColor(totalCostVariance)}`}>
-            {totalCostVariance > 0 ? "+" : ""}{money(Math.abs(totalCostVariance))}
+            {totalCostVariance > 0 ? "+" : ""}{moneyCompact(Math.abs(totalCostVariance))}
           </p>
         </div>
         <div className="rounded-lg border border-border/50 bg-surface-hover/50 p-4">
@@ -109,13 +120,13 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
             {onTrackPct}%
           </p>
           <p className="text-xs text-text-secondary">
-            {onTrack} of {totalActivities}
+            {onTrack} of {comparableCount}
           </p>
         </div>
       </div>
 
       {/* Status Breakdown */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-lg border border-success/20 bg-success/10 p-4 text-center">
           <p className="text-3xl font-bold text-success">{ahead}</p>
           <p className="text-sm text-success">Ahead ({aheadPct}%)</p>
@@ -127,6 +138,10 @@ export function VarianceDashboard({ data }: VarianceDashboardProps) {
         <div className="rounded-lg border border-danger/20 bg-danger/10 p-4 text-center">
           <p className="text-3xl font-bold text-danger">{delayedFinish}</p>
           <p className="text-sm text-danger">Delayed ({delayedPct}%)</p>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-surface-hover/50 p-4 text-center">
+          <p className="text-3xl font-bold text-text-secondary">{notComparableCount}</p>
+          <p className="text-sm text-text-secondary">Not Comparable</p>
         </div>
       </div>
 

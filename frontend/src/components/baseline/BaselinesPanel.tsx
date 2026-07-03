@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { ListTodo, Plus, Trash2, Eye } from "lucide-react";
+import { ListTodo, Plus, Trash2, Eye, Upload } from "lucide-react";
 import { baselineApi } from "@/lib/api/baselineApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -14,6 +14,7 @@ import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
 import { ScheduleComparisonTable } from "@/components/baseline/ScheduleComparisonTable";
 import { ScheduleVarianceSection } from "@/components/reports/ScheduleVarianceSection";
 import { CostVarianceSection } from "@/components/reports/CostVarianceSection";
+import { ImportBaselineDialog } from "@/components/baseline/ImportBaselineDialog";
 import type { BaselineResponse, BaselineVarianceRow } from "@/lib/types";
 
 /**
@@ -123,6 +124,7 @@ export function BaselinesPanel({ projectId }: { projectId: string }) {
       onUpdateBaseline={(baselineId) => updateBaselineMutation.mutate(baselineId)}
       isUpdatingBaseline={updateBaselineMutation.isPending}
       updatingBaselineId={updateBaselineMutation.variables ?? null}
+      onImported={() => refetchBaselines()}
     />
   );
 }
@@ -145,6 +147,7 @@ function BaselinesTab({
   onUpdateBaseline,
   isUpdatingBaseline,
   updatingBaselineId,
+  onImported,
 }: {
   projectId: string;
   baselines: BaselineResponse[];
@@ -163,10 +166,12 @@ function BaselinesTab({
   updatingBaselineId: string | null;
   isActivating: boolean;
   activatingBaselineId: string | null;
+  onImported: () => void;
 }) {
-  const { money } = useProjectCurrency();
+  const { moneyCompact } = useProjectCurrency();
   const [varianceTab, setVarianceTab] = useState<"schedule" | "cost">("schedule");
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [formData, setFormData] = useState({ name: "", description: "", baselineType: "PROJECT" });
   const [expandedBaselineId, setExpandedBaselineId] = useState<string | null>(null);
   const [varianceData, setVarianceData] = useState<Record<string, BaselineVarianceRow[]>>({});
@@ -266,6 +271,14 @@ function BaselinesTab({
           >
             Assign Baselines
           </Link>
+          <button
+            onClick={() => setShowImport(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface/60 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
+            title="Import a Primavera XER programme as a baseline"
+          >
+            <Upload size={16} />
+            Import Baseline
+          </button>
         </div>
       )}
 
@@ -354,7 +367,7 @@ function BaselinesTab({
                     <p>Type: {baseline.baselineType}</p>
                     <p>Date: {new Date(baseline.baselineDate).toLocaleDateString()}</p>
                     <p>Activities: {baseline.totalActivities}</p>
-                    {baseline.totalCost > 0 && <p>Total Cost: {money(baseline.totalCost)}</p>}
+                    {baseline.totalCost > 0 && <p>Total Cost: {moneyCompact(baseline.totalCost)}</p>}
                   </div>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
@@ -492,6 +505,13 @@ function BaselinesTab({
           )}
         </div>
       )}
+
+      <ImportBaselineDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        projectId={projectId}
+        onImported={onImported}
+      />
     </div>
   );
 }

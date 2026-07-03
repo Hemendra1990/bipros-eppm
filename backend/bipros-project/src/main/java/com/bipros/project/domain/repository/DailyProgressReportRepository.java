@@ -181,6 +181,20 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       @org.springframework.data.repository.query.Param("projectId") java.util.UUID projectId);
 
   /**
+   * Per (BOQ item, activity) Σ qty_executed across APPROVED DPRs for the project. Used by
+   * {@code CostService.getEvmByWbs} to find the "executing activity" for a BOQ item (the one
+   * with the largest executed qty) so BOQ budget can be regrouped onto that activity's WBS node
+   * instead of the BOQ item's own (frequently null) {@code wbsNodeId} — the same key the AC
+   * (actual cost) side already groups by. Only rows with both ids present count.
+   */
+  @Query("select d.boqItemId, d.activityId, coalesce(sum(d.qtyExecuted), 0) "
+      + "from DailyProgressReport d "
+      + "where d.projectId = :projectId and d.boqItemId is not null and d.activityId is not null "
+      + "and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED "
+      + "group by d.boqItemId, d.activityId")
+  List<Object[]> boqItemExecutingActivities(@Param("projectId") UUID projectId);
+
+  /**
    * Null out the supervisor FK when the underlying user is deleted. {@code supervisorName}
    * stays put because the column is NOT NULL and the display snapshot is still valid history.
    */

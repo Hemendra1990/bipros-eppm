@@ -1,6 +1,7 @@
 package com.bipros.cost.application.service;
 
 import com.bipros.cost.domain.entity.ActivityExpense;
+import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
 
 import java.math.BigDecimal;
@@ -65,7 +66,8 @@ public final class ActivityCostCalculator {
   public static BigDecimal calculateBudgetedCost(
       UUID activityId,
       Map<UUID, List<ActivityExpense>> expensesByActivity,
-      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+      Map<UUID, List<ResourceAssignment>> assignmentsByActivity,
+      Map<UUID, List<ActivitySubContractorAssignment>> scByActivity) {
     BigDecimal cost = BigDecimal.ZERO;
     List<ActivityExpense> expenses = expensesByActivity.get(activityId);
     if (expenses != null) {
@@ -84,6 +86,12 @@ public final class ActivityCostCalculator {
         if (contribution != null) cost = cost.add(contribution);
       }
     }
+    List<ActivitySubContractorAssignment> scAssignments = scByActivity.get(activityId);
+    if (scAssignments != null) {
+      for (ActivitySubContractorAssignment sa : scAssignments) {
+        if (sa.getPlannedCost() != null) cost = cost.add(sa.getPlannedCost());
+      }
+    }
     return cost;
   }
 
@@ -95,7 +103,8 @@ public final class ActivityCostCalculator {
   public static BigDecimal calculatePlannedCost(
       UUID activityId,
       Map<UUID, List<ActivityExpense>> expensesByActivity,
-      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+      Map<UUID, List<ResourceAssignment>> assignmentsByActivity,
+      Map<UUID, List<ActivitySubContractorAssignment>> scByActivity) {
     BigDecimal cost = BigDecimal.ZERO;
     List<ActivityExpense> expenses = expensesByActivity.get(activityId);
     if (expenses != null) {
@@ -107,6 +116,12 @@ public final class ActivityCostCalculator {
     if (assignments != null) {
       for (ResourceAssignment ra : assignments) {
         if (ra.getPlannedCost() != null) cost = cost.add(ra.getPlannedCost());
+      }
+    }
+    List<ActivitySubContractorAssignment> scAssignments = scByActivity.get(activityId);
+    if (scAssignments != null) {
+      for (ActivitySubContractorAssignment sa : scAssignments) {
+        if (sa.getPlannedCost() != null) cost = cost.add(sa.getPlannedCost());
       }
     }
     return cost;
@@ -131,6 +146,24 @@ public final class ActivityCostCalculator {
     if (assignments != null) {
       for (ResourceAssignment ra : assignments) {
         if (ra.getActualCost() != null) cost = cost.add(ra.getActualCost());
+      }
+    }
+    return cost;
+  }
+
+  /**
+   * The ActivityExpense-only half of the canonical actual cost. Combine with the DPR ledger
+   * (DprActualCostLookup.sumByActivity) to get the canonical per-activity AC used project-wide;
+   * this deliberately excludes ResourceAssignment.actualCost, which mirrors the DPR ledger.
+   */
+  public static BigDecimal calculateExpenseActualCost(
+      UUID activityId,
+      Map<UUID, List<ActivityExpense>> expensesByActivity) {
+    BigDecimal cost = BigDecimal.ZERO;
+    List<ActivityExpense> expenses = expensesByActivity.get(activityId);
+    if (expenses != null) {
+      for (ActivityExpense e : expenses) {
+        if (e.getActualCost() != null) cost = cost.add(e.getActualCost());
       }
     }
     return cost;
@@ -191,10 +224,11 @@ public final class ActivityCostCalculator {
   public static ActivityCostSummary summarize(
       UUID activityId,
       Map<UUID, List<ActivityExpense>> expensesByActivity,
-      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+      Map<UUID, List<ResourceAssignment>> assignmentsByActivity,
+      Map<UUID, List<ActivitySubContractorAssignment>> scByActivity) {
     return new ActivityCostSummary(
-        calculateBudgetedCost(activityId, expensesByActivity, assignmentsByActivity),
-        calculatePlannedCost(activityId, expensesByActivity, assignmentsByActivity),
+        calculateBudgetedCost(activityId, expensesByActivity, assignmentsByActivity, scByActivity),
+        calculatePlannedCost(activityId, expensesByActivity, assignmentsByActivity, scByActivity),
         calculateActualCost(activityId, expensesByActivity, assignmentsByActivity),
         calculateRemainingCost(activityId, expensesByActivity, assignmentsByActivity),
         calculateAtCompletionCost(activityId, expensesByActivity, assignmentsByActivity));

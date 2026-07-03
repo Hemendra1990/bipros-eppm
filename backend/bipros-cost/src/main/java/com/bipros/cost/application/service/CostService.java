@@ -17,6 +17,7 @@ import com.bipros.project.application.service.BoqCalculator;
 import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.BoqItemRepository;
+import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
@@ -77,6 +78,10 @@ public class CostService {
     private final FinancialPeriodAutoGenerator financialPeriodAutoGenerator;
     private final BoqItemRepository boqItemRepository;
     private final WbsNodeRepository wbsNodeRepository;
+    // Finds the executing activity per BOQ item (Fix 3: Cost Variance by WBS) so BOQ budget in
+    // getEvmByWbs regroups onto the activity's WBS node instead of the BOQ item's own (often null)
+    // wbsNodeId — the same key the actual-cost side already groups by.
+    private final DailyProgressReportRepository dailyProgressReportRepository;
 
     // Cost Account Operations
     @Transactional
@@ -711,11 +716,34 @@ public class CostService {
         for (var n : nodes) { byId.put(n.getId(), n); parentById.put(n.getId(), n.getParentId()); }
         UUID soleRoot = soleRootOf(parentById);
 
+        // Activity → its own WBS node (shared by both the budget regroup below and the AC loop).
+        Map<UUID, UUID> activityToWbs = new HashMap<>();
+        for (var a : activityRepository.findByProjectId(projectId)) activityToWbs.put(a.getId(), a.getWbsNodeId());
+
+        // Each BOQ item's dominant executing activity (largest Σ qty_executed across APPROVED
+        // DPRs). BoqItem has no activity FK — the DPR is the only BOQ↔activity link — so budget
+        // must be regrouped via the executing activity's WBS, the SAME key the AC side uses,
+        // instead of BoqItem.wbsNodeId (frequently null in real data → everything piling into
+        // "(Unmapped)").
+        Map<UUID, UUID> boqItemToActivity = new HashMap<>();
+        Map<UUID, BigDecimal> boqItemBestQty = new HashMap<>();
+        for (Object[] r : dailyProgressReportRepository.boqItemExecutingActivities(projectId)) {
+            UUID boqId = (UUID) r[0];
+            UUID actId = (UUID) r[1];
+            BigDecimal qty = r[2] != null ? (BigDecimal) r[2] : BigDecimal.ZERO;
+            if (qty.compareTo(boqItemBestQty.getOrDefault(boqId, BigDecimal.valueOf(-1))) > 0) {
+                boqItemBestQty.put(boqId, qty);
+                boqItemToActivity.put(boqId, actId);
+            }
+        }
+
         // A null group key is the "(Unmapped)" bucket: BOQ/AC with no WBS link still counts toward
         // the totals, so Σ rows always reconciles to the project BAC/EV/AC shown on the cards.
         Map<UUID, BigDecimal[]> agg = new LinkedHashMap<>();   // group node (or null) -> [budgeted, earned, ac]
         for (var b : boqItemRepository.findByProjectId(projectId)) {
-            UUID group = groupAncestor(b.getWbsNodeId(), parentById, soleRoot);
+            UUID execAct = boqItemToActivity.get(b.getId());
+            UUID wbs = execAct != null ? activityToWbs.get(execAct) : b.getWbsNodeId();
+            UUID group = groupAncestor(wbs, parentById, soleRoot);
             BigDecimal budg = b.getBudgetedAmount() != null ? b.getBudgetedAmount() : BigDecimal.ZERO;
             BigDecimal earned = BoqCalculator
                     .cappedEarned(b.getQtyExecutedToDate(), b.getBoqQty(), b.getBudgetedRate());
@@ -724,8 +752,6 @@ public class CostService {
         }
         // AC by group node (DPR cost per activity → activity's WBS → group)
         Map<UUID, BigDecimal> acByActivity = dprActualCostLookup.sumByActivity(projectId);
-        Map<UUID, UUID> activityToWbs = new HashMap<>();
-        for (var a : activityRepository.findByProjectId(projectId)) activityToWbs.put(a.getId(), a.getWbsNodeId());
         for (var entry : acByActivity.entrySet()) {
             UUID group = groupAncestor(activityToWbs.get(entry.getKey()), parentById, soleRoot);
             BigDecimal[] cell = agg.computeIfAbsent(group, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});

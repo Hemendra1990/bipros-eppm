@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface GradeMasterRepository extends JpaRepository<GradeMaster, UUID> {
 
   Optional<GradeMaster> findByCode(String code);
+
+  Optional<GradeMaster> findByName(String name);
 }

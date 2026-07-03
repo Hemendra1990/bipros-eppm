@@ -18,6 +18,7 @@ public record ScheduleComparisonResponse(
     ADDED,
     DELETED,
     CHANGED,
-    UNCHANGED
+    UNCHANGED,
+    NOT_COMPARABLE
   }
 }

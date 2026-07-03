@@ -49,6 +49,7 @@ export interface BaselineVarianceRow {
   finishVarianceDays: number;
   durationVariance: number;
   costVariance: number;
+  comparable: boolean;
 }
 
 export interface CreateBaselineRequest {
@@ -86,11 +87,54 @@ export interface ScheduleComparisonRow {
   activityName: string;
   currentStart: string | null;
   baselineStart: string | null;
-  startVarianceDays: number;
+  startVarianceDays: number | null;
   currentFinish: string | null;
   baselineFinish: string | null;
-  finishVarianceDays: number;
-  status: "ADDED" | "DELETED" | "CHANGED" | "UNCHANGED";
+  finishVarianceDays: number | null;
+  status: "ADDED" | "DELETED" | "CHANGED" | "UNCHANGED" | "NOT_COMPARABLE";
+}
+
+export type ImportFormat = "EXCEL" | "XER" | "P6XML" | "MSP_XML" | "CSV";
+
+export interface ImportPreview {
+  activitiesInFile: number;
+  matched: number;
+  newActivities: number;
+  missingInFile: number;
+  wbsNodes: number;
+  relationships: number;
+  resourceAssignments: number;
+  dateRangeStart: string | null;
+  dateRangeFinish: string | null;
+  totalPlannedCost: number;
+  missingActivityCodes: string[];
+  warnings: string[];
+  resources?: {
+    manpowerRows: number;
+    manpowerApplied: number;
+    equipmentRows: number;
+    equipmentApplied: number;
+    materialRows: number;
+    materialApplied: number;
+    subContractorRows: number;
+    subContractorApplied: number;
+    warnings: string[];
+  } | null;
+}
+
+export interface ApplySummary {
+  activitiesCreated: number;
+  activitiesUpdated: number;
+  wbsCreated: number;
+  wbsUpdated: number;
+  relationshipsCreated: number;
+  assignmentsUpserted: number;
+  missingActivityCodes: string[];
+}
+
+export interface BaselineImportResult {
+  baseline: BaselineResponse;
+  summary: ApplySummary;
 }
 
 export const baselineApi = {
@@ -179,5 +223,46 @@ export const baselineApi = {
         `/v1/projects/${projectId}/baselines/${baselineId}/update`,
         request
       )
+      .then((r) => r.data),
+
+  previewImport: (projectId: string, file: File, format: ImportFormat) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("format", format);
+    return apiClient
+      .post<ApiResponse<ImportPreview>>(
+        `/v1/projects/${projectId}/baselines/import/preview`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((r) => r.data);
+  },
+
+  importBaseline: (
+    projectId: string,
+    args: { file: File; format: ImportFormat; name: string; type?: string; description?: string }
+  ) => {
+    const form = new FormData();
+    form.append("file", args.file);
+    form.append("format", args.format);
+    form.append("name", args.name);
+    if (args.type) form.append("type", args.type);
+    if (args.description) form.append("description", args.description);
+    return apiClient
+      .post<ApiResponse<BaselineImportResult>>(
+        `/v1/projects/${projectId}/baselines/import`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((r) => r.data);
+  },
+
+  /** Downloadable import template whose headers match what the parser reads (Excel only, so far). */
+  downloadTemplate: (projectId: string, format: ImportFormat) =>
+    apiClient
+      .get(`/v1/projects/${projectId}/baselines/import/template`, {
+        responseType: "blob",
+        params: { format },
+      })
       .then((r) => r.data),
 };

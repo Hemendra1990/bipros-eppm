@@ -246,4 +246,18 @@ public class Activity extends BaseEntity {
   @Column(name = "is_preliminary", nullable = false,
           columnDefinition = "boolean NOT NULL DEFAULT false")
   private boolean preliminary = false;
+
+  /** Current effective start: actual if started, else scheduler forecast (early), else planned. */
+  public java.time.LocalDate currentStartDate() {
+    if (actualStartDate != null) return actualStartDate;
+    if (earlyStartDate != null) return earlyStartDate;
+    return plannedStartDate;
+  }
+
+  /** Current effective finish: actual if complete, else scheduler forecast (early), else planned. */
+  public java.time.LocalDate currentFinishDate() {
+    if (actualFinishDate != null) return actualFinishDate;
+    if (earlyFinishDate != null) return earlyFinishDate;
+    return plannedFinishDate;
+  }
 }

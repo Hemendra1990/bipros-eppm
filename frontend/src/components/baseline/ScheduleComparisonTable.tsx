@@ -10,6 +10,7 @@ const statusColors: Record<ScheduleComparisonRow["status"], string> = {
   DELETED: "bg-danger/10 text-danger",
   CHANGED: "bg-warning/10 text-warning",
   UNCHANGED: "bg-surface-active/50 text-text-secondary",
+  NOT_COMPARABLE: "bg-surface-active/30 text-text-muted",
 };
 
 const statusLabels: Record<ScheduleComparisonRow["status"], string> = {
@@ -17,6 +18,7 @@ const statusLabels: Record<ScheduleComparisonRow["status"], string> = {
   DELETED: "Deleted",
   CHANGED: "Changed",
   UNCHANGED: "Unchanged",
+  NOT_COMPARABLE: "Not comparable",
 };
 
 function formatDate(dateStr: string | null): string {
@@ -48,6 +50,7 @@ export function ScheduleComparisonTable({
     DELETED: data.filter((r) => r.status === "DELETED").length,
     CHANGED: data.filter((r) => r.status === "CHANGED").length,
     UNCHANGED: data.filter((r) => r.status === "UNCHANGED").length,
+    NOT_COMPARABLE: data.filter((r) => r.status === "NOT_COMPARABLE").length,
   };
 
   const columns = useMemo<ColumnDef<ScheduleComparisonRow>[]>(
@@ -82,7 +85,9 @@ export function ScheduleComparisonTable({
         accessorKey: "startVarianceDays",
         meta: { align: "right" },
         cell: ({ getValue }) => {
-          const v = Number(getValue());
+          const raw = getValue();
+          if (raw == null) return <span className="text-text-secondary">—</span>;
+          const v = Number(raw);
           return (
             <span className={`text-right text-sm ${getVarianceColor(v)}`}>
               {v > 0 ? "+" : ""}
@@ -114,7 +119,9 @@ export function ScheduleComparisonTable({
         accessorKey: "finishVarianceDays",
         meta: { align: "right" },
         cell: ({ getValue }) => {
-          const v = Number(getValue());
+          const raw = getValue();
+          if (raw == null) return <span className="text-text-secondary">—</span>;
+          const v = Number(raw);
           return (
             <span className={`text-right text-sm ${getVarianceColor(v)}`}>
               {v > 0 ? "+" : ""}
@@ -166,6 +173,11 @@ export function ScheduleComparisonTable({
         {counts.UNCHANGED > 0 && (
           <span className="rounded-full bg-surface-active/50 px-3 py-1 text-text-secondary">
             Unchanged: {counts.UNCHANGED}
+          </span>
+        )}
+        {counts.NOT_COMPARABLE > 0 && (
+          <span className="rounded-full bg-surface-active/30 px-3 py-1 text-text-muted">
+            Not comparable: {counts.NOT_COMPARABLE}
           </span>
         )}
       </div>

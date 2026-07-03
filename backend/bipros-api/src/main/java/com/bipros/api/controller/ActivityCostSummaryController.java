@@ -6,7 +6,9 @@ import com.bipros.common.dto.ApiResponse;
 import com.bipros.cost.application.service.ActivityCostCalculator;
 import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +44,7 @@ public class ActivityCostSummaryController {
   private final ActivityRepository activityRepository;
   private final ActivityExpenseRepository activityExpenseRepository;
   private final ResourceAssignmentRepository resourceAssignmentRepository;
+  private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
 
   public record ActivityCostSummaryRow(
       UUID activityId,
@@ -69,13 +72,17 @@ public class ActivityCostSummaryController {
     Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
         .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
 
+    Map<UUID, List<ActivitySubContractorAssignment>> scByActivity =
+        activitySubContractorAssignmentRepository.findByProjectId(projectId).stream()
+            .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
+
     // Iterate every activity (not only those with cost rows) so the grid can render an
     // explicit ₹0 row instead of a blank cell for activities that simply have no costs yet.
     List<ActivityCostSummaryRow> rows = new java.util.ArrayList<>(activities.size());
     Map<UUID, ActivityCostSummaryRow> byActivity = new HashMap<>(activities.size());
     for (Activity activity : activities) {
       ActivityCostCalculator.ActivityCostSummary summary = ActivityCostCalculator.summarize(
-          activity.getId(), expensesByActivity, assignmentsByActivity);
+          activity.getId(), expensesByActivity, assignmentsByActivity, scByActivity);
       ActivityCostSummaryRow row = new ActivityCostSummaryRow(
           activity.getId(),
           summary.budgetedCost(),
@@ -93,7 +100,7 @@ public class ActivityCostSummaryController {
     for (UUID orphanActivityId : expensesByActivity.keySet()) {
       if (!byActivity.containsKey(orphanActivityId)) {
         ActivityCostCalculator.ActivityCostSummary summary = ActivityCostCalculator.summarize(
-            orphanActivityId, expensesByActivity, assignmentsByActivity);
+            orphanActivityId, expensesByActivity, assignmentsByActivity, scByActivity);
         rows.add(new ActivityCostSummaryRow(
             orphanActivityId,
             summary.budgetedCost(),
@@ -107,7 +114,7 @@ public class ActivityCostSummaryController {
       if (!byActivity.containsKey(orphanActivityId)
           && !expensesByActivity.containsKey(orphanActivityId)) {
         ActivityCostCalculator.ActivityCostSummary summary = ActivityCostCalculator.summarize(
-            orphanActivityId, expensesByActivity, assignmentsByActivity);
+            orphanActivityId, expensesByActivity, assignmentsByActivity, scByActivity);
         rows.add(new ActivityCostSummaryRow(
             orphanActivityId,
             summary.budgetedCost(),

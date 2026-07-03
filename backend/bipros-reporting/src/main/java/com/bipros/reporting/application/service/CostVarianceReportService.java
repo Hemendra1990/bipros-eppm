@@ -9,15 +9,19 @@ import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.cost.application.dto.CostSummaryDto;
 import com.bipros.cost.application.dto.WbsEvmRow;
+import com.bipros.cost.application.service.ActivityCostCalculator;
 import com.bipros.cost.application.service.CostService;
 import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.bipros.reporting.application.dto.CostVarianceReport;
+import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,7 +51,9 @@ public class CostVarianceReportService {
   private final ActivityRepository activityRepository;
   private final ActivityExpenseRepository activityExpenseRepository;
   private final ResourceAssignmentRepository resourceAssignmentRepository;
+  private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
   private final CostService costService;
+  private final DprActualCostLookup dprActualCostLookup;
 
   public CostVarianceReport getReport(UUID projectId, UUID requestedBaselineId) {
     Project project = projectRepository.findById(projectId)
@@ -94,12 +100,19 @@ public class CostVarianceReportService {
     Map<UUID, List<ResourceAssignment>> assignmentsByActivity = resourceAssignmentRepository
         .findByProjectId(projectId).stream()
         .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+    Map<UUID, List<ActivitySubContractorAssignment>> scByActivity = activitySubContractorAssignmentRepository
+        .findByProjectId(projectId).stream()
+        .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
+
+    Map<UUID, BigDecimal> dprByActivity = dprActualCostLookup.sumByActivity(projectId);
 
     List<CostVarianceReport.ActivityRow> activityRows = baselineActivities.stream()
         .map(ba -> buildActivityRow(ba,
             currentByActivityId.get(ba.getActivityId()),
             expensesByActivity,
-            assignmentsByActivity))
+            assignmentsByActivity,
+            scByActivity,
+            dprByActivity))
         // Worst burn variance first.
         .sorted(Comparator.comparing(CostVarianceReport.ActivityRow::burnVariance,
             Comparator.nullsLast(Comparator.reverseOrder())))
@@ -147,7 +160,9 @@ public class CostVarianceReportService {
       BaselineActivity ba,
       Activity current,
       Map<UUID, List<ActivityExpense>> expensesByActivity,
-      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+      Map<UUID, List<ResourceAssignment>> assignmentsByActivity,
+      Map<UUID, List<ActivitySubContractorAssignment>> scByActivity,
+      Map<UUID, BigDecimal> dprByActivity) {
 
     String code = current != null ? current.getCode() : "—";
     String name = current != null ? current.getName() : "Deleted activity";
@@ -158,8 +173,10 @@ public class CostVarianceReportService {
     Double percentComplete = current != null ? current.getPercentComplete() : null;
 
     BigDecimal baselinePlanned = ba.getPlannedCost() != null ? ba.getPlannedCost() : BigDecimal.ZERO;
-    BigDecimal currentPlanned = sumPlanned(ba.getActivityId(), expensesByActivity, assignmentsByActivity);
-    BigDecimal currentActual = sumActual(ba.getActivityId(), expensesByActivity, assignmentsByActivity);
+    BigDecimal currentPlanned = sumPlanned(ba.getActivityId(), expensesByActivity, assignmentsByActivity, scByActivity);
+    BigDecimal currentActual = ActivityCostCalculator
+        .calculateExpenseActualCost(ba.getActivityId(), expensesByActivity)
+        .add(dprByActivity.getOrDefault(ba.getActivityId(), BigDecimal.ZERO));
 
     BigDecimal estimateVariance = currentPlanned.subtract(baselinePlanned);
 
@@ -187,7 +204,8 @@ public class CostVarianceReportService {
 
   private static BigDecimal sumPlanned(UUID activityId,
                                        Map<UUID, List<ActivityExpense>> expenses,
-                                       Map<UUID, List<ResourceAssignment>> assignments) {
+                                       Map<UUID, List<ResourceAssignment>> assignments,
+                                       Map<UUID, List<ActivitySubContractorAssignment>> scAssignments) {
     BigDecimal sum = BigDecimal.ZERO;
     List<ActivityExpense> es = expenses.get(activityId);
     if (es != null) {
@@ -197,20 +215,9 @@ public class CostVarianceReportService {
     if (as != null) {
       for (ResourceAssignment a : as) if (a.getPlannedCost() != null) sum = sum.add(a.getPlannedCost());
     }
-    return sum;
-  }
-
-  private static BigDecimal sumActual(UUID activityId,
-                                      Map<UUID, List<ActivityExpense>> expenses,
-                                      Map<UUID, List<ResourceAssignment>> assignments) {
-    BigDecimal sum = BigDecimal.ZERO;
-    List<ActivityExpense> es = expenses.get(activityId);
-    if (es != null) {
-      for (ActivityExpense e : es) if (e.getActualCost() != null) sum = sum.add(e.getActualCost());
-    }
-    List<ResourceAssignment> as = assignments.get(activityId);
-    if (as != null) {
-      for (ResourceAssignment a : as) if (a.getActualCost() != null) sum = sum.add(a.getActualCost());
+    List<ActivitySubContractorAssignment> scs = scAssignments.get(activityId);
+    if (scs != null) {
+      for (ActivitySubContractorAssignment sa : scs) if (sa.getPlannedCost() != null) sum = sum.add(sa.getPlannedCost());
     }
     return sum;
   }

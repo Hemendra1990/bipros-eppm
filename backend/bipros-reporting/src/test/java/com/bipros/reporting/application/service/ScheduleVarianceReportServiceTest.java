@@ -135,6 +135,96 @@ class ScheduleVarianceReportServiceTest {
     assertTrue(milestoneRow.isMilestone());
   }
 
+  @Test
+  @DisplayName("undated activity is not comparable and excluded from on-track count")
+  void undatedActivityIsNotComparable_notCountedOnTrack() {
+    Project project = newProject(baselineId);
+    Baseline baseline = newBaseline(baselineId, projectId);
+
+    UUID undatedActId = UUID.randomUUID();
+
+    BaselineActivity baOnTrack = newBaselineActivity(onTrackActId,
+        LocalDate.of(2025, 2, 1), LocalDate.of(2025, 2, 28), 27.0);
+    BaselineActivity baUndated = newBaselineActivity(undatedActId,
+        LocalDate.of(2025, 4, 1), null, 10.0);
+
+    Activity onTrack = newActivity(onTrackActId, "A002", "On track",
+        LocalDate.of(2025, 2, 1), LocalDate.of(2025, 2, 28), 27.0,
+        ActivityType.TASK_DEPENDENT, ActivityStatus.NOT_STARTED, false);
+    Activity undated = newActivity(undatedActId, "A004", "Undated",
+        null, null, null,
+        ActivityType.TASK_DEPENDENT, ActivityStatus.NOT_STARTED, false);
+
+    when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+    when(baselineRepository.findById(baselineId)).thenReturn(Optional.of(baseline));
+    when(baselineActivityRepository.findByBaselineId(baselineId))
+        .thenReturn(List.of(baOnTrack, baUndated));
+    when(activityRepository.findByProjectId(projectId))
+        .thenReturn(List.of(onTrack, undated));
+
+    ScheduleVarianceReport report = service.getReport(projectId, baselineId);
+    assertEquals(1, report.summary().notComparableCount());
+    assertEquals(1, report.summary().onTrackCount());        // only the truly-dated on-time one
+    assertEquals(2, report.summary().totalActivities());     // total still counts all rows
+  }
+
+  @Test
+  @DisplayName("actual finish later than baseline slips the row even when planned == baseline")
+  void actualFinishLaterThanBaseline_producesSlippage() {
+    Project project = newProject(baselineId);
+    Baseline baseline = newBaseline(baselineId, projectId);
+
+    LocalDate baselineStart = LocalDate.of(2025, 1, 1);
+    LocalDate baselineFinish = LocalDate.of(2025, 1, 31);
+    BaselineActivity ba = newBaselineActivity(slippedActId, baselineStart, baselineFinish, 30.0);
+
+    // Planned dates deliberately equal the baseline — the old (buggy) comparison against
+    // plannedFinishDate would read 0 variance here. The activity actually finished 83 days late.
+    Activity completed = newActivity(slippedActId, "A001", "Completed late",
+        baselineStart, baselineFinish, 30.0,
+        ActivityType.TASK_DEPENDENT, ActivityStatus.COMPLETED, false);
+    completed.setActualStartDate(baselineStart);
+    completed.setActualFinishDate(baselineFinish.plusDays(83));
+
+    when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+    when(baselineRepository.findById(baselineId)).thenReturn(Optional.of(baseline));
+    when(baselineActivityRepository.findByBaselineId(baselineId)).thenReturn(List.of(ba));
+    when(activityRepository.findByProjectId(projectId)).thenReturn(List.of(completed));
+
+    ScheduleVarianceReport report = service.getReport(projectId, baselineId);
+    ScheduleVarianceReport.Row row = report.rows().get(0);
+
+    assertEquals(83L, row.finishVarianceDays(), "SLIPPED: actual finish must drive the variance, not planned");
+    assertTrue(row.comparable());
+  }
+
+  @Test
+  @DisplayName("in-progress activity with only planned dates (== baseline) is on-track")
+  void inProgressActivity_plannedOnlyEqualsBaseline_isOnTrack() {
+    Project project = newProject(baselineId);
+    Baseline baseline = newBaseline(baselineId, projectId);
+
+    LocalDate baselineStart = LocalDate.of(2025, 2, 1);
+    LocalDate baselineFinish = LocalDate.of(2025, 2, 28);
+    BaselineActivity ba = newBaselineActivity(onTrackActId, baselineStart, baselineFinish, 27.0);
+
+    // No actual, no early — falls all the way back to planned, which matches the baseline.
+    Activity inProgress = newActivity(onTrackActId, "A002", "On track",
+        baselineStart, baselineFinish, 27.0,
+        ActivityType.TASK_DEPENDENT, ActivityStatus.IN_PROGRESS, false);
+
+    when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+    when(baselineRepository.findById(baselineId)).thenReturn(Optional.of(baseline));
+    when(baselineActivityRepository.findByBaselineId(baselineId)).thenReturn(List.of(ba));
+    when(activityRepository.findByProjectId(projectId)).thenReturn(List.of(inProgress));
+
+    ScheduleVarianceReport report = service.getReport(projectId, baselineId);
+    ScheduleVarianceReport.Row row = report.rows().get(0);
+
+    assertEquals(0L, row.finishVarianceDays());
+    assertTrue(row.comparable());
+  }
+
   // ── builders ──────────────────────────────────────────────────────────
 
   private Project newProject(UUID activeBaselineId) {

@@ -13,7 +13,10 @@ import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.cost.application.service.ActivityCostCalculator;
 import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.project.application.service.DprActualCostLookup;
+import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.risk.domain.model.ActivityCorrelation;
 import com.bipros.risk.domain.model.MonteCarloActivityStat;
@@ -86,6 +89,8 @@ public class MonteCarloEngine {
     // baseline snapshot — the baseline is retained only as the variance/comparison reference.
     private final ActivityExpenseRepository activityExpenseRepository;
     private final ResourceAssignmentRepository resourceAssignmentRepository;
+    private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
+    private final DprActualCostLookup dprActualCostLookup;
 
     public EngineResult run(MonteCarloInput input) {
         long startNs = System.nanoTime();
@@ -156,8 +161,16 @@ public class MonteCarloEngine {
             .findByProjectId(input.projectId()).stream()
             .filter(r -> r.getActivityId() != null)
             .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+        Map<UUID, List<ActivitySubContractorAssignment>> scByActivity =
+            activitySubContractorAssignmentRepository.findByProjectId(input.projectId()).stream()
+                .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
+        // Canonical per-activity Actual Cost (matches the Cost tab / variance reports): posted
+        // expenses + the DPR ledger, which is where sub-contractor actuals live (dpr_sub_contractor
+        // quantity × rate_per_unit). ResourceAssignment.actualCost is deliberately excluded here — it
+        // mirrors the DPR ledger rather than adding to it.
+        Map<UUID, BigDecimal> dprByActivity = dprActualCostLookup.sumByActivity(input.projectId());
         Map<UUID, BigDecimal> activityBaselineCost = buildForecastCostMap(
-            activities, baseline, baselineByActivity, expensesByActivity, assignmentsByActivity);
+            activities, baseline, baselineByActivity, expensesByActivity, assignmentsByActivity, scByActivity);
 
         int activitiesNotInBaseline = (int) activities.stream()
             .filter(a -> !baselineByActivity.containsKey(a.getId()))
@@ -202,8 +215,8 @@ public class MonteCarloEngine {
 
             // EV cost split: actual incurred (certain) + remaining at risk (scales with sampled remaining).
             BigDecimal forecast = activityBaselineCost.getOrDefault(a.getId(), BigDecimal.ZERO);
-            BigDecimal actual = ActivityCostCalculator.calculateActualCost(
-                a.getId(), expensesByActivity, assignmentsByActivity);
+            BigDecimal actual = ActivityCostCalculator.calculateExpenseActualCost(a.getId(), expensesByActivity)
+                .add(dprByActivity.getOrDefault(a.getId(), BigDecimal.ZERO));
             if (actual == null || actual.signum() < 0) actual = BigDecimal.ZERO;
             if (actual.compareTo(forecast) > 0) actual = forecast; // never let remaining go negative
             activityActualCost.put(a.getId(), actual);
@@ -761,13 +774,14 @@ public class MonteCarloEngine {
     private Map<UUID, BigDecimal> buildForecastCostMap(List<Activity> activities, Baseline baseline,
                                                       Map<UUID, BaselineActivity> baselineByActivity,
                                                       Map<UUID, List<ActivityExpense>> expensesByActivity,
-                                                      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+                                                      Map<UUID, List<ResourceAssignment>> assignmentsByActivity,
+                                                      Map<UUID, List<ActivitySubContractorAssignment>> scByActivity) {
         Map<UUID, BigDecimal> costs = new HashMap<>();
         BigDecimal explicitTotal = BigDecimal.ZERO;
         for (Activity a : activities) {
             // 1) Live current approved cost (primary source).
             BigDecimal c = ActivityCostCalculator.calculatePlannedCost(
-                a.getId(), expensesByActivity, assignmentsByActivity);
+                a.getId(), expensesByActivity, assignmentsByActivity, scByActivity);
             // 2) Fall back to the baseline snapshot cost only when the activity has no live cost.
             if (c == null || c.signum() <= 0) {
                 BaselineActivity ba = baselineByActivity.get(a.getId());
