@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { gisApi, SatelliteImage } from "@/lib/api/gisApi";
 import { formatDate } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Maximize2, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { SatelliteImageDetailModal } from "./SatelliteImageDetailModal";
+import { useSatelliteRaster } from "./useSatelliteRaster";
 
 /**
- * One thumbnail tile. Fetches the raster bytes via the authenticated apiClient,
- * wraps them in a blob URL, renders with an {@code <img>}. Blob URLs are
- * revoked on unmount so navigating away doesn't leak Blob references.
+ * One thumbnail tile. Loads the raster via {@link useSatelliteRaster} (authenticated
+ * blob URL) and renders it with an {@code <img>}. The same raster is shown full-size
+ * in {@link SatelliteImageDetailModal} when the card is clicked.
  */
 function SatelliteThumbnail({
   projectId,
@@ -21,34 +23,7 @@ function SatelliteThumbnail({
   imageId: string;
   mimeType?: string;
 }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let revoked: string | null = null;
-    let cancelled = false;
-    gisApi
-      .getSatelliteImageThumbnail(
-        projectId as `${string}-${string}-${string}-${string}-${string}`,
-        imageId as `${string}-${string}-${string}-${string}-${string}`
-      )
-      .then((response) => {
-        if (cancelled) return;
-        const blob = new Blob([response.data], {
-          type: mimeType || "image/png",
-        });
-        const url = URL.createObjectURL(blob);
-        revoked = url;
-        setSrc(url);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-    return () => {
-      cancelled = true;
-      if (revoked) URL.revokeObjectURL(revoked);
-    };
-  }, [projectId, imageId, mimeType]);
+  const { src, error } = useSatelliteRaster(projectId, imageId, mimeType);
 
   if (error) {
     return (
@@ -81,6 +56,7 @@ export function SatelliteImageGallery({
   images,
 }: SatelliteImageGalleryProps) {
   const qc = useQueryClient();
+  const [selected, setSelected] = useState<SatelliteImage | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: (imageId: string) =>
@@ -120,13 +96,31 @@ export function SatelliteImageGallery({
           {sortedImages.map((image) => (
             <div
               key={image.id}
-              className="bg-surface/50 rounded-lg border border-border overflow-hidden hover:shadow-lg transition-shadow"
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelected(image)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelected(image);
+                }
+              }}
+              title="Click to view the full image and all details"
+              className="group bg-surface/50 rounded-lg border border-border overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:border-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <SatelliteThumbnail
-                projectId={projectId}
-                imageId={image.id}
-                mimeType={image.mimeType}
-              />
+              <div className="relative">
+                <SatelliteThumbnail
+                  projectId={projectId}
+                  imageId={image.id}
+                  mimeType={image.mimeType}
+                />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
+                  <Maximize2
+                    size={22}
+                    className="text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-90"
+                  />
+                </div>
+              </div>
 
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -135,7 +129,8 @@ export function SatelliteImageGallery({
                   </h4>
                   {image.source === "MANUAL_UPLOAD" && (
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (confirm("Delete this uploaded image?")) {
                           deleteMutation.mutate(image.id);
                         }
@@ -193,6 +188,14 @@ export function SatelliteImageGallery({
             </div>
           ))}
         </div>
+      )}
+
+      {selected && (
+        <SatelliteImageDetailModal
+          projectId={projectId}
+          image={selected}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   );
