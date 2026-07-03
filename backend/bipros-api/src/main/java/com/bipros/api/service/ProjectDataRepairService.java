@@ -1,13 +1,19 @@
 package com.bipros.api.service;
 
+import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityEditStatus;
+import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.model.ActivitySupervisor;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
+import com.bipros.api.dto.ActivityStatusCorrectionRequest;
+import com.bipros.api.dto.ActivityStatusCorrectionResponse;
 import com.bipros.api.dto.DataHealthResponse;
 import com.bipros.api.dto.EpsCodeCorrectionResponse;
 import com.bipros.api.dto.RepairReport;
 import com.bipros.api.dto.RepairRequest;
+import com.bipros.common.util.AuditService;
 import com.bipros.dbs.service.DbsAggregationService;
 import com.bipros.project.application.service.BoqRebuildService;
 import com.bipros.project.application.service.DailyProgressReportService;
@@ -50,6 +56,8 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -78,6 +86,8 @@ public class ProjectDataRepairService {
   private final DailyProgressReportService dprService;
   private final DbsAggregationService dbsAggregationService;
   private final ActivitySubContractorAssignmentRepository scAssignmentRepo;
+  private final PercentCompleteCalculator percentCompleteCalculator;
+  private final AuditService auditService;
 
   // Self-proxy: lets repair(...) route Phase-A calls through the Spring proxy so each runs in
   // (and commits) its own transaction. NOT in the Lombok constructor — non-final, package-private
@@ -486,5 +496,152 @@ public class ProjectDataRepairService {
     DataHealthResponse after = dry ? before : diagnose(projectId);
     log.info("[ProjectDataRepairService] repair project={} dryRun={} changed={}", projectId, dry, changed);
     return new RepairReport(dry, new ArrayList<>(phases), changed, before, after);
+  }
+
+  /**
+   * Admin data-correction: re-derive each activity's status/percentComplete from its own
+   * APPROVED DPR/BOQ data, using the same {@link PercentCompleteCalculator} engine the app
+   * already uses (so the recomputed value is stable and consistent with normal DPR-approval
+   * flow). Precedence per activity: no approved DPR at all → reset to NOT_STARTED/0; else if
+   * the activity has linked BOQ workdone → BOQ-driven percent (kept as-is if already 100%);
+   * else fall back to the activity's own {@code percentCompleteType} (DURATION/UNITS/PHYSICAL).
+   *
+   * <p>{@code dryRun} (default true) computes and reports without persisting. When dryRun,
+   * NO setter is called on the loaded {@link Activity} — JPA dirty-checking would otherwise
+   * flush any mutated field at commit even without an explicit {@code save()}, corrupting data
+   * under a "preview" call. All intended new values are computed into locals first and only
+   * applied to the entity inside the {@code !dryRun && changed} branch.
+   */
+  @Transactional
+  public ActivityStatusCorrectionResponse correctActivityStatus(
+      UUID projectId, ActivityStatusCorrectionRequest req) {
+    if (req == null || req.getActivityIds() == null || req.getActivityIds().isEmpty()) {
+      throw new BusinessRuleException("ACTIVITY_IDS_REQUIRED", "activityIds is required");
+    }
+    boolean dryRun = req.isDryRun();
+    LocalDate today = LocalDate.now();
+
+    int resetNotStarted = 0;
+    int resetInProgress = 0;
+    int keptCompleted = 0;
+    int noBoqRecomputed = 0;
+    int skipped = 0;
+    List<ActivityStatusCorrectionResponse.Result> results = new ArrayList<>();
+
+    for (UUID id : req.getActivityIds()) {
+      Activity a = activityRepo.findById(id).orElse(null);
+      if (a == null) {
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, null, null, null, null, null, null, "SKIPPED_NOT_FOUND", null));
+        skipped++;
+        continue;
+      }
+      if (!projectId.equals(a.getProjectId())) {
+        String statusName = a.getStatus() == null ? null : a.getStatus().name();
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, a.getCode(), a.getName(), statusName, a.getPercentComplete(),
+            statusName, a.getPercentComplete(), "SKIPPED_WRONG_PROJECT", null));
+        skipped++;
+        continue;
+      }
+
+      ActivityStatus oldStatusEnum = a.getStatus();
+      String oldStatus = oldStatusEnum == null ? null : oldStatusEnum.name();
+      Double oldPct = a.getPercentComplete();
+      String note = (a.getEditStatus() == ActivityEditStatus.LOCKED) ? "was LOCKED" : null;
+
+      Optional<LocalDate> earliestApproved = dprRepo.findEarliestApprovedReportDateForActivity(id);
+      boolean hasApprovedDpr = earliestApproved.isPresent();
+      BigDecimal bq = dprRepo.sumLinkedBoqQtyApproved(id);
+      double boqQty = bq == null ? 0.0 : bq.doubleValue();
+      BigDecimal wd = dprRepo.sumActivityWorkdoneOnBoqApproved(id);
+      Double workdone = wd == null ? 0.0 : wd.doubleValue();
+
+      // Intended new values, computed into locals only — no setter is called on `a` here.
+      ActivityStatus newStatusEnum = oldStatusEnum;
+      Double newPct = oldPct;
+      LocalDate newStart = a.getActualStartDate();
+      LocalDate newFinish = a.getActualFinishDate();
+      String outcome;
+
+      if (!hasApprovedDpr) {
+        newStatusEnum = ActivityStatus.NOT_STARTED;
+        newPct = 0.0;
+        newStart = null;
+        newFinish = null;
+        outcome = "RESET_NOT_STARTED";
+      } else if (boqQty > 0) {
+        PercentCompleteCalculator.Result r =
+            percentCompleteCalculator.calculateBoq(a, workdone, boqQty, today);
+        double pct = r.percent();
+        if (pct >= 100.0) {
+          outcome = "KEPT_COMPLETED"; // new == old, no change
+        } else {
+          newPct = pct;
+          newStatusEnum = r.status();
+          newFinish = null; // clear the wrongful completion
+          if (newStatusEnum == ActivityStatus.IN_PROGRESS && a.getActualStartDate() == null) {
+            newStart = earliestApproved.orElse(null);
+          } else if (newStatusEnum == ActivityStatus.NOT_STARTED) {
+            // pct==0 => derive() only returns NOT_STARTED when actualStart was already null; kept for clarity
+            newStart = null;
+          } else {
+            newStart = a.getActualStartDate();
+          }
+          outcome = (newStatusEnum == ActivityStatus.IN_PROGRESS)
+              ? "RESET_IN_PROGRESS" : "RESET_NOT_STARTED";
+        }
+      } else {
+        PercentCompleteCalculator.Result r = percentCompleteCalculator.calculate(a, null, null, today);
+        if (r.isKeepPrior()) {
+          outcome = "SKIPPED_NO_BOQ_NO_RECOMPUTE"; // new == old, no change
+        } else {
+          newPct = r.percent();
+          newStatusEnum = r.status();
+          newFinish = r.forcedActualFinish() != null
+              ? r.forcedActualFinish()
+              : (newPct != null && newPct < 100.0 ? null : a.getActualFinishDate());
+          newStart = a.getActualStartDate();
+          outcome = "RESET_FROM_TYPE";
+        }
+      }
+
+      boolean changed = outcome.startsWith("RESET_");
+      if (!dryRun && changed) {
+        a.setPercentComplete(newPct);
+        a.setStatus(newStatusEnum);
+        a.setActualStartDate(newStart);
+        a.setActualFinishDate(newFinish);
+        activityRepo.save(a);
+        if (!Objects.equals(oldPct, newPct)) {
+          auditService.logUpdate("Activity", id, "percentComplete", oldPct, newPct);
+        }
+        if (oldStatusEnum != newStatusEnum) {
+          auditService.logUpdate("Activity", id, "status", oldStatusEnum, newStatusEnum);
+        }
+      }
+
+      String newStatusName = newStatusEnum == null ? oldStatus : newStatusEnum.name();
+      results.add(new ActivityStatusCorrectionResponse.Result(
+          id, a.getCode(), a.getName(), oldStatus, oldPct, newStatusName, newPct, outcome, note));
+
+      switch (outcome) {
+        case "RESET_NOT_STARTED" -> resetNotStarted++;
+        case "RESET_IN_PROGRESS" -> resetInProgress++;
+        case "KEPT_COMPLETED" -> keptCompleted++;
+        case "RESET_FROM_TYPE" -> noBoqRecomputed++;
+        default -> skipped++; // SKIPPED_NO_BOQ_NO_RECOMPUTE
+      }
+    }
+
+    log.info("[ProjectDataRepairService] activity status correction: project={} dryRun={} "
+            + "resetNotStarted={} resetInProgress={} keptCompleted={} noBoqRecomputed={} skipped={}",
+        projectId, dryRun, resetNotStarted, resetInProgress, keptCompleted, noBoqRecomputed, skipped);
+
+    return new ActivityStatusCorrectionResponse(
+        dryRun,
+        new ActivityStatusCorrectionResponse.Summary(
+            resetNotStarted, resetInProgress, keptCompleted, noBoqRecomputed, skipped),
+        results);
   }
 }

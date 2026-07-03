@@ -85,7 +85,8 @@ class ProjectDataRepairServiceTest {
         manpowerCategoryMasterRepo, gradeMasterRepo,
         workActivityRepo, dprEquipmentRepo,
         normResolver, rateResolver, resourceAssignmentRepo,
-        boqRebuildService, dprService, dbsAggregationService, scAssignmentRepo);
+        boqRebuildService, dprService, dbsAggregationService, scAssignmentRepo,
+        null, null);
     // No Spring context here, so the @Autowired self-proxy is never injected; wire it to the
     // same instance so repair(...)'s self.repairXxx(...) calls run the real methods (with mocked
     // repos) instead of NPE-ing. Behavior is identical to a direct call.

@@ -1,5 +1,7 @@
 package com.bipros.api.controller.admin;
 
+import com.bipros.api.dto.ActivityStatusCorrectionRequest;
+import com.bipros.api.dto.ActivityStatusCorrectionResponse;
 import com.bipros.api.dto.BudgetCorrectionRequest;
 import com.bipros.api.dto.BudgetCorrectionResponse;
 import com.bipros.api.dto.DataHealthResponse;
@@ -64,5 +66,14 @@ public class ProjectDataRepairController {
     log.info("POST /v1/admin/projects/{}/eps-code-correction epsNodeId={} code={}",
         projectId, req.getEpsNodeId(), req.getCode());
     return ResponseEntity.ok(ApiResponse.ok(service.correctEpsCode(req.getEpsNodeId(), req.getCode())));
+  }
+
+  @PostMapping("/activity-status-correction")
+  public ResponseEntity<ApiResponse<ActivityStatusCorrectionResponse>> correctActivityStatus(
+      @PathVariable UUID projectId,
+      @RequestBody ActivityStatusCorrectionRequest req) {
+    log.info("POST /v1/admin/projects/{}/activity-status-correction activityIds={} dryRun={}",
+        projectId, req.getActivityIds(), req.isDryRun());
+    return ResponseEntity.ok(ApiResponse.ok(service.correctActivityStatus(projectId, req)));
   }
 }
