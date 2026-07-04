@@ -2,6 +2,8 @@ package com.bipros.api.controller.admin;
 
 import com.bipros.api.dto.ActivityStatusCorrectionRequest;
 import com.bipros.api.dto.ActivityStatusCorrectionResponse;
+import com.bipros.api.dto.ActivityStatusForceRequest;
+import com.bipros.api.dto.ActivityStatusForceResponse;
 import com.bipros.api.dto.BudgetCorrectionRequest;
 import com.bipros.api.dto.BudgetCorrectionResponse;
 import com.bipros.api.dto.DataHealthResponse;
@@ -75,5 +77,14 @@ public class ProjectDataRepairController {
     log.info("POST /v1/admin/projects/{}/activity-status-correction activityIds={} dryRun={}",
         projectId, req.getActivityIds(), req.isDryRun());
     return ResponseEntity.ok(ApiResponse.ok(service.correctActivityStatus(projectId, req)));
+  }
+
+  @PostMapping("/activity-status-force")
+  public ResponseEntity<ApiResponse<ActivityStatusForceResponse>> forceActivityInProgress(
+      @PathVariable UUID projectId,
+      @RequestBody ActivityStatusForceRequest req) {
+    log.info("POST /v1/admin/projects/{}/activity-status-force activities={} dryRun={}",
+        projectId, req.getActivities() == null ? 0 : req.getActivities().size(), req.isDryRun());
+    return ResponseEntity.ok(ApiResponse.ok(service.forceActivityInProgress(projectId, req)));
   }
 }

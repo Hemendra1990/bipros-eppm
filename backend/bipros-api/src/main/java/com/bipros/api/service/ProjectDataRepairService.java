@@ -9,6 +9,8 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
 import com.bipros.api.dto.ActivityStatusCorrectionRequest;
 import com.bipros.api.dto.ActivityStatusCorrectionResponse;
+import com.bipros.api.dto.ActivityStatusForceRequest;
+import com.bipros.api.dto.ActivityStatusForceResponse;
 import com.bipros.api.dto.DataHealthResponse;
 import com.bipros.api.dto.EpsCodeCorrectionResponse;
 import com.bipros.api.dto.RepairReport;
@@ -643,5 +645,126 @@ public class ProjectDataRepairService {
         new ActivityStatusCorrectionResponse.Summary(
             resetNotStarted, resetInProgress, keptCompleted, noBoqRecomputed, skipped),
         results);
+  }
+
+  /**
+   * Admin data-correction (opposite of {@link #correctActivityStatus}): force each listed
+   * genuinely-100% activity (Case B — 100% derived from its own APPROVED BOQ workdone) back down
+   * to IN_PROGRESS at a caller-supplied percent, WITHOUT touching any DPR/BOQ data. Used when an
+   * activity is legitimately 100% complete by BOQ but the business wants it to display as
+   * in-progress (e.g. Overall%/Budget/EVM must stay frozen against the real, unmodified DPR data).
+   *
+   * <p>Only activities that are genuinely 100% via approved BOQ workdone (re-derived with the same
+   * {@link PercentCompleteCalculator} engine as {@code correctActivityStatus}) are eligible; any
+   * other activity is skipped as {@code SKIPPED_NOT_CASE_B}. Note the forced value is not durable:
+   * the next DPR approval on this activity's BOQ line recomputes percent/status from real data,
+   * reverting the force.
+   *
+   * <p>{@code dryRun} (default true) computes and reports without persisting. When dryRun,
+   * NO setter is called on the loaded {@link Activity} — see {@link #correctActivityStatus} for
+   * why (JPA dirty-checking would otherwise flush any mutated field at commit).
+   */
+  @Transactional
+  public ActivityStatusForceResponse forceActivityInProgress(
+      UUID projectId, ActivityStatusForceRequest req) {
+    if (req == null || req.getActivities() == null || req.getActivities().isEmpty()) {
+      throw new BusinessRuleException("ACTIVITIES_REQUIRED", "activities is required");
+    }
+    boolean dryRun = req.isDryRun();
+    LocalDate today = LocalDate.now();
+
+    int forced = 0;
+    int skipped = 0;
+    List<ActivityStatusCorrectionResponse.Result> results = new ArrayList<>();
+
+    for (ActivityStatusForceRequest.ForceTarget t : req.getActivities()) {
+      if (t == null || t.getActivityId() == null) {
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            t == null ? null : t.getActivityId(), null, null, null, null, null, null,
+            "SKIPPED_NOT_FOUND", "null activity entry"));
+        skipped++;
+        continue;
+      }
+
+      UUID id = t.getActivityId();
+      Double target = t.getTargetPercent();
+
+      if (target == null || target <= 0.0 || target >= 100.0) {
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, null, null, null, null, null, null,
+            "SKIPPED_INVALID_PERCENT", "targetPercent must be 0<x<100"));
+        skipped++;
+        continue;
+      }
+
+      Activity a = activityRepo.findById(id).orElse(null);
+      if (a == null) {
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, null, null, null, null, null, null, "SKIPPED_NOT_FOUND", null));
+        skipped++;
+        continue;
+      }
+      if (!projectId.equals(a.getProjectId())) {
+        String statusName = a.getStatus() == null ? null : a.getStatus().name();
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, a.getCode(), a.getName(), statusName, a.getPercentComplete(),
+            statusName, a.getPercentComplete(), "SKIPPED_WRONG_PROJECT", null));
+        skipped++;
+        continue;
+      }
+
+      ActivityStatus oldStatusEnum = a.getStatus();
+      String oldStatus = oldStatusEnum == null ? null : oldStatusEnum.name();
+      Double oldPct = a.getPercentComplete();
+
+      BigDecimal bq = dprRepo.sumLinkedBoqQtyApproved(id);
+      double boqQty = bq == null ? 0.0 : bq.doubleValue();
+      if (boqQty <= 0) {
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, a.getCode(), a.getName(), oldStatus, oldPct, oldStatus, oldPct,
+            "SKIPPED_NOT_CASE_B", "no approved BOQ workdone — not eligible for force"));
+        skipped++;
+        continue;
+      }
+      BigDecimal wd = dprRepo.sumActivityWorkdoneOnBoqApproved(id);
+      Double workdone = wd == null ? 0.0 : wd.doubleValue();
+      double derivedPct = percentCompleteCalculator.calculateBoq(a, workdone, boqQty, today).percent();
+      if (derivedPct < 100.0) {
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, a.getCode(), a.getName(), oldStatus, oldPct, oldStatus, oldPct,
+            "SKIPPED_NOT_CASE_B",
+            "derived % is " + derivedPct + " (<100) — use re-derive, not force"));
+        skipped++;
+        continue;
+      }
+
+      double newPct = Math.round(target * 100.0) / 100.0;
+      if (newPct <= 0.0 || newPct >= 100.0) {
+        results.add(new ActivityStatusCorrectionResponse.Result(
+            id, a.getCode(), a.getName(), oldStatus, oldPct, oldStatus, oldPct,
+            "SKIPPED_INVALID_PERCENT", "targetPercent rounds to boundary"));
+        skipped++;
+        continue;
+      }
+      if (!dryRun) {
+        a.setStatus(ActivityStatus.IN_PROGRESS);
+        a.setPercentComplete(newPct);
+        a.setActualFinishDate(null);
+        activityRepo.save(a);
+        auditService.logUpdate("Activity", id, "percentComplete", oldPct, newPct);
+        auditService.logUpdate("Activity", id, "status", oldStatusEnum, ActivityStatus.IN_PROGRESS);
+      }
+
+      results.add(new ActivityStatusCorrectionResponse.Result(
+          id, a.getCode(), a.getName(), oldStatus, oldPct, "IN_PROGRESS", newPct,
+          "FORCED_IN_PROGRESS", "BOQ line still ~100%; reverts on next DPR"));
+      forced++;
+    }
+
+    log.info("[ProjectDataRepairService] activity force in-progress: project={} dryRun={} "
+            + "forced={} skipped={}", projectId, dryRun, forced, skipped);
+
+    return new ActivityStatusForceResponse(
+        dryRun, new ActivityStatusForceResponse.Summary(forced, skipped), results);
   }
 }
