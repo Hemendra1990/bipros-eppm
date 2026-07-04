@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { gisApi, SatelliteImage } from "@/lib/api/gisApi";
 import { formatDate } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -54,6 +54,8 @@ interface SatelliteImageGalleryProps {
   /** Optional client-side capture-date filter, 'YYYY-MM-DD' (inclusive). */
   dateFrom?: string;
   dateTo?: string;
+  /** When set, the gallery follows the map's chosen polygon. */
+  selectedPolygonId?: string | null;
 }
 
 const ALL = "ALL";
@@ -68,10 +70,19 @@ export function SatelliteImageGallery({
   polygons,
   dateFrom,
   dateTo,
+  selectedPolygonId,
 }: SatelliteImageGalleryProps) {
   const qc = useQueryClient();
   const [selected, setSelected] = useState<SatelliteImage | null>(null);
   const [polygonFilter, setPolygonFilter] = useState<string>(ALL);
+
+  // Follow the map's chosen polygon: when one is selected, scope the gallery to
+  // it (the user can still change the dropdown afterwards).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (selectedPolygonId) setPolygonFilter(selectedPolygonId);
+  }, [selectedPolygonId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const deleteMutation = useMutation({
     mutationFn: (imageId: string) =>

@@ -58,6 +58,7 @@ export interface SatelliteImage {
   imageName: string;
   description?: string;
   captureDate: string;
+  cloudCoverPercent?: number;
   source:
     | "ISRO_CARTOSAT"
     | "PLANET_LABS"
@@ -103,6 +104,12 @@ export interface IngestionResult {
   scenesSkippedDedupe: number;
   snapshotsCreated: number;
   errors: string[];
+}
+
+/** Async ingest dispatch ack — the run is tracked in the ingestion log by runId. */
+export interface IngestionRunAck {
+  runId: string;
+  status: "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL";
 }
 
 export interface IngestionLogEntry {
@@ -366,7 +373,7 @@ export const gisApi = {
     to: string,
     polygonId?: UUID
   ) =>
-    apiClient.post<{ data: IngestionResult }>(
+    apiClient.post<{ data: IngestionRunAck }>(
       `/v1/projects/${projectId}/gis/ingest`,
       null,
       { params: polygonId ? { from, to, polygonId } : { from, to } }
