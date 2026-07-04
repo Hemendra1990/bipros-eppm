@@ -223,3 +223,5 @@ databaseChangeLog:
       file: db/changelog/115-project-hse-metrics.yaml
   - include:
       file: db/changelog/116-project-hse-indirect-manhours.yaml
+  - include:
+      file: db/changelog/117-gis-per-polygon-columns.yaml

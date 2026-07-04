@@ -1,0 +1,35 @@
+databaseChangeLog:
+  # Per-polygon satellite scene ownership + optional polygon name (GIS per-polygon scenes feature).
+  # Both columns are additive and nullable (dev ddl-auto:update adds them automatically over existing
+  # rows; legacy scenes keep wbs_polygon_id = NULL and surface as "Unassigned" in the viewer).
+  - changeSet:
+      id: 117-gis-per-polygon-columns
+      author: hemendra
+      changes:
+        - addColumn:
+            schemaName: gis
+            tableName: satellite_images
+            columns:
+              - column:
+                  name: wbs_polygon_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+        - addColumn:
+            schemaName: gis
+            tableName: wbs_polygons
+            columns:
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            schemaName: gis
+            tableName: satellite_images
+            columnName: wbs_polygon_id
+        - dropColumn:
+            schemaName: gis
+            tableName: wbs_polygons
+            columnName: name
