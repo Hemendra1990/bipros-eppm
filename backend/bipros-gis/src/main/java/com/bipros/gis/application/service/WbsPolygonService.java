@@ -42,6 +42,7 @@ public class WbsPolygonService {
         polygon.setLayerId(request.layerId());
         polygon.setWbsCode(request.wbsCode());
         polygon.setWbsName(request.wbsName());
+        polygon.setName(request.name());
         polygon.setPolygon(parsePolygon(request.polygonGeoJson()));
         polygon.setCenterLatitude(request.centerLatitude());
         polygon.setCenterLongitude(request.centerLongitude());
@@ -74,6 +75,7 @@ public class WbsPolygonService {
 
         polygon.setWbsCode(request.wbsCode());
         polygon.setWbsName(request.wbsName());
+        polygon.setName(request.name());
         polygon.setPolygon(parsePolygon(request.polygonGeoJson()));
         polygon.setCenterLatitude(request.centerLatitude());
         polygon.setCenterLongitude(request.centerLongitude());

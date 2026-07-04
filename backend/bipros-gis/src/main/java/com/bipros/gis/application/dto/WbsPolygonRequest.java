@@ -18,6 +18,8 @@ public record WbsPolygonRequest(
     @NotBlank(message = "WBS name is required")
     String wbsName,
 
+    String name,
+
     @NotNull(message = "Polygon GeoJSON is required")
     String polygonGeoJson,
 
