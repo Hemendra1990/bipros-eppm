@@ -6,18 +6,26 @@ import com.bipros.gis.application.dto.GeoJsonFeature;
 import com.bipros.gis.application.dto.GeoJsonFeatureCollection;
 import com.bipros.gis.application.dto.WbsPolygonRequest;
 import com.bipros.gis.application.dto.WbsPolygonResponse;
+import com.bipros.gis.domain.model.SatelliteImage;
 import com.bipros.gis.domain.model.WbsPolygon;
+import com.bipros.gis.domain.repository.ConstructionProgressSnapshotRepository;
+import com.bipros.gis.domain.repository.SatelliteImageRepository;
 import com.bipros.gis.domain.repository.WbsPolygonRepository;
+import com.bipros.integration.storage.RasterStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.geojson.GeoJsonReader;
 import org.locationtech.jts.io.geojson.GeoJsonWriter;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,10 +33,14 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WbsPolygonService {
 
     private final WbsPolygonRepository polygonRepository;
     private final ObjectMapper objectMapper;
+    private final SatelliteImageRepository imageRepository;
+    private final ConstructionProgressSnapshotRepository snapshotRepository;
+    private final RasterStorage rasterStorage;
 
     /** JTS GeoJsonReader and Writer are thread-safe for simple reads/writes. */
     private static final GeoJsonReader GEOJSON_READER = new GeoJsonReader();
@@ -87,11 +99,72 @@ public class WbsPolygonService {
         return WbsPolygonResponse.from(updated);
     }
 
+    /**
+     * Cascade delete: removes the polygon plus everything it owns — its
+     * satellite scenes and their MinIO rasters, legacy (null-polygon) scenes
+     * whose footprint overlaps it, and its analysis snapshots. Raster deletes
+     * are best-effort (a missing/unreachable object never blocks the DB delete).
+     */
+    @Transactional
     public void delete(UUID projectId, UUID polygonId) {
         WbsPolygon polygon = polygonRepository.findById(polygonId)
             .filter(p -> p.getProjectId().equals(projectId))
             .orElseThrow(() -> new ResourceNotFoundException("WbsPolygon", polygonId.toString()));
+
+        // Owned scenes + their rasters.
+        deleteImagesWithRasters(imageRepository.findByWbsPolygonId(polygonId));
+
+        // Legacy (null-polygon) scenes whose footprint bbox overlaps this polygon.
+        Envelope polygonEnv = polygon.getPolygon().getEnvelopeInternal();
+        List<SatelliteImage> legacyOverlaps = imageRepository.findByProjectIdOrderByCaptureDate(projectId).stream()
+            .filter(img -> img.getWbsPolygonId() == null)
+            .filter(img -> overlaps(img, polygonEnv))
+            .toList();
+        deleteImagesWithRasters(legacyOverlaps);
+
+        // Analysis snapshots owned by the polygon.
+        snapshotRepository.deleteAll(snapshotRepository.findByWbsPolygonIdOrderByCaptureDate(polygonId));
+
+        // The polygon row itself.
         polygonRepository.delete(polygon);
+    }
+
+    /** Multi-select delete — runs the single-polygon cascade per id; returns the count deleted. */
+    @Transactional
+    public int deleteBatch(UUID projectId, List<UUID> ids) {
+        int deleted = 0;
+        for (UUID id : ids) {
+            delete(projectId, id);
+            deleted++;
+        }
+        return deleted;
+    }
+
+    /** Delete image rows and best-effort remove their backing rasters. */
+    private void deleteImagesWithRasters(List<SatelliteImage> images) {
+        if (images.isEmpty()) return;
+        for (SatelliteImage img : images) {
+            if (img.getFilePath() == null) continue;
+            try {
+                rasterStorage.delete(URI.create(img.getFilePath()));
+            } catch (Exception e) {
+                log.warn("[Polygon delete] raster delete failed for image {} ({}): {}",
+                    img.getId(), img.getFilePath(), e.getMessage());
+            }
+        }
+        imageRepository.deleteAll(images);
+    }
+
+    /** Standard bbox intersection between a legacy image footprint and the polygon envelope. */
+    private boolean overlaps(SatelliteImage img, Envelope polygonEnv) {
+        if (img.getWestBound() == null || img.getEastBound() == null
+            || img.getSouthBound() == null || img.getNorthBound() == null) {
+            return false;
+        }
+        Envelope imageEnv = new Envelope(
+            img.getWestBound(), img.getEastBound(),
+            img.getSouthBound(), img.getNorthBound());
+        return polygonEnv.intersects(imageEnv);
     }
 
     public GeoJsonFeatureCollection getAsGeoJson(UUID projectId) {

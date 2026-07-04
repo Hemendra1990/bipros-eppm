@@ -79,4 +79,14 @@ public class WbsPolygonController {
         polygonService.delete(projectId, polygonId);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/batch-delete")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.UPDATE')")
+    public ResponseEntity<ApiResponse<Integer>> batchDelete(
+        @PathVariable UUID projectId,
+        @Valid @RequestBody BatchDeleteRequest request
+    ) {
+        int deleted = polygonService.deleteBatch(projectId, request.ids());
+        return ResponseEntity.ok(ApiResponse.ok(deleted));
+    }
 }
