@@ -281,12 +281,19 @@ export function MapViewer({
     }
   }, [highlightId]);
 
-  // Swap the raster when the scene (or its blob URL) changes.
+  // Swap the raster when the scene (or its blob URL) changes. Whenever there's
+  // no valid scene, HIDE the layer as well as nulling the source: an ImageLayer
+  // left visible with a null source makes OL's renderer dereference the source
+  // (getInterpolate) on the next frame and crash.
   useEffect(() => {
     const layer = rasterLayerRef.current;
     if (!layer) return;
-    if (!selectedScene || !sceneBlobUrl) {
+    const clear = () => {
+      layer.setVisible(false);
       layer.setSource(null as unknown as ImageStatic);
+    };
+    if (!selectedScene || !sceneBlobUrl) {
+      clear();
       return;
     }
     const { westBound: w, southBound: s, eastBound: e, northBound: n } =
@@ -297,7 +304,7 @@ export function MapViewer({
       typeof e !== "number" ||
       typeof n !== "number"
     ) {
-      layer.setSource(null as unknown as ImageStatic);
+      clear();
       return;
     }
     if (w > e) {
@@ -305,7 +312,7 @@ export function MapViewer({
       console.warn("[MapViewer] skipping antimeridian-crossing raster", {
         w, e, sceneId: selectedScene.id,
       });
-      layer.setSource(null as unknown as ImageStatic);
+      clear();
       return;
     }
     const extent3857 = transformExtent(
@@ -321,16 +328,18 @@ export function MapViewer({
         crossOrigin: undefined,
       })
     );
-  }, [selectedScene, sceneBlobUrl]);
+    layer.setVisible(visibility.satellite);
+  }, [selectedScene, sceneBlobUrl, visibility.satellite]);
 
   // Live visibility + opacity — no rebuild.
   useEffect(() => {
     baseLayerRef.current?.setVisible(visibility.baseMap);
     vectorLayerRef.current?.setVisible(visibility.polygons);
-    rasterLayerRef.current?.setVisible(visibility.satellite);
-    rasterLayerRef.current?.setOpacity(
-      Math.max(0, Math.min(1, satelliteOpacity))
-    );
+    // Only show the raster when it actually has a source; a visible ImageLayer
+    // with a null source crashes OL's renderer (getInterpolate on null).
+    const raster = rasterLayerRef.current;
+    raster?.setVisible(visibility.satellite && !!raster.getSource());
+    raster?.setOpacity(Math.max(0, Math.min(1, satelliteOpacity)));
   }, [visibility, satelliteOpacity]);
 
   // Fit view to polygon extent when data loads or the parent re-requests it.
