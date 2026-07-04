@@ -24,7 +24,30 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   constraints:
                     nullable: true
+        # Per-polygon ingestion stores the same scene_id once per polygon, so the
+        # global UNIQUE(scene_id) from changeset 030 (SatelliteImage.scene_id was
+        # @Column(unique=true)) must go. That constraint is unnamed in Liquibase
+        # (Postgres auto-names it satellite_images_scene_id_key; a Hibernate
+        # ddl-auto dev DB names it differently), so drop it defensively by locating
+        # whatever single-column unique constraint sits on scene_id.
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: false
+            sql: |
+              DO $$ DECLARE c text; BEGIN
+                SELECT conname INTO c FROM pg_constraint
+                  WHERE conrelid = 'gis.satellite_images'::regclass AND contype = 'u'
+                    AND conkey = ARRAY[(SELECT attnum FROM pg_attribute
+                      WHERE attrelid = 'gis.satellite_images'::regclass AND attname = 'scene_id')];
+                IF c IS NOT NULL THEN
+                  EXECUTE format('ALTER TABLE gis.satellite_images DROP CONSTRAINT %I', c);
+                END IF;
+              END $$;
       rollback:
+        # No-op for the constraint drop: we intentionally do NOT recreate the
+        # UNIQUE(scene_id) constraint, since per-polygon scenes legitimately share
+        # a scene_id. Only the additive columns are reversed here.
         - dropColumn:
             schemaName: gis
             tableName: satellite_images
