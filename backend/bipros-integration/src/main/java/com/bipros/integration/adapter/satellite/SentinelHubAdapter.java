@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Envelope;
+import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.Polygon;
+import org.locationtech.jts.io.geojson.GeoJsonReader;
 import org.locationtech.jts.io.geojson.GeoJsonWriter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -63,6 +65,7 @@ public class SentinelHubAdapter implements SatelliteAdapter {
     private final String baseUrl;
     private final String tokenUrl;
     private final GeoJsonWriter geoJsonWriter = new GeoJsonWriter();
+    private final GeoJsonReader geoJsonReader = new GeoJsonReader();
 
     // Cached OAuth2 bearer — refreshed when within 5 min of expiry.
     private String cachedToken;
@@ -124,11 +127,31 @@ public class SentinelHubAdapter implements SatelliteAdapter {
 
         if (response == null) return List.of();
         JsonNode features = response.path("features");
+        Envelope aoiEnv = aoi.getEnvelopeInternal();
         List<SceneDescriptor> scenes = new ArrayList<>(features.size());
         for (JsonNode feature : features) {
             String sceneId = feature.path("id").asText(null);
             String dateStr = feature.path("properties").path("datetime").asText(null);
             if (sceneId == null || dateStr == null) continue;
+
+            // Defensive AOI post-filter: the STAC search occasionally returns scenes
+            // whose footprint only touches the requested tile grid, not the AOI itself
+            // (e.g. a T46 tile for an Oman AOI). Drop any feature whose footprint
+            // envelope does not intersect the AOI envelope. Fail open when the
+            // geometry is missing or unparseable — never silently drop a valid scene.
+            JsonNode geometry = feature.path("geometry");
+            if (geometry != null && !geometry.isMissingNode() && !geometry.isNull()) {
+                try {
+                    Geometry footprint = geoJsonReader.read(json.writeValueAsString(geometry));
+                    if (!aoiEnv.intersects(footprint.getEnvelopeInternal())) {
+                        log.debug("[SentinelHub] dropping scene {} — footprint outside AOI", sceneId);
+                        continue;
+                    }
+                } catch (Exception e) {
+                    log.debug("[SentinelHub] keeping scene {} — footprint unparseable: {}", sceneId, e.getMessage());
+                }
+            }
+
             LocalDate capture = Instant.parse(dateStr).atZone(java.time.ZoneOffset.UTC).toLocalDate();
             double cloud = feature.path("properties").path("eo:cloud_cover").asDouble(Double.NaN);
             scenes.add(new SceneDescriptor(
