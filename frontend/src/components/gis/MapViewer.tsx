@@ -36,6 +36,7 @@ interface MapViewerProps {
   selectedScene: SatelliteImage | null;
   sceneBlobUrl: string | null;
   fitPolygonsSignal: number;
+  highlightId?: string | null;
   mode?: MapMode;
   onDrawEnd?: (geom: Polygon) => void;
   onModifyEnd?: (feature: Feature) => void;
@@ -58,6 +59,7 @@ export function MapViewer({
   selectedScene,
   sceneBlobUrl,
   fitPolygonsSignal,
+  highlightId = null,
   mode = "view",
   onDrawEnd,
   onModifyEnd,
@@ -81,6 +83,9 @@ export function MapViewer({
   const onModifyEndRef = useRef(onModifyEnd);
   const onDeleteClickRef = useRef(onDeleteClick);
   const onSelectFeatureRef = useRef(onSelectFeature);
+  // Latest highlightId held in a ref so the vector style function reads the
+  // current value without the layer being rebuilt on every selection change.
+  const highlightIdRef = useRef<string | null>(highlightId);
   useEffect(() => {
     modeRef.current = mode;
     onDrawEndRef.current = onDrawEnd;
@@ -106,14 +111,21 @@ export function MapViewer({
       source: vectorSource,
       style: (feature) => {
         const props = feature.getProperties();
+        const isHighlighted =
+          highlightIdRef.current != null &&
+          props.id === highlightIdRef.current;
         return new Style({
           fill: new Fill({ color: props.fillColor || "#3388ff" }),
           stroke: new Stroke({
-            color: props.strokeColor || "#000000",
-            width: 2,
+            // Highlighted polygon gets an accent colour + thicker outline so it
+            // stands out from the other features; others keep their own colour.
+            color: isHighlighted
+              ? "#f59e0b"
+              : props.strokeColor || "#000000",
+            width: isHighlighted ? 4 : 2,
           }),
           text: new Text({
-            text: props.wbsCode || "",
+            text: props.name || props.wbsCode || "",
             fill: new Fill({ color: "#000" }),
             font: "12px Arial",
           }),
@@ -242,6 +254,32 @@ export function MapViewer({
     });
     src.addFeatures(feats);
   }, [geoJsonData]);
+
+  // Restyle (not rebuild) the vector layer when the highlighted polygon
+  // changes. The style function reads highlightIdRef, so we only need to push
+  // the latest value into the ref and ask OL to recompute feature styles.
+  useEffect(() => {
+    highlightIdRef.current = highlightId;
+    const layer = vectorLayerRef.current;
+    layer?.changed();
+    layer?.getSource()?.changed();
+    // Frame the selected polygon so picking it from the list zooms to it.
+    if (highlightId && layer) {
+      const feat = layer
+        .getSource()
+        ?.getFeatures()
+        .find((f) => f.get("id") === highlightId);
+      const extent = feat?.getGeometry()?.getExtent();
+      const map = mapRef.current;
+      if (map && extent && !isExtentEmpty(extent)) {
+        map.getView().fit(extent, {
+          padding: [60, 60, 60, 60],
+          maxZoom: 17,
+          duration: 300,
+        });
+      }
+    }
+  }, [highlightId]);
 
   // Swap the raster when the scene (or its blob URL) changes.
   useEffect(() => {

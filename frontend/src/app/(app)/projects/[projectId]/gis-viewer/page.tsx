@@ -8,10 +8,12 @@ import type Polygon from "ol/geom/Polygon";
 import { MapViewer, type LayerVisibility } from "@/components/gis/MapViewer";
 import { ScenePicker } from "@/components/gis/ScenePicker";
 import { LayerControlPanel } from "@/components/gis/LayerControlPanel";
+import PolygonListPanel, {
+  type PolygonListItem,
+} from "@/components/gis/PolygonListPanel";
 import { GisLayerList } from "@/components/gis/GisLayerList";
 import { SatelliteImageGallery } from "@/components/gis/SatelliteImageGallery";
 import { UploadSatelliteImageModal } from "@/components/gis/UploadSatelliteImageModal";
-import { ProgressVarianceTable } from "@/components/gis/ProgressVarianceTable";
 import { MapModeToolbar, type MapMode } from "@/components/gis/MapModeToolbar";
 import {
   DrawReviewPanel,
@@ -65,6 +67,9 @@ function GisViewerPageInner() {
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
   const [showAllScenes, setShowAllScenes] = useState(false);
+  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(
+    null
+  );
 
   // Drawing / editing state.
   const [mapMode, setMapMode] = useState<MapMode>("view");
@@ -108,11 +113,6 @@ function GisViewerPageInner() {
     queryFn: async () => (await gisApi.getSatelliteImages(projectId)).data,
   });
 
-  const { data: varianceResponse } = useQuery({
-    queryKey: ["gis", projectId, "progress-variance"],
-    queryFn: async () => (await gisApi.getProgressVariance(projectId)).data,
-  });
-
   const { data: wbsTreeResponse } = useQuery({
     queryKey: ["project", projectId, "wbs-tree"],
     queryFn: () => projectApi.getWbsTree(projectId),
@@ -133,6 +133,10 @@ function GisViewerPageInner() {
   );
 
   const relevantScenes = useMemo(() => {
+    // A selected polygon takes precedence: show only the scenes it owns.
+    if (selectedPolygonId) {
+      return allScenes.filter((s) => s.wbsPolygonId === selectedPolygonId);
+    }
     if (showAllScenes || !polygonExtent4326) return allScenes;
     return allScenes.filter((s) => {
       if (
@@ -151,7 +155,7 @@ function GisViewerPageInner() {
       ];
       return bboxIntersects(sceneBox, polygonExtent4326);
     });
-  }, [allScenes, polygonExtent4326, showAllScenes]);
+  }, [allScenes, polygonExtent4326, showAllScenes, selectedPolygonId]);
 
   const selectedScene = useMemo(
     () => relevantScenes.find((s) => s.id === selectedSceneId) ?? null,
@@ -176,6 +180,39 @@ function GisViewerPageInner() {
     [features, selectedFeatureId]
   );
 
+  // Scenes owned per polygon (satellite images now carry wbsPolygonId).
+  const sceneCountByPolygon = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of allScenes) {
+      if (s.wbsPolygonId) {
+        counts[s.wbsPolygonId] = (counts[s.wbsPolygonId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [allScenes]);
+
+  const polygonListItems: PolygonListItem[] = useMemo(
+    () =>
+      features.map((f) => ({
+        id: f.properties.id,
+        name: f.properties.name,
+        wbsCode: f.properties.wbsCode,
+        wbsName: f.properties.wbsName,
+        areaInSqMeters: f.properties.areaInSqMeters,
+      })),
+    [features]
+  );
+
+  const galleryPolygons = useMemo(
+    () =>
+      polygonListItems.map((p) => ({
+        id: p.id,
+        name: p.name,
+        wbsCode: p.wbsCode,
+      })),
+    [polygonListItems]
+  );
+
   // --- Mutations ------------------------------------------------------------
 
   const createPolygon = useMutation({
@@ -190,6 +227,7 @@ function GisViewerPageInner() {
         layerId: layerId as `${string}-${string}-${string}-${string}-${string}`,
         wbsCode: payload.wbsCode,
         wbsName: payload.wbsName,
+        name: payload.name,
         polygonGeoJson: meta.geoJsonString,
         centerLatitude: meta.centerLat,
         centerLongitude: meta.centerLon,
@@ -296,6 +334,23 @@ function GisViewerPageInner() {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["gis", projectId, "geojson"] });
+      // Cascade also removes the polygon's satellite scenes/rasters.
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "satellite-images"] });
+      setSelectedFeatureId(null);
+      setSelectedPolygonId(null);
+      setMutationError(null);
+    },
+    onError: (err: unknown) => {
+      setMutationError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const batchDeletePolygons = useMutation({
+    mutationFn: (ids: string[]) => gisApi.batchDeletePolygons(projectId, ids),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "geojson"] });
+      qc.invalidateQueries({ queryKey: ["gis", projectId, "satellite-images"] });
+      setSelectedPolygonId(null);
       setSelectedFeatureId(null);
       setMutationError(null);
     },
@@ -303,6 +358,17 @@ function GisViewerPageInner() {
       setMutationError(err instanceof Error ? err.message : String(err));
     },
   });
+
+  const handleBatchDelete = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      const ok = window.confirm(
+        `Delete ${ids.length} polygon(s) and their satellite scenes? This cannot be undone.`
+      );
+      if (ok) batchDeletePolygons.mutate(ids);
+    },
+    [batchDeletePolygons]
+  );
 
   const createDefaultLayer = useMutation({
     mutationFn: () =>
@@ -355,7 +421,7 @@ function GisViewerPageInner() {
       const wbsCode = feature.get("wbsCode") as string | undefined;
       if (!polygonId) return;
       const ok = window.confirm(
-        `Delete polygon ${wbsCode ?? polygonId}? This cannot be undone.`
+        `Delete polygon ${wbsCode ?? polygonId} and its satellite scenes? This cannot be undone.`
       );
       if (!ok) return;
       deletePolygon.mutate(polygonId);
@@ -431,7 +497,7 @@ function GisViewerPageInner() {
     { id: "map" as TabId, label: "Map Viewer" },
     { id: "layers" as TabId, label: "Layers" },
     { id: "satellite" as TabId, label: "Satellite Images" },
-    { id: "progress" as TabId, label: "Progress Tracking" },
+    // "Progress Tracking" tab hidden for the demo (code retained).
   ];
 
   // What side panel to show in the right column.
@@ -509,19 +575,25 @@ function GisViewerPageInner() {
                 selectedSceneId={selectedSceneId}
                 onChange={setSelectedSceneId}
               />
-              {!showAllScenes &&
-                polygonExtent4326 &&
-                allScenes.length > 0 &&
-                relevantScenes.length === 0 && (
+              {allScenes.length > 0 &&
+                relevantScenes.length === 0 &&
+                (selectedPolygonId ||
+                  (!showAllScenes && polygonExtent4326)) && (
                   <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning flex items-center justify-between gap-2">
                     <span>
-                      No scenes intersect this project&apos;s polygon area.
+                      {selectedPolygonId
+                        ? "No scenes for the selected polygon yet. Fetch imagery or re-run ingestion."
+                        : "No scenes intersect this project's polygon area."}
                     </span>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setShowAllScenes(true)}
+                      onClick={() =>
+                        selectedPolygonId
+                          ? setSelectedPolygonId(null)
+                          : setShowAllScenes(true)
+                      }
                     >
                       Show all
                     </Button>
@@ -550,6 +622,7 @@ function GisViewerPageInner() {
                   sceneBlobUrl={sceneBlobUrl}
                   fitPolygonsSignal={fitSignal}
                   mode={mapMode}
+                  highlightId={selectedPolygonId}
                   onDrawEnd={handleDrawEnd}
                   onModifyEnd={handleModifyEnd}
                   onDeleteClick={handleDeleteClick}
@@ -591,23 +664,32 @@ function GisViewerPageInner() {
                 }
                 onDelete={() => {
                   const ok = window.confirm(
-                    `Delete polygon ${selectedFeature.properties.wbsCode}? This cannot be undone.`
+                    `Delete polygon ${selectedFeature.properties.wbsCode} and its satellite scenes? This cannot be undone.`
                   );
                   if (ok) deletePolygon.mutate(selectedFeature.properties.id);
                 }}
               />
             ) : (
-              <LayerControlPanel
-                projectId={projectId}
-                visibility={visibility}
-                onVisibilityChange={setVisibility}
-                satelliteOpacity={satelliteOpacity}
-                onSatelliteOpacityChange={setSatelliteOpacity}
-                selectedScene={selectedScene}
-                onZoomToPolygons={() => setFitSignal((n) => n + 1)}
-                canZoomToPolygons={!!polygonExtent4326}
-                backendLayers={layersResponse?.data}
-              />
+              <div className="flex flex-col gap-4">
+                <PolygonListPanel
+                  polygons={polygonListItems}
+                  selectedPolygonId={selectedPolygonId}
+                  onSelect={setSelectedPolygonId}
+                  sceneCountByPolygon={sceneCountByPolygon}
+                  onBatchDelete={handleBatchDelete}
+                />
+                <LayerControlPanel
+                  projectId={projectId}
+                  visibility={visibility}
+                  onVisibilityChange={setVisibility}
+                  satelliteOpacity={satelliteOpacity}
+                  onSatelliteOpacityChange={setSatelliteOpacity}
+                  selectedScene={selectedScene}
+                  onZoomToPolygons={() => setFitSignal((n) => n + 1)}
+                  canZoomToPolygons={!!polygonExtent4326}
+                  backendLayers={layersResponse?.data}
+                />
+              </div>
             )}
           </div>
         )}
@@ -680,7 +762,11 @@ function GisViewerPageInner() {
             </div>
 
             {satelliteImagesResponse?.data && satelliteImagesResponse.data.length > 0 ? (
-              <SatelliteImageGallery projectId={projectId} images={satelliteImagesResponse.data} />
+              <SatelliteImageGallery
+                projectId={projectId}
+                images={satelliteImagesResponse.data}
+                polygons={galleryPolygons}
+              />
             ) : (
               <div className="flex items-center justify-center h-40 rounded-lg border border-dashed border-border">
                 <span className="text-text-muted">
@@ -691,19 +777,6 @@ function GisViewerPageInner() {
           </div>
         )}
 
-        {activeTab === "progress" && (
-          <div>
-            {varianceResponse?.data && varianceResponse.data.length > 0 ? (
-              <ProgressVarianceTable projectId={projectId} variance={varianceResponse.data} />
-            ) : (
-              <div className="flex items-center justify-center h-96">
-                <span className="text-text-muted">
-                  No progress data available
-                </span>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <UploadSatelliteImageModal

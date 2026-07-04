@@ -10,6 +10,7 @@ export interface DrawPayload {
   wbsNodeId: string;
   wbsCode: string;
   wbsName: string;
+  name?: string;
   fillColor: string;
   strokeColor: string;
 }
@@ -51,11 +52,22 @@ export function DrawReviewPanel({
   onDiscard,
 }: DrawReviewPanelProps) {
   const [nodeId, setNodeId] = useState<string | null>(null);
+  const [name, setName] = useState("");
   const [fillColor, setFillColor] = useState("#3388ff");
   const [strokeColor, setStrokeColor] = useState("#000000");
 
   const node = nodeId ? findNode(tree, nodeId) : null;
   const ha = (meta.areaSqM / 10_000).toFixed(2);
+
+  // Prefill the polygon name from the picked WBS node, but never clobber a
+  // name the user has already typed.
+  const handleNodeChange = (id: string | null) => {
+    setNodeId(id);
+    if (id && name.trim() === "") {
+      const picked = findNode(tree, id);
+      if (picked) setName(picked.name);
+    }
+  };
 
   return (
     <aside className="flex flex-col gap-4 rounded-lg border border-accent/40 bg-surface/50 p-4">
@@ -76,7 +88,21 @@ export function DrawReviewPanel({
           tree={tree}
           value={nodeId}
           mappedNodeIds={mappedNodeIds}
-          onChange={setNodeId}
+          onChange={handleNodeChange}
+          disabled={isSaving}
+        />
+      </section>
+
+      <section>
+        <label className="block text-xs text-text-secondary mb-1">
+          Name
+        </label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Polygon name"
+          className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary placeholder:text-text-muted"
           disabled={isSaving}
         />
       </section>
@@ -131,6 +157,7 @@ export function DrawReviewPanel({
               wbsNodeId: node.id,
               wbsCode: node.code,
               wbsName: node.name,
+              name: name.trim() || undefined,
               fillColor,
               strokeColor,
             })
