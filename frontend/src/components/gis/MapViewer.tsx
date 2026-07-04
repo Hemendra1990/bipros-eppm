@@ -42,6 +42,8 @@ interface MapViewerProps {
   onModifyEnd?: (feature: Feature) => void;
   onDeleteClick?: (feature: Feature) => void;
   onSelectFeature?: (feature: Feature | null) => void;
+  /** View-mode click on a polygon — used to scope scenes to that polygon. */
+  onViewSelectFeature?: (id: string | null) => void;
 }
 
 /**
@@ -65,6 +67,7 @@ export function MapViewer({
   onModifyEnd,
   onDeleteClick,
   onSelectFeature,
+  onViewSelectFeature,
 }: MapViewerProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
@@ -83,6 +86,7 @@ export function MapViewer({
   const onModifyEndRef = useRef(onModifyEnd);
   const onDeleteClickRef = useRef(onDeleteClick);
   const onSelectFeatureRef = useRef(onSelectFeature);
+  const onViewSelectFeatureRef = useRef(onViewSelectFeature);
   // Latest highlightId held in a ref so the vector style function reads the
   // current value without the layer being rebuilt on every selection change.
   const highlightIdRef = useRef<string | null>(highlightId);
@@ -92,7 +96,15 @@ export function MapViewer({
     onModifyEndRef.current = onModifyEnd;
     onDeleteClickRef.current = onDeleteClick;
     onSelectFeatureRef.current = onSelectFeature;
-  }, [mode, onDrawEnd, onModifyEnd, onDeleteClick, onSelectFeature]);
+    onViewSelectFeatureRef.current = onViewSelectFeature;
+  }, [
+    mode,
+    onDrawEnd,
+    onModifyEnd,
+    onDeleteClick,
+    onSelectFeature,
+    onViewSelectFeature,
+  ]);
 
   const [selectedPolygon, setSelectedPolygon] = useState<
     Record<string, unknown> | null
@@ -175,11 +187,12 @@ export function MapViewer({
         return;
       }
 
-      // view mode: keep the popup behaviour.
+      // view mode: select the polygon (scopes scenes/gallery to it) + popup.
       if (clickedFeature) {
         const feat = clickedFeature as Feature;
         const props = feat.getProperties();
         setSelectedPolygon(props);
+        onViewSelectFeatureRef.current?.((props.id as string) ?? null);
         const extent = feat.getGeometry()?.getExtent();
         if (extent) {
           const center: [number, number] = [

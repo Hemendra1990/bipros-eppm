@@ -704,6 +704,7 @@ function GisViewerPageInner() {
                   onModifyEnd={handleModifyEnd}
                   onDeleteClick={handleDeleteClick}
                   onSelectFeature={handleSelectFeature}
+                  onViewSelectFeature={setSelectedPolygonId}
                 />
               )}
             </div>
