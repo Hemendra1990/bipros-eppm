@@ -21,6 +21,7 @@ import {
 } from "@/components/gis/DrawReviewPanel";
 import { PolygonEditPanel } from "@/components/gis/PolygonEditPanel";
 import { TabTip } from "@/components/common/TabTip";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 // import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,6 +89,13 @@ function GisViewerPageInner() {
   const [ingestTo, setIngestTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [lastIngestResult, setLastIngestResult] = useState<IngestionResult | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  // Themed delete-confirmation (replaces window.confirm). Holds the pending
+  // action so one dialog serves single, edit-panel, and batch polygon deletes.
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const ingestMutation = useMutation({
     mutationFn: () => gisApi.ingestSatellite(projectId, ingestFrom, ingestTo),
@@ -362,10 +370,11 @@ function GisViewerPageInner() {
   const handleBatchDelete = useCallback(
     (ids: string[]) => {
       if (ids.length === 0) return;
-      const ok = window.confirm(
-        `Delete ${ids.length} polygon(s) and their satellite scenes? This cannot be undone.`
-      );
-      if (ok) batchDeletePolygons.mutate(ids);
+      setConfirmState({
+        title: ids.length > 1 ? "Delete polygons" : "Delete polygon",
+        message: `Delete ${ids.length} polygon(s) and their satellite scenes? This cannot be undone.`,
+        onConfirm: () => batchDeletePolygons.mutate(ids),
+      });
     },
     [batchDeletePolygons]
   );
@@ -420,11 +429,11 @@ function GisViewerPageInner() {
       const polygonId = feature.get("id") as string | undefined;
       const wbsCode = feature.get("wbsCode") as string | undefined;
       if (!polygonId) return;
-      const ok = window.confirm(
-        `Delete polygon ${wbsCode ?? polygonId} and its satellite scenes? This cannot be undone.`
-      );
-      if (!ok) return;
-      deletePolygon.mutate(polygonId);
+      setConfirmState({
+        title: "Delete polygon",
+        message: `Delete polygon ${wbsCode ?? polygonId} and its satellite scenes? This cannot be undone.`,
+        onConfirm: () => deletePolygon.mutate(polygonId),
+      });
     },
     [deletePolygon]
   );
@@ -662,12 +671,14 @@ function GisViewerPageInner() {
                 onFetchImagery={() =>
                   fetchImageryForPolygon.mutate(selectedFeature.properties.id)
                 }
-                onDelete={() => {
-                  const ok = window.confirm(
-                    `Delete polygon ${selectedFeature.properties.wbsCode} and its satellite scenes? This cannot be undone.`
-                  );
-                  if (ok) deletePolygon.mutate(selectedFeature.properties.id);
-                }}
+                onDelete={() =>
+                  setConfirmState({
+                    title: "Delete polygon",
+                    message: `Delete polygon ${selectedFeature.properties.wbsCode} and its satellite scenes? This cannot be undone.`,
+                    onConfirm: () =>
+                      deletePolygon.mutate(selectedFeature.properties.id),
+                  })
+                }
               />
             ) : (
               <div className="flex flex-col gap-4">
@@ -783,6 +794,19 @@ function GisViewerPageInner() {
         projectId={projectId}
         open={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        title={confirmState?.title ?? ""}
+        message={confirmState?.message ?? ""}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => {
+          confirmState?.onConfirm();
+          setConfirmState(null);
+        }}
+        onCancel={() => setConfirmState(null)}
       />
     </div>
   );
