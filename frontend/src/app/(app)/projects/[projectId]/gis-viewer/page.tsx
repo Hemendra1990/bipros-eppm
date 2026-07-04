@@ -33,6 +33,7 @@ import {
   type GeoJsonFeatureCollection,
 } from "@/lib/api/gisApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { useAuthStore } from "@/lib/state/store";
 import { useSceneBlobUrl } from "@/lib/gis/useSceneBlobUrl";
 import {
   computeGeoJsonExtent4326,
@@ -269,6 +270,50 @@ function GisViewerPageInner() {
     }
   }, [polygonListItems, selectedPolygonId]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // WhatsApp deep-link: hydrate auth from ?auth= query param or cookie.
+  useEffect(() => {
+    const storeToken = useAuthStore.getState().accessToken;
+    if (storeToken) return;
+
+    const authParam = searchParams.get("auth");
+    const cookieEntry = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("access_token="));
+    const cookieToken = cookieEntry?.split("=")[1];
+
+    const token = authParam || cookieToken;
+    if (!token) return;
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    fetch(`${API_BASE_URL}/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch user");
+        return res.json();
+      })
+      .then((json) => {
+        if (json.data) {
+          useAuthStore.getState().setAuth(json.data, token, "");
+          // Set cookie so middleware allows subsequent page navigation
+          if (authParam) {
+            const maxAge = 3600;
+            document.cookie = `access_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+            // Remove ?auth= from URL
+            const url = new URL(window.location.href);
+            url.searchParams.delete("auth");
+            window.history.replaceState({}, "", url.toString());
+          }
+        }
+      })
+      .catch(() => {
+        document.cookie = "access_token=; path=/; max-age=0; SameSite=Lax";
+        if (authParam) {
+          window.location.href = "/auth/login?error=invalid_token";
+        }
+      });
+  }, []);
 
   // --- Mutations ------------------------------------------------------------
 
