@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Polygon;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,9 +56,75 @@ public class SatelliteIngestionService {
     private final RasterStorage rasterStorage;
     private final ProgressAnalyzerService analyzerService;
 
+    /**
+     * Persist a RUNNING audit row and return it. Called by the controller
+     * outside any ambient transaction so the row commits immediately and a
+     * poller of {@code GET .../ingestion-log} can observe RUNNING while the
+     * work continues on the async thread.
+     */
+    @Transactional
+    public SatelliteSceneIngestionLog createRunLog(UUID projectId, LocalDate from, LocalDate to) {
+        SatelliteAdapter adapter = adapterRegistry.defaultAdapter();
+        SatelliteSceneIngestionLog auditLog = SatelliteSceneIngestionLog.builder()
+            .projectId(projectId)
+            .vendorId(adapter.vendorId())
+            .fromDate(from)
+            .toDate(to)
+            .runStartedAt(Instant.now())
+            .status(SatelliteSceneIngestionLog.Status.RUNNING)
+            .build();
+        return logRepository.save(auditLog);
+    }
+
+    /**
+     * Run the actual ingestion on a background thread and update the pre-created
+     * audit row to a terminal status when done. Must be invoked from a DIFFERENT
+     * bean (the controller) so the {@code @Async} proxy applies — self-invocation
+     * from another method of this service would bypass it and run inline.
+     */
+    @Async
+    @Transactional
+    public void executeAsync(UUID runId, UUID projectId, UUID polygonId, LocalDate from, LocalDate to) {
+        SatelliteSceneIngestionLog auditLog = logRepository.findById(runId).orElse(null);
+        if (auditLog == null) {
+            log.warn("[Ingestion] async run {} could not load its audit log; aborting", runId);
+            return;
+        }
+
+        List<WbsPolygon> polygons;
+        if (polygonId != null) {
+            WbsPolygon polygon = polygonRepository.findById(polygonId)
+                .filter(p -> p.getProjectId().equals(projectId))
+                .orElse(null);
+            if (polygon == null) {
+                markFailed(auditLog, "[\"polygon not found\"]");
+                return;
+            }
+            polygons = List.of(polygon);
+        } else {
+            polygons = polygonRepository.findByProjectId(projectId);
+        }
+
+        try {
+            run(auditLog, projectId, polygons, from, to);
+        } catch (Exception e) {
+            log.error("[Ingestion] async run {} failed: {}", runId, e.getMessage(), e);
+            markFailed(auditLog, "[\"" + e.getMessage() + "\"]");
+        }
+    }
+
+    /** Outer safety net so an aborted run never stays stuck in RUNNING. */
+    private void markFailed(SatelliteSceneIngestionLog auditLog, String errorsJson) {
+        auditLog.setStatus(SatelliteSceneIngestionLog.Status.FAILED);
+        auditLog.setRunFinishedAt(Instant.now());
+        auditLog.setErrorsJson(errorsJson);
+        logRepository.save(auditLog);
+    }
+
     @Transactional
     public IngestionResult runForProject(UUID projectId, LocalDate from, LocalDate to) {
-        return run(projectId, polygonRepository.findByProjectId(projectId), from, to);
+        SatelliteSceneIngestionLog auditLog = createRunLog(projectId, from, to);
+        return run(auditLog, projectId, polygonRepository.findByProjectId(projectId), from, to);
     }
 
     /**
@@ -72,22 +139,14 @@ public class SatelliteIngestionService {
             .filter(p -> p.getProjectId().equals(projectId))
             .orElseThrow(() -> new com.bipros.common.exception.ResourceNotFoundException(
                 "WbsPolygon", polygonId.toString()));
-        return run(projectId, List.of(polygon), from, to);
+        SatelliteSceneIngestionLog auditLog = createRunLog(projectId, from, to);
+        return run(auditLog, projectId, List.of(polygon), from, to);
     }
 
-    private IngestionResult run(UUID projectId, List<WbsPolygon> polygons, LocalDate from, LocalDate to) {
-        Instant started = Instant.now();
+    private IngestionResult run(SatelliteSceneIngestionLog auditLog, UUID projectId, List<WbsPolygon> polygons,
+                               LocalDate from, LocalDate to) {
+        Instant started = auditLog.getRunStartedAt();
         SatelliteAdapter adapter = adapterRegistry.defaultAdapter();
-
-        SatelliteSceneIngestionLog auditLog = SatelliteSceneIngestionLog.builder()
-            .projectId(projectId)
-            .vendorId(adapter.vendorId())
-            .fromDate(from)
-            .toDate(to)
-            .runStartedAt(started)
-            .status(SatelliteSceneIngestionLog.Status.RUNNING)
-            .build();
-        auditLog = logRepository.save(auditLog);
 
         int scenesFetched = 0;
         int scenesSkipped = 0;

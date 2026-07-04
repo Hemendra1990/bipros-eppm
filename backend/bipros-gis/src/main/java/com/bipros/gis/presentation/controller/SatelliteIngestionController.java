@@ -2,7 +2,7 @@ package com.bipros.gis.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.common.exception.ResourceNotFoundException;
-import com.bipros.gis.application.dto.IngestionResult;
+import com.bipros.gis.application.dto.IngestionRunAck;
 import com.bipros.gis.application.service.SatelliteIngestionService;
 import com.bipros.gis.domain.model.SatelliteImage;
 import com.bipros.gis.domain.model.SatelliteSceneIngestionLog;
@@ -38,22 +38,23 @@ public class SatelliteIngestionController {
     private final RasterStorage rasterStorage;
 
     /**
-     * Manual trigger used by the UI "Run Ingestion" button. Runs synchronously
-     * and returns when all polygons have been processed. Typical duration:
-     * 30-90 s for a 10-polygon project. For nightly runs, use the
-     * SatelliteIngestionScheduler (Phase 4).
+     * Manual trigger used by the UI "Run Ingestion" button. Returns IMMEDIATELY
+     * with the run id + status RUNNING; the actual ingestion runs on a background
+     * thread and updates the audit row to a terminal status when done. The UI
+     * polls {@code GET .../ingestion-log} to watch progress and show a completion
+     * toast. For nightly runs, use the SatelliteIngestionScheduler (Phase 4).
      */
     @PostMapping("/ingest")
-    public ResponseEntity<ApiResponse<IngestionResult>> ingest(
+    public ResponseEntity<ApiResponse<IngestionRunAck>> ingest(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
         @RequestParam(required = false) UUID polygonId
     ) {
-        IngestionResult result = polygonId != null
-            ? ingestionService.runForPolygon(projectId, polygonId, from, to)
-            : ingestionService.runForProject(projectId, from, to);
-        return ResponseEntity.ok(ApiResponse.ok(result));
+        SatelliteSceneIngestionLog logRow = ingestionService.createRunLog(projectId, from, to);
+        // Invoked on a different bean so the @Async proxy applies; returns immediately.
+        ingestionService.executeAsync(logRow.getId(), projectId, polygonId, from, to);
+        return ResponseEntity.ok(ApiResponse.ok(new IngestionRunAck(logRow.getId(), "RUNNING")));
     }
 
     /** Recent ingestion runs for a project, newest first. Used by the UI's "last sync" indicator. */
