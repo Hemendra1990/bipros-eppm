@@ -33,8 +33,8 @@ import java.util.UUID;
  * Orchestrates one satellite ingestion run for a project. Designed to be:
  * <ul>
  *   <li><b>idempotent</b> — re-running over the same date range is a no-op
- *       because {@code satellite_images.scene_id} is unique and the repo's
- *       {@code existsBySceneId} dedupes before write.</li>
+ *       because the repo's {@code existsBySceneIdAndWbsPolygonId} dedupes each
+ *       (scene, polygon) pair before write.</li>
  *   <li><b>resilient</b> — one polygon or scene failing doesn't abort the run;
  *       errors are collected and surfaced via {@link IngestionResult} + the
  *       {@link SatelliteSceneIngestionLog} row.</li>
@@ -94,8 +94,8 @@ public class SatelliteIngestionService {
         int snapshotsCreated = 0;
         List<String> errors = new ArrayList<>();
 
-        // A single scene can overlap many polygons in a project. Download once;
-        // record the SatelliteImage once. Per-polygon analysis is Phase 3's job.
+        // A scene is stored once per polygon it overlaps; the key is
+        // (sceneId, polygonId) so the same scene can be owned by several polygons.
         Map<String, SatelliteImage> seenThisRun = new HashMap<>();
 
         for (WbsPolygon polygon : polygons) {
@@ -110,20 +110,21 @@ public class SatelliteIngestionService {
             }
 
             for (SceneDescriptor desc : descriptors) {
-                if (seenThisRun.containsKey(desc.sceneId())) continue;
-                if (imageRepository.existsBySceneId(desc.sceneId())) {
+                String dedupeKey = desc.sceneId() + "|" + polygon.getId();
+                if (seenThisRun.containsKey(dedupeKey)) continue;
+                if (imageRepository.existsBySceneIdAndWbsPolygonId(desc.sceneId(), polygon.getId())) {
                     scenesSkipped++;
                     continue;
                 }
                 try {
                     byte[] raster = adapter.fetchRaster(desc.sceneId(), polygon.getPolygon(), 1024);
-                    String key = projectId + "/" + desc.captureDate().getYear() + "/"
+                    String key = projectId + "/" + polygon.getId() + "/" + desc.captureDate().getYear() + "/"
                         + String.format("%02d", desc.captureDate().getMonthValue()) + "/"
                         + sanitise(desc.sceneId()) + ".tif";
                     URI storedAt = rasterStorage.put(key, raster, adapter.rasterContentType());
-                    SatelliteImage image = persistImage(projectId, polygon.getLayerId(), desc, storedAt,
+                    SatelliteImage image = persistImage(projectId, polygon.getLayerId(), polygon.getId(), desc, storedAt,
                         raster.length, adapter.rasterContentType());
-                    seenThisRun.put(desc.sceneId(), image);
+                    seenThisRun.put(dedupeKey, image);
                     scenesFetched++;
 
                     // Fire the analyzer asynchronously. analyzeAsync() is an
@@ -163,11 +164,12 @@ public class SatelliteIngestionService {
             scenesFetched, scenesSkipped, snapshotsCreated, errors);
     }
 
-    private SatelliteImage persistImage(UUID projectId, UUID layerId, SceneDescriptor desc,
+    private SatelliteImage persistImage(UUID projectId, UUID layerId, UUID polygonId, SceneDescriptor desc,
                                         URI storedAt, int fileSize, String mimeType) {
         SatelliteImage image = new SatelliteImage();
         image.setProjectId(projectId);
         image.setLayerId(layerId);
+        image.setWbsPolygonId(polygonId);
         image.setSceneId(desc.sceneId());
         image.setImageName(desc.vendorId() + " " + desc.captureDate() + " " + desc.sceneId());
         image.setCaptureDate(desc.captureDate());
