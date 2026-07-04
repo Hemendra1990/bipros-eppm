@@ -512,7 +512,7 @@ export function AiChatPanel() {
       const single = firstUser.content.replace(/\s+/g, " ").trim();
       return single.length <= 60 ? single : `${single.slice(0, 57)}...`;
     }
-    return "Bipros AI Conversation";
+    return "Sarooj AI Conversation";
   }, [messages]);
 
   const runExport = useCallback(
@@ -793,7 +793,7 @@ export function AiChatPanel() {
         title="Open AI chat (Ctrl+Shift+K)"
       >
         <Bot size={18} />
-        <span className="hidden sm:inline">Ask AI</span>
+        <span className="hidden sm:inline">Sarooj AI</span>
       </button>
     );
   }
@@ -816,7 +816,7 @@ export function AiChatPanel() {
             {!collapsed && (
               <div className="flex items-center gap-2 min-w-0">
                 <Bot size={18} className="text-accent shrink-0" />
-                <span className="text-sm font-semibold text-text-primary shrink-0">Bipros AI</span>
+                <span className="text-sm font-semibold text-text-primary shrink-0">Sarooj AI</span>
                 <span className="text-xs text-text-muted bg-surface-hover px-2 py-0.5 rounded shrink-0">
                   {effectiveModule}
                 </span>
