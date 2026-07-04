@@ -23,6 +23,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Sentinel Hub (Copernicus) adapter.
@@ -48,6 +50,8 @@ import java.util.List;
 public class SentinelHubAdapter implements SatelliteAdapter {
 
     private static final String VENDOR_ID = "sentinel-hub";
+    /** Extracts the short MGRS tile id (e.g. "46RDV") from a Sentinel-2 product id. */
+    private static final Pattern MGRS_TILE = Pattern.compile("_T(\\d{2}[A-Z]{3})_");
     /** True-colour evalscript — S2 bands B04 (red), B03 (green), B02 (blue). */
     private static final String EVAL_SCRIPT = """
         //VERSION=3
@@ -180,8 +184,14 @@ public class SentinelHubAdapter implements SatelliteAdapter {
         ObjectNode s2 = data.addObject();
         s2.put("type", "sentinel-2-l2a");
         ObjectNode dataFilter = s2.putObject("dataFilter");
-        // We accept any scene that matches the catalog id filter pattern.
-        dataFilter.put("tileId", sceneId);
+        // Sentinel Hub's Process API expects the short MGRS tile id (e.g. "46RDV"),
+        // not the full product id (e.g. S2B_MSIL2A_..._T46RDV_...). Send the tileId
+        // filter only when the product id yields a tile; otherwise omit it rather
+        // than pass a value Sentinel Hub cannot match.
+        Matcher tileMatcher = MGRS_TILE.matcher(sceneId);
+        if (tileMatcher.find()) {
+            dataFilter.put("tileId", tileMatcher.group(1));
+        }
 
         // output
         ObjectNode output = request.putObject("output");
