@@ -26,6 +26,9 @@ public interface ActivitySupervisorRepository extends JpaRepository<ActivitySupe
   void deleteByActivityId(UUID activityId);
 
   @Modifying
+  void deleteByActivityIdIn(Collection<UUID> activityIds);
+
+  @Modifying
   void deleteByActivityIdAndUserId(UUID activityId, UUID userId);
 
   @Modifying

@@ -3,8 +3,10 @@ package com.bipros.api.controller.admin;
 import com.bipros.api.dto.DataHealthResponse;
 import com.bipros.api.dto.RepairReport;
 import com.bipros.api.dto.RepairRequest;
+import com.bipros.api.service.ActivityWbsDeletionService;
 import com.bipros.api.service.ProjectBudgetCorrectionService;
 import com.bipros.api.service.ProjectDataRepairService;
+import com.bipros.api.service.UnitConsistencyRepairService;
 import com.bipros.common.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,16 +29,22 @@ import static org.mockito.Mockito.when;
 class ProjectDataRepairControllerTest {
 
   @Mock
+  ActivityWbsDeletionService activityWbsDeletionService;
+
+  @Mock
   ProjectDataRepairService service;
 
   @Mock
   ProjectBudgetCorrectionService budgetCorrectionService;
 
+  @Mock
+  UnitConsistencyRepairService unitConsistencyRepairService;
+
   ProjectDataRepairController controller;
 
   @BeforeEach
   void setUp() {
-    controller = new ProjectDataRepairController(service, budgetCorrectionService);
+    controller = new ProjectDataRepairController(activityWbsDeletionService, service, budgetCorrectionService, unitConsistencyRepairService);
   }
 
   // --- helpers ---

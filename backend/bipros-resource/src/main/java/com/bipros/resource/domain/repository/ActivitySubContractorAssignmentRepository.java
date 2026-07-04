@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,6 +20,8 @@ public interface ActivitySubContractorAssignmentRepository
   List<ActivitySubContractorAssignment> findByProjectId(UUID projectId);
 
   long countBySubContractorMasterId(UUID subContractorMasterId);
+
+  long countByActivityIdIn(Collection<UUID> activityIds);
 
   @Query("SELECT COALESCE(SUM(a.plannedCost), 0) FROM ActivitySubContractorAssignment a "
        + "WHERE a.projectId = :projectId")

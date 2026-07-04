@@ -20,6 +20,9 @@ public interface ProductivityNormRepository extends JpaRepository<ProductivityNo
 
   List<ProductivityNorm> findByWorkActivityId(UUID workActivityId);
 
+  /** Norms for a set of work activities — used by the unit-consistency repair to load norms in bulk. */
+  List<ProductivityNorm> findByWorkActivityIdIn(List<UUID> workActivityIds);
+
   long countByWorkActivityId(UUID workActivityId);
 
   Optional<ProductivityNorm> findFirstByWorkActivityIdAndResourceId(

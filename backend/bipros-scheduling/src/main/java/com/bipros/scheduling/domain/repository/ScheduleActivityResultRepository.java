@@ -2,8 +2,10 @@ package com.bipros.scheduling.domain.repository;
 
 import com.bipros.scheduling.domain.model.ScheduleActivityResult;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,4 +15,9 @@ public interface ScheduleActivityResultRepository extends JpaRepository<Schedule
   List<ScheduleActivityResult> findByScheduleResultId(UUID scheduleResultId);
 
   List<ScheduleActivityResult> findByScheduleResultIdAndIsCritical(UUID scheduleResultId, Boolean isCritical);
+
+  @Modifying
+  void deleteByActivityIdIn(Collection<UUID> activityIds);
+
+  long countByActivityIdIn(Collection<UUID> activityIds);
 }

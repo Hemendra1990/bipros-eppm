@@ -137,6 +137,12 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
   /** All DPRs for a project — used by the data-repair orchestrator for full-project scans. */
   List<DailyProgressReport> findByProjectId(UUID projectId);
 
+  long countByActivityIdIn(Collection<UUID> activityIds);
+
+  /** Per-activity DPR counts for the given activity ids. Each row = [UUID activityId, Long count]. */
+  @Query("select d.activityId, count(d) from DailyProgressReport d where d.activityId in :ids group by d.activityId")
+  List<Object[]> countDprsByActivityIdInGrouped(@Param("ids") Collection<UUID> ids);
+
   @org.springframework.data.jpa.repository.Query(
       "select min(d.reportDate) from DailyProgressReport d where d.projectId = :projectId")
   java.util.Optional<java.time.LocalDate> findMinReportDate(
@@ -300,4 +306,25 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
    */
   List<DailyProgressReport> findByApprovalStatusAndSubmittedAtBeforeAndEscalatedAtIsNull(
       DprApprovalStatus approvalStatus, Instant submittedAtBefore);
+
+  // ─── Unit-consistency repair ─────────────────────────────────────────────────
+
+  /** Lightweight projection (id, activityId, unit) for the unit-consistency repair — avoids
+   *  hydrating full DPR entities for a ~9k-row project. Each row = [UUID id, UUID activityId, String unit]. */
+  @Query("select d.id, d.activityId, d.unit from DailyProgressReport d where d.projectId = :projectId")
+  List<Object[]> findIdActivityUnitByProjectId(@Param("projectId") UUID projectId);
+
+  /** Distinct (boqItemId, activityId) pairs for the project's DPRs that carry a BOQ link.
+   *  Each row = [UUID boqItemId, UUID activityId]. Used to map a BOQ item to the activities that use it. */
+  @Query("select distinct d.boqItemId, d.activityId from DailyProgressReport d "
+      + "where d.projectId = :projectId and d.boqItemId is not null")
+  List<Object[]> findDistinctBoqItemActivityPairsByProjectId(@Param("projectId") UUID projectId);
+
+  /** Targeted column-only bulk relabel: set unit on the given DPR ids, skipping rows already at :unit.
+   *  Returns the number of rows changed. Column-only, so it never conflicts with edits to other DPR
+   *  fields and fires no events (pure relabel). */
+  @Modifying
+  @Query("update DailyProgressReport d set d.unit = :unit "
+      + "where d.id in :ids and (d.unit is null or d.unit <> :unit)")
+  int bulkSetUnit(@Param("ids") List<UUID> ids, @Param("unit") String unit);
 }

@@ -2,12 +2,14 @@ package com.bipros.resource.domain.repository;
 
 import com.bipros.resource.domain.model.ResourceAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +26,11 @@ public interface ResourceAssignmentRepository extends JpaRepository<ResourceAssi
   long countByMaterialRoleVariantId(UUID materialRoleVariantId);
 
   List<ResourceAssignment> findByActivityIdIn(List<UUID> activityIds);
+
+  @Modifying
+  void deleteByActivityIdIn(Collection<UUID> activityIds);
+
+  long countByActivityIdIn(Collection<UUID> activityIds);
 
   List<ResourceAssignment> findByResourceId(UUID resourceId);
 

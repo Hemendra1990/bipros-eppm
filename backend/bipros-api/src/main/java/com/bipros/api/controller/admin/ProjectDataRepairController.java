@@ -7,12 +7,18 @@ import com.bipros.api.dto.ActivityStatusForceResponse;
 import com.bipros.api.dto.BudgetCorrectionRequest;
 import com.bipros.api.dto.BudgetCorrectionResponse;
 import com.bipros.api.dto.DataHealthResponse;
+import com.bipros.api.dto.DeleteActivitiesWbsRequest;
+import com.bipros.api.dto.DeleteActivitiesWbsResponse;
 import com.bipros.api.dto.EpsCodeCorrectionRequest;
 import com.bipros.api.dto.EpsCodeCorrectionResponse;
 import com.bipros.api.dto.RepairReport;
 import com.bipros.api.dto.RepairRequest;
+import com.bipros.api.dto.UnitConsistencyRepairRequest;
+import com.bipros.api.dto.UnitConsistencyRepairResponse;
+import com.bipros.api.service.ActivityWbsDeletionService;
 import com.bipros.api.service.ProjectBudgetCorrectionService;
 import com.bipros.api.service.ProjectDataRepairService;
+import com.bipros.api.service.UnitConsistencyRepairService;
 import com.bipros.common.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,8 +35,10 @@ import java.util.UUID;
 @Slf4j
 public class ProjectDataRepairController {
 
+  private final ActivityWbsDeletionService activityWbsDeletionService;
   private final ProjectDataRepairService service;
   private final ProjectBudgetCorrectionService budgetCorrectionService;
+  private final UnitConsistencyRepairService unitConsistencyRepairService;
 
   @GetMapping("/data-health")
   public ResponseEntity<ApiResponse<DataHealthResponse>> dataHealth(@PathVariable UUID projectId) {
@@ -86,5 +94,26 @@ public class ProjectDataRepairController {
     log.info("POST /v1/admin/projects/{}/activity-status-force activities={} dryRun={}",
         projectId, req.getActivities() == null ? 0 : req.getActivities().size(), req.isDryRun());
     return ResponseEntity.ok(ApiResponse.ok(service.forceActivityInProgress(projectId, req)));
+  }
+
+  @PostMapping("/unit-consistency-repair")
+  public ResponseEntity<ApiResponse<UnitConsistencyRepairResponse>> unitConsistencyRepair(
+      @PathVariable UUID projectId,
+      @RequestBody UnitConsistencyRepairRequest req) {
+    log.info("POST /v1/admin/projects/{}/unit-consistency-repair dryRun={} chunkSize={} phases={}",
+        projectId, req.isDryRun(), req.getChunkSize(), req.getPhases());
+    return ResponseEntity.ok(ApiResponse.ok(unitConsistencyRepairService.repair(projectId, req)));
+  }
+
+  @PostMapping("/delete-activities-wbs")
+  public ResponseEntity<ApiResponse<DeleteActivitiesWbsResponse>> deleteActivitiesAndWbs(
+      @PathVariable UUID projectId,
+      @RequestBody DeleteActivitiesWbsRequest req) {
+    log.info("POST /v1/admin/projects/{}/delete-activities-wbs wbsNodeIds={} activityIds={} dryRun={} force={}",
+        projectId,
+        req.getWbsNodeIds() == null ? 0 : req.getWbsNodeIds().size(),
+        req.getActivityIds() == null ? 0 : req.getActivityIds().size(),
+        req.isDryRun(), req.isForce());
+    return ResponseEntity.ok(ApiResponse.ok(activityWbsDeletionService.deleteActivitiesAndWbs(projectId, req)));
   }
 }
