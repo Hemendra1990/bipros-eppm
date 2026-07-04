@@ -347,7 +347,7 @@ export default function FinancialDashboardPage() {
           <div className="space-y-6">
             {/* KPI strip */}
             <section id="overview" className="scroll-mt-24">
-              <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
                 <KpiTile
                   label="Contract Value"
                   // Match the Costs tab: no Primary Contract → em-dash, not "0 OMR".
@@ -366,7 +366,7 @@ export default function FinancialDashboardPage() {
                       : undefined
                   }
                 />
-                <KpiTile
+                {/* <KpiTile
                   label="Approved BOQ"
                   value={fmt(approvedBoq)}
                   hint={
@@ -376,7 +376,7 @@ export default function FinancialDashboardPage() {
                   }
                   tone="default"
                   icon={<FileText size={14} strokeWidth={1.75} />}
-                />
+                /> */}
                 <KpiTile
                   label="Expenditure to Date"
                   value={fmt(expenditure)}
