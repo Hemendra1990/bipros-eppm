@@ -74,14 +74,16 @@ export function WorkActivityCoverageChip({ workActivityId }: Props) {
             <ul className="mt-1 list-disc pl-4">
               {coverage.manpower.norms.map((n, i) => (
                 <li key={`mp-${i}`}>
-                  <span className="font-medium">Manpower</span> · {n.label}
+                  <span className="font-medium">Manpower</span>
+                  {n.scope !== "UNSCOPED" && <> · {n.label}</>}
                   {n.outputPerManPerDay != null && ` — ${n.outputPerManPerDay}${u} per man/day`}
                   {n.outputPerDay != null && ` (gang ${n.outputPerDay}${u}/day)`}
                 </li>
               ))}
               {coverage.equipment.norms.map((n, i) => (
                 <li key={`eq-${i}`}>
-                  <span className="font-medium">Equipment</span> · {n.label}
+                  <span className="font-medium">Equipment</span>
+                  {n.scope !== "UNSCOPED" && <> · {n.label}</>}
                   {n.outputPerDay != null && ` — ${n.outputPerDay}${u}/day`}
                   {n.workingHoursPerDay != null && ` over ${n.workingHoursPerDay}h`}
                 </li>

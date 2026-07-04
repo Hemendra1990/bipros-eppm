@@ -217,11 +217,13 @@ const Sc180SectionTable = memo(function Sc180SectionTable({
                   {r.roleCode && (
                     <div className="text-xs text-text-muted font-mono">{r.roleCode}</div>
                   )}
-                  <div className="text-xs text-text-muted mt-1">
-                    {r.normSource === "NONE"
-                      ? "Productivity not tracked on this activity"
-                      : `Norm: ${r.normSource.toLowerCase()}`}
-                  </div>
+                  {r.normSource === "UNSCOPED" ? null : (
+                    <div className="text-xs text-text-muted mt-1">
+                      {r.normSource === "NONE"
+                        ? "Productivity not tracked on this activity"
+                        : `Norm: ${r.normSource.toLowerCase()}`}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 align-top text-right text-xs">
                   {/* Show real rate precision — sub-1 rates (e.g. 0.58 OMR/day) must not
