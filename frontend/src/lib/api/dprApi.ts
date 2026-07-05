@@ -364,6 +364,7 @@ export interface DprVoicePatch {
   chainageFromM?: number | null;
   chainageToM?: number | null;
   boqItemNo?: string | null;
+  boqItemId?: string | null;
   unit?: string | null;
   qtyExecuted?: number | null;
   remarks?: string | null;

@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.netty.http.client.HttpClient;
@@ -87,7 +88,6 @@ public class OpenAiCompatibleProvider {
     private String postWithRetry(WebClient client, String url, LlmProviderConfig config,
                                   String apiKey, Object body, long timeoutMs) {
         int attempt = 0;
-        WebClientResponseException last = null;
         while (true) {
             attempt++;
             try {
@@ -99,21 +99,50 @@ public class OpenAiCompatibleProvider {
                         .bodyToMono(String.class)
                         .block(Duration.ofMillis(timeoutMs));
             } catch (WebClientResponseException e) {
-                last = e;
+                // HTTP error response (got a status code). Retry only 429 / 5xx.
                 if (!isRetryable(e) || attempt >= MAX_RETRY_ATTEMPTS) {
                     throw new RuntimeException(formatHttpError(e, url), e);
                 }
-                long delay = backoffMillis(e, attempt);
-                log.warn("LLM call to {} returned {} (attempt {}/{}); retrying in {} ms",
-                        url, e.getStatusCode().value(), attempt, MAX_RETRY_ATTEMPTS, delay);
-                try {
-                    Thread.sleep(delay);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException(formatHttpError(last, url), last);
+                sleepBackoff(backoffMillis(e, attempt), url,
+                        String.valueOf(e.getStatusCode().value()), attempt);
+            } catch (WebClientRequestException e) {
+                // Transport-level failure (connection reset / premature close / read error). These
+                // are transient and are NOT WebClientResponseException, so without this branch the
+                // whole call fails with no retry even though a retry usually succeeds. A chat/embeddings
+                // POST is safe to retry — the provider either processed the request or it did not.
+                if (attempt >= MAX_RETRY_ATTEMPTS) {
+                    throw new RuntimeException("Transport error on POST " + url + " after "
+                            + attempt + " attempts — " + mostSpecificMessage(e), e);
                 }
+                sleepBackoff(transientBackoffMillis(attempt), url, mostSpecificMessage(e), attempt);
             }
         }
+    }
+
+    /** Log a retry and sleep, translating interruption into a clean unchecked failure. */
+    private void sleepBackoff(long delayMs, String url, String reason, int attempt) {
+        log.warn("LLM call to {} failed ({}); retry {}/{} in {} ms",
+                url, reason, attempt, MAX_RETRY_ATTEMPTS, delayMs);
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted during retry backoff for POST " + url, ie);
+        }
+    }
+
+    /** Exponential backoff + jitter for transport errors (no Retry-After header to honor). */
+    private static long transientBackoffMillis(int attempt) {
+        long base = (long) Math.pow(2, attempt - 1) * 500L;
+        long jitter = java.util.concurrent.ThreadLocalRandom.current().nextLong(300);
+        return Math.min(base + jitter, 8_000L);
+    }
+
+    /** Deepest cause message — e.g. "Connection reset" — for actionable transport-error logs. */
+    private static String mostSpecificMessage(Throwable e) {
+        Throwable c = e;
+        while (c.getCause() != null && c.getCause() != c) c = c.getCause();
+        return c.getMessage() == null ? c.getClass().getSimpleName() : c.getMessage();
     }
 
     private static final int MAX_RETRY_ATTEMPTS = 3;
