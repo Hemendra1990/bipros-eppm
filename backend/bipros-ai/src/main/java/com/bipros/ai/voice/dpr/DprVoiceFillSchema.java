@@ -68,7 +68,7 @@ public class DprVoiceFillSchema {
 
     ObjectNode props = patch.putObject("properties");
     props.set("reportDate", nullableString("ISO date (yyyy-MM-dd). Default to today if not stated."));
-    props.set("supervisorResourceId", nullableString(
+    props.set("supervisorUserId", nullableString(
         "UUID of a supervisor from the provided eligible list. Pick by exact name match if unambiguous; "
             + "otherwise emit a follow-up question instead of guessing."));
     props.set("supervisorName", nullableString("Display name of the supervisor."));
@@ -94,7 +94,10 @@ public class DprVoiceFillSchema {
         "Chainage from, in metres. Convert km+metres (e.g. '145+200') to metres (145200)."));
     props.set("chainageToM", nullableInteger("Chainage to, in metres."));
     props.set("boqItemNo", nullableString("BOQ item number from the provided BOQ list."));
-    props.set("unit", nullableString("Unit of measure for qtyExecuted (e.g. Cum, MT, Sqm, Rm)."));
+    props.set("boqItemId", nullableString(
+        "UUID of the BOQ item when it matches the provided BOQ list; otherwise null."));
+    props.set("unit", nullableEnum(DprUnits.STANDARD_UNITS,
+        "Unit of measure for qtyExecuted. Use exactly one of these canonical codes, or null."));
     props.set("qtyExecuted", nullableNumber("Quantity executed today, in the matching unit."));
     props.set("remarks", nullableString("Free-text remarks. Capture context not covered by other fields."));
     props.set("delayReason", nullableString("Reason for any delay reported."));
@@ -107,9 +110,9 @@ public class DprVoiceFillSchema {
     props.set("materials", materialsSchema());
 
     requireAll(patch, List.of(
-        "reportDate", "supervisorResourceId", "supervisorName", "activityId", "activityName",
+        "reportDate", "supervisorUserId", "supervisorName", "activityId", "activityName",
         "contractorName", "weatherCondition", "startTime", "endTime", "shift", "approvalStatus",
-        "side", "landmark", "chainageFromM", "chainageToM", "boqItemNo", "unit", "qtyExecuted",
+        "side", "landmark", "chainageFromM", "chainageToM", "boqItemNo", "boqItemId", "unit", "qtyExecuted",
         "remarks", "delayReason", "safetyObservation", "safetyIncidentType",
         "manpower", "equipment", "materials"));
     return patch;

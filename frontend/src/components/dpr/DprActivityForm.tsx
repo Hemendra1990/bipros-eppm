@@ -431,6 +431,7 @@ export function DprActivityForm({
       setIfPresent("side", patch.side);
       setIfPresent("landmark", patch.landmark);
       setIfPresent("boqItemNo", patch.boqItemNo);
+      setIfPresent("boqItemId", patch.boqItemId);
       setIfPresent("unit", patch.unit);
       setIfPresent("qtyExecuted", patch.qtyExecuted);
       setIfPresent("remarks", patch.remarks);

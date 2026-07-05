@@ -80,4 +80,23 @@ class DprVoiceFillSchemaTest {
         assertThat(required).extracting(JsonNode::asText)
             .contains("roleId", "materialRoleVariantId");
     }
+
+    @Test
+    void patchIncludesBoqItemId() {
+        JsonNode patch = schemaBuilder.buildSchema()
+            .path("json_schema").path("schema").path("properties").path("patch");
+        assertThat(patch.path("properties").has("boqItemId")).as("patch must expose boqItemId").isTrue();
+        assertThat(patch.path("required")).extracting(JsonNode::asText).contains("boqItemId");
+    }
+
+    @Test
+    void unitIsConstrainedToStandardCodes() {
+        JsonNode unit = schemaBuilder.buildSchema()
+            .path("json_schema").path("schema").path("properties").path("patch")
+            .path("properties").path("unit");
+        assertThat(unit.path("type").isArray()).as("nullable enum type is an array").isTrue();
+        java.util.List<String> enumVals = new java.util.ArrayList<>();
+        unit.path("enum").forEach(n -> { if (!n.isNull()) enumVals.add(n.asText()); });
+        assertThat(enumVals).contains("Cum", "Sqm", "MT", "Nos");
+    }
 }
