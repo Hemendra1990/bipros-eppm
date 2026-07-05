@@ -128,18 +128,27 @@ public class DprVoiceFillSchema {
     item.put("additionalProperties", false);
     ObjectNode props = item.putObject("properties");
     props.set("resourceAssignmentId", nullableString("UUID of the resource assignment, or null."));
-    props.set("trade", stringField("Trade name (e.g. Mason, Helper, Electrician)."));
+    props.set("roleId", nullableString(
+        "UUID of the manpower role, from the provided manpower roles reference list."));
+    props.set("manpowerRoleRateId", nullableString(
+        "UUID of the manpower rate variant (variantId from the reference list). "
+            + "Must match a listed variantId. Set to null when no match is found."));
+    props.set("trade", stringField("Trade name (e.g. Mason, Helper, Electrician). "
+        + "Set to the roleName from the matched reference list entry."));
     props.set("category", nullableEnum(
         List.of("SKILLED", "SEMI_SKILLED", "UNSKILLED"),
         "Worker category. Default UNSKILLED if not stated."));
+    props.set("shift", nullableEnum(
+        List.of("DAY", "NIGHT"),
+        "Per-row shift. Default DAY when not stated."));
     props.set("nos", nullableInteger("Number of workers."));
     props.set("workingHours", nullableNumber("Hours worked (regular)."));
     props.set("otHours", nullableNumber("Overtime hours."));
     props.set("contractorName", nullableString("Crew contractor name."));
     props.set("remarks", nullableString("Per-row remarks."));
     requireAll(item, List.of(
-        "resourceAssignmentId", "trade", "category", "nos", "workingHours", "otHours",
-        "contractorName", "remarks"));
+        "resourceAssignmentId", "roleId", "manpowerRoleRateId", "trade", "category", "shift",
+        "nos", "workingHours", "otHours", "contractorName", "remarks"));
     return arr;
   }
 
@@ -153,11 +162,20 @@ public class DprVoiceFillSchema {
     item.put("additionalProperties", false);
     ObjectNode props = item.putObject("properties");
     props.set("resourceAssignmentId", nullableString("UUID of the resource assignment, or null."));
-    props.set("equipmentType", stringField("Equipment type (e.g. JCB, Excavator, Roller)."));
+    props.set("roleId", nullableString(
+        "UUID of the equipment role, from the provided equipment roles reference list."));
+    props.set("equipmentRoleVariantId", nullableString(
+        "UUID of the equipment variant (variantId from the reference list). "
+            + "Must match a listed variantId. Set to null when no match is found."));
+    props.set("equipmentType", stringField("Equipment type (e.g. JCB, Excavator, Roller). "
+        + "Set to the roleName from the matched reference list entry."));
     props.set("fleetNo", nullableString("Fleet / asset number."));
     props.set("ownership", nullableEnum(
         List.of("OWNED", "HIRED", "SUBCONTRACTOR"),
         "Ownership."));
+    props.set("shift", nullableEnum(
+        List.of("DAY", "NIGHT"),
+        "Per-row shift. Default DAY when not stated."));
     props.set("nos", nullableInteger("Number of units."));
     props.set("workingHours", nullableNumber("Hours run."));
     props.set("idleHours", nullableNumber("Idle hours."));
@@ -168,8 +186,9 @@ public class DprVoiceFillSchema {
         "End-of-day status."));
     props.set("remarks", nullableString("Per-row remarks."));
     requireAll(item, List.of(
-        "resourceAssignmentId", "equipmentType", "fleetNo", "ownership", "nos", "workingHours",
-        "idleHours", "breakdownHours", "fuelLitres", "availabilityStatus", "remarks"));
+        "resourceAssignmentId", "roleId", "equipmentRoleVariantId", "equipmentType", "fleetNo",
+        "ownership", "shift", "nos", "workingHours", "idleHours", "breakdownHours",
+        "fuelLitres", "availabilityStatus", "remarks"));
     return arr;
   }
 
@@ -183,7 +202,13 @@ public class DprVoiceFillSchema {
     item.put("additionalProperties", false);
     ObjectNode props = item.putObject("properties");
     props.set("resourceAssignmentId", nullableString("UUID of the resource assignment, or null."));
-    props.set("materialName", stringField("Material name (e.g. Cement, Steel TMT, Aggregate 20mm)."));
+    props.set("roleId", nullableString(
+        "UUID of the material role, from the provided material roles reference list."));
+    props.set("materialRoleVariantId", nullableString(
+        "UUID of the material variant (variantId from the reference list). "
+            + "Must match a listed variantId. Set to null when no match is found."));
+    props.set("materialName", stringField("Material name (e.g. Cement, Steel TMT, Aggregate 20mm). "
+        + "Set to the roleName from the matched reference list entry."));
     props.set("quantity", nullableNumber("Quantity consumed."));
     props.set("unit", nullableString("Unit (e.g. MT, Cum, Bags)."));
     props.set("source", nullableString("Quarry / yard / vendor source."));
@@ -191,8 +216,8 @@ public class DprVoiceFillSchema {
     props.set("vendorName", nullableString("Vendor name."));
     props.set("remarks", nullableString("Per-row remarks."));
     requireAll(item, List.of(
-        "resourceAssignmentId", "materialName", "quantity", "unit", "source", "batchNo",
-        "vendorName", "remarks"));
+        "resourceAssignmentId", "roleId", "materialRoleVariantId", "materialName", "quantity",
+        "unit", "source", "batchNo", "vendorName", "remarks"));
     return arr;
   }
 
