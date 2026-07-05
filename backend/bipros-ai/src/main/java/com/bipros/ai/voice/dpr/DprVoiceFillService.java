@@ -5,11 +5,18 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.provider.LlmProvider;
 import com.bipros.ai.provider.LlmProviderConfig;
 import com.bipros.ai.provider.LlmProviderConfigRepository;
+import com.bipros.ai.provider.ModelCapabilityRegistry;
 import com.bipros.ai.provider.OpenAiCompatibleProvider;
 import com.bipros.ai.voice.SpeechToTextService;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.project.domain.model.BoqItem;
 import com.bipros.project.domain.repository.BoqItemRepository;
+import com.bipros.resource.application.dto.role.EquipmentRoleVariantResponse;
+import com.bipros.resource.application.dto.role.ManpowerRoleRateResponse;
+import com.bipros.resource.application.dto.role.MaterialRoleVariantResponse;
+import com.bipros.resource.application.dto.role.RoleAssignmentResponse;
+import com.bipros.resource.application.service.role.RoleAssignmentService;
+import com.bipros.resource.application.service.role.RoleRateService;
 import com.bipros.resource.domain.model.ProjectResource;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceStatus;
@@ -67,6 +74,9 @@ public class DprVoiceFillService {
   private final ProjectResourceRepository projectResourceRepository;
   private final ActivityRepository activityRepository;
   private final BoqItemRepository boqItemRepository;
+  private final RoleRateService roleRateService;
+  private final RoleAssignmentService roleAssignmentService;
+  private final ModelCapabilityRegistry capabilityRegistry;
 
   public DprVoiceFillResponse fill(UUID projectId, MultipartFile audio, DprVoiceFillRequest request) {
     String filename = audio.getOriginalFilename() == null ? "audio.webm" : audio.getOriginalFilename();
@@ -85,7 +95,10 @@ public class DprVoiceFillService {
 
     // Reference data is loaded fresh per call so a recently-pooled supervisor is visible
     // immediately. Volumes are small (<200 in practice), so caching isn't justified yet.
-    ReferenceData refs = loadReferenceData(projectId);
+    String activityIdStr = request.state().path("activityId").asText(null);
+    UUID activityId = tryParseUuid(activityIdStr);
+
+    ReferenceData refs = loadReferenceData(projectId, activityId);
 
     LlmProviderConfig cfg = providerConfigRepository.findByIsDefaultTrueAndIsActiveTrue()
         .orElseGet(() -> providerConfigRepository
@@ -160,6 +173,13 @@ public class DprVoiceFillService {
         - Set complete=true only when no follow-up is needed and you've captured every spoken fact.
         - assistantMessage is a short reply to the user (1-2 sentences) confirming what you heard
           plus the follow-up if any.
+        - For manpower rows: set manpowerRoleRateId to the variantId from the Manpower roles
+          list, roleId to the matching roleId, and trade to the role's roleName. When no exact
+          match exists, set both ids to null and emit a follow-up question.
+        - For equipment rows: set equipmentRoleVariantId to the variantId from the Equipment
+          roles list, roleId to the matching roleId, and equipmentType to the role's roleName.
+        - For material rows: set materialRoleVariantId to the variantId from the Material roles
+          list, roleId to the matching roleId, and materialName to the role's roleName.
         """;
   }
 
@@ -197,6 +217,55 @@ public class DprVoiceFillService {
         sb.append("  ").append(b.itemNo()).append(" — ")
             .append(b.unit() == null ? "" : b.unit()).append(" — ")
             .append(b.description()).append('\n');
+      }
+    }
+
+    sb.append("\nManpower roles (variantId — roleName [category/grade] (planned|rate-book)):\n");
+    if (refs.manpowerRoles().isEmpty()) {
+      sb.append("  (none)\n");
+    } else {
+      for (ManpowerRoleRef m : refs.manpowerRoles()) {
+        sb.append("  ").append(m.variantId()).append(" — ").append(m.roleName());
+        if (m.categoryName() != null || m.gradeName() != null) {
+          sb.append(" [");
+          if (m.categoryName() != null) sb.append(m.categoryName());
+          if (m.gradeName() != null) {
+            if (m.categoryName() != null) sb.append("/");
+            sb.append(m.gradeName());
+          }
+          sb.append("]");
+        }
+        sb.append(m.planned() ? " (planned)\n" : " (rate-book)\n");
+      }
+    }
+
+    sb.append("\nEquipment roles (variantId — roleName make/model (planned|rate-book)):\n");
+    if (refs.equipmentRoles().isEmpty()) {
+      sb.append("  (none)\n");
+    } else {
+      for (EquipmentRoleRef e : refs.equipmentRoles()) {
+        sb.append("  ").append(e.variantId()).append(" — ").append(e.roleName());
+        if (e.make() != null || e.model() != null) {
+          sb.append(" ");
+          if (e.make() != null) sb.append(e.make());
+          if (e.model() != null) {
+            if (e.make() != null) sb.append(" / ");
+            sb.append(e.model());
+          }
+        }
+        sb.append(e.planned() ? " (planned)\n" : " (rate-book)\n");
+      }
+    }
+
+    sb.append("\nMaterial roles (variantId — roleName specGrade unit (planned|rate-book)):\n");
+    if (refs.materialRoles().isEmpty()) {
+      sb.append("  (none)\n");
+    } else {
+      for (MaterialRoleRef m : refs.materialRoles()) {
+        sb.append("  ").append(m.variantId()).append(" — ").append(m.roleName());
+        if (m.specGrade() != null) sb.append(" ").append(m.specGrade());
+        if (m.unit() != null) sb.append(" ").append(m.unit());
+        sb.append(m.planned() ? " (planned)\n" : " (rate-book)\n");
       }
     }
     return sb.toString();
@@ -279,6 +348,7 @@ public class DprVoiceFillService {
   }
 
   private static UUID tryParseUuid(String s) {
+    if (s == null) return null;
     try {
       return UUID.fromString(s);
     } catch (IllegalArgumentException e) {
@@ -300,11 +370,14 @@ public class DprVoiceFillService {
 
   // ─── reference-data loading ──────────────────────────────────────────────────
 
-  private ReferenceData loadReferenceData(UUID projectId) {
+  private ReferenceData loadReferenceData(UUID projectId, UUID activityId) {
     return new ReferenceData(
         loadSupervisors(projectId),
         loadActivities(projectId),
-        loadBoqItems(projectId));
+        loadBoqItems(projectId),
+        loadManpowerRoles(activityId),
+        loadEquipmentRoles(activityId),
+        loadMaterialRoles(activityId));
   }
 
   private List<SupervisorRef> loadSupervisors(UUID projectId) {
@@ -349,6 +422,85 @@ public class DprVoiceFillService {
     return cap(out);
   }
 
+  private List<ManpowerRoleRef> loadManpowerRoles(UUID activityId) {
+    java.util.Set<String> seen = new HashSet<>();
+    java.util.List<ManpowerRoleRef> out = new ArrayList<>();
+
+    if (activityId != null) {
+      for (RoleAssignmentResponse a : roleAssignmentService.listForActivity(activityId)) {
+        if (!"MANPOWER".equalsIgnoreCase(a.roleType())
+            && !"LABOR".equalsIgnoreCase(a.roleType())) continue;
+        if (a.unplanned()) continue;
+        if (a.variantId() == null || a.roleId() == null) continue;
+        String vid = a.variantId().toString();
+        if (seen.contains(vid)) continue;
+        seen.add(vid);
+        out.add(new ManpowerRoleRef(vid, a.roleId().toString(), a.roleName(), null, null, true));
+      }
+    }
+
+    for (ManpowerRoleRateResponse v : roleRateService.listAllManpower()) {
+      String vid = v.id().toString();
+      if (seen.contains(vid)) continue;
+      seen.add(vid);
+      out.add(new ManpowerRoleRef(vid, v.roleId().toString(), v.roleName(),
+          v.categoryName(), v.gradeName(), false));
+    }
+    return cap(out);
+  }
+
+  private List<EquipmentRoleRef> loadEquipmentRoles(UUID activityId) {
+    java.util.Set<String> seen = new HashSet<>();
+    java.util.List<EquipmentRoleRef> out = new ArrayList<>();
+
+    if (activityId != null) {
+      for (RoleAssignmentResponse a : roleAssignmentService.listForActivity(activityId)) {
+        if (!"EQUIPMENT".equalsIgnoreCase(a.roleType())) continue;
+        if (a.unplanned()) continue;
+        if (a.variantId() == null || a.roleId() == null) continue;
+        String vid = a.variantId().toString();
+        if (seen.contains(vid)) continue;
+        seen.add(vid);
+        out.add(new EquipmentRoleRef(vid, a.roleId().toString(), a.roleName(), null, null, true));
+      }
+    }
+
+    for (EquipmentRoleVariantResponse v : roleRateService.listAllEquipment()) {
+      String vid = v.id().toString();
+      if (seen.contains(vid)) continue;
+      seen.add(vid);
+      out.add(new EquipmentRoleRef(vid, v.roleId().toString(), v.roleName(),
+          v.make(), v.model(), false));
+    }
+    return cap(out);
+  }
+
+  private List<MaterialRoleRef> loadMaterialRoles(UUID activityId) {
+    java.util.Set<String> seen = new HashSet<>();
+    java.util.List<MaterialRoleRef> out = new ArrayList<>();
+
+    if (activityId != null) {
+      for (RoleAssignmentResponse a : roleAssignmentService.listForActivity(activityId)) {
+        if (!"MATERIAL".equalsIgnoreCase(a.roleType())) continue;
+        if (a.unplanned()) continue;
+        if (a.variantId() == null || a.roleId() == null) continue;
+        String vid = a.variantId().toString();
+        if (seen.contains(vid)) continue;
+        seen.add(vid);
+        out.add(new MaterialRoleRef(vid, a.roleId().toString(), a.roleName(), null, null, true));
+      }
+    }
+
+    for (MaterialRoleVariantResponse v : roleRateService.listAllMaterial()) {
+      String vid = v.id().toString();
+      if (seen.contains(vid)) continue;
+      seen.add(vid);
+      out.add(new MaterialRoleRef(vid, v.roleId().toString(), v.roleName(),
+          v.specGrade(), v.unit(), false));
+    }
+    return cap(out);
+  }
+
   /** Cap reference lists to keep the prompt size predictable on huge projects. */
   private static <T> List<T> cap(List<T> in) {
     if (in.size() <= MAX_REFERENCE_LIST_SIZE) return in;
@@ -360,11 +512,26 @@ public class DprVoiceFillService {
   private record ReferenceData(
       List<SupervisorRef> supervisors,
       List<ActivityRef> activities,
-      List<BoqItemRef> boqItems) {}
+      List<BoqItemRef> boqItems,
+      List<ManpowerRoleRef> manpowerRoles,
+      List<EquipmentRoleRef> equipmentRoles,
+      List<MaterialRoleRef> materialRoles) {}
 
   private record SupervisorRef(String id, String name, String roleName) {}
 
   private record ActivityRef(String id, String code, String name) {}
 
   private record BoqItemRef(String itemNo, String description, String unit) {}
+
+  private record ManpowerRoleRef(
+      String variantId, String roleId, String roleName,
+      String categoryName, String gradeName, boolean planned) {}
+
+  private record EquipmentRoleRef(
+      String variantId, String roleId, String roleName,
+      String make, String model, boolean planned) {}
+
+  private record MaterialRoleRef(
+      String variantId, String roleId, String roleName,
+      String specGrade, String unit, boolean planned) {}
 }
