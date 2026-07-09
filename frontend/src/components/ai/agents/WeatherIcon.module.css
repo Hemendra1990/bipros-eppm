@@ -1,0 +1,168 @@
+/* Self-contained animated weather glyphs (no external assets/libs). Each icon composes a few
+   absolutely-positioned primitives (sun, cloud, drops, flakes, bolt, fog lines) driven by CSS
+   keyframes. Sized via the wrapper's font-size (1em ≈ the icon box) so callers just set width/height. */
+
+.icon {
+  position: relative;
+  display: inline-block;
+  color: #64748b; /* slate default; cloud uses this */
+}
+
+.icon * {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+/* ── Sun ─────────────────────────────────────────────── */
+.sun {
+  width: 46%;
+  height: 46%;
+  left: 27%;
+  top: 27%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffd77a, #f5a623);
+  box-shadow: 0 0 6px rgba(245, 166, 35, 0.6);
+  animation: pulse 2.6s ease-in-out infinite;
+}
+.rays {
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  animation: spin 9s linear infinite;
+}
+.ray {
+  width: 8%;
+  height: 20%;
+  left: 46%;
+  top: 4%;
+  border-radius: 2px;
+  background: #f5a623;
+  transform-origin: 50% 230%;
+}
+
+/* sun tucked into a corner for "partly"/"showers" */
+.sunCorner {
+  width: 40%;
+  height: 40%;
+  left: 6%;
+  top: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffd77a, #f5a623);
+  box-shadow: 0 0 5px rgba(245, 166, 35, 0.55);
+  animation: pulse 2.6s ease-in-out infinite;
+}
+
+/* ── Cloud ───────────────────────────────────────────── */
+.cloud {
+  width: 66%;
+  height: 34%;
+  left: 17%;
+  top: 40%;
+  background: #cbd5e1;
+  border-radius: 999px;
+  animation: drift 4.5s ease-in-out infinite;
+}
+.cloud::before {
+  content: "";
+  position: absolute;
+  width: 46%;
+  height: 130%;
+  left: 12%;
+  bottom: 30%;
+  background: #cbd5e1;
+  border-radius: 50%;
+}
+.cloud::after {
+  content: "";
+  position: absolute;
+  width: 58%;
+  height: 165%;
+  right: 8%;
+  bottom: 30%;
+  background: #cbd5e1;
+  border-radius: 50%;
+}
+.cloudDark { background: #94a3b8; }
+.cloudDark::before,
+.cloudDark::after { background: #94a3b8; }
+
+/* ── Precipitation ───────────────────────────────────── */
+.drop {
+  width: 6%;
+  height: 20%;
+  bottom: 2%;
+  border-radius: 0 60% 60% 60%;
+  background: #3b82f6;
+  transform: rotate(45deg);
+  animation: fall 1s linear infinite;
+}
+.dropLight { background: #7dd3fc; animation-duration: 1.4s; }
+.dropFast { animation-duration: 0.6s; }
+
+.flake {
+  width: 12%;
+  height: 12%;
+  bottom: 6%;
+  color: #e0f2fe;
+  font-size: 0.5em;
+  line-height: 0.7;
+  text-align: center;
+  background: none;
+  animation: snowfall 2.2s linear infinite;
+}
+.flake::before { content: "❄"; color: #bae6fd; }
+
+.bolt {
+  width: 26%;
+  height: 40%;
+  left: 38%;
+  top: 46%;
+  background: #facc15;
+  clip-path: polygon(52% 0, 12% 58%, 46% 58%, 30% 100%, 88% 40%, 52% 40%);
+  filter: drop-shadow(0 0 3px rgba(250, 204, 21, 0.8));
+  animation: flash 1.8s steps(1) infinite;
+}
+
+/* ── Fog ─────────────────────────────────────────────── */
+.fogLine {
+  height: 9%;
+  left: 12%;
+  width: 76%;
+  border-radius: 999px;
+  background: #cbd5e1;
+  animation: fogDrift 3s ease-in-out infinite;
+}
+
+/* ── Keyframes ───────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+@keyframes drift {
+  0%, 100% { transform: translateX(-6%); }
+  50% { transform: translateX(6%); }
+}
+@keyframes fall {
+  0% { transform: translateY(-40%) rotate(45deg); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(120%) rotate(45deg); opacity: 0; }
+}
+@keyframes snowfall {
+  0% { transform: translateY(-30%) translateX(0); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(120%) translateX(18%); opacity: 0; }
+}
+@keyframes flash {
+  0%, 70%, 100% { opacity: 0.15; }
+  75%, 85% { opacity: 1; }
+}
+@keyframes fogDrift {
+  0%, 100% { transform: translateX(-8%); opacity: 0.7; }
+  50% { transform: translateX(8%); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sun, .sunCorner, .rays, .cloud, .drop, .flake, .bolt, .fogLine { animation: none !important; }
+}

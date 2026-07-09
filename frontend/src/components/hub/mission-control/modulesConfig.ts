@@ -185,6 +185,15 @@ export const MODULE_SECTIONS: ModuleSectionDef[] = [
     gridClass: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3",
     tiles: [
       {
+        key: "ai-portfolio",
+        title: "AI Insights",
+        description: "What every agent found across your projects",
+        href: "/ai",
+        icon: Sparkles,
+        color: "gold",
+        permission: "AI.READ",
+      },
+      {
         key: "calendars",
         title: "Calendars",
         description: "Working time, shifts and holidays",

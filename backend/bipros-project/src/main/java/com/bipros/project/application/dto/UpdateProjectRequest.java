@@ -40,6 +40,17 @@ public record UpdateProjectRequest(
     @Size(max = 120) String toLocation,
     BigDecimal totalLengthKm,
 
+    // ── Site location for weather monitoring (all optional; sent by the Location card) ──
+    Double siteLatitude,
+    Double siteLongitude,
+    @Size(max = 200) String sitePlaceLabel,
+    @Size(max = 100) String siteCountry,
+    @Size(max = 2) String siteCountryCode,
+    @Size(max = 120) String siteRegion,
+    @Size(max = 120) String siteCity,
+    @Size(max = 60) String siteTimezone,
+    Boolean weatherMonitoringEnabled,
+
     UUID calendarId,
 
     /** ISO 4217 currency code for budget fields (e.g. "USD", "OMR"). Leave null to keep existing value. */

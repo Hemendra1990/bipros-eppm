@@ -322,6 +322,7 @@ public class ResourceLevelingService {
   private Map<UUID, Double> buildResourceCapacityMap(List<ResourceAssignment> assignments) {
     Set<UUID> resourceIds = assignments.stream()
         .map(ResourceAssignment::getResourceId)
+        .filter(Objects::nonNull)   // role-based assignments can have a null resourceId
         .collect(Collectors.toSet());
 
     Map<UUID, Double> resourceMaxUnits = new HashMap<>();

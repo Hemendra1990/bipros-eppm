@@ -39,6 +39,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "@/
 import { ProjectDocumentsPanel } from "@/components/document/ProjectDocumentsPanel";
 import { ProjectSetupProgress } from "@/components/project/ProjectSetupProgress";
 import { ProjectTeamCard } from "@/components/project/ProjectTeamCard";
+import { LocationCard } from "@/components/project/LocationCard";
 import { ProjectDashboardTab } from "@/components/dashboards/project/ProjectDashboardTab";
 import { BaselinesPanel } from "@/components/baseline/BaselinesPanel";
 import type { ContractType } from "@/lib/types";
@@ -530,6 +531,8 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
       <BudgetCard projectId={projectId} />
 
       <CurrencyCard project={project} projectId={projectId} />
+
+      <LocationCard project={project} projectId={projectId} />
 
       <ProjectDetailsSection project={project} projectId={projectId} />
 

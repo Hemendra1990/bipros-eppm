@@ -78,6 +78,52 @@ export function NotificationBell() {
 
   const items: NotificationItem[] = page?.content ?? [];
 
+  // Real-time push over SSE — refreshes the badge + list the moment the backend emits, with
+  // reconnect backoff. The 45 s poll above stays as a fallback if the stream can't connect
+  // (endpoint absent / proxy buffering). Any data frame → invalidate; heartbeats are `:` comments.
+  useEffect(() => {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    let cancelled = false;
+    let ctrl: AbortController | null = null;
+    let attempt = 0;
+
+    const connect = async () => {
+      if (cancelled) return;
+      ctrl = new AbortController();
+      try {
+        const token =
+          typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+        const res = await fetch(`${API_BASE}/v1/notifications/stream`, {
+          signal: ctrl.signal,
+          headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
+        });
+        if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+        attempt = 0;
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        while (!cancelled) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value && value.includes("data:")) {
+            queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+            queryClient.invalidateQueries({ queryKey: ["notifications-list"] });
+          }
+        }
+      } catch {
+        /* fall through to reconnect */
+      }
+      if (!cancelled) {
+        attempt = Math.min(attempt + 1, 6);
+        setTimeout(connect, Math.min(1000 * 2 ** attempt, 30_000));
+      }
+    };
+
+    connect();
+    return () => {
+      cancelled = true;
+      ctrl?.abort();
+    };
+  }, [queryClient]);
+
   // Close on outside click + Escape (same pattern as UserMenu)
   useEffect(() => {
     if (!open) return;

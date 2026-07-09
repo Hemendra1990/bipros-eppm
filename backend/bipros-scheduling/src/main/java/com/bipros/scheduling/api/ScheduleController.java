@@ -5,6 +5,8 @@ import com.bipros.scheduling.application.dto.FloatPathResponse;
 import com.bipros.scheduling.application.dto.ScheduleActivityResultResponse;
 import com.bipros.scheduling.application.dto.ScheduleRequest;
 import com.bipros.scheduling.application.dto.ScheduleResultResponse;
+import com.bipros.scheduling.application.dto.WhatIfRequest;
+import com.bipros.scheduling.application.dto.WhatIfResponse;
 import com.bipros.scheduling.application.service.SchedulingService;
 import com.bipros.scheduling.domain.model.SchedulingOption;
 import jakarta.validation.Valid;
@@ -40,6 +42,16 @@ public class ScheduleController {
     ScheduleResultResponse result = schedulingService.scheduleProject(projectId, option);
 
     return ApiResponse.ok(result);
+  }
+
+  @PostMapping("/what-if")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'SCHEDULE.READ')")
+  public ApiResponse<WhatIfResponse> whatIf(
+      @PathVariable UUID projectId,
+      @RequestBody WhatIfRequest request) {
+    log.info("Schedule what-if for project {}: {} change(s)", projectId,
+        request != null && request.changes() != null ? request.changes().size() : 0);
+    return ApiResponse.ok(schedulingService.simulateWhatIf(projectId, request));
   }
 
   @GetMapping

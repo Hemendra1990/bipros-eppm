@@ -17,6 +17,8 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.scheduling.application.dto.FloatPathResponse;
 import com.bipros.scheduling.application.dto.ScheduleActivityResultResponse;
 import com.bipros.scheduling.application.dto.ScheduleResultResponse;
+import com.bipros.scheduling.application.dto.WhatIfRequest;
+import com.bipros.scheduling.application.dto.WhatIfResponse;
 import com.bipros.scheduling.domain.algorithm.CPMScheduler;
 import com.bipros.scheduling.domain.algorithm.CalendarCalculator;
 import com.bipros.scheduling.domain.algorithm.MultipleFloatPathFinder;
@@ -42,6 +44,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -328,6 +331,148 @@ public class SchedulingService {
         data.activities(), data.relationships(), data.summaryChildren(),
         data.dataDate(), data.mustFinishByDate(), projectId, data.schedulingOption()
     );
+  }
+
+  /**
+   * Deterministic schedule what-if / change-impact: applies the requested per-activity duration
+   * changes to the current network in memory (no persistence, no events) and reports the impact on
+   * the project finish date and critical path versus the unchanged baseline run.
+   */
+  public WhatIfResponse simulateWhatIf(UUID projectId, WhatIfRequest request) {
+    CpmEvaluator evaluator = newCpmEvaluator(projectId);
+    Map<UUID, Double> base = evaluator.baseSchedulingDurations();
+
+    Map<UUID, Double> overrides = new HashMap<>();
+
+    // High-level scenario levers expand into per-activity overrides FIRST, so that any explicit
+    // per-activity change below takes precedence and overwrites the lever-derived value.
+    applyLevers(projectId, request != null ? request.levers() : null, base, overrides);
+
+    if (request != null && request.changes() != null) {
+      for (WhatIfRequest.ActivityChange c : request.changes()) {
+        if (c.activityId() == null) continue;
+        double b = base.getOrDefault(c.activityId(), 0.0);
+        double nd = c.newDurationDays() != null ? c.newDurationDays()
+            : (c.deltaDays() != null ? b + c.deltaDays() : b);
+        overrides.put(c.activityId(), Math.max(0.0, nd));
+      }
+    }
+
+    CpmSimulation baseSim = evaluator.evaluate(Map.of());
+    CpmSimulation scenSim = evaluator.evaluate(overrides);
+
+    Map<UUID, ScheduledActivity> baseById = new HashMap<>();
+    for (ScheduledActivity s : baseSim.activities()) baseById.put(s.getActivityId(), s);
+    Map<UUID, ScheduledActivity> scenById = new HashMap<>();
+    for (ScheduledActivity s : scenSim.activities()) scenById.put(s.getActivityId(), s);
+
+    Map<UUID, String> names = new HashMap<>();
+    for (Activity a : activityRepository.findByProjectId(projectId)) names.put(a.getId(), a.getName());
+
+    int baseCrit = (int) baseSim.activities().stream().filter(ScheduledActivity::isCritical).count();
+    int scenCrit = (int) scenSim.activities().stream().filter(ScheduledActivity::isCritical).count();
+
+    List<WhatIfResponse.ActivityImpact> newlyCritical = new ArrayList<>();
+    for (ScheduledActivity s : scenSim.activities()) {
+      ScheduledActivity b = baseById.get(s.getActivityId());
+      if (s.isCritical() && (b == null || !b.isCritical())) {
+        newlyCritical.add(impact(s.getActivityId(), names, b, s));
+      }
+    }
+
+    List<WhatIfResponse.ActivityImpact> changed = new ArrayList<>();
+    for (UUID id : overrides.keySet()) {
+      changed.add(impact(id, names, baseById.get(id), scenById.get(id)));
+    }
+
+    double deltaWorkingDays = scenSim.finishSpanWorkingDays() - baseSim.finishSpanWorkingDays();
+    String label = (request != null && request.scenarioLabel() != null) ? request.scenarioLabel() : "Scenario";
+    return new WhatIfResponse(label, baseSim.projectFinish(), scenSim.projectFinish(),
+        deltaWorkingDays, baseCrit, scenCrit, newlyCritical, changed);
+  }
+
+  private WhatIfResponse.ActivityImpact impact(UUID id, Map<UUID, String> names,
+      ScheduledActivity base, ScheduledActivity scen) {
+    LocalDate bf = base != null ? base.getEarlyFinish() : null;
+    LocalDate sf = scen != null ? scen.getEarlyFinish() : null;
+    long shift = (bf != null && sf != null) ? java.time.temporal.ChronoUnit.DAYS.between(bf, sf) : 0L;
+    return new WhatIfResponse.ActivityImpact(id, names.get(id), bf, sf, shift,
+        scen != null && scen.isCritical());
+  }
+
+  // -------------------------------------------------------------------------
+  // Scenario levers
+  // -------------------------------------------------------------------------
+
+  /** Activities whose duration is sensitive to weather (rain / temperature) by name. */
+  private static final List<String> WEATHER_KEYWORDS =
+      List.of("earthwork", "excavation", "concrete", "asphalt", "paving", "bitumen", "subgrade");
+
+  /** Activities that depend on procured / supplied materials by name. */
+  private static final List<String> PROCUREMENT_KEYWORDS =
+      List.of("steel", "concrete", "pipe", "cable", "supply", "material");
+
+  /**
+   * Expands high-level scenario levers into per-activity duration overrides in {@code overrides}.
+   * Loads the project activities once. Each lever computes a new duration from the base scheduling
+   * duration ({@code base}) of every matching activity; activities with no base duration are skipped.
+   * Applied before any explicit per-activity change, which then takes precedence.
+   */
+  private void applyLevers(UUID projectId, List<WhatIfRequest.ScenarioLever> levers,
+      Map<UUID, Double> base, Map<UUID, Double> overrides) {
+    if (levers == null || levers.isEmpty()) return;
+    List<Activity> activities = activityRepository.findByProjectId(projectId);
+    for (WhatIfRequest.ScenarioLever lever : levers) {
+      if (lever == null || lever.type() == null) continue;
+      String raw = lever.appliesToKeyword();
+      String keyword = raw != null ? raw.trim().toLowerCase(Locale.ROOT) : null;
+      boolean hasKeyword = keyword != null && !keyword.isBlank();
+      Double magnitude = lever.magnitude();
+
+      for (Activity a : activities) {
+        Double b = base.get(a.getId());
+        if (b == null) continue;
+        String name = a.getName() != null ? a.getName().toLowerCase(Locale.ROOT) : "";
+        String type = a.getActivityType() != null ? a.getActivityType().name() : "";
+
+        Double newDur = null;
+        switch (lever.type()) {
+          case ADD_RESOURCE -> {
+            boolean matches = hasKeyword
+                ? name.contains(keyword)
+                : ("TASK_DEPENDENT".equals(type) || "RESOURCE_DEPENDENT".equals(type));
+            if (matches) {
+              double pct = magnitude != null ? magnitude : 15.0;
+              newDur = Math.max(0.5, b * (1 - pct / 100.0));
+            }
+          }
+          case WEATHER_DELAY -> {
+            boolean matches = hasKeyword ? name.contains(keyword) : containsAny(name, WEATHER_KEYWORDS);
+            if (matches) {
+              double days = magnitude != null ? magnitude : 5.0;
+              newDur = b + days;
+            }
+          }
+          case PROCUREMENT_DELAY -> {
+            boolean matches = hasKeyword ? name.contains(keyword) : containsAny(name, PROCUREMENT_KEYWORDS);
+            if (matches) {
+              double days = magnitude != null ? magnitude : 7.0;
+              newDur = b + days;
+            }
+          }
+        }
+        if (newDur != null) {
+          overrides.put(a.getId(), Math.max(0.0, newDur));
+        }
+      }
+    }
+  }
+
+  private static boolean containsAny(String haystack, List<String> needles) {
+    for (String n : needles) {
+      if (haystack.contains(n)) return true;
+    }
+    return false;
   }
 
   private CpmInputs buildCpmInputs(UUID projectId, List<Activity> activities,

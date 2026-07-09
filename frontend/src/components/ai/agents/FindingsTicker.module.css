@@ -1,0 +1,75 @@
+/* News-style headline ticker: slide-up cross-fade on each rotation + a live pulse + a sweeping
+   accent line. Self-contained; respects reduced-motion. */
+
+.slide {
+  animation: slideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Slide by motion + a shallow fade only (0.55 → 1), so a frame captured mid-transition never
+   looks washed-out — the headline stays high-contrast at every point of the animation. */
+@keyframes slideUp {
+  0% {
+    opacity: 0.55;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dot {
+  animation: livePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55);
+  }
+  60% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+  }
+}
+
+/* thin accent line sweeping left→right under the label, like a news lower-third */
+.sweep {
+  position: relative;
+  overflow: hidden;
+}
+/* keep the rail label/counter above the sweeping gradient so it never gets washed out */
+.sweep > * {
+  position: relative;
+  z-index: 1;
+}
+.sweep::after {
+  content: "";
+  position: absolute;
+  left: -40%;
+  top: 0;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(245, 166, 35, 0.5), transparent);
+  animation: sweep 3.2s linear infinite;
+}
+
+@keyframes sweep {
+  to {
+    left: 120%;
+  }
+}
+
+.bar {
+  transition: width 4.8s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide,
+  .dot,
+  .sweep::after,
+  .bar {
+    animation: none !important;
+    transition: none !important;
+  }
+}

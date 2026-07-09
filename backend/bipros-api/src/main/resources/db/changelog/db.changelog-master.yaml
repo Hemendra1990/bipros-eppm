@@ -225,3 +225,9 @@ databaseChangeLog:
       file: db/changelog/116-project-hse-indirect-manhours.yaml
   - include:
       file: db/changelog/117-gis-per-polygon-columns.yaml
+  - include:
+      file: db/changelog/118-agent-tables.yaml
+  - include:
+      file: db/changelog/119-user-notification-severity.yaml
+  - include:
+      file: db/changelog/120-project-site-location.yaml

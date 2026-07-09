@@ -24,6 +24,22 @@ public class AiAccessGuard {
     private final ProjectAccessGuard projectAccess;
     private final SecurityContextHelper securityContextHelper;
 
+    /** Read access for the agent APIs (findings, runs, registry). Same semantics as {@link #canChat}. */
+    public boolean canRead(UUID projectId) {
+        return canChat(projectId);
+    }
+
+    /**
+     * Write access for the agent APIs (run an agent/pipeline, investigate). Requires edit rights on
+     * the project; in cross-project mode requires ADMIN. Findings ack/resolve stay on read access.
+     */
+    public boolean canWrite(UUID projectId) {
+        if (projectId != null) {
+            return projectAccess.canEdit(projectId);
+        }
+        return securityContextHelper.hasRole("ADMIN");
+    }
+
     public boolean canChat(UUID projectId) {
         if (projectId != null) {
             return projectAccess.canRead(projectId);

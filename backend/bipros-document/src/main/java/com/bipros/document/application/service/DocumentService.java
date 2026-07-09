@@ -34,6 +34,7 @@ public class DocumentService {
     private final AuditService auditService;
     private final DocumentStorageService storageService;
     private final ProjectAccessGuard projectAccess;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     public DocumentResponse createDocument(UUID projectId, DocumentRequest request) {
         projectAccess.requireEdit(projectId);
@@ -283,6 +284,9 @@ public class DocumentService {
         version.setUploadedBy(uploadedBy != null ? uploadedBy : "SYSTEM");
         version.setUploadedAt(Instant.now());
         versionRepository.save(version);
+
+        // Notify the Document Intelligence agent (best-effort; the nightly sweep is the fallback).
+        eventPublisher.publishEvent(new com.bipros.common.event.DocumentUploadedEvent(projectId, saved.getId()));
 
         return DocumentResponse.from(saved);
     }

@@ -95,6 +95,7 @@ function ProjectDetailLayoutInner({
     { id: "evm",                label: "EVM",                 href: `/projects/${projectId}/evm` },
     { id: "risks",              label: "Risks",               href: `/projects/${projectId}/risks`, permission: "RISK.READ" },
     { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption` },
+    { id: "ai",                 label: "AI",                  href: `/projects/${projectId}/ai`, permission: "AI.READ" },
   ];
 
   const tabs = allTabs.filter((t) => !t.permission || hasPermission(t.permission));

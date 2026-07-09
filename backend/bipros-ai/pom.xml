@@ -33,6 +33,10 @@
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
+            <artifactId>bipros-site-ops</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
             <artifactId>bipros-activity</artifactId>
         </dependency>
         <dependency>
@@ -116,6 +120,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <!-- JavaMailSender for the agent EmailChannel. The channel is gated on
+             bipros.agent.notify.email.host + a JavaMailSender bean (auto-configured
+             only when spring.mail.host is set), so this stays inert until configured. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
         <dependency>

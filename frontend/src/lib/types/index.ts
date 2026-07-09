@@ -177,6 +177,16 @@ export interface ProjectResponse {
   fromLocation: string | null;
   toLocation: string | null;
   totalLengthKm: number | null;
+  // Site location for real-weather monitoring (set by admin on the Location card)
+  siteLatitude: number | null;
+  siteLongitude: number | null;
+  sitePlaceLabel: string | null;
+  siteCountry: string | null;
+  siteCountryCode: string | null;
+  siteRegion: string | null;
+  siteCity: string | null;
+  siteTimezone: string | null;
+  weatherMonitoringEnabled: boolean;
   calendarId: string | null;
   /** Deprecated: read-only mirror of {@link primaryBaselineId}. */
   activeBaselineId: string | null;
@@ -283,6 +293,16 @@ export interface UpdateProjectRequest {
   fromLocation?: string | null;
   toLocation?: string | null;
   totalLengthKm?: number | null;
+  // Site location for weather monitoring
+  siteLatitude?: number | null;
+  siteLongitude?: number | null;
+  sitePlaceLabel?: string | null;
+  siteCountry?: string | null;
+  siteCountryCode?: string | null;
+  siteRegion?: string | null;
+  siteCity?: string | null;
+  siteTimezone?: string | null;
+  weatherMonitoringEnabled?: boolean | null;
   calendarId?: string | null;
   contract?: ContractSummaryInput | null;
   /**
@@ -1658,3 +1678,6 @@ export interface InsightsResponse {
   /** Chart specs built deterministically server-side. Always present in fresh responses. */
   charts?: ChartSpec[] | null;
 }
+
+// === Multi-agent AI platform (Track D) ===
+export * from "./agent";

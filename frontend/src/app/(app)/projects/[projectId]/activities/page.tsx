@@ -49,6 +49,7 @@ import {
   scheduleVarianceBucket,
 } from "@/lib/utils/schedulePercent";
 import { ScheduleLogPanel } from "@/components/schedule/ScheduleLogPanel";
+import { WhatIfPanel } from "@/components/schedule/WhatIfPanel";
 import type { ScheduleResultResponse } from "@/lib/api/scheduleApi";
 import { useAuthStore } from "@/lib/state/store";
 import type { ProjectResponse, WbsNodeResponse } from "@/lib/types";
@@ -736,6 +737,8 @@ export default function ActivitiesPage() {
           </p>
         </div>
       )}
+
+      {activities.length > 0 && <WhatIfPanel projectId={projectId} />}
 
       <ActivityAiGenerateDialog
         open={showAiDialog}

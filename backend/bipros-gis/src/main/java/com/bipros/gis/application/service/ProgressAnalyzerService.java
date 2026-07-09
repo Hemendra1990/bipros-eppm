@@ -40,6 +40,7 @@ public class ProgressAnalyzerService {
     private final ConstructionProgressSnapshotRepository snapshotRepository;
     private final ProgressAnalyzerRegistry analyzerRegistry;
     private final RasterStorage rasterStorage;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /**
      * Run analysis and persist a ConstructionProgressSnapshot. Propagation REQUIRES_NEW so the
@@ -97,6 +98,9 @@ public class ProgressAnalyzerService {
         }
 
         snapshotRepository.save(snapshot);
+        // Notify the GIS Intelligence agent (best-effort; the nightly sweep is the fallback).
+        eventPublisher.publishEvent(
+            new com.bipros.common.event.GisSnapshotAnalyzedEvent(image.getProjectId(), snapshot.getId()));
         log.info("[Analyzer] snapshot for polygon={} progress={}% variance={}% duration={}ms",
             polygon.getWbsCode(),
             result.progressPercent(),

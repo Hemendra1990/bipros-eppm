@@ -196,6 +196,34 @@ public class ProjectService {
         if (request.toLocation() != null) {
             project.setToLocation(sanitizeText(request.toLocation()));
         }
+        // ── Site location for weather monitoring ──
+        if (request.siteLatitude() != null) {
+            project.setSiteLatitude(request.siteLatitude());
+        }
+        if (request.siteLongitude() != null) {
+            project.setSiteLongitude(request.siteLongitude());
+        }
+        if (request.sitePlaceLabel() != null) {
+            project.setSitePlaceLabel(sanitizeText(request.sitePlaceLabel()));
+        }
+        if (request.siteCountry() != null) {
+            project.setSiteCountry(sanitizeText(request.siteCountry()));
+        }
+        if (request.siteCountryCode() != null) {
+            project.setSiteCountryCode(sanitizeText(request.siteCountryCode()));
+        }
+        if (request.siteRegion() != null) {
+            project.setSiteRegion(sanitizeText(request.siteRegion()));
+        }
+        if (request.siteCity() != null) {
+            project.setSiteCity(sanitizeText(request.siteCity()));
+        }
+        if (request.siteTimezone() != null) {
+            project.setSiteTimezone(sanitizeText(request.siteTimezone()));
+        }
+        if (request.weatherMonitoringEnabled() != null) {
+            project.setWeatherMonitoringEnabled(request.weatherMonitoringEnabled());
+        }
         if (request.calendarId() != null) {
             project.setCalendarId(request.calendarId());
         }
@@ -451,6 +479,15 @@ public class ProjectService {
             project.getFromLocation(),
             project.getToLocation(),
             project.getTotalLengthKm(),
+            project.getSiteLatitude(),
+            project.getSiteLongitude(),
+            project.getSitePlaceLabel(),
+            project.getSiteCountry(),
+            project.getSiteCountryCode(),
+            project.getSiteRegion(),
+            project.getSiteCity(),
+            project.getSiteTimezone(),
+            project.isWeatherMonitoringEnabled(),
             project.getCalendarId(),
             project.getActiveBaselineId(),
             project.getPrimaryBaselineId(),

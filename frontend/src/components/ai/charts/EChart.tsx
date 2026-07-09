@@ -59,10 +59,13 @@ class ChartErrorBoundary extends Component<
 
 export function EChart({ spec, height = 260 }: EChartProps) {
   const { resolvedTheme } = useTheme();
-  const [tokens, setTokens] = useState<ResolvedTokens | null>(null);
+  // Eager init so tokens is NEVER null — otherwise the chart can stick on the
+  // placeholder forever if the deferred rAF below is cancelled by a re-render
+  // (readTokens() is side-effect-free and falls back to safe defaults on SSR).
+  const [tokens, setTokens] = useState<ResolvedTokens>(() => readTokens());
 
   useEffect(() => {
-    // Defer one frame so the .dark class swap has flushed to computed style.
+    // Re-read one frame later so the .dark class swap has flushed to computed style.
     const id = requestAnimationFrame(() => setTokens(readTokens()));
     return () => cancelAnimationFrame(id);
   }, [resolvedTheme]);
