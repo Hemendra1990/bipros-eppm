@@ -33,7 +33,7 @@ import java.util.Optional;
 /**
  * Seeds the {@link MaterialIssue} + {@link MaterialConsumptionLog} ledgers for
  * {@code OMAN-DEMO-KHASAB} so the Material KPI block on the Insights tab lights
- * up. Without these rows, {@link com.bipros.api.service.MaterialKpiService}
+ * up. Without these rows, {@link com.bipros.resource.application.service.MaterialKpiService}
  * short-circuits with all zeros and the UI renders the "No material issues or
  * consumption logs in this window" banner.
  *

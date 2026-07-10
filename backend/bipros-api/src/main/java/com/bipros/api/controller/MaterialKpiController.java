@@ -1,7 +1,7 @@
 package com.bipros.api.controller;
 
-import com.bipros.api.service.MaterialKpiService;
-import com.bipros.api.service.MaterialKpiService.MaterialKpiResponse;
+import com.bipros.resource.application.service.MaterialKpiService;
+import com.bipros.resource.application.service.MaterialKpiService.MaterialKpiResponse;
 import com.bipros.common.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;

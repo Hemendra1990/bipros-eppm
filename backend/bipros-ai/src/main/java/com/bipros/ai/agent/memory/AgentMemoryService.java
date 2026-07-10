@@ -64,6 +64,10 @@ public class AgentMemoryService {
             if (existing != null && contentHash.equals(existing.getContentHash())) {
                 existing.setLastSeenAt(now);
                 existing.setNotifiable(false);
+                // Content is unchanged, but the deterministic evidence (deep-links, value formatting,
+                // chart series) may have — refresh it so corrections propagate without a noisy supersede.
+                existing.setEvidenceJson(writeJson(draft.evidence()));
+                existing.setStakeholdersJson(writeJson(draft.stakeholders()));
                 result.add(findingRepository.save(existing));
                 continue;
             }

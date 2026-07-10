@@ -177,22 +177,25 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
         String weakest = dims.entrySet().stream().min(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey).orElse("Schedule quality");
 
+        // Bands match the project's single RiskLevel (ScheduleHealthService.determineRiskLevel):
+        // >=80 low, 60-79 medium, 40-59 high, <40 critical — so this score reads on the same scale.
         Severity severity = score < 40 ? Severity.CRITICAL : score < 60 ? Severity.HIGH
-                : score < 75 ? Severity.MEDIUM : Severity.INFO;
-        String grade = score < 40 ? "critical" : score < 60 ? "weak" : score < 75 ? "fair" : "healthy";
+                : score < 80 ? Severity.MEDIUM : Severity.INFO;
+        String grade = score < 40 ? "critical" : score < 60 ? "high risk"
+                : score < 80 ? "medium risk" : "low risk";
 
         List<EvidenceRef> ev = new ArrayList<>();
-        ev.add(EvidenceRef.metric("Baseline Health Score", score + " / 100"));
+        ev.add(EvidenceRef.metric("Baseline Readiness Score", score + " / 100"));
         dims.forEach((k, v) -> ev.add(EvidenceRef.metric(k, (int) Math.round(v) + " / 100")));
         ev.add(EvidenceRef.metric("Missing logic", pct(h.missingLogicPct())));
         ev.add(EvidenceRef.metric("High float", pct(h.highFloatPct())));
-        ev.add(EvidenceRef.entity("Schedule health", "Open", "project", projectId,
+        ev.add(EvidenceRef.entity("Schedule health page", "Open", "project", projectId,
                 "/projects/" + projectId + "/schedule"));
 
         return new AgentFindingDraft(
                 "BASELINE_HEALTH_SCORE", "PROJECT", severity, 0.85,
                 "Composite of schedule quality (40%), execution (20%), resource feasibility (20%) and risk (20%)",
-                "Baseline Health Score " + score + "/100 — " + grade + " (weakest: " + weakest + ")",
+                "Baseline Readiness " + score + "/100 — " + grade + " (weakest: " + weakest + ")",
                 "The baseline scores " + score + "/100 overall — schedule quality " + (int) schedule
                         + ", execution " + (int) execution + ", resource feasibility " + (int) resource
                         + ", risk exposure " + (int) risk + ". The weakest dimension is " + weakest + ".",
@@ -227,8 +230,12 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
         int critical = h.criticalActivities() != null ? h.criticalActivities() : 0;
         int nearCritical = h.nearCriticalActivities() != null ? h.nearCriticalActivities() : 0;
         boolean memCritical = execSeverity == Severity.CRITICAL;
-        // Recoverable time: the slip we must claw back, or the near-critical activities we can parallelise.
-        int recoverable = Math.max(slip, nearCritical);
+        // Recoverable time is measured in DAYS = the deadline slip we must claw back. near-critical is an
+        // activity COUNT (not days) and must not enter this figure; the crash/fast-track analysis quantifies
+        // the precise recoverable time and cost.
+        int recoverableDays = slip;
+        String recPhrase = recoverableDays > 0 ? "~" + recoverableDays + " days recoverable" : "recoverable time available";
+        String recEst = recoverableDays > 0 ? "~" + recoverableDays + " days" : "meaningful time";
 
         Severity severity = (slip >= 30 || memCritical) ? Severity.HIGH
                 : slip >= 10 ? Severity.MEDIUM : Severity.LOW;
@@ -237,7 +244,9 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
         ev.add(EvidenceRef.metric("Critical activities", String.valueOf(critical)));
         ev.add(EvidenceRef.metric("Near-critical", String.valueOf(nearCritical)));
         ev.add(EvidenceRef.metric("Deadline slip", slip + " days"));
-        ev.add(EvidenceRef.metric("Est. recoverable", "~" + recoverable + " days"));
+        if (recoverableDays > 0) {
+            ev.add(EvidenceRef.metric("Est. recoverable", "~" + recoverableDays + " days"));
+        }
         ev.add(EvidenceRef.entity("Schedule", "Open", "project", projectId,
                 "/projects/" + projectId + "/schedule"));
 
@@ -245,18 +254,18 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
                 "SCHEDULE_COMPRESSION_OPPORTUNITY", "PROJECT", severity, 0.75,
                 "Project is behind (deadline slip / negative float / forecast risk) with critical and near-critical "
                         + "activities that can be crashed, fast-tracked or parallelised",
-                "Schedule is behind — ~" + recoverable + " days recoverable by crashing/fast-tracking the critical path",
+                "Schedule is behind — " + recPhrase + " by crashing/fast-tracking the critical path",
                 "The project is running behind"
                         + (slip > 0 ? " (deadline slip " + slip + " days)" : "")
                         + " with " + critical + " critical and " + nearCritical + " near-critical activities. "
                         + "Crashing or fast-tracking the critical path and parallelising near-critical work can "
-                        + "recover an estimated ~" + recoverable + " days.",
+                        + "recover an estimated " + recEst + ".",
                 "The current logic and durations finish later than the committed deadline, but the critical and "
                         + "near-critical activities leave room to compress the plan.",
                 "Time lost to slippage compounds into liquidated damages and downstream resource clashes unless it is "
                         + "actively recovered rather than absorbed.",
                 "Run a crash/fast-track analysis on the critical path and parallelise the near-critical activities "
-                        + "where predecessors allow; the ~" + recoverable + " days is an indicative estimate — the "
+                        + "where predecessors allow; the " + recEst + " is an indicative estimate — the "
                         + "crash analysis will quantify the recoverable time and cost precisely. Then re-run the schedule.",
                 ev, Map.of("PLANNING_ENGINEER", List.of(), "PROJECT_MANAGER", List.of()), validUntil);
     }

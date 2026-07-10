@@ -141,9 +141,11 @@ export function FindingCard({
   return (
     <Card
       variant="elevated"
-      className={cn("border-l-[3px]", resolved && "opacity-70")}
-      style={{ borderLeftColor: sev.hue }}
+      className={cn("overflow-hidden", resolved && "opacity-70")}
     >
+      {/* Severity band — reads at a glance, flush to the card's top edge */}
+      <div className="-mx-6 -mt-6 mb-4 h-1.5" style={{ background: sev.hue }} aria-hidden />
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
@@ -184,12 +186,43 @@ export function FindingCard({
         <FindingVisual finding={finding} />
       </div>
 
-      {/* Entity deep-links (kept visible — they're navigation, not prose) */}
+      {/* Entity deep-links as a scannable list (navigation, not prose) */}
       {entityChips.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {entityChips.map((ev, i) => (
-            <EvidenceChip key={`${ev.label}-${i}`} ev={ev} />
-          ))}
+        <div className="mt-3 overflow-hidden rounded-xl border border-hairline">
+          {entityChips.map((ev, i) => {
+            const row = (
+              <div className="flex items-center gap-3 bg-ivory/40 px-3 py-2.5 text-sm transition-colors hover:bg-ivory/80">
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: sev.hue }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate text-text-primary">
+                  {ev.label}
+                  {ev.value ? <span className="text-text-secondary"> — {ev.value}</span> : null}
+                </span>
+                {ev.entityType && (
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-gold-deep">
+                    {humanizeType(ev.entityType)}
+                  </span>
+                )}
+                {ev.linkUrl && <ExternalLink size={12} className="shrink-0 text-slate" />}
+              </div>
+            );
+            return ev.linkUrl ? (
+              <Link
+                key={`${ev.label}-${i}`}
+                href={ev.linkUrl}
+                className="block border-t border-hairline first:border-t-0"
+              >
+                {row}
+              </Link>
+            ) : (
+              <div key={`${ev.label}-${i}`} className="border-t border-hairline first:border-t-0">
+                {row}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -257,7 +290,6 @@ export function FindingCard({
               </Button>
             )}
             <Button
-              variant="secondary"
               size="sm"
               onClick={() => resolve.mutate()}
               disabled={resolve.isPending}

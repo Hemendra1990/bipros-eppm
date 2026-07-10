@@ -51,7 +51,8 @@ public final class AgentPipelines {
                 Set.of("capacity_utilisation", "field_utilisation", "supervisor_performance",
                         "dpr_intelligence", "dpr_anomaly", "productivity_analysis", "root_cause",
                         "dbs_validation", "issue_intelligence", "document_intelligence",
-                        "gis_intelligence", "weather_risk"),
+                        "gis_intelligence", "weather_risk",
+                        "material_intelligence", "subcontractor_performance", "labour_cost_intelligence"),
                 // Stage 2 — schedule + risk (read stage-1 findings, e.g. planning reads capacity).
                 Set.of("planning_intelligence", "progress_variance", "risk_intelligence"),
                 // Stage 3 — forecasting (reads planning + risk).
@@ -64,7 +65,8 @@ public final class AgentPipelines {
         register(new PipelineDefinition(OPERATIONS_REACTIVE, List.of(
                 Set.of("dpr_intelligence", "dpr_anomaly", "productivity_analysis", "root_cause",
                         "dbs_validation", "capacity_utilisation", "field_utilisation",
-                        "supervisor_performance"),
+                        "supervisor_performance", "material_intelligence", "subcontractor_performance",
+                        "labour_cost_intelligence"),
                 Set.of("notification"))));
 
         register(new PipelineDefinition(SCHEDULE_REACTIVE, List.of(

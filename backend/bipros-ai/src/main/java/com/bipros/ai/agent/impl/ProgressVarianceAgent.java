@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -111,7 +112,8 @@ public class ProgressVarianceAgent extends AbstractAgent {
                 snapshot.put("spi", round(spi));
                 snapshot.put("plannedPctOfBudget", round(plannedPct));
                 snapshot.put("earnedPctOfBudget", round(earnedPct));
-                candidates.add(scheduleVariance(projectId, spi, sv, plannedPct, earnedPct, e.getDataDate(), validUntil));
+                candidates.add(scheduleVariance(projectId, spi, sv, plannedPct, earnedPct, e.getDataDate(),
+                        spiHistorySeries(projectId), validUntil));
             }
         }
 
@@ -177,7 +179,8 @@ public class ProgressVarianceAgent extends AbstractAgent {
     }
 
     private AgentFindingDraft scheduleVariance(UUID projectId, double spi, double sv, double plannedPct,
-                                               double earnedPct, LocalDate dataDate, Instant validUntil) {
+                                               double earnedPct, LocalDate dataDate, EvidenceRef spiSeries,
+                                               Instant validUntil) {
         Severity severity;
         String posture;
         if (spi < 0.80) {
@@ -218,16 +221,51 @@ public class ProgressVarianceAgent extends AbstractAgent {
                         + "blockers, and re-baseline only if the date is genuinely unrecoverable — then escalate a "
                         + "schedule-change request."
                         : "Maintain the current pace and watch near-critical fronts for early slippage.",
-                List.of(
-                        EvidenceRef.metric("SPI (EV/PV)", f2(spi)),
-                        EvidenceRef.metric("Planned progress", pct(plannedPct)),
-                        EvidenceRef.metric("Earned progress", pct(earnedPct)),
-                        EvidenceRef.metric("Behind plan by", behindPP + " pts of budget"),
-                        EvidenceRef.metric("Schedule variance", signed(sv)),
-                        EvidenceRef.entity("EVM dashboard", "Open", "project", projectId,
-                                "/projects/" + projectId + "/evm")),
+                scheduleVarianceEvidence(projectId, spi, plannedPct, earnedPct, behindPP, sv, spiSeries),
                 Map.of("PLANNING_ENGINEER", List.of(), "PROJECT_MANAGER", List.of()), validUntil);
     }
+
+    /** SPI metrics + EVM deep-link, led by the SPI trend chart when history is available. */
+    private List<EvidenceRef> scheduleVarianceEvidence(UUID projectId, double spi, double plannedPct,
+                                                       double earnedPct, long behindPP, double sv,
+                                                       EvidenceRef spiSeries) {
+        List<EvidenceRef> ev = new ArrayList<>();
+        if (spiSeries != null) ev.add(spiSeries);
+        ev.add(EvidenceRef.metric("SPI (EV/PV)", f2(spi)));
+        ev.add(EvidenceRef.metric("Planned progress", pct(plannedPct)));
+        ev.add(EvidenceRef.metric("Earned progress", pct(earnedPct)));
+        ev.add(EvidenceRef.metric("Behind plan by", behindPP + " pts of budget"));
+        ev.add(EvidenceRef.metric("Schedule variance", signed(sv)));
+        ev.add(EvidenceRef.entity("EVM dashboard", "Open", "project", projectId,
+                "/projects/" + projectId + "/evm"));
+        return ev;
+    }
+
+    /** Project-level SPI over the last ~8 EVM data dates as a LINE chart, with 1.00 as the target reference line. */
+    private EvidenceRef spiHistorySeries(UUID projectId) {
+        // findByProjectIdOrderByDataDateDesc → newest first; keep project-level rows (activityId == null), one per date.
+        LinkedHashMap<LocalDate, Double> byDate = new LinkedHashMap<>();
+        for (EvmCalculation e : evmRepository.findByProjectIdOrderByDataDateDesc(projectId)) {
+            if (e.getActivityId() != null || e.getDataDate() == null) continue;
+            double pv = dbl(e.getPlannedValue());
+            double ev = dbl(e.getEarnedValue());
+            double spi = e.getSchedulePerformanceIndex() != null ? e.getSchedulePerformanceIndex()
+                    : (pv > 0 ? ev / pv : 0.0);
+            byDate.putIfAbsent(e.getDataDate(), spi);
+            if (byDate.size() >= 8) break;
+        }
+        if (byDate.size() < 2) return null;
+        // Reverse newest-first → chronological for the trend line.
+        List<LocalDate> dates = new ArrayList<>(byDate.keySet());
+        List<EvidenceRef.Series.Point> pts = new ArrayList<>();
+        for (int i = dates.size() - 1; i >= 0; i--) {
+            LocalDate d = dates.get(i);
+            pts.add(new EvidenceRef.Series.Point(d.format(SPI_DATE_FMT), Math.round(byDate.get(d) * 100) / 100.0));
+        }
+        return EvidenceRef.chart("SPI trend", new EvidenceRef.Series("LINE", "", pts, 1.0, "1.00 target"));
+    }
+
+    private static final DateTimeFormatter SPI_DATE_FMT = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH);
 
     private AgentFindingDraft activityBreakdown(UUID projectId, int scheduled, int ahead, int onTrack,
                                                 int delayed, List<Lag> laggards, Instant validUntil) {

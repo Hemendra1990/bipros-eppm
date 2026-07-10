@@ -22,6 +22,23 @@ export type AgentRunStatus =
 
 export type EvidenceType = "METRIC" | "ENTITY" | "TOOL_RESULT" | "CHART";
 
+export type SeriesKind = "COLUMN" | "LINE";
+
+export interface EvidenceSeriesPoint {
+  label: string;
+  value: number;
+}
+
+/** A compact chartable series carried by a CHART evidence ref (rainfall/day, SPI over periods, …). */
+export interface EvidenceSeries {
+  kind: SeriesKind | string;
+  unit?: string | null;
+  points: EvidenceSeriesPoint[];
+  /** Reference-line value (threshold/target), e.g. 20 (mm) or 1.0 (SPI target). */
+  refValue?: number | null;
+  refLabel?: string | null;
+}
+
 export interface EvidenceDto {
   type: EvidenceType | string;
   label: string;
@@ -30,6 +47,8 @@ export interface EvidenceDto {
   entityId?: string | null;
   /** Deep-link into the app for the referenced entity, if resolvable. */
   linkUrl?: string | null;
+  /** Present only on CHART refs — a small series to plot on the card. */
+  series?: EvidenceSeries | null;
 }
 
 export interface AgentFindingDto {

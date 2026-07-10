@@ -44,6 +44,6 @@ public class AgentDtoMapper {
     }
 
     private EvidenceDto toEvidenceDto(EvidenceRef e) {
-        return new EvidenceDto(e.type(), e.label(), e.value(), e.entityType(), e.entityId(), e.linkUrl());
+        return new EvidenceDto(e.type(), e.label(), e.value(), e.entityType(), e.entityId(), e.linkUrl(), e.series());
     }
 }

@@ -217,7 +217,7 @@ public class ForecastingAgent extends AbstractAgent {
             evidence.add(EvidenceRef.metric("Days past committed finish", breachDays + " days"));
         }
         evidence.add(EvidenceRef.entity("Monte Carlo", "Open schedule risk analysis", "monte_carlo",
-                mc.simId, "/projects/" + projectId + "/risk?tab=monte-carlo"));
+                mc.simId, "/projects/" + projectId + "/risk-analysis"));
 
         return new AgentFindingDraft(
                 "COMPLETION_FORECAST",
@@ -332,7 +332,7 @@ public class ForecastingAgent extends AbstractAgent {
                 EvidenceRef.metric("Contingency gap at P80", money(gap)),
                 EvidenceRef.metric("Gap vs baseline", pct(gapRatio)),
                 EvidenceRef.entity("Monte Carlo", "Open cost risk analysis", "monte_carlo",
-                        mc.simId, "/projects/" + projectId + "/risk?tab=monte-carlo"));
+                        mc.simId, "/projects/" + projectId + "/risk-analysis"));
 
         return new AgentFindingDraft(
                 "CASHFLOW_PRESSURE",

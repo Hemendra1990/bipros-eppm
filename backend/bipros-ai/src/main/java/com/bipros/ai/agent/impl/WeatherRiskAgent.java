@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -185,8 +186,8 @@ public class WeatherRiskAgent extends AbstractAgent {
                         + "erodes exposed formation — lost working days and rework risk.",
                 "Re-sequence weather-sensitive work (pours, earthworks, trenching) around the wet days; protect "
                         + "open excavations and stockpiles; confirm dewatering capacity before " + rainy.get(0).date() + ".",
-                buildEvidence("Rain days over " + fmt(RAIN_MM_HIGH) + " mm", rainy.size() + " of " + all.size(),
-                        "Wettest day", worst.date() + " · " + fmt(worst.rainfallMm()) + " mm", projectId),
+                rainEvidence("Rain days over " + fmt(RAIN_MM_HIGH) + " mm", rainy.size() + " of " + all.size(),
+                        "Wettest day", worst.date() + " · " + fmt(worst.rainfallMm()) + " mm", projectId, all),
                 stakeholders(),
                 validUntil);
     }
@@ -269,6 +270,32 @@ public class WeatherRiskAgent extends AbstractAgent {
                 EvidenceRef.metric(m2Label, m2Val),
                 EvidenceRef.entity("Site weather", "7-day forecast", "project", projectId,
                         "/projects/" + projectId + "/ai"));
+    }
+
+    /** Rain evidence + a leading COLUMN chart of the full forecast's daily rainfall. */
+    private List<EvidenceRef> rainEvidence(String m1Label, String m1Val, String m2Label, String m2Val,
+                                           UUID projectId, List<DailyWx> all) {
+        List<EvidenceRef> ev = new ArrayList<>();
+        EvidenceRef series = rainfallSeries(all);
+        if (series != null) ev.add(series);
+        ev.addAll(buildEvidence(m1Label, m1Val, m2Label, m2Val, projectId));
+        return ev;
+    }
+
+    /** The forecast's daily rainfall (mm) as a COLUMN series, with the heavy-rain threshold as the reference line. */
+    private EvidenceRef rainfallSeries(List<DailyWx> all) {
+        List<EvidenceRef.Series.Point> pts = new ArrayList<>();
+        for (DailyWx d : all) {
+            double mm = d.rainfallMm() == null ? 0.0 : d.rainfallMm();
+            pts.add(new EvidenceRef.Series.Point(dayLabel(d.date()), Math.round(mm * 10) / 10.0));
+        }
+        if (pts.size() < 2) return null;
+        EvidenceRef.Series s = new EvidenceRef.Series("COLUMN", "mm", pts, RAIN_MM_HIGH, fmt(RAIN_MM_HIGH) + " mm");
+        return EvidenceRef.chart("7-day rainfall", s);
+    }
+
+    private static String dayLabel(LocalDate d) {
+        return d.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.ENGLISH);
     }
 
     private static java.util.Map<String, List<UUID>> stakeholders() {

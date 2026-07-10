@@ -1,5 +1,7 @@
 package com.bipros.ai.agent.api.dto;
 
+import com.bipros.ai.agent.core.EvidenceRef;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -46,7 +48,8 @@ public final class AgentDtos {
             String value,
             String entityType,
             UUID entityId,
-            String linkUrl) {
+            String linkUrl,
+            EvidenceRef.Series series) {
     }
 
     public record AgentFindingDto(

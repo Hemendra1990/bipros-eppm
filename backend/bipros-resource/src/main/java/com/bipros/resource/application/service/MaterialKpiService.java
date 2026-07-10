@@ -1,4 +1,4 @@
-package com.bipros.api.service;
+package com.bipros.resource.application.service;
 
 import com.bipros.project.domain.model.BoqItem;
 import com.bipros.project.domain.model.DailyProgressReport;
@@ -41,6 +41,9 @@ import java.util.stream.Collectors;
  * baseline that isn't stored per material. They surface as {@code null} in Phase 1 — the UI
  * shows a "—" placeholder rather than fabricating a number. Full coverage of those KPIs is
  * tracked in Phase 2 (material_batch_designs schema addition).
+ *
+ * <p>Lives in {@code bipros-resource} so both the REST controller (bipros-api) and the
+ * {@code material_intelligence} agent (bipros-ai) delegate to this single computation.
  */
 @Service
 @RequiredArgsConstructor

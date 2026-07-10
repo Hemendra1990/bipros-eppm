@@ -12,6 +12,7 @@ import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.resource.domain.service.ProductivityNormLookupService;
 import com.bipros.resource.domain.service.ResolvedNorm;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -103,7 +105,16 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
             String key = d.getActivityName().toLowerCase(Locale.ROOT);
             Act a = byActivity.computeIfAbsent(key, k -> new Act(d.getActivityName(), d.getActivityId(), d.getUnit()));
             a.totalQty = a.totalQty.add(d.getQtyExecuted());
-            if (d.getReportDate() != null) a.days.add(d.getReportDate());
+            if (d.getReportDate() != null) {
+                a.days.add(d.getReportDate());
+                // Crew-day = one reporting front on one date. A "front" is the supervisor when known, else the
+                // chainage/side key — so N parallel crews on a date count as N crew-days and the per-crew-day
+                // output isn't inflated by summing every front's output over calendar days.
+                Object front = d.getSupervisorUserId() != null
+                        ? d.getSupervisorUserId()
+                        : Arrays.asList(d.getChainageFromM(), d.getChainageToM(), d.getSide());
+                a.crewDays.add(Arrays.asList(d.getReportDate(), front));
+            }
         }
 
         int normsResolved = 0;
@@ -119,9 +130,11 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
             normsResolved++;
 
             double normPerDay = norm.outputPerDay().doubleValue();
-            double actualPerDay = a.totalQty.doubleValue() / a.days.size();
+            // Per crew-day (not calendar day): total output ÷ distinct (date, front) pairs, so multiple
+            // parallel crews on one date don't inflate the ratio against the single-crew norm.
+            double actualPerDay = a.totalQty.doubleValue() / a.crewDays.size();
             double ratio = actualPerDay / normPerDay;
-            if (ratio <= 1.0 - BELOW_MARGIN) {
+            if (ratio < 1.0 - BELOW_MARGIN) {
                 below.add(new Lag(a, actualPerDay, normPerDay, ratio));
             } else {
                 aboveOrOn++;
@@ -131,6 +144,22 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
         snapshot.put("activitiesWithNorm", normsResolved);
         snapshot.put("belowNorm", below.size());
         snapshot.put("atOrAboveNorm", aboveOrOn);
+
+        // Per-activity fingerprint of the below-norm set, so a DPR that materially moves an
+        // activity's output-per-day WITHOUT flipping its below/above-norm bucket (or that swaps
+        // one below-norm activity for another while the 3 counts stay identical) still changes the
+        // snapshot hash and re-runs the agent. Ratio is bucketed into 5% bands (band = round(ratio/0.05)):
+        // idle-day / ±0.01 DPRs stay in-band and don't churn, but a real productivity shift crosses a
+        // band. Sorted by activity key because `below` is in DPR-insertion order (byActivity is a
+        // LinkedHashMap), not sorted — the explicit sort is what makes the serialized hash deterministic.
+        List<Lag> fingerprint = new ArrayList<>(below);
+        fingerprint.sort(Comparator.comparing((Lag l) -> l.a.name == null ? "" : l.a.name.toLowerCase(Locale.ROOT)));
+        ArrayNode belowBands = snapshot.putArray("belowNormBands");
+        for (Lag l : fingerprint) {
+            ObjectNode e = belowBands.addObject();
+            e.put("activity", l.a.name == null ? "" : l.a.name.toLowerCase(Locale.ROOT));
+            e.put("band5", (int) Math.round(l.ratio / 0.05));
+        }
 
         if (!below.isEmpty()) {
             candidates.add(belowNorm(projectId, below, normsResolved, validUntil));
@@ -222,6 +251,8 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
         final String unit;
         BigDecimal totalQty = BigDecimal.ZERO;
         final Set<LocalDate> days = new HashSet<>();
+        /** Distinct (reportDate, front) pairs — the crew-day denominator for output-per-day. */
+        final Set<Object> crewDays = new HashSet<>();
 
         Act(String name, UUID activityId, String unit) {
             this.name = name;

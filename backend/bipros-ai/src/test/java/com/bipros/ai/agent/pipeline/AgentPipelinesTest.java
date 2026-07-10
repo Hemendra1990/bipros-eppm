@@ -53,7 +53,8 @@ class AgentPipelinesTest {
                 "gis_intelligence", "document_intelligence", "executive_insights", "notification",
                 "weather_risk", "supervisor_performance", "field_utilisation", "dpr_anomaly",
                 "progress_variance", "productivity_analysis", "root_cause",
-                "role_briefings", "historical_learning", "baseline_intelligence");
+                "role_briefings", "historical_learning", "baseline_intelligence",
+                "material_intelligence", "subcontractor_performance", "labour_cost_intelligence");
         AgentPipelines.all().forEach(def ->
                 assertThat(known).as("pipeline %s references only real agent keys", def.key())
                         .containsAll(def.allAgentKeys()));
