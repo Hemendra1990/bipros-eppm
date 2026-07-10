@@ -1,12 +1,14 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CloudRain, Wind, Thermometer, MapPin, Loader2 } from "lucide-react";
+import { CloudRain, Wind, MapPin, Loader2 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { projectApi } from "@/lib/api/projectApi";
 import { geoApi, type DailyWx } from "@/lib/api/geoApi";
-import { WeatherIcon } from "./WeatherIcon";
+import { WeatherIcon, kindForCode, type Kind } from "./WeatherIcon";
+import styles from "./SiteWeatherPanel.module.css";
 
 // Same construction thresholds the backend WeatherRiskAgent uses, for at-a-glance highlighting.
 const RAIN_MM = 20;
@@ -29,6 +31,21 @@ function flags(d: DailyWx): { adverse: boolean; hue: string | null } {
   if (d.tempMinC != null && d.tempMinC <= COLD_C) return { adverse: true, hue: "#0891B2" };
   return { adverse: false, hue: null };
 }
+
+/** Group each animation kind into a sky-gradient theme for the card background. */
+const THEME_BY_KIND: Record<Kind, string> = {
+  sun: styles.clearWarm,
+  partly: styles.clearWarm,
+  showers: styles.clearWarm,
+  cloud: styles.overcast,
+  fog: styles.overcast,
+  drizzle: styles.wet,
+  rain: styles.wet,
+  heavyRain: styles.wet,
+  storm: styles.storm,
+  snow: styles.frozen,
+  sleet: styles.frozen,
+};
 
 /**
  * Live 7-day site-weather strip for the AI overview. Reads the project's configured coordinates and
@@ -59,6 +76,13 @@ export function SiteWeatherPanel({ projectId }: { projectId: string }) {
 
   const days = forecastRes?.data?.days ?? [];
 
+  // Week temperature envelope, so each card's range bar is scaled against the same axis.
+  const lows = days.map((d) => d.tempMinC).filter((t): t is number => t != null);
+  const highs = days.map((d) => d.tempMaxC).filter((t): t is number => t != null);
+  const weekMin = lows.length ? Math.min(...lows) : 0;
+  const weekMax = highs.length ? Math.max(...highs) : 1;
+  const weekSpan = Math.max(1, weekMax - weekMin);
+
   return (
     <Card variant="flat" className="p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -83,40 +107,59 @@ export function SiteWeatherPanel({ projectId }: { projectId: string }) {
         <div className="py-6 text-center text-sm text-slate">Forecast unavailable right now.</div>
       ) : (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {days.map((d) => {
+          {days.map((d, i) => {
             const f = flags(d);
+            const theme = THEME_BY_KIND[kindForCode(d.weatherCode)];
+            const hasRange = d.tempMinC != null && d.tempMaxC != null;
+            const fillLeft = hasRange ? ((d.tempMinC! - weekMin) / weekSpan) * 100 : 0;
+            const fillWidth = hasRange
+              ? Math.max(6, ((d.tempMaxC! - d.tempMinC!) / weekSpan) * 100)
+              : 0;
             return (
               <div
                 key={d.date}
-                className="min-w-[92px] flex-1 rounded-lg border p-2.5 text-center"
-                style={{
-                  borderColor: f.adverse ? `${f.hue}55` : undefined,
-                  backgroundColor: f.adverse ? `${f.hue}0F` : undefined,
-                }}
+                className={`${styles.card} ${theme ?? ""}`}
+                style={{ "--i": i } as CSSProperties}
               >
+                {f.adverse && (
+                  <span
+                    className={styles.accent}
+                    style={{ backgroundColor: f.hue ?? undefined }}
+                    aria-hidden
+                  />
+                )}
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-slate">
                   {weekday(d.date)}
                 </div>
-                <div className="mt-1 flex justify-center">
-                  <WeatherIcon code={d.weatherCode} title={d.condition ?? undefined} size={34} />
+                <div className={styles.stage}>
+                  <WeatherIcon code={d.weatherCode} title={d.condition ?? undefined} size={42} />
                 </div>
-                <div className="mt-1 truncate text-[11px] text-charcoal" title={d.condition ?? ""}>
+                <div className="mt-1.5 truncate text-[11px] text-charcoal" title={d.condition ?? ""}>
                   {d.condition ?? "—"}
                 </div>
-                <div className="mt-1.5 flex items-center justify-center gap-1 text-xs font-semibold tabular-nums text-charcoal">
-                  <Thermometer size={11} className="text-slate" />
+                <div className="mt-1.5 flex items-center justify-center gap-1 text-sm font-semibold tabular-nums text-charcoal">
                   {d.tempMaxC != null ? Math.round(d.tempMaxC) : "–"}°
                   <span className="font-normal text-slate">
                     /{d.tempMinC != null ? Math.round(d.tempMinC) : "–"}°
                   </span>
                 </div>
-                <div className="mt-1 flex items-center justify-center gap-1 text-[11px] tabular-nums text-slate">
-                  <CloudRain size={10} />
-                  {d.rainfallMm != null ? `${Math.round(d.rainfallMm)}mm` : "–"}
-                </div>
-                <div className="flex items-center justify-center gap-1 text-[11px] tabular-nums text-slate">
-                  <Wind size={10} />
-                  {d.windMaxKmh != null ? `${Math.round(d.windMaxKmh)}` : "–"}
+                {hasRange && (
+                  <div className={styles.tempTrack} title="Daily range vs. this week">
+                    <span
+                      className={styles.tempFill}
+                      style={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
+                    />
+                  </div>
+                )}
+                <div className="mt-2 flex items-center justify-center gap-2.5 text-[11px] tabular-nums text-slate">
+                  <span className="flex items-center gap-0.5">
+                    <CloudRain size={10} />
+                    {d.rainfallMm != null ? `${Math.round(d.rainfallMm)}mm` : "–"}
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    <Wind size={10} />
+                    {d.windMaxKmh != null ? `${Math.round(d.windMaxKmh)}` : "–"}
+                  </span>
                 </div>
               </div>
             );

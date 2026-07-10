@@ -2,7 +2,7 @@
 
 import styles from "./WeatherIcon.module.css";
 
-type Kind =
+export type Kind =
   | "sun"
   | "partly"
   | "cloud"
@@ -16,7 +16,7 @@ type Kind =
   | "storm";
 
 /** WMO weather-interpretation code → animation kind (mirrors OpenMeteoClient.describeCode bands). */
-function kindForCode(code: number | null | undefined): Kind {
+export function kindForCode(code: number | null | undefined): Kind {
   if (code == null) return "cloud";
   switch (code) {
     case 0:
