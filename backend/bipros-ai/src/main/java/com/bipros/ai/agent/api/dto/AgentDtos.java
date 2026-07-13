@@ -49,7 +49,9 @@ public final class AgentDtos {
             String entityType,
             UUID entityId,
             String linkUrl,
-            EvidenceRef.Series series) {
+            EvidenceRef.Series series,
+            Double numericValue,
+            String unit) {
     }
 
     public record AgentFindingDto(

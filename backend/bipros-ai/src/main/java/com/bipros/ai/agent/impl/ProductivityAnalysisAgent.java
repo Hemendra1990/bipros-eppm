@@ -9,6 +9,7 @@ import com.bipros.ai.agent.core.Severity;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.model.DprApprovalStatus;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprSubContractorRepository;
 import com.bipros.resource.domain.service.ProductivityNormLookupService;
 import com.bipros.resource.domain.service.ResolvedNorm;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +26,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,6 +68,7 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
     private static final int MAX_EXAMPLES = 6;
 
     private final DailyProgressReportRepository dprRepository;
+    private final DprSubContractorRepository dprSubContractorRepository;
     private final ProductivityNormLookupService normLookup;
     private final ObjectMapper objectMapper;
 
@@ -117,6 +120,15 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
             }
         }
 
+        // Sub-contractor-delivered quantity per activity (canonical: ManpowerKpiService subtracts this from
+        // crew output). Netting it out means SC-delivered work isn't counted as the deployed crew's productivity.
+        Map<UUID, Double> scQtyByActivity = new HashMap<>();
+        for (Object[] r : dprSubContractorRepository.sumQuantityByProjectGroupedByActivity(projectId)) {
+            if (r[0] != null && r[1] != null) {
+                scQtyByActivity.put((UUID) r[0], ((BigDecimal) r[1]).doubleValue());
+            }
+        }
+
         int normsResolved = 0;
         List<Lag> below = new ArrayList<>();
         int aboveOrOn = 0;
@@ -130,9 +142,12 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
             normsResolved++;
 
             double normPerDay = norm.outputPerDay().doubleValue();
-            // Per crew-day (not calendar day): total output ÷ distinct (date, front) pairs, so multiple
-            // parallel crews on one date don't inflate the ratio against the single-crew norm.
-            double actualPerDay = a.totalQty.doubleValue() / a.crewDays.size();
+            // Per crew-day (not calendar day): crew output ÷ distinct (date, front) pairs, so multiple parallel
+            // crews on one date don't inflate the ratio against the single-crew norm. Crew output nets out
+            // sub-contractor-delivered qty so SC work isn't attributed to the deployed crew's productivity.
+            double scQty = a.activityId != null ? scQtyByActivity.getOrDefault(a.activityId, 0.0) : 0.0;
+            double crewQty = Math.max(0.0, a.totalQty.doubleValue() - scQty);
+            double actualPerDay = crewQty / a.crewDays.size();
             double ratio = actualPerDay / normPerDay;
             if (ratio < 1.0 - BELOW_MARGIN) {
                 below.add(new Lag(a, actualPerDay, normPerDay, ratio));
@@ -206,7 +221,7 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
                             + "/day (" + pct(l.ratio * 100) + " of norm)",
                     "activity", l.a.activityId,
                     l.a.activityId == null ? "/projects/" + projectId + "/dpr"
-                            : "/projects/" + projectId + "/schedule?focus=" + l.a.activityId));
+                            : "/projects/" + projectId + "/activities/" + l.a.activityId));
         }
 
         Lag worst = below.get(0);

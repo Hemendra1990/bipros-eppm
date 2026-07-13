@@ -92,9 +92,11 @@ public class ProgressAnalyzerService {
         snapshot.setAnalysisCostMicros(result.costMicros());
         snapshot.setRemarks(result.remarks());
         snapshot.setAlertFlag(deriveAlert(result.progressPercent(), contractorClaimedPercent));
-        // Variance is |claimed - ai|; set only when both present.
+        // Signed variance = derived − claimed (matches ConstructionProgressService); negative = contractor
+        // over-claim. Set only when both present. (Was Math.abs(...), which lost the over/under-claim direction
+        // for AI-segmentation snapshots, so the GIS tab and the AI agent couldn't tell over- from under-claim.)
         if (result.progressPercent() != null && contractorClaimedPercent != null) {
-            snapshot.setVariancePercent(Math.abs(contractorClaimedPercent - result.progressPercent()));
+            snapshot.setVariancePercent(result.progressPercent() - contractorClaimedPercent);
         }
 
         snapshotRepository.save(snapshot);

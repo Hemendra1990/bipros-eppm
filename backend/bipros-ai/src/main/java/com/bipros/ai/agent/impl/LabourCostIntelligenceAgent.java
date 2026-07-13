@@ -9,6 +9,7 @@ import com.bipros.ai.agent.core.Severity;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.model.DprApprovalStatus;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprManpowerRepository;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,10 +39,10 @@ import java.util.UUID;
  *   <li><b>Cost per Unit Output</b> = Σ actual labour cost(activity) ÷ Σ DPR qty executed(activity)</li>
  * </ul>
  *
- * <p>Inputs are read straight from {@link ResourceAssignment} (the rolled-up actual cost = rate ×
- * actual units, the same figure the DBS Section-A manpower total uses) and the Daily Progress Reports.
- * Manpower assignments are those carrying a {@code manpowerRoleRateId}. Dormant when no manpower
- * assignment has a planned/actual cost.
+ * <p>PLC is read from {@link ResourceAssignment} planned cost (manpower assignments carry a
+ * {@code manpowerRoleRateId}); ALC is the canonical Σ {@code dpr_manpower.line_cost} — the same
+ * manpower actual cost the Cost summary sums, so the agent reconciles with the Costs tab. Dormant
+ * when no manpower actual cost is booked yet.
  */
 @Slf4j
 @Component
@@ -58,6 +59,7 @@ public class LabourCostIntelligenceAgent extends AbstractAgent {
 
     private final ResourceAssignmentRepository assignmentRepository;
     private final DailyProgressReportRepository dprRepository;
+    private final DprManpowerRepository dprManpowerRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -87,32 +89,28 @@ public class LabourCostIntelligenceAgent extends AbstractAgent {
         Instant now = ctx.now() == null ? Instant.now() : ctx.now();
         Instant validUntil = now.plus(TTL);
 
-        // Manpower assignments only (carry a manpowerRoleRateId). Aggregate PLC/ALC + per-activity actual cost.
+        // PLC = Σ planned cost over manpower resource assignments (those carrying a manpowerRoleRateId).
         double plc = 0;
-        double alc = 0;
-        Map<UUID, Double> laborCostByActivity = new HashMap<>();
         for (ResourceAssignment a : assignmentRepository.findByProjectId(projectId)) {
             if (a.getManpowerRoleRateId() == null) continue;
-            double pc = dbl(a.getPlannedCost());
-            double ac = dbl(a.getActualCost());
-            plc += pc;
-            alc += ac;
-            if (a.getActivityId() != null && ac > 0) {
-                laborCostByActivity.merge(a.getActivityId(), ac, Double::sum);
-            }
+            plc += dbl(a.getPlannedCost());
         }
+        // ALC = canonical manpower actual cost = Σ dpr_manpower.line_cost over APPROVED DPRs — the same figure
+        // the Cost summary / Operational-Insights "Total Manpower Cost" uses (the metrics doc: all figures use
+        // approved DPRs). NOT ResourceAssignment.actualCost (~0 on the role-only model).
+        double alc = dbl(dprManpowerRepository.sumLineCostByProjectApproved(projectId));
 
         if (alc <= 0) {
             // No actual manpower cost booked yet — nothing to judge.
             return new GatherResult(snapshot, candidates);
         }
 
-        // Output qty + activity names from approved DPRs.
+        // Output qty + activity names from DPRs (submitted/approved).
         Map<UUID, Double> outputByActivity = new HashMap<>();
         Map<UUID, String> nameByActivity = new HashMap<>();
         for (DailyProgressReport d : dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId)) {
             DprApprovalStatus st = d.getApprovalStatus();
-            if (st != DprApprovalStatus.SUBMITTED && st != DprApprovalStatus.APPROVED) continue;
+            if (st != DprApprovalStatus.APPROVED) continue;   // all figures use approved DPRs (metrics doc)
             if (d.getActivityId() == null || d.getQtyExecuted() == null) continue;
             outputByActivity.merge(d.getActivityId(), d.getQtyExecuted().doubleValue(), Double::sum);
             if (d.getActivityName() != null) nameByActivity.putIfAbsent(d.getActivityId(), d.getActivityName());
@@ -124,16 +122,19 @@ public class LabourCostIntelligenceAgent extends AbstractAgent {
         snapshot.put("alc", round(alc));
         snapshot.put("lcpi", round(lcpi));
 
-        // Cost per unit output per activity + project weighted mean (for outlier detection).
+        // Cost per unit output per activity = canonical Σ dpr_manpower.line_cost(activity) ÷ Σ qty(activity),
+        // + project weighted mean for outlier detection.
         List<UnitCost> unitCosts = new ArrayList<>();
         double totalCostWithOutput = 0;
         double totalOutput = 0;
-        for (Map.Entry<UUID, Double> e : laborCostByActivity.entrySet()) {
-            Double out = outputByActivity.get(e.getKey());
-            if (out == null || out <= 0) continue;
-            double cpu = e.getValue() / out;
-            unitCosts.add(new UnitCost(nameFor(e.getKey(), nameByActivity), e.getKey(), e.getValue(), out, cpu));
-            totalCostWithOutput += e.getValue();
+        for (Map.Entry<UUID, Double> e : outputByActivity.entrySet()) {
+            double out = e.getValue();
+            if (out <= 0) continue;
+            double laborCost = dbl(dprManpowerRepository.sumLineCostByProjectAndActivityApproved(projectId, e.getKey()));
+            if (laborCost <= 0) continue;
+            double cpu = laborCost / out;
+            unitCosts.add(new UnitCost(nameFor(e.getKey(), nameByActivity), e.getKey(), laborCost, out, cpu));
+            totalCostWithOutput += laborCost;
             totalOutput += out;
         }
         double meanUnitCost = totalOutput > 0 ? totalCostWithOutput / totalOutput : 0;
@@ -162,9 +163,9 @@ public class LabourCostIntelligenceAgent extends AbstractAgent {
                 : (lcpi < 0.95 || overrunPct >= 5) ? Severity.MEDIUM : Severity.LOW;
 
         List<EvidenceRef> ev = new ArrayList<>();
-        ev.add(EvidenceRef.metric("Planned labour cost (PLC)", money(plc)));
-        ev.add(EvidenceRef.metric("Actual labour cost (ALC)", money(alc)));
-        ev.add(EvidenceRef.metric("Manpower cost variance", money(variance)));
+        ev.add(EvidenceRef.money("Planned labour cost (PLC)", BigDecimal.valueOf(plc)));
+        ev.add(EvidenceRef.money("Actual labour cost (ALC)", BigDecimal.valueOf(alc)));
+        ev.add(EvidenceRef.money("Manpower cost variance", BigDecimal.valueOf(variance)));
         ev.add(EvidenceRef.metric("LCPI", fmt2(lcpi)));
         ev.add(EvidenceRef.entity("Cost report", "Open", "project", projectId,
                 "/projects/" + projectId + "/daily-cost-report"));
@@ -194,14 +195,14 @@ public class LabourCostIntelligenceAgent extends AbstractAgent {
 
         List<EvidenceRef> ev = new ArrayList<>();
         ev.add(EvidenceRef.metric("Activities above " + fmt1(OUTLIER_FACTOR) + "× mean unit cost",
-                n + " of activities with output"));
-        ev.add(EvidenceRef.metric("Project mean unit labour cost", money(mean) + " / unit"));
+                String.valueOf(n)));
+        ev.add(EvidenceRef.money("Project mean unit labour cost", BigDecimal.valueOf(mean)));
         for (UnitCost u : outliers.subList(0, Math.min(MAX_EXAMPLES, n))) {
             ev.add(EvidenceRef.entity(u.name,
                     money(u.costPerUnit) + " / unit (" + money(u.laborCost) + " over " + fmt1(u.output) + " units)",
                     "activity", u.activityId,
                     u.activityId == null ? "/projects/" + projectId + "/daily-cost-report"
-                            : "/projects/" + projectId + "/schedule?focus=" + u.activityId));
+                            : "/projects/" + projectId + "/activities/" + u.activityId));
         }
 
         return new AgentFindingDraft(

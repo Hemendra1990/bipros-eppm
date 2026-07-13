@@ -135,11 +135,15 @@ public class DprAnomalyAgent extends AbstractAgent {
         if (!ids.isEmpty()) {
             for (DprManpower m : manpowerRepository.findByDprIdIn(ids)) {
                 double[] agg = labourByDpr.computeIfAbsent(m.getDprId(), k -> new double[2]);
-                agg[0] += m.getNos() == null ? 0 : m.getNos();
-                agg[1] += dbl(m.getWorkingHours()) + dbl(m.getOtHours());
+                double nos = m.getNos() == null ? 0 : m.getNos();
+                agg[0] += nos;
+                // Canonical person-hours = Σ(nos × hours), not Σ(hours) — matches the HSE/Manpower man-hours.
+                agg[1] += nos * (dbl(m.getWorkingHours()) + dbl(m.getOtHours()));
             }
             for (DprEquipment e : equipmentRepository.findByDprIdIn(ids)) {
-                equipHoursByDpr.merge(e.getDprId(), dbl(e.getWorkingHours()), Double::sum);
+                double enos = e.getNos() == null ? 0 : e.getNos();
+                // Machine-hours = Σ(nos × hours) so a 3-machine 8h row logs 24, not 8.
+                equipHoursByDpr.merge(e.getDprId(), enos * dbl(e.getWorkingHours()), Double::sum);
             }
         }
 

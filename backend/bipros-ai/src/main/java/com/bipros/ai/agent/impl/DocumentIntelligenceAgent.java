@@ -60,12 +60,13 @@ public class DocumentIntelligenceAgent extends AbstractAgent {
     private static final int RECENT_DAYS = 7;
     /** Permits whose end date is within this many days are flagged as expiring. */
     private static final int PERMIT_WINDOW_DAYS = 7;
-    /** Upper bound on permits scanned per project run. */
-    private static final int MAX_PERMITS = 500;
+    /** Upper bound on permits scanned per project run (headroom well beyond any real project's permit count). */
+    private static final int MAX_PERMITS = 5000;
 
-    /** Permit states that represent a live, in-force permit. */
+    /** Permit states that represent a live, in-force permit — matches the Permit dashboard
+     *  ({@code PermitDashboardService}) / expiry job, which count ISSUED + IN_PROGRESS only. */
     private static final Set<PermitStatus> LIVE_STATUSES =
-            EnumSet.of(PermitStatus.APPROVED, PermitStatus.ISSUED, PermitStatus.IN_PROGRESS);
+            EnumSet.of(PermitStatus.ISSUED, PermitStatus.IN_PROGRESS);
 
     /** Core document types a controlled project register is expected to hold. */
     private static final List<DocumentType> EXPECTED_TYPES =

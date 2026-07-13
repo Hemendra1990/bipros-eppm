@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { agentApi } from "@/lib/api/agentApi";
+import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
 import type { AgentFindingDto, EvidenceDto } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 import { AgentAvatar } from "./AgentAvatar";
@@ -55,6 +56,14 @@ function evidenceIcon(type: string) {
 }
 
 function EvidenceChip({ ev }: { ev: EvidenceDto }) {
+  const cur = useProjectCurrencyOptional();
+  // MONEY evidence relabels to the project currency (Cr/L for INR, M/B otherwise); everything else as-is.
+  const shown =
+    ev.unit === "MONEY" && ev.numericValue != null
+      ? cur
+        ? cur.moneyCompact(ev.numericValue)
+        : ev.value
+      : ev.value;
   const inner = (
     <span
       className={cn(
@@ -64,8 +73,8 @@ function EvidenceChip({ ev }: { ev: EvidenceDto }) {
     >
       <span className="text-slate">{evidenceIcon(ev.type)}</span>
       <span className="font-medium text-text-primary">{ev.label}</span>
-      {ev.value != null && ev.value !== "" && (
-        <span className="truncate font-mono tabular-nums text-slate">{ev.value}</span>
+      {shown != null && shown !== "" && (
+        <span className="truncate font-mono tabular-nums text-slate">{shown}</span>
       )}
       {ev.linkUrl && <ExternalLink size={10} className="shrink-0 text-gold-deep" />}
     </span>

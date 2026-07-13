@@ -69,6 +69,11 @@ public class RiskIntelligenceAgent extends AbstractAgent {
             RiskStatus.CLOSED, RiskStatus.RESOLVED, RiskStatus.REJECTED,
             RiskStatus.REALISED, RiskStatus.REALISED_PARTIALLY);
 
+    /** Statuses {@code RiskService.calculateRiskExposure} excludes from EMV — CLOSED + RESOLVED only. The
+     *  EMV-narrative count must use THIS population (not the wider CLOSED_STATES) to reconcile with the Risks tab. */
+    private static final EnumSet<RiskStatus> EMV_OPEN_EXCLUDES = EnumSet.of(
+            RiskStatus.CLOSED, RiskStatus.RESOLVED);
+
     private final RiskService riskService;
     private final RiskRepository riskRepository;
     private final ObjectMapper objectMapper;
@@ -104,9 +109,23 @@ public class RiskIntelligenceAgent extends AbstractAgent {
         BigDecimal emv = riskService.calculateRiskExposure(projectId);
         double emvValue = emv == null ? 0.0 : emv.doubleValue();
 
+        // EMV is computed over RiskService's exposure population (excludes CLOSED + RESOLVED only). Count
+        // worsening/exposure over the SAME population so the "N active risks" narrated with EMV reconciles with
+        // the Risks tab; the wider CLOSED_STATES set drives only the per-risk review findings below.
+        List<Risk> exposureOpen = all.stream()
+                .filter(r -> !EMV_OPEN_EXCLUDES.contains(r.getStatus()))
+                .toList();
         int worseningCount = 0;
         double worseningEmv = 0.0;
         int openWithExposure = 0;
+        for (Risk r : exposureOpen) {
+            BigDecimal exp = r.getPreResponseExposureCost();
+            if (exp != null) openWithExposure++;
+            if (r.getTrend() == RiskTrend.WORSENING) {
+                worseningCount++;
+                worseningEmv += exp == null ? 0.0 : exp.doubleValue();
+            }
+        }
 
         List<AgentFindingDraft> candidates = new ArrayList<>();
         ObjectNode snapshot = objectMapper.createObjectNode();
@@ -116,13 +135,6 @@ public class RiskIntelligenceAgent extends AbstractAgent {
             double score = r.getRiskScore() == null ? 0.0 : r.getRiskScore();
             BigDecimal exp = r.getPreResponseExposureCost();
             double expVal = exp == null ? 0.0 : exp.doubleValue();
-            boolean worsening = r.getTrend() == RiskTrend.WORSENING;
-
-            if (exp != null) openWithExposure++;
-            if (worsening) {
-                worseningCount++;
-                worseningEmv += expVal;
-            }
 
             long ageDays = r.getCreatedAt() == null ? -1
                     : Math.max(0, Duration.between(r.getCreatedAt(), now).toDays());
@@ -147,13 +159,14 @@ public class RiskIntelligenceAgent extends AbstractAgent {
         }
 
         snapshot.put("emv", round(emvValue));
-        snapshot.put("openRiskCount", open.size());
+        snapshot.put("openRiskCount", exposureOpen.size());
+        snapshot.put("reviewRiskCount", open.size());
         snapshot.put("worseningCount", worseningCount);
         snapshot.put("worseningEmv", round(worseningEmv));
 
         if (emvValue > 0 && worseningCount >= 1) {
             candidates.add(exposureSpike(projectId, emvValue, worseningCount, worseningEmv,
-                    open.size(), openWithExposure, validUntil));
+                    exposureOpen.size(), openWithExposure, validUntil));
         }
 
         candidates.sort((x, y) -> y.severity().ordinal() - x.severity().ordinal());

@@ -208,7 +208,7 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.metric("Critical activities", String.valueOf(critical)),
                         EvidenceRef.metric("Schedule health score", scoreLabel(score)),
                         EvidenceRef.entity("Schedule", "Open schedule", "schedule", projectId,
-                                "/projects/" + projectId + "/schedule")),
+                                "/projects/" + projectId + "/activities")),
                 Map.of("PROJECT_MANAGER", List.of(), "SITE_MANAGER", List.of()),
                 validUntil);
     }
@@ -241,7 +241,7 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.metric("Near-critical activities", String.valueOf(nearCritical)),
                         EvidenceRef.metric("Average total float", fmt(avgFloat) + " days"),
                         EvidenceRef.entity("Schedule", "Open schedule", "schedule", projectId,
-                                "/projects/" + projectId + "/schedule")),
+                                "/projects/" + projectId + "/activities")),
                 Map.of("PROJECT_MANAGER", List.of()),
                 validUntil);
     }
@@ -276,7 +276,7 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.metric("High-float (>44d) share", pct(highFloatPct)),
                         EvidenceRef.metric("Schedule health score", scoreLabel(score)),
                         EvidenceRef.entity("Schedule", "Open schedule", "schedule", projectId,
-                                "/projects/" + projectId + "/schedule")),
+                                "/projects/" + projectId + "/activities")),
                 Map.of("PROJECT_MANAGER", List.of()),
                 validUntil);
     }
@@ -297,7 +297,7 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
         if (worst != null) {
             evidence.add(EvidenceRef.entity("Worst-drifting activity", worstName, "activity",
                     worst.activityId(),
-                    "/projects/" + projectId + "/schedule?focus=" + worst.activityId()));
+                    "/projects/" + projectId + "/activities/" + worst.activityId()));
         }
         evidence.add(EvidenceRef.entity("Baseline", "Open baseline comparison", "baseline", baselineId,
                 "/projects/" + projectId + "/baseline"));

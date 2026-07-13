@@ -9,6 +9,9 @@ import com.bipros.ai.agent.core.AgentRunContext;
 import com.bipros.ai.agent.core.EvidenceRef;
 import com.bipros.ai.agent.core.GatherResult;
 import com.bipros.ai.agent.core.Severity;
+import com.bipros.ai.agent.support.CanonicalEvm;
+import com.bipros.cost.application.dto.PeriodPerformanceRollupDto;
+import com.bipros.cost.application.service.PerformanceRollupService;
 import com.bipros.evm.domain.entity.EvmCalculation;
 import com.bipros.evm.domain.repository.EvmCalculationRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,7 +25,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,7 +32,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -63,6 +64,8 @@ public class ProgressVarianceAgent extends AbstractAgent {
 
     private final EvmCalculationRepository evmRepository;
     private final ActivityRepository activityRepository;
+    private final CanonicalEvm canonicalEvm;
+    private final PerformanceRollupService performanceRollupService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -93,28 +96,24 @@ public class ProgressVarianceAgent extends AbstractAgent {
         LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
         Instant validUntil = now.plus(TTL);
 
-        // --- Schedule progress variance from project EVM (PV vs EV) ---
-        Optional<EvmCalculation> evmOpt = evmRepository.findTopByProjectIdOrderByDataDateDesc(projectId);
-        if (evmOpt.isPresent()) {
-            EvmCalculation e = evmOpt.get();
-            double pv = dbl(e.getPlannedValue());
-            double ev = dbl(e.getEarnedValue());
-            double bac = dbl(e.getBudgetAtCompletion());
-            if (pv > 0 && bac > 0) {
-                double spi = e.getSchedulePerformanceIndex() != null ? e.getSchedulePerformanceIndex() : ev / pv;
-                double plannedPct = pv / bac * 100.0;
-                double earnedPct = ev / bac * 100.0;
-                double sv = e.getScheduleVariance() != null ? dbl(e.getScheduleVariance()) : ev - pv;
+        // --- Schedule progress variance from the canonical cost/EVM engine (identical to the Costs/EVM tab) ---
+        CanonicalEvm.Snapshot evm = canonicalEvm.of(projectId);
+        if (evm != null && evm.bac().signum() > 0 && evm.pv().signum() > 0) {
+            double pv = evm.pv().doubleValue();
+            double ev = evm.ev().doubleValue();
+            double spi = evm.spi() != null ? evm.spi().doubleValue() : (pv > 0 ? ev / pv : 0.0);
+            double plannedPct = evm.plannedPct();
+            double earnedPct = evm.earnedPct();
+            double sv = evm.sv().doubleValue();
 
-                snapshot.put("pv", round(pv));
-                snapshot.put("ev", round(ev));
-                snapshot.put("bac", round(bac));
-                snapshot.put("spi", round(spi));
-                snapshot.put("plannedPctOfBudget", round(plannedPct));
-                snapshot.put("earnedPctOfBudget", round(earnedPct));
-                candidates.add(scheduleVariance(projectId, spi, sv, plannedPct, earnedPct, e.getDataDate(),
-                        spiHistorySeries(projectId), validUntil));
-            }
+            snapshot.put("pv", round(pv));
+            snapshot.put("ev", round(ev));
+            snapshot.put("bac", round(evm.bac().doubleValue()));
+            snapshot.put("spi", round(spi));
+            snapshot.put("plannedPctOfBudget", round(plannedPct));
+            snapshot.put("earnedPctOfBudget", round(earnedPct));
+            candidates.add(scheduleVariance(projectId, spi, sv, plannedPct, earnedPct, today,
+                    spiHistorySeries(projectId), validUntil));
         }
 
         List<Activity> activities = activityRepository.findByProjectId(projectId);
@@ -235,37 +234,31 @@ public class ProgressVarianceAgent extends AbstractAgent {
         ev.add(EvidenceRef.metric("Planned progress", pct(plannedPct)));
         ev.add(EvidenceRef.metric("Earned progress", pct(earnedPct)));
         ev.add(EvidenceRef.metric("Behind plan by", behindPP + " pts of budget"));
-        ev.add(EvidenceRef.metric("Schedule variance", signed(sv)));
+        ev.add(EvidenceRef.money("Schedule variance", BigDecimal.valueOf(sv)));
         ev.add(EvidenceRef.entity("EVM dashboard", "Open", "project", projectId,
                 "/projects/" + projectId + "/evm"));
         return ev;
     }
 
-    /** Project-level SPI over the last ~8 EVM data dates as a LINE chart, with 1.00 as the target reference line. */
+    /** Project SPI over recent periods from the canonical performance rollup — the same per-period SPI the
+     *  EVM tab's history chart uses. LINE chart with 1.00 as the target reference line. */
     private EvidenceRef spiHistorySeries(UUID projectId) {
-        // findByProjectIdOrderByDataDateDesc → newest first; keep project-level rows (activityId == null), one per date.
-        LinkedHashMap<LocalDate, Double> byDate = new LinkedHashMap<>();
-        for (EvmCalculation e : evmRepository.findByProjectIdOrderByDataDateDesc(projectId)) {
-            if (e.getActivityId() != null || e.getDataDate() == null) continue;
-            double pv = dbl(e.getPlannedValue());
-            double ev = dbl(e.getEarnedValue());
-            double spi = e.getSchedulePerformanceIndex() != null ? e.getSchedulePerformanceIndex()
-                    : (pv > 0 ? ev / pv : 0.0);
-            byDate.putIfAbsent(e.getDataDate(), spi);
-            if (byDate.size() >= 8) break;
+        List<PeriodPerformanceRollupDto> rows;
+        try {
+            rows = performanceRollupService.rollup(projectId, "M");
+        } catch (Exception ex) {
+            return null;
         }
-        if (byDate.size() < 2) return null;
-        // Reverse newest-first → chronological for the trend line.
-        List<LocalDate> dates = new ArrayList<>(byDate.keySet());
         List<EvidenceRef.Series.Point> pts = new ArrayList<>();
-        for (int i = dates.size() - 1; i >= 0; i--) {
-            LocalDate d = dates.get(i);
-            pts.add(new EvidenceRef.Series.Point(d.format(SPI_DATE_FMT), Math.round(byDate.get(d) * 100) / 100.0));
+        for (PeriodPerformanceRollupDto r : rows) {
+            if (r.spi() == null) continue;
+            pts.add(new EvidenceRef.Series.Point(r.periodName(), Math.round(r.spi().doubleValue() * 100) / 100.0));
         }
+        if (pts.size() < 2) return null;
+        // Keep the last ~8 periods for a readable card chart (rollup is chronological ascending).
+        if (pts.size() > 8) pts = new ArrayList<>(pts.subList(pts.size() - 8, pts.size()));
         return EvidenceRef.chart("SPI trend", new EvidenceRef.Series("LINE", "", pts, 1.0, "1.00 target"));
     }
-
-    private static final DateTimeFormatter SPI_DATE_FMT = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH);
 
     private AgentFindingDraft activityBreakdown(UUID projectId, int scheduled, int ahead, int onTrack,
                                                 int delayed, List<Lag> laggards, Instant validUntil) {
@@ -286,9 +279,9 @@ public class ProgressVarianceAgent extends AbstractAgent {
         ev.add(EvidenceRef.metric("Ahead", String.valueOf(ahead)));
         for (Lag l : laggards.subList(0, Math.min(MAX_EXAMPLES, laggards.size()))) {
             ev.add(EvidenceRef.entity(l.name,
-                    "SPI " + f2(l.spi) + " · earned " + pct(l.pv <= 0 ? 0 : l.ev / l.pv * 100),
+                    "SPI " + f2(l.spi),
                     "activity", l.activityId,
-                    "/projects/" + projectId + "/schedule?focus=" + l.activityId));
+                    "/projects/" + projectId + "/activities/" + l.activityId));
         }
 
         String headline = delayed == 0
@@ -330,7 +323,7 @@ public class ProgressVarianceAgent extends AbstractAgent {
             ev.add(EvidenceRef.entity(activityLabel(m.a),
                     "due " + m.a.getPlannedFinishDate() + " · " + m.daysLate + "d overdue",
                     "activity", m.a.getId(),
-                    "/projects/" + projectId + "/schedule?focus=" + m.a.getId()));
+                    "/projects/" + projectId + "/activities/" + m.a.getId()));
         }
         return new AgentFindingDraft(
                 "MILESTONE_AT_RISK", "PROJECT", severity, 0.9,

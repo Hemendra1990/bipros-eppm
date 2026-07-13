@@ -49,6 +49,10 @@ export interface EvidenceDto {
   linkUrl?: string | null;
   /** Present only on CHART refs — a small series to plot on the card. */
   series?: EvidenceSeries | null;
+  /** Raw number for the frontend to format (money etc.); null for text values. */
+  numericValue?: number | null;
+  /** Formatting hint: "MONEY" | "%" | "d" | null. MONEY is rendered via useProjectCurrency().moneyCompact. */
+  unit?: string | null;
 }
 
 export interface AgentFindingDto {

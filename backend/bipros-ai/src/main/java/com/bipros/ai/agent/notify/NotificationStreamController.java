@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
 import java.util.UUID;
 
 /**
@@ -32,9 +33,18 @@ public class NotificationStreamController {
         try {
             userId = securityContextHelper.getCurrentUserId();
         } catch (RuntimeException noUser) {
-            // Non-UUID principals (e.g. the legacy "admin" seed user) have no per-user stream.
-            return Flux.empty();
+            // Non-UUID principals (e.g. the legacy "admin" seed user) have no per-user stream. Return a
+            // heartbeat-only keep-alive that never completes — an empty Flux would close the SSE
+            // immediately and the browser's EventSource would reconnect every couple of seconds (a
+            // request storm). The 45s poll fallback still refreshes the badge for these users.
+            return keepAlive();
         }
         return hub.stream(userId);
+    }
+
+    /** Comment-only SSE heartbeat that holds the connection open without emitting notifications. */
+    private static Flux<ServerSentEvent<String>> keepAlive() {
+        return Flux.interval(Duration.ofSeconds(25))
+                .map(i -> ServerSentEvent.<String>builder().comment("keep-alive").build());
     }
 }

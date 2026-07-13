@@ -6,6 +6,8 @@ import com.bipros.ai.agent.core.AgentRunContext;
 import com.bipros.ai.agent.core.EvidenceRef;
 import com.bipros.ai.agent.core.GatherResult;
 import com.bipros.ai.agent.core.Severity;
+import com.bipros.admin.domain.model.GlobalSetting;
+import com.bipros.admin.domain.repository.GlobalSettingRepository;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.model.DprApprovalStatus;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
@@ -35,7 +37,7 @@ import java.util.UUID;
  *       (2 days), so progress/EVM dashboards are running on stale data;</li>
  *   <li>{@code APPROVAL_BOTTLENECK} — DPRs sitting in SUBMITTED state past the approval SLA window,
  *       mirroring the cutoff logic of {@code DprApprovalSlaEscalationJob} (SUBMITTED older than
- *       {@code SLA_HOURS} = a bottleneck).</li>
+ *       {@code slaHours} = a bottleneck).</li>
  * </ul>
  *
  * <p>Both are direct facts read from stored report dates / submission timestamps, so confidence is
@@ -54,12 +56,30 @@ public class DprIntelligenceAgent extends AbstractAgent {
 
     /** A submitted DPR older than this many days is a reporting gap (factual). */
     private static final int MISSING_THRESHOLD_DAYS = 2;
-    /** Approval SLA window in hours — mirrors {@code DprSlaConfig.DEFAULT_HOURS} (the aggregator bean
-     *  lives in bipros-api and can't be injected here, so the default is reused as a constant). */
-    private static final int SLA_HOURS = 24;
+    /** Fallback approval SLA window (hours) when the global setting is missing/invalid. */
+    private static final int DEFAULT_slaHours = 24;
+    /** Global-setting key for the configurable DPR approval SLA (mirrors {@code DprSlaConfig}, which
+     *  lives in bipros-api and is unreachable here — we read the same setting directly). */
+    private static final String SLA_SETTING_KEY = "dpr_sla_hours";
 
     private final DailyProgressReportRepository dprRepository;
+    private final GlobalSettingRepository globalSettingRepository;
     private final ObjectMapper objectMapper;
+
+    /** Configurable DPR approval SLA window in hours — the same value the DPR dashboard uses. */
+    private int slaHours() {
+        return globalSettingRepository.findBySettingKey(SLA_SETTING_KEY)
+                .map(GlobalSetting::getSettingValue)
+                .map(v -> {
+                    try {
+                        int h = Integer.parseInt(v.trim());
+                        return h < 0 ? DEFAULT_slaHours : h;
+                    } catch (NumberFormatException | NullPointerException e) {
+                        return DEFAULT_slaHours;
+                    }
+                })
+                .orElse(DEFAULT_slaHours);
+    }
 
     @Override
     public String key() {
@@ -90,7 +110,8 @@ public class DprIntelligenceAgent extends AbstractAgent {
         List<DailyProgressReport> dprs = dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId);
 
         LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
-        Instant slaCutoff = now.minus(Duration.ofHours(SLA_HOURS));
+        int slaHours = slaHours();
+        Instant slaCutoff = now.minus(Duration.ofHours(slaHours));
 
         // Single pass: find the latest submitted/approved report date, and collect DPRs stuck in
         // SUBMITTED past the SLA cutoff.
@@ -141,7 +162,7 @@ public class DprIntelligenceAgent extends AbstractAgent {
                     .orElse(stuck.get(0));
             long oldestHours = Duration.between(oldest.getSubmittedAt(), now).toHours();
             snapshot.put("oldestStuckHours", oldestHours);
-            candidates.add(approvalBottleneck(projectId, stuck.size(), oldest, oldestHours, validUntil));
+            candidates.add(approvalBottleneck(projectId, stuck.size(), oldest, oldestHours, slaHours, validUntil));
         }
 
         // Most-severe first for a stable, meaningful narration order.
@@ -179,20 +200,20 @@ public class DprIntelligenceAgent extends AbstractAgent {
     }
 
     private AgentFindingDraft approvalBottleneck(UUID projectId, int stuckCount, DailyProgressReport oldest,
-                                                 long oldestHours, Instant validUntil) {
-        Severity severity = (oldestHours >= 3L * SLA_HOURS || stuckCount >= 5) ? Severity.HIGH
-                : (oldestHours >= 2L * SLA_HOURS || stuckCount >= 3) ? Severity.MEDIUM
+                                                 long oldestHours, int slaHours, Instant validUntil) {
+        Severity severity = (oldestHours >= 3L * slaHours || stuckCount >= 5) ? Severity.HIGH
+                : (oldestHours >= 2L * slaHours || stuckCount >= 3) ? Severity.MEDIUM
                 : Severity.LOW;
         return new AgentFindingDraft(
                 "APPROVAL_BOTTLENECK",
                 "PROJECT",
                 severity,
                 0.90,
-                "Count of DPRs in SUBMITTED state past the " + SLA_HOURS + "h approval SLA",
+                "Count of DPRs in SUBMITTED state past the " + slaHours + "h approval SLA",
                 stuckCount + " DPR" + (stuckCount == 1 ? "" : "s") + " stuck awaiting approval past the "
-                        + SLA_HOURS + "h SLA",
+                        + slaHours + "h SLA",
                 stuckCount + " daily progress report" + (stuckCount == 1 ? " has" : "s have")
-                        + " been in SUBMITTED state beyond the " + SLA_HOURS + "-hour approval SLA; the oldest "
+                        + " been in SUBMITTED state beyond the " + slaHours + "-hour approval SLA; the oldest "
                         + "has waited " + oldestHours + "h (" + oldest.getSupervisorName() + " — "
                         + oldest.getActivityName() + ").",
                 "Assigned approvers have not actioned the submitted DPRs within the SLA window — an "
@@ -204,7 +225,7 @@ public class DprIntelligenceAgent extends AbstractAgent {
                         + "h), and escalate to the approver's manager if still unactioned.",
                 List.of(
                         EvidenceRef.metric("DPRs past SLA", String.valueOf(stuckCount)),
-                        EvidenceRef.metric("SLA window", SLA_HOURS + "h"),
+                        EvidenceRef.metric("SLA window", slaHours + "h"),
                         EvidenceRef.metric("Oldest wait", oldestHours + "h"),
                         EvidenceRef.entity("Oldest DPR",
                                 oldest.getSupervisorName() + " / " + oldest.getActivityName(),

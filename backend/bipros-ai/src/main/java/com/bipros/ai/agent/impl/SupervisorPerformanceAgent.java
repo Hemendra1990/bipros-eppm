@@ -42,9 +42,10 @@ import java.util.UUID;
  * <p>Data source: {@link DailyProgressReportRepository} — the supervisors are read from where the
  * field actually records them (the DPR's {@code supervisorUserId} / {@code supervisorName}), not
  * from an activity→resource assignment that many projects never populate. Each supervisor's DPRs are
- * joined to their activities to compute <em>unit-free, cross-comparable</em> metrics: average
- * percent-complete and the share of their activities running late. Against the <em>peer median</em>
- * of the project's own supervisors it emits:
+ * joined to their activities to compute <em>unit-free, cross-comparable</em> metrics: progress
+ * attributed by each supervisor's share of the executed quantity (not the shared activity
+ * %-complete, which would credit every supervisor of an activity its full progress) and the share of
+ * their activities running late. Against the <em>peer median</em> of the project's own supervisors it emits:
  *
  * <ul>
  *   <li>{@code SUPERVISOR_COMPARISON} — one scorecard (who leads / who lags on progress) whenever
@@ -109,8 +110,11 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
             activityById.put(a.getId(), a);
         }
 
-        // Group reported DPRs by supervisor (prefer the user id; fall back to the name string).
+        // Group reported DPRs by supervisor (prefer the user id; fall back to the name string). Track each
+        // supervisor's own executed qty per activity AND the project-wide executed qty per activity, so
+        // progress can be attributed by contribution share (not by copying the shared activity %-complete).
         Map<String, Sup> bySupervisor = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> totalQtyByActivity = new HashMap<>();
         for (DailyProgressReport d : dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId)) {
             DprApprovalStatus st = d.getApprovalStatus();
             if (st != DprApprovalStatus.SUBMITTED && st != DprApprovalStatus.APPROVED) continue;
@@ -121,29 +125,42 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
             Sup s = bySupervisor.computeIfAbsent(key, k -> new Sup(d.getSupervisorUserId(), d.getSupervisorName()));
             s.reports++;
             if (d.getReportDate() != null) s.activeDays.add(d.getReportDate());
-            if (d.getActivityId() != null) s.activityIds.add(d.getActivityId());
-            if (d.getQtyExecuted() != null) s.totalQty = s.totalQty.add(d.getQtyExecuted());
+            if (d.getActivityId() != null) {
+                s.activityIds.add(d.getActivityId());
+                if (d.getQtyExecuted() != null) {
+                    s.totalQty = s.totalQty.add(d.getQtyExecuted());
+                    s.qtyByActivity.merge(d.getActivityId(), d.getQtyExecuted(), BigDecimal::add);
+                    totalQtyByActivity.merge(d.getActivityId(), d.getQtyExecuted(), BigDecimal::add);
+                }
+            }
         }
 
-        // Score each supervisor from their supervised activities (progress + delay), unit-free.
+        // Score each supervisor by their OWN contribution: attribute each activity's %-complete weighted by
+        // the supervisor's share of the executed quantity on that activity (share = supQty / totalQty). This
+        // credits a supervisor for the work THEY did — a supervisor who merely dabbled in a near-complete
+        // activity is no longer scored as if they finished it — instead of copying the shared activity
+        // %-complete to every supervisor who touched it. Sole contributors (share = 1) score unchanged.
         List<Score> scores = new ArrayList<>();
         for (Sup s : bySupervisor.values()) {
             int activityCount = 0;
-            double pctSum = 0;
-            int pctCount = 0;
+            double pctShareSum = 0;    // Σ (activity.pct × share)
+            double pctShareDenom = 0;  // Σ share over activities carrying a %-complete
             int delayed = 0;
             for (UUID aid : s.activityIds) {
                 Activity a = activityById.get(aid);
                 if (a == null) continue;
                 activityCount++;
+                BigDecimal supQty = s.qtyByActivity.getOrDefault(aid, BigDecimal.ZERO);
+                BigDecimal totQty = totalQtyByActivity.getOrDefault(aid, BigDecimal.ZERO);
+                double share = totQty.signum() > 0 ? supQty.doubleValue() / totQty.doubleValue() : 1.0;
                 if (a.getPercentComplete() != null) {
-                    pctSum += a.getPercentComplete();
-                    pctCount++;
+                    pctShareSum += a.getPercentComplete() * share;
+                    pctShareDenom += share;
                 }
                 if (isDelayed(a, today)) delayed++;
             }
             if (activityCount < MIN_ACTIVITIES || s.activeDays.size() < MIN_ACTIVE_DAYS) continue;
-            double avgPct = pctCount == 0 ? 0 : pctSum / pctCount;
+            double avgPct = pctShareDenom > 0 ? pctShareSum / pctShareDenom : 0;
             double delayRatio = activityCount == 0 ? 0 : (double) delayed / activityCount;
             scores.add(new Score(s, activityCount, avgPct, delayed, delayRatio));
         }
@@ -202,7 +219,8 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
                 "PROJECT",
                 Severity.INFO,
                 0.9,
-                "Ranked across " + count + " supervisors by average progress of their activities",
+                "Ranked across " + count + " supervisors by progress attributed to each supervisor's own share "
+                        + "of the executed work",
                 "Supervisor scorecard: " + best.sup.name() + " leads, " + worst.sup.name() + " lags",
                 count + " supervisors were compared on the average progress of their activities. "
                         + best.sup.name() + " leads at " + pctv(best.avgPct) + " avg complete ("
@@ -305,6 +323,7 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
         private final String name;
         final Set<LocalDate> activeDays = new HashSet<>();
         final Set<UUID> activityIds = new HashSet<>();
+        final Map<UUID, BigDecimal> qtyByActivity = new HashMap<>();
         int reports;
         BigDecimal totalQty = BigDecimal.ZERO;
 

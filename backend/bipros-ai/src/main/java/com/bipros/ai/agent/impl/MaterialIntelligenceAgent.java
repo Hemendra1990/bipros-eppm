@@ -178,7 +178,7 @@ public class MaterialIntelligenceAgent extends AbstractAgent {
                             + " (" + pct(overPct) + " over)",
                     "activity", r.activityId(),
                     r.activityId() == null ? "/projects/" + projectId + "/material-consumption"
-                            : "/projects/" + projectId + "/schedule?focus=" + r.activityId()));
+                            : "/projects/" + projectId + "/activities/" + r.activityId()));
         }
 
         return new AgentFindingDraft(

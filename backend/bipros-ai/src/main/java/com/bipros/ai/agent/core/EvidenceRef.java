@@ -24,7 +24,9 @@ public record EvidenceRef(
         String entityType,
         UUID entityId,
         String linkUrl,
-        Series series) {
+        Series series,
+        Double numericValue,   // raw number for the frontend to format (money etc.); null for text values
+        String unit) {         // "MONEY" | "%" | "d" | null — formatting hint for the frontend
 
     /**
      * A compact, chartable series carried by a CHART evidence ref — a handful of labelled points plus an
@@ -49,14 +51,23 @@ public record EvidenceRef(
     }
 
     public static EvidenceRef metric(String label, String value) {
-        return new EvidenceRef("METRIC", label, value, null, null, null, null);
+        return new EvidenceRef("METRIC", label, value, null, null, null, null, null, null);
+    }
+
+    /** Money metric: the frontend formats {@code numericValue} via moneyCompact (project currency);
+     *  {@code value} is a raw grouped fallback for non-currency surfaces. */
+    public static EvidenceRef money(String label, java.math.BigDecimal raw) {
+        double v = raw == null ? 0.0 : raw.doubleValue();
+        return new EvidenceRef("METRIC", label,
+                String.format(java.util.Locale.ROOT, "%,.0f", v),
+                null, null, null, null, v, "MONEY");
     }
 
     public static EvidenceRef entity(String label, String value, String entityType, UUID entityId, String linkUrl) {
-        return new EvidenceRef("ENTITY", label, value, entityType, entityId, linkUrl, null);
+        return new EvidenceRef("ENTITY", label, value, entityType, entityId, linkUrl, null, null, null);
     }
 
     public static EvidenceRef chart(String label, Series series) {
-        return new EvidenceRef("CHART", label, null, null, null, null, series);
+        return new EvidenceRef("CHART", label, null, null, null, null, series, null, null);
     }
 }

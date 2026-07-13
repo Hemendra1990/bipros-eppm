@@ -3,21 +3,36 @@
 import type { AgentFindingDto, EvidenceDto } from "@/lib/types";
 import { severityMeta } from "./agentMeta";
 import { FindingSeriesChart } from "@/components/ai/charts/FindingSeriesChart";
+import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
 
 interface Metric {
   label: string;
   num: number;
   isPct: boolean;
   raw: string;
+  money: boolean;
 }
 
-/** Pull the first signed number out of an evidence value string ("53 days", "-58,000.00", "0.00", "39900%"). */
-function parseMetric(ev: EvidenceDto): Metric | null {
-  if (ev.type !== "METRIC" || ev.value == null) return null;
-  const cleaned = String(ev.value).replace(/,/g, "");
-  const m = cleaned.match(/-?\d+(\.\d+)?/);
+/**
+ * Turn an evidence item into a stat metric. MONEY items use their raw number formatted in the project
+ * currency (Cr/L for INR, M/B otherwise). Non-money items pull the first signed number out of the value
+ * string — but a value that is a date, code or prose (not a leading number) is NOT a stat and is skipped,
+ * so dates/ids/sentences never render as a scraped "2K" tile.
+ */
+function parseMetric(ev: EvidenceDto, money: (n: number) => string): Metric | null {
+  if (ev.type !== "METRIC") return null;
+  if (ev.unit === "MONEY" && ev.numericValue != null) {
+    return { label: ev.label, num: ev.numericValue, isPct: false, raw: money(ev.numericValue), money: true };
+  }
+  if (ev.value == null) return null;
+  const raw = String(ev.value);
+  // Skip non-stat values: ISO dates ("2026-07-15") and anything not starting with a number/sign
+  // (prose like "Heavy rain…", codes like "PTW-001", booleans like "Yes", statuses like "BEHIND").
+  if (/\d{4}-\d{2}-\d{2}/.test(raw)) return null;
+  if (!/^-?[\d.]/.test(raw.trim())) return null;
+  const m = raw.replace(/,/g, "").match(/-?\d+(\.\d+)?/);
   if (!m) return null;
-  return { label: ev.label, num: parseFloat(m[0]), isPct: /%/.test(ev.value), raw: ev.value };
+  return { label: ev.label, num: parseFloat(m[0]), isPct: /%/.test(raw), raw, money: false };
 }
 
 /** Compact human number: 500T, 200Q, 1.2B, 45, -58K. Keeps absurd demo magnitudes bounded. */
@@ -59,6 +74,7 @@ const HERO_RE = /overrun|impact|variance|slip|delay|shortfall|gap|exceed|over bu
 const INDEX_RE = /index|\bcpi\b|\bspi\b|margin/i;
 
 function fmt(m: Metric): string {
+  if (m.money) return m.raw; // already formatted in the project currency (₹3 Cr / 30 M OMR)
   return compactNum(m.num) + (m.isPct ? "%" : "");
 }
 
@@ -121,7 +137,7 @@ function StatTiles({ metrics, hue }: { metrics: Metric[]; hue: string }) {
   const tiles = metrics.slice(0, 4);
   const heroIdx = tiles.findIndex((m) => HERO_RE.test(m.label) || m.num < 0);
   return (
-    <div className={`grid gap-2 ${tiles.length >= 3 ? "grid-cols-3" : "grid-cols-" + tiles.length}`}>
+    <div className={`grid gap-2 ${tiles.length >= 3 ? "grid-cols-3" : tiles.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
       {tiles.map((m, i) => {
         const isIndex = INDEX_RE.test(m.label);
         const bad = m.num < 0 || (isIndex && m.num < 1 && !/margin/i.test(m.label));
@@ -160,6 +176,8 @@ function StatTiles({ metrics, hue }: { metrics: Metric[]; hue: string }) {
  */
 export function FindingVisual({ finding }: { finding: AgentFindingDto }) {
   const hue = severityMeta(finding.severity).hue;
+  const cur = useProjectCurrencyOptional();
+  const money = (n: number) => (cur ? cur.moneyCompact(n) : compactNum(n));
 
   // A charted series (rainfall/day, SPI trend) is the strongest visual — lead with it. The underlying
   // scalar metrics stay available in the expanded Evidence section.
@@ -168,7 +186,9 @@ export function FindingVisual({ finding }: { finding: AgentFindingDto }) {
     return <FindingSeriesChart series={seriesEv.series} hue={hue} />;
   }
 
-  const metrics = (finding.evidence ?? []).map(parseMetric).filter((m): m is Metric => m != null);
+  const metrics = (finding.evidence ?? [])
+    .map((e) => parseMetric(e, money))
+    .filter((m): m is Metric => m != null);
   if (metrics.length === 0) return null;
 
   for (const p of PAIRS) {

@@ -243,24 +243,34 @@ public class FieldUtilisationAgent extends AbstractAgent {
         final java.util.Set<LocalDate> days = new java.util.HashSet<>();
         int planned;
         int deployed;
-        double worked;
-        double idle;
+        double worked;       // Σ hoursWorked (raw, for display)
+        double idle;         // Σ idleHours (raw, for display)
+        double workedNosH;   // Σ nosDeployed × hoursWorked (nos-weighted)
+        double idleNosH;     // Σ nosDeployed × idleHours (nos-weighted)
 
         void add(DailyResourceDeployment d) {
             if (d.getLogDate() != null) days.add(d.getLogDate());
             if (d.getNosPlanned() != null) planned += d.getNosPlanned();
-            if (d.getNosDeployed() != null) deployed += d.getNosDeployed();
-            if (d.getHoursWorked() != null) worked += d.getHoursWorked();
-            if (d.getIdleHours() != null) idle += d.getIdleHours();
+            int nos = d.getNosDeployed() != null ? d.getNosDeployed() : 0;
+            deployed += nos;
+            if (d.getHoursWorked() != null) {
+                worked += d.getHoursWorked();
+                workedNosH += nos * d.getHoursWorked();
+            }
+            if (d.getIdleHours() != null) {
+                idle += d.getIdleHours();
+                idleNosH += nos * d.getIdleHours();
+            }
         }
 
         Double deployRatio() {
             return planned <= 0 ? null : (double) deployed / planned;
         }
 
+        /** Nos-weighted idle ratio = Σ(nos×idle) / Σ(nos×(idle+worked)) — matches the canonical Idle Time Ratio KPI. */
         Double idleRatio() {
-            double total = worked + idle;
-            return total <= 0 ? null : idle / total;
+            double total = workedNosH + idleNosH;
+            return total <= 0 ? null : idleNosH / total;
         }
     }
 }

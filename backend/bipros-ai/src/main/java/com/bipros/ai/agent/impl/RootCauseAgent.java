@@ -206,7 +206,7 @@ public class RootCauseAgent extends AbstractAgent {
         return new AgentFindingDraft(
                 "RECURRING_DELAY_CAUSE", "cause:" + cause, severity, 0.85,
                 "A single delay cause recurring on ≥" + RECURRING_DAYS + " distinct days",
-                cause + " is recurring — " + c.days.size() + " days lost to the same cause",
+                cause + " is recurring — recorded on " + c.days.size() + " distinct days",
                 cause + " has been recorded as a delay cause on " + c.days.size() + " distinct days ("
                         + c.count + " DPR entries) — a repeating, not one-off, constraint.",
                 "A cause that recurs this often is a standing gap in the delivery system (supply chain, plant "

@@ -66,6 +66,12 @@ public abstract class AbstractAgent implements Agent {
 
             List<AgentFindingDraft> candidates = gathered.candidates();
             if (candidates.isEmpty()) {
+                // The agent gathered data but found nothing to report — retract any prior findings whose
+                // condition has now cleared. Guard on a non-empty snapshot so a transient data outage
+                // (empty/null snapshot) does NOT wipe good findings; the TTL sweep still backstops those.
+                if (snapshot != null && !snapshot.isEmpty()) {
+                    runtime.memory().upsertAll(run.getId(), key(), ctx.projectId(), List.of(), startedAt);
+                }
                 run.setStatus(AgentRunStatus.SUCCEEDED);
                 run.setLlmSkipReason(LlmSkipReason.NONE);
                 return finishAndSave(run, startedAt, startNanos, ctx, "SUCCEEDED", 0);

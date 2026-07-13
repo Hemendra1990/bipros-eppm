@@ -66,6 +66,7 @@ public class ExecutiveInsightsAgent extends AbstractAgent {
         List<AgentFinding> active = runtime.memory()
                 .activeFindings(ctx.projectId(), null, Severity.MEDIUM)
                 .stream()
+                .filter(f -> !KEY.equals(f.getAgentKey()))   // never count or cite our own prior brief
                 .sorted(Comparator
                         .comparingInt((AgentFinding f) -> f.getSeverity().ordinal()).reversed()
                         .thenComparing(Comparator.comparingDouble(AgentFinding::getConfidence).reversed()))
@@ -121,9 +122,11 @@ public class ExecutiveInsightsAgent extends AbstractAgent {
     }
 
     private List<EvidenceRef> buildEvidence(List<AgentFinding> top) {
+        // Cited findings render as entity chips (label + title), not stat tiles — a title is prose, not a number.
         return top.stream()
-                .map(f -> EvidenceRef.metric(
-                        f.getSeverity().name() + " · " + humanize(f.getAgentKey()), f.getTitle()))
+                .map(f -> EvidenceRef.entity(
+                        f.getSeverity().name() + " · " + humanize(f.getAgentKey()), f.getTitle(),
+                        "finding", f.getId(), null))
                 .toList();
     }
 

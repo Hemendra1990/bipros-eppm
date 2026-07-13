@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,8 +56,10 @@ public class AgentMemoryService {
     public List<AgentFinding> upsertAll(UUID runId, String agentKey, UUID projectId,
                                         List<AgentFindingDraft> drafts, Instant now) {
         List<AgentFinding> result = new ArrayList<>(drafts.size());
+        Set<String> keptFingerprints = new HashSet<>();
         for (AgentFindingDraft draft : drafts) {
             String fingerprint = FindingFingerprint.of(agentKey, projectId, draft.findingType(), draft.subjectRef());
+            keptFingerprints.add(fingerprint);
             String contentHash = FindingFingerprint.content(draft);
             AgentFinding existing = findingRepository.findByFingerprintAndStatus(fingerprint, FindingStatus.ACTIVE)
                     .orElse(null);
@@ -83,6 +86,17 @@ public class AgentMemoryService {
             fresh.setSupersedesId(supersedesId);
             fresh.setNotifiable(true);
             result.add(findingRepository.save(fresh));
+        }
+
+        // Retract any ACTIVE finding this agent is no longer emitting (its condition cleared this run) so a
+        // stale finding does not linger until its TTL. Freshly inserted / re-emitted rows are in
+        // keptFingerprints and are left untouched. Works for an empty draft set too (retracts everything).
+        for (AgentFinding stale : findingRepository.findByProjectIdAndAgentKeyInAndStatus(
+                projectId, Set.of(agentKey), FindingStatus.ACTIVE)) {
+            if (!keptFingerprints.contains(stale.getFingerprint())) {
+                stale.setStatus(FindingStatus.SUPERSEDED);
+                findingRepository.save(stale);
+            }
         }
         return result;
     }

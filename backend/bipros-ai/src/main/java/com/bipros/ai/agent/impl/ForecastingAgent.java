@@ -7,8 +7,7 @@ import com.bipros.ai.agent.core.EvidenceRef;
 import com.bipros.ai.agent.core.GatherResult;
 import com.bipros.ai.agent.core.Severity;
 import com.bipros.ai.agent.domain.AgentFinding;
-import com.bipros.evm.application.service.EvmService;
-import com.bipros.evm.domain.entity.EvmCalculation;
+import com.bipros.ai.agent.support.CanonicalEvm;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.risk.application.dto.MonteCarloRunRequest;
@@ -49,7 +48,7 @@ import java.util.UUID;
  *       this is a user-forced/manual run ({@code ctx.force()}) is one fresh simulation computed via
  *       {@link MonteCarloService#runSimulation} (fixed seed, so the data-hash stays stable); a
  *       routine event/sweep degrades gracefully instead.</li>
- *   <li>{@link EvmService#computeEvmSnapshot(UUID)} — read-only EAC/BAC/CPI cost forecast.</li>
+ *   <li>{@link CanonicalEvm} — canonical (BOQ-ledger) EAC/BAC/CPI, identical to the Costs/EVM tab.</li>
  *   <li>{@link ProjectRepository} — the project's start anchor and contract/planned finish dates,
  *       used to turn the P80 project <em>duration</em> into a P80 completion <em>date</em>.</li>
  * </ul>
@@ -70,7 +69,7 @@ public class ForecastingAgent extends AbstractAgent {
 
     private final MonteCarloSimulationRepository monteCarloSimulationRepository;
     private final MonteCarloService monteCarloService;
-    private final EvmService evmService;
+    private final CanonicalEvm canonicalEvm;
     private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
 
@@ -101,9 +100,8 @@ public class ForecastingAgent extends AbstractAgent {
         Instant validUntil = (ctx.now() == null ? Instant.now() : ctx.now()).plus(TTL);
 
         Forecast mc = resolveForecast(projectId, ctx.force());
-        EvmCalculation evm = safeEvm(projectId);
-        boolean haveEvm = evm != null && evm.getBudgetAtCompletion() != null
-                && evm.getBudgetAtCompletion().signum() > 0;
+        CanonicalEvm.Snapshot evm = canonicalEvm.of(projectId);
+        boolean haveEvm = evm != null && evm.bac() != null && evm.bac().signum() > 0;
 
         // Degrade to empty when neither probabilistic nor deterministic cost data is available.
         if (mc == null && !haveEvm) {
@@ -242,22 +240,25 @@ public class ForecastingAgent extends AbstractAgent {
                 validUntil);
     }
 
-    private AgentFindingDraft costAtCompletion(UUID projectId, EvmCalculation evm, Forecast mc,
+    private AgentFindingDraft costAtCompletion(UUID projectId, CanonicalEvm.Snapshot evm, Forecast mc,
                                                ObjectNode snapshot, List<String> relatedTitles,
                                                Instant validUntil) {
-        BigDecimal bac = evm.getBudgetAtCompletion();
-        BigDecimal eac = evm.getEstimateAtCompletion();
+        BigDecimal bac = evm.bac();
+        BigDecimal eac = evm.eac();
         if (bac == null || bac.signum() <= 0 || eac == null) {
             return null;
         }
         BigDecimal overrun = eac.subtract(bac);
         double overrunRatio = overrun.doubleValue() / bac.doubleValue();
 
+        double cpi = evm.cpi() != null ? evm.cpi().doubleValue() : 0.0;
+        double perfPct = evm.earnedPct();
+
         ObjectNode e = snapshot.putObject("evm");
         e.put("bac", bac.doubleValue());
         e.put("eac", eac.doubleValue());
-        e.put("cpi", nz(evm.getCostPerformanceIndex()));
-        e.put("performancePct", nz(evm.getPerformancePercentComplete()));
+        e.put("cpi", cpi);
+        e.put("performancePct", perfPct);
 
         // Emit only when the forecast is an overrun of at least 2% of budget.
         if (overrun.signum() <= 0 || overrunRatio < 0.02) {
@@ -265,8 +266,6 @@ public class ForecastingAgent extends AbstractAgent {
         }
 
         Severity severity = ratioSeverity(overrunRatio, 0.15, 0.08, 0.03);
-        double cpi = nz(evm.getCostPerformanceIndex());
-        double perfPct = nz(evm.getPerformancePercentComplete());
         double confidence = clamp(0.5 + perfPct / 250.0, 0.5, 0.9);
 
         // Confidence basis names the Monte Carlo P-value when a simulation corroborates the EVM
@@ -277,15 +276,15 @@ public class ForecastingAgent extends AbstractAgent {
                 : "CPI-based EAC (CPI " + fmt2(cpi) + ") at " + fmt0(perfPct) + "% performance-complete";
 
         List<EvidenceRef> evidence = new ArrayList<>();
-        evidence.add(EvidenceRef.metric("Estimate at completion (EAC)", money(eac)));
-        evidence.add(EvidenceRef.metric("Budget at completion (BAC)", money(bac)));
-        evidence.add(EvidenceRef.metric("Forecast overrun (VAC)", money(overrun.negate())));
+        evidence.add(EvidenceRef.money("Estimate at completion (EAC)", eac));
+        evidence.add(EvidenceRef.money("Budget at completion (BAC)", bac));
+        evidence.add(EvidenceRef.money("Forecast overrun (VAC)", overrun.negate()));
         evidence.add(EvidenceRef.metric("Cost performance index (CPI)", fmt2(cpi)));
         if (mc != null && mc.p80Cost != null) {
-            evidence.add(EvidenceRef.metric("Monte Carlo P80 cost", money(mc.p80Cost)));
+            evidence.add(EvidenceRef.money("Monte Carlo P80 cost", mc.p80Cost));
         }
         evidence.add(EvidenceRef.entity("EVM", "Open cost performance", "evm", projectId,
-                "/projects/" + projectId + "/cost?tab=evm"));
+                "/projects/" + projectId + "/evm"));
 
         String impact = "Left uncorrected, completing the project costs about " + money(overrun)
                 + " more than the approved budget (" + pct(overrunRatio) + " over), consuming contingency "
@@ -327,9 +326,9 @@ public class ForecastingAgent extends AbstractAgent {
         Severity severity = ratioSeverity(gapRatio, 0.20, 0.10, 0.05);
 
         List<EvidenceRef> evidence = List.of(
-                EvidenceRef.metric("P80 cost (80% confidence)", money(mc.p80Cost)),
-                EvidenceRef.metric("Cost baseline", money(mc.baselineCost)),
-                EvidenceRef.metric("Contingency gap at P80", money(gap)),
+                EvidenceRef.money("P80 cost (80% confidence)", mc.p80Cost),
+                EvidenceRef.money("Cost baseline", mc.baselineCost),
+                EvidenceRef.money("Contingency gap at P80", gap),
                 EvidenceRef.metric("Gap vs baseline", pct(gapRatio)),
                 EvidenceRef.entity("Monte Carlo", "Open cost risk analysis", "monte_carlo",
                         mc.simId, "/projects/" + projectId + "/risk-analysis"));
@@ -382,15 +381,6 @@ public class ForecastingAgent extends AbstractAgent {
             return Forecast.fromDto(dto);
         } catch (Exception ex) {
             log.debug("Fresh Monte Carlo run skipped for project {}: {}", projectId, ex.getMessage());
-            return null;
-        }
-    }
-
-    private EvmCalculation safeEvm(UUID projectId) {
-        try {
-            return evmService.computeEvmSnapshot(projectId);
-        } catch (Exception ex) {
-            log.debug("EVM snapshot unavailable for project {}: {}", projectId, ex.getMessage());
             return null;
         }
     }
@@ -452,10 +442,6 @@ public class ForecastingAgent extends AbstractAgent {
 
     private static double round(double v) {
         return Math.round(v * 10000.0) / 10000.0;
-    }
-
-    private static double nz(Double v) {
-        return v == null ? 0.0 : v;
     }
 
     private static double clamp(double v, double lo, double hi) {

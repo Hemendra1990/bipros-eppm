@@ -125,9 +125,9 @@ public class SubcontractorPerformanceAgent extends AbstractAgent {
                 : (lcpi < 0.95 || overrunPct >= 5) ? Severity.MEDIUM : Severity.LOW;
 
         List<EvidenceRef> ev = new ArrayList<>();
-        ev.add(EvidenceRef.metric("Planned SC cost", money(plannedCost)));
-        ev.add(EvidenceRef.metric("Actual SC cost", money(actualCost)));
-        ev.add(EvidenceRef.metric("Cost variance", money(variance)));
+        ev.add(EvidenceRef.money("Planned SC cost", BigDecimal.valueOf(plannedCost)));
+        ev.add(EvidenceRef.money("Actual SC cost", BigDecimal.valueOf(actualCost)));
+        ev.add(EvidenceRef.money("Cost variance", BigDecimal.valueOf(variance)));
         ev.add(EvidenceRef.metric("SC LCPI", fmt2(lcpi)));
         for (Over o : overruns.subList(0, Math.min(MAX_EXAMPLES, overruns.size()))) {
             ev.add(EvidenceRef.metric(o.name,
