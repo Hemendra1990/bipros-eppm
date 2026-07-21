@@ -231,12 +231,95 @@ public class CapacityUtilizationReportService {
 
   // ─── Per-section build ─────────────────────────────────────────────────────────────────────
 
-  private Section buildSection(
+  /** Result of {@link #accumulateByRole}: per-role accumulators + the section's hidden-side notes
+   *  and shared norm cache, so {@link #buildSection} and {@link #cumulativeByActivity} reuse the
+   *  identical allocation / norm-resolution pass instead of re-deriving (and drifting from) it. */
+  private record RoleAccum(
+      Map<UUID, RoleAccumulator> byRole,
+      List<CapacityUtilizationReport.HiddenSideNote> hiddenNotes,
+      Map<WorkActivityRoleKey, NormLookup> normCache) {}
+
+  /** Per-(work-activity, resource-type) efficiency row returned by {@link #cumulativeByActivity}.
+   *  {@code efficiencyPct} = budgetDays ÷ tracked actualDays × 100 (output vs the productivity norm). */
+  public record ActivityEff(
+      UUID workActivityId, String activityName, String resourceType,
+      double budgetDays, double actualDays, double efficiencyPct) {}
+
+  /**
+   * Per-(work-activity, resource-type) efficiency vs the productivity norm, cumulative project-to-date.
+   * Reuses the SAME allocator + norm resolution + {@link #buildPeriod} formula the per-role Capacity
+   * Util. rows use, only regrouped by work-activity — so the Productivity Analysis agent's numbers
+   * cannot drift from the Capacity tab. Rows with no tracked (norm-resolved) days are omitted
+   * (nothing measurable to compare).
+   */
+  public List<ActivityEff> cumulativeByActivity(UUID projectId) {
+    LocalDate from = LocalDate.of(1970, 1, 1);
+    LocalDate to = LocalDate.now();
+    List<ActivityEff> out = new ArrayList<>();
+    collectActivityEfficiency(projectId, "MANPOWER", from, to, out);
+    collectActivityEfficiency(projectId, "EQUIPMENT", from, to, out);
+    return out;
+  }
+
+  private void collectActivityEfficiency(
+      UUID projectId, String normType, LocalDate from, LocalDate to, List<ActivityEff> out) {
+    RoleAccum accum = accumulateByRole(projectId, normType, from, to, to, YearMonth.from(to), null);
+    Map<WorkActivityRoleKey, NormLookup> normCache = accum.normCache();
+    // Regroup the per-(work-activity, role) accumulators by work-activity, summing the SAME
+    // tracked-budget / actual / untracked / hidden day figures the per-role rows are built from.
+    Map<UUID, ActivityAgg> byWa = new LinkedHashMap<>();
+    for (RoleAccumulator role : accum.byRole().values()) {
+      for (ActivityRoleAccumulator ara : role.activityRoles.values()) {
+        NormLookup nl = normCache.computeIfAbsent(
+            new WorkActivityRoleKey(ara.workActivityId, ara.roleId),
+            k -> resolveNorm(k.workActivityId, k.roleId, normType));
+        ActivityAgg agg = byWa.computeIfAbsent(
+            ara.workActivityId, k -> new ActivityAgg(ara.workActivityName));
+        agg.actualDays = agg.actualDays.add(ara.cumActualDays);
+        agg.hidden = agg.hidden.add(ara.cumActualHidden);
+        boolean tracked = ara.normResolved
+            && nl.outputPerDay() != null && nl.outputPerDay().signum() > 0;
+        if (tracked) {
+          agg.anyNorm = true;
+          if (ara.cumQty.signum() > 0) {
+            agg.budgetDays = agg.budgetDays.add(
+                ara.cumQty.divide(nl.outputPerDay(), 4, RoundingMode.HALF_UP));
+          }
+        } else {
+          agg.untracked = agg.untracked.add(ara.cumActualDays);
+        }
+      }
+    }
+    for (var e : byWa.entrySet()) {
+      ActivityAgg agg = e.getValue();
+      // SAME formula as the per-role row: trackedActual = actual − untracked − hidden;
+      // util% = budget ÷ trackedActual (via buildPeriod) — cannot drift from the Capacity tab.
+      RolePeriod p = buildPeriod(agg.actualDays, agg.anyNorm ? agg.budgetDays : null,
+          null, null, null, defaultWorkDays(), agg.untracked, agg.hidden, agg.anyNorm);
+      if (p.utilizationPct() == null) continue; // no tracked/norm days → nothing to measure
+      BigDecimal trackedActual = agg.actualDays.subtract(agg.untracked).subtract(agg.hidden);
+      out.add(new ActivityEff(
+          e.getKey(), agg.name, normType,
+          agg.budgetDays.doubleValue(), trackedActual.doubleValue(),
+          p.utilizationPct().doubleValue()));
+    }
+  }
+
+  private static final class ActivityAgg {
+    final String name;
+    BigDecimal actualDays = BigDecimal.ZERO;
+    BigDecimal untracked = BigDecimal.ZERO;
+    BigDecimal hidden = BigDecimal.ZERO;
+    BigDecimal budgetDays = BigDecimal.ZERO;
+    boolean anyNorm = false;
+    ActivityAgg(String name) { this.name = name; }
+  }
+
+  private RoleAccum accumulateByRole(
       UUID projectId, String normType,
       LocalDate fromDate, LocalDate toDate,
       LocalDate referenceDate, YearMonth referenceMonth,
-      UUID supervisorUserId,
-      int workDays) {
+      UUID supervisorUserId) {
     List<Contribution> contributions = "MANPOWER".equals(normType)
         ? loadManpowerContributions(projectId, fromDate, toDate, supervisorUserId)
         : loadEquipmentContributions(projectId, fromDate, toDate, supervisorUserId);
@@ -355,6 +438,20 @@ public class CapacityUtilizationReportService {
         creditActualAndAlloc(acc, c, allocated, qtyDone, referenceDate, referenceMonth);
       }
     }
+    return new RoleAccum(byRole, hiddenNotes, normCache);
+  }
+
+  private Section buildSection(
+      UUID projectId, String normType,
+      LocalDate fromDate, LocalDate toDate,
+      LocalDate referenceDate, YearMonth referenceMonth,
+      UUID supervisorUserId,
+      int workDays) {
+    RoleAccum accum = accumulateByRole(projectId, normType, fromDate, toDate,
+        referenceDate, referenceMonth, supervisorUserId);
+    Map<UUID, RoleAccumulator> byRole = accum.byRole();
+    Map<WorkActivityRoleKey, NormLookup> normCache = accum.normCache();
+    List<CapacityUtilizationReport.HiddenSideNote> hiddenNotes = accum.hiddenNotes();
 
     // Rate per role: weighted by the variants actually deployed via DPRs in the window
     // (NOT the AVG across every variant of the role). This is the same source the bottom

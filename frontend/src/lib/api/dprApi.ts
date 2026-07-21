@@ -7,6 +7,7 @@ import type {
   DprAttachment,
   DprPage,
   DprSummaryRow,
+  DprApprovalStatus,
   DprVoiceNote,
   UpdateDailyProgressReportRequest,
 } from "../types/dpr";
@@ -30,6 +31,19 @@ export interface DprListFilters {
   before?: string;
   /** Number of distinct days to fetch in this page. Defaults to 14 server-side. */
   days?: number;
+  /**
+   * Narrow to one supervisor (User UUID). Applied server-side — the page is a window over
+   * distinct dates, so filtering in the browser would only ever narrow the pages already fetched.
+   */
+  supervisorUserId?: string;
+  /**
+   * Narrow to one supervisor by the name stored on the DPR. Used instead of
+   * {@link supervisorUserId} on projects whose DPRs carry no user link (free-text supervisors),
+   * where an id filter would match nothing.
+   */
+  supervisorName?: string;
+  /** Narrow to one approval status. Server-side for the same reason as {@link supervisorUserId}. */
+  status?: DprApprovalStatus;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -78,6 +92,9 @@ export const dprApi = {
     if (filters.activity) params.set("activity", filters.activity);
     if (filters.before) params.set("before", filters.before);
     if (filters.days != null) params.set("days", String(filters.days));
+    if (filters.supervisorUserId) params.set("supervisorUserId", filters.supervisorUserId);
+    if (filters.supervisorName) params.set("supervisorName", filters.supervisorName);
+    if (filters.status) params.set("status", filters.status);
     const qs = params.toString() ? `?${params.toString()}` : "";
     return apiClient
       .get<ApiResponse<DprPage>>(`/v1/projects/${projectId}/dpr${qs}`)

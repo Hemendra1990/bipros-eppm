@@ -207,8 +207,8 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.metric("Slip vs planned duration", pct(slipRatio)),
                         EvidenceRef.metric("Critical activities", String.valueOf(critical)),
                         EvidenceRef.metric("Schedule health score", scoreLabel(score)),
-                        EvidenceRef.entity("Schedule", "Open schedule", "schedule", projectId,
-                                "/projects/" + projectId + "/activities")),
+                        EvidenceRef.entity("Schedule health", "Open", "schedule", projectId,
+                                "/projects/" + projectId + "/schedule-health")),
                 Map.of("PROJECT_MANAGER", List.of(), "SITE_MANAGER", List.of()),
                 validUntil);
     }
@@ -240,8 +240,8 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.metric("Critical activities", String.valueOf(critical)),
                         EvidenceRef.metric("Near-critical activities", String.valueOf(nearCritical)),
                         EvidenceRef.metric("Average total float", fmt(avgFloat) + " days"),
-                        EvidenceRef.entity("Schedule", "Open schedule", "schedule", projectId,
-                                "/projects/" + projectId + "/activities")),
+                        EvidenceRef.entity("Schedule health", "Open", "schedule", projectId,
+                                "/projects/" + projectId + "/schedule-health")),
                 Map.of("PROJECT_MANAGER", List.of()),
                 validUntil);
     }
@@ -275,8 +275,8 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.metric("Activities without logic", openActivities + " of " + totalActivities),
                         EvidenceRef.metric("High-float (>44d) share", pct(highFloatPct)),
                         EvidenceRef.metric("Schedule health score", scoreLabel(score)),
-                        EvidenceRef.entity("Schedule", "Open schedule", "schedule", projectId,
-                                "/projects/" + projectId + "/activities")),
+                        EvidenceRef.entity("Schedule health", "Open", "schedule", projectId,
+                                "/projects/" + projectId + "/schedule-health")),
                 Map.of("PROJECT_MANAGER", List.of()),
                 validUntil);
     }
@@ -300,7 +300,7 @@ public class PlanningIntelligenceAgent extends AbstractAgent {
                     "/projects/" + projectId + "/activities/" + worst.activityId()));
         }
         evidence.add(EvidenceRef.entity("Baseline", "Open baseline comparison", "baseline", baselineId,
-                "/projects/" + projectId + "/baseline"));
+                "/projects/" + projectId + "/baselines"));
 
         return new AgentFindingDraft(
                 "BASELINE_DRIFT",

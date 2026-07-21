@@ -189,8 +189,8 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
         dims.forEach((k, v) -> ev.add(EvidenceRef.metric(k, (int) Math.round(v) + " / 100")));
         ev.add(EvidenceRef.metric("Missing logic", pct(h.missingLogicPct())));
         ev.add(EvidenceRef.metric("High float", pct(h.highFloatPct())));
-        ev.add(EvidenceRef.entity("Schedule health page", "Open", "project", projectId,
-                "/projects/" + projectId + "/activities"));
+        ev.add(EvidenceRef.entity("Schedule health page", "Open", "schedule", projectId,
+                "/projects/" + projectId + "/schedule-health"));
 
         return new AgentFindingDraft(
                 "BASELINE_HEALTH_SCORE", "PROJECT", severity, 0.85,
@@ -244,8 +244,8 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
         ev.add(EvidenceRef.metric("Critical activities", String.valueOf(critical)));
         ev.add(EvidenceRef.metric("Near-critical", String.valueOf(nearCritical)));
         ev.add(EvidenceRef.metric("Deadline slip", slip + " days"));
-        ev.add(EvidenceRef.entity("Schedule", "Open", "project", projectId,
-                "/projects/" + projectId + "/activities"));
+        ev.add(EvidenceRef.entity("Compression analysis", "Open", "schedule", projectId,
+                "/projects/" + projectId + "/schedule-compression"));
 
         return new AgentFindingDraft(
                 "SCHEDULE_COMPRESSION_OPPORTUNITY", "PROJECT", severity, 0.75,
@@ -298,7 +298,7 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
                         + "analysis all stay dark — the planning intelligence is unavailable.",
                 "Run the schedule (Schedule → Calculate) to compute the critical path and float"
                         + (hasBaseline ? "" : ", then capture a baseline") + "; the schedule agents activate automatically.",
-                List.of(EvidenceRef.entity("Schedule", "Run schedule", "project", projectId,
+                List.of(EvidenceRef.entity("Activities", "Run schedule", "project", projectId,
                         "/projects/" + projectId + "/activities")),
                 Map.of("PLANNING_ENGINEER", List.of(), "PROJECT_MANAGER", List.of()), validUntil);
     }
@@ -315,7 +315,7 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
                         + "may already be wrong.",
                 "Re-run the schedule to refresh the critical path, float and health; if the plan has genuinely "
                         + "moved on, capture a fresh baseline.",
-                List.of(EvidenceRef.entity("Schedule", "Re-run schedule", "project", projectId,
+                List.of(EvidenceRef.entity("Activities", "Re-run schedule", "project", projectId,
                         "/projects/" + projectId + "/activities")),
                 Map.of("PLANNING_ENGINEER", List.of()), validUntil);
     }
@@ -439,7 +439,7 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
         List<EvidenceRef> ev = new ArrayList<>();
         ev.add(EvidenceRef.metric("Duplicate activity names", String.valueOf(n)));
         for (String d : dups.subList(0, Math.min(MAX_EXAMPLES, n))) ev.add(EvidenceRef.metric("Duplicate", d));
-        ev.add(EvidenceRef.entity("Schedule", "Open", "project", projectId, "/projects/" + projectId + "/activities"));
+        ev.add(EvidenceRef.entity("Activities", "Open", "project", projectId, "/projects/" + projectId + "/activities"));
         return new AgentFindingDraft(
                 "DUPLICATE_ACTIVITIES", "PROJECT", n >= 5 ? Severity.MEDIUM : Severity.LOW, 0.85,
                 "Activities sharing an identical name (possible double-entry)",
@@ -465,7 +465,7 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
                         + "report status against to the client.",
                 "Add the key project milestones (major stage completions, handover) and link them into the logic "
                         + "so milestone variance can be tracked.",
-                List.of(EvidenceRef.entity("Schedule", "Open", "project", projectId,
+                List.of(EvidenceRef.entity("Activities", "Open", "project", projectId,
                         "/projects/" + projectId + "/activities")),
                 Map.of("PLANNING_ENGINEER", List.of()), validUntil);
     }
@@ -475,7 +475,7 @@ public class BaselineIntelligenceAgent extends AbstractAgent {
         List<EvidenceRef> ev = new ArrayList<>();
         ev.add(EvidenceRef.metric("Sequencing violations", String.valueOf(n)));
         for (String v : violations.subList(0, Math.min(MAX_EXAMPLES, n))) ev.add(EvidenceRef.metric("Violation", v));
-        ev.add(EvidenceRef.entity("Schedule", "Open", "project", projectId, "/projects/" + projectId + "/activities"));
+        ev.add(EvidenceRef.entity("Activities", "Open", "project", projectId, "/projects/" + projectId + "/activities"));
         return new AgentFindingDraft(
                 "CONSTRUCTION_LOGIC_VIOLATION", "PROJECT", n >= 3 ? Severity.HIGH : Severity.MEDIUM, 0.75,
                 "Relationships where a later construction phase is sequenced before an earlier one",

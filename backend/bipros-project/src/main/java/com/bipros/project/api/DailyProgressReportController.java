@@ -13,6 +13,7 @@ import com.bipros.project.application.dto.UpdateDailyProgressReportRequest;
 import com.bipros.project.application.service.DailyProgressReportService;
 import com.bipros.project.application.service.DprAttachmentService;
 import com.bipros.project.application.service.DprVoiceNoteService;
+import com.bipros.project.domain.model.DprApprovalStatus;
 import com.bipros.project.infrastructure.storage.VoiceNoteStorage;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -84,8 +85,12 @@ public class DailyProgressReportController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
       @RequestParam(required = false) String activity,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate before,
-      @RequestParam(defaultValue = "14") int days) {
-    return ResponseEntity.ok(ApiResponse.ok(service.listPaged(projectId, from, to, activity, before, days)));
+      @RequestParam(defaultValue = "14") int days,
+      @RequestParam(required = false) UUID supervisorUserId,
+      @RequestParam(required = false) String supervisorName,
+      @RequestParam(required = false) DprApprovalStatus status) {
+    return ResponseEntity.ok(ApiResponse.ok(service.listPaged(
+        projectId, from, to, activity, before, days, supervisorUserId, supervisorName, status)));
   }
 
   @GetMapping("/{id}")
@@ -122,8 +127,10 @@ public class DailyProgressReportController {
   public ResponseEntity<ApiResponse<List<SupervisorOption>>> supervisorsUsed(
       @PathVariable UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
-    return ResponseEntity.ok(ApiResponse.ok(service.listSupervisorsUsed(projectId, fromDate, toDate)));
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+      @RequestParam(defaultValue = "false") boolean includeUnlinked) {
+    return ResponseEntity.ok(
+        ApiResponse.ok(service.listSupervisorsUsed(projectId, fromDate, toDate, includeUnlinked)));
   }
 
   @PutMapping("/{id}")

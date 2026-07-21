@@ -111,6 +111,9 @@ export default function RiskAnalysisPage() {
     (b) => b.isActive && b.totalActivities > 0
   );
   const hasActiveBaseline = !!activeBaseline;
+  /** The simulation stores only the baseline id; show the baseline's name, not a raw id fragment. */
+  const baselineNameById = (id: string) =>
+    (baselinesResp?.data ?? []).find((b) => b.id === id)?.name;
 
   const runMutation = useMutation({
     mutationFn: (req: MonteCarloRunRequest) => monteCarloApi.runSimulation(projectId, req),
@@ -314,7 +317,9 @@ export default function RiskAnalysisPage() {
                   <p className="text-sm font-medium text-text-secondary mb-2">Baseline Duration</p>
                   <p className="text-2xl font-bold text-accent">{Math.round(sim.baselineDuration)} days</p>
                   {sim.baselineId && (
-                    <p className="text-xs text-text-muted mt-1">baseline {sim.baselineId.slice(0, 8)}</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      {baselineNameById(sim.baselineId) ?? `baseline ${sim.baselineId.slice(0, 8)}`}
+                    </p>
                   )}
                 </div>
 

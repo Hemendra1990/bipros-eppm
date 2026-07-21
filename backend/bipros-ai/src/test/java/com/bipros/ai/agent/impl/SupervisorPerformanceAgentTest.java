@@ -38,7 +38,10 @@ class SupervisorPerformanceAgentTest {
     private ActivityRepository activityRepository;
 
     private SupervisorPerformanceAgent agent() {
-        return new SupervisorPerformanceAgent(dprRepository, activityRepository, new ObjectMapper());
+        // Optional.empty() = no reporting module wired in; the progress comparison must still stand
+        // on its own, with efficiency simply absent.
+        return new SupervisorPerformanceAgent(dprRepository, activityRepository,
+                java.util.Optional.empty(), new ObjectMapper());
     }
 
     private static Activity activity(double pct, LocalDate plannedFinish) {

@@ -80,7 +80,11 @@ export function AgentActivityFeed({ projectId }: { projectId: string }) {
           const isRunning =
             status === "RUNNING" || status === "GATHERING" || status === "NARRATING" || status === "PENDING";
           const tone = runStatusTone(status);
-          const findings = l?.findingsCount ?? a.lastRun?.findingsCount ?? 0;
+          // Show the agent's persistent ACTIVE-finding count (the same basis the KPI cards sum), so
+          // the badge stays correct across a SKIPPED_NO_CHANGE run — lastRun.findingsCount is 0 on a
+          // skip even though the findings are still active. Falls back to the run count if the
+          // backend hasn't supplied the active count yet.
+          const findings = a.activeFindingsCount ?? a.lastRun?.findingsCount ?? 0;
           return (
             <div key={a.key} className="flex items-center gap-3 px-4 py-2.5">
               <AgentAvatar

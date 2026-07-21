@@ -116,6 +116,7 @@ public class CapacityUtilisationAgent extends AbstractAgent {
             n.put("efficiencyPct", round(r.efficiencyPct()));
             n.put("budgetedDays", round(r.budgetedDays()));
             n.put("actualDays", round(r.actualDays()));
+            n.put("countedDays", round(r.countedDays()));
             n.put("costOverrun", round(r.costImplication()));
 
             if ("MANPOWER".equals(r.resourceType())) {
@@ -191,7 +192,7 @@ public class CapacityUtilisationAgent extends AbstractAgent {
                 "Output vs productivity norm per resource-day (Capacity Utilisation), project-to-date",
                 head,
                 r.roleName() + " produced at " + pct(effPct) + " of its productivity norm across "
-                        + fmt0(r.actualDays()) + " deployed resource-days (norm expected " + fmt1(r.budgetedDays())
+                        + fmt1(r.countedDays()) + " counted resource-days (norm expected " + fmt1(r.budgetedDays())
                         + " days for the output achieved)"
                         + (overrun > 0 ? ", a cost overrun of " + money0(overrun) + "." : "."),
                 "The crew/plant was deployed for more resource-days than its output — valued at the productivity "
@@ -204,7 +205,7 @@ public class CapacityUtilisationAgent extends AbstractAgent {
                 List.of(
                         EvidenceRef.metric("Efficiency vs norm", pct(effPct)),
                         EvidenceRef.money("Cost overrun", BigDecimal.valueOf(overrun)),
-                        EvidenceRef.metric("Deployed resource-days", fmt0(r.actualDays())),
+                        EvidenceRef.metric("Counted days", fmt1(r.countedDays())),
                         EvidenceRef.metric("Norm-expected days", fmt1(r.budgetedDays())),
                         EvidenceRef.entity("Capacity Utilisation", "Open", "project", projectId,
                                 "/projects/" + projectId + "/capacity-utilization")),

@@ -1,6 +1,7 @@
 package com.bipros.ai.agent.api.dto;
 
 import com.bipros.ai.agent.core.EvidenceRef;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.time.Instant;
 import java.util.List;
@@ -16,7 +17,11 @@ public final class AgentDtos {
             String key,
             String displayName,
             boolean supportsPortfolio,
-            AgentRunDto lastRun) {
+            AgentRunDto lastRun,
+            /** Currently-ACTIVE findings for this agent on this project — the persistent count the
+             *  KPI cards sum. Stays correct across a SKIPPED_NO_CHANGE run (unlike lastRun.findingsCount,
+             *  which is 0 on a skip). */
+            int activeFindingsCount) {
     }
 
     public record AgentRunDto(
@@ -34,7 +39,8 @@ public final class AgentDtos {
             Instant startedAt,
             Instant finishedAt,
             Long durationMs,
-            String errorMessage) {
+            String errorMessage,
+            JsonNode snapshot) {
     }
 
     public record AgentRunDetailDto(
@@ -74,8 +80,10 @@ public final class AgentDtos {
             Instant validUntil,
             Instant lastSeenAt,
             UUID acknowledgedBy,
+            String acknowledgedByName,
             Instant acknowledgedAt,
             UUID resolvedBy,
+            String resolvedByName,
             Instant resolvedAt,
             Instant createdAt) {
     }

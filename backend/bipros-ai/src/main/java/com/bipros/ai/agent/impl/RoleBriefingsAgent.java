@@ -105,15 +105,15 @@ public class RoleBriefingsAgent extends AbstractAgent {
                 .limit(MAX_ITEMS).toList();
 
         if (!supervisor.isEmpty()) {
-            candidates.add(brief(projectId, "SUPERVISOR_DAILY_BRIEF", "SITE_MANAGER",
+            candidates.add(brief("SUPERVISOR_DAILY_BRIEF", "SITE_MANAGER",
                     "Supervisor brief", "next-day site priorities", supervisor, validUntil));
         }
         if (!planning.isEmpty()) {
-            candidates.add(brief(projectId, "PLANNING_BRIEF", "PLANNING_ENGINEER",
+            candidates.add(brief("PLANNING_BRIEF", "PLANNING_ENGINEER",
                     "Planning brief", "schedule impacts to action", planning, validUntil));
         }
         if (!critical.isEmpty()) {
-            candidates.add(brief(projectId, "PM_ACTION_BRIEF", "PROJECT_MANAGER",
+            candidates.add(brief("PM_ACTION_BRIEF", "PROJECT_MANAGER",
                     "Project Manager brief", "critical actions", critical, validUntil));
         }
 
@@ -121,7 +121,7 @@ public class RoleBriefingsAgent extends AbstractAgent {
         return new GatherResult(snapshot, candidates);
     }
 
-    private AgentFindingDraft brief(UUID projectId, String findingType, String roleKey, String label,
+    private AgentFindingDraft brief(String findingType, String roleKey, String label,
                                     String focus, List<AgentFinding> items, Instant validUntil) {
         // A brief is as urgent as its worst cited item, but never escalates beyond MEDIUM on its own —
         // except the PM brief, which is meant to mirror the criticality it summarises.
@@ -141,9 +141,12 @@ public class RoleBriefingsAgent extends AbstractAgent {
             if (f.getRecommendedAction() != null && !f.getRecommendedAction().isBlank()) {
                 actions.append(i).append(") ").append(firstSentence(f.getRecommendedAction())).append("  ");
             }
+            // linkUrl stays null so the frontend routes the click through onFindingClick →
+            // goToFinding (scroll + highlight the cited finding's own card on this page), the same
+            // in-page navigation ExecutiveInsightsAgent uses. A non-null "/ai" URL would instead be
+            // treated as a plain link to the page you are already on — a no-op.
             ev.add(EvidenceRef.entity("[" + f.getSeverity() + "] " + f.getTitle(),
-                    humanize(f.getAgentKey()), "finding", f.getId(),
-                    "/projects/" + projectId + "/ai"));
+                    humanize(f.getAgentKey()), "finding", f.getId(), null));
             i++;
         }
 

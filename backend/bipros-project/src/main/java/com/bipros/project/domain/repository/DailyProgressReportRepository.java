@@ -234,8 +234,15 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
 
   /**
    * Most-recent distinct report dates for the project within an optional [from,to] window and
-   * strictly older than an optional {@code before} cursor, optionally narrowed to one activity.
+   * strictly older than an optional {@code before} cursor, optionally narrowed to one activity,
+   * one supervisor and one approval status.
    * Ordered newest-first; pass a {@code Pageable} of size {@code days+1} to detect "has more".
+   *
+   * <p>The supervisor / status predicates must match {@link
+   * #findByProjectIdAndReportDateInOrderByReportDateDescIdAsc} exactly: a date only earns a slot
+   * in the page if it still has a matching row, otherwise pages come back visibly empty.
+   * A null {@code status} means "any"; {@code DRAFT} also matches legacy rows whose
+   * approval_status was never set, mirroring the frontend's {@code approvalStatus ?? "DRAFT"}.
    */
   @Query("""
       select distinct d.reportDate from DailyProgressReport d
@@ -244,6 +251,11 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
         and (cast(:to as date) is null or d.reportDate <= :to)
         and (cast(:before as date) is null or d.reportDate < :before)
         and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
+        and (:supervisorUserId is null or d.supervisorUserId = :supervisorUserId)
+        and (cast(:supervisorName as string) is null
+             or d.supervisorName = cast(:supervisorName as string))
+        and (:status is null
+             or coalesce(d.approvalStatus, com.bipros.project.domain.model.DprApprovalStatus.DRAFT) = :status)
       order by d.reportDate desc
       """)
   List<LocalDate> findDistinctReportDatesDesc(
@@ -252,20 +264,35 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       @Param("to") LocalDate to,
       @Param("before") LocalDate before,
       @Param("activity") String activity,
+      @Param("supervisorUserId") UUID supervisorUserId,
+      @Param("supervisorName") String supervisorName,
+      @Param("status") DprApprovalStatus status,
       Pageable pageable);
 
-  /** All DPR rows for the given set of report dates, newest-first, optionally one activity. */
+  /**
+   * All DPR rows for the given set of report dates, newest-first, optionally narrowed to one
+   * activity, supervisor and approval status. Keep the predicates in lockstep with
+   * {@link #findDistinctReportDatesDesc}.
+   */
   @Query("""
       select d from DailyProgressReport d
       where d.projectId = :projectId
         and d.reportDate in :dates
         and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
+        and (:supervisorUserId is null or d.supervisorUserId = :supervisorUserId)
+        and (cast(:supervisorName as string) is null
+             or d.supervisorName = cast(:supervisorName as string))
+        and (:status is null
+             or coalesce(d.approvalStatus, com.bipros.project.domain.model.DprApprovalStatus.DRAFT) = :status)
       order by d.reportDate desc, d.id asc
       """)
   List<DailyProgressReport> findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(
       @Param("projectId") UUID projectId,
       @Param("dates") Collection<LocalDate> dates,
-      @Param("activity") String activity);
+      @Param("activity") String activity,
+      @Param("supervisorUserId") UUID supervisorUserId,
+      @Param("supervisorName") String supervisorName,
+      @Param("status") DprApprovalStatus status);
 
   /**
    * Refresh the denormalized {@code activityName} snapshot on every DPR for {@code activityId}.

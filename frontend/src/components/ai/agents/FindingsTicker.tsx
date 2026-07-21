@@ -3,20 +3,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Radio, ChevronRight } from "lucide-react";
 import type { AgentFindingDto } from "@/lib/types";
-import { compactNum } from "./FindingVisual";
+import { compactNum, parseMetric } from "./FindingVisual";
 import { severityMeta, humanizeType } from "./agentMeta";
 import styles from "./FindingsTicker.module.css";
 
 const ROTATE_MS = 5000;
 
-/** The single most telling number on a finding (first numeric metric), compacted for the headline. */
+/**
+ * The single most telling number on a finding (first numeric metric), compacted for the headline.
+ * Shares {@link parseMetric} with the finding cards on purpose: this used to scrape the first digits
+ * itself, which rendered the date "2026-06-30" as a headline "2K". One parser, one set of rules.
+ */
 function headlineMetric(f: AgentFindingDto): { value: string; label: string } | null {
   for (const ev of f.evidence ?? []) {
-    if (ev.type !== "METRIC" || ev.value == null) continue;
-    const m = String(ev.value).replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+    const m = parseMetric(ev, compactNum);
     if (!m) continue;
-    const isPct = /%/.test(ev.value);
-    return { value: compactNum(parseFloat(m[0])) + (isPct ? "%" : ""), label: ev.label };
+    if (m.money) return { value: m.raw, label: m.label };
+    const suffix = m.isPct ? "%" : m.unit ? ` ${m.unit}` : "";
+    return { value: compactNum(m.num) + suffix, label: m.label };
   }
   return null;
 }
@@ -29,9 +33,12 @@ function headlineMetric(f: AgentFindingDto): { value: string; label: string } | 
 export function FindingsTicker({
   findings,
   agentNames,
+  onSelect,
 }: {
   findings: AgentFindingDto[];
   agentNames?: Record<string, string>;
+  /** Navigate to this finding's card in the board below (click-through from the briefing headline). */
+  onSelect?: (findingId: string) => void;
 }) {
   const reel = useMemo(() => {
     return [...findings]
@@ -100,8 +107,27 @@ export function FindingsTicker({
         </div>
       </div>
 
-      {/* headline body */}
-      <div key={f.id} className={`${styles.slide} flex items-center gap-4 px-4 py-3.5`}>
+      {/* headline body — click-through to the finding's card in the board below */}
+      <div
+        key={f.id}
+        role={onSelect ? "button" : undefined}
+        tabIndex={onSelect ? 0 : undefined}
+        onClick={onSelect ? () => onSelect(f.id) : undefined}
+        onKeyDown={
+          onSelect
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(f.id);
+                }
+              }
+            : undefined
+        }
+        title={onSelect ? "View this finding below" : undefined}
+        className={`${styles.slide} flex items-center gap-4 px-4 py-3.5 ${
+          onSelect ? "cursor-pointer transition-colors hover:bg-white/5" : ""
+        }`}
+      >
         <span
           className="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
           style={{ backgroundColor: sev.hue, color: "#fff" }}

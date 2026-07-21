@@ -89,10 +89,16 @@ export function NotificationBell() {
 
     const connect = async () => {
       if (cancelled) return;
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+      if (!token) {
+        // Not signed in yet — don't open an anonymous stream. The backend rejects it, and a rejected
+        // stream response can't be handled cleanly server-side (logs a committed-response error). Retry.
+        if (!cancelled) setTimeout(connect, 5000);
+        return;
+      }
       ctrl = new AbortController();
       try {
-        const token =
-          typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
         const res = await fetch(`${API_BASE}/v1/notifications/stream`, {
           signal: ctrl.signal,
           headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },

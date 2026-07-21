@@ -29,7 +29,9 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -124,6 +126,13 @@ public class IssueIntelligenceAgent extends AbstractAgent {
         snapshot.put("ncrOpen", openNcr.size());
         snapshot.put("snagOpen", openSnag.size());
         snapshot.put("safetyOpen", openSafety.size());
+
+        // ---- OPEN_ISSUE_BACKLOG: surface the raw open-issue backlog. No other finding reports plain
+        // open issues, so a project with open non-HSE issues below the recurring-cluster threshold went
+        // silent. This baseline finding fires whenever any issue is open. ----
+        if (!openDpr.isEmpty()) {
+            candidates.add(openIssueBacklog(projectId, openDpr, now, validUntil));
+        }
 
         // ---- HSE_OPEN_CRITICAL ----
         List<HseItem> hse = collectHse(openDpr, openNcr, openSafety);
@@ -327,6 +336,91 @@ public class IssueIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.metric("Clustering threshold", PATTERN_MIN + " of a kind")),
                 Map.of("SITE_MANAGER", List.of(), "QUALITY_MANAGER", List.of()),
                 validUntil);
+    }
+
+    private AgentFindingDraft openIssueBacklog(UUID projectId, List<DprIssueRow> open, Instant now, Instant validUntil) {
+        Map<String, Integer> byCategory = new TreeMap<>();
+        int critical = 0;
+        int high = 0;
+        for (DprIssueRow r : open) {
+            byCategory.merge(prettyCategory(r.category()), 1, Integer::sum);
+            String sev = r.severity() == null ? "" : r.severity().name();
+            if ("CRITICAL".equals(sev)) critical++;
+            else if ("HIGH".equals(sev)) high++;
+        }
+        long oldestDays = open.stream().mapToLong(r -> ageDays(r.openedAt(), now)).max().orElse(0);
+        int total = open.size();
+        Severity severity = (critical > 0 || high > 0) ? Severity.HIGH : Severity.MEDIUM;
+
+        // Priority list: most-severe first, then oldest first.
+        List<DprIssueRow> priority = open.stream()
+                .sorted(Comparator
+                        .comparingInt((DprIssueRow r) -> severityRank(r.severity()))
+                        .thenComparingLong(r -> -ageDays(r.openedAt(), now)))
+                .limit(5)
+                .toList();
+
+        List<EvidenceRef> ev = new ArrayList<>();
+        ev.add(EvidenceRef.metric("Open issues", String.valueOf(total)));
+        if (critical > 0) ev.add(EvidenceRef.metric("Critical", String.valueOf(critical)));
+        if (high > 0) ev.add(EvidenceRef.metric("High", String.valueOf(high)));
+        ev.add(EvidenceRef.metric("By category", categorySummary(byCategory)));
+        ev.add(EvidenceRef.metric("Oldest open for", oldestDays + " days"));
+        for (DprIssueRow r : priority) {
+            String sev = r.severity() == null ? "" : r.severity().name() + " · ";
+            String label = sev + (r.title() == null ? "Issue" : r.title());
+            ev.add(EvidenceRef.entity(prettyCategory(r.category()),
+                    label + " · " + ageDays(r.openedAt(), now) + "d",
+                    "dpr_issue", r.id(), "/projects/" + projectId + "/issues?focus=" + r.id()));
+        }
+
+        String head = critical > 0
+                ? critical + " critical of " + total + " open issues in the backlog"
+                : total + " open issues in the backlog";
+        return new AgentFindingDraft(
+                "OPEN_ISSUE_BACKLOG",
+                "PROJECT",
+                severity,
+                0.9,
+                "Direct count of " + total + " open project issues (DPR field issues + directly-raised)",
+                head,
+                total + " project issue" + (total == 1 ? " is" : "s are") + " open"
+                        + (critical > 0 ? ", " + critical + " of them critical" : "")
+                        + (high > 0 ? (critical > 0 ? " and " : ", ") + high + " high" : "")
+                        + "; the oldest has been open for " + oldestDays + " days. By category: "
+                        + categorySummary(byCategory) + ".",
+                "Open issues are unresolved blockers, approvals, and site problems that have been logged but not "
+                        + "yet closed out by their owners.",
+                "Each open issue is a live risk to progress, cost, or compliance on the activities it touches; the "
+                        + "critical and high ones can stall or rework a front if they linger.",
+                "Work the backlog owner-by-owner, closing the critical and high issues first; confirm an owner and a "
+                        + "target date on every open item so none stalls.",
+                ev,
+                Map.of("PROJECT_MANAGER", List.of(), "SITE_MANAGER", List.of()),
+                validUntil);
+    }
+
+    private static int severityRank(Enum<?> s) {
+        if (s == null) return 9;
+        return switch (s.name()) {
+            case "CRITICAL" -> 0;
+            case "HIGH" -> 1;
+            case "MEDIUM" -> 2;
+            case "LOW" -> 3;
+            default -> 4;
+        };
+    }
+
+    private static String prettyCategory(Enum<?> c) {
+        if (c == null) return "Other";
+        String n = c.name().replace('_', ' ').toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(n.charAt(0)) + n.substring(1);
+    }
+
+    private static String categorySummary(Map<String, Integer> byCategory) {
+        return byCategory.entrySet().stream()
+                .map(e -> e.getValue() + " " + e.getKey())
+                .collect(java.util.stream.Collectors.joining(" · "));
     }
 
     // ---------------------------------------------------------------- collection

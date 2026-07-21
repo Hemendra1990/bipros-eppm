@@ -1,8 +1,8 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, Suspense, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Download, PlusCircle } from "lucide-react";
 import {
@@ -409,15 +409,20 @@ const DataRow = memo(function DataRow({
   );
 });
 
-export default function CapacityUtilizationPage() {
+function CapacityUtilizationPageInner() {
   const params = useParams();
   const projectId = params.projectId as string;
+  const searchParams = useSearchParams();
 
   const [fromDate, setFromDate] = useState(startOfMonth());
   const [toDate, setToDate] = useState(today());
   const [groupBy, setGroupBy] = useState<CapacityGroupBy>("RESOURCE_TYPE");
   const [normType, setNormType] = useState<CapacityNormType | "">("");
-  const [supervisorUserId, setSupervisorUserId] = useState<string>("");
+  // Seeded from ?supervisorUserId= so the AI Insights supervisor rows can deep-link straight into
+  // that supervisor's breakdown; the dropdown owns it from then on.
+  const [supervisorUserId, setSupervisorUserId] = useState<string>(
+    () => searchParams.get("supervisorUserId") ?? "",
+  );
   const [workDays, setWorkDays] = useState<number>(26);
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -532,10 +537,14 @@ export default function CapacityUtilizationPage() {
 
   const supervisorSelectOptions: SelectOption[] = [
     { value: "", label: "All supervisors (project-wide)" },
-    ...supervisors.map((s) => ({
-      value: s.supervisorUserId,
-      label: `${s.supervisorName} (${s.dprCount} DPRs)`,
-    })),
+    // This page filters strictly by user id, so an entry without one is unusable. The endpoint
+    // only returns those under includeUnlinked, which this page doesn't request.
+    ...supervisors
+      .filter((s) => s.supervisorUserId !== null)
+      .map((s) => ({
+        value: s.supervisorUserId as string,
+        label: `${s.supervisorName} (${s.dprCount} DPRs)`,
+      })),
   ];
 
   return (
@@ -776,5 +785,15 @@ export default function CapacityUtilizationPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CapacityUtilizationPage() {
+  // useSearchParams suspends in Next 16 App Router — wrap so the page can be
+  // pre-rendered while the params resolve client-side.
+  return (
+    <Suspense fallback={<div className="p-6 text-text-muted">Loading capacity utilization…</div>}>
+      <CapacityUtilizationPageInner />
+    </Suspense>
   );
 }

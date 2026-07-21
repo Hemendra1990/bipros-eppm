@@ -10,6 +10,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ExternalLink,
   Loader2,
   Wrench,
@@ -115,11 +116,15 @@ export function FindingCard({
   agentName,
   projectId,
   onChanged,
+  onFindingClick,
 }: {
   finding: AgentFindingDto;
   agentName?: string;
   projectId?: string;
   onChanged?: (updated: AgentFindingDto) => void;
+  /** Jump to another finding's card in the board (used by the Executive-brief concern rows, which
+   *  each cite another agent's finding by id). */
+  onFindingClick?: (findingId: string) => void;
 }) {
   const qc = useQueryClient();
   const sev = severityMeta(finding.severity);
@@ -199,6 +204,10 @@ export function FindingCard({
       {entityChips.length > 0 && (
         <div className="mt-3 overflow-hidden rounded-xl border border-hairline">
           {entityChips.map((ev, i) => {
+            const findingTarget =
+              !ev.linkUrl && ev.entityType === "finding" && ev.entityId && onFindingClick
+                ? ev.entityId
+                : null;
             const row = (
               <div className="flex items-center gap-3 bg-ivory/40 px-3 py-2.5 text-sm transition-colors hover:bg-ivory/80">
                 <span
@@ -216,17 +225,33 @@ export function FindingCard({
                   </span>
                 )}
                 {ev.linkUrl && <ExternalLink size={12} className="shrink-0 text-slate" />}
+                {findingTarget && <ChevronRight size={12} className="shrink-0 text-slate" />}
               </div>
             );
-            return ev.linkUrl ? (
-              <Link
-                key={`${ev.label}-${i}`}
-                href={ev.linkUrl}
-                className="block border-t border-hairline first:border-t-0"
-              >
-                {row}
-              </Link>
-            ) : (
+            if (ev.linkUrl) {
+              return (
+                <Link
+                  key={`${ev.label}-${i}`}
+                  href={ev.linkUrl}
+                  className="block border-t border-hairline first:border-t-0"
+                >
+                  {row}
+                </Link>
+              );
+            }
+            if (findingTarget) {
+              return (
+                <button
+                  key={`${ev.label}-${i}`}
+                  type="button"
+                  onClick={() => onFindingClick?.(findingTarget)}
+                  className="block w-full border-t border-hairline text-left first:border-t-0"
+                >
+                  {row}
+                </button>
+              );
+            }
+            return (
               <div key={`${ev.label}-${i}`} className="border-t border-hairline first:border-t-0">
                 {row}
               </div>
@@ -273,11 +298,11 @@ export function FindingCard({
         <div className="text-[11px] text-text-muted">
           {resolved && local.resolvedBy ? (
             <span className="inline-flex items-center gap-1 text-emerald">
-              <CheckCircle2 size={12} /> Resolved by {local.resolvedBy}
+              <CheckCircle2 size={12} /> Resolved by {local.resolvedByName ?? local.resolvedBy}
             </span>
           ) : acknowledged && local.acknowledgedBy ? (
             <span className="inline-flex items-center gap-1">
-              <Check size={12} /> Acknowledged by {local.acknowledgedBy}
+              <Check size={12} /> Acknowledged by {local.acknowledgedByName ?? local.acknowledgedBy}
             </span>
           ) : local.lastSeenAt ? (
             <span>Last seen {new Date(local.lastSeenAt).toLocaleString()}</span>

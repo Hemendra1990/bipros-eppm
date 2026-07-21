@@ -14,6 +14,8 @@ import com.bipros.cost.application.service.ActivityCostCalculator;
 import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
 import com.bipros.project.application.service.DprActualCostLookup;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
@@ -91,6 +93,7 @@ public class MonteCarloEngine {
     private final ResourceAssignmentRepository resourceAssignmentRepository;
     private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
     private final DprActualCostLookup dprActualCostLookup;
+    private final ProjectRepository projectRepository;
 
     public EngineResult run(MonteCarloInput input) {
         long startNs = System.nanoTime();
@@ -121,12 +124,21 @@ public class MonteCarloEngine {
             pertById.put(pe.getActivityId(), pe);
         }
 
+        // Prefer an activity-level calendar; fall back to the project's default calendar (P6-style
+        // cascade — activities inherit the project calendar when they carry no explicit override).
         UUID defaultCalendarId = activities.stream()
             .map(Activity::getCalendarId)
             .filter(Objects::nonNull)
             .findFirst()
-            .orElseThrow(() -> new BusinessRuleException("NO_CALENDAR",
-                "No calendar assigned to any activity; assign calendars before running Monte Carlo."));
+            .orElseGet(() -> projectRepository.findById(input.projectId())
+                .map(Project::getCalendarId)
+                .filter(Objects::nonNull)
+                .orElse(null));
+        if (defaultCalendarId == null) {
+            throw new BusinessRuleException("NO_CALENDAR",
+                "No calendar assigned to any activity and the project has no default calendar; "
+                + "assign a project calendar before running Monte Carlo.");
+        }
 
         LocalDate projectStartDate = Optional.ofNullable(baseline.getProjectStartDate())
             .orElseGet(() -> activities.stream()

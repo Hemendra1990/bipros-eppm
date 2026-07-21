@@ -5,13 +5,22 @@ import { severityMeta } from "./agentMeta";
 import { FindingSeriesChart } from "@/components/ai/charts/FindingSeriesChart";
 import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
 
-interface Metric {
+export interface Metric {
   label: string;
   num: number;
   isPct: boolean;
   raw: string;
   money: boolean;
+  /** Trailing unit ("days", "hours"), when the value is a plain "<number> <unit>". */
+  unit?: string;
 }
+
+/**
+ * Trailing unit on a simple "<number><unit>" value — "20 days" → "days", "24h" → "h".
+ * Deliberately strict: a bare number ("279") or anything compound ("3 of 4 (75%)") yields no unit,
+ * so prose is never echoed into a stat tile as if it were one.
+ */
+const UNIT_RE = /^-?[\d,]+(?:\.\d+)?\s*([a-zA-Z][a-zA-Z/²³-]{0,11})$/;
 
 /**
  * Turn an evidence item into a stat metric. MONEY items use their raw number formatted in the project
@@ -19,7 +28,7 @@ interface Metric {
  * string — but a value that is a date, code or prose (not a leading number) is NOT a stat and is skipped,
  * so dates/ids/sentences never render as a scraped "2K" tile.
  */
-function parseMetric(ev: EvidenceDto, money: (n: number) => string): Metric | null {
+export function parseMetric(ev: EvidenceDto, money: (n: number) => string): Metric | null {
   if (ev.type !== "METRIC") return null;
   if (ev.unit === "MONEY" && ev.numericValue != null) {
     return { label: ev.label, num: ev.numericValue, isPct: false, raw: money(ev.numericValue), money: true };
@@ -32,7 +41,8 @@ function parseMetric(ev: EvidenceDto, money: (n: number) => string): Metric | nu
   if (!/^-?[\d.]/.test(raw.trim())) return null;
   const m = raw.replace(/,/g, "").match(/-?\d+(\.\d+)?/);
   if (!m) return null;
-  return { label: ev.label, num: parseFloat(m[0]), isPct: /%/.test(raw), raw, money: false };
+  const unit = raw.trim().match(UNIT_RE)?.[1];
+  return { label: ev.label, num: parseFloat(m[0]), isPct: /%/.test(raw), raw, money: false, unit };
 }
 
 /** Compact human number: 500T, 200Q, 1.2B, 45, -58K. Keeps absurd demo magnitudes bounded. */
@@ -75,7 +85,17 @@ const INDEX_RE = /index|\bcpi\b|\bspi\b|margin/i;
 
 function fmt(m: Metric): string {
   if (m.money) return m.raw; // already formatted in the project currency (₹3 Cr / 30 M OMR)
-  return compactNum(m.num) + (m.isPct ? "%" : "");
+  if (m.isPct) return compactNum(m.num) + "%";
+  // Show exact, grouped numbers up to 100k — compacting day-counts/quantities to "1.5K" hides the
+  // precision that makes a ratio legible (e.g. 1,458 ÷ 1,540 = 95%). Only large magnitudes compact.
+  const n =
+    Math.abs(m.num) < 1e5
+      ? Number.isInteger(m.num)
+        ? m.num.toLocaleString("en-US")
+        : m.num.toLocaleString("en-US", { maximumFractionDigits: 1 })
+      : compactNum(m.num);
+  // Keep the unit the agent sent — a bare "20" for "20 days" or "24" for "24 hours" is ambiguous.
+  return m.unit ? `${n} ${m.unit}` : n;
 }
 
 /**

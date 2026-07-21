@@ -15,6 +15,7 @@ import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { boqApi } from "@/lib/api/boqApi";
 import { userApi } from "@/lib/api/userApi";
+import { capacityUtilizationApi } from "@/lib/api/capacityUtilizationApi";
 // import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import { Drawer } from "@/components/common/Drawer";
 import { TabTip } from "@/components/common/TabTip";
@@ -61,6 +62,19 @@ const STATUS_OPTIONS: Array<{ value: DprApprovalStatus | "ALL"; label: string }>
   { value: "REJECTED", label: "Rejected" },
 ];
 
+// A supervisor is identified by user id when the DPRs carry one and by name when they don't
+// (free-text supervisors on imported/seeded projects — the common case). The dropdown value
+// encodes which, and `supervisorFilterParam` unpacks it back into the matching query param.
+const NAME_KEY_PREFIX = "name:";
+const supervisorFilterValue = (s: { supervisorUserId: string | null; supervisorName: string }) =>
+  s.supervisorUserId ?? `${NAME_KEY_PREFIX}${s.supervisorName}`;
+const supervisorFilterParam = (value: string) =>
+  value === "ALL"
+    ? {}
+    : value.startsWith(NAME_KEY_PREFIX)
+      ? { supervisorName: value.slice(NAME_KEY_PREFIX.length) }
+      : { supervisorUserId: value };
+
 // ─── Approvals queue view ──────────────────────────────────────────────────────
 
 const APPROVAL_STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
@@ -70,7 +84,7 @@ const APPROVAL_STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
   REJECTED: "danger",
 };
 
-function DprApprovalsView({ projectId }: { projectId: string }) {
+function DprApprovalsView({ projectId, focusDprId }: { projectId: string; focusDprId?: string | null }) {
   const { data: pendingData, isLoading: pendingLoading } = useQuery({
     queryKey: ["dpr-pending-approvals", projectId],
     queryFn: () => dprApi.pendingApprovals(projectId),
@@ -84,6 +98,14 @@ function DprApprovalsView({ projectId }: { projectId: string }) {
 
   const pendingRows: DprSummaryRow[] = pendingData?.data ?? [];
   const unassignedRows: DprSummaryRow[] = unassignedData?.data ?? [];
+
+  // Scroll the deep-linked DPR into view once its row is on the page. Keyed on the query results
+  // (stable references from react-query) rather than the derived arrays, which are new each render.
+  useEffect(() => {
+    if (!focusDprId) return;
+    const el = document.getElementById(`dpr-${focusDprId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusDprId, pendingData, unassignedData]);
 
   return (
     <div className="space-y-8">
@@ -104,7 +126,7 @@ function DprApprovalsView({ projectId }: { projectId: string }) {
         ) : (
           <div className="space-y-2.5">
             {pendingRows.map((row) => (
-              <ApprovalQueueRow key={row.id} projectId={projectId} row={row} />
+              <ApprovalQueueRow key={row.id} projectId={projectId} row={row} highlight={row.id === focusDprId} />
             ))}
           </div>
         )}
@@ -126,7 +148,7 @@ function DprApprovalsView({ projectId }: { projectId: string }) {
         ) : (
           <div className="space-y-2.5">
             {unassignedRows.map((row) => (
-              <ApprovalQueueRow key={row.id} projectId={projectId} row={row} />
+              <ApprovalQueueRow key={row.id} projectId={projectId} row={row} highlight={row.id === focusDprId} />
             ))}
           </div>
         )}
@@ -135,7 +157,15 @@ function DprApprovalsView({ projectId }: { projectId: string }) {
   );
 }
 
-function ApprovalQueueRow({ projectId, row }: { projectId: string; row: DprSummaryRow }) {
+function ApprovalQueueRow({
+  projectId,
+  row,
+  highlight = false,
+}: {
+  projectId: string;
+  row: DprSummaryRow;
+  highlight?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const fmt = (n: number | null | undefined) =>
     typeof n === "number" && Number.isFinite(n)
@@ -144,7 +174,13 @@ function ApprovalQueueRow({ projectId, row }: { projectId: string; row: DprSumma
   const status = row.approvalStatus ?? "SUBMITTED";
 
   return (
-    <div className="group rounded-xl border border-hairline bg-paper px-4 py-3 shadow-[0_1px_2px_rgba(28,28,28,0.04)] transition-all hover:border-gold/30 hover:shadow-[0_4px_16px_-8px_rgba(0,88,202,0.18)]">
+    <div
+      id={`dpr-${row.id}`}
+      className={cn(
+        "group scroll-mt-24 rounded-xl border bg-paper px-4 py-3 shadow-[0_1px_2px_rgba(28,28,28,0.04)] transition-all hover:border-gold/30 hover:shadow-[0_4px_16px_-8px_rgba(0,88,202,0.18)]",
+        highlight ? "border-gold ring-2 ring-gold/40" : "border-hairline",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"
@@ -349,7 +385,13 @@ export default function DprPage() {
   const [prefill, setPrefill] = useState<DprPrefill | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("feed");
+  // AI Insights → DPR Intelligence deep-links here two ways: ?view=approvals opens the queue, and
+  // ?focus=<dprId> targets one pending DPR. A focused pending DPR lives in the approvals queue, so
+  // ?focus also opens that view and the id is used to scroll/highlight the matching row.
+  const focusDprId = searchParams.get("focus");
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    searchParams.get("view") === "approvals" || searchParams.get("focus") ? "approvals" : "feed",
+  );
   const [statusFilter, setStatusFilter] = useState<DprApprovalStatus | "ALL">("ALL");
   const [supervisorFilter, setSupervisorFilter] = useState<string>("ALL");
 
@@ -401,43 +443,56 @@ export default function DprPage() {
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: ["dpr", projectId, from, to],
+    // Both filters are part of the key: they run server-side, so changing either one is a
+    // different result set that has to re-page from the newest day.
+    queryKey: ["dpr", projectId, from, to, supervisorFilter, statusFilter],
     queryFn: ({ pageParam }) =>
-      dprApi.list(projectId, { from, to, before: pageParam ?? undefined, days: 14 }),
+      dprApi.list(projectId, {
+        from,
+        to,
+        before: pageParam ?? undefined,
+        days: 14,
+        ...supervisorFilterParam(supervisorFilter),
+        status: statusFilter === "ALL" ? undefined : statusFilter,
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.data?.hasMore ? lastPage.data.nextCursor ?? undefined : undefined,
     enabled: !!projectId && !!from && !!to,
   });
 
-  const allRows: DprSummaryRow[] = useMemo(
+  // Already filtered by the server — render as-is.
+  const rows: DprSummaryRow[] = useMemo(
     () => (listPages?.pages ?? []).flatMap((p) => p.data?.items ?? []),
     [listPages],
   );
 
-  // Supervisor options come from the loaded rows within the selected range (dedup, sorted).
-  // Stable key handles free-text supervisors that have no user id.
-  const supKey = (r: DprSummaryRow) => r.supervisorUserId || r.supervisorName || "";
-  const supervisorFilterOptions = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const r of allRows) {
-      if (r.supervisorName === "System") continue; // never offer the system/seed supervisor
-      const k = supKey(r);
-      if (k) m.set(k, r.supervisorName ?? k);
-    }
-    return Array.from(m, ([value, label]) => ({ value, label })).sort((a, b) =>
-      a.label.localeCompare(b.label),
-    );
-  }, [allRows]);
-
-  // Client-side filters (supervisor + status) — lightweight since rows are already loaded.
-  const rows: DprSummaryRow[] = useMemo(() => {
-    let out = allRows;
-    if (supervisorFilter !== "ALL") out = out.filter((r) => supKey(r) === supervisorFilter);
-    if (statusFilter !== "ALL")
-      out = out.filter((r) => (r.approvalStatus ?? "DRAFT") === statusFilter);
-    return out;
-  }, [allRows, statusFilter, supervisorFilter]);
+  // Supervisor options come from the canonical `supervisors-used` endpoint (the same source the
+  // Capacity Utilization tab uses): a server-side DISTINCT over the whole [from,to] window, so
+  // the list is complete on first open. Deriving it from the loaded rows instead only ever
+  // showed the supervisors present in the pages fetched so far.
+  //
+  // includeUnlinked is required here: most projects store the supervisor as free text with a null
+  // supervisorUserId, and the default (id-only) list comes back empty for them.
+  const { data: supervisorsUsed } = useQuery({
+    queryKey: ["dpr-supervisors-used", projectId, from, to],
+    queryFn: () =>
+      capacityUtilizationApi.getSupervisorsUsed({
+        projectId,
+        fromDate: from,
+        toDate: to,
+        includeUnlinked: true,
+      }),
+    enabled: !!projectId && !!from && !!to,
+  });
+  const supervisorFilterOptions = useMemo(
+    () =>
+      (supervisorsUsed?.data ?? [])
+        .filter((s) => s.supervisorName !== "System") // never offer the system/seed supervisor
+        .map((s) => ({ value: supervisorFilterValue(s), label: s.supervisorName }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [supervisorsUsed],
+  );
 
   // Pending approvals count for the badge (always fetched when user has DPR.APPROVE).
   const { data: pendingBadgeData } = useQuery({
@@ -746,12 +801,12 @@ export default function DprPage() {
         </Drawer>
 
         {viewMode === "approvals" ? (
-          <DprApprovalsView projectId={projectId} />
+          <DprApprovalsView projectId={projectId} focusDprId={focusDprId} />
         ) : (
           <>
-            {statusFilter !== "ALL" && rows.length === 0 && allRows.length > 0 && (
+            {rows.length === 0 && (statusFilter !== "ALL" || supervisorFilter !== "ALL") && (
               <div className="mb-4 rounded-lg border border-dashed border-hairline bg-ivory/30 px-6 py-8 text-center text-sm text-slate">
-                No DPRs with status &ldquo;{statusFilter}&rdquo; in this date range.
+                No DPRs match the selected filters in this date range.
               </div>
             )}
             <DprDayList

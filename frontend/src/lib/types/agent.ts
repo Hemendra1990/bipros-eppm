@@ -76,8 +76,10 @@ export interface AgentFindingDto {
   validUntil?: string | null;
   lastSeenAt?: string | null;
   acknowledgedBy?: string | null;
+  acknowledgedByName?: string | null;
   acknowledgedAt?: string | null;
   resolvedBy?: string | null;
+  resolvedByName?: string | null;
   resolvedAt?: string | null;
   createdAt: string;
 }
@@ -99,6 +101,8 @@ export interface AgentRunDto {
   finishedAt?: string | null;
   durationMs?: number | null;
   errorMessage?: string | null;
+  /** Raw gather() snapshot from the last run — drives the always-on coverage card. */
+  snapshot?: Record<string, unknown> | null;
 }
 
 export interface AgentSummaryDto {
@@ -106,6 +110,9 @@ export interface AgentSummaryDto {
   displayName: string;
   supportsPortfolio: boolean;
   lastRun: AgentRunDto | null;
+  /** Currently-ACTIVE findings for this agent (persistent basis the KPI cards sum). Correct across
+   *  a SKIPPED_NO_CHANGE run, unlike lastRun.findingsCount which is 0 on a skip. */
+  activeFindingsCount?: number;
 }
 
 /** Spring-style page envelope used by the agent list endpoints. */

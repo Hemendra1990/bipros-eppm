@@ -129,6 +129,17 @@ public class MaterialKpiService {
         .filter(java.util.Objects::nonNull)
         .mapToDouble(BigDecimal::doubleValue)
         .sum();
+    // Projects that record material against APPROVED DPR lines (instead of the store-issue +
+    // consumption-log ledger) have empty logs — fold that DPR-consumed quantity in so the headline
+    // consumed reflects the same union the Material Consumption Report shows. The two paths are
+    // mutually exclusive per project, so we only substitute when the ledger is empty (no double-count).
+    if (consumedQty <= 0d) {
+      consumedQty = dprMaterials.stream()
+          .map(DprMaterial::getQuantity)
+          .filter(java.util.Objects::nonNull)
+          .mapToDouble(BigDecimal::doubleValue)
+          .sum();
+    }
 
     // Wastage = issued − consumed (clamped to ≥ 0). Returns are not modelled today, so
     // negative values would imply a data-quality issue rather than legitimate over-consumption.

@@ -262,8 +262,11 @@ export interface SupervisorOption {
   /**
    * User UUID. The {@code /dpr/supervisors-used} endpoint surfaces this JSON
    * field; Phase 091 dropped the legacy Resource-FK source.
+   *
+   * <p>Null only for entries returned under {@code includeUnlinked=true} — supervisors the DPRs
+   * record as free text with no user link. Those are identified by {@link supervisorName}.
    */
-  supervisorUserId: string;
+  supervisorUserId: string | null;
   supervisorCode: string | null;
   supervisorName: string;
   dprCount: number;
@@ -379,10 +382,17 @@ export const capacityUtilizationApi = {
     projectId: string;
     fromDate?: string;
     toDate?: string;
+    /**
+     * Also return supervisors recorded only as free text (null `supervisorUserId`). Off by
+     * default because this page filters strictly by user id; the DPR tab's filter accepts a name
+     * too and needs them, otherwise projects with no user links get an empty dropdown.
+     */
+    includeUnlinked?: boolean;
   }) => {
     const qs: string[] = [];
     if (params.fromDate) qs.push(`fromDate=${params.fromDate}`);
     if (params.toDate) qs.push(`toDate=${params.toDate}`);
+    if (params.includeUnlinked) qs.push("includeUnlinked=true");
     const tail = qs.length ? `?${qs.join("&")}` : "";
     return apiClient
       .get<ApiResponse<SupervisorOption[]>>(

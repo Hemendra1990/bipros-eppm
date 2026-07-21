@@ -67,6 +67,18 @@ public interface DprEquipmentRepository extends JpaRepository<DprEquipment, UUID
     @Query("select e.dprId, coalesce(sum(e.nos), 0) from DprEquipment e where e.dprId in :ids group by e.dprId")
     List<Object[]> sumNosByDprIdIn(@Param("ids") Collection<UUID> ids);
 
+    /** Σ equipment count (nos) deployed per activity across APPROVED DPRs. Returns [activityId (UUID), total (Long)]. */
+    @Query("""
+        select d.activityId, coalesce(sum(e.nos), 0)
+        from DprEquipment e, com.bipros.project.domain.model.DailyProgressReport d
+        where e.dprId = d.id
+          and d.projectId = :projectId
+          and d.activityId is not null
+          and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED
+        group by d.activityId
+        """)
+    List<Object[]> sumDeployedNosByActivityApproved(@Param("projectId") UUID projectId);
+
     // ---- From-scratch rebuild queries (Task 1: DPR Data Repair) ----
 
     /** All equipment rows for a DPR — used by data-repair to inspect/rebuild resource lines. */

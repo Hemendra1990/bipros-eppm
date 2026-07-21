@@ -80,6 +80,12 @@ export function useAgentStream(
 
     const handle = (event: string, d: Record<string, unknown>) => {
       const agentKey = typeof d.agentKey === "string" ? d.agentKey : undefined;
+      // The SSE frame is the whole AgentStreamEvent: agentKey/type are top-level, but the
+      // type-specific fields (title, findingType, status, findingsCount, …) are nested under `payload`.
+      const payload = (d.payload && typeof d.payload === "object" ? d.payload : {}) as Record<
+        string,
+        unknown
+      >;
       if (event === "run_started" && agentKey) {
         setLive((p) => ({
           ...p,
@@ -104,13 +110,13 @@ export function useAgentStream(
         setFindingPings((p) =>
           [
             {
-              key: `${(d.findingId as string) ?? "f"}-${seq.current++}`,
-              findingId: d.findingId as string | undefined,
+              key: `${(payload.findingId as string) ?? "f"}-${seq.current++}`,
+              findingId: payload.findingId as string | undefined,
               agentKey,
-              findingType: d.findingType as string | undefined,
-              severity: d.severity as string | undefined,
-              title: d.title as string | undefined,
-              notifiable: d.notifiable as boolean | undefined,
+              findingType: payload.findingType as string | undefined,
+              severity: payload.severity as string | undefined,
+              title: payload.title as string | undefined,
+              notifiable: payload.notifiable as boolean | undefined,
               at: Date.now(),
             },
             ...p,
@@ -126,9 +132,9 @@ export function useAgentStream(
           }));
         }
       } else if (event === "run_finished" && agentKey) {
-        const status = (d.status as string) || "SUCCEEDED";
+        const status = (payload.status as string) || "SUCCEEDED";
         const findingsCount =
-          typeof d.findingsCount === "number" ? d.findingsCount : undefined;
+          typeof payload.findingsCount === "number" ? payload.findingsCount : undefined;
         setLive((p) => ({
           ...p,
           [agentKey]: {

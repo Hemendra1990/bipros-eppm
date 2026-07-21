@@ -202,7 +202,7 @@ public class GisIntelligenceAgent extends AbstractAgent {
                 EvidenceRef.metric("Variance", signed(variance)),
                 EvidenceRef.metric("Verification status", v.varianceStatus() == null ? "UNKNOWN" : v.varianceStatus()),
                 EvidenceRef.entity("Stretch", stretchLabel(v), "wbs-polygon", v.wbsPolygonId(),
-                        "/projects/" + projectId + "/gis?focus=" + v.wbsPolygonId()));
+                        "/projects/" + projectId + "/gis-viewer?focus=" + v.wbsPolygonId()));
     }
 
     private static String stretchLabel(ProgressVarianceResponse v) {

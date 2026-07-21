@@ -167,8 +167,11 @@ public class LabourCostIntelligenceAgent extends AbstractAgent {
         ev.add(EvidenceRef.money("Actual labour cost (ALC)", BigDecimal.valueOf(alc)));
         ev.add(EvidenceRef.money("Manpower cost variance", BigDecimal.valueOf(variance)));
         ev.add(EvidenceRef.metric("LCPI", fmt2(lcpi)));
-        ev.add(EvidenceRef.entity("Cost report", "Open", "project", projectId,
-                "/projects/" + projectId + "/daily-cost-report"));
+        // Operational Insights → Manpower KPIs, NOT the Daily Cost Report. The daily report is
+        // total cost against BOQ rates for every resource; these figures are manpower-only, so it
+        // is the Manpower KPI card (planned/actual manpower cost, LCPI) that matches this finding.
+        ev.add(EvidenceRef.entity("Manpower KPIs", "Open", "project", projectId,
+                "/projects/" + projectId + "/insights/operational"));
 
         return new AgentFindingDraft(
                 "LABOUR_COST_OVERRUN", "PROJECT", severity, 0.9,
@@ -201,7 +204,7 @@ public class LabourCostIntelligenceAgent extends AbstractAgent {
             ev.add(EvidenceRef.entity(u.name,
                     money(u.costPerUnit) + " / unit (" + money(u.laborCost) + " over " + fmt1(u.output) + " units)",
                     "activity", u.activityId,
-                    u.activityId == null ? "/projects/" + projectId + "/daily-cost-report"
+                    u.activityId == null ? "/projects/" + projectId + "/insights/operational"
                             : "/projects/" + projectId + "/activities/" + u.activityId));
         }
 

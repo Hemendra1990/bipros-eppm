@@ -74,6 +74,18 @@ public interface DprManpowerRepository extends JpaRepository<DprManpower, UUID> 
     @Query("select m.dprId, coalesce(sum(m.nos), 0) from DprManpower m where m.dprId in :ids group by m.dprId")
     List<Object[]> sumNosByDprIdIn(@Param("ids") Collection<UUID> ids);
 
+    /** Σ manpower headcount (nos) deployed per activity across APPROVED DPRs. Returns [activityId (UUID), total (Long)]. */
+    @Query("""
+        select d.activityId, coalesce(sum(m.nos), 0)
+        from DprManpower m, com.bipros.project.domain.model.DailyProgressReport d
+        where m.dprId = d.id
+          and d.projectId = :projectId
+          and d.activityId is not null
+          and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED
+        group by d.activityId
+        """)
+    List<Object[]> sumDeployedNosByActivityApproved(@Param("projectId") UUID projectId);
+
     // ---- From-scratch rebuild queries (Task 1: DPR Data Repair) ----
 
     /** All manpower rows for a DPR — used by data-repair to inspect/rebuild resource lines. */

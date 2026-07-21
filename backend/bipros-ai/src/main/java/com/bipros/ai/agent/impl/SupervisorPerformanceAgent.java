@@ -8,6 +8,8 @@ import com.bipros.ai.agent.core.AgentRunContext;
 import com.bipros.ai.agent.core.EvidenceRef;
 import com.bipros.ai.agent.core.GatherResult;
 import com.bipros.ai.agent.core.Severity;
+import com.bipros.ai.agent.support.CapacityUtilizationProvider;
+import com.bipros.ai.agent.support.CapacityUtilizationProvider.SupervisorEfficiency;
 import com.bipros.project.domain.model.DailyProgressReport;
 import com.bipros.project.domain.model.DprApprovalStatus;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
@@ -31,6 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -76,6 +79,8 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
 
     private final DailyProgressReportRepository dprRepository;
     private final ActivityRepository activityRepository;
+    /** Canonical capacity engine — the ONLY source of resource-efficiency figures (never re-derived here). */
+    private final Optional<CapacityUtilizationProvider> capacityProvider;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -116,8 +121,8 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
         Map<String, Sup> bySupervisor = new LinkedHashMap<>();
         Map<UUID, BigDecimal> totalQtyByActivity = new HashMap<>();
         for (DailyProgressReport d : dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId)) {
-            DprApprovalStatus st = d.getApprovalStatus();
-            if (st != DprApprovalStatus.SUBMITTED && st != DprApprovalStatus.APPROVED) continue;
+            // APPROVED only — an unapproved DPR is not yet an accepted fact about the site.
+            if (d.getApprovalStatus() != DprApprovalStatus.APPROVED) continue;
             String key = d.getSupervisorUserId() != null
                     ? "u:" + d.getSupervisorUserId()
                     : (d.getSupervisorName() != null ? "n:" + d.getSupervisorName().toLowerCase(Locale.ROOT) : null);
@@ -167,6 +172,11 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
 
         scores.sort(Comparator.comparingDouble((Score sc) -> sc.avgPct).reversed());
 
+        // Resource efficiency for the SAME supervisors, read from the canonical capacity engine — the
+        // second, independent dimension: progress says how much of the work is done, efficiency says
+        // whether the crews hit the productivity norm while doing it.
+        Map<UUID, SupervisorEfficiency> effById = loadEfficiency(projectId, scores);
+
         Instant validUntil = now.plus(TTL);
         ArrayNode rowsNode = snapshot.putArray("supervisors");
         for (Score sc : scores) {
@@ -177,6 +187,13 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
             n.put("avgPercentComplete", round(sc.avgPct));
             n.put("delayed", sc.delayed);
             n.put("delayRatio", round(sc.delayRatio));
+            SupervisorEfficiency eff = effById.get(sc.sup.userId());
+            if (eff != null) {
+                putPct(n, "manpowerEfficiencyPct", eff.manpowerEfficiencyPct());
+                putPct(n, "equipmentEfficiencyPct", eff.equipmentEfficiencyPct());
+                putPct(n, "efficiencyPct", eff.overallEfficiencyPct());
+                n.put("countedDays", round(eff.countedDays()));
+            }
         }
         snapshot.put("supervisorCount", scores.size());
 
@@ -192,7 +209,7 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
         // --- Scorecard summary (SUPERVISOR_COMPARISON) ---
         Score best = scores.get(0);
         Score worst = scores.get(scores.size() - 1);
-        candidates.add(comparison(projectId, scores.size(), best, worst, medianPct, validUntil));
+        candidates.add(comparison(projectId, scores, best, worst, medianPct, effById, validUntil));
 
         // --- Per-supervisor underperformance (SUPERVISOR_UNDERPERFORMANCE) ---
         for (Score sc : scores) {
@@ -204,7 +221,7 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
             boolean delayLag = sc.delayRatio >= DELAY_LAG_RATIO && sc.delayRatio > medianDelay + 0.10;
             if (progressLag || delayLag) {
                 candidates.add(underperformance(projectId, sc, medianPct, medianDelay,
-                        progressLag, delayLag, validUntil));
+                        progressLag, delayLag, effById.get(sc.sup.userId()), validUntil));
             }
         }
 
@@ -212,38 +229,66 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
         return new GatherResult(snapshot, candidates);
     }
 
-    private AgentFindingDraft comparison(UUID projectId, int count, Score best, Score worst,
-                                         double medianPct, Instant validUntil) {
+    private AgentFindingDraft comparison(UUID projectId, List<Score> scores, Score best, Score worst,
+                                         double medianPct, Map<UUID, SupervisorEfficiency> effById,
+                                         Instant validUntil) {
+        int count = scores.size();
+        List<EvidenceRef> evidence = new ArrayList<>();
+        // Chart every supervisor on progress — the dimension with real spread (efficiency sits in a
+        // narrow band, so bars would be indistinguishable). Median is the reference line.
+        evidence.add(EvidenceRef.chart("Progress by supervisor", new EvidenceRef.Series(
+                "COLUMN", "%",
+                scores.stream()
+                        .map(sc -> new EvidenceRef.Series.Point(sc.sup.name(), round(sc.avgPct)))
+                        .toList(),
+                round(medianPct), "Peer median " + pctv(medianPct))));
+        evidence.add(EvidenceRef.metric("Supervisors compared", String.valueOf(count)));
+        evidence.add(EvidenceRef.metric("Peer median progress", pctv(medianPct)));
+        // One row per supervisor carrying BOTH dimensions, each deep-linking into the Capacity Util.
+        // tab filtered to that supervisor — where the full per-trade / per-equipment table already lives.
+        for (Score sc : scores) {
+            evidence.add(supervisorEntity(projectId, sc.sup, rank(sc, best, worst),
+                    pctv(sc.avgPct) + " progress · " + effv(effById.get(sc.sup.userId())) + " efficiency"));
+        }
         return new AgentFindingDraft(
                 "SUPERVISOR_COMPARISON",
                 "PROJECT",
                 Severity.INFO,
                 0.9,
                 "Ranked across " + count + " supervisors by progress attributed to each supervisor's own share "
-                        + "of the executed work",
+                        + "of the executed work; efficiency read from the Capacity Utilization engine",
                 "Supervisor scorecard: " + best.sup.name() + " leads, " + worst.sup.name() + " lags",
-                count + " supervisors were compared on the average progress of their activities. "
+                count + " supervisors were compared on two independent measures — the average progress of "
+                        + "their activities, and resource efficiency against the productivity norm. "
                         + best.sup.name() + " leads at " + pctv(best.avgPct) + " avg complete ("
-                        + best.delayed + " late); " + worst.sup.name() + " trails at " + pctv(worst.avgPct)
-                        + " (" + worst.delayed + " late), against a peer median of " + pctv(medianPct) + ".",
-                "Progress per supervisor varies with crew mix, activity difficulty and site conditions; the "
-                        + "spread shows where planning attention moves the schedule most.",
+                        + best.delayed + " late, " + effv(effById.get(best.sup.userId())) + " efficiency); "
+                        + worst.sup.name() + " trails at " + pctv(worst.avgPct) + " (" + worst.delayed
+                        + " late, " + effv(effById.get(worst.sup.userId())) + " efficiency), against a peer "
+                        + "median progress of " + pctv(medianPct) + ".",
+                "Progress per supervisor varies with crew mix, activity difficulty and site conditions. "
+                        + "Progress and efficiency answer different questions: progress is how much of the "
+                        + "work is finished, efficiency is whether the crews hit the norm while doing it — a "
+                        + "supervisor can be efficient yet behind if they were given less work or are blocked.",
                 "Comparing supervisors head-to-head highlights who needs support and who is running work well — "
                         + "the same crews redeployed toward the lagging front recover time at no extra cost.",
                 "Review " + worst.sup.name() + "'s activities with the project manager; consider pairing them "
-                        + "with " + best.sup.name() + " or re-balancing crews toward the schedule-critical front.",
-                List.of(
-                        EvidenceRef.metric("Supervisors compared", String.valueOf(count)),
-                        EvidenceRef.metric("Top — " + best.sup.name(), pctv(best.avgPct) + " complete"),
-                        EvidenceRef.metric("Lagging — " + worst.sup.name(), pctv(worst.avgPct) + " complete"),
-                        EvidenceRef.metric("Peer median progress", pctv(medianPct)),
-                        supervisorEntity(projectId, worst.sup, "Lagging supervisor")),
+                        + "with " + best.sup.name() + " or re-balancing crews toward the schedule-critical front. "
+                        + "Open any supervisor below to see their trade-by-trade efficiency.",
+                evidence,
                 Map.of("PROJECT_MANAGER", List.of()),
                 validUntil);
     }
 
+    /** Row label; the card renders it as "{label} — {value}", so the rank reads as a suffix. */
+    private static String rank(Score sc, Score best, Score worst) {
+        if (sc == best) return sc.sup.name() + " (top)";
+        if (sc == worst) return sc.sup.name() + " (lagging)";
+        return sc.sup.name();
+    }
+
     private AgentFindingDraft underperformance(UUID projectId, Score sc, double medianPct, double medianDelay,
-                                               boolean progressLag, boolean delayLag, Instant validUntil) {
+                                               boolean progressLag, boolean delayLag,
+                                               SupervisorEfficiency eff, Instant validUntil) {
         double gapPP = medianPct - sc.avgPct;
         boolean farBelow = medianPct > 0 && sc.avgPct <= medianPct * 0.4;
         Severity severity;
@@ -260,7 +305,11 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
         evidence.add(EvidenceRef.metric("Delayed activities", sc.delayed + " of " + sc.activityCount
                 + " (" + pctv(sc.delayRatio * 100) + ")"));
         evidence.add(EvidenceRef.metric("Active reporting days", String.valueOf(sc.sup.activeDays.size())));
-        evidence.add(supervisorEntity(projectId, sc.sup, "Supervisor"));
+        if (eff != null && eff.overallEfficiencyPct() != null) {
+            evidence.add(EvidenceRef.metric("Resource efficiency", effv(eff)));
+        }
+        evidence.add(supervisorEntity(projectId, sc.sup, "Supervisor",
+                pctv(sc.avgPct) + " progress · " + effv(eff) + " efficiency"));
 
         return new AgentFindingDraft(
                 "SUPERVISOR_UNDERPERFORMANCE",
@@ -283,9 +332,50 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
                 validUntil);
     }
 
-    private static EvidenceRef supervisorEntity(UUID projectId, Sup sup, String label) {
-        return EvidenceRef.entity(label, sup.name(), "user", sup.userId(),
-                "/projects/" + projectId + "/dpr");
+    /**
+     * A supervisor row that deep-links into Capacity Utilization pre-filtered to them — that tab already
+     * renders the full trade-by-trade and equipment-by-equipment breakdown, so the drill-down reuses it
+     * rather than rebuilding a table on the finding card.
+     */
+    private static EvidenceRef supervisorEntity(UUID projectId, Sup sup, String label, String value) {
+        String base = "/projects/" + projectId + "/capacity-utilization";
+        String link = sup.userId() != null ? base + "?supervisorUserId=" + sup.userId() : base;
+        return EvidenceRef.entity(label, value, "user", sup.userId(), link);
+    }
+
+    /** Efficiency for the scored supervisors, straight from the canonical engine. Empty when unavailable. */
+    private Map<UUID, SupervisorEfficiency> loadEfficiency(UUID projectId, List<Score> scores) {
+        List<UUID> ids = scores.stream()
+                .map(sc -> sc.sup.userId())
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (capacityProvider.isEmpty() || ids.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            Map<UUID, SupervisorEfficiency> out = new LinkedHashMap<>();
+            for (SupervisorEfficiency e : capacityProvider.get().cumulativeBySupervisor(projectId, ids)) {
+                out.put(e.supervisorUserId(), e);
+            }
+            return out;
+        } catch (RuntimeException ex) {
+            // Efficiency is a supplement — never fail the whole progress comparison over it.
+            log.warn("Supervisor efficiency unavailable for project {}: {}", projectId, ex.toString());
+            return Map.of();
+        }
+    }
+
+    /** Overall efficiency for display, or "n/a" when the supervisor has no norm-resolved resource days. */
+    private static String effv(SupervisorEfficiency eff) {
+        return eff == null || eff.overallEfficiencyPct() == null
+                ? "n/a"
+                : String.format(Locale.ROOT, "%.1f%%", eff.overallEfficiencyPct());
+    }
+
+    private static void putPct(ObjectNode node, String field, Double pct) {
+        if (pct != null) {
+            node.put(field, round(pct));
+        }
     }
 
     private static boolean isDelayed(Activity a, LocalDate today) {

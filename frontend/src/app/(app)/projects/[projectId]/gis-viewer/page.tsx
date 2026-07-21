@@ -257,6 +257,12 @@ function GisViewerPageInner() {
   // Auto-select the first polygon once, so the viewer opens scoped to a single
   // polygon rather than a merged "all polygons" set. The user can still clear
   // the selection ("Show all") afterwards without it snapping back.
+  //
+  // ?focus=<wbsPolygonId> (AI Insights deep-links) takes priority over the first
+  // polygon. It is resolved HERE rather than in a competing effect so this one
+  // cannot win the race and select polygon[0] instead; and it stays gated on
+  // loaded data, so MapViewer's fit-to-feature always finds the feature.
+  const focusPolygonId = searchParams.get("focus");
   const didAutoSelectPolygonRef = useRef(false);
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -266,9 +272,13 @@ function GisViewerPageInner() {
       polygonListItems.length > 0
     ) {
       didAutoSelectPolygonRef.current = true;
-      setSelectedPolygonId(polygonListItems[0].id);
+      // Only honour the focused id if it really is a polygon of this project.
+      const focused = focusPolygonId
+        ? polygonListItems.find((p) => p.id === focusPolygonId)
+        : undefined;
+      setSelectedPolygonId((focused ?? polygonListItems[0]).id);
     }
-  }, [polygonListItems, selectedPolygonId]);
+  }, [polygonListItems, selectedPolygonId, focusPolygonId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // WhatsApp deep-link: hydrate auth from ?auth= query param or cookie.

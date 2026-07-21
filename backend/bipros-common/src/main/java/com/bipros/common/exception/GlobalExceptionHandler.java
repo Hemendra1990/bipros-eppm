@@ -185,7 +185,17 @@ public class GlobalExceptionHandler {
 
     /** Uploaded file or request body could not be read (e.g. client disconnect mid-upload). */
     @ExceptionHandler(IOException.class)
-    public ResponseEntity<ApiResponse<Void>> handleIoError(IOException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleIoError(IOException ex, HttpServletResponse response) {
+        // A broken pipe / aborted connection during an SSE or async stream surfaces here as an
+        // IOException on a response whose headers are already committed (text/event-stream). We can't
+        // write a JSON ApiResponse body onto that — it fails with HttpMessageNotWritableException and
+        // logs a second stack trace per disconnect. Bail quietly; the client is already gone.
+        if (response.isCommitted()) {
+            if (log.isDebugEnabled()) {
+                log.debug("IO error after response committed (client disconnect, suppressing body): {}", ex.getMessage());
+            }
+            return null;
+        }
         log.warn("IO error: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("IO_ERROR",

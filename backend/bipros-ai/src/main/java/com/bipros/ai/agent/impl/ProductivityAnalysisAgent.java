@@ -6,12 +6,8 @@ import com.bipros.ai.agent.core.AgentRunContext;
 import com.bipros.ai.agent.core.EvidenceRef;
 import com.bipros.ai.agent.core.GatherResult;
 import com.bipros.ai.agent.core.Severity;
-import com.bipros.project.domain.model.DailyProgressReport;
-import com.bipros.project.domain.model.DprApprovalStatus;
-import com.bipros.project.domain.repository.DailyProgressReportRepository;
-import com.bipros.project.domain.repository.DprSubContractorRepository;
-import com.bipros.resource.domain.service.ProductivityNormLookupService;
-import com.bipros.resource.domain.service.ResolvedNorm;
+import com.bipros.ai.agent.support.CapacityUtilizationProvider;
+import com.bipros.ai.agent.support.CapacityUtilizationProvider.ActivityEfficiency;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,39 +15,36 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Productivity Analysis agent. A deterministic {@link #gather} that compares each activity's
- * <em>actual</em> daily output against its <em>planned productivity norm</em> and flags the
- * activities running materially below norm — i.e. declining or under-performing production.
+ * Productivity Analysis agent. Flags the work-activities whose <em>actual output-per-resource-day</em>
+ * is running materially below their <em>planned productivity norm</em> — i.e. under-performing
+ * production, per work-front.
  *
- * <p>Actual output is read from the Daily Progress Reports (quantity executed per reporting day per
- * activity); the planned norm is resolved from the productivity-norm master via
- * {@link ProductivityNormLookupService#resolveByName} (the unscoped, activity-level output-per-day).
- * Only activities whose DPR unit matches the norm unit are compared, so the ratio is apples-to-apples.
+ * <p>Numbers come EXACTLY from the canonical Capacity Utilisation computation via
+ * {@link CapacityUtilizationProvider#cumulativeByActivity} (a Dependency-Inversion port; the heavy
+ * allocator + norm resolution live in the unreachable {@code bipros-reporting} module). That is the
+ * SAME allocator, norm resolution and efficiency formula the Capacity Util. tab uses, only regrouped
+ * by work-activity — so the agent never re-derives, and never drifts from, the tab. The per-role
+ * Capacity Utilisation agent answers "which resource ROLE is inefficient"; this answers "which
+ * ACTIVITY is producing below norm", split by resource type so the lagging side is named.
  *
  * <ul>
- *   <li>{@code PRODUCTIVITY_BELOW_NORM} — activities whose actual output-per-day is materially below
- *       their norm, with the worst first.</li>
+ *   <li>{@code PRODUCTIVITY_BELOW_NORM} — activities whose manpower or equipment efficiency is
+ *       materially below norm, worst first.</li>
  * </ul>
  *
- * <p>Dormant on projects without a productivity-norm master (nothing to compare against). The output
- * is crew-size-neutral (norm is a standard-crew figure), so confidence is high but not exact.
+ * <p>Dormant on projects with no norm-resolved activity output (nothing to compare against).
  */
 @Slf4j
 @Component
@@ -61,15 +54,13 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
     private static final String KEY = "productivity_analysis";
     private static final Duration TTL = Duration.ofDays(7);
 
-    /** An activity needs at least this many reporting days before its productivity is judged. */
-    private static final int MIN_DAYS = 3;
-    /** Actual output-per-day this far below norm (fraction) is "below norm". */
-    private static final double BELOW_MARGIN = 0.20;
+    /** Efficiency at or below this (% of norm) is "below norm". */
+    private static final double BELOW_PCT = 80.0;
+    /** A side needs at least this many tracked resource-days before its efficiency is judged. */
+    private static final double MIN_ACTUAL_DAYS = 5.0;
     private static final int MAX_EXAMPLES = 6;
 
-    private final DailyProgressReportRepository dprRepository;
-    private final DprSubContractorRepository dprSubContractorRepository;
-    private final ProductivityNormLookupService normLookup;
+    private final Optional<CapacityUtilizationProvider> capacityProvider;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -99,157 +90,115 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
         Instant now = ctx.now() == null ? Instant.now() : ctx.now();
         Instant validUntil = now.plus(TTL);
 
-        // Aggregate actual output per activity from reported DPRs.
-        Map<String, Act> byActivity = new LinkedHashMap<>();
-        for (DailyProgressReport d : dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId)) {
-            DprApprovalStatus st = d.getApprovalStatus();
-            if (st != DprApprovalStatus.SUBMITTED && st != DprApprovalStatus.APPROVED) continue;
-            if (d.getActivityName() == null || d.getQtyExecuted() == null) continue;
-            String key = d.getActivityName().toLowerCase(Locale.ROOT);
-            Act a = byActivity.computeIfAbsent(key, k -> new Act(d.getActivityName(), d.getActivityId(), d.getUnit()));
-            a.totalQty = a.totalQty.add(d.getQtyExecuted());
-            if (d.getReportDate() != null) {
-                a.days.add(d.getReportDate());
-                // Crew-day = one reporting front on one date. A "front" is the supervisor when known, else the
-                // chainage/side key — so N parallel crews on a date count as N crew-days and the per-crew-day
-                // output isn't inflated by summing every front's output over calendar days.
-                Object front = d.getSupervisorUserId() != null
-                        ? d.getSupervisorUserId()
-                        : Arrays.asList(d.getChainageFromM(), d.getChainageToM(), d.getSide());
-                a.crewDays.add(Arrays.asList(d.getReportDate(), front));
+        // Canonical per-(work-activity, resource-type) efficiency — same figures as the Capacity tab.
+        List<ActivityEfficiency> rows = capacityProvider
+                .map(p -> p.cumulativeByActivity(projectId))
+                .orElse(List.of());
+
+        // Fold the two resource-type rows into one per work-activity.
+        Map<UUID, Act> byActivity = new LinkedHashMap<>();
+        for (ActivityEfficiency r : rows) {
+            Act a = byActivity.computeIfAbsent(r.workActivityId(), k -> new Act(r.activityName()));
+            if ("MANPOWER".equals(r.resourceType())) {
+                a.mpEff = r.efficiencyPct();
+                a.mpDays = r.actualDays();
+                a.mpBudget = r.budgetDays();
+            } else {
+                a.eqEff = r.efficiencyPct();
+                a.eqDays = r.actualDays();
+                a.eqBudget = r.budgetDays();
             }
         }
 
-        // Sub-contractor-delivered quantity per activity (canonical: ManpowerKpiService subtracts this from
-        // crew output). Netting it out means SC-delivered work isn't counted as the deployed crew's productivity.
-        Map<UUID, Double> scQtyByActivity = new HashMap<>();
-        for (Object[] r : dprSubContractorRepository.sumQuantityByProjectGroupedByActivity(projectId)) {
-            if (r[0] != null && r[1] != null) {
-                scQtyByActivity.put((UUID) r[0], ((BigDecimal) r[1]).doubleValue());
-            }
-        }
-
-        int normsResolved = 0;
-        List<Lag> below = new ArrayList<>();
+        int withNorm = 0;
         int aboveOrOn = 0;
+        List<Lag> below = new ArrayList<>();
         for (Act a : byActivity.values()) {
-            if (a.days.size() < MIN_DAYS) continue;
-            ResolvedNorm norm = resolveNorm(a.name);
-            if (norm == null || norm.outputPerDay() == null || norm.outputPerDay().signum() <= 0) continue;
-            // Only compare when the units line up — but normalise first, since the DPR ("cu.m.") and the
-            // norm master ("cum") spell the same unit differently. Skip only on a genuine unit clash.
-            if (unitClash(a.unit, norm.unit())) continue;
-            normsResolved++;
-
-            double normPerDay = norm.outputPerDay().doubleValue();
-            // Per crew-day (not calendar day): crew output ÷ distinct (date, front) pairs, so multiple parallel
-            // crews on one date don't inflate the ratio against the single-crew norm. Crew output nets out
-            // sub-contractor-delivered qty so SC work isn't attributed to the deployed crew's productivity.
-            double scQty = a.activityId != null ? scQtyByActivity.getOrDefault(a.activityId, 0.0) : 0.0;
-            double crewQty = Math.max(0.0, a.totalQty.doubleValue() - scQty);
-            double actualPerDay = crewQty / a.crewDays.size();
-            double ratio = actualPerDay / normPerDay;
-            if (ratio < 1.0 - BELOW_MARGIN) {
-                below.add(new Lag(a, actualPerDay, normPerDay, ratio));
+            Lag worst = worstSide(a);
+            if (worst == null) continue; // no side with enough tracked days to judge
+            withNorm++;
+            if (worst.effPct() < BELOW_PCT) {
+                below.add(worst);
             } else {
                 aboveOrOn++;
             }
         }
 
-        snapshot.put("activitiesWithNorm", normsResolved);
+        snapshot.put("activitiesWithNorm", withNorm);
         snapshot.put("belowNorm", below.size());
         snapshot.put("atOrAboveNorm", aboveOrOn);
-
-        // Per-activity fingerprint of the below-norm set, so a DPR that materially moves an
-        // activity's output-per-day WITHOUT flipping its below/above-norm bucket (or that swaps
-        // one below-norm activity for another while the 3 counts stay identical) still changes the
-        // snapshot hash and re-runs the agent. Ratio is bucketed into 5% bands (band = round(ratio/0.05)):
-        // idle-day / ±0.01 DPRs stay in-band and don't churn, but a real productivity shift crosses a
-        // band. Sorted by activity key because `below` is in DPR-insertion order (byActivity is a
-        // LinkedHashMap), not sorted — the explicit sort is what makes the serialized hash deterministic.
+        // Fingerprint the below-norm set (5% efficiency bands, sorted) so a real productivity shift
+        // that doesn't flip the below/above counts still changes the snapshot hash and re-runs.
         List<Lag> fingerprint = new ArrayList<>(below);
-        fingerprint.sort(Comparator.comparing((Lag l) -> l.a.name == null ? "" : l.a.name.toLowerCase(Locale.ROOT)));
-        ArrayNode belowBands = snapshot.putArray("belowNormBands");
+        fingerprint.sort(Comparator.comparing(l -> l.name() == null ? "" : l.name().toLowerCase(Locale.ROOT)));
+        ArrayNode bands = snapshot.putArray("belowNormBands");
         for (Lag l : fingerprint) {
-            ObjectNode e = belowBands.addObject();
-            e.put("activity", l.a.name == null ? "" : l.a.name.toLowerCase(Locale.ROOT));
-            e.put("band5", (int) Math.round(l.ratio / 0.05));
+            ObjectNode e = bands.addObject();
+            e.put("activity", l.name() == null ? "" : l.name().toLowerCase(Locale.ROOT));
+            e.put("band5", (int) Math.round(l.effPct() / 5.0));
         }
 
         if (!below.isEmpty()) {
-            candidates.add(belowNorm(projectId, below, normsResolved, validUntil));
+            candidates.add(belowNorm(projectId, below, withNorm, validUntil));
         }
-        // Dormant when no activity resolves a norm (no productivity master) — no candidates.
 
         candidates.sort((x, y) -> y.severity().ordinal() - x.severity().ordinal());
         return new GatherResult(snapshot, candidates);
     }
 
-    /** True only when both units are present and, once normalised (lowercased, punctuation stripped),
-     *  clearly differ — e.g. "cu.m." and "cum" do NOT clash, but "cum" and "sqm" do. */
-    private static boolean unitClash(String a, String b) {
-        if (a == null || a.isBlank() || b == null || b.isBlank()) return false;
-        return !normUnit(a).equals(normUnit(b));
-    }
-
-    private static String normUnit(String u) {
-        return u.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-    }
-
-    private ResolvedNorm resolveNorm(String activityName) {
-        try {
-            return normLookup.resolveByName(activityName, null);
-        } catch (Exception e) {
-            log.debug("norm resolve failed for '{}': {}", activityName, e.getMessage());
-            return null;
+    /** The worse-performing resource side of an activity, considering only sides with enough tracked
+     *  resource-days to judge; {@code null} when neither side qualifies. */
+    private static Lag worstSide(Act a) {
+        Lag worst = null;
+        if (a.mpEff != null && a.mpDays >= MIN_ACTUAL_DAYS) {
+            worst = new Lag(a.name, "manpower", a.mpEff, a.mpBudget, a.mpDays);
         }
+        if (a.eqEff != null && a.eqDays >= MIN_ACTUAL_DAYS
+                && (worst == null || a.eqEff < worst.effPct())) {
+            worst = new Lag(a.name, "equipment", a.eqEff, a.eqBudget, a.eqDays);
+        }
+        return worst;
     }
 
     private AgentFindingDraft belowNorm(UUID projectId, List<Lag> below, int withNorm, Instant validUntil) {
-        below.sort(Comparator.comparingDouble(l -> l.ratio));
+        below.sort(Comparator.comparingDouble(Lag::effPct));
         int n = below.size();
-        double worstRatio = below.get(0).ratio;
+        Lag worst = below.get(0);
         double share = withNorm == 0 ? 0 : (double) n / withNorm;
-        Severity severity = worstRatio < 0.5 || share >= 0.5 ? Severity.HIGH
-                : worstRatio < 0.7 || n >= 3 ? Severity.MEDIUM : Severity.LOW;
+        Severity severity = worst.effPct() < 50 || share >= 0.5 ? Severity.HIGH
+                : worst.effPct() < 70 || n >= 3 ? Severity.MEDIUM : Severity.LOW;
 
         List<EvidenceRef> ev = new ArrayList<>();
         ev.add(EvidenceRef.metric("Activities below norm", n + " of " + withNorm + " with a norm"));
         for (Lag l : below.subList(0, Math.min(MAX_EXAMPLES, n))) {
-            ev.add(EvidenceRef.entity(activityLabel(l.a),
-                    fmt(l.actualPerDay) + " vs norm " + fmt(l.normPerDay) + " " + unit(l.a)
-                            + "/day (" + pct(l.ratio * 100) + " of norm)",
-                    "activity", l.a.activityId,
-                    l.a.activityId == null ? "/projects/" + projectId + "/dpr"
-                            : "/projects/" + projectId + "/activities/" + l.a.activityId));
+            ev.add(EvidenceRef.entity(activityLabel(l.name()),
+                    l.side() + " " + pct(l.effPct()) + " of norm (norm-expected " + fmt(l.budgetDays())
+                            + " vs " + fmt(l.actualDays()) + " resource-days)",
+                    "activity", null,
+                    "/projects/" + projectId + "/capacity-utilization"));
         }
 
-        Lag worst = below.get(0);
         return new AgentFindingDraft(
-                "PRODUCTIVITY_BELOW_NORM", "PROJECT", severity, 0.8,
-                "Actual output-per-day (from DPRs) vs the activity's productivity norm",
+                "PRODUCTIVITY_BELOW_NORM", "PROJECT", severity, 0.85,
+                "Output per resource-day vs the productivity norm (canonical Capacity Utilisation), project-to-date",
                 n + " activit" + (n == 1 ? "y is" : "ies are") + " producing below their productivity norm",
                 n + " activit" + (n == 1 ? "y is" : "ies are") + " executing below the planned productivity norm; "
-                        + "the worst, " + activityLabel(worst.a) + ", is running at " + pct(worst.ratio * 100)
-                        + " of norm (" + fmt(worst.actualPerDay) + " vs " + fmt(worst.normPerDay) + " "
-                        + unit(worst.a) + "/day).",
-                "Output per crew-day is lagging the benchmark — a sign of a weaker crew, harder conditions, rework, "
-                        + "or tool/material gaps on these fronts rather than normal variation.",
-                "Below-norm productivity silently extends every affected activity's duration and inflates unit cost; "
-                        + "it is the earliest measurable warning of schedule and cost slip.",
-                "Review the lowest-ratio activities with the supervisor for the cause (crew skill, ground, rework, "
-                        + "materials) and set a recovery target back toward norm; re-baseline the norm only if it is "
-                        + "genuinely unachievable for this site.",
+                        + "the worst, " + activityLabel(worst.name()) + ", is running its " + worst.side()
+                        + " at " + pct(worst.effPct()) + " of norm (norm expected " + fmt(worst.budgetDays())
+                        + " resource-days for the output, but " + fmt(worst.actualDays()) + " were deployed).",
+                "Output per resource-day is lagging the benchmark — a sign of a weaker crew/plant, harder "
+                        + "conditions, rework, or tool/material gaps on these fronts rather than normal variation.",
+                "Below-norm productivity silently extends every affected activity's duration and inflates its unit "
+                        + "cost; it is the earliest measurable warning of schedule and cost slip.",
+                "Review the lowest-efficiency activities with the supervisor for the cause (crew skill, ground, "
+                        + "rework, materials) and set a recovery target back toward norm; re-baseline the norm only if "
+                        + "it is genuinely unachievable for this site.",
                 ev, Map.of("PLANNING_ENGINEER", List.of(), "SITE_MANAGER", List.of()), validUntil);
     }
 
-    private static String activityLabel(Act a) {
-        String name = a.name == null ? "activity" : a.name;
-        return name.length() > 48 ? name.substring(0, 47) + "…" : name;
-    }
-
-    private static String unit(Act a) {
-        return a.unit == null ? "units" : a.unit;
+    private static String activityLabel(String name) {
+        String n = name == null ? "activity" : name;
+        return n.length() > 48 ? n.substring(0, 47) + "…" : n;
     }
 
     private static String fmt(double v) {
@@ -262,20 +211,18 @@ public class ProductivityAnalysisAgent extends AbstractAgent {
 
     private static final class Act {
         final String name;
-        final UUID activityId;
-        final String unit;
-        BigDecimal totalQty = BigDecimal.ZERO;
-        final Set<LocalDate> days = new HashSet<>();
-        /** Distinct (reportDate, front) pairs — the crew-day denominator for output-per-day. */
-        final Set<Object> crewDays = new HashSet<>();
+        Double mpEff;
+        double mpDays;
+        double mpBudget;
+        Double eqEff;
+        double eqDays;
+        double eqBudget;
 
-        Act(String name, UUID activityId, String unit) {
+        Act(String name) {
             this.name = name;
-            this.activityId = activityId;
-            this.unit = unit;
         }
     }
 
-    private record Lag(Act a, double actualPerDay, double normPerDay, double ratio) {
+    private record Lag(String name, String side, double effPct, double budgetDays, double actualDays) {
     }
 }

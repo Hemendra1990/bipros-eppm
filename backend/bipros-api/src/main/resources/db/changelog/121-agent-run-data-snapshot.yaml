@@ -1,0 +1,12 @@
+databaseChangeLog:
+  # Adds the raw gather() snapshot to agent_run so the AI page can render an always-on
+  # coverage card per agent (value when healthy, reason + link when blank). Text, nullable.
+  - changeSet:
+      id: 121-1-agent-run-data-snapshot
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: ai
+            tableName: agent_run
+            columns:
+              - column: { name: data_snapshot, type: TEXT }

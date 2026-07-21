@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -9,12 +9,15 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { agentApi } from "@/lib/api/agentApi";
+import { cn } from "@/lib/utils/cn";
 import type { AgentFindingDto, AgentSeverity } from "@/lib/types";
 import { FindingCard } from "@/components/ai/agents/FindingCard";
 import { AgentActivityFeed } from "@/components/ai/agents/AgentActivityFeed";
 import { InvestigatePanel } from "@/components/ai/agents/InvestigatePanel";
 import { SiteWeatherPanel } from "@/components/ai/agents/SiteWeatherPanel";
 import { FindingsTicker } from "@/components/ai/agents/FindingsTicker";
+import { NoDataCard } from "@/components/ai/agents/NoDataCard";
+import { catalogFor, deriveCoverageStatus, type CoverageStatus } from "@/components/ai/agents/agentCatalog";
 import { SEVERITY_META, severityMeta } from "@/components/ai/agents/agentMeta";
 
 const SEVERITIES: AgentSeverity[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"];
@@ -64,6 +67,8 @@ export default function ProjectAiPage() {
   const [severity, setSeverity] = useState<AgentSeverity | "ALL">("ALL");
   const [agentKey, setAgentKey] = useState<string>("ALL");
   const [status, setStatus] = useState<string>("ACTIVE");
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
 
   const { data: agentsRes } = useQuery({
     queryKey: ["agents", projectId],
@@ -93,6 +98,31 @@ export default function ProjectAiPage() {
     };
   }, [activeFindings, activeRes]);
 
+  const activeByAgent = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const f of activeFindings) m[f.agentKey] = (m[f.agentKey] ?? 0) + 1;
+    return m;
+  }, [activeFindings]);
+
+  // Agents that currently have no data to analyse — rendered as same-style "no data" cards in the
+  // feed. Only in the default active/all-severity view, so severity/status filtering stays about findings.
+  const noDataAgents = useMemo<{ agent: (typeof agents)[number]; status: CoverageStatus }[]>(() => {
+    // Only in the broad views (all severities, and status Active or Any) — a narrow severity/status
+    // filter is about findings, not empty agents. "Any status" (ALL) is broader than Active, so it
+    // must show the cards too.
+    if (severity !== "ALL" || (status !== "ACTIVE" && status !== "ALL")) return [];
+    const out: { agent: (typeof agents)[number]; status: CoverageStatus }[] = [];
+    for (const a of agents) {
+      if (agentKey !== "ALL" && a.key !== agentKey) continue;
+      const entry = catalogFor(a.key);
+      if (entry.kind === "infra") continue;
+      const snap = (a.lastRun?.snapshot ?? null) as Record<string, unknown> | null;
+      const st = deriveCoverageStatus(entry, snap, activeByAgent[a.key] ?? 0);
+      if (st === "NO_DATA" || st === "NOT_CONFIGURED") out.push({ agent: a, status: st });
+    }
+    return out;
+  }, [agents, agentKey, severity, status, activeByAgent]);
+
   // The filtered board.
   const {
     data: boardRes,
@@ -111,12 +141,40 @@ export default function ProjectAiPage() {
   });
   const findings: AgentFindingDto[] = useMemo(() => {
     const list = boardRes?.data?.content ?? [];
+    // Triage first: most-severe on top. Within a severity, order alphabetically by section (agent)
+    // name so same-severity findings are predictable/scannable; confidence is the final tiebreaker.
+    const section = (f: AgentFindingDto) => agentNames[f.agentKey] ?? f.agentKey;
     return [...list].sort(
       (a, b) =>
         severityMeta(b.severity).order - severityMeta(a.severity).order ||
+        section(a).localeCompare(section(b)) ||
         (b.confidence ?? 0) - (a.confidence ?? 0),
     );
-  }, [boardRes]);
+  }, [boardRes, agentNames]);
+
+  // Click-through from the AI-briefing headline or an Executive-brief concern: jump to a finding's
+  // card. If it's filtered out of the current board (a concern often cites another agent's finding),
+  // widen the filters so it renders; the effect below scrolls + rings it once it appears.
+  const goToFinding = (id: string) => {
+    if (!findings.some((f) => f.id === id)) {
+      setSeverity("ALL");
+      setAgentKey("ALL");
+      setStatus("ALL");
+    }
+    setPendingScrollId(id);
+  };
+
+  useEffect(() => {
+    if (!pendingScrollId || !findings.some((f) => f.id === pendingScrollId)) return;
+    const id = pendingScrollId;
+    setPendingScrollId(null);
+    setHighlightedId(id);
+    requestAnimationFrame(() =>
+      document.getElementById(`finding-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+    );
+    const t = window.setTimeout(() => setHighlightedId((cur) => (cur === id ? null : cur)), 2200);
+    return () => window.clearTimeout(t);
+  }, [findings, pendingScrollId]);
 
   const sweep = useMutation({
     mutationFn: async () => {
@@ -178,7 +236,7 @@ export default function ProjectAiPage() {
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         {/* Findings board */}
         <div>
-          <FindingsTicker findings={findings} agentNames={agentNames} />
+          <FindingsTicker findings={findings} agentNames={agentNames} onSelect={goToFinding} />
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate">
               Filter
@@ -225,7 +283,7 @@ export default function ProjectAiPage() {
             <Card variant="flat" className="py-12 text-center text-sm text-text-muted">
               Couldn&apos;t load findings. The agent platform may not be seeded for this project yet.
             </Card>
-          ) : findings.length === 0 ? (
+          ) : findings.length === 0 && noDataAgents.length === 0 ? (
             <Card variant="flat" className="py-12 text-center">
               <Inbox size={28} className="mx-auto mb-3 text-ash" />
               <p className="text-sm text-text-secondary">No findings match these filters.</p>
@@ -236,13 +294,34 @@ export default function ProjectAiPage() {
           ) : (
             <div className="space-y-4">
               {findings.map((f) => (
-                <FindingCard
+                <div
                   key={f.id}
-                  finding={f}
-                  agentName={agentNames[f.agentKey]}
-                  projectId={projectId}
-                />
+                  id={`finding-${f.id}`}
+                  className={cn(
+                    "scroll-mt-24 rounded-2xl transition-shadow",
+                    highlightedId === f.id && "ring-2 ring-gold",
+                  )}
+                >
+                  <FindingCard
+                    finding={f}
+                    agentName={agentNames[f.agentKey]}
+                    projectId={projectId}
+                    onFindingClick={goToFinding}
+                  />
+                </div>
               ))}
+              {noDataAgents.length > 0 && (
+                <>
+                  {findings.length > 0 && (
+                    <div className="pt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate">
+                      No data yet
+                    </div>
+                  )}
+                  {noDataAgents.map(({ agent, status: st }) => (
+                    <NoDataCard key={agent.key} agent={agent} status={st} projectId={projectId} />
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>

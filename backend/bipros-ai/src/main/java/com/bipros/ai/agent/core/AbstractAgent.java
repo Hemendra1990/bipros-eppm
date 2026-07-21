@@ -57,6 +57,10 @@ public abstract class AbstractAgent implements Agent {
             JsonNode snapshot = gathered.dataSnapshot();
             String hash = snapshot != null ? runtime.dataHash().computeHash(snapshot) : null;
             run.setDataHash(hash);
+            // Keep the raw snapshot so the AI page can render an always-on coverage card even when the
+            // agent found nothing to report. gather() runs on every sweep (before the skip/empty branches),
+            // so this captures a fresh snapshot on all success/skip paths — no copy-forward needed.
+            run.setDataSnapshot(snapshot != null ? snapshot.toString() : null);
 
             if (!ctx.force() && hash != null && matchesLastSucceeded(ctx, hash)) {
                 run.setStatus(AgentRunStatus.SKIPPED_NO_CHANGE);

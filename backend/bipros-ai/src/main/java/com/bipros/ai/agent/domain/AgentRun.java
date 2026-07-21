@@ -46,6 +46,10 @@ public class AgentRun extends BaseEntity {
     @Column(name = "data_hash", length = 64)
     private String dataHash;
 
+    /** Raw JSON of the agent's last gather() dataSnapshot — surfaced as the always-on coverage card. */
+    @Column(name = "data_snapshot", columnDefinition = "text")
+    private String dataSnapshot;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "llm_skip_reason", length = 20)
     private LlmSkipReason llmSkipReason = LlmSkipReason.NONE;

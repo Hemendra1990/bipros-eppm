@@ -231,3 +231,5 @@ databaseChangeLog:
       file: db/changelog/119-user-notification-severity.yaml
   - include:
       file: db/changelog/120-project-site-location.yaml
+  - include:
+      file: db/changelog/121-agent-run-data-snapshot.yaml

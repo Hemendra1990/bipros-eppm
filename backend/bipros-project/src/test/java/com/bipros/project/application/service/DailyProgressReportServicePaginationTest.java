@@ -98,13 +98,13 @@ class DailyProgressReportServicePaginationTest {
   void firstPage_hasMore() {
     LocalDate d1 = LocalDate.of(2026, 3, 10);
     LocalDate d2 = LocalDate.of(2026, 3, 9);
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
         .thenReturn(List.of(d1, d2, LocalDate.of(2026, 3, 8)));
-    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1, d2)), isNull()))
+    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1, d2)), isNull(), isNull(), isNull(), isNull()))
         .thenReturn(List.of(dpr(dprA, d1, "Earthworks", new BigDecimal("100")),
                             dpr(dprB, d2, "Earthworks", new BigDecimal("50"))));
 
-    DprPage page = service.listPaged(projectId, null, null, null, null, 2);
+    DprPage page = service.listPaged(projectId, null, null, null, null, 2, null, null, null);
 
     assertThat(page.hasMore()).isTrue();
     assertThat(page.nextCursor()).isEqualTo(d2);
@@ -117,12 +117,12 @@ class DailyProgressReportServicePaginationTest {
   @DisplayName("last page: fewer days than requested ⇒ hasMore false, nextCursor null")
   void lastPage_noMore() {
     LocalDate d1 = LocalDate.of(2026, 3, 1);
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
         .thenReturn(List.of(d1));
-    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull()))
+    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull(), isNull(), isNull(), isNull()))
         .thenReturn(List.of(dpr(dprA, d1, "Earthworks", new BigDecimal("10"))));
 
-    DprPage page = service.listPaged(projectId, null, null, null, null, 14);
+    DprPage page = service.listPaged(projectId, null, null, null, null, 14, null, null, null);
 
     assertThat(page.hasMore()).isFalse();
     assertThat(page.nextCursor()).isNull();
@@ -132,10 +132,10 @@ class DailyProgressReportServicePaginationTest {
   @Test
   @DisplayName("empty: no dates ⇒ empty page")
   void empty() {
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
         .thenReturn(List.of());
 
-    DprPage page = service.listPaged(projectId, null, null, null, null, 14);
+    DprPage page = service.listPaged(projectId, null, null, null, null, 14, null, null, null);
 
     assertThat(page.items()).isEmpty();
     assertThat(page.hasMore()).isFalse();
@@ -146,9 +146,9 @@ class DailyProgressReportServicePaginationTest {
   @DisplayName("aggregates: nos sums, counts, and issue live/open/critical flags map onto the right dpr")
   void aggregates() {
     LocalDate d1 = LocalDate.of(2026, 3, 10);
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
         .thenReturn(List.of(d1));
-    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull()))
+    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull(), isNull(), isNull(), isNull()))
         .thenReturn(List.of(dpr(dprA, d1, "Earthworks", new BigDecimal("100"))));
     when(manpowerRepository.sumNosByDprIdIn(any())).thenReturn(List.<Object[]>of(new Object[]{dprA, 12L}));
     when(equipmentRepository.sumNosByDprIdIn(any())).thenReturn(List.<Object[]>of(new Object[]{dprA, 3L}));
@@ -159,7 +159,7 @@ class DailyProgressReportServicePaginationTest {
         new Object[]{dprA, IssueStatus.RESOLVED, IssueSeverity.LOW},
         new Object[]{dprA, IssueStatus.CANCELLED, IssueSeverity.HIGH}));
 
-    var row = service.listPaged(projectId, null, null, null, null, 14).items().get(0);
+    var row = service.listPaged(projectId, null, null, null, null, 14, null, null, null).items().get(0);
 
     assertThat(row.manpowerNos()).isEqualTo(12);
     assertThat(row.equipmentNos()).isEqualTo(3);

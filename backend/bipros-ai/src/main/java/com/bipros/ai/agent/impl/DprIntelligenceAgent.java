@@ -213,24 +213,33 @@ public class DprIntelligenceAgent extends AbstractAgent {
                 stuckCount + " DPR" + (stuckCount == 1 ? "" : "s") + " stuck awaiting approval past the "
                         + slaHours + "h SLA",
                 stuckCount + " daily progress report" + (stuckCount == 1 ? " has" : "s have")
-                        + " been in SUBMITTED state beyond the " + slaHours + "-hour approval SLA; the oldest "
-                        + "has waited " + oldestHours + "h (" + oldest.getSupervisorName() + " — "
-                        + oldest.getActivityName() + ").",
+                        + " been in SUBMITTED state beyond the " + slaHours + "-hour approval SLA "
+                        + "(Service Level Agreement — the window an approver has to action a submitted "
+                        + "DPR); the oldest has waited " + oldestHours + " hours ("
+                        + oldest.getSupervisorName() + " — " + oldest.getActivityName() + ").",
                 "Assigned approvers have not actioned the submitted DPRs within the SLA window — an "
                         + "approval-queue bottleneck, not a data error.",
                 "Unapproved DPRs do not feed approved-only EVM and BOQ progress; a growing approval backlog "
                         + "delays earned-value recognition and can stall downstream billing and capacity rollups.",
                 "Clear the approval queue: action or reassign the " + stuckCount + " overdue DPR"
                         + (stuckCount == 1 ? "" : "s") + ", starting with the oldest (" + oldestHours
-                        + "h), and escalate to the approver's manager if still unactioned.",
+                        + " hours), and escalate to the approver's manager if still unactioned.",
                 List.of(
                         EvidenceRef.metric("DPRs past SLA", String.valueOf(stuckCount)),
-                        EvidenceRef.metric("SLA window", slaHours + "h"),
-                        EvidenceRef.metric("Oldest wait", oldestHours + "h"),
-                        EvidenceRef.entity("Oldest DPR",
-                                oldest.getSupervisorName() + " / " + oldest.getActivityName(),
+                        // Units spelled out: the card renders the number with its unit, so "24 hours"
+                        // reads unambiguously where a bare "24" did not.
+                        EvidenceRef.metric("SLA window", slaHours + " hours"),
+                        EvidenceRef.metric("Oldest wait", oldestHours + " hours"),
+                        EvidenceRef.entity("Oldest pending DPR",
+                                oldest.getSupervisorName() + " / " + oldest.getActivityName()
+                                        + " — waiting " + oldestHours + " hours",
                                 "dpr", oldest.getId(),
-                                "/projects/" + projectId + "/dpr?focus=" + oldest.getId())),
+                                "/projects/" + projectId + "/dpr?focus=" + oldest.getId()),
+                        // The full queue already exists on DPR → Approvals; link to it rather than
+                        // rebuilding the list (with supervisor, date and status) on this card.
+                        EvidenceRef.entity("All " + stuckCount + " pending approval", "Open approvals queue",
+                                "project", projectId,
+                                "/projects/" + projectId + "/dpr?view=approvals")),
                 Map.of("PROJECT_MANAGER", List.of(), "SITE_MANAGER", List.of()),
                 validUntil);
     }

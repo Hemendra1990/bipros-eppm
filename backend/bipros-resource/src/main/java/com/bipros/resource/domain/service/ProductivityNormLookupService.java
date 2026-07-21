@@ -87,7 +87,11 @@ public class ProductivityNormLookupService {
       Optional<ProductivityNorm> unscoped = normRepository
           .findFirstByWorkActivityIdAndRoleIdIsNullAndCategoryIdIsNullAndGradeIdIsNullAndMakeIsNullAndModelIsNullAndNormType(
               workActivityId, nt);
-      if (unscoped.isPresent()) {
+      // A work-activity often carries BOTH a MANPOWER and an EQUIPMENT unscoped norm, and one tier may
+      // have no output-per-day. Skip an empty one so we return the tier that actually carries a usable
+      // norm, instead of stopping on the first normType (which may be blank).
+      if (unscoped.isPresent() && unscoped.get().getOutputPerDay() != null
+          && unscoped.get().getOutputPerDay().signum() > 0) {
         return materialise(unscoped.get(), ResolvedNorm.Source.UNSCOPED, resourceId);
       }
     }

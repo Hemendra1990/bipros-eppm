@@ -236,7 +236,7 @@ export default function BudgetChangesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Budget Changes"
-        description="P6-style budget change log: additions, reductions, and transfers"
+        description="Budget change log: additions, reductions, and transfers"
         actions={
           budget?.originalBudget != null ? (
             <button

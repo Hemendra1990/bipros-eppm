@@ -403,16 +403,29 @@ public class DailyProgressReportService {
    * report dates within the optional [from,to] window and strictly older than {@code before},
    * with all rows for those days. Child detail is NOT hydrated — only cheap aggregates — so the
    * collapsed list is light; full detail comes from {@link #get(UUID, UUID)} on expand.
+   *
+   * <p>The supervisor and status filters are applied HERE rather than in the browser: the page
+   * is a window over distinct dates, so a client-side filter would only ever narrow the pages
+   * already fetched and report "no DPRs" for anyone whose rows sit in an older, unfetched page.
+   *
+   * <p>A supervisor is identified by {@code supervisorUserId} when the DPRs carry a user link and
+   * by {@code supervisorName} when they don't — on imported/seeded projects every DPR stores the
+   * supervisor as free text with a null user id, so an id-only filter would match nothing. The
+   * caller sends whichever key the dropdown option carries; passing both narrows by both.
    */
   @Transactional(readOnly = true)
   public DprPage listPaged(UUID projectId, LocalDate from, LocalDate to, String activityName,
-                           LocalDate before, int days) {
+                           LocalDate before, int days, UUID supervisorUserId,
+                           String supervisorNameFilter, DprApprovalStatus status) {
     ensureProjectExists(projectId);
     int batch = days <= 0 ? 14 : days;
     String activity = (activityName != null && !activityName.isBlank()) ? activityName : null;
+    String supervisorName =
+        (supervisorNameFilter != null && !supervisorNameFilter.isBlank()) ? supervisorNameFilter : null;
 
     List<LocalDate> dates = dprRepository.findDistinctReportDatesDesc(
-        projectId, from, to, before, activity, PageRequest.of(0, batch + 1));
+        projectId, from, to, before, activity, supervisorUserId, supervisorName, status,
+        PageRequest.of(0, batch + 1));
     boolean hasMore = dates.size() > batch;
     if (hasMore) {
       dates = dates.subList(0, batch);
@@ -423,7 +436,8 @@ public class DailyProgressReportService {
     LocalDate nextCursor = dates.get(dates.size() - 1); // oldest date in this batch
 
     List<DailyProgressReport> rows =
-        dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(projectId, dates, activity);
+        dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(
+            projectId, dates, activity, supervisorUserId, supervisorName, status);
     List<DprSummaryResponse> items = toSummaryRows(rows);
     return new DprPage(items, hasMore ? nextCursor : null, hasMore);
   }
@@ -870,12 +884,17 @@ public class DailyProgressReportService {
    * also keys off the DPR's filer rather than the activity's assignees. Co-supervisors on a
    * shared activity each see their own filing count.
    *
-   * <p>DPRs with {@code supervisor_user_id = NULL} (legacy imports / manually inserted) are
-   * excluded so the dropdown never shows a `(null)` bucket.
+   * <p>By default DPRs with {@code supervisor_user_id = NULL} are excluded so the dropdown never
+   * shows a `(null)` bucket — Capacity Utilization filters strictly by user id, so an entry it
+   * cannot filter on is useless there. Pass {@code includeUnlinked = true} for the DPR tab's own
+   * filter, which also accepts a supervisor by name: on projects whose DPRs were imported or
+   * seeded without a user link (the common case — supervisors are captured as free text) the
+   * user-id-only list comes back EMPTY, so the dropdown would show nothing at all. Unlinked rows
+   * are grouped by {@code supervisor_name} and carry a null {@code supervisorUserId}.
    */
   @Transactional(readOnly = true)
   public List<com.bipros.project.application.dto.SupervisorOption> listSupervisorsUsed(
-      UUID projectId, LocalDate fromDate, LocalDate toDate) {
+      UUID projectId, LocalDate fromDate, LocalDate toDate, boolean includeUnlinked) {
     ensureProjectExists(projectId);
 
     @SuppressWarnings("unchecked")
@@ -885,18 +904,24 @@ public class DailyProgressReportService {
                 + "       COALESCE( "
                 + "         NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), "
                 + "         u.username, "
+                + "         MAX(d.supervisor_name), "
                 + "         '') "
                 + "                                                                      AS supervisor_name, "
                 + "       COUNT(DISTINCT d.id)                                            AS dpr_count "
                 + "FROM project.daily_progress_reports d "
                 + "LEFT JOIN public.users u ON u.id = d.supervisor_user_id "
                 + "WHERE d.project_id = :projectId "
-                + "  AND d.supervisor_user_id IS NOT NULL "
+                + "  AND (CAST(:includeUnlinked AS boolean) = TRUE OR d.supervisor_user_id IS NOT NULL) "
                 + "  AND (CAST(:fromDate AS date) IS NULL OR d.report_date >= CAST(:fromDate AS date)) "
                 + "  AND (CAST(:toDate   AS date) IS NULL OR d.report_date <= CAST(:toDate   AS date)) "
-                + "GROUP BY d.supervisor_user_id, u.username, u.first_name, u.last_name "
+                // The CASE keeps linked supervisors grouped by user id alone (it collapses to a
+                // constant NULL for them, so a renamed user still yields ONE row); only unlinked
+                // rows, which have no id to group by, fan out per distinct name.
+                + "GROUP BY d.supervisor_user_id, u.username, u.first_name, u.last_name, "
+                + "         CASE WHEN d.supervisor_user_id IS NULL THEN d.supervisor_name END "
                 + "ORDER BY dpr_count DESC, supervisor_name")
         .setParameter("projectId", projectId)
+        .setParameter("includeUnlinked", includeUnlinked)
         .setParameter("fromDate", fromDate)
         .setParameter("toDate", toDate)
         .getResultList();

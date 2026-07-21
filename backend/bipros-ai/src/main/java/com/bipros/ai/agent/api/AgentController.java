@@ -37,9 +37,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Read + manual-run surface for the agent framework (§6). Reactive SSE streams, pipeline runs,
@@ -64,7 +66,13 @@ public class AgentController {
     @GetMapping("/projects/{projectId}/agents")
     @PreAuthorize("@aiAccess.canRead(#projectId)")
     public ResponseEntity<ApiResponse<List<AgentSummaryDto>>> listAgents(@PathVariable UUID projectId) {
-        List<AgentSummaryDto> out = registry.all().stream().map(a -> toSummary(a, projectId)).toList();
+        // Active-finding count per agent — the persistent basis the KPI cards use, so the Live-activity
+        // badge agrees with them even when an agent's last run was SKIPPED_NO_CHANGE.
+        Map<String, Long> activeByAgent = findingRepository
+                .findByProjectIdAndStatus(projectId, FindingStatus.ACTIVE).stream()
+                .collect(Collectors.groupingBy(AgentFinding::getAgentKey, Collectors.counting()));
+        List<AgentSummaryDto> out = registry.all().stream()
+                .map(a -> toSummary(a, projectId, activeByAgent)).toList();
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
@@ -180,9 +188,10 @@ public class AgentController {
 
     // ---- helpers ----
 
-    private AgentSummaryDto toSummary(Agent a, UUID projectId) {
+    private AgentSummaryDto toSummary(Agent a, UUID projectId, Map<String, Long> activeByAgent) {
         AgentRun last = runRepository.findFirstByAgentKeyAndProjectIdOrderByStartedAtDesc(a.key(), projectId).orElse(null);
-        return new AgentSummaryDto(a.key(), a.displayName(), a.supportsPortfolio(), mapper.toRunDto(last));
+        int active = activeByAgent.getOrDefault(a.key(), 0L).intValue();
+        return new AgentSummaryDto(a.key(), a.displayName(), a.supportsPortfolio(), mapper.toRunDto(last), active);
     }
 
     private AgentFinding loadFindingWithAccess(UUID id) {

@@ -180,8 +180,10 @@ public class DocumentIntelligenceAgent extends AbstractAgent {
         evidence.add(EvidenceRef.metric("Earliest expiry",
                 soonest.getPermitCode() + " in " + days + " day(s)"));
         for (Permit p : expiring.subList(0, Math.min(3, n))) {
+            // Permits are global routes, not under /projects/{id}/. Link straight to the permit's own
+            // detail page — that IS the focus, and it beats scrolling a virtualised, paged register.
             evidence.add(EvidenceRef.entity("Permit", p.getPermitCode(), "permit", p.getId(),
-                    "/projects/" + projectId + "/permits?focus=" + p.getId()));
+                    "/permits/" + p.getId()));
         }
 
         return new AgentFindingDraft(

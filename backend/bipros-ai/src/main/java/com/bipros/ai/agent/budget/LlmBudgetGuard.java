@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -86,14 +87,16 @@ public class LlmBudgetGuard {
     }
 
     private AgentBudgetUsage getOrCreateLocked(UUID projectId, LocalDate date) {
+        Optional<AgentBudgetUsage> existing = repository.lockByProjectIdAndUsageDate(projectId, date);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        // Day's first run: concurrent agents all see no row and race to create it. The insert is a
+        // no-op for whoever loses (it blocks on the winner's uncommitted row, then does nothing), so
+        // both sides reach the re-read below and lock the single surviving row.
+        repository.insertIfAbsent(projectId, date);
         return repository.lockByProjectIdAndUsageDate(projectId, date)
-                .orElseGet(() -> {
-                    AgentBudgetUsage row = new AgentBudgetUsage();
-                    row.setProjectId(projectId);
-                    row.setUsageDate(date);
-                    // Insert then re-lock so subsequent reads in this tx see a locked row. The unique
-                    // constraint on (project_id, usage_date) prevents duplicate rows under a race.
-                    return repository.saveAndFlush(row);
-                });
+                .orElseThrow(() -> new IllegalStateException(
+                        "Budget row missing after insert for scope " + projectId + " on " + date));
     }
 }
