@@ -74,6 +74,22 @@ interface Props {
    * the hardcoded "Cum". When the user manually overrides, an inline warning appears.
    */
   defaultUnitByActivityId: Map<string, string | null>;
+  /**
+   * activityId → its linked BOQ line (design D8). When the picked activity carries a link,
+   * the BOQ picker is replaced by a read-only chip — the server inherits the link and rejects
+   * contradicting payloads (DPR_BOQ_MISMATCH), so the chip is honesty, not enforcement.
+   */
+  linkedBoqByActivityId: Map<
+    string,
+    {
+      id: string;
+      itemNo: string;
+      label: string;
+      /** Stage 4: the linked operation of a split line, with its target and approved executed
+       *  qty — drives the pre-save "operation already complete" warning. */
+      operation?: { name: string; targetQty: number | null; executedQty: number };
+    }
+  >;
   boqOptions: SelectOption[];
   /**
    * Optional seed for new DPRs (ignored on edit). When a user clicks "Create DPR" from an
@@ -119,7 +135,9 @@ const STATUS_OPTS: Array<{ value: DprApprovalStatus; label: string }> = [
 ];
 import { STANDARD_UNITS, unitOptionsWithFallback } from "@/lib/constants/units";
 const UNIT_OPTS = STANDARD_UNITS;
-const WEATHER_OPTS = ["Clear", "Cloudy", "Rain", "Hot", "Cold", "Windy"];
+// Canonical weather list (client workbook, 01 Aug 2026). Must stay in sync with
+// weather-log CONDITION_PRESETS, DprVoiceFillSchema and weatherTheme PATTERNS.
+const WEATHER_OPTS = ["Clear", "Cloudy", "Rain", "Thunderstorm", "Foggy", "Sandstorm"];
 
 const initialState = (
   editing: DailyProgressReportResponse | null,
@@ -217,6 +235,7 @@ export function DprActivityForm({
   activityIdByName,
   supervisorsByActivityId,
   defaultUnitByActivityId,
+  linkedBoqByActivityId,
   boqOptions,
   defaultPrefill,
   onCancel,
@@ -408,12 +427,54 @@ export function DprActivityForm({
 
   /**
    * Merge a backend-returned patch into form state. Non-array fields override only when the patch
-   * carries a non-null value. Row arrays (manpower/equipment/material) APPEND — the LLM is told
-   * to never re-emit rows the user already typed, so we trust it on append semantics.
+   * carries a non-null value. Row arrays (manpower/equipment/material) MERGE: a patch row matching
+   * an existing row (variant FK first, else trade/name label) UPDATES that row in place — so
+   * "make masons 3" changes the Mason row instead of duplicating it — and unmatched rows append.
+   * Explicit removals (removeManpower/-Equipment/-Materials labels) are applied first; the AI can
+   * only remove rows the user named, never wipe anything silently.
    */
   const applyVoicePatch = useCallback((patch: DprVoicePatch) => {
     setState((current) => {
       const next: FormState = { ...current };
+      const normLabel = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+      const removeByLabel = <R,>(
+        rows: R[],
+        labels: string[] | null | undefined,
+        labelOf: (r: R) => string | null | undefined,
+      ): R[] => {
+        if (!Array.isArray(labels) || labels.length === 0) return rows;
+        const wanted = new Set(labels.map(normLabel).filter(Boolean));
+        if (wanted.size === 0) return rows;
+        return rows.filter((r) => !wanted.has(normLabel(labelOf(r))));
+      };
+      const mergeRows = <R extends object>(
+        existing: R[],
+        incoming: R[],
+        fkOf: (r: R) => string | null | undefined,
+        labelOf: (r: R) => string | null | undefined,
+      ): R[] => {
+        const out = [...existing];
+        for (const inc of incoming) {
+          const fk = fkOf(inc);
+          const label = normLabel(labelOf(inc));
+          let idx = fk ? out.findIndex((r) => fkOf(r) === fk) : -1;
+          if (idx < 0 && label) idx = out.findIndex((r) => normLabel(labelOf(r)) === label);
+          if (idx < 0) {
+            out.push(inc);
+            continue;
+          }
+          const targetFk = fkOf(out[idx]);
+          const target = { ...out[idx] } as Record<string, unknown>;
+          for (const [k, v] of Object.entries(inc)) {
+            if (v !== null && v !== undefined) target[k] = v;
+          }
+          // Variant switched (e.g. "actually grade B") → drop the stale rate so the backend
+          // re-resolves it from the new variant id at save time.
+          if (fk && targetFk && targetFk !== fk) target.unitRate = null;
+          out[idx] = target as R;
+        }
+        return out;
+      };
       const setIfPresent = <K extends keyof FormState>(key: K, value: FormState[K] | null | undefined) => {
         if (value !== undefined && value !== null) next[key] = value as FormState[K];
       };
@@ -447,23 +508,36 @@ export function DprActivityForm({
         next.chainageToM = patch.chainageToM;
         next.chainageToRaw = chainageLabel(patch.chainageToM);
       }
+      // Removals first, then merge — so "remove carpenter, add two masons" works in one turn.
+      const manpowerRows = removeByLabel(current.manpower ?? [], patch.removeManpower, (r) => r.trade);
+      if (manpowerRows !== current.manpower) next.manpower = manpowerRows;
       if (Array.isArray(patch.manpower) && patch.manpower.length > 0) {
-        next.manpower = [
-          ...(current.manpower ?? []),
-          ...(patch.manpower as unknown as DprManpowerRow[]),
-        ];
+        next.manpower = mergeRows(
+          manpowerRows,
+          patch.manpower as unknown as DprManpowerRow[],
+          (r) => r.manpowerRoleRateId,
+          (r) => r.trade,
+        );
       }
+      const equipmentRows = removeByLabel(current.equipment ?? [], patch.removeEquipment, (r) => r.equipmentType);
+      if (equipmentRows !== current.equipment) next.equipment = equipmentRows;
       if (Array.isArray(patch.equipment) && patch.equipment.length > 0) {
-        next.equipment = [
-          ...(current.equipment ?? []),
-          ...(patch.equipment as unknown as DprEquipmentRow[]),
-        ];
+        next.equipment = mergeRows(
+          equipmentRows,
+          patch.equipment as unknown as DprEquipmentRow[],
+          (r) => r.equipmentRoleVariantId,
+          (r) => r.equipmentType,
+        );
       }
+      const materialRows = removeByLabel(current.materials ?? [], patch.removeMaterials, (r) => r.materialName);
+      if (materialRows !== current.materials) next.materials = materialRows;
       if (Array.isArray(patch.materials) && patch.materials.length > 0) {
-        next.materials = [
-          ...(current.materials ?? []),
-          ...(patch.materials as unknown as DprMaterialRow[]),
-        ];
+        next.materials = mergeRows(
+          materialRows,
+          patch.materials as unknown as DprMaterialRow[],
+          (r) => r.materialRoleVariantId,
+          (r) => r.materialName,
+        );
       }
       return next;
     });
@@ -591,6 +665,13 @@ export function DprActivityForm({
       : null;
     if (activityUnit && activityUnit.trim().length > 0) {
       delta.unit = activityUnit.trim();
+    }
+    // BOQ link (design D8): a linked activity dictates the DPR's BOQ item — pre-set it so
+    // the totals/budget-rate hints work and the payload matches what the server will enforce.
+    const linkedBoq = newActivityId ? linkedBoqByActivityId.get(newActivityId) : undefined;
+    if (linkedBoq) {
+      delta.boqItemId = linkedBoq.id;
+      delta.boqItemNo = linkedBoq.itemNo;
     }
     // Multi-supervisor: pick the first supervisor in the activity's list that is still
     // eligible (i.e. still has a supervisor role). If none are eligible, leave the supervisor
@@ -799,7 +880,9 @@ export function DprActivityForm({
         );
         setError(null);
       } else {
-        const msg = err instanceof Error ? err.message : "Failed to save DPR.";
+        // Prefer the server's business message (e.g. "A DPR for this supervisor on this activity
+        // for <date> already exists…") over axios's generic "Request failed with status code 400".
+        const msg = apiErr?.message ?? (err instanceof Error ? err.message : "Failed to save DPR.");
         setError(msg);
       }
     } finally {
@@ -919,9 +1002,16 @@ export function DprActivityForm({
             className={inputCls}
           >
             <option value="">—</option>
-            {WEATHER_OPTS.map((w) => (
+            {/* Legacy-value fallback (same pattern as unitOptionsWithFallback): DPRs saved
+                with a retired value (Hot/Cold/Windy) still render their stored condition
+                instead of a blank select. */}
+            {(state.weatherCondition && !WEATHER_OPTS.includes(state.weatherCondition)
+              ? [...WEATHER_OPTS, state.weatherCondition]
+              : WEATHER_OPTS
+            ).map((w) => (
               <option key={w} value={w}>
                 {w}
+                {!WEATHER_OPTS.includes(w) ? " (legacy)" : ""}
               </option>
             ))}
           </select>
@@ -950,9 +1040,67 @@ export function DprActivityForm({
           <Briefcase className="h-4 w-4 text-gold-deep" />
           Activity details
         </div>
+        {/* Field order follows the client requirements workbook (01 Aug 2026):
+            Side → Landmark → BOQ item → Chainage from → Chainage to → Unit → Quantity → Remarks. */}
         <div className="grid gap-4 md:grid-cols-3">
+          <Field label="Side">
+            <select
+              value={state.side ?? ""}
+              onChange={(e) => patch({ side: (e.target.value || null) as Side | null })}
+              className={inputCls}
+            >
+              <option value="">—</option>
+              {SIDE_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Landmark" className="md:col-span-2">
+            <input
+              type="text"
+              value={state.landmark ?? ""}
+              onChange={(e) => patch({ landmark: e.target.value || null })}
+              placeholder="Near Main Road junction"
+              className={inputCls}
+            />
+          </Field>
           <Field label="BOQ item">
             {(() => {
+              // BOQ link (design D8): a linked activity's BOQ item is inherited, not picked.
+              const linkedBoq = state.activityId
+                ? linkedBoqByActivityId.get(state.activityId)
+                : undefined;
+              if (linkedBoq) {
+                // Stage 4 pre-save nudge (owner-approved warn-not-block): the linked operation
+                // already reached its target — tell the user BEFORE they fill anything in.
+                const op = linkedBoq.operation;
+                const opComplete =
+                  !!op && op.targetQty != null && op.targetQty > 0 && op.executedQty >= op.targetQty;
+                return (
+                  <>
+                    <div className="flex items-center gap-2 rounded-md border border-border bg-surface-hover/60 px-3 py-2 text-sm">
+                      <span className="rounded bg-accent/10 px-1.5 py-0.5 text-xs font-semibold text-accent">
+                        BOQ
+                      </span>
+                      <span className="truncate text-text-primary">{linkedBoq.label}</span>
+                    </div>
+                    {opComplete && (
+                      <div className="mt-1 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                        Operation &quot;{op.name}&quot; has already reached its target (
+                        {op.executedQty} / {op.targetQty} approved). If the crew has moved to the
+                        next stage, re-point this activity to the next operation on the activity
+                        page — or create a new activity for it. Saving here records the quantity
+                        against the completed operation.
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs text-text-muted">
+                      Inherited from the activity&apos;s BOQ link — nothing to pick.
+                    </p>
+                  </>
+                );
+              }
               // When the user has picked an activity, prefer the narrowed candidate list. When
               // no activity (or no candidates), fall back to the full project BoQ list so the
               // form is never blocked from linking.
@@ -1008,6 +1156,12 @@ export function DprActivityForm({
                       )}
                     </p>
                   )}
+                  {state.activityId && (
+                    <p className="mt-1 text-xs text-warning">
+                      This activity has no BOQ link yet — link it on the activity page to stop
+                      picking the BOQ item manually.
+                    </p>
+                  )}
                 </>
               );
             })()}
@@ -1030,49 +1184,6 @@ export function DprActivityForm({
               onBlur={() => handleChainageBlur("to")}
               placeholder="145+200"
               className={inputCls}
-            />
-          </Field>
-          <Field label="Side">
-            <select
-              value={state.side ?? ""}
-              onChange={(e) => patch({ side: (e.target.value || null) as Side | null })}
-              className={inputCls}
-            >
-              <option value="">—</option>
-              {SIDE_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Landmark" className="md:col-span-3">
-            <input
-              type="text"
-              value={state.landmark ?? ""}
-              onChange={(e) => patch({ landmark: e.target.value || null })}
-              placeholder="Near Main Road junction"
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Workdone Quantity" required>
-            <input
-              type="number"
-              step="0.001"
-              min="0"
-              value={state.qtyExecuted}
-              onChange={(e) => patch({ qtyExecuted: parseFloat(e.target.value) || 0 })}
-              className={inputCls}
-              required
-            />
-            <ProductivityPreviewBanner
-              preview={preview}
-              workdone={state.qtyExecuted ?? null}
-              subContractorQty={(state.subContractors ?? []).reduce(
-                (s, r) => s + (r.quantity ?? 0),
-                0,
-              )}
-              unit={state.unit}
             />
           </Field>
           <Field label="Unit">
@@ -1114,6 +1225,26 @@ export function DprActivityForm({
               }
               return null;
             })()}
+          </Field>
+          <Field label="Workdone Quantity" required>
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              value={state.qtyExecuted}
+              onChange={(e) => patch({ qtyExecuted: parseFloat(e.target.value) || 0 })}
+              className={inputCls}
+              required
+            />
+            <ProductivityPreviewBanner
+              preview={preview}
+              workdone={state.qtyExecuted ?? null}
+              subContractorQty={(state.subContractors ?? []).reduce(
+                (s, r) => s + (r.quantity ?? 0),
+                0,
+              )}
+              unit={state.unit}
+            />
           </Field>
           <Field label="Remarks" className="md:col-span-3">
             <textarea

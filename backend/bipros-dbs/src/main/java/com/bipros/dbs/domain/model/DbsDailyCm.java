@@ -69,6 +69,14 @@ public class DbsDailyCm extends BaseEntity {
     @Column(name = "material_amount", precision = 18, scale = 4)
     private BigDecimal materialAmount;
 
+    /**
+     * Σ of the CM's supervisor rows' sub-contract expense, mirroring the engineer tier. Zero in
+     * practice today — Section F is only computed at project scope — but carried so the CM tab
+     * renders a figure rather than a blank.
+     */
+    @Column(name = "subcontract_amount", precision = 18, scale = 4)
+    private BigDecimal subcontractAmount;
+
     @Column(name = "direct_cost", precision = 18, scale = 4)
     private BigDecimal directCost;
 
@@ -87,6 +95,26 @@ public class DbsDailyCm extends BaseEntity {
     @Column(name = "boq_achieved_to_date", precision = 18, scale = 4)
     private BigDecimal boqAchievedToDate;
 
+    /**
+     * Σ of the CM's supervisor rows' income for the day. Stored (not derived on read) so the
+     * period rollup can sum real per-day P&amp;L instead of re-deriving it from BOQ revenue.
+     */
+    @Column(name = "total_income", precision = 18, scale = 4)
+    private BigDecimal totalIncome;
+
+    /** Σ of the CM's supervisor rows' expense for the day. */
+    @Column(name = "total_expense", precision = 18, scale = 4)
+    private BigDecimal totalExpense;
+
+    /** {@code totalIncome − totalExpense}. */
+    @Column(name = "contribution", precision = 18, scale = 4)
+    private BigDecimal contribution;
+
+    /**
+     * {@code contribution / totalIncome} as a FRACTION (0.9823 = 98.23%), matching the supervisor,
+     * engineer and project tiers. This tier previously stored a percentage, which made the CM tab
+     * render 100× too large and forced compensating branches in the AI DBS tool and the PM tab.
+     */
     @Column(name = "contribution_pct", precision = 8, scale = 4)
     private BigDecimal contributionPct;
 

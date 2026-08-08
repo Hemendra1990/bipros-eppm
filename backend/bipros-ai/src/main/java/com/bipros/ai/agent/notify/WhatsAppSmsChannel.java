@@ -58,17 +58,18 @@ public class WhatsAppSmsChannel {
         }
 
         @Override
-        public void send(ResolvedNotification n) {
+        public SendResult send(ResolvedNotification n) {
             if (!isEnabled()) {
-                return;
+                return SendResult.skipped("channel not configured");
             }
             if (n.phone() == null || n.phone().isBlank()) {
                 log.debug("Channel '{}' skipped for finding {} — recipient {} has no phone number.",
                         key, n.findingId(), n.recipientUserId());
-                return;
+                return SendResult.skipped("recipient has no phone number");
             }
-            // adapter.send never throws and returns success/failure; the router records the outcome.
-            adapter.send(key, n.phone(), buildMessage(n));
+            // adapter.send never throws and returns success/failure; record it honestly.
+            boolean ok = adapter.send(key, n.phone(), buildMessage(n));
+            return ok ? SendResult.sent() : SendResult.failed("provider send failed");
         }
 
         private static String buildMessage(ResolvedNotification n) {

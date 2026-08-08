@@ -125,6 +125,43 @@ public class DbsQueryService {
     /**
      * Compact per-CM summaries for a project on a given date — powers the PM tab CM drill-down.
      */
+    /**
+     * Period-aware CM roster. DAY (or null) behaves like {@link #listCmsForDay}; WEEK / MONTH
+     * expand to the period bounds and reuse {@link DbsAggregationService#computeCmPeriod} per CM
+     * so the picker labels carry exactly the figures the CM detail view will show. Mirrors
+     * {@link #listSupervisorsForScope} — without it the CM picker is empty on any focal date
+     * with no DPRs, hiding the whole tab in WEEK / MONTH mode.
+     */
+    public List<DbsCmSummaryDto> listCmsForScope(UUID projectId, LocalDate referenceDate, String periodType) {
+        String normalised = normalisePeriod(periodType);
+        if (normalised == null || "DAY".equals(normalised)) {
+            return listCmsForDay(projectId, referenceDate);
+        }
+        LocalDate[] bounds = boundsFor(normalised, referenceDate);
+        LinkedHashSet<UUID> cmIds = cmRepo
+            .findByProjectIdAndReportDateBetween(projectId, bounds[0], bounds[1]).stream()
+            .map(DbsDailyCm::getCmUserId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (cmIds.isEmpty()) return List.of();
+        Map<UUID, String> nameByUser = resolveUserNames(cmIds);
+        return cmIds.stream()
+            .map(cmId -> {
+                DbsDailyCm totals = aggregationService.computeCmPeriod(projectId, cmId, bounds[0], bounds[1]);
+                return new DbsCmSummaryDto(
+                    cmId,
+                    nameByUser.get(cmId),
+                    totals.getSupervisorCount() == null ? 0 : totals.getSupervisorCount(),
+                    nz(totals.getDirectCost()),
+                    nz(totals.getPrelimCost()),
+                    nz(totals.getTotalCostInclPrelims()),
+                    nz(totals.getContributionPct()),
+                    nz(totals.getPctAchieved())
+                );
+            })
+            .toList();
+    }
+
     public List<DbsCmSummaryDto> listCmsForDay(UUID projectId, LocalDate date) {
         List<DbsDailyCm> rows = cmRepo.findByProjectIdAndReportDate(projectId, date);
         Map<UUID, String> nameByUser = resolveUserNames(rows.stream()
@@ -260,13 +297,20 @@ public class DbsQueryService {
     public BoqExecutedSummaryDto boqExecutedSummary(UUID projectId, UUID supervisorUserId,
                                                     String periodType, LocalDate referenceDate) {
         LocalDate[] b = boundsFor(periodType, referenceDate);
+        // Stage 4: billable = the income predicate (measurement-operation / pre-split /
+        // partition rows) — on split lines the raw Σ counts every operation's workdone while
+        // only the measured share is billable. LEFT JOINs keep the raw counts byte-identical.
         Object[] row = (Object[]) em.createNativeQuery(
-                "SELECT COUNT(DISTINCT boq_item_id) AS items, COALESCE(SUM(qty_executed),0) AS qty" +
-                " FROM project.daily_progress_reports" +
-                " WHERE project_id = cast(:pid as uuid) AND approval_status = 'APPROVED'" +
-                "   AND report_date BETWEEN :from AND :to" +
-                "   AND boq_item_id IS NOT NULL AND COALESCE(qty_executed,0) > 0" +
-                "   AND (cast(:sup as uuid) IS NULL OR supervisor_user_id = cast(:sup as uuid))")
+                "SELECT COUNT(DISTINCT d.boq_item_id) AS items, COALESCE(SUM(d.qty_executed),0) AS qty," +
+                " COALESCE(SUM(CASE WHEN d.boq_operation_id IS NULL OR o.is_measure = true" +
+                "   OR bi.split_mode = 'QUANTITY_PARTITION' THEN d.qty_executed ELSE 0 END),0) AS billable" +
+                " FROM project.daily_progress_reports d" +
+                " LEFT JOIN project.boq_items bi ON bi.id = d.boq_item_id" +
+                " LEFT JOIN project.boq_operations o ON o.id = d.boq_operation_id" +
+                " WHERE d.project_id = cast(:pid as uuid) AND d.approval_status = 'APPROVED'" +
+                "   AND d.report_date BETWEEN :from AND :to" +
+                "   AND d.boq_item_id IS NOT NULL AND COALESCE(d.qty_executed,0) > 0" +
+                "   AND (cast(:sup as uuid) IS NULL OR d.supervisor_user_id = cast(:sup as uuid))")
             .setParameter("pid", projectId.toString())
             .setParameter("from", b[0])
             .setParameter("to", b[1])
@@ -274,10 +318,13 @@ public class DbsQueryService {
             .getSingleResult();
         Number items = (Number) row[0];
         Number qty   = (Number) row[1];
+        Number billable = (Number) row[2];
         long itemsLong = items == null ? 0L : items.longValue();
         BigDecimal qtyBd = qty == null ? BigDecimal.ZERO
             : (qty instanceof BigDecimal bd ? bd : new BigDecimal(qty.toString()));
-        return new BoqExecutedSummaryDto(itemsLong, qtyBd);
+        BigDecimal billableBd = billable == null ? BigDecimal.ZERO
+            : (billable instanceof BigDecimal bd2 ? bd2 : new BigDecimal(billable.toString()));
+        return new BoqExecutedSummaryDto(itemsLong, qtyBd, billableBd);
     }
 
     // ── list ────────────────────────────────────────────────────────────────────
@@ -509,12 +556,16 @@ public class DbsQueryService {
             nz(e.getAdminAmount()),
             nz(e.getMachineryAmount()),
             fuelOf(e.getMachineryAmount()),
+            nz(e.getSubcontractAmount()),
             nz(e.getDirectCost()),
             nz(e.getPrelimCost()),
             nz(e.getTotalCostInclPrelims()),
             nz(e.getBoqForTheDayAmount()),
             nz(e.getBoqPlannedToDate()),
             nz(e.getBoqAchievedToDate()),
+            nz(e.getTotalExpense()),
+            nz(e.getTotalIncome()),
+            nz(e.getContribution()),
             nz(e.getContributionPct()),
             nz(e.getPctAchieved()),
             e.getRecomputedAt()
@@ -588,10 +639,15 @@ public class DbsQueryService {
         return new DbsCmDayResponse(
             null, projectId, cmUserId, date,
             Collections.emptyList(), Collections.emptyList(), 0,
+            // material, manpower, admin, machinery, fuel, subcontract
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            // direct, prelim, totalInclPrelims
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+            // boqForTheDay, boqPlannedToDate, boqAchievedToDate
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-            BigDecimal.ZERO, BigDecimal.ZERO,
+            // totalExpense, totalIncome, contribution, contributionPct, pctAchieved
+            BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
             null
         );
     }

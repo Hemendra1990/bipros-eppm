@@ -23,7 +23,7 @@ import java.util.UUID;
 
 /**
  * Builds the {@link DprCostingReport} for a project + date range from APPROVED DPRs only. Reads
- * across schemas with native SQL (mirrors {@link DprReportService}): the DPR header rows from
+ * across schemas with native SQL: the DPR header rows from
  * {@code project.daily_progress_reports}, child line-items from the four {@code project.dpr_*}
  * tables, contract quantities from {@code project.boq_items}, and sub-contractor rates from
  * {@code resource.activity_sub_contractor_assignments}.

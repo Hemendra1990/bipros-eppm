@@ -3,6 +3,7 @@ package com.bipros.project.application.service;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.domain.model.BoqItem;
 import com.bipros.project.domain.repository.BoqItemRepository;
+import com.bipros.project.domain.repository.BoqOperationRepository;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.*;
 class BoqServiceRecomputeTest {
 
   @Mock BoqItemRepository boqItemRepository;
+  @Mock BoqOperationRepository boqOperationRepository;
   @Mock ProjectRepository projectRepository;
   @Mock AuditService auditService;
   @Mock DailyProgressReportRepository dprRepository;
@@ -44,7 +46,8 @@ class BoqServiceRecomputeTest {
 
   @BeforeEach
   void setUp() {
-    boqService = new BoqService(boqItemRepository, projectRepository, auditService, dprRepository);
+    boqService = new BoqService(boqItemRepository, boqOperationRepository,
+        new BoqOperationProgressCalculator(), projectRepository, auditService, dprRepository);
     ReflectionTestUtils.setField(boqService, "em", em);
   }
 
@@ -52,7 +55,7 @@ class BoqServiceRecomputeTest {
   @DisplayName("sets qtyExecutedToDate to the approved sum and saves")
   void setsApprovedQtyAndSaves() {
     BoqItem item = boqItem(null);
-    when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
+    when(boqItemRepository.findByIdForUpdate(boqItemId)).thenReturn(Optional.of(item));
     when(dprRepository.sumQtyExecutedByBoqItemIdApproved(projectId, boqItemId))
         .thenReturn(new BigDecimal("42"));
 
@@ -71,7 +74,7 @@ class BoqServiceRecomputeTest {
     item.setBoqRate(new BigDecimal("50"));
     item.setBudgetedRate(new BigDecimal("40"));
     item.setActualRate(new BigDecimal("45"));
-    when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
+    when(boqItemRepository.findByIdForUpdate(boqItemId)).thenReturn(Optional.of(item));
     when(dprRepository.sumQtyExecutedByBoqItemIdApproved(projectId, boqItemId))
         .thenReturn(new BigDecimal("60"));
 
@@ -87,7 +90,7 @@ class BoqServiceRecomputeTest {
   @DisplayName("treats null approved-sum (should not happen with COALESCE) as zero")
   void nullApprovedSumTreatedAsZero() {
     BoqItem item = boqItem(null);
-    when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
+    when(boqItemRepository.findByIdForUpdate(boqItemId)).thenReturn(Optional.of(item));
     when(dprRepository.sumQtyExecutedByBoqItemIdApproved(projectId, boqItemId)).thenReturn(null);
 
     boqService.recomputeExecutedQtyApproved(projectId, boqItemId);
@@ -100,7 +103,7 @@ class BoqServiceRecomputeTest {
   @Test
   @DisplayName("no-op when boqItemId does not exist")
   void noOpWhenItemNotFound() {
-    when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.empty());
+    when(boqItemRepository.findByIdForUpdate(boqItemId)).thenReturn(Optional.empty());
 
     boqService.recomputeExecutedQtyApproved(projectId, boqItemId);
 
@@ -114,7 +117,7 @@ class BoqServiceRecomputeTest {
     UUID otherProject = UUID.randomUUID();
     BoqItem item = boqItem(null);
     item.setProjectId(otherProject);  // different project
-    when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
+    when(boqItemRepository.findByIdForUpdate(boqItemId)).thenReturn(Optional.of(item));
 
     boqService.recomputeExecutedQtyApproved(projectId, boqItemId);
 
@@ -125,7 +128,7 @@ class BoqServiceRecomputeTest {
   @DisplayName("manualOverride=TRUE item is still recomputed (existing qty path does not skip manual-override)")
   void manualOverrideItemIsNotSkipped() {
     BoqItem item = boqItem(Boolean.TRUE);
-    when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
+    when(boqItemRepository.findByIdForUpdate(boqItemId)).thenReturn(Optional.of(item));
     when(dprRepository.sumQtyExecutedByBoqItemIdApproved(projectId, boqItemId))
         .thenReturn(new BigDecimal("10"));
 
@@ -136,8 +139,8 @@ class BoqServiceRecomputeTest {
   }
 
   @Test
-  @DisplayName("grand total caps overall % complete but leaves cost variance uncapped")
-  void grand_total_caps_overall_percent_but_not_variance() {
+  @DisplayName("grand total caps overall % AND the variance basis (Gate A) — footer = Σ rows")
+  void grand_total_caps_overall_percent_and_variance_basis() {
     BoqItem item = BoqItem.builder()
         .projectId(projectId)
         .boqQty(new BigDecimal("100"))
@@ -154,8 +157,10 @@ class BoqServiceRecomputeTest {
 
     // overall % = capped earned (min(250,100)×10 = 1000) ÷ budgeted (100×10 = 1000) = 1.0
     assertThat(r.overallPercentComplete()).isEqualByComparingTo("1.000000");
-    // grand cost variance UNCAPPED: actual 250×11=2750 − uncapped earned 250×10=2500 = 250
-    assertThat(r.grandCostVariance()).isEqualByComparingTo("250.00");
+    // Gate A (04 Aug 2026): grand variance basis = the same capped earnedBudget the row uses,
+    // so the footer equals the row: 2750 − min(250,100)×10 = 1750 (pre-Gate-A: 250)
+    assertThat(r.grandCostVariance()).isEqualByComparingTo("1750.00");
+    assertThat(r.grandCostVariance()).isEqualByComparingTo(item.getCostVariance());
   }
 
   @Test

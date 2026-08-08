@@ -47,17 +47,28 @@ public class PercentCompleteCalculator {
 
     /**
      * BOQ workdone branch (precedence #1). Mirrors {@link #calculateUnits}: percent is
-     * {@code workdone / boqQty * 100} capped at 100, with status derived and
+     * {@code workdone / denominator * 100} capped at 100, with status derived and
      * {@code actualFinishDate} forced to {@code statusDate} on reaching 100.
+     *
+     * <p>Denominator (BOQ-link design §5.3, owner-approved 04 Aug 2026): the activity's own
+     * {@code plannedQty} when set — so several activities sharing one BOQ line each show an
+     * honest % of their own share — else the line quantity, which is the pre-link behaviour
+     * byte-for-byte (calculation change log entry 7).
      *
      * @param workdone this activity's own Σ qtyExecuted on its BOQ-linked DPRs
      * @param boqQty   Σ boqQty of the distinct BOQ items the activity references
      */
     public Result calculateBoq(Activity activity, Double workdone, Double boqQty, LocalDate statusDate) {
-        if (boqQty == null || boqQty <= 0) {
+        java.math.BigDecimal planned = activity.getPlannedQty();
+        // No ternary here — mixing double/Double operands would unbox a null boqQty and NPE.
+        Double denominator = boqQty;
+        if (planned != null && planned.signum() > 0) {
+            denominator = planned.doubleValue();
+        }
+        if (denominator == null || denominator <= 0) {
             return Result.KEEP_PRIOR;
         }
-        double raw = workdone != null ? (workdone / boqQty) * 100.0 : 0.0;
+        double raw = workdone != null ? (workdone / denominator) * 100.0 : 0.0;
         double pct = Math.min(raw, 100.0);
         pct = round2(pct);
         ActivityStatus status = ActivityStatusDerivation.derive(pct, activity.getActualStartDate());

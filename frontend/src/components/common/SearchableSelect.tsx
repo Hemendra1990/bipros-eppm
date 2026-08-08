@@ -50,9 +50,11 @@ export function SearchableSelect({
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [dropdownPos, setDropdownPos] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,18 +90,31 @@ export function SearchableSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Position the portaled dropdown right below the input. Re-measure on open + on
-  // scroll/resize so it tracks the trigger when ancestors scroll (e.g., the drawer body).
-  // We deliberately don't clear dropdownPos on close — the list is gated on `isOpen` in
-  // the JSX, so a stale position is harmless and skipping the clear keeps this effect
-  // strictly synchronizing-with-an-external-system (DOM rect / scroll events).
+  // Position the portaled dropdown against the input. Opens below by default; flips above
+  // when the viewport bottom would clip it and there is more room above (the list is
+  // position:fixed, so a clipped tail can never be scrolled into view — e.g. the What-If
+  // panel at the bottom of the Activities page). Max height caps to the available space.
+  // Re-measure on open + on scroll/resize so it tracks the trigger when ancestors scroll
+  // (e.g., the drawer body). We deliberately don't clear dropdownPos on close — the list
+  // is gated on `isOpen` in the JSX, so a stale position is harmless and skipping the
+  // clear keeps this effect strictly synchronizing-with-an-external-system.
   useLayoutEffect(() => {
     if (!isOpen) return;
     const update = () => {
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      const LIST_MAX = 240; // matches the previous max-h-60
+      const GAP = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - GAP;
+      const spaceAbove = rect.top - GAP;
+      const openUp = spaceBelow < LIST_MAX && spaceAbove > spaceBelow;
+      const maxHeight = Math.min(LIST_MAX, Math.max(120, openUp ? spaceAbove : spaceBelow));
+      setDropdownPos(
+        openUp
+          ? { bottom: window.innerHeight - rect.top + GAP, left: rect.left, width: rect.width, maxHeight }
+          : { top: rect.bottom + GAP, left: rect.left, width: rect.width, maxHeight }
+      );
     };
     update();
     window.addEventListener("scroll", update, true); // capture: catch ancestor scrolls
@@ -238,10 +253,12 @@ export function SearchableSelect({
             style={{
               position: "fixed",
               top: dropdownPos.top,
+              bottom: dropdownPos.bottom,
               left: dropdownPos.left,
               width: dropdownPos.width,
+              maxHeight: dropdownPos.maxHeight,
             }}
-            className="z-[60] max-h-60 overflow-auto rounded-md border border-border bg-surface-hover py-1 shadow-lg"
+            className="z-[60] overflow-auto rounded-md border border-border bg-surface-hover py-1 shadow-lg"
           >
             {loading ? (
               <li className="px-3 py-2 text-sm text-text-muted">Loading...</li>

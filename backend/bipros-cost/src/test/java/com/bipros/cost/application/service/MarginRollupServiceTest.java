@@ -181,7 +181,7 @@ class MarginRollupServiceTest {
 
     private static DailyCostReportRow row(UUID dprId, LocalDate date, String activity, UUID boqItemId, String qty) {
         return new DailyCostReportRow(dprId, date, activity, new BigDecimal(qty), "cu.m", boqItemId, null,
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, true);
     }
 
     private static PeriodPerformanceRollupDto period(String name, LocalDate start, LocalDate end, String ac) {

@@ -78,9 +78,12 @@ public class StretchService {
             totalBoq = totalBoq.add(qty.multiply(rate));
             totalExecuted = totalExecuted.add(executed.multiply(rate));
         }
+        // Gate B (B4, approved 04 Aug 2026): capped at 100 — an over-executed line must not
+        // make a stretch read >100% complete.
         BigDecimal percent = totalBoq.signum() > 0
             ? totalExecuted.multiply(BigDecimal.valueOf(100))
                 .divide(totalBoq, 4, RoundingMode.HALF_UP)
+                .min(BigDecimal.valueOf(100))
             : BigDecimal.ZERO;
         return new StretchProgressResponse(
             stretch.getId(), stretch.getStretchCode(), stretch.getName(),

@@ -99,10 +99,12 @@ public class NotificationRouter {
     }
 
     private void dispatch(NotificationChannel channel, ResolvedNotification rn, UUID findingId, String channelKey) {
-        DeliveryStatus status = DeliveryStatus.SENT;
-        String detail = null;
+        DeliveryStatus status;
+        String detail;
         try {
-            channel.send(rn);
+            NotificationChannel.SendResult result = channel.send(rn);
+            status = result == null ? DeliveryStatus.SENT : result.status();
+            detail = result == null ? null : truncate(result.detail());
         } catch (Exception ex) {
             // Channels are contracted not to throw; this is a defensive guard so the audit stays honest.
             status = DeliveryStatus.FAILED;
@@ -115,6 +117,15 @@ public class NotificationRouter {
     private boolean isDuplicate(UUID findingId, String channelKey, UUID userId) {
         if (deliveryRepository.existsByFindingIdAndChannelKeyAndRecipientUserId(findingId, channelKey, userId)) {
             return true;
+        }
+        // The 24h bell-window guard is in_app-ONLY — it exists to stop bell spam on re-routes.
+        // Applying it to every channel meant email was blocked until 24h AFTER the bell entry
+        // (the in_app channel routes first in the same pass), and because changed findings get
+        // new ids, most findings never emailed at all. Owner expectation 2026-08-05: when SMTP
+        // is configured the email must be ATTEMPTED; email keeps its own once-per-finding dedup
+        // via the delivery row above.
+        if (!InAppChannel.KEY.equals(channelKey)) {
+            return false;
         }
         Instant since = Instant.now().minus(DEDUP_WINDOW);
         return notificationService.existsSince(findingId, InAppChannel.NOTIFICATION_TYPE, userId, since);
@@ -138,6 +149,16 @@ public class NotificationRouter {
     }
 
     // ---------------------------------------------------------------- rule + recipient helpers
+
+    /**
+     * Whether the effective routing rule for (project, severity) includes the email channel.
+     * Used by {@link AgentDigestJob} so the deferred digest honours the same channel config as
+     * immediate routing (per-finding email is off by default — owner decision 2026-08-07).
+     */
+    public boolean emailEnabled(UUID projectId, Severity severity) {
+        RoutingRule rule = resolveRule(projectId, severity);
+        return rule != null && rule.channels().contains(EmailChannel.KEY);
+    }
 
     private RoutingRule resolveRule(UUID projectId, Severity severity) {
         if (severity == null) {

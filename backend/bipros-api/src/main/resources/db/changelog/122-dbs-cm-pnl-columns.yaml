@@ -1,0 +1,50 @@
+databaseChangeLog:
+  # CM-tier P&L columns + margin scale normalisation.
+  #
+  # WHY: recomputeCmDay() already summed total income, total expense and contribution from the
+  # CM's supervisor rows, then discarded all three because dbs_daily_cm had no columns for them.
+  # The CM tab therefore rendered blanks where the supervisor, engineer and project tabs show a
+  # P&L — reported by the client as "Income is not coming ... No cost is coming in P&L summary".
+  #
+  # The same changeset normalises contribution_pct. The CM tier stored a PERCENTAGE (98.2283)
+  # while every other tier stores a FRACTION (0.9823), so CmDbsTab's `* 100` rendered 9,822.83%
+  # and two consumers carried compensating branches. contribution_pct is now a fraction on all
+  # four tiers; the update below rescales existing rows so they are not read 100x high.
+  #
+  # All added columns are additive and nullable, matching the dev ddl-auto:update path.
+  - changeSet:
+      id: 122-dbs-cm-pnl-columns
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: dbs
+            tableName: dbs_daily_cm
+            columns:
+              - column: { name: total_income, type: "NUMERIC(18,4)" }
+              - column: { name: total_expense, type: "NUMERIC(18,4)" }
+              - column: { name: contribution, type: "NUMERIC(18,4)" }
+              - column: { name: subcontract_amount, type: "NUMERIC(18,4)" }
+      rollback:
+        - dropColumn:
+            schemaName: dbs
+            tableName: dbs_daily_cm
+            columns:
+              - column: { name: total_income }
+              - column: { name: total_expense }
+              - column: { name: contribution }
+              - column: { name: subcontract_amount }
+
+  # DEPLOYMENT STEP — historic CM rows are NOT migrated by SQL, deliberately.
+  #
+  # An earlier draft of this changeset rescaled existing contribution_pct values from percentage
+  # to fraction, guarded by ABS(contribution_pct) > 1 on the assumption that a fraction is always
+  # within ±1. That assumption is false on real data: a day whose expense far exceeds its BOQ
+  # revenue has a legitimate fraction well outside ±1 (verified on the pilot — 55 of 58 CM rows,
+  # e.g. contribution −68,757.87 ÷ income 7,873.44 = −8.7329, a valid −873% margin). The guard
+  # would have divided those 55 correct rows by 100.
+  #
+  # There is no heuristic that distinguishes a stale percentage from a large valid fraction, so
+  # after deploying this changeset run a DBS recompute over the project's full date range:
+  #   POST /v1/projects/{projectId}/dbs/recompute-range?from={firstDbsDate}&to={lastDbsDate}
+  # That repopulates total_income / total_expense / contribution / subcontract_amount and rewrites
+  # contribution_pct as a fraction, from source, for every day.

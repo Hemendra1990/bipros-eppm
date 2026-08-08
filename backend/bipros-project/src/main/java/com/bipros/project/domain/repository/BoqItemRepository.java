@@ -34,11 +34,20 @@ public interface BoqItemRepository extends JpaRepository<BoqItem, UUID> {
   @Query("SELECT COALESCE(SUM(b.budgetedAmount), 0) FROM BoqItem b WHERE b.projectId = :projectId")
   BigDecimal sumBudgetedAmount(@Param("projectId") UUID projectId);
 
-  /** Σ capped earned value (min(qty_executed, boq_qty) × budgeted_rate) — the numerator of
-   *  Cost % Complete. Capped so EV can never exceed BAC when a line is over-executed. */
-  @Query("SELECT COALESCE(SUM((CASE WHEN b.qtyExecutedToDate < b.boqQty THEN b.qtyExecutedToDate ELSE b.boqQty END) * b.budgetedRate), 0) FROM BoqItem b " +
+  /** Σ capped earned value — the numerator of Cost % Complete. Split lines (Stage 4) earn
+   *  earned_fraction × boq_qty × budgeted_rate; unsplit lines min(qty_executed, boq_qty) ×
+   *  budgeted_rate, capped so EV can never exceed BAC when a line is over-executed. Java twin:
+   *  {@link com.bipros.project.application.service.BoqCalculator#cappedEarned} — keep identical. */
+  @Query("SELECT COALESCE(SUM(CASE WHEN b.earnedFraction IS NOT NULL THEN b.earnedFraction * b.boqQty * b.budgetedRate " +
+         "ELSE (CASE WHEN b.qtyExecutedToDate < b.boqQty THEN b.qtyExecutedToDate ELSE b.boqQty END) * b.budgetedRate END), 0) FROM BoqItem b " +
          "WHERE b.projectId = :projectId AND b.qtyExecutedToDate IS NOT NULL AND b.budgetedRate IS NOT NULL AND b.boqQty IS NOT NULL")
   BigDecimal sumEarnedBudgetedValue(@Param("projectId") UUID projectId);
+
+  /** Row-locked load for the DPR roll-up write path (edge 17/X8 — concurrent sibling-activity
+   *  DPR approvals on one line serialise here). */
+  @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT b FROM BoqItem b WHERE b.id = :id")
+  Optional<BoqItem> findByIdForUpdate(@Param("id") UUID id);
 
   /** Targeted column-only bulk relabel of BOQ item units. Returns rows changed. */
   @Modifying

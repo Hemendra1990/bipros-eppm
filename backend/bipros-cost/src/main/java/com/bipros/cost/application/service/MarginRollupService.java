@@ -180,6 +180,8 @@ public class MarginRollupService {
     }
 
     private static BigDecimal rowRevenue(DailyCostReportRow r, Map<UUID, BigDecimal> rateById) {
+        // Stage 4 (A8): non-measurement-operation rows of a split line carry cost but no revenue.
+        if (!r.countsAsRevenue()) return BigDecimal.ZERO;
         BigDecimal rate = r.boqItemId() == null ? BigDecimal.ZERO
                 : rateById.getOrDefault(r.boqItemId(), BigDecimal.ZERO);
         return nz(r.qtyExecuted()).multiply(rate);

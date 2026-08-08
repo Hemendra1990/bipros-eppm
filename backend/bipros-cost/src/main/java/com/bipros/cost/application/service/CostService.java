@@ -745,8 +745,8 @@ public class CostService {
             UUID wbs = execAct != null ? activityToWbs.get(execAct) : b.getWbsNodeId();
             UUID group = groupAncestor(wbs, parentById, soleRoot);
             BigDecimal budg = b.getBudgetedAmount() != null ? b.getBudgetedAmount() : BigDecimal.ZERO;
-            BigDecimal earned = BoqCalculator
-                    .cappedEarned(b.getQtyExecutedToDate(), b.getBoqQty(), b.getBudgetedRate());
+            BigDecimal earned = BoqCalculator.cappedEarned(
+                    b.getEarnedFraction(), b.getQtyExecutedToDate(), b.getBoqQty(), b.getBudgetedRate());
             BigDecimal[] cell = agg.computeIfAbsent(group, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
             cell[0] = cell[0].add(budg); cell[1] = cell[1].add(earned);
         }

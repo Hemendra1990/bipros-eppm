@@ -82,6 +82,16 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
     /** Canonical capacity engine — the ONLY source of resource-efficiency figures (never re-derived here). */
     private final Optional<CapacityUtilizationProvider> capacityProvider;
     private final ObjectMapper objectMapper;
+    private final com.bipros.ai.agent.notify.StakeholderResolver stakeholderResolver;
+
+    /**
+     * Responsible-person routing (owner decision 2026-08-05): the lagging supervisor's direct
+     * manager gets the finding — never the supervisor themselves; PM always; SITE_MANAGER seats
+     * only as the fallback when no manager resolves (free-text supervisor, no team seat).
+     */
+    private Map<String, List<UUID>> stakeholdersFor(UUID projectId, UUID supervisorUserId) {
+        return stakeholderResolver.pmPlusManagersOf(projectId, java.util.Collections.singleton(supervisorUserId));
+    }
 
     @Override
     public String key() {
@@ -275,7 +285,7 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
                         + "with " + best.sup.name() + " or re-balancing crews toward the schedule-critical front. "
                         + "Open any supervisor below to see their trade-by-trade efficiency.",
                 evidence,
-                Map.of("PROJECT_MANAGER", List.of()),
+                stakeholdersFor(projectId, worst.sup.userId()),
                 validUntil);
     }
 
@@ -328,7 +338,7 @@ public class SupervisorPerformanceAgent extends AbstractAgent {
                 "Sit with " + sc.sup.name() + " to unblock the lagging activities (crew size, materials, sequencing, "
                         + "access); reassign float or add a lead hand where the " + dimension + " gap is widest.",
                 evidence,
-                Map.of("PROJECT_MANAGER", List.of(), "SITE_MANAGER", List.of()),
+                stakeholdersFor(projectId, sc.sup.userId()),
                 validUntil);
     }
 

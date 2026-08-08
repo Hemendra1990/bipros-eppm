@@ -2,6 +2,7 @@ package com.bipros.reporting.application.service;
 
 import com.bipros.reporting.application.dto.CapacityUtilizationAggregateReport;
 import com.bipros.reporting.application.dto.CapacityUtilizationAggregateReport.Bucket;
+import com.bipros.reporting.application.dto.CapacityUtilizationClientWorkbook;
 import com.bipros.reporting.application.dto.CapacityUtilizationReport;
 import com.bipros.reporting.application.dto.CapacityUtilizationReport.RolePeriod;
 import com.bipros.reporting.application.dto.CapacityUtilizationReport.RoleRow;
@@ -96,7 +97,7 @@ public class CapacityUtilizationReportService {
         : null;
 
     // Synthesise the legacy flat-row + groupBy/normType fields so existing consumers
-    // (Excel writer, Insights collector) keep working until they're migrated.
+    // (Insights collector; the Excel writer now uses clientWorkbook) keep working until migrated.
     String resolvedGroupBy = groupBy == null ? "ROLE" : groupBy.toUpperCase();
     List<CapacityUtilizationReport.Row> legacyRows =
         synthesiseLegacyRows(manpowerSection, equipmentSection);
@@ -188,10 +189,179 @@ public class CapacityUtilizationReportService {
     return new Section(stripped, null, null, src.totalCumulative());
   }
 
+  // ─── Client-format workbook (Plant / Manpower utilization sheets) ──────────────────────────
+
+  /**
+   * Data for the client-format "Resource Capacity Utilization Report" workbook: per-role →
+   * per-work-activity breakdown, Day + Month buckets only. Reuses {@link #accumulateByRole}
+   * (same allocator, norm resolution and hidden/untracked handling as the Capacity Util. tab)
+   * and only regroups the accumulators — no new formulas. A catalogue fill adds every work
+   * activity that has a role-scoped norm linked to this project even when idle in the window
+   * (blank actuals), matching the client template's fixed task skeleton.
+   */
+  @Transactional(readOnly = true)
+  public CapacityUtilizationClientWorkbook clientWorkbook(
+      UUID projectId, LocalDate fromDate, LocalDate toDate,
+      UUID supervisorUserId, int workDays) {
+    LocalDate today = LocalDate.now();
+    LocalDate effectiveTo = toDate == null ? today : toDate;
+    LocalDate effectiveFrom = fromDate == null ? effectiveTo.withDayOfMonth(1) : fromDate;
+    LocalDate referenceDate = effectiveTo.isBefore(today) ? effectiveTo : today;
+    YearMonth referenceMonth = YearMonth.from(referenceDate);
+    int effectiveWorkDays = workDays > 0 ? workDays : 26;
+    return new CapacityUtilizationClientWorkbook(
+        projectId, effectiveFrom, effectiveTo, referenceDate, effectiveWorkDays,
+        clientSection(projectId, "EQUIPMENT", effectiveFrom, effectiveTo,
+            referenceDate, referenceMonth, supervisorUserId),
+        clientSection(projectId, "MANPOWER", effectiveFrom, effectiveTo,
+            referenceDate, referenceMonth, supervisorUserId));
+  }
+
+  private CapacityUtilizationClientWorkbook.Section clientSection(
+      UUID projectId, String normType,
+      LocalDate fromDate, LocalDate toDate,
+      LocalDate referenceDate, YearMonth referenceMonth,
+      UUID supervisorUserId) {
+    RoleAccum accum = accumulateByRole(projectId, normType, fromDate, toDate,
+        referenceDate, referenceMonth, supervisorUserId);
+    Map<WorkActivityRoleKey, NormLookup> normCache = accum.normCache();
+
+    Map<UUID, ClientGroupDraft> drafts = new LinkedHashMap<>();
+    for (var entry : accum.byRole().entrySet()) {
+      RoleAccumulator role = entry.getValue();
+      ClientGroupDraft g = drafts.computeIfAbsent(entry.getKey(),
+          k -> new ClientGroupDraft(role.roleId,
+              role.roleName != null ? role.roleName : role.roleCode));
+      for (ActivityRoleAccumulator ara : role.activityRoles.values()) {
+        NormLookup nl = normCache.computeIfAbsent(
+            new WorkActivityRoleKey(ara.workActivityId, ara.roleId),
+            k -> resolveNorm(k.workActivityId(), k.roleId(), normType));
+        boolean tracked = ara.normResolved
+            && nl.outputPerDay() != null && nl.outputPerDay().signum() > 0;
+        BigDecimal dayBudget = null;
+        BigDecimal monthBudget = null;
+        if (tracked) {
+          if (ara.dayQty.signum() > 0) {
+            dayBudget = ara.dayQty.divide(nl.outputPerDay(), 4, RoundingMode.HALF_UP);
+            g.dayBud = g.dayBud.add(dayBudget);
+          }
+          if (ara.monthQty.signum() > 0) {
+            monthBudget = ara.monthQty.divide(nl.outputPerDay(), 4, RoundingMode.HALF_UP);
+            g.monthBud = g.monthBud.add(monthBudget);
+          }
+        } else {
+          // Untracked lines mirror buildSection: their full actual is excluded from the
+          // rollup's util denominator (no norm → nothing measurable).
+          g.dayExcl = g.dayExcl.add(ara.dayActualDays);
+          g.monthExcl = g.monthExcl.add(ara.monthActualDays);
+        }
+        // Hidden-side days excluded from the denominator on every branch — same as buildSection.
+        g.dayExcl = g.dayExcl.add(ara.dayActualHidden);
+        g.monthExcl = g.monthExcl.add(ara.monthActualHidden);
+        g.dayAct = g.dayAct.add(ara.dayActualDays);
+        g.monthAct = g.monthAct.add(ara.monthActualDays);
+
+        BigDecimal dayTrackedActual = ara.dayActualDays.subtract(ara.dayActualHidden);
+        BigDecimal monthTrackedActual = ara.monthActualDays.subtract(ara.monthActualHidden);
+        g.lines.put(ara.workActivityId, new CapacityUtilizationClientWorkbook.ActivityLine(
+            ara.workActivityId, ara.workActivityName, ara.workActivityDefaultUnit,
+            tracked ? nl.outputPerDay() : null,
+            nullIfZero(ara.dayQty), dayBudget, nullIfZero(ara.dayActualDays),
+            pctOf(dayBudget, dayTrackedActual),
+            nullIfZero(ara.monthQty), monthBudget, nullIfZero(ara.monthActualDays),
+            pctOf(monthBudget, monthTrackedActual),
+            (tracked && ara.monthQty.signum() > 0 && monthTrackedActual.signum() > 0)
+                ? ara.monthQty.divide(monthTrackedActual, 4, RoundingMode.HALF_UP)
+                : null));
+      }
+    }
+
+    for (CatalogueNorm cn : loadRoleNormCatalogue(projectId, normType)) {
+      ClientGroupDraft g = drafts.computeIfAbsent(cn.roleId(),
+          k -> new ClientGroupDraft(cn.roleId(),
+              cn.roleName() != null ? cn.roleName() : cn.roleCode()));
+      g.lines.putIfAbsent(cn.workActivityId(), new CapacityUtilizationClientWorkbook.ActivityLine(
+          cn.workActivityId(), cn.workActivityName(), cn.unit(), cn.outputPerDay(),
+          null, null, null, null, null, null, null, null, null));
+    }
+
+    List<CapacityUtilizationClientWorkbook.RoleGroup> groups = new ArrayList<>(drafts.size());
+    for (ClientGroupDraft g : drafts.values()) {
+      List<CapacityUtilizationClientWorkbook.ActivityLine> lines = new ArrayList<>(g.lines.values());
+      lines.sort(java.util.Comparator.comparing(
+          l -> l.activityName() == null ? "" : l.activityName(),
+          String.CASE_INSENSITIVE_ORDER));
+      groups.add(new CapacityUtilizationClientWorkbook.RoleGroup(
+          g.roleId, g.roleName,
+          new CapacityUtilizationClientWorkbook.Rollup(
+              nullIfZero(g.dayBud), nullIfZero(g.dayAct),
+              pctOf(nullIfZero(g.dayBud), g.dayAct.subtract(g.dayExcl))),
+          new CapacityUtilizationClientWorkbook.Rollup(
+              nullIfZero(g.monthBud), nullIfZero(g.monthAct),
+              pctOf(nullIfZero(g.monthBud), g.monthAct.subtract(g.monthExcl))),
+          lines));
+    }
+    groups.sort(java.util.Comparator.comparing(
+        grp -> grp.roleName() == null ? "" : grp.roleName(),
+        String.CASE_INSENSITIVE_ORDER));
+    return new CapacityUtilizationClientWorkbook.Section(groups);
+  }
+
+  /** budgetDays ÷ trackedActualDays × 100 — the {@link #buildPeriod} util formula, null-guarded. */
+  private static BigDecimal pctOf(BigDecimal budgetDays, BigDecimal trackedActualDays) {
+    if (budgetDays == null || budgetDays.signum() <= 0) return null;
+    if (trackedActualDays == null || trackedActualDays.signum() <= 0) return null;
+    return budgetDays.divide(trackedActualDays, 4, RoundingMode.HALF_UP).multiply(HUNDRED);
+  }
+
+  /**
+   * Role-scoped productivity norms for work activities linked to this project — the fixed task
+   * skeleton the client workbook lists under each resource. One row per (role, work activity),
+   * first-created wins on duplicates (the same tie-break {@link #resolveNorm} uses).
+   */
+  @SuppressWarnings("unchecked")
+  private List<CatalogueNorm> loadRoleNormCatalogue(UUID projectId, String normType) {
+    String normColumn = "EQUIPMENT".equalsIgnoreCase(normType)
+        ? "n.output_per_day"
+        : "COALESCE(n.output_per_man_per_day, n.output_per_day)";
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT DISTINCT ON (n.role_id, n.work_activity_id) "
+                + "  n.role_id, rr.code, rr.name, "
+                + "  n.work_activity_id, wa.name, wa.default_unit, "
+                + "  " + normColumn + " AS output_per_day "
+                + "FROM resource.productivity_norms n "
+                + "JOIN resource.work_activities wa ON wa.id = n.work_activity_id "
+                + "JOIN resource.resource_roles rr ON rr.id = n.role_id "
+                + "WHERE n.norm_type = :nt "
+                + "  AND n.role_id IS NOT NULL "
+                // Retired roles don't get catalogue rows (they'd clutter as idle lines forever);
+                // roles with actual DPR data in the window still appear via the accumulators.
+                + "  AND COALESCE(rr.active, true) = true "
+                + "  AND n.category_id IS NULL AND n.grade_id IS NULL "
+                + "  AND n.make IS NULL AND n.model IS NULL "
+                + "  AND n.resource_id IS NULL AND n.resource_type_id IS NULL "
+                + "  AND EXISTS (SELECT 1 FROM activity.activities a "
+                + "              WHERE a.work_activity_id = n.work_activity_id "
+                + "                AND a.project_id = :pid) "
+                + "ORDER BY n.role_id, n.work_activity_id, n.created_at NULLS LAST")
+        .setParameter("nt", normType)
+        .setParameter("pid", projectId)
+        .getResultList();
+    List<CatalogueNorm> out = new ArrayList<>(rows.size());
+    for (Object[] r : rows) {
+      BigDecimal norm = toBigDecimal(r[6]);
+      if (norm == null || norm.signum() <= 0) continue;
+      out.add(new CatalogueNorm((UUID) r[0], (String) r[1], (String) r[2],
+          (UUID) r[3], (String) r[4], (String) r[5], norm));
+    }
+    return out;
+  }
+
   /**
    * Project the new section/role shape back into the legacy flat-row shape so existing
-   * downstream consumers (Excel writer, Insights collector) can keep rendering until they're
-   * migrated. One legacy row per (role, period); group key carries the role id.
+   * downstream consumers (Insights collector; the Excel writer has been migrated to
+   * {@link #clientWorkbook}) can keep rendering until they're migrated. One legacy row per
+   * (role, period); group key carries the role id.
    */
   private List<CapacityUtilizationReport.Row> synthesiseLegacyRows(
       Section manpower, Section equipment) {
@@ -1233,6 +1403,29 @@ public class CapacityUtilizationReportService {
   private record WorkActivityRoleKey(UUID workActivityId, UUID roleId) {}
 
   private record NormLookup(BigDecimal outputPerDay, String source) {}
+
+  /** Per-role builder for {@link #clientSection}: rollup sums + lines keyed by work activity. */
+  private static final class ClientGroupDraft {
+    final UUID roleId;
+    final String roleName;
+    BigDecimal dayBud = BigDecimal.ZERO;
+    BigDecimal dayAct = BigDecimal.ZERO;
+    /** Days excluded from the util denominator (untracked full actual + hidden-side days). */
+    BigDecimal dayExcl = BigDecimal.ZERO;
+    BigDecimal monthBud = BigDecimal.ZERO;
+    BigDecimal monthAct = BigDecimal.ZERO;
+    BigDecimal monthExcl = BigDecimal.ZERO;
+    final Map<UUID, CapacityUtilizationClientWorkbook.ActivityLine> lines = new LinkedHashMap<>();
+
+    ClientGroupDraft(UUID roleId, String roleName) {
+      this.roleId = roleId;
+      this.roleName = roleName;
+    }
+  }
+
+  private record CatalogueNorm(
+      UUID roleId, String roleCode, String roleName,
+      UUID workActivityId, String workActivityName, String unit, BigDecimal outputPerDay) {}
 
   private record BucketedPlanned(BigDecimal day, BigDecimal month, BigDecimal cum) {
     static BucketedPlanned empty() {

@@ -58,9 +58,13 @@ public class MaterialConsumptionLogController {
   public ResponseEntity<ApiResponse<List<MaterialConsumptionLogResponse>>> list(
       @PathVariable UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-    log.info("GET /v1/projects/{}/material-consumption, from={}, to={}", projectId, from, to);
-    return ResponseEntity.ok(ApiResponse.ok(service.list(projectId, from, to)));
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+      @RequestParam(required = false) String enteredByRole,
+      @RequestParam(required = false) UUID issuedByUserId) {
+    log.info("GET /v1/projects/{}/material-consumption, from={}, to={}, enteredByRole={}, issuedByUserId={}",
+        projectId, from, to, enteredByRole, issuedByUserId);
+    return ResponseEntity.ok(
+        ApiResponse.ok(service.list(projectId, from, to, enteredByRole, issuedByUserId)));
   }
 
   @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")

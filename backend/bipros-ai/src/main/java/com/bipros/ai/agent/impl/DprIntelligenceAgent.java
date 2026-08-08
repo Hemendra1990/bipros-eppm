@@ -65,6 +65,7 @@ public class DprIntelligenceAgent extends AbstractAgent {
     private final DailyProgressReportRepository dprRepository;
     private final GlobalSettingRepository globalSettingRepository;
     private final ObjectMapper objectMapper;
+    private final com.bipros.ai.agent.notify.StakeholderResolver stakeholderResolver;
 
     /** Configurable DPR approval SLA window in hours — the same value the DPR dashboard uses. */
     private int slaHours() {
@@ -162,7 +163,7 @@ public class DprIntelligenceAgent extends AbstractAgent {
                     .orElse(stuck.get(0));
             long oldestHours = Duration.between(oldest.getSubmittedAt(), now).toHours();
             snapshot.put("oldestStuckHours", oldestHours);
-            candidates.add(approvalBottleneck(projectId, stuck.size(), oldest, oldestHours, slaHours, validUntil));
+            candidates.add(approvalBottleneck(projectId, stuck, oldest, oldestHours, slaHours, validUntil));
         }
 
         // Most-severe first for a stable, meaningful narration order.
@@ -199,11 +200,18 @@ public class DprIntelligenceAgent extends AbstractAgent {
                 validUntil);
     }
 
-    private AgentFindingDraft approvalBottleneck(UUID projectId, int stuckCount, DailyProgressReport oldest,
+    private AgentFindingDraft approvalBottleneck(UUID projectId, List<DailyProgressReport> stuck,
+                                                 DailyProgressReport oldest,
                                                  long oldestHours, int slaHours, Instant validUntil) {
+        int stuckCount = stuck.size();
         Severity severity = (oldestHours >= 3L * slaHours || stuckCount >= 5) ? Severity.HIGH
                 : (oldestHours >= 2L * slaHours || stuckCount >= 3) ? Severity.MEDIUM
                 : Severity.LOW;
+        // Responsible-person routing: the assigned approvers ARE the action owners of a stuck
+        // approval — notify them directly (+ PM); SITE_MANAGER seats only when none are assigned.
+        Map<String, List<UUID>> stakeholders = stakeholderResolver.pmPlusResponsible(projectId,
+                stuck.stream().map(DailyProgressReport::getAssignedApproverUserId)
+                        .filter(java.util.Objects::nonNull).toList());
         return new AgentFindingDraft(
                 "APPROVAL_BOTTLENECK",
                 "PROJECT",
@@ -240,7 +248,7 @@ public class DprIntelligenceAgent extends AbstractAgent {
                         EvidenceRef.entity("All " + stuckCount + " pending approval", "Open approvals queue",
                                 "project", projectId,
                                 "/projects/" + projectId + "/dpr?view=approvals")),
-                Map.of("PROJECT_MANAGER", List.of(), "SITE_MANAGER", List.of()),
+                stakeholders,
                 validUntil);
     }
 }

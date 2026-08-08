@@ -3,6 +3,7 @@ package com.bipros.ai.agent.notify;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
@@ -16,10 +17,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * button. Money already arrives pre-formatted in the finding fields and is rendered as-is (currency
  * relabel-only — never converted).
  *
- * <p>The whole channel is gated on an SMTP host being configured under
- * {@code bipros.agent.notify.email.host} AND a {@link JavaMailSender} bean being present (Spring
- * Boot only auto-configures one when {@code spring.mail.host} is set). When either is missing the
- * channel disables itself (logged once) and every send is a no-op. Never throws.
+ * <p>Single-key SMTP gate (owner decision 2026-08-05): the channel transmits exactly when Spring
+ * auto-configured a {@link JavaMailSender}, which happens when {@code spring.mail.host}
+ * ({@code SMTP_HOST}) is set — one config, any provider (gmail / outlook / office365 / …).
+ * From address: {@code bipros.agent.notify.email.from} ({@code BIPROS_MAIL_FROM}) when set, else
+ * {@code spring.mail.username} (gmail/outlook reject a mismatched sender), else a local fallback.
+ * Without SMTP the channel runs in PREVIEW mode: renders + logs, never transmits. Never throws.
  */
 @Slf4j
 @Component
@@ -32,11 +35,15 @@ public class EmailChannel implements NotificationChannel {
 
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final AgentNotifyProperties props;
+    private final String mailUsername;
     private final AtomicBoolean warnedDisabled = new AtomicBoolean(false);
 
-    public EmailChannel(ObjectProvider<JavaMailSender> mailSenderProvider, AgentNotifyProperties props) {
+    public EmailChannel(ObjectProvider<JavaMailSender> mailSenderProvider,
+                        AgentNotifyProperties props,
+                        @Value("${spring.mail.username:}") String mailUsername) {
         this.mailSenderProvider = mailSenderProvider;
         this.props = props;
+        this.mailUsername = mailUsername;
     }
 
     @Override
@@ -44,57 +51,91 @@ public class EmailChannel implements NotificationChannel {
         return KEY;
     }
 
+    /**
+     * True only when the message can actually be transmitted — an SMTP host is configured AND
+     * Spring auto-configured a {@link JavaMailSender}. When it is false the channel is in
+     * PREVIEW mode, not switched off: {@link #isEnabled()} still reports the channel as usable
+     * so the router keeps it in the fan-out, and {@link #send} renders and logs the message
+     * instead of transmitting it.
+     */
+    private boolean canTransmit() {
+        // Single gate: Spring Boot auto-configures the sender exactly when spring.mail.host is set.
+        return mailSenderProvider.getIfAvailable() != null;
+    }
+
+    /** From = explicit BIPROS_MAIL_FROM, else the SMTP username, else a local fallback. */
+    private String resolveFrom() {
+        String from = props.getEmail().getFrom();
+        if (!isBlank(from)) {
+            return from;
+        }
+        return isBlank(mailUsername) ? "no-reply@bipros.local" : mailUsername;
+    }
+
     @Override
     public boolean isEnabled() {
-        String host = props.getEmail().getHost();
-        boolean hostSet = host != null && !host.isBlank();
-        boolean senderAvailable = mailSenderProvider.getIfAvailable() != null;
-        if (!hostSet || !senderAvailable) {
-            if (warnedDisabled.compareAndSet(false, true)) {
-                log.info("EmailChannel disabled (host configured={}, JavaMailSender present={}); "
-                        + "agent emails will be skipped until both are set.", hostSet, senderAvailable);
-            }
-            return false;
+        if (!canTransmit() && warnedDisabled.compareAndSet(false, true)) {
+            log.info("EmailChannel is in PREVIEW mode — set spring.mail.host (SMTP_HOST) to transmit. "
+                    + "Messages will be rendered and logged, not sent.");
         }
+        // Always enabled: in PREVIEW mode the send is a logged no-op rather than a silent drop,
+        // which is what makes the routing path verifiable without a mail server.
         return true;
     }
 
     @Override
-    public void send(ResolvedNotification n) {
-        if (!isEnabled() || isBlank(n.email())) {
-            return;
+    public SendResult send(ResolvedNotification n) {
+        if (isBlank(n.email())) {
+            return SendResult.skipped("recipient has no email address");
+        }
+        if (!canTransmit()) {
+            log.info("[EMAIL PREVIEW] to={} subject={}{} (not sent — no SMTP host configured)",
+                    n.email(), severityTag(n.severity()), safe(n.title()));
+            return SendResult.preview("SMTP not configured — rendered, not sent");
         }
         try {
             JavaMailSender sender = mailSenderProvider.getObject();
             MimeMessage msg = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, false, "UTF-8");
-            helper.setFrom(props.getEmail().getFrom());
+            helper.setFrom(resolveFrom());
             helper.setTo(n.email());
             helper.setSubject(severityTag(n.severity()) + safe(n.title()));
             helper.setText(buildHtml(n), true);
             sender.send(msg);
+            return SendResult.sent();
         } catch (Exception ex) {
             log.warn("EmailChannel send failed for finding {} to {}: {}",
                     n.findingId(), n.email(), ex.getMessage());
+            return SendResult.failed(ex.getMessage());
         }
     }
 
-    /** One rolled-up digest email listing several deferred findings. Best-effort; never throws. */
-    public void sendDigest(String toEmail, String recipientName, List<ResolvedNotification> items) {
-        if (!isEnabled() || isBlank(toEmail) || items == null || items.isEmpty()) {
-            return;
+    /**
+     * One rolled-up digest email listing several deferred findings. Best-effort; never throws.
+     * Returns the honest outcome so {@code AgentDigestJob} records it on the delivery rows.
+     */
+    public SendResult sendDigest(String toEmail, String recipientName, List<ResolvedNotification> items) {
+        if (isBlank(toEmail) || items == null || items.isEmpty()) {
+            return SendResult.skipped("no email address or empty digest");
+        }
+        if (!canTransmit()) {
+            log.info("[EMAIL PREVIEW] digest to={} items={} (not sent — no SMTP host configured)",
+                    toEmail, items.size());
+            return SendResult.preview("SMTP not configured — rendered, not sent");
         }
         try {
             JavaMailSender sender = mailSenderProvider.getObject();
             MimeMessage msg = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, false, "UTF-8");
-            helper.setFrom(props.getEmail().getFrom());
+            helper.setFrom(resolveFrom());
             helper.setTo(toEmail);
             helper.setSubject("Daily AI digest (" + items.size() + " finding" + (items.size() == 1 ? "" : "s") + ")");
             helper.setText(buildDigestHtml(recipientName, items), true);
             sender.send(msg);
+            return SendResult.sent();
         } catch (Exception ex) {
             log.warn("EmailChannel digest send failed to {}: {}", toEmail, ex.getMessage());
+            return SendResult.failed(ex.getMessage());
         }
     }
 

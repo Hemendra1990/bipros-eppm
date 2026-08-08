@@ -57,8 +57,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DbsAggregationService {
 
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-
     private final DbsDailySupervisorRepository supervisorRepo;
     private final DbsDailyEngineerRepository engineerRepo;
     private final DbsDailyProjectRepository projectRepo;
@@ -287,6 +285,7 @@ public class DbsAggregationService {
         row.setMachineryAmount(sumOf(supRows, DbsDailySupervisor::getMachineryAmount));
         row.setFuelAmount(fuelFromMachinery(row.getMachineryAmount()));
         row.setMaterialAmount(sumOf(supRows, DbsDailySupervisor::getMaterialAmount));
+        row.setSubcontractAmount(sumOf(supRows, DbsDailySupervisor::getSubcontractAmount));
 
         BigDecimal boqForDay = sumOf(supRows, DbsDailySupervisor::getBoqForTheDayAmount);
         // BOQ cumulative is DEDUPED at CM scope — see comment on the engineer rollup.
@@ -311,13 +310,19 @@ public class DbsAggregationService {
         row.setPrelimCost(prelimCost);
         row.setTotalCostInclPrelims(directCost.add(prelimCost));
 
-        // contributionPct mirrors the engineer/supervisor compute today: (income − expense) / income × 100.
+        // P&L for the day, summed from the CM's supervisor rows. Stored (previously computed here
+        // and discarded, because the entity had no columns for it) so the CM tab can show income,
+        // expense and contribution, and so computeCmPeriod can sum real per-day P&L.
+        // contributionPct is a FRACTION, matching supervisor/engineer/project — see DbsDailyCm.
         BigDecimal totalExpense = sumOf(supRows, DbsDailySupervisor::getTotalExpense);
         BigDecimal totalIncome = sumOf(supRows, DbsDailySupervisor::getTotalIncome);
         BigDecimal contribution = totalIncome.subtract(totalExpense);
         BigDecimal contributionPct = totalIncome.compareTo(BigDecimal.ZERO) > 0
-            ? contribution.multiply(HUNDRED).divide(totalIncome, 4, RoundingMode.HALF_UP)
+            ? contribution.divide(totalIncome, 4, RoundingMode.HALF_UP)
             : BigDecimal.ZERO;
+        row.setTotalIncome(totalIncome);
+        row.setTotalExpense(totalExpense);
+        row.setContribution(contribution);
         row.setContributionPct(contributionPct);
 
         BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAchieved, boqPlanned);
@@ -431,6 +436,7 @@ public class DbsAggregationService {
         totals.setMachineryAmount(sumOf(rows, DbsDailyCm::getMachineryAmount));
         totals.setFuelAmount(fuelFromMachinery(totals.getMachineryAmount()));
         totals.setMaterialAmount(sumOf(rows, DbsDailyCm::getMaterialAmount));
+        totals.setSubcontractAmount(sumOf(rows, DbsDailyCm::getSubcontractAmount));
         totals.setDirectCost(sumOf(rows, DbsDailyCm::getDirectCost));
         totals.setPrelimCost(sumOf(rows, DbsDailyCm::getPrelimCost));
         totals.setTotalCostInclPrelims(sumOf(rows, DbsDailyCm::getTotalCostInclPrelims));
@@ -447,12 +453,22 @@ public class DbsAggregationService {
         BigDecimal pctAchieved = SectionFBoqCalculator.cappedPctAchieved(boqAchieved, boqPlanned);
         totals.setPctAchieved(pctAchieved);
 
-        BigDecimal boqForDay = totals.getBoqForTheDayAmount();
-        BigDecimal directCost = nz(totals.getDirectCost());
-        BigDecimal contributionPct = nz(boqForDay).compareTo(BigDecimal.ZERO) > 0
-            ? boqForDay.subtract(directCost).multiply(HUNDRED).divide(boqForDay, 4, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO;
-        totals.setContributionPct(contributionPct);
+        // Period P&L = Σ of the real per-day P&L rows, and margin = contribution / income as a
+        // fraction — the same shape every other tier uses (DbsQueryService.pctFraction).
+        //
+        // This previously read (boqForTheDay − directCost) / boqForTheDay × 100, which is not a
+        // margin at all: directCost is the non-preliminary share of BOQ REVENUE, so the expression
+        // is the preliminaries share of revenue. With prelimCost = 0 — every CM row on the pilot —
+        // directCost equals boqForTheDay and the period margin was therefore always exactly 0%.
+        BigDecimal periodIncome = sumOf(rows, DbsDailyCm::getTotalIncome);
+        BigDecimal periodExpense = sumOf(rows, DbsDailyCm::getTotalExpense);
+        BigDecimal periodContribution = periodIncome.subtract(periodExpense);
+        totals.setTotalIncome(periodIncome);
+        totals.setTotalExpense(periodExpense);
+        totals.setContribution(periodContribution);
+        totals.setContributionPct(periodIncome.compareTo(BigDecimal.ZERO) > 0
+            ? periodContribution.divide(periodIncome, 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO);
 
         Integer supervisorCount = rows.stream()
             .map(DbsDailyCm::getSupervisorCount)
@@ -460,7 +476,23 @@ public class DbsAggregationService {
             .max(Integer::compareTo)
             .orElse(0);
         totals.setSupervisorCount(supervisorCount);
+
+        // Org footprint for the period = union of the per-day downlines. Without this the
+        // WEEK/MONTH response carried null id arrays and the CM tab asserted "no site
+        // managers or engineers had activity" right under non-zero KPI tiles.
+        totals.setSiteManagerIds(unionIds(rows, DbsDailyCm::getSiteManagerIds));
+        totals.setEngineerIds(unionIds(rows, DbsDailyCm::getEngineerIds));
         return totals;
+    }
+
+    private static UUID[] unionIds(List<DbsDailyCm> rows,
+                                   java.util.function.Function<DbsDailyCm, UUID[]> f) {
+        return rows.stream()
+            .map(f)
+            .filter(java.util.Objects::nonNull)
+            .flatMap(java.util.Arrays::stream)
+            .distinct()
+            .toArray(UUID[]::new);
     }
 
     /**

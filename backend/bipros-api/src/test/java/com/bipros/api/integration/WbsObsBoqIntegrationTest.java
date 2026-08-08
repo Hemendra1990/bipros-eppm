@@ -427,7 +427,7 @@ class WbsObsBoqIntegrationTest {
             String id = (String) d.get("id");
 
             UpdateBoqItemRequest updateReq = new UpdateBoqItemRequest(
-                    "Updated description", "KG", null, null, null, null, null, null, null, null);
+                    "Updated description", "KG", null, null, null, null, null, null, null, null, null);
             HttpEntity<UpdateBoqItemRequest> updateE = new HttpEntity<>(updateReq, h);
             ResponseEntity<ApiResponse> response = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/boq/" + id,

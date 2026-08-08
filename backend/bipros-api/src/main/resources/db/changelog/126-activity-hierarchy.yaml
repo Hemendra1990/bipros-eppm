@@ -1,0 +1,44 @@
+databaseChangeLog:
+  # Activity hierarchy (design doc 2026-08-04, D10/D11): optional containment parent +
+  # code widened for dotted-path codes. Dev environments get the new column via
+  # ddl-auto:update and the widening via DevSchemaFixupRunner fixup 126; this is the
+  # production path.
+  - changeSet:
+      id: 126-activity-parent-and-code-width
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: activity
+            tableName: activities
+            columns:
+              - column:
+                  name: parent_activity_id
+                  type: uuid
+        - modifyDataType:
+            schemaName: activity
+            tableName: activities
+            columnName: code
+            newDataType: varchar(120)
+        - addForeignKeyConstraint:
+            baseTableSchemaName: activity
+            baseTableName: activities
+            baseColumnNames: parent_activity_id
+            referencedTableSchemaName: activity
+            referencedTableName: activities
+            referencedColumnNames: id
+            constraintName: fk_activity_parent
+            onDelete: RESTRICT
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableSchemaName: activity
+            baseTableName: activities
+            constraintName: fk_activity_parent
+        - dropColumn:
+            schemaName: activity
+            tableName: activities
+            columnName: parent_activity_id
+        - modifyDataType:
+            schemaName: activity
+            tableName: activities
+            columnName: code
+            newDataType: varchar(20)

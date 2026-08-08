@@ -452,6 +452,12 @@ public class RoleAssignmentService {
           "ACTIVITY_LOCKED",
           "Activity '" + activity.getCode() + "' is locked. Unlock it before editing.");
     }
+    // Hierarchy D10: parents are grouping nodes — the resource plan lives on the children.
+    if (activityRepo.existsByParentActivityId(activityId)) {
+      throw new BusinessRuleException(
+          "ACTIVITY_IS_PARENT_PLAN_REJECTED",
+          "Activity '" + activity.getCode() + "' groups child activities — plan resources on the children.");
+    }
   }
 
   private Optional<ResourceAssignment> findExisting(

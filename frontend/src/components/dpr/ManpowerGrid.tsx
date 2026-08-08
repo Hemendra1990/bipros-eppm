@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { roleAssignmentApi } from "@/lib/api/roleAssignmentApi";
 import { roleRateApi } from "@/lib/api/roleRateApi";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
-import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { CellInput, CellSelect, RowGrid, type RowGridColumn } from "./RowGrid";
 import type { DprManpowerRow } from "@/lib/types/dpr";
 
@@ -38,7 +37,6 @@ const optKey = (roleId: string | null | undefined, variantId: string | null | un
  * ResourceAssignment for unplanned picks so they roll up into the activity Resource Plan.
  */
 export function ManpowerGrid({ projectId, activityId, rows, onChange }: Props) {
-  const { money } = useProjectCurrency();
   const { data: plannedResp, isLoading: plannedLoading } = useQuery({
     queryKey: ["role-assignments", projectId, activityId],
     queryFn: () => roleAssignmentApi.listForActivity(projectId, activityId!),
@@ -66,9 +64,12 @@ export function ManpowerGrid({ projectId, activityId, rows, onChange }: Props) {
       const k = optKey(p.roleId, p.variantId);
       if (seen.has(k)) continue;
       seen.add(k);
+      // variantLabel arrives as "{category} / {grade} — {unit} @ {rate}"; strip the
+      // rate (and unit) — supervisors filing DPRs should not see money (workbook DPR-30).
+      const plannedVariant = p.variantLabel ? p.variantLabel.split(" — ")[0] : null;
       out.push({
         value: k,
-        label: `${p.roleName ?? "—"}${p.variantLabel ? ` — ${p.variantLabel}` : ""}  (planned)`,
+        label: `${p.roleName ?? "—"}${plannedVariant ? ` — ${plannedVariant}` : ""}  (planned)`,
         roleId: p.roleId,
         variantId: p.variantId,
         trade: p.roleName ?? "",
@@ -80,10 +81,9 @@ export function ManpowerGrid({ projectId, activityId, rows, onChange }: Props) {
       const k = optKey(v.roleId, v.id);
       if (seen.has(k)) continue;
       seen.add(k);
-      const variantLabel = `${v.categoryName ?? "?"} / ${v.gradeName ?? "?"} — ${v.unit} @ ${money(v.rate)}`;
       out.push({
         value: k,
-        label: `${v.roleName ?? "—"} — ${variantLabel}`,
+        label: `${v.roleName ?? "—"} — ${v.categoryName ?? "?"} / ${v.gradeName ?? "?"}`,
         roleId: v.roleId,
         variantId: v.id,
         trade: v.roleName ?? "",
@@ -130,19 +130,28 @@ export function ManpowerGrid({ projectId, activityId, rows, onChange }: Props) {
   const columns: RowGridColumn<DprManpowerRow>[] = [
     {
       key: "role",
-      label: "Role · Category / Grade",
+      label: "Trade",
       minWidth: 320,
       grow: 1,
-      render: (r, i) => (
-        <SearchableSelect
-          options={options.map((o) => ({ value: o.value, label: o.label }))}
-          value={selectedKey(r)}
-          onChange={(v) => handlePick(i, v)}
-          placeholder={isLoading ? "Loading…" : "Pick role…"}
-          loading={isLoading}
-          disabled={!activityId}
-        />
-      ),
+      render: (r, i) => {
+        const key = selectedKey(r);
+        const rowOptions = options.map((o) => ({ value: o.value, label: o.label }));
+        // Retired-trade fallback: a stored row whose role was later deactivated is no longer
+        // in the rate book feed — keep it displayable (same idea as the "(legacy)" units).
+        if (key && !options.some((o) => o.value === key)) {
+          rowOptions.push({ value: key, label: `${r.trade || "—"} (retired)` });
+        }
+        return (
+          <SearchableSelect
+            options={rowOptions}
+            value={key}
+            onChange={(v) => handlePick(i, v)}
+            placeholder={isLoading ? "Loading…" : "Pick role…"}
+            loading={isLoading}
+            disabled={!activityId}
+          />
+        );
+      },
     },
     ...(SHOW_REMAINING
       ? ([

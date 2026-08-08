@@ -32,5 +32,12 @@ public record DailyCostReportRow(
     BigDecimal etc,
     /** Estimate at Completion projected onto this row — see {@link #etc} for the share math. */
     BigDecimal eac,
-    String supervisor
+    String supervisor,
+    /**
+     * Stage 4 (A8): false when the row is attributed to a non-measurement operation of a
+     * WEIGHTED-split BOQ line — its qty is execution progress, not billable revenue, and pricing
+     * it at the line rate would double margin income. True for legacy rows (null operation),
+     * measurement-operation rows, unsplit lines and QUANTITY_PARTITION children.
+     */
+    boolean countsAsRevenue
 ) {}

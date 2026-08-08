@@ -39,10 +39,11 @@ public class AgentNotifyProperties {
     @Getter
     @Setter
     public static class Email {
-        /** SMTP host gate — blank disables the email channel. */
-        private String host = "";
-        /** From address on agent emails. */
-        private String from = "no-reply@bipros.local";
+        /**
+         * From address on agent emails. Blank = fall back to {@code spring.mail.username}
+         * (the SMTP gate itself is {@code spring.mail.host} — single-key config, any provider).
+         */
+        private String from = "";
         /** Frontend base URL prepended to a finding's relative deep link in emails. */
         private String appBaseUrl = "http://localhost:3000";
     }

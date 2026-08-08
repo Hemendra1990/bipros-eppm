@@ -133,6 +133,15 @@ public class DprIssue extends BaseEntity {
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 
+    /**
+     * When the issue entered CLOSED (client workbook DPRT-22). Distinct from
+     * {@link #resolvedAt}, which stamps on the FIRST terminal status (RESOLVED or CLOSED)
+     * and therefore keeps the RESOLVED time across a later RESOLVED→CLOSED transition.
+     * Cleared when the issue is reopened out of CLOSED.
+     */
+    @Column(name = "closed_at")
+    private Instant closedAt;
+
     @Column(name = "resolution_notes", length = 1000)
     private String resolutionNotes;
 

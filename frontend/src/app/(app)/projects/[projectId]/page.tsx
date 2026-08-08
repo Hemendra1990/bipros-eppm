@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
 import { formatDate, getPriorityInfo, formatBudget, budgetUnit } from "@/lib/utils/format";
+import { chainageLabel, parseChainage } from "@/lib/format/chainage";
 import { projectApi } from "@/lib/api/projectApi";
 import { settingsApi } from "@/lib/api/settingsApi";
 import { resolveCurrencyMeta } from "@/lib/currency/format";
@@ -934,8 +935,9 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
   const [form, setForm] = useState({
     category: project.category ?? "",
     morthCode: project.morthCode ?? "",
-    fromChainageM: project.fromChainageM ?? "",
-    toChainageM: project.toChainageM ?? "",
+    // Chainages are edited as km+metres text ("145+000"); parsed back to metres on save.
+    fromChainageM: project.fromChainageM != null ? chainageLabel(project.fromChainageM) : "",
+    toChainageM: project.toChainageM != null ? chainageLabel(project.toChainageM) : "",
     fromLocation: project.fromLocation ?? "",
     toLocation: project.toLocation ?? "",
     calendarId: project.calendarId ?? "",
@@ -957,8 +959,9 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
       await projectApi.updateProject(project.id, {
         category: form.category || null,
         morthCode: form.morthCode || null,
-        fromChainageM: form.fromChainageM ? Number(form.fromChainageM) : null,
-        toChainageM: form.toChainageM ? Number(form.toChainageM) : null,
+        // parseChainage accepts both "145+000" and bare metres "145000".
+        fromChainageM: form.fromChainageM ? parseChainage(form.fromChainageM) : null,
+        toChainageM: form.toChainageM ? parseChainage(form.toChainageM) : null,
         fromLocation: form.fromLocation || null,
         toLocation: form.toLocation || null,
         calendarId: form.calendarId || null,
@@ -1041,12 +1044,34 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
               <input name="morthCode" value={form.morthCode} onChange={handleChange} placeholder="NH-48" className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary">From Chainage (m)</label>
-              <input name="fromChainageM" type="number" value={form.fromChainageM} onChange={handleChange} placeholder="145000" className={inputClass} />
+              <label className="block text-xs font-medium text-text-secondary">Start Chainage</label>
+              <input
+                name="fromChainageM"
+                type="text"
+                value={form.fromChainageM}
+                onChange={handleChange}
+                onBlur={() => {
+                  const parsed = parseChainage(form.fromChainageM);
+                  if (parsed != null) setForm((p) => ({ ...p, fromChainageM: chainageLabel(parsed) }));
+                }}
+                placeholder="145+000"
+                className={inputClass}
+              />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary">To Chainage (m)</label>
-              <input name="toChainageM" type="number" value={form.toChainageM} onChange={handleChange} placeholder="165000" className={inputClass} />
+              <label className="block text-xs font-medium text-text-secondary">End Chainage</label>
+              <input
+                name="toChainageM"
+                type="text"
+                value={form.toChainageM}
+                onChange={handleChange}
+                onBlur={() => {
+                  const parsed = parseChainage(form.toChainageM);
+                  if (parsed != null) setForm((p) => ({ ...p, toChainageM: chainageLabel(parsed) }));
+                }}
+                placeholder="165+000"
+                className={inputClass}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-text-secondary">From Location</label>
@@ -1131,12 +1156,12 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
             <p className="text-sm font-medium text-text-primary">{project.morthCode ?? "—"}</p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">From Chainage (m)</p>
-            <p className="text-sm font-medium text-text-primary">{project.fromChainageM ?? "—"}</p>
+            <p className="text-xs text-text-secondary">Start Chainage</p>
+            <p className="text-sm font-medium text-text-primary">{chainageLabel(project.fromChainageM)}</p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">To Chainage (m)</p>
-            <p className="text-sm font-medium text-text-primary">{project.toChainageM ?? "—"}</p>
+            <p className="text-xs text-text-secondary">End Chainage</p>
+            <p className="text-sm font-medium text-text-primary">{chainageLabel(project.toChainageM)}</p>
           </div>
           <div>
             <p className="text-xs text-text-secondary">From Location</p>

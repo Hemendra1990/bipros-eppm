@@ -7,4 +7,9 @@ import java.math.BigDecimal;
  * items executed and the total qty_executed summed across approved DPRs that
  * have a BOQ item linked. Returned by {@code GET /v1/projects/{id}/dbs/boq-executed-summary}.
  */
-public record BoqExecutedSummaryDto(long boqItemsExecuted, BigDecimal boqQtyExecuted) {}
+public record BoqExecutedSummaryDto(
+    long boqItemsExecuted,
+    BigDecimal boqQtyExecuted,
+    /** Stage 4: the BILLABLE subset of {@code boqQtyExecuted} — measurement-operation, pre-split
+     *  and partition rows only. Equals {@code boqQtyExecuted} when no split line is involved. */
+    BigDecimal boqBillableQty) {}

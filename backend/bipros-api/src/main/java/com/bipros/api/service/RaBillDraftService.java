@@ -111,7 +111,8 @@ public class RaBillDraftService {
             b.getDescription(),
             b.getUnit(),
             b.getBoqRate(),
-            b.getQtyExecutedToDate()))
+            b.getQtyExecutedToDate(),
+            b.getBoqQty()))
         .toList();
 
     DeductionConfig deductions = DeductionConfig.defaults();

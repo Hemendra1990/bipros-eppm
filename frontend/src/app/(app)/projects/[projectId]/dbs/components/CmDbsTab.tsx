@@ -40,11 +40,7 @@ import { TotalsPanel } from "./TotalsPanel";
 export interface CmDbsTabProps {
   projectId: string;
   date: string;
-  /**
-   * Period type from the parent date/period selector. V1 only implements DAY;
-   * WEEK / MONTH are accepted but currently rendered as the day rollup. Wired
-   * up here so future period support doesn't require a prop-shape change.
-   */
+  /** Period type from the parent date/period selector — DAY / WEEK / MONTH. */
   periodType: DbsPeriodType;
   cmUserId: string;
   onCmChange: (value: string) => void;
@@ -59,13 +55,11 @@ export function CmDbsTab({
   onCmChange,
   currency,
 }: CmDbsTabProps) {
-  // V1 ignores period (DAY only); referenced so the prop is consumed and the
-  // intent is documented.
-  void periodType;
-  // CM roster — backend returns CMs that had activity on the chosen date.
+  // CM roster — backend returns CMs that had activity on the chosen date, or
+  // anywhere in the ISO week / calendar month when a period is selected.
   const { data: cmsData, isLoading: cmsLoading } = useQuery({
-    queryKey: ["dbs-cms-roster", projectId, date],
-    queryFn: () => dbsApi.listCms(projectId, date),
+    queryKey: ["dbs-cms-roster", projectId, date, periodType],
+    queryFn: () => dbsApi.listCms(projectId, date, periodType),
     enabled: !!projectId && !!date,
   });
   const cms = useMemo(() => cmsData?.data ?? [], [cmsData]);
@@ -112,8 +106,8 @@ export function CmDbsTab({
   }, [cms, cmUserId, onCmChange]);
 
   const dayQuery = useQuery({
-    queryKey: ["dbs-cm-day", projectId, cmUserId, date],
-    queryFn: () => dbsApi.getCmDay(projectId, cmUserId, { date }),
+    queryKey: ["dbs-cm-day", projectId, cmUserId, date, periodType],
+    queryFn: () => dbsApi.getCmDay(projectId, cmUserId, { date, periodType }),
     enabled: !!projectId && !!cmUserId && !!date,
   });
 

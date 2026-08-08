@@ -871,7 +871,11 @@ public class ManpowerKpiService {
     for (BoqItem b : boqItems) {
       if (b.getBoqQty() == null || b.getBoqQty().signum() <= 0) continue;
       totalBoqQty += b.getBoqQty().doubleValue();
-      if (b.getQtyExecutedToDate() != null) {
+      if (b.getEarnedFraction() != null) {
+        // Stage 4: a split line's completion basis is its earned fraction — the measured
+        // billing quantity lags until the measurement operation executes.
+        totalExecuted += b.getEarnedFraction().doubleValue() * b.getBoqQty().doubleValue();
+      } else if (b.getQtyExecutedToDate() != null) {
         totalExecuted += Math.min(b.getQtyExecutedToDate().doubleValue(), b.getBoqQty().doubleValue());
       }
     }

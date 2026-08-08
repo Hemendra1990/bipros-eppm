@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Lock, Mic, Sparkles, Square, X } from "lucide-react";
+import { Check, Loader2, Lock, Mic, Send, Sparkles, Square, X } from "lucide-react";
 import { dprApi, type DprVoicePatch, type DprVoiceTurn } from "@/lib/api/dprApi";
 
 interface Props {
@@ -56,16 +56,24 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
   const [isProcessing, setIsProcessing] = useState(false);
   const [history, setHistory] = useState<SessionTurn[]>([]);
   const [followUp, setFollowUp] = useState<string | null>(null);
-  const [lastTranscript, setLastTranscript] = useState<string | null>(null);
-  const [lastReply, setLastReply] = useState<string | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
   const [permissionState, setPermissionState] = useState<"unknown" | "granted" | "prompt" | "denied">("unknown");
   const [showPanel, setShowPanel] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [procStage, setProcStage] = useState(0);
+  const [typedText, setTypedText] = useState("");
+  // "voice" runs two processing stages (transcribe → fill); "text" skips transcription.
+  const [procMode, setProcMode] = useState<"voice" | "text">("voice");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep the newest turn in view as the conversation grows.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [history, followUp, isProcessing, showPanel]);
 
   useEffect(() => {
     return () => {
@@ -143,8 +151,6 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
    */
   const startRecording = async () => {
     setShowPanel(true);
-    setLastTranscript(null);
-    setLastReply(null);
     setFollowUp(null);
     setMicError(null);
     await beginCapture();
@@ -168,15 +174,14 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
     setIsRecording(false);
   };
 
-  const sendRecording = async (blob: Blob) => {
+  const send = async (input: { audio: Blob } | { text: string }) => {
+    setProcMode("audio" in input ? "voice" : "text");
     setIsProcessing(true);
     try {
       const state = getState();
       const wireHistory: DprVoiceTurn[] = history;
-      const result = await dprApi.voiceFill(projectId, blob, state, wireHistory, dprId);
+      const result = await dprApi.voiceFill(projectId, input, state, wireHistory, dprId);
 
-      setLastTranscript(result.transcript);
-      setLastReply(result.assistantTurn.content);
       setFollowUp(result.followUpQuestion);
 
       // Merge patch into the form state via the parent callback.
@@ -196,30 +201,37 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
     }
   };
 
-  const dismissPanel = () => {
-    setShowPanel(false);
+  const sendRecording = (blob: Blob) => send({ audio: blob });
+
+  /** Typed-chat path (client workbook, Web sheet row 9) — same pipeline, no microphone. */
+  const sendTyped = async () => {
+    const text = typedText.trim();
+    if (!text || isRecording || isProcessing) return;
+    setTypedText("");
     setFollowUp(null);
-    setLastTranscript(null);
-    setLastReply(null);
+    setMicError(null);
+    await send({ text });
   };
+
+  // Closing the panel keeps the session — reopening shows the same thread; Reset clears it.
+  const dismissPanel = () => setShowPanel(false);
 
   const resetSession = () => {
     setHistory([]);
     setFollowUp(null);
-    setLastTranscript(null);
-    setLastReply(null);
     setMicError(null);
+    setTypedText("");
   };
 
-  const hasResult = !!lastTranscript && !isRecording && !isProcessing;
+  const hasThread = history.length > 0;
   const showIdle =
-    !isRecording && !isProcessing && !hasResult && !micError && permissionState !== "denied";
+    !isRecording && !isProcessing && !hasThread && !micError && permissionState !== "denied";
 
   return (
     <div className="relative inline-flex items-center gap-2">
       <button
         type="button"
-        onClick={isRecording ? stopRecording : startRecording}
+        onClick={isRecording ? stopRecording : () => setShowPanel(true)}
         disabled={isProcessing}
         aria-label={isRecording ? "Stop recording" : "Voice fill"}
         className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 disabled:opacity-60 ${
@@ -232,7 +244,7 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
             ? "Stop recording"
             : isProcessing
               ? "Processing…"
-              : "Voice fill — dictate the day's work"
+              : "Voice fill — dictate or type the day's work"
         }
       >
         {isRecording ? (
@@ -286,6 +298,7 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
           </div>
 
           <div
+            ref={threadRef}
             className="max-h-80 overflow-y-auto px-3 py-3 text-xs text-charcoal"
             aria-live="polite"
           >
@@ -368,8 +381,9 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
               </div>
             )}
 
-            {/* 4 — Processing */}
-            {isProcessing && !isRecording && (
+            {/* 4 — Processing (full view only for the session's first message; later turns
+                show a compact typing indicator inside the thread below) */}
+            {isProcessing && !isRecording && !hasThread && (
               <div className="flex flex-col items-center gap-3 py-3">
                 <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gold/40 bg-gold/10">
                   <Loader2 className="h-5 w-5 text-gold-ink motion-safe:animate-spin" />
@@ -378,39 +392,41 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
                   <span className="vf-slide absolute inset-y-0 left-0 w-1/3 rounded-full bg-gold" aria-hidden="true" />
                 </div>
                 <div className="text-sm font-medium text-charcoal">
-                  {procStage === 0 ? "Transcribing your notes…" : "Filling the form…"}
+                  {procMode === "text" || procStage === 1 ? "Filling the form…" : "Transcribing your notes…"}
                 </div>
                 <div className="text-[11px] text-slate">This usually takes a few seconds.</div>
               </div>
             )}
 
-            {/* 5 — Result */}
-            {hasResult && (
+            {/* 5 — Conversation thread: the FULL session, oldest to newest, auto-scrolled */}
+            {hasThread && !isRecording && permissionState !== "denied" && (
               <div className="space-y-2.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gold/15">
-                    <Check className="h-3.5 w-3.5 text-gold-ink" />
-                  </span>
-                  <span className="text-xs font-semibold text-charcoal">Form updated</span>
-                </div>
-
-                <div className="rounded-md bg-ivory px-2.5 py-2">
-                  <div className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate">
-                    <Mic className="h-3 w-3" /> You said
-                  </div>
-                  <div className="italic leading-snug text-charcoal">&ldquo;{lastTranscript}&rdquo;</div>
-                </div>
-
-                {lastReply && (
-                  <div className="px-0.5">
-                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate">
-                      Assistant
+                {history.map((t, i) =>
+                  t.role === "user" ? (
+                    <div key={i} className="rounded-md bg-ivory px-2.5 py-2">
+                      <div className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate">
+                        <Mic className="h-3 w-3" /> You
+                      </div>
+                      <div className="italic leading-snug text-charcoal">&ldquo;{t.content}&rdquo;</div>
                     </div>
-                    <div className="leading-snug text-charcoal">{lastReply}</div>
+                  ) : (
+                    <div key={i} className="px-0.5">
+                      <div className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate">
+                        <Check className="h-3 w-3 text-gold-ink" /> Assistant
+                      </div>
+                      <div className="leading-snug text-charcoal">{t.content}</div>
+                    </div>
+                  ),
+                )}
+
+                {isProcessing && (
+                  <div className="flex items-center gap-2 px-0.5 py-1 text-[11px] text-slate">
+                    <Loader2 className="h-3.5 w-3.5 text-gold motion-safe:animate-spin" />
+                    {procMode === "text" || procStage === 1 ? "Filling the form…" : "Transcribing your notes…"}
                   </div>
                 )}
 
-                {followUp ? (
+                {followUp && !isProcessing && (
                   <div className="rounded-md border border-gold/40 bg-gold/10 px-2.5 py-2">
                     <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gold-ink">
                       Needs your input
@@ -424,7 +440,8 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
                       <Mic className="h-3.5 w-3.5" /> Answer
                     </button>
                   </div>
-                ) : (
+                )}
+                {!followUp && !isProcessing && (
                   <button
                     type="button"
                     onClick={startRecording}
@@ -442,9 +459,9 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
                 <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gold/40 bg-gold/10">
                   <Sparkles className="h-5 w-5 text-gold" />
                 </span>
-                <div className="text-sm font-semibold text-charcoal">Dictate the day&rsquo;s work</div>
+                <div className="text-sm font-semibold text-charcoal">Dictate or type the day&rsquo;s work</div>
                 <div className="text-[11px] leading-snug text-slate">
-                  Say the supervisor, activity, quantity, and crew — I&rsquo;ll fill the form.
+                  Say — or type below — the supervisor, activity, quantity, and crew; I&rsquo;ll fill the form.
                 </div>
                 <button
                   type="button"
@@ -456,6 +473,36 @@ export function DprVoiceAssistant({ projectId, dprId, getState, applyPatch }: Pr
               </div>
             )}
           </div>
+
+          {/* Typed chat input — the no-microphone path (client workbook, Web sheet row 9).
+              Hidden while recording; Enter sends here and must NOT submit the DPR form. */}
+          {!isRecording && (
+            <div className="flex items-center gap-1.5 border-t border-hairline px-3 py-2">
+              <input
+                type="text"
+                value={typedText}
+                onChange={(e) => setTypedText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void sendTyped();
+                  }
+                }}
+                placeholder={followUp ? "Type your answer…" : "Or type it — e.g. 200 Cum by two masons"}
+                disabled={isProcessing}
+                className="min-w-0 flex-1 rounded-md border border-hairline bg-ivory px-2.5 py-1.5 text-xs text-charcoal placeholder:text-slate/70 focus:border-gold focus:outline-none disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => void sendTyped()}
+                disabled={isProcessing || !typedText.trim()}
+                aria-label="Send typed input"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gold text-gold-ink transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 disabled:opacity-50"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

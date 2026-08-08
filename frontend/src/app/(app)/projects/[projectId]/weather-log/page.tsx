@@ -28,7 +28,8 @@ interface WeatherForm {
   remarks: string;
 }
 
-const CONDITION_PRESETS = ["Clear", "Cloudy", "Rain", "Hot", "Sunny", "Overcast"];
+// Canonical weather list (client workbook, 01 Aug 2026) — same list as the DPR form.
+const CONDITION_PRESETS = ["Clear", "Cloudy", "Rain", "Thunderstorm", "Foggy", "Sandstorm"];
 
 const todayIso = () => new Date().toISOString().split("T")[0];
 

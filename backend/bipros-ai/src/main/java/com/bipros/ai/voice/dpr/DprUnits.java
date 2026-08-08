@@ -14,13 +14,18 @@ import java.util.Map;
  */
 final class DprUnits {
 
+  // Client-approved 12-unit list (workbook "Web" sheet, DPR row 2, 01 Aug 2026).
   static final List<String> STANDARD_UNITS = List.of(
-      "Cum", "Brass", "L", "Sqm", "Sqft", "Rm", "Lm", "lin.m.", "R/mtr", "m", "mm", "ft", "in",
-      "kg", "MT", "Tonne", "Quintal", "Bag", "Each", "Nr", "Nos", "Day", "Hour");
+      "Cum", "Sqm", "Rm", "MT", "Nr", "LS", "Kg", "Hrs", "Bag", "Month", "Week", "Day");
 
   /**
    * Spoken/written variants → canonical code. Keys are stored already-normalized (lowercase,
    * single-spaced) and looked up via {@link LabelMatcher#norm(String)}.
+   *
+   * <p>Only dimension-identical relabels map onto the 12-list (metre→Rm, each→Nr, tonne→MT,
+   * hour→Hrs). Magnitude-different retired units (Sqft, mm, ft, in, Quintal, L) keep their old
+   * compact spelling — the value passes through and the FE renders it as "(legacy)"; we never
+   * convert a quantity's unit to a different magnitude.
    */
   private static final Map<String, String> SYNONYMS = Map.ofEntries(
       Map.entry("cubic meter", "Cum"), Map.entry("cubic metre", "Cum"),
@@ -31,20 +36,24 @@ final class DprUnits {
       Map.entry("square feet", "Sqft"), Map.entry("square foot", "Sqft"), Map.entry("sq ft", "Sqft"),
       Map.entry("running meter", "Rm"), Map.entry("running metre", "Rm"),
       Map.entry("running meters", "Rm"), Map.entry("rmt", "Rm"), Map.entry("r mtr", "Rm"),
-      Map.entry("linear meter", "Lm"), Map.entry("linear metre", "Lm"),
-      Map.entry("meter", "m"), Map.entry("metre", "m"), Map.entry("meters", "m"),
+      Map.entry("linear meter", "Rm"), Map.entry("linear metre", "Rm"),
+      Map.entry("meter", "Rm"), Map.entry("metre", "Rm"), Map.entry("meters", "Rm"),
       Map.entry("millimeter", "mm"), Map.entry("millimetre", "mm"),
       Map.entry("feet", "ft"), Map.entry("foot", "ft"), Map.entry("inch", "in"), Map.entry("inches", "in"),
-      Map.entry("kilogram", "kg"), Map.entry("kilograms", "kg"), Map.entry("kilo", "kg"), Map.entry("kgs", "kg"),
-      Map.entry("metric ton", "MT"), Map.entry("metric tonne", "MT"), Map.entry("metric tons", "MT"),
+      Map.entry("kilogram", "Kg"), Map.entry("kilograms", "Kg"), Map.entry("kilo", "Kg"), Map.entry("kgs", "Kg"),
+      Map.entry("metric ton", "MT"), Map.entry("metric tons", "MT"),
       Map.entry("ton", "MT"), Map.entry("tons", "MT"),
-      Map.entry("tonne", "Tonne"), Map.entry("tonnes", "Tonne"),
+      Map.entry("metric tonne", "MT"), Map.entry("tonne", "MT"), Map.entry("tonnes", "MT"),
       Map.entry("quintal", "Quintal"), Map.entry("quintals", "Quintal"),
       Map.entry("bag", "Bag"), Map.entry("bags", "Bag"),
-      Map.entry("each", "Each"), Map.entry("number", "Nos"), Map.entry("numbers", "Nos"),
-      Map.entry("no", "Nos"), Map.entry("pieces", "Nos"), Map.entry("piece", "Nos"),
+      Map.entry("each", "Nr"), Map.entry("number", "Nr"), Map.entry("numbers", "Nr"),
+      Map.entry("no", "Nr"), Map.entry("nos", "Nr"),
+      Map.entry("pieces", "Nr"), Map.entry("piece", "Nr"),
+      Map.entry("lump sum", "LS"), Map.entry("lumpsum", "LS"),
+      Map.entry("month", "Month"), Map.entry("months", "Month"),
+      Map.entry("week", "Week"), Map.entry("weeks", "Week"),
       Map.entry("day", "Day"), Map.entry("days", "Day"),
-      Map.entry("hour", "Hour"), Map.entry("hours", "Hour"), Map.entry("hr", "Hour"), Map.entry("hrs", "Hour"));
+      Map.entry("hour", "Hrs"), Map.entry("hours", "Hrs"), Map.entry("hr", "Hrs"));
 
   private DprUnits() {}
 

@@ -26,6 +26,7 @@ public final class PermissionCatalog {
     private static final String MANAGE = "MANAGE";
     private static final String CLOSE = "CLOSE";
     private static final String RELEASE = "RELEASE";
+    private static final String RECOMPUTE = "RECOMPUTE";
 
     public static final List<Permission> ALL = List.of(
             // Project
@@ -206,7 +207,12 @@ public final class PermissionCatalog {
             new Permission("HDS_LIBRARY.READ",   "HDS_LIBRARY", READ,   "Query the HDS standards library"),
             new Permission("HDS_LIBRARY.CREATE", "HDS_LIBRARY", CREATE, "Upload new HDS documents / versions"),
             new Permission("HDS_LIBRARY.UPDATE", "HDS_LIBRARY", UPDATE, "Edit HDS metadata / re-trigger ingestion"),
-            new Permission("HDS_LIBRARY.DELETE", "HDS_LIBRARY", DELETE, "Delete HDS documents")
+            new Permission("HDS_LIBRARY.DELETE", "HDS_LIBRARY", DELETE, "Delete HDS documents"),
+
+            // DBS (Daily Balance Sheet) — admin-grade recompute of the daily aggregates.
+            // Reads are membership-gated at the controller; only the three recompute POSTs
+            // need this stronger code (a project-wide recompute is an admin action).
+            new Permission("DBS.RECOMPUTE", "DBS", RECOMPUTE, "Trigger DBS aggregate recompute (day / range / cumulative)")
     );
 
     public static final Set<String> ALL_CODES = ALL.stream()

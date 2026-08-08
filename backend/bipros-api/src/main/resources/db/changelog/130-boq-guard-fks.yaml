@@ -1,0 +1,32 @@
+databaseChangeLog:
+  # B5 (Stage 4): DB-side guard matching BoqService.rejectIfReferenced — a BOQ line referenced
+  # by DPRs can no longer be deleted out from under them. Guarded by an orphan precondition:
+  # the pilot carries 408 orphaned ra_bill_items from historical unguarded deletes, so a DB
+  # with existing dpr→boq orphans must MARK_RAN (app-side guard still protects it) rather
+  # than fail the release.
+  - changeSet:
+      id: 130-dpr-boq-item-fk
+      author: subrat
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT COUNT(*) FROM project.daily_progress_reports d
+              WHERE d.boq_item_id IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM project.boq_items b WHERE b.id = d.boq_item_id)
+      changes:
+        - addForeignKeyConstraint:
+            baseTableSchemaName: project
+            baseTableName: daily_progress_reports
+            baseColumnNames: boq_item_id
+            referencedTableSchemaName: project
+            referencedTableName: boq_items
+            referencedColumnNames: id
+            constraintName: fk_dpr_boq_item
+            onDelete: RESTRICT
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableSchemaName: project
+            baseTableName: daily_progress_reports
+            constraintName: fk_dpr_boq_item

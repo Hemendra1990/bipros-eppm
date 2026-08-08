@@ -21,6 +21,9 @@ export interface DailyCostReportRow {
   /** Workstream B3: projected EAC for this row (null when no EvmCalculation exists). */
   eac: number | null;
   supervisor: string;
+  /** Stage 4 (A8): false when the row belongs to a non-measurement operation of a split
+   *  BOQ line — cost is real, but the qty is not billable revenue. */
+  countsAsRevenue: boolean;
 }
 
 export interface DailyCostReportResponse {

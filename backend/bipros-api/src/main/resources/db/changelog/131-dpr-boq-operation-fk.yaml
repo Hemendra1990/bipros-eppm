@@ -1,0 +1,32 @@
+databaseChangeLog:
+  # Review fix (Stage 4, unsplit race): a DPR save racing an unsplit could keep a dangling
+  # boq_operation_id that every income predicate then excludes forever. The app clears the
+  # references inside unsplit; this FK closes the race at the database — the racing insert or
+  # the delete fails cleanly instead of leaving a silent dangling pointer. Same orphan-guarded
+  # MARK_RAN pattern as changeset 130.
+  - changeSet:
+      id: 131-dpr-boq-operation-fk
+      author: subrat
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT COUNT(*) FROM project.daily_progress_reports d
+              WHERE d.boq_operation_id IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM project.boq_operations o WHERE o.id = d.boq_operation_id)
+      changes:
+        - addForeignKeyConstraint:
+            baseTableSchemaName: project
+            baseTableName: daily_progress_reports
+            baseColumnNames: boq_operation_id
+            referencedTableSchemaName: project
+            referencedTableName: boq_operations
+            referencedColumnNames: id
+            constraintName: fk_dpr_boq_operation
+            onDelete: RESTRICT
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableSchemaName: project
+            baseTableName: daily_progress_reports
+            constraintName: fk_dpr_boq_operation

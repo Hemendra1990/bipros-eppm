@@ -62,7 +62,8 @@ class ActivityServiceApplyActualsTest {
   void setUp() {
     service = new ActivityService(activityRepository, activitySupervisorRepository,
         relationshipRepository, auditService, projectAccess, projectRepository,
-        percentCompleteCalculator, stepRepository,
+        percentCompleteCalculator,
+        new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository,
         org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
         boqProgressGuard);
     projectId = UUID.randomUUID();

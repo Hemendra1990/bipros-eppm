@@ -59,6 +59,7 @@ public final class RolePermissionMatrix {
                 "COST.CREATE", "COST.READ", "COST.UPDATE", "COST.DELETE", "COST.EXPORT",
                 "EVM.READ", "EVM.UPDATE", "EVM.EXPORT",
                 "CONTRACT.READ", "CONTRACT.UPDATE",
+                "DBS.RECOMPUTE",
                 "REPORT.READ", "REPORT.EXPORT",
                 "AI.READ"
         ));
@@ -80,6 +81,7 @@ public final class RolePermissionMatrix {
                 "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE",
                 "CONTRACT.READ", "CONTRACT.UPDATE",
                 "DPR.READ", "DPR.APPROVE",
+                "DBS.RECOMPUTE",
                 "NCR.READ", "NCR.APPROVE",
                 "SAFETY.READ",
                 "PORTFOLIO.READ",
@@ -214,6 +216,7 @@ public final class RolePermissionMatrix {
                 "EVM.READ",
                 "DOCUMENT.READ",
                 "DPR.READ", "DPR.UPDATE",
+                "DBS.RECOMPUTE",
                 "NCR.READ",
                 "YIELD_VARIANCE.READ",
                 "REPORT.READ",

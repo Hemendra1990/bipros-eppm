@@ -258,12 +258,15 @@ public class ActivityProgressGenerationService {
 
   private void renameActivity(ActivityPlan p) {
     // UpdateActivityRequest mutates only on non-null components; name set, everything else null.
-    // 28 components total: name + 27 nulls (verified against the record's declaration order).
+    // 34 components total: name + 33 nulls (verified against the record's declaration order).
     UpdateActivityRequest request = new UpdateActivityRequest(
         p.newName(),                                              // name (1)
         null, null, null, null, null, null, null, null, null,     // (2-10)
         null, null, null, null, null, null, null, null, null,     // (11-19)
-        null, null, null, null, null, null, null, null, null);    // (20-28)
+        null, null, null, null, null, null, null, null, null,     // (20-28)
+        null, null,                                               // parentActivityId, clearParent (29-30)
+        null, null, null,                                         // boqItemId, plannedQty, clearBoqLink (31-33)
+        null);                                                    // boqOperationId (34, Stage 4)
     activityService.updateActivity(p.activityId(), request);
   }
 

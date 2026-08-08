@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 134-create-dpr-agent-report
+      author: claude
+      comment: DPR AI report artifacts, scheduled + on-demand (ported from branch 89c2b295; renumbered 119→134 — 119 was already taken on this line)
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: dpr_agent_report
+            columns:
+              - column: {name: id, type: UUID, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: project_id, type: UUID, constraints: {nullable: false}}
+              - column: {name: trigger_type, type: VARCHAR(20), constraints: {nullable: false}}
+              - column: {name: window_from, type: DATE}
+              - column: {name: window_to, type: DATE}
+              - column: {name: window_label, type: VARCHAR(120)}
+              - column: {name: filters_json, type: TEXT}
+              - column: {name: generated_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: requested_by_user_id, type: UUID}
+              - column: {name: status, type: VARCHAR(20), constraints: {nullable: false}}
+              - column: {name: summary, type: TEXT}
+              - column: {name: insights_json, type: TEXT}
+              - column: {name: html_body, type: TEXT}
+              - column: {name: prompt_tokens, type: INT}
+              - column: {name: completion_tokens, type: INT}
+              - column: {name: delivered_to, type: TEXT}
+              - column: {name: delivery_status, type: VARCHAR(40)}
+              - column: {name: error_message, type: TEXT}
+              - column: {name: created_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: VARCHAR(255)}
+              - column: {name: updated_by, type: VARCHAR(255)}
+              - column: {name: version, type: BIGINT}
+        - createIndex:
+            schemaName: ai
+            tableName: dpr_agent_report
+            indexName: idx_dpr_agent_report_project
+            columns: [{column: {name: project_id}}, {column: {name: generated_at}}]
+      rollback:
+        - dropTable: {schemaName: ai, tableName: dpr_agent_report}

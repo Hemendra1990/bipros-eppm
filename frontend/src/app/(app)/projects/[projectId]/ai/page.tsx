@@ -17,6 +17,7 @@ import { InvestigatePanel } from "@/components/ai/agents/InvestigatePanel";
 import { SiteWeatherPanel } from "@/components/ai/agents/SiteWeatherPanel";
 import { FindingsTicker } from "@/components/ai/agents/FindingsTicker";
 import { NoDataCard } from "@/components/ai/agents/NoDataCard";
+import { NotificationLogPanel } from "@/components/ai/agents/NotificationLogPanel";
 import { catalogFor, deriveCoverageStatus, type CoverageStatus } from "@/components/ai/agents/agentCatalog";
 import { SEVERITY_META, severityMeta } from "@/components/ai/agents/agentMeta";
 
@@ -177,15 +178,11 @@ export default function ProjectAiPage() {
   }, [findings, pendingScrollId]);
 
   const sweep = useMutation({
-    mutationFn: async () => {
-      const results = await Promise.allSettled(
-        agents.map((a) => agentApi.runAgent(projectId, a.key)),
-      );
-      const ok = results.filter((r) => r.status === "fulfilled").length;
-      return { ok, total: agents.length };
-    },
-    onSuccess: ({ ok, total }) => {
-      toast.success(`Sweep started — ${ok}/${total} agents running`);
+    // The ordered pipeline (finders → forecasting → synthesis → notification) so a manual
+    // sweep delivers its own findings — parallel per-agent runs raced the notification stage.
+    mutationFn: () => agentApi.runPipeline(projectId, "DAILY_PROJECT_SWEEP"),
+    onSuccess: () => {
+      toast.success("Sweep started — agents run in order, notifications go out at the end");
       // Give runs a head start, then refresh the feed + findings.
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: ["agents", projectId] });
@@ -331,6 +328,9 @@ export default function ProjectAiPage() {
           <AgentActivityFeed projectId={projectId} />
         </div>
       </div>
+
+      {/* Delivery audit — PM/admin only (panel hides itself on 403). */}
+      <NotificationLogPanel projectId={projectId} />
     </div>
   );
 }

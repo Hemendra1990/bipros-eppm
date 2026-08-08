@@ -57,7 +57,9 @@ public record DprIssueRow(
     @Size(max = 1000) String resolutionNotes,
     UUID supervisorUserId,
     UUID assignedToUserId,
-    HseIncidentType hseIncidentType
+    HseIncidentType hseIncidentType,
+    /** Response-only, like openedAt/resolvedAt — stamped when the issue enters CLOSED. */
+    Instant closedAt
 ) {
     @SuppressWarnings("deprecation")
     public static DprIssueRow from(DprIssue e) {
@@ -81,6 +83,7 @@ public record DprIssueRow(
             e.getResolutionNotes(),
             e.getSupervisorUserId(),
             e.getAssignedToUserId(),
-            e.getHseIncidentType());
+            e.getHseIncidentType(),
+            e.getClosedAt());
     }
 }

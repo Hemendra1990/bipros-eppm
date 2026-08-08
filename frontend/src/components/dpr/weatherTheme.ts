@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Cloud, CloudRain, CloudSun, Sun, Thermometer, Wind } from "lucide-react";
+import { Cloud, CloudRain, CloudSun, Sun, Wind } from "lucide-react";
 
-export type WeatherBucket = "sunny" | "cloudy" | "rainy" | "hot" | "cold" | "neutral";
+export type WeatherBucket = "sunny" | "cloudy" | "rainy" | "sand" | "neutral";
 
 export interface WeatherTheme {
   bucket: WeatherBucket;
@@ -52,28 +52,23 @@ const THEMES: Record<Exclude<WeatherBucket, "neutral">, WeatherTheme> = {
       "rounded-full border border-steel/30 bg-steel/10 px-2 py-0.5 text-steel",
     iconClass: "text-steel",
   },
-  hot: {
-    bucket: "hot",
-    Icon: Thermometer,
+  sand: {
+    bucket: "sand",
+    Icon: Wind,
     headerStyle: { backgroundImage: tint("--amber-flame", 16) },
     pillClass:
       "rounded-full border border-amber-flame/40 bg-amber-flame/10 px-2 py-0.5 text-amber-flame",
     iconClass: "text-amber-flame",
   },
-  cold: {
-    bucket: "cold",
-    Icon: Wind,
-    headerStyle: { backgroundImage: tint("--steel", 10) },
-    pillClass:
-      "rounded-full border border-divider bg-divider/60 px-2 py-0.5 text-steel",
-    iconClass: "text-steel",
-  },
 };
 
+// Order matters: sand before rainy, so "Sandstorm"/"Sand storm" hit the sand
+// bucket instead of matching the generic "storm" in the rainy pattern. The
+// compound spellings (thunderstorm/sandstorm) are matched explicitly because
+// \b(thunder|storm)\b never matches inside a single compound word.
 const PATTERNS: Array<{ bucket: Exclude<WeatherBucket, "neutral">; test: RegExp }> = [
-  { bucket: "rainy", test: /\b(rain|rainy|drizzle|shower|storm|thunder)\b/ },
-  { bucket: "hot", test: /\b(hot|humid|heat|heatwave|scorching)\b/ },
-  { bucket: "cold", test: /\b(cold|chilly|wind|windy|frost|snow)\b/ },
+  { bucket: "sand", test: /sand\s?storm|dust\s?storm|\b(sand|dust|sandy)\b/ },
+  { bucket: "rainy", test: /thunder\s?storm|\b(rain|rainy|drizzle|shower|storm|thunder)\b/ },
   { bucket: "sunny", test: /\b(clear|sunny|fair|bright)\b/ },
   { bucket: "cloudy", test: /\b(cloud|cloudy|overcast|hazy|fog|foggy|mist)\b/ },
 ];

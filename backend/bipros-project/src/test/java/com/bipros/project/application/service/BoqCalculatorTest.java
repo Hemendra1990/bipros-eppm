@@ -124,7 +124,8 @@ class BoqCalculatorTest {
   }
 
   @Test
-  void over_executed_line_caps_percent_complete_but_not_cost_variance() {
+  void over_executed_line_caps_percent_and_earned_budget() {
+    // Gate A (approved 04 Aug 2026): budget is never credited beyond the contracted quantity.
     // boq 100 @ budget 10; executed 250 @ actual 11.
     BoqItem item = BoqItem.builder()
         .boqQty(bd("100"))
@@ -138,9 +139,34 @@ class BoqCalculatorTest {
 
     // progress capped at 100% (min(250,100)/100 = 1)
     assertThat(item.getPercentComplete()).isEqualByComparingTo("1.000000");
-    // cost variance stays UNCAPPED: 250×11 − 250×10 = 250
+    // earned budget CAPPED: min(250,100)×10 = 1000 ⇒ variance = 2750 − 1000 = 1750
+    // (pre-Gate-A this was 2750 − 2500 = 250 — the extra 150 units earned phantom budget)
     assertThat(item.getActualAmount()).isEqualByComparingTo("2750.00");
-    assertThat(item.getCostVariance()).isEqualByComparingTo("250.00");
+    assertThat(item.getCostVariance()).isEqualByComparingTo("1750.00");
+    // variance % basis is the same capped earned budget: 1750 / 1000
+    assertThat(item.getCostVariancePercent()).isEqualByComparingTo("1.750000");
+  }
+
+  @Test
+  void split_line_percent_and_earned_budget_follow_earned_fraction() {
+    // Design §4.5 excavation "truth" column: fraction 0.76, boqQty 500, budgetedRate 3.6,
+    // measured 300 @ actualRate 5.70 ⇒ actualAmount 1,710.00, earnedBudget 0.76×500×3.6 = 1,368.00
+    BoqItem item = BoqItem.builder()
+        .boqQty(bd("500"))
+        .boqRate(bd("4.5"))
+        .budgetedRate(bd("3.6"))
+        .qtyExecutedToDate(bd("300"))
+        .actualRate(bd("5.7"))
+        .earnedFraction(bd("0.760000"))
+        .build();
+
+    BoqCalculator.recompute(item);
+
+    // percent = the weighted operation fraction, NOT measured/boqQty (300/500 = 0.6)
+    assertThat(item.getPercentComplete()).isEqualByComparingTo("0.760000");
+    assertThat(item.getActualAmount()).isEqualByComparingTo("1710.00");
+    // variance = 1710 − 1368 = 342
+    assertThat(item.getCostVariance()).isEqualByComparingTo("342.00");
   }
 
   @Test
@@ -157,6 +183,16 @@ class BoqCalculatorTest {
     // null qty ⇒ 0
     assertThat(BoqCalculator.cappedEarned(null, bd("100"), bd("10")))
         .isEqualByComparingTo("0.00");
+  }
+
+  @Test
+  void split_aware_capped_earned_twin_matches_sql_case() {
+    // fraction present ⇒ fraction × boqQty × budgetedRate (ignores the raw measured qty)
+    assertThat(BoqCalculator.cappedEarned(bd("0.76"), bd("300"), bd("500"), bd("3.6")))
+        .isEqualByComparingTo("1368.00");
+    // fraction absent ⇒ falls through to the capped formula
+    assertThat(BoqCalculator.cappedEarned(null, bd("250"), bd("100"), bd("10")))
+        .isEqualByComparingTo("1000.00");
   }
 
   private static BigDecimal bd(String s) {

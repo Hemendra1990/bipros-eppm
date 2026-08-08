@@ -62,6 +62,7 @@ public class ActivityService {
   private final ProjectAccessGuard projectAccess;
   private final ProjectRepository projectRepository;
   private final PercentCompleteCalculator percentCompleteCalculator;
+  private final com.bipros.activity.application.percent.ParentRollupCalculator parentRollupCalculator;
   private final ActivityStepRepository stepRepository;
   private final ApplicationEventPublisher eventPublisher;
   private final com.bipros.activity.application.percent.BoqProgressGuard boqProgressGuard;
@@ -95,6 +96,15 @@ public class ActivityService {
     activity.setDescription(request.description());
     activity.setProjectId(request.projectId());
     activity.setWbsNodeId(request.wbsNodeId());
+
+    if (request.parentActivityId() != null) {
+      // Hierarchy (D10/D11): validates the containment edge and rewrites the code to
+      // parentCode.segment. Safe pre-save — the cycle walk tolerates a null id.
+      applyParent(activity, request.parentActivityId());
+    }
+    // BOQ link (D8/D9): optional at create; validates the line exists in this project and
+    // defaults plannedQty to the line's boqQty when this is the only linked activity.
+    applyBoqLink(activity, request.boqItemId(), request.boqOperationId(), request.plannedQty(), false);
 
     if (request.activityType() != null) {
       activity.setActivityType(request.activityType());
@@ -310,6 +320,19 @@ public class ActivityService {
     // but the assignment is now made via PUT /v1/activities/{id}/supervisor (supervisor_user_id).
     // Intentional no-op here.
 
+    // Hierarchy (D10/D11): null parentActivityId = unchanged; detaching needs the explicit flag.
+    UUID oldParentId = activity.getParentActivityId();
+    if (Boolean.TRUE.equals(request.clearParent())) {
+      applyParent(activity, null);
+    } else if (request.parentActivityId() != null
+        && !request.parentActivityId().equals(activity.getParentActivityId())) {
+      applyParent(activity, request.parentActivityId());
+    }
+
+    // BOQ link (D8/D9): null boqItemId = unchanged; unlinking needs the explicit flag.
+    applyBoqLink(activity, request.boqItemId(), request.boqOperationId(), request.plannedQty(),
+        Boolean.TRUE.equals(request.clearBoqLink()));
+
     // Enforce date-order across the planned window after any updates
     LocalDate ps = activity.getPlannedStartDate();
     LocalDate pf = activity.getPlannedFinishDate();
@@ -348,6 +371,13 @@ public class ActivityService {
     if (request.actualFinishDate() != null && !request.actualFinishDate().equals(oldActualFinish)) {
       auditService.logUpdate("Activity", id, "actualFinishDate", oldActualFinish, request.actualFinishDate());
     }
+    if (!java.util.Objects.equals(oldParentId, updated.getParentActivityId())) {
+      auditService.logUpdate("Activity", id, "parentActivityId", oldParentId, updated.getParentActivityId());
+      // H5 — the OLD parent chain shrinks by this child; recompute it too.
+      recomputeAncestorsFrom(oldParentId);
+    }
+    // §5.4 — bubble any progress/parent change up the containment chain (no-op when top-level).
+    recomputeParentChain(updated.getId());
 
     eventPublisher.publishEvent(
         new ActivityUpdatedEvent(updated.getProjectId(), updated.getId(), updated.getCode(), updated.getName())
@@ -363,6 +393,12 @@ public class ActivityService {
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
 
     projectAccess.requireEdit(activity.getProjectId());
+
+    // Hierarchy H7: a parent cannot be deleted out from under its children.
+    if (activityRepository.existsByParentActivityId(id)) {
+      throw new BusinessRuleException("ACTIVITY_HAS_CHILDREN",
+          "Cannot delete an activity that has child activities. Re-parent or delete the children first.");
+    }
 
     boolean hasRelationships = !relationshipRepository.findByPredecessorActivityId(id).isEmpty()
         || !relationshipRepository.findBySuccessorActivityId(id).isEmpty();
@@ -528,6 +564,12 @@ public class ActivityService {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
 
+    // Hierarchy D10: a parent's % is rolled up from its children — never edited directly.
+    if (activityRepository.existsByParentActivityId(id)) {
+      throw new BusinessRuleException("ACTIVITY_IS_PARENT",
+          "This activity's progress rolls up from its children — update the children instead.");
+    }
+
     if (percentComplete < 0 || percentComplete > 100) {
       throw new BusinessRuleException("INVALID_PERCENT_COMPLETE",
           "Percent complete must be between 0 and 100");
@@ -578,6 +620,9 @@ public class ActivityService {
     if (!java.util.Objects.equals(actualFinish, oldActualFinish)) {
       auditService.logUpdate("Activity", id, "actualFinishDate", oldActualFinish, actualFinish);
     }
+
+    // §5.4 — bubble the change up the containment chain (no-op when top-level).
+    recomputeParentChain(updated.getId());
 
     return ActivityResponse.from(updated);
   }
@@ -751,6 +796,11 @@ public class ActivityService {
   public ActivityResponse lockActivity(UUID id) {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
+    // Hierarchy H10: parents have no resource plan or DPRs, so lock stays a leaf concept.
+    if (activityRepository.existsByParentActivityId(id)) {
+      throw new BusinessRuleException("ACTIVITY_IS_PARENT",
+          "Parents are grouping nodes — lock the child activities instead.");
+    }
     if (activity.getEditStatus() == ActivityEditStatus.LOCKED) {
       return ActivityResponse.from(activity);
     }
@@ -780,6 +830,252 @@ public class ActivityService {
     log.info("Activity unlocked: id={}", id);
     auditService.logUpdate("Activity", id, "editStatus", prior, ActivityEditStatus.DRAFT);
     return ActivityResponse.from(saved);
+  }
+
+  // ─── Hierarchy (design D10/D11) ─────────────────────────────────────────────────
+
+  /** Spec H1/H4/C1-C3: validate the containment edge and regenerate dotted codes. */
+  private void applyParent(Activity child, UUID newParentId) {
+    if (newParentId == null) {
+      child.setParentActivityId(null);
+      regenerateCode(child, null);   // detach → code collapses back to the bare segment
+      return;
+    }
+    if (newParentId.equals(child.getId())) {
+      throw new BusinessRuleException("ACTIVITY_PARENT_CYCLE", "An activity cannot be its own parent.");
+    }
+    Activity parent = activityRepository.findById(newParentId)
+        .orElseThrow(() -> new ResourceNotFoundException("Activity", newParentId));
+    if (!parent.getProjectId().equals(child.getProjectId())) {
+      throw new BusinessRuleException("ACTIVITY_PARENT_PROJECT", "Parent must belong to the same project.");
+    }
+    // H1 — walk up from the proposed parent; meeting the child means a cycle.
+    UUID cursor = parent.getParentActivityId();
+    int hops = 0;
+    while (cursor != null && hops++ < 200) {
+      if (cursor.equals(child.getId())) {
+        throw new BusinessRuleException("ACTIVITY_PARENT_CYCLE", "This move would create a cycle.");
+      }
+      cursor = activityRepository.findById(cursor).map(Activity::getParentActivityId).orElse(null);
+    }
+    // H4 — a node gaining its FIRST child must hold no scheduling relationships
+    // (parents are excluded from CPM; silently orphaning edges would corrupt the schedule).
+    if (!activityRepository.existsByParentActivityId(parent.getId())
+        && (!relationshipRepository.findByPredecessorActivityId(parent.getId()).isEmpty()
+            || !relationshipRepository.findBySuccessorActivityId(parent.getId()).isEmpty())) {
+      throw new BusinessRuleException("ACTIVITY_PARENT_HAS_RELATIONSHIPS",
+          "Remove or move this activity's schedule links before adding children — parents hold no dependencies.");
+    }
+    // H11 (reverse) — a node gaining its FIRST child must not carry a BOQ link either:
+    // links live on leaves, or the line would be double-represented in progress.
+    if (!activityRepository.existsByParentActivityId(parent.getId()) && parent.getBoqItemId() != null) {
+      throw new BusinessRuleException("ACTIVITY_PARENT_HAS_BOQ_LINK",
+          "Remove this activity's BOQ link before adding children — links live on the child activities.");
+    }
+    child.setParentActivityId(parent.getId());
+    if (child.getWbsNodeId() == null) {
+      child.setWbsNodeId(parent.getWbsNodeId());   // H8 default (create paths always set WBS, so this is a safety net)
+    }
+    regenerateCode(child, parent);
+  }
+
+  /** C1-C3: full code = parent's full code + "." + own segment; descendants follow recursively. */
+  private void regenerateCode(Activity node, Activity parent) {
+    String segment = segmentOf(node.getCode());
+    String full = parent == null ? segment : parent.getCode() + "." + segment;
+    if (full.length() > 120) {
+      throw new BusinessRuleException("ACTIVITY_CODE_TOO_LONG",
+          "Nested code '" + full + "' exceeds 120 characters — shorten the activity's code segment.");
+    }
+    if (!full.equals(node.getCode())
+        && activityRepository.existsByProjectIdAndCode(node.getProjectId(), full)) {
+      throw new BusinessRuleException("ACTIVITY_CODE_DUPLICATE",
+          "Code " + full + " already exists in this project.");
+    }
+    node.setCode(full);
+    if (node.getId() == null) {
+      return;   // brand-new activity — no descendants yet
+    }
+    for (Activity c : activityRepository.findByProjectIdAndParentActivityId(node.getProjectId(), node.getId())) {
+      regenerateCode(c, node);   // C2 — the moved subtree's codes follow
+      activityRepository.save(c);
+    }
+  }
+
+  /** The activity's own segment = the part after the last dot (the whole code when top-level). */
+  private static String segmentOf(String code) {
+    int i = code.lastIndexOf('.');
+    return i < 0 ? code : code.substring(i + 1);
+  }
+
+  // ─── BOQ link (design D8/D9/§5.3) ───────────────────────────────────────────────
+
+  /**
+   * Set / change / clear the activity's BOQ link. Hard rules only — the WBS-divergence
+   * warning (D13) is rendered client-side where the picker already has both WBS ids.
+   * When this is the only activity linked to the line and no explicit {@code plannedQty}
+   * was given, it defaults to the line's {@code boqQty} (§5.3 — zero extra data entry,
+   * and guarantees the sole-linked activity's % basis equals today's).
+   */
+  private void applyBoqLink(Activity a, UUID boqItemId, UUID boqOperationId,
+                            java.math.BigDecimal plannedQty, boolean clearLink) {
+    if (clearLink) {
+      a.setBoqItemId(null);
+      a.setBoqOperationId(null);
+      a.setPlannedQty(null);
+      return;
+    }
+    if (boqItemId != null && !boqItemId.equals(a.getBoqItemId())) {
+      // H11 — parents carry no links; the children do the work.
+      if (a.getId() != null && activityRepository.existsByParentActivityId(a.getId())) {
+        throw new BusinessRuleException("ACTIVITY_PARENT_NO_LINK",
+            "Parents don't carry BOQ links — link the child activity that does the work.");
+      }
+      List<?> rows = em.createNativeQuery(
+              "SELECT b.boq_qty FROM project.boq_items b "
+                  + "WHERE b.id = cast(:id as uuid) AND b.project_id = cast(:pid as uuid)")
+          .setParameter("id", boqItemId.toString())
+          .setParameter("pid", a.getProjectId().toString())
+          .getResultList();
+      if (rows.isEmpty()) {
+        throw new ResourceNotFoundException("BoqItem", boqItemId);
+      }
+      a.setBoqItemId(boqItemId);
+      a.setBoqOperationId(null);   // a re-point resets any stale operation of the old line
+      Object boqQty = rows.get(0);
+      // Line-based plannedQty default only when no operation is being assigned — the
+      // operation's own target wins below (Stage 4).
+      if (boqOperationId == null && plannedQty == null && a.getPlannedQty() == null
+          && boqQty != null && countOtherActivitiesLinkedTo(boqItemId, a.getId()) == 0) {
+        a.setPlannedQty(new java.math.BigDecimal(boqQty.toString()));
+      }
+    }
+    // Stage 4: point the activity at one operation of its (split) line. Validated against the
+    // CURRENT line so a stale operation id from another line can never be attached.
+    if (boqOperationId != null && !boqOperationId.equals(a.getBoqOperationId())) {
+      if (a.getBoqItemId() == null) {
+        throw new BusinessRuleException("ACTIVITY_BOQ_OPERATION_MISMATCH",
+            "Link the activity to a BOQ line before picking one of its operations.");
+      }
+      List<Object[]> opRows = em.createNativeQuery(
+              "SELECT o.target_qty, o.is_legacy FROM project.boq_operations o "
+                  + "WHERE o.id = cast(:op as uuid) AND o.boq_item_id = cast(:b as uuid)")
+          .setParameter("op", boqOperationId.toString())
+          .setParameter("b", a.getBoqItemId().toString())
+          .getResultList();
+      if (opRows.isEmpty()) {
+        throw new BusinessRuleException("ACTIVITY_BOQ_OPERATION_MISMATCH",
+            "That operation does not belong to the activity's linked BOQ line.");
+      }
+      Object[] op = opRows.get(0);
+      if (Boolean.TRUE.equals(op[1])) {
+        throw new BusinessRuleException("ACTIVITY_BOQ_OPERATION_MISMATCH",
+            "That is the line's pre-split history operation — pick a real operation.");
+      }
+      a.setBoqOperationId(boqOperationId);
+      // §5.3 carried to operations: sole-covering activity's plannedQty defaults to the
+      // operation's target.
+      if (plannedQty == null && a.getPlannedQty() == null && op[0] != null
+          && countOtherActivitiesOnOperation(boqOperationId, a.getId()) == 0) {
+        a.setPlannedQty(new java.math.BigDecimal(op[0].toString()));
+      }
+    }
+    if (plannedQty != null) {
+      if (plannedQty.signum() <= 0) {
+        throw new BusinessRuleException("ACTIVITY_PLANNED_QTY_INVALID",
+            "Planned quantity must be greater than zero.");
+      }
+      a.setPlannedQty(plannedQty);
+    }
+  }
+
+  private long countOtherActivitiesOnOperation(UUID boqOperationId, UUID excludeActivityId) {
+    String exclude = excludeActivityId == null ? new UUID(0, 0).toString() : excludeActivityId.toString();
+    return ((Number) em.createNativeQuery(
+            "SELECT count(*) FROM activity.activities "
+                + "WHERE boq_operation_id = cast(:o as uuid) AND id <> cast(:a as uuid)")
+        .setParameter("o", boqOperationId.toString())
+        .setParameter("a", exclude)
+        .getSingleResult()).longValue();
+  }
+
+  private long countOtherActivitiesLinkedTo(UUID boqItemId, UUID excludeActivityId) {
+    String exclude = excludeActivityId == null ? new UUID(0, 0).toString() : excludeActivityId.toString();
+    return ((Number) em.createNativeQuery(
+            "SELECT count(*) FROM activity.activities "
+                + "WHERE boq_item_id = cast(:b as uuid) AND id <> cast(:a as uuid)")
+        .setParameter("b", boqItemId.toString())
+        .setParameter("a", exclude)
+        .getSingleResult()).longValue();
+  }
+
+  /**
+   * §5.4 rollup: after a child's % changes, recompute every ancestor's rolled-up
+   * percentComplete + derived status. Public so the BOQ progress listener (same module)
+   * can bubble DPR-driven changes up the tree. No-op for top-level activities.
+   */
+  public void recomputeParentChain(UUID childActivityId) {
+    if (childActivityId == null) {
+      return;
+    }
+    UUID parentId = activityRepository.findById(childActivityId)
+        .map(Activity::getParentActivityId).orElse(null);
+    recomputeAncestorsFrom(parentId);
+  }
+
+  /** Walk upward from {@code parentId}, recomputing each ancestor. Cycle-bounded like applyParent. */
+  private void recomputeAncestorsFrom(UUID parentId) {
+    int hops = 0;
+    while (parentId != null && hops++ < 200) {
+      Activity parent = activityRepository.findById(parentId).orElse(null);
+      if (parent == null) {
+        return;
+      }
+      List<Activity> children =
+          activityRepository.findByProjectIdAndParentActivityId(parent.getProjectId(), parent.getId());
+      Map<UUID, java.math.BigDecimal> costs = plannedCostByChildrenOf(parent.getId());
+      List<com.bipros.activity.application.percent.ParentRollupCalculator.ChildSnapshot> snaps =
+          children.stream()
+              .map(c -> new com.bipros.activity.application.percent.ParentRollupCalculator.ChildSnapshot(
+                  c.getPercentComplete() == null ? 0.0 : c.getPercentComplete(),
+                  costs.getOrDefault(c.getId(), java.math.BigDecimal.ZERO),
+                  c.getStatus()))
+              .toList();
+      var result = parentRollupCalculator.rollup(snaps);
+      parent.setPercentComplete(result.percentComplete());
+      parent.setStatus(result.derivedStatus());
+      activityRepository.save(parent);
+      parentId = parent.getParentActivityId();
+    }
+  }
+
+  /**
+   * Planned resource-plan cost per child of {@code parentId} — the rollup weights (§5.4).
+   * Cross-schema native SQL (same precedent as the default-unit lookup above): role/legacy
+   * assignments plus sub-contractor assignments, both of which store {@code planned_cost}.
+   */
+  @SuppressWarnings("unchecked")
+  private Map<UUID, java.math.BigDecimal> plannedCostByChildrenOf(UUID parentId) {
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT t.activity_id, SUM(t.pc) FROM ("
+                + "  SELECT ra.activity_id, COALESCE(ra.planned_cost, 0) AS pc"
+                + "    FROM resource.resource_assignments ra"
+                + "    JOIN activity.activities a ON a.id = ra.activity_id"
+                + "   WHERE a.parent_activity_id = cast(:pid as uuid)"
+                + "  UNION ALL"
+                + "  SELECT sc.activity_id, COALESCE(sc.planned_cost, 0)"
+                + "    FROM resource.activity_sub_contractor_assignments sc"
+                + "    JOIN activity.activities a ON a.id = sc.activity_id"
+                + "   WHERE a.parent_activity_id = cast(:pid as uuid)"
+                + ") t GROUP BY t.activity_id")
+        .setParameter("pid", parentId.toString())
+        .getResultList();
+    Map<UUID, java.math.BigDecimal> out = new HashMap<>();
+    for (Object[] row : rows) {
+      UUID id = row[0] instanceof UUID u ? u : UUID.fromString(row[0].toString());
+      out.put(id, new java.math.BigDecimal(row[1].toString()));
+    }
+    return out;
   }
 
   /**

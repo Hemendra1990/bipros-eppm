@@ -79,6 +79,20 @@ public class DprAnomalyAgent extends AbstractAgent {
     private final DprManpowerRepository manpowerRepository;
     private final DprEquipmentRepository equipmentRepository;
     private final ObjectMapper objectMapper;
+    private final com.bipros.ai.agent.notify.StakeholderResolver stakeholderResolver;
+
+    /**
+     * Responsible-person routing (owner decision 2026-08-05): the flagged DPRs' supervisors'
+     * MANAGERS receive the finding (never the supervisors themselves); PM always; SITE_MANAGER
+     * seats only when no manager resolves (free-text supervisors).
+     */
+    private Map<String, List<UUID>> stakeholdersFor(UUID projectId, List<DailyProgressReport> hits) {
+        List<UUID> supervisors = hits == null ? List.of() : hits.stream()
+                .map(DailyProgressReport::getSupervisorUserId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        return stakeholderResolver.pmPlusManagersOf(projectId, supervisors);
+    }
 
     @Override
     public String key() {
@@ -275,7 +289,7 @@ public class DprAnomalyAgent extends AbstractAgent {
                         + "earned-value rollups; if it is an entry gap, EVM understates progress until it is fixed.",
                 "Check each flagged DPR: if work genuinely stalled, log the delay reason and address the blocker; "
                         + "if output was missed, complete the quantity so cost and progress reconcile.",
-                ev, Map.of("SITE_MANAGER", List.of(), "PROJECT_MANAGER", List.of()), validUntil);
+                ev, stakeholdersFor(projectId, hits), validUntil);
     }
 
     private AgentFindingDraft lowOutputEquipFinding(UUID projectId, List<DailyProgressReport> hits,
@@ -302,7 +316,7 @@ public class DprAnomalyAgent extends AbstractAgent {
                         + "analysis; unrecorded output understates progress against the same machine cost.",
                 "Reconcile each flagged DPR: capture the breakdown/standby reason, or enter the missing output so "
                         + "equipment cost maps to real production.",
-                ev, Map.of("SITE_MANAGER", List.of(), "PROJECT_MANAGER", List.of()), validUntil);
+                ev, stakeholdersFor(projectId, hits), validUntil);
     }
 
     private AgentFindingDraft productivityDropFinding(UUID projectId, List<String> drops, Instant validUntil) {
@@ -356,7 +370,7 @@ public class DprAnomalyAgent extends AbstractAgent {
                         + "cost — and can over-pay quantity-linked billing until they are removed.",
                 "Review each duplicate group and delete the redundant rows, keeping one per genuine work entry; "
                         + "confirm cumulative quantity and BOQ progress correct themselves afterwards.",
-                ev, Map.of("PROJECT_MANAGER", List.of(), "SITE_MANAGER", List.of()), validUntil);
+                ev, stakeholdersFor(projectId, groups.stream().flatMap(List::stream).toList()), validUntil);
     }
 
     private AgentFindingDraft inconsistencyFinding(UUID projectId, List<String> issues, Instant validUntil) {

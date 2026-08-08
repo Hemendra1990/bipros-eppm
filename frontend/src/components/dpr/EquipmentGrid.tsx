@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { roleAssignmentApi } from "@/lib/api/roleAssignmentApi";
 import { roleRateApi } from "@/lib/api/roleRateApi";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
-import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { CellInput, CellSelect, RowGrid, type RowGridColumn } from "./RowGrid";
 import type { DprEquipmentRow } from "@/lib/types/dpr";
 
@@ -37,7 +36,6 @@ const optKey = (roleId: string | null | undefined, variantId: string | null | un
  * equipment they actually used. Backend creates a phantom assignment for unplanned picks.
  */
 export function EquipmentGrid({ projectId, activityId, rows, onChange }: Props) {
-  const { money } = useProjectCurrency();
   const { data: plannedResp, isLoading: plannedLoading } = useQuery({
     queryKey: ["role-assignments", projectId, activityId],
     queryFn: () => roleAssignmentApi.listForActivity(projectId, activityId!),
@@ -61,9 +59,12 @@ export function EquipmentGrid({ projectId, activityId, rows, onChange }: Props) 
       const k = optKey(p.roleId, p.variantId);
       if (seen.has(k)) continue;
       seen.add(k);
+      // variantLabel arrives as "{make} / {model} — {unit} @ {rate}"; strip the rate —
+      // supervisors filing DPRs should not see money (client workbook, Web sheet row 5).
+      const plannedVariant = p.variantLabel ? p.variantLabel.split(" @ ")[0] : null;
       out.push({
         value: k,
-        label: `${p.roleName ?? "—"}${p.variantLabel ? ` — ${p.variantLabel}` : ""}  (planned)`,
+        label: `${p.roleName ?? "—"}${plannedVariant ? ` — ${plannedVariant}` : ""}  (planned)`,
         roleId: p.roleId,
         variantId: p.variantId,
         equipmentType: p.roleName ?? "",
@@ -75,7 +76,7 @@ export function EquipmentGrid({ projectId, activityId, rows, onChange }: Props) 
       const k = optKey(v.roleId, v.id);
       if (seen.has(k)) continue;
       seen.add(k);
-      const variantLabel = `${v.make} / ${v.model} — ${v.unit} @ ${money(v.rate)}`;
+      const variantLabel = `${v.make} / ${v.model} — ${v.unit}`;
       out.push({
         value: k,
         label: `${v.roleName ?? "—"} — ${variantLabel}`,
@@ -116,16 +117,24 @@ export function EquipmentGrid({ projectId, activityId, rows, onChange }: Props) 
       label: "Equipment · Make / Model",
       minWidth: 280,
       grow: 1,
-      render: (r, i) => (
-        <SearchableSelect
-          options={options.map((o) => ({ value: o.value, label: o.label }))}
-          value={selectedKey(r)}
-          onChange={(v) => handlePick(i, v)}
-          placeholder={isLoading ? "Loading…" : "Pick equipment…"}
-          loading={isLoading}
-          disabled={!activityId}
-        />
-      ),
+      render: (r, i) => {
+        const key = selectedKey(r);
+        const rowOptions = options.map((o) => ({ value: o.value, label: o.label }));
+        // Retired-equipment fallback — stored rows keep displaying after the role is deactivated.
+        if (key && !options.some((o) => o.value === key)) {
+          rowOptions.push({ value: key, label: `${r.equipmentType || "—"} (retired)` });
+        }
+        return (
+          <SearchableSelect
+            options={rowOptions}
+            value={key}
+            onChange={(v) => handlePick(i, v)}
+            placeholder={isLoading ? "Loading…" : "Pick equipment…"}
+            loading={isLoading}
+            disabled={!activityId}
+          />
+        );
+      },
     },
     {
       key: "fleetNo",

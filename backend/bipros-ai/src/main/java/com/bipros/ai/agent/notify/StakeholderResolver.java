@@ -80,6 +80,52 @@ public class StakeholderResolver {
         return out;
     }
 
+    /**
+     * The user's direct manager on this project's reporting line (one {@code reportsTo} edge in
+     * {@code project_team}) — for responsible-person routing. Owner decision 2026-08-05: the
+     * subject of a finding is never notified; their manager is (put the returned id under the
+     * unmapped {@code "RESPONSIBLE"} stakeholder key so no role fan-out is triggered).
+     */
+    public java.util.Optional<UUID> managerOf(UUID projectId, UUID userId) {
+        if (projectId == null || userId == null) {
+            return java.util.Optional.empty();
+        }
+        return projectTeamService.getImmediateReporter(projectId, userId)
+                .filter(mgr -> !mgr.equals(userId));
+    }
+
+    /**
+     * Stakeholder map for responsible-person routing: PM role key always; the given users as
+     * explicit recipients under the unmapped {@code RESPONSIBLE} key (no role fan-out); when
+     * none resolve, the SITE_MANAGER seats as the fallback audience.
+     */
+    public Map<String, List<UUID>> pmPlusResponsible(UUID projectId, java.util.Collection<UUID> responsibleUserIds) {
+        Map<String, List<UUID>> out = new java.util.LinkedHashMap<>();
+        out.put("PROJECT_MANAGER", List.of());
+        List<UUID> ids = responsibleUserIds == null ? List.of() : responsibleUserIds.stream()
+                .filter(Objects::nonNull).distinct().toList();
+        if (!ids.isEmpty()) {
+            out.put("RESPONSIBLE", ids);
+        } else {
+            out.put("SITE_MANAGER", List.of());
+        }
+        return out;
+    }
+
+    /**
+     * Same as {@link #pmPlusResponsible} but the responsible recipients are the subjects'
+     * direct MANAGERS — owner decision 2026-08-05: the person a finding criticises is never
+     * notified themselves; their manager (+ PM) is.
+     */
+    public Map<String, List<UUID>> pmPlusManagersOf(UUID projectId, java.util.Collection<UUID> subjectUserIds) {
+        List<UUID> managers = subjectUserIds == null ? List.of() : subjectUserIds.stream()
+                .filter(Objects::nonNull).distinct()
+                .map(id -> managerOf(projectId, id).orElse(null))
+                .filter(Objects::nonNull)
+                .toList();
+        return pmPlusResponsible(projectId, managers);
+    }
+
     /** Map a finding stakeholder role-key onto a {@link ProjectRole}; unknown keys resolve to null. */
     static ProjectRole mapRole(String key) {
         if (key == null || key.isBlank()) {
@@ -93,6 +139,19 @@ public class StakeholderResolver {
             case "SUPERVISOR" -> ProjectRole.SUPERVISOR;
             case "QS" -> ProjectRole.QS;
             case "SAFETY" -> ProjectRole.SAFETY;
+
+            // The seven keys the agents actually emit that previously resolved to nobody.
+            // Counted across backend/bipros-ai/.../agent/impl: PLANNING_ENGINEER x17,
+            // COST_CONTROLLER x5, QUALITY_MANAGER x2, HSE_MANAGER x2, DOCUMENT_CONTROLLER x2,
+            // STORE_KEEPER x1, PORTFOLIO_MANAGER x1. Unmapped keys fell through to the PM
+            // fallback, so every one of these findings was addressed to the PM alone.
+            case "PLANNING_ENGINEER" -> ProjectRole.ENGINEER;
+            case "COST_CONTROLLER", "PROJECT_CONTROL", "PROJECT_CONTROL_ENGINEER" -> ProjectRole.PROJECT_CONTROL;
+            case "QUALITY_MANAGER", "QUALITY_ENGINEER", "QA_QC" -> ProjectRole.QUALITY_ENGINEER;
+            case "HSE_MANAGER", "HSE" -> ProjectRole.SAFETY;
+            case "DOCUMENT_CONTROLLER", "DESIGN_COORDINATOR" -> ProjectRole.DESIGN_COORDINATOR;
+            case "STORE_KEEPER", "STOREKEEPER" -> ProjectRole.STORE_KEEPER;
+            case "PORTFOLIO_MANAGER" -> ProjectRole.PM;
             default -> null;
         };
     }

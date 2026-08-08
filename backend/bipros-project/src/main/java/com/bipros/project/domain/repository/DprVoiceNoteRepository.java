@@ -25,4 +25,7 @@ public interface DprVoiceNoteRepository extends JpaRepository<DprVoiceNote, UUID
     /** Per-DPR voice-note count. Returns [dprId (UUID), count (Long)]. */
     @Query("select v.dprId, count(v) from DprVoiceNote v where v.dprId in :ids group by v.dprId")
     List<Object[]> countByDprIdIn(@Param("ids") Collection<UUID> ids);
+
+    /** Untranscribed voice notes for the given DPR ids — feeds the DPR report agent's transcribe-once step. */
+    List<DprVoiceNote> findByDprIdInAndTranscriptIsNull(Collection<UUID> dprIds);
 }

@@ -18,7 +18,10 @@ services:
     ports:
       # Host port 5433 → container port 5432 so this can coexist with native
       # Postgres.app on 5432. Backend connects via DATABASE_URL on 5433.
-      - "5433:5432"
+      # Override with PG_HOST_PORT in a local .env when the host already runs a
+      # native Postgres on 5433 (Windows installers commonly put PG16 there) —
+      # the bind silently succeeds and connections land on the wrong server.
+      - "${PG_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-schemas.sql:/docker-entrypoint-initdb.d/01-init-schemas.sql
@@ -146,6 +149,20 @@ services:
       # before exposing this stack to anything that isn't your laptop.
       BIPROS_AI_KEK: ${BIPROS_AI_KEK:-Vd/RdHKwlLA1vFuDVUr/ou0CMHAsha99Cfi8UXzXUlA=}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # ---------------------------------------------------------------------
+      # Email (agent notifications + digests). Single-key gate: leave SMTP_HOST
+      # blank for PREVIEW mode (emails rendered + logged, not sent). Works with
+      # any provider — gmail: smtp.gmail.com + app password; office365:
+      # smtp.office365.com. From defaults to SMTP_USERNAME when unset.
+      # ---------------------------------------------------------------------
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      BIPROS_MAIL_FROM: ${BIPROS_MAIL_FROM:-}
+      DPR_REPORT_FROM: ${DPR_REPORT_FROM:-}
       # ---------------------------------------------------------------------
       # Schema build strategy
       # ---------------------------------------------------------------------

@@ -1,0 +1,25 @@
+databaseChangeLog:
+  # Gate A (calc-log entry 8) changed the earned-budget basis of cost_variance to
+  # min(qty, boqQty) × budgetedRate — but cost_variance is a STORED column, recomputed only when
+  # the line is next written. This one-time repair re-derives it for the only rows the cap can
+  # move: over-executed unsplit lines (exactly one row on the pilot, 2.1.5 (i)).
+  - changeSet:
+      id: 132-gate-a-stored-variance-repair
+      author: subrat
+      changes:
+        - sql:
+            sql: >-
+              UPDATE project.boq_items SET
+                cost_variance = ROUND(COALESCE(actual_amount,0)
+                  - (LEAST(COALESCE(qty_executed_to_date,0), boq_qty) * COALESCE(budgeted_rate,0)), 2),
+                cost_variance_percent = CASE
+                  WHEN LEAST(COALESCE(qty_executed_to_date,0), boq_qty) * COALESCE(budgeted_rate,0) = 0 THEN NULL
+                  ELSE ROUND((COALESCE(actual_amount,0)
+                    - (LEAST(COALESCE(qty_executed_to_date,0), boq_qty) * COALESCE(budgeted_rate,0)))
+                    / (LEAST(COALESCE(qty_executed_to_date,0), boq_qty) * COALESCE(budgeted_rate,0)), 6)
+                END
+              WHERE boq_qty IS NOT NULL AND boq_qty > 0
+                AND COALESCE(qty_executed_to_date,0) > boq_qty
+                AND earned_fraction IS NULL
+      rollback:
+        - empty: {}

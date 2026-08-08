@@ -21,7 +21,13 @@ export type ProjectRole =
   | "ENGINEER"
   | "SUPERVISOR"
   | "QS"
-  | "SAFETY";
+  | "SAFETY"
+  // Seats named in the client requirements workbook (01 Aug 2026). They take part in
+  // notification addressing and the access matrices, not in the DBS cost rollup.
+  | "PROJECT_CONTROL"
+  | "QUALITY_ENGINEER"
+  | "STORE_KEEPER"
+  | "DESIGN_COORDINATOR";
 
 export const PROJECT_TEAM_ROLES: ProjectRole[] = [
   "PM",
@@ -31,6 +37,10 @@ export const PROJECT_TEAM_ROLES: ProjectRole[] = [
   "SUPERVISOR",
   "QS",
   "SAFETY",
+  "PROJECT_CONTROL",
+  "QUALITY_ENGINEER",
+  "STORE_KEEPER",
+  "DESIGN_COORDINATOR",
 ];
 
 export const PROJECT_TEAM_ROLE_LABELS: Record<ProjectRole, string> = {
@@ -41,6 +51,10 @@ export const PROJECT_TEAM_ROLE_LABELS: Record<ProjectRole, string> = {
   SUPERVISOR: "Supervisor",
   QS: "Quantity Surveyor",
   SAFETY: "Safety Officer",
+  PROJECT_CONTROL: "Project Control Engineer",
+  QUALITY_ENGINEER: "Quality Engineer",
+  STORE_KEEPER: "Store Keeper",
+  DESIGN_COORDINATOR: "Design Coordinator",
 };
 
 export interface ProjectTeamMember {

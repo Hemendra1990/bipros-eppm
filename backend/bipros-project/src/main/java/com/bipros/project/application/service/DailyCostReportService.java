@@ -108,6 +108,22 @@ public class DailyCostReportService {
                                                  LocalDate from, LocalDate to,
                                                  UUID drilldownBoqItemId) {
     List<BoqItem> boqItems = boqItemRepository.findByProjectIdOrderByItemNoAsc(projectId);
+
+    // Stage 4 (A8): revenue attribution for split lines — see DailyCostReportRow.countsAsRevenue.
+    // Null em only in unit tests: no operations then, every row counts (pre-split behaviour).
+    Set<UUID> measureOpIds = new HashSet<>();
+    if (em != null) {
+      for (Object row : em.createNativeQuery(
+              "SELECT id FROM project.boq_operations WHERE project_id = :pid AND is_measure = true")
+          .setParameter("pid", projectId)
+          .getResultList()) {
+        measureOpIds.add(row instanceof UUID u ? u : UUID.fromString(row.toString()));
+      }
+    }
+    Set<UUID> partitionLineIds = new HashSet<>();
+    for (BoqItem b : boqItems) {
+      if ("QUANTITY_PARTITION".equals(b.getSplitMode())) partitionLineIds.add(b.getId());
+    }
     Map<String, BoqItem> boqByItemNo = new HashMap<>();
     Map<UUID, BoqItem> boqById = new HashMap<>();
     for (BoqItem b : boqItems) {
@@ -246,6 +262,10 @@ public class DailyCostReportService {
         }
       }
       BoqItem b = r.boq();
+      UUID opId = r.dpr().getBoqOperationId();
+      boolean countsAsRevenue = opId == null
+          || measureOpIds.contains(opId)
+          || (b != null && partitionLineIds.contains(b.getId()));
       rows.add(new DailyCostReportRow(
           r.dpr().getId(),
           r.dpr().getReportDate(),
@@ -262,7 +282,8 @@ public class DailyCostReportService {
           r.variancePct(),
           etc,
           eac,
-          r.dpr().getSupervisorName()));
+          r.dpr().getSupervisorName(),
+          countsAsRevenue));
     }
 
     BigDecimal periodVariance = periodActual.subtract(periodBudgeted).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
@@ -351,9 +372,19 @@ public class DailyCostReportService {
    * the existing pattern in {@code DailyProgressReportService}.
    */
   /**
-   * Sum {@code line_cost} across {@code dpr_manpower + dpr_equipment + dpr_material} per dprId
-   * for the rows in this report window. Cross-schema raw SQL — matches the existing pattern in
-   * {@link DprActualCostLookup}. Returns an empty map when there are no DPRs.
+   * Sum actual cost across {@code dpr_manpower + dpr_equipment + dpr_material + dpr_sub_contractor}
+   * per dprId for the rows in this report window. Cross-schema raw SQL — matches the existing
+   * pattern in {@link DprActualCostLookup}. Returns an empty map when there are no DPRs.
+   *
+   * <p>The first three legs carry a persisted {@code line_cost}; the sub-contractor leg does not —
+   * {@code dpr_sub_contractor} stores quantity only, so the rate is joined at query time from
+   * {@code resource.activity_sub_contractor_assignments}, exactly as
+   * {@link DprActualCostLookup#accumulateSubContractorByDpr} does. Without this leg the Daily Cost
+   * Report under-states actual cost on every sub-contracted DPR and fails to reconcile with the
+   * Costs / EVM tabs, which have always included it.
+   *
+   * <p>No {@code approval_status} predicate here: both callers already restrict {@code dprs} to
+   * APPROVED, so {@code dpr_id IN (:dprIds)} is the approval filter for all four legs.
    */
   @SuppressWarnings("unchecked")
   private Map<UUID, BigDecimal> loadActualCostByDprId(UUID projectId, List<DailyProgressReport> dprs) {
@@ -373,6 +404,13 @@ public class DailyCostReportService {
             + "  UNION ALL "
             + "  SELECT dpr_id, COALESCE(SUM(line_cost), 0) AS line_cost FROM project.dpr_material "
             + "    WHERE dpr_id IN (:dprIds) GROUP BY dpr_id "
+            + "  UNION ALL "
+            + "  SELECT c.dpr_id AS dpr_id, "
+            + "         COALESCE(SUM(c.quantity * COALESCE(a.rate_per_unit, 0)), 0) AS line_cost "
+            + "    FROM project.dpr_sub_contractor c "
+            + "    JOIN resource.activity_sub_contractor_assignments a "
+            + "      ON a.id = c.activity_sub_contractor_assignment_id "
+            + "    WHERE c.dpr_id IN (:dprIds) GROUP BY c.dpr_id "
             + ") combined GROUP BY dpr_id";
     Query q = em.createNativeQuery(sql);
     q.setParameter("dprIds", dprIds);

@@ -41,6 +41,9 @@ export interface TotalsPanelProps {
   boqItemsExecuted?: number;
   /** Optional sum of qty_executed for BOQ-linked approved DPRs in the period. Units vary. */
   boqQtyExecuted?: number;
+  /** Stage 4: billable subset of {@code boqQtyExecuted} (measurement-operation rows only on
+   *  split lines). Shown in the tile hint when it differs from the raw tally. */
+  boqBillableQty?: number;
 }
 
 export function TotalsPanel({
@@ -60,6 +63,7 @@ export function TotalsPanel({
   currency,
   boqItemsExecuted,
   boqQtyExecuted,
+  boqBillableQty,
 }: TotalsPanelProps) {
   const { moneyCompact } = useProjectCurrency();
 
@@ -108,7 +112,13 @@ export function TotalsPanel({
           <KpiTile
             label="BOQ Qty Executed"
             value={boqQtyExecuted.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            hint="Σ workdone qty · units vary"
+            hint={
+              // Split lines: only the measurement operation's qty is billable — surface the
+              // difference so this tally is never mistaken for the income basis.
+              boqBillableQty != null && boqBillableQty !== boqQtyExecuted
+                ? `billable ${boqBillableQty.toLocaleString(undefined, { maximumFractionDigits: 2 })} · Σ workdone all operations`
+                : "Σ workdone qty · units vary"
+            }
             tone="default"
           />
         )}

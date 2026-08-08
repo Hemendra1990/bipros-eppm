@@ -5,7 +5,6 @@ import com.bipros.common.event.DprSubmittedEvent;
 import com.bipros.project.application.listener.BoqActualRateRecalcListener;
 import com.bipros.project.domain.model.BoqItem;
 import com.bipros.project.domain.repository.BoqItemRepository;
-import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +34,7 @@ import static org.mockito.Mockito.when;
 class BoqActualCostAgreementTest {
 
   @Mock private BoqItemRepository boqRepo;
-  @Mock private DailyProgressReportRepository dprRepo;
+  @Mock private BoqService boqService;
   @Mock private BoqActualCostQuery boqActualCostQuery;
 
   private BoqRebuildService rebuildService;
@@ -46,8 +45,8 @@ class BoqActualCostAgreementTest {
 
   @BeforeEach
   void setUp() {
-    rebuildService = new BoqRebuildService(boqRepo, dprRepo, boqActualCostQuery);
-    listener = new BoqActualRateRecalcListener(boqRepo, dprRepo, boqActualCostQuery);
+    rebuildService = new BoqRebuildService(boqRepo, boqService, boqActualCostQuery);
+    listener = new BoqActualRateRecalcListener(boqRepo, boqActualCostQuery);
     // EntityManager is not exercised by onDprSubmitted path; inject null to satisfy the field
     ReflectionTestUtils.setField(listener, "em", null);
   }
@@ -62,7 +61,9 @@ class BoqActualCostAgreementTest {
     // ── rebuild path ──────────────────────────────────────────────────────
     BoqItem rebuildItem = boqItem();
     when(boqRepo.findByProjectId(projectId)).thenReturn(List.of(rebuildItem));
-    when(dprRepo.sumQtyExecutedByBoqItemIdApproved(projectId, boqId)).thenReturn(qty);
+    // A10: the rebuild's qty comes from the canonical split-aware roll-up — simulate its write.
+    org.mockito.Mockito.doAnswer(inv -> { rebuildItem.setQtyExecutedToDate(qty); return null; })
+        .when(boqService).recomputeExecutedQtyApproved(projectId, boqId);
     when(boqActualCostQuery.sumActualCost(projectId, boqId)).thenReturn(cost);
 
     rebuildService.rebuildFromDprs(projectId);
@@ -70,8 +71,10 @@ class BoqActualCostAgreementTest {
 
     // ── listener path ─────────────────────────────────────────────────────
     BoqItem listenerItem = boqItem();
+    // A5: the listener divides by the STORED measured qty (written by DprBoqSyncListener at
+    // order 10 in production) — simulate that write here.
+    listenerItem.setQtyExecutedToDate(qty);
     when(boqRepo.findById(boqId)).thenReturn(Optional.of(listenerItem));
-    // dprRepo and boqActualCostQuery already stubbed above; Mockito reuses the same stubs
 
     listener.onDprSubmitted(DprSubmittedEvent.withoutChildren(
         projectId, UUID.randomUUID(), java.time.LocalDate.of(2026, 6, 1),
@@ -103,12 +106,14 @@ class BoqActualCostAgreementTest {
 
     BoqItem rebuildItem = boqItem();
     when(boqRepo.findByProjectId(projectId)).thenReturn(List.of(rebuildItem));
-    when(dprRepo.sumQtyExecutedByBoqItemIdApproved(projectId, boqId)).thenReturn(qty);
+    org.mockito.Mockito.doAnswer(inv -> { rebuildItem.setQtyExecutedToDate(qty); return null; })
+        .when(boqService).recomputeExecutedQtyApproved(projectId, boqId);
     when(boqActualCostQuery.sumActualCost(projectId, boqId)).thenReturn(lineCostBasedCost);
 
     rebuildService.rebuildFromDprs(projectId);
 
     BoqItem listenerItem = boqItem();
+    listenerItem.setQtyExecutedToDate(qty);   // A5: stored measured qty (order-10 write)
     when(boqRepo.findById(boqId)).thenReturn(Optional.of(listenerItem));
 
     listener.onDprSubmitted(DprSubmittedEvent.withoutChildren(

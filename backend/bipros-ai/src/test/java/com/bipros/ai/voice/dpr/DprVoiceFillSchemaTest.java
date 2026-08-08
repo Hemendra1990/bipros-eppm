@@ -97,6 +97,6 @@ class DprVoiceFillSchemaTest {
         assertThat(unit.path("type").isArray()).as("nullable enum type is an array").isTrue();
         java.util.List<String> enumVals = new java.util.ArrayList<>();
         unit.path("enum").forEach(n -> { if (!n.isNull()) enumVals.add(n.asText()); });
-        assertThat(enumVals).contains("Cum", "Sqm", "MT", "Nos");
+        assertThat(enumVals).contains("Cum", "Sqm", "MT", "Nr", "Hrs", "LS");
     }
 }

@@ -6,5 +6,7 @@ public enum DeliveryStatus {
     SENT,
     FAILED,
     /** Suppressed by dedup or a disabled channel — not an error. */
-    SKIPPED
+    SKIPPED,
+    /** Rendered and logged but NOT transmitted (e.g. email with no SMTP configured). */
+    PREVIEW
 }

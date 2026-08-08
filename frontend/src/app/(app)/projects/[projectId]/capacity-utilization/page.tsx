@@ -4,7 +4,8 @@ import { memo, Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Download, PlusCircle } from "lucide-react";
+import { AlertTriangle, FileSpreadsheet, PlusCircle } from "lucide-react";
+import toast from "react-hot-toast";
 import {
   capacityUtilizationApi,
   type CapacityGroupBy,
@@ -19,7 +20,7 @@ import { MultiSelect } from "@/components/common/MultiSelect";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { SupervisorPerformanceSections } from "@/components/capacity-utilization/SupervisorPerformanceSections";
 import { SupervisorComparisonSections } from "@/components/capacity-utilization/SupervisorComparisonSections";
-import { PeriodCell as RolePeriodCellShared } from "@/components/capacity/PeriodCell";
+import { PeriodCell as RolePeriodCellShared, utilBand } from "@/components/capacity/PeriodCell";
 import {
   hiddenSideSentence,
   SHOW_HIDDEN_SIDE_NOTES,
@@ -37,14 +38,6 @@ const startOfMonth = () => {
 function fmt(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined) return "—";
   return n.toLocaleString("en-IN", { maximumFractionDigits: digits });
-}
-
-function utilBand(util: number | null | undefined): string {
-  if (util === null || util === undefined)
-    return "bg-surface/30 text-text-muted";
-  if (util >= 100) return "bg-success/15 text-success ring-1 ring-success/30";
-  if (util >= 80) return "bg-warning/15 text-warning ring-1 ring-warning/30";
-  return "bg-danger/15 text-danger ring-1 ring-danger/30";
 }
 
 const PeriodCell = memo(function PeriodCell({
@@ -81,82 +74,6 @@ const PeriodCell = memo(function PeriodCell({
     </div>
   );
 });
-
-function downloadCsv(
-  filename: string,
-  rows: CapacityUtilizationRow[],
-  fromDate: string,
-  toDate: string,
-): void {
-  const header = [
-    "Group",
-    "Activity Code",
-    "Activity Name",
-    "Unit",
-    "Norm/Day",
-    "Norm Source",
-    "Day Qty",
-    "Day Bud Days",
-    "Day Act Days",
-    "Day Act/Day",
-    "Day Util %",
-    "Month Qty",
-    "Month Bud Days",
-    "Month Act Days",
-    "Month Act/Day",
-    "Month Util %",
-    "Cum Qty",
-    "Cum Bud Days",
-    "Cum Act Days",
-    "Cum Act/Day",
-    "Cum Util %",
-  ];
-  const csvRows: string[] = [header.join(",")];
-  for (const r of rows) {
-    csvRows.push(
-      [
-        r.groupKey.displayLabel,
-        r.workActivity?.code ?? "",
-        r.workActivity?.name ?? "",
-        r.workActivity?.defaultUnit ?? "",
-        r.budgeted.outputPerDay ?? "",
-        r.budgeted.source,
-        r.forTheDay.qty ?? "",
-        r.forTheDay.budgetedDays ?? "",
-        r.forTheDay.actualDays ?? "",
-        r.forTheDay.actualOutputPerDay ?? "",
-        r.forTheDay.utilizationPct ?? "",
-        r.forTheMonth.qty ?? "",
-        r.forTheMonth.budgetedDays ?? "",
-        r.forTheMonth.actualDays ?? "",
-        r.forTheMonth.actualOutputPerDay ?? "",
-        r.forTheMonth.utilizationPct ?? "",
-        r.cumulative.qty ?? "",
-        r.cumulative.budgetedDays ?? "",
-        r.cumulative.actualDays ?? "",
-        r.cumulative.actualOutputPerDay ?? "",
-        r.cumulative.utilizationPct ?? "",
-      ]
-        .map((v) => {
-          const s = String(v ?? "");
-          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-        })
-        .join(","),
-    );
-  }
-  const meta = `# Capacity Utilization · ${fromDate} → ${toDate}\n`;
-  const blob = new Blob([meta + csvRows.join("\n")], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
 // ─── SC180-style Summary table ─────────────────────────────────────────────────────────────
 // One row per Role with three time buckets (Day · Month · Cumulative), each carrying the SC180
@@ -426,6 +343,43 @@ function CapacityUtilizationPageInner() {
   const [workDays, setWorkDays] = useState<number>(26);
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [generating, setGenerating] = useState<boolean>(false);
+
+  // Client-format Excel workbook (Plant / Manpower utilization + SUMMARY) for the current
+  // filter window — the printable monthly report from the client's Capacity_Utilization
+  // template. Same numbers as this page (same backend accumulators), pivoted resource → activity.
+  const generateReport = async () => {
+    setGenerating(true);
+    try {
+      const response = await capacityUtilizationApi.downloadClientWorkbook({
+        projectId,
+        fromDate,
+        toDate,
+        workDays,
+        supervisorUserId: supervisorUserId || undefined,
+      });
+      const blob =
+        response.data instanceof Blob
+          ? response.data
+          : new Blob([response.data], {
+              type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `capacity-utilization-${fromDate}-to-${toDate}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Capacity Utilization report downloaded");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Report generation failed";
+      toast.error(msg);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const { data: supervisorOptions } = useQuery({
     queryKey: ["supervisors-used", projectId, fromDate, toDate],
@@ -561,21 +515,13 @@ function CapacityUtilizationPageInner() {
             </h1>
             <div className="flex items-center gap-2">
               <button
-                onClick={() =>
-                  rows &&
-                  downloadCsv(
-                    `capacity-utilization-${fromDate}-to-${toDate}.csv`,
-                    rows,
-                    fromDate,
-                    toDate,
-                  )
-                }
-                disabled={!rows || rows.length === 0}
+                onClick={generateReport}
+                disabled={generating}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-info/10 text-info ring-1 ring-info/30 rounded-lg hover:bg-info/20 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Download the matrix as CSV (opens in Excel)"
+                title="Generate the client-format Resource Capacity Utilization workbook (Plant / Manpower utilization + Summary) for the current filters"
               >
-                <Download size={16} />
-                Export CSV
+                <FileSpreadsheet size={16} />
+                {generating ? "Generating…" : "Generate Report"}
               </button>
               <Link
                 href={`/projects/${projectId}/daily-outputs`}
@@ -703,7 +649,7 @@ function CapacityUtilizationPageInner() {
           </div>
           <div className="mt-2 text-xs text-text-muted">
             <span className="font-semibold text-text-secondary">Efficiency %</span>
-            {" "}color bands: ≥100 % green · 80–99 % yellow · &lt;80 % red · no norm grey.
+            {" "}color bands: ≥100 % green · 90–99 % yellow · &lt;90 % red · no norm grey.
             <br />
             Efficiency = output vs the productivity norm per resource-day — not deployment utilization.
             {compareMode && compareIds.length < 2 && (

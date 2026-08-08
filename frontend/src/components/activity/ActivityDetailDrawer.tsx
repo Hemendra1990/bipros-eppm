@@ -64,6 +64,17 @@ export function ActivityDetailDrawer({ open, onClose, projectId, activityId }: P
 
   const activity = activityData?.data ?? null;
 
+  // Hierarchy (D10): a PARENT activity is grouping + rollup only — no Create DPR, frozen plan.
+  // Same query key as the parent pickers so react-query shares the cache.
+  const { data: allActivitiesData } = useQuery({
+    queryKey: ["activities", projectId, "all-for-parent-picker"],
+    queryFn: () => activityApi.listActivities(projectId, 0, 1000),
+    enabled: open && !!activityId,
+  });
+  const isParentActivity = (allActivitiesData?.data?.content ?? []).some(
+    (a) => a.parentActivityId === activityId,
+  );
+
   if (!open || !activityId) return null;
 
   return (
@@ -81,6 +92,7 @@ export function ActivityDetailDrawer({ open, onClose, projectId, activityId }: P
         isLoadingActivity={isLoadingActivity}
         projectId={projectId}
         activityId={activityId}
+        isParentActivity={isParentActivity}
         onClose={onClose}
       />
     </aside>
@@ -92,12 +104,15 @@ function DrawerInner({
   isLoadingActivity,
   projectId,
   activityId,
+  isParentActivity,
   onClose,
 }: {
   activity: Awaited<ReturnType<typeof activityApi.getActivity>>["data"] | null;
   isLoadingActivity: boolean;
   projectId: string;
   activityId: string;
+  /** Hierarchy D10: true when this activity has children — grouping/rollup node. */
+  isParentActivity: boolean;
   onClose: () => void;
 }) {
   const [supervisorOpen, setSupervisorOpen] = useState(false);
@@ -165,7 +180,13 @@ function DrawerInner({
               <h2 className="mt-1 truncate text-lg font-semibold text-text-primary">
                 {activity.name}
               </h2>
-              {activity.editStatus === "DRAFT" && (
+              {isParentActivity && (
+                <p className="mt-1 text-xs text-text-muted">
+                  Grouping activity — % complete rolls up from its children (cost-weighted).
+                  DPRs and the resource plan live on the child activities.
+                </p>
+              )}
+              {!isParentActivity && activity.editStatus === "DRAFT" && (
                 <p className="mt-1 text-xs text-text-muted">
                   Draft — DPRs can&apos;t be submitted until this activity is locked.
                 </p>
@@ -310,7 +331,7 @@ function DrawerInner({
           Open full detail page
           <ExternalLink size={14} />
         </Link>
-        {activity && isLocked && (
+        {activity && isLocked && !isParentActivity && (
           <button
             type="button"
             onClick={() => {

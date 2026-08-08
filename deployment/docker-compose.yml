@@ -137,6 +137,18 @@ services:
       BIPROS_AI_ENABLED: ${BIPROS_AI_ENABLED:-true}
       BIPROS_AI_KEK: ${BIPROS_AI_KEK:-Vd/RdHKwlLA1vFuDVUr/ou0CMHAsha99Cfi8UXzXUlA=}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # SMTP / email (DPR AI report delivery). Blank SMTP_HOST ⇒ safe PREVIEW
+      # mode (logs, no send). Supply real values via a gitignored .env (compose
+      # loads it) — do NOT hardcode SMTP_PASSWORD here (git-tracked). Gmail:
+      # smtp.gmail.com:587 + App Password; Outlook/O365: smtp.office365.com:587.
+      # DPR_REPORT_FROM must match SMTP_USERNAME.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      DPR_REPORT_FROM: ${DPR_REPORT_FROM:-}
       # See deployment/README.md §"Known issues" — Liquibase is off for now
       SPRING_LIQUIBASE_ENABLED: "false"
       SPRING_JPA_HIBERNATE_DDL_AUTO: update

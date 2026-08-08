@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { DprSummaryRow } from "@/lib/types/dpr";
 import type { ActivityGroup } from "./groupByDayThenActivity";
+import { fmtQty } from "./dprFormulas";
 import { AvatarStack } from "./AvatarStack";
 import { DprWorkFrontRow } from "./DprWorkFrontRow";
 
@@ -14,9 +15,6 @@ interface Props {
   onEditRow: (row: DprSummaryRow) => void;
   onDeleteRow: (row: DprSummaryRow) => void;
 }
-
-const fmt = (n: number, digits = 2) =>
-  n.toLocaleString(undefined, { maximumFractionDigits: digits });
 
 /**
  * One BOQ-activity entry inside a day card. Renders an editorial "site ledger"
@@ -72,7 +70,7 @@ function DprActivityGroupImpl({ group, projectId, onEditRow, onDeleteRow }: Prop
         {group.totalQty > 0 && (
           <div className="flex shrink-0 items-baseline gap-1 pl-2">
             <span className="font-display text-xl font-semibold tabular-nums text-gold-ink">
-              {fmt(group.totalQty)}
+              {fmtQty(group.totalQty)}
             </span>
             <span className="text-xs text-slate">{group.unit || "qty"}</span>
           </div>

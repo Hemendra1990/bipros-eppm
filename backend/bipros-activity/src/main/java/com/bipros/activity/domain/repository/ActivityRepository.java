@@ -80,6 +80,12 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSp
 
   boolean existsByProjectIdAndCode(UUID projectId, String code);
 
+  // Hierarchy (design D10): containment children of a parent, and the "is a parent" probe
+  // used by the DPR / resource-plan / relationship guards.
+  List<Activity> findByProjectIdAndParentActivityId(UUID projectId, UUID parentActivityId);
+
+  boolean existsByParentActivityId(UUID parentActivityId);
+
   boolean existsByProjectIdAndUpdatedAtAfter(UUID projectId, Instant updatedAt);
 
   Optional<Activity> findByProjectIdAndCode(UUID projectId, String code);

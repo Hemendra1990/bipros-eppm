@@ -90,6 +90,22 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
   return { Authorization: `Bearer ${token}`, ...extra };
 }
 
+/** One delivery-audit row of the Notification Log. `sentAt` is set only when status is SENT. */
+export interface NotificationLogEntry {
+  at: string;
+  findingId: string;
+  findingTitle: string;
+  severity: string;
+  agentKey: string;
+  projectId: string | null;
+  recipientUserId: string | null;
+  recipientName: string | null;
+  channel: string;
+  status: "SENT" | "PREVIEW" | "FAILED" | "SKIPPED" | "PENDING";
+  detail: string | null;
+  sentAt: string | null;
+}
+
 export const agentApi = {
   listAgents: (projectId: string) =>
     apiClient
@@ -110,6 +126,26 @@ export const agentApi = {
       .post<ApiResponse<{ pipelineRunId: string }>>(
         `/v1/projects/${projectId}/agents/pipelines/${pipelineKey}/run`,
       )
+      .then((r) => r.data),
+
+  /**
+   * Notification Log — who was sent what, when, over which channel, with the honest status
+   * (SENT / PREVIEW / FAILED / SKIPPED). Project route: PM of the project or admin (others 403 —
+   * callers hide the section). Admin route: every project.
+   */
+  notificationLog: (projectId: string, limit = 100) =>
+    apiClient
+      .get<ApiResponse<NotificationLogEntry[]>>(
+        `/v1/projects/${projectId}/notifications/log`,
+        { params: { limit } },
+      )
+      .then((r) => r.data),
+
+  adminNotificationLog: (projectId?: string, limit = 200) =>
+    apiClient
+      .get<ApiResponse<NotificationLogEntry[]>>(`/v1/admin/notifications/log`, {
+        params: { limit, ...(projectId ? { projectId } : {}) },
+      })
       .then((r) => r.data),
 
   /** Recent agent runs across every project the caller can see — the portfolio activity feed. */

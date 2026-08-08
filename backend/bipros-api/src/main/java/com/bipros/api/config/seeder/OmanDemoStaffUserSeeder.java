@@ -87,9 +87,14 @@ public class OmanDemoStaffUserSeeder implements CommandLineRunner {
             return;
         }
 
+        // Role names must match DataSeeder.seedRoles() exactly — findByName() returns empty
+        // for unknown names and attachRole() is a silent no-op, so a wrong name here left
+        // every engineer/QA account with ZERO roles ("the engineer cannot see anything").
+        // SITE_MANAGER stands in for the Construction Manager: RolePermissionMatrix defines
+        // CONSTRUCTION_MANAGER as an exact copy of SITE_MANAGER and only the latter is seeded.
         Map<String, Role> rolesByName = new HashMap<>();
-        for (String r : List.of("SUPERVISOR", "ENGINEER", "QUALITY_ENGINEER",
-                "CM_MANAGER", "PROJECT_MANAGER")) {
+        for (String r : List.of("SUPERVISOR", "SITE_ENGINEER", "QA_QC_ENGINEER",
+                "SITE_MANAGER", "PROJECT_MANAGER")) {
             roleRepository.findByName(r).ifPresent(role -> rolesByName.put(r, role));
         }
         if (!rolesByName.containsKey("SUPERVISOR")) {
@@ -181,13 +186,13 @@ public class OmanDemoStaffUserSeeder implements CommandLineRunner {
         switch (row.roleCategory()) {
             case "SUPERVISOR" -> attachRole(user, rolesByName.get("SUPERVISOR"));
             case "ENGINEER" -> {
-                attachRole(user, rolesByName.get("ENGINEER"));
+                attachRole(user, rolesByName.get("SITE_ENGINEER"));
                 String desig = row.designation() == null ? "" : row.designation().toUpperCase();
                 if (desig.contains("QA") || desig.contains("QC") || desig.contains("QUALITY")) {
-                    attachRole(user, rolesByName.get("QUALITY_ENGINEER"));
+                    attachRole(user, rolesByName.get("QA_QC_ENGINEER"));
                 }
             }
-            case "CM" -> attachRole(user, rolesByName.get("CM_MANAGER"));
+            case "CM" -> attachRole(user, rolesByName.get("SITE_MANAGER"));
             case "PM" -> attachRole(user, rolesByName.get("PROJECT_MANAGER"));
             default -> { /* no role */ }
         }

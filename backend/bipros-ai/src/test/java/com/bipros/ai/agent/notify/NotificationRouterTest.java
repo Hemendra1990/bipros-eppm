@@ -124,12 +124,11 @@ class NotificationRouterTest {
         stubChannelKeys();
         when(inApp.isEnabled()).thenReturn(true);
         when(email.isEnabled()).thenReturn(true);
-        // in_app already delivered to this recipient; email not yet.
+        // in_app already delivered to this recipient; email not yet. (The bell-window check is
+        // never consulted: in_app short-circuits on its delivery row, email skips the bell check.)
         when(deliveryRepository.existsByFindingIdAndChannelKeyAndRecipientUserId(FINDING, "in_app", USER))
                 .thenReturn(true);
         when(deliveryRepository.existsByFindingIdAndChannelKeyAndRecipientUserId(FINDING, "email", USER))
-                .thenReturn(false);
-        when(notificationService.existsSince(eq(FINDING), anyString(), eq(USER), any(Instant.class)))
                 .thenReturn(false);
 
         router().route(finding(Severity.HIGH));
@@ -140,7 +139,7 @@ class NotificationRouterTest {
     }
 
     @Test
-    void inAppDedupWindowSuppressesAllChannels() {
+    void bellWindowSuppressesInAppOnlyEmailStillAttempted() {
         stubYmlFallback(Severity.HIGH);
         stubOneRecipient();
         stubChannelKeys();
@@ -148,15 +147,17 @@ class NotificationRouterTest {
         when(email.isEnabled()).thenReturn(true);
         when(deliveryRepository.existsByFindingIdAndChannelKeyAndRecipientUserId(eq(FINDING), anyString(), eq(USER)))
                 .thenReturn(false);
-        // A recent in-app notification exists -> 24h window suppresses every (channel, recipient).
+        // A recent in-app notification exists -> the 24h window suppresses the BELL only.
+        // Owner expectation 2026-08-05: email must still be ATTEMPTED (it was previously blocked
+        // until 24h after the bell, so most findings never emailed at all).
         when(notificationService.existsSince(eq(FINDING), anyString(), eq(USER), any(Instant.class)))
                 .thenReturn(true);
 
         router().route(finding(Severity.HIGH));
 
         verify(inApp, never()).send(any(ResolvedNotification.class));
-        verify(email, never()).send(any(ResolvedNotification.class));
-        verify(deliveryRepository, never()).save(any(AgentNotificationDelivery.class));
+        verify(email, times(1)).send(any(ResolvedNotification.class));
+        verify(deliveryRepository, times(1)).save(any(AgentNotificationDelivery.class));
     }
 
     @Test

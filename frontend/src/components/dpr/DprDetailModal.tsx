@@ -20,7 +20,7 @@ import { chainageLabel } from "@/lib/format/chainage";
 import { dprApi } from "@/lib/api/dprApi";
 import { dbsApi } from "@/lib/api/dbsApi";
 import { DprTotalsBar } from "./DprTotalsBar";
-import { productivitySideFromPreview } from "./dprFormulas";
+import { fmtQty, productivitySideFromPreview } from "./dprFormulas";
 import type {
   DailyProgressReportResponse,
   DprApprovalStatus,
@@ -290,13 +290,13 @@ function KpiStrip({
       <Kpi label="Approver" value={approverName} sub={approverWhen} valueMono={false} />
       <Kpi
         label="Work Done"
-        value={num(row.qtyExecuted ?? detail?.qtyExecuted)}
+        value={fmtQty(row.qtyExecuted ?? detail?.qtyExecuted)}
         unit={row.unit}
         sub="today"
       />
       <Kpi
         label="Cumulative"
-        value={detail ? num(detail.cumulativeQty) : "…"}
+        value={detail ? fmtQty(detail.cumulativeQty) : "…"}
         unit={row.unit}
         sub="to date"
       />

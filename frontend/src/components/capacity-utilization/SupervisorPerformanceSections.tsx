@@ -12,6 +12,7 @@ import type {
   TradeRollup,
 } from "@/lib/api/capacityUtilizationApi";
 import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
+import { utilBand } from "@/components/capacity/PeriodCell";
 import {
   COUNTED_TOOLTIP,
   countedDays,
@@ -35,14 +36,6 @@ function CostLabel({ value }: { value: number | null | undefined }) {
     return <span className="text-success">Cost saved: {money(Math.abs(value), { decimals: 0 })}</span>;
   }
   return <span className="text-danger">Cost overrun: {money(value, { decimals: 0 })}</span>;
-}
-
-function utilBand(util: number | null | undefined): string {
-  if (util === null || util === undefined)
-    return "bg-surface/30 text-text-muted";
-  if (util >= 100) return "bg-success/15 text-success ring-1 ring-success/30";
-  if (util >= 80) return "bg-warning/15 text-warning ring-1 ring-warning/30";
-  return "bg-danger/15 text-danger ring-1 ring-danger/30";
 }
 
 function UtilCell({ util }: { util: number | null | undefined }) {

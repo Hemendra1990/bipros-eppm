@@ -119,8 +119,10 @@ function ProjectDetailLayoutInner({
     { label: "Relationships", href: `/projects/${projectId}/relationships` },
     // { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },  // hidden per request
     { label: "Performance (D/W/M)", href: `/projects/${projectId}/performance` },
-    { label: "P&L vs Budgeted Rates", href: `/projects/${projectId}/pnl/budgeted` },
-    { label: "P&L vs BOQ Rates", href: `/projects/${projectId}/pnl/boq` },
+    // /pnl/** routes are gated by project-scoped COST.READ on the backend — hide the
+    // links from roles that would only get a 403 on click.
+    { label: "P&L vs Budgeted Rates", href: `/projects/${projectId}/pnl/budgeted`, permission: "COST.READ" },
+    { label: "P&L vs BOQ Rates", href: `/projects/${projectId}/pnl/boq`, permission: "COST.READ" },
     { label: "Material Consumption Report", href: `/projects/${projectId}/reports/material-consumption` },
     /* { label: "Material Reconciliation", href: `/projects/${projectId}/material-reconciliation` },
     { label: "Resource Deployment", href: `/projects/${projectId}/resource-deployment` }, */

@@ -41,6 +41,13 @@ public class RelationshipService {
           "An activity cannot have a relationship with itself");
     }
 
+    // Hierarchy D10/H12: parents are grouping nodes, excluded from CPM — they hold no dependencies.
+    if (activityRepository.existsByParentActivityId(request.predecessorActivityId())
+        || activityRepository.existsByParentActivityId(request.successorActivityId())) {
+      throw new BusinessRuleException("ACTIVITY_IS_PARENT_NO_RELATIONSHIPS",
+          "Parent activities cannot hold schedule links — connect the child activities instead.");
+    }
+
     // Check for duplicate relationship
     boolean exists = relationshipRepository.existsByPredecessorActivityIdAndSuccessorActivityId(
         request.predecessorActivityId(), request.successorActivityId());

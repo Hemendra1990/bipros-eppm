@@ -21,11 +21,16 @@ function fmtBudget(n: number | null | undefined): string {
   return n.toLocaleString("en-IN", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
 
+/**
+ * Efficiency colour bands (client workbook, 01 Aug 2026 — CAP-16):
+ * ≥100 % green · 90–99 % yellow · <90 % red · no norm grey.
+ * Single source of truth — every capacity surface imports this; do not copy it locally.
+ */
 export function utilBand(util: number | null | undefined): string {
   if (util === null || util === undefined)
     return "bg-surface/30 text-text-muted";
   if (util >= 100) return "bg-success/15 text-success ring-1 ring-success/30";
-  if (util >= 80) return "bg-warning/15 text-warning ring-1 ring-warning/30";
+  if (util >= 90) return "bg-warning/15 text-warning ring-1 ring-warning/30";
   return "bg-danger/15 text-danger ring-1 ring-danger/30";
 }
 

@@ -74,6 +74,7 @@ public class RoleRateService {
   public List<ManpowerRoleRateResponse> listAllManpower() {
     List<ResourceRole> roles = roleRepo.findByResourceType_Code("MANPOWER");
     if (roles.isEmpty()) roles = roleRepo.findByResourceType_Code("LABOR");
+    roles = activeOnly(roles);
     if (roles.isEmpty()) return List.of();
     java.util.Map<UUID, ResourceRole> byId = new java.util.HashMap<>();
     for (ResourceRole r : roles) byId.put(r.getId(), r);
@@ -149,7 +150,7 @@ public class RoleRateService {
 
   @Transactional(readOnly = true)
   public List<EquipmentRoleVariantResponse> listAllEquipment() {
-    List<ResourceRole> roles = roleRepo.findByResourceType_Code("EQUIPMENT");
+    List<ResourceRole> roles = activeOnly(roleRepo.findByResourceType_Code("EQUIPMENT"));
     if (roles.isEmpty()) return List.of();
     java.util.Map<UUID, ResourceRole> byId = new java.util.HashMap<>();
     for (ResourceRole r : roles) byId.put(r.getId(), r);
@@ -229,7 +230,7 @@ public class RoleRateService {
 
   @Transactional(readOnly = true)
   public List<MaterialRoleVariantResponse> listAllMaterial() {
-    List<ResourceRole> roles = roleRepo.findByResourceType_Code("MATERIAL");
+    List<ResourceRole> roles = activeOnly(roleRepo.findByResourceType_Code("MATERIAL"));
     if (roles.isEmpty()) return List.of();
     java.util.Map<UUID, ResourceRole> byId = new java.util.HashMap<>();
     for (ResourceRole r : roles) byId.put(r.getId(), r);
@@ -383,6 +384,13 @@ public class RoleRateService {
   }
 
   // ===== helpers =====
+
+  // The listAll* feeds back the DPR pickers — a deactivated role must disappear from them
+  // (deactivate-instead-of-delete is the supported way to retire a trade with history).
+  // Null-safe: legacy rows with active == null count as active.
+  private static List<ResourceRole> activeOnly(List<ResourceRole> roles) {
+    return roles.stream().filter(r -> !Boolean.FALSE.equals(r.getActive())).toList();
+  }
 
   private ResourceRole requireRole(UUID roleId, String... allowedTypeCodes) {
     ResourceRole role =

@@ -1,0 +1,95 @@
+databaseChangeLog:
+  # BOQ operations split (split design 2026-08-03 §4, decisions D1-D5): operations live in their
+  # own table so flat sums over boq_items stay correct untouched (D1). New columns on boq_items /
+  # daily_progress_reports are nullable so dev's ddl-auto:update path matches Liquibase exactly;
+  # null split_mode / earned_fraction / boq_operation_id ⇒ today's flat behaviour verbatim.
+  - changeSet:
+      id: 129-1-boq-operations-table
+      author: subrat
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: boq_operations
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: boq_item_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: op_code, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: work_activity_id, type: UUID }
+              - column: { name: unit, type: VARCHAR(20) }
+              - column: { name: target_qty, type: numeric(18,3) }
+              - column: { name: weight_pct, type: numeric(6,3) }
+              - column: { name: is_measure, type: BOOLEAN }
+              - column: { name: is_legacy, type: BOOLEAN }
+              - column: { name: sort_order, type: INT }
+        - addUniqueConstraint:
+            schemaName: project
+            tableName: boq_operations
+            columnNames: boq_item_id, op_code
+            constraintName: uk_boq_op_item_code
+        - createIndex:
+            schemaName: project
+            tableName: boq_operations
+            indexName: idx_boq_op_item
+            columns:
+              - column: { name: boq_item_id }
+        - addForeignKeyConstraint:
+            baseTableSchemaName: project
+            baseTableName: boq_operations
+            baseColumnNames: boq_item_id
+            referencedTableSchemaName: project
+            referencedTableName: boq_items
+            referencedColumnNames: id
+            constraintName: fk_boq_op_item
+            onDelete: RESTRICT
+      rollback:
+        - dropTable:
+            schemaName: project
+            tableName: boq_operations
+
+  - changeSet:
+      id: 129-2-boq-item-split-columns
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: boq_items
+            columns:
+              - column:
+                  name: split_mode
+                  type: varchar(24)
+              - column:
+                  name: earned_fraction
+                  type: numeric(9,6)
+      rollback:
+        - dropColumn:
+            schemaName: project
+            tableName: boq_items
+            columnName: split_mode
+        - dropColumn:
+            schemaName: project
+            tableName: boq_items
+            columnName: earned_fraction
+
+  - changeSet:
+      id: 129-3-dpr-boq-operation
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: daily_progress_reports
+            columns:
+              - column:
+                  name: boq_operation_id
+                  type: uuid
+      rollback:
+        - dropColumn:
+            schemaName: project
+            tableName: daily_progress_reports
+            columnName: boq_operation_id

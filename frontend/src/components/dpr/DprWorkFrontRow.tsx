@@ -19,6 +19,7 @@ import { useAuthStore } from "@/lib/state/store";
 import { ResourceAvatar } from "@/components/resource/supervisor-assign/ResourceAvatar";
 import { chainageLabel } from "@/lib/format/chainage";
 import type { DprApprovalStatus, DprSummaryRow } from "@/lib/types/dpr";
+import { fmtQty } from "./dprFormulas";
 import { DprApprovalActions } from "./DprApprovalActions";
 import { DprDetailModal } from "./DprDetailModal";
 
@@ -43,11 +44,6 @@ const SIDE_LABEL: Record<string, string> = {
   RHS: "RHS",
   CENTER: "Center",
 };
-
-const fmt = (n: number | null | undefined, digits = 2) =>
-  typeof n === "number" && Number.isFinite(n)
-    ? n.toLocaleString(undefined, { maximumFractionDigits: digits })
-    : "—";
 
 const lengthLabel = (from: number | null | undefined, to: number | null | undefined): string | null => {
   if (typeof from !== "number" || typeof to !== "number") return null;
@@ -157,7 +153,7 @@ function DprWorkFrontRowImpl({ row, projectId, index, total, onEdit, onDelete }:
           <div className="flex shrink-0 items-center gap-2">
             {row.qtyExecuted != null && (
               <span className="font-display text-base font-semibold tabular-nums text-gold-ink">
-                {fmt(row.qtyExecuted)}
+                {fmtQty(row.qtyExecuted)}
                 <span className="ml-1 text-xs font-normal text-slate">{row.unit}</span>
               </span>
             )}

@@ -32,7 +32,8 @@ class ActivityProgressFromBoqListenerTest {
 
   private ActivityProgressFromBoqListener newListener() {
     return new ActivityProgressFromBoqListener(
-        activityRepository, dprRepository, new PercentCompleteCalculator(), auditService);
+        activityRepository, dprRepository, new PercentCompleteCalculator(), auditService,
+        org.mockito.Mockito.mock(com.bipros.activity.application.service.ActivityService.class));
   }
 
   private DprSubmittedEvent event(UUID activityId) {

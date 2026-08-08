@@ -23,6 +23,30 @@ public class AiAccessGuard {
 
     private final ProjectAccessGuard projectAccess;
     private final SecurityContextHelper securityContextHelper;
+    private final com.bipros.project.domain.repository.ProjectTeamRepository projectTeamRepository;
+
+    /**
+     * Notification-log visibility (owner decision 2026-08-05): ADMIN sees every project's log;
+     * the project's PM (a PM seat on {@code project_team}) sees their own project's. Everyone
+     * else is denied — the log reveals other users' delivery details.
+     */
+    public boolean canViewNotificationLog(UUID projectId) {
+        if (securityContextHelper.hasRole("ADMIN")) {
+            return true;
+        }
+        if (projectId == null) {
+            return false;
+        }
+        try {
+            UUID userId = securityContextHelper.getCurrentUserId();
+            return userId != null && projectTeamRepository
+                    .findByProjectIdAndUserIdAndRole(projectId, userId,
+                            com.bipros.project.domain.model.ProjectRole.PM)
+                    .isPresent();
+        } catch (IllegalStateException | IllegalArgumentException noAuth) {
+            return false;
+        }
+    }
 
     /** Read access for the agent APIs (findings, runs, registry). Same semantics as {@link #canChat}. */
     public boolean canRead(UUID projectId) {

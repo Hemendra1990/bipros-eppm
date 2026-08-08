@@ -29,6 +29,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -129,9 +130,13 @@ public class DbsController {
     @GetMapping("/cms")
     public ResponseEntity<ApiResponse<List<DbsCmSummaryDto>>> listCms(
         @PathVariable UUID projectId,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
 
-        return ResponseEntity.ok(ApiResponse.ok(queryService.listCmsForDay(projectId, date)));
+        // periodType optional — omit / DAY keeps the single-day roster; WEEK / MONTH expand to
+        // the period bounds so the CM picker matches the period scope (same rationale as
+        // listSupervisors above).
+        return ResponseEntity.ok(ApiResponse.ok(queryService.listCmsForScope(projectId, date, periodType)));
     }
 
     // ── project (PM tab) ────────────────────────────────────────────────────────
@@ -246,6 +251,7 @@ public class DbsController {
     // ── admin recompute ─────────────────────────────────────────────────────────
 
     @PostMapping("/recompute")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.RECOMPUTE')")
     public ResponseEntity<ApiResponse<DbsDailyProject>> recompute(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -256,6 +262,7 @@ public class DbsController {
     }
 
     @PostMapping("/recompute-range")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.RECOMPUTE')")
     public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> recomputeRange(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -267,6 +274,7 @@ public class DbsController {
     }
 
     @PostMapping("/recompute-cumulative")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.RECOMPUTE')")
     public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> recomputeCumulative(
         @PathVariable UUID projectId) {
 

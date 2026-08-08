@@ -80,6 +80,14 @@ public record ActivityResponse(
      * instead of {@code direct_cost} on every DBS rollup. Mirrors {@link com.bipros.activity.domain.model.Activity#isPreliminary()}.
      */
     boolean preliminary,
+    /** Hierarchy (design D10): containment parent, null for top-level activities. */
+    UUID parentActivityId,
+    /** BOQ link (design D8): the ONE BOQ line this activity executes; null = unlinked. */
+    UUID boqItemId,
+    /** Operation of a split line (Stage 4); always null until operations exist. */
+    UUID boqOperationId,
+    /** §5.3: this activity's own workdone target in the line's unit. */
+    java.math.BigDecimal plannedQty,
     Instant createdAt,
     Instant updatedAt,
     String createdBy,
@@ -155,6 +163,10 @@ public record ActivityResponse(
         sups,
         workActivityDefaultUnit,
         activity.isPreliminary(),
+        activity.getParentActivityId(),
+        activity.getBoqItemId(),
+        activity.getBoqOperationId(),
+        activity.getPlannedQty(),
         activity.getCreatedAt(),
         activity.getUpdatedAt(),
         activity.getCreatedBy(),

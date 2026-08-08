@@ -523,6 +523,7 @@ export function PmDbsTab({
             currency={currency}
             boqItemsExecuted={boqSummaryQuery.data?.data?.boqItemsExecuted}
             boqQtyExecuted={boqSummaryQuery.data?.data?.boqQtyExecuted}
+            boqBillableQty={boqSummaryQuery.data?.data?.boqBillableQty}
           />
 
           {/* F. Sub-Contractor — project-level breakdown. Hidden on other tabs
@@ -672,7 +673,7 @@ export function PmDbsTab({
                             </td>
                             <td className="px-4 py-2 text-right font-mono text-text-secondary">
                               {cm.contributionPct != null
-                                ? formatPercent(cm.contributionPct)
+                                ? formatPercent(cm.contributionPct * 100)
                                 : "—"}
                             </td>
                             <td className="px-4 py-2 text-right font-mono text-text-secondary">

@@ -302,16 +302,18 @@ export const dprApi = {
 
   // ─── Voice form-fill ─────────────────────────────────────────────────────────
 
+  /** One input per call: an audio recording OR typed chat text (exactly one must be set). */
   voiceFill: async (
     projectId: string,
-    audio: Blob,
+    input: { audio: Blob } | { text: string },
     state: unknown,
     history: DprVoiceTurn[],
     dprId?: string | null
   ): Promise<DprVoiceFillResponse> => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
     const form = new FormData();
-    form.append("audio", audio, "voice.webm");
+    if ("audio" in input) form.append("audio", input.audio, "voice.webm");
+    else form.append("text", new Blob([input.text], { type: "text/plain" }));
     form.append("state", new Blob([JSON.stringify(state)], { type: "application/json" }));
     form.append("history", new Blob([JSON.stringify(history)], { type: "application/json" }));
     if (dprId) form.append("dprId", dprId);
@@ -391,6 +393,11 @@ export interface DprVoicePatch {
   manpower?: Array<Record<string, unknown>>;
   equipment?: Array<Record<string, unknown>>;
   materials?: Array<Record<string, unknown>>;
+  /** Row labels the user asked to delete — matched case-insensitively against trade /
+   *  equipmentType / materialName by the form. */
+  removeManpower?: string[] | null;
+  removeEquipment?: string[] | null;
+  removeMaterials?: string[] | null;
 }
 
 export interface DprVoiceFillResponse {

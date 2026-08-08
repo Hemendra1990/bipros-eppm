@@ -86,6 +86,14 @@ export interface ActivityResponse {
    * into `prelim_cost` instead of `direct_cost`. Defaults to false for every existing row.
    */
   preliminary?: boolean;
+  /** Hierarchy (design D10): containment parent, null for top-level activities. */
+  parentActivityId?: string | null;
+  /** BOQ link (design D8): the ONE BOQ line this activity executes; null = unlinked. */
+  boqItemId?: string | null;
+  /** Operation of a split line (Stage 4); always null until operations exist. */
+  boqOperationId?: string | null;
+  /** §5.3: this activity's own workdone target in the line's unit. */
+  plannedQty?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -127,6 +135,14 @@ export interface CreateActivityRequest {
    * default of false.
    */
   preliminary?: boolean | null;
+  /** Hierarchy: create directly under this parent — the code becomes parentCode.segment. */
+  parentActivityId?: string | null;
+  /** BOQ link (design D8): the BOQ line this activity executes. Optional. */
+  boqItemId?: string | null;
+  /** §5.3: this activity's own workdone target (defaults to the line's boqQty when sole-linked). */
+  plannedQty?: number | null;
+  /** Stage 4: the operation of the linked (split) line this activity executes. */
+  boqOperationId?: string | null;
 }
 
 export interface UpdateActivityRequest {
@@ -164,6 +180,15 @@ export interface UpdateActivityRequest {
    * on this request).
    */
   preliminary?: boolean | null;
+  /** Hierarchy: re-parent (null/omit = unchanged). To detach, send clearParent: true. */
+  parentActivityId?: string | null;
+  clearParent?: boolean | null;
+  /** BOQ link: re-point (null/omit = unchanged). To unlink, send clearBoqLink: true. */
+  boqItemId?: string | null;
+  plannedQty?: number | null;
+  clearBoqLink?: boolean | null;
+  /** Stage 4: (re-)point at an operation of the linked split line (null/omit = unchanged). */
+  boqOperationId?: string | null;
 }
 
 /**

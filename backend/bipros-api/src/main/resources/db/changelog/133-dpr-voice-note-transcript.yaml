@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 133-dpr-voice-note-transcript
+      author: claude
+      comment: Store STT transcripts on voice notes for the DPR report agent (ported from branch 89c2b295; renumbered 118→133 — 118 was already taken on this line)
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_voice_notes
+            columns:
+              - column: {name: transcript, type: TEXT, constraints: {nullable: true}}
+              - column: {name: transcribed_at, type: TIMESTAMP, constraints: {nullable: true}}
+      rollback:
+        - dropColumn: {schemaName: project, tableName: dpr_voice_notes, columnName: transcript}
+        - dropColumn: {schemaName: project, tableName: dpr_voice_notes, columnName: transcribed_at}

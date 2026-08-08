@@ -390,7 +390,11 @@ public class ActivityAiGenerationService {
                     null,  // costAccountId
                     null,  // supervisorResourceId (deprecated)
                     null,  // supervisorResourceName (deprecated)
-                    null   // preliminary (DBS-Phase-2 BOQ Section 1 flag)
+                    null,  // preliminary (DBS-Phase-2 BOQ Section 1 flag)
+                    null,  // parentActivityId (hierarchy D10 — AI generation stays flat)
+                    null,  // boqItemId (BOQ link D8 — the planner links manually)
+                    null,  // plannedQty (§5.3)
+                    null   // boqOperationId (Stage 4 — planner assigns via the link card)
             );
 
             try {

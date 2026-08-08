@@ -42,6 +42,7 @@ public class ActivityProgressFromBoqListener {
   private final DailyProgressReportRepository dprRepository;
   private final PercentCompleteCalculator calculator;
   private final AuditService auditService;
+  private final com.bipros.activity.application.service.ActivityService activityService;
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -53,6 +54,14 @@ public class ActivityProgressFromBoqListener {
   private void recompute(UUID activityId) {
     Activity activity = activityRepository.findById(activityId).orElse(null);
     if (activity == null) return;
+
+    // Hierarchy H3: a PARENT's % is owned by the children rollup. Its own historical DPRs
+    // still count toward the BOQ line, but must not overwrite the rolled-up percentage
+    // (reachable via revoke/re-approve of a pre-hierarchy DPR — new DPRs are guarded off).
+    if (activityRepository.existsByParentActivityId(activityId)) {
+      activityService.recomputeParentChain(activityId);
+      return;
+    }
 
     BigDecimal boqQty = dprRepository.sumLinkedBoqQtyApproved(activityId);
     if (boqQty == null || boqQty.signum() <= 0) return; // not BOQ-driven — leave to type writers
@@ -92,5 +101,8 @@ public class ActivityProgressFromBoqListener {
     if (!java.util.Objects.equals(oldStatus, activity.getStatus())) {
       auditService.logUpdate("Activity", activityId, "status", oldStatus, activity.getStatus());
     }
+
+    // Hierarchy §5.4 — bubble the DPR-driven change up the containment chain (no-op when top-level).
+    activityService.recomputeParentChain(activityId);
   }
 }

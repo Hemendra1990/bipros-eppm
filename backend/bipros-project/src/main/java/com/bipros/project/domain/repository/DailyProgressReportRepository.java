@@ -173,6 +173,16 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       @org.springframework.data.repository.query.Param("projectId") UUID projectId,
       @org.springframework.data.repository.query.Param("boqItemId") UUID boqItemId);
 
+  /** Stage 4: approved qty per operation of one split line. A null key groups the pre-split rows
+   *  ({@code boq_operation_id IS NULL}) — the caller resolves them to the legacy operation (§7.3). */
+  @org.springframework.data.jpa.repository.Query(value =
+      "SELECT d.boq_operation_id, COALESCE(SUM(d.qty_executed), 0) FROM project.daily_progress_reports d "
+          + "WHERE d.project_id = :projectId AND d.boq_item_id = :boqItemId AND d.approval_status = 'APPROVED' "
+          + "GROUP BY d.boq_operation_id", nativeQuery = true)
+  java.util.List<Object[]> sumQtyExecutedByOperationApproved(
+      @org.springframework.data.repository.query.Param("projectId") UUID projectId,
+      @org.springframework.data.repository.query.Param("boqItemId") UUID boqItemId);
+
   /** Approved DPR executed qty per BOQ item per date, with that item's boqQty and budgetedRate.
    *  Feeds cumulative earned-value capping in {@link com.bipros.project.application.service.DprEarnedValueLookup}. */
   @org.springframework.data.jpa.repository.Query(
@@ -184,6 +194,23 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
           + "and b.budgetedRate is not null and b.boqQty is not null "
           + "group by d.boqItemId, d.reportDate, b.boqQty, b.budgetedRate")
   java.util.List<Object[]> sumQtyByBoqItemAndDate(
+      @org.springframework.data.repository.query.Param("projectId") java.util.UUID projectId);
+
+  /** Stage 4 (B2) twin of {@link #sumQtyByBoqItemAndDate} restricted to MEASURED rows: on a
+   *  WEIGHTED-split line only measurement-operation and pre-split (null-operation) rows count —
+   *  summing every operation's qty as line qty would distort the per-date EV shape.
+   *  QUANTITY_PARTITION children all count. */
+  @org.springframework.data.jpa.repository.Query(
+      "select d.boqItemId, d.reportDate, coalesce(sum(d.qtyExecuted), 0), b.boqQty, b.budgetedRate "
+          + "from DailyProgressReport d, BoqItem b "
+          + "where d.projectId = :projectId and d.boqItemId = b.id "
+          + "and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED "
+          + "and d.reportDate is not null and d.qtyExecuted is not null "
+          + "and b.budgetedRate is not null and b.boqQty is not null "
+          + "and (d.boqOperationId is null or b.splitMode = 'QUANTITY_PARTITION' "
+          + "     or exists (select 1 from BoqOperation o where o.id = d.boqOperationId and o.isMeasure = true)) "
+          + "group by d.boqItemId, d.reportDate, b.boqQty, b.budgetedRate")
+  java.util.List<Object[]> sumQtyByBoqItemAndDateMeasured(
       @org.springframework.data.repository.query.Param("projectId") java.util.UUID projectId);
 
   /**

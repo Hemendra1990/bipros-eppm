@@ -11,8 +11,11 @@ import {
   type CreateBoqItemRequest,
   type UpdateBoqItemRequest,
 } from "@/lib/api/boqApi";
+import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
+import { SplitBoqDialog } from "@/components/boq/SplitBoqDialog";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { AlertBanner } from "@/components/common/AlertBanner";
 import { boqStatusVariant } from "@/components/common/StatusBadge";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -34,6 +37,7 @@ interface BoqForm {
   itemNo: string;
   description: string;
   unit: string;
+  wbsNodeId: string;
   boqQty: string;
   boqRate: string;
   budgetedRate: string;
@@ -45,12 +49,16 @@ const initialFormState: BoqForm = {
   itemNo: "",
   description: "",
   unit: "",
+  wbsNodeId: "",
   boqQty: "",
   boqRate: "",
   budgetedRate: "",
   qtyExecutedToDate: "",
   actualRate: "",
 };
+
+/** Sentinel for the "unassigned" choice in the WBS filter dropdown. */
+const WBS_FILTER_NONE = "__none__";
 
 function formatAmount(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
@@ -87,6 +95,11 @@ export default function BoqPage() {
   const [editingCell, setEditingCell] = useState<{ itemId: string; field: EditableField } | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
   const [overrunOnly, setOverrunOnly] = useState(false);
+  // Row whose WBS cell is in edit mode (inline SearchableSelect), and the table filter.
+  const [editingWbsItemId, setEditingWbsItemId] = useState<string | null>(null);
+  const [wbsFilter, setWbsFilter] = useState<string>("");
+  // Stage 4: line whose split/operations dialog is open.
+  const [splitDialogItem, setSplitDialogItem] = useState<BoqItemResponse | null>(null);
 
   const {
     data: summaryResponse,
@@ -97,12 +110,34 @@ export default function BoqPage() {
     queryFn: () => boqApi.list(projectId),
   });
 
+  // WBS nodes for the column labels, the Add-form picker and the filter.
+  const { data: wbsResponse } = useQuery({
+    queryKey: ["wbs", projectId],
+    queryFn: () => projectApi.getWbsTree(projectId),
+  });
+  const wbsNodes = useMemo(() => wbsResponse?.data ?? [], [wbsResponse]);
+  const wbsById = useMemo(() => {
+    const m = new Map<string, { code: string; name: string }>();
+    for (const n of wbsNodes) m.set(n.id, { code: n.code, name: n.name });
+    return m;
+  }, [wbsNodes]);
+  const wbsOptions: SelectOption[] = useMemo(
+    () => wbsNodes.map((n) => ({ value: n.id, label: `${n.code} — ${n.name}` })),
+    [wbsNodes],
+  );
+
   const summary: BoqSummaryResponse | null | undefined = summaryResponse?.data;
   const allItems: BoqItemResponse[] = summary?.items ?? [];
   const overrunItems = allItems.filter((i) => i.status === "OVERRUN");
   const overrunCount = overrunItems.length;
   const overrunUnbilled = overrunItems.reduce((sum, item) => sum + unbilledOverrunValue(item), 0);
-  const items = overrunOnly ? overrunItems : allItems;
+  const overrunScoped = overrunOnly ? overrunItems : allItems;
+  const items =
+    wbsFilter === ""
+      ? overrunScoped
+      : overrunScoped.filter((i) =>
+          wbsFilter === WBS_FILTER_NONE ? !i.wbsNodeId : i.wbsNodeId === wbsFilter,
+        );
 
   const updateMutation = useMutation({
     mutationFn: ({ itemId, request }: { itemId: string; request: UpdateBoqItemRequest }) =>
@@ -169,6 +204,7 @@ export default function BoqPage() {
       itemNo: formData.itemNo.trim(),
       description: formData.description.trim(),
       unit: formData.unit,
+      wbsNodeId: formData.wbsNodeId || undefined,
       boqQty: formData.boqQty === "" ? undefined : Number(formData.boqQty),
       boqRate: formData.boqRate === "" ? undefined : Number(formData.boqRate),
       budgetedRate: formData.budgetedRate === "" ? undefined : Number(formData.budgetedRate),
@@ -178,7 +214,57 @@ export default function BoqPage() {
     createMutation.mutate(request);
   };
 
+  // WBS cell — label when idle, inline SearchableSelect on click (same interaction
+  // pattern as the editable number cells). Clearing the select unlinks the item.
+  const renderWbsCell = (item: BoqItemResponse) => {
+    if (editingWbsItemId === item.id) {
+      return (
+        <div onClick={(e) => e.stopPropagation()}>
+          <SearchableSelect
+            options={wbsOptions}
+            value={item.wbsNodeId ?? ""}
+            onChange={(v) => {
+              setEditingWbsItemId(null);
+              if ((item.wbsNodeId ?? "") !== v) {
+                // Empty selection = unlink. The backend treats wbsNodeId:null as "leave
+                // unchanged", so unlinking needs the explicit clearWbsNode flag.
+                updateMutation.mutate({
+                  itemId: item.id,
+                  request: v ? { wbsNodeId: v } : { clearWbsNode: true },
+                });
+              }
+            }}
+            placeholder="Pick WBS…"
+          />
+        </div>
+      );
+    }
+    const wbs = item.wbsNodeId ? wbsById.get(item.wbsNodeId) : null;
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditingWbsItemId(item.id);
+        }}
+        className="block w-full text-left hover:text-gold focus:text-gold focus:outline-none"
+        title="Click to assign WBS"
+      >
+        {wbs ? `${wbs.code} — ${wbs.name}` : <span className="text-text-secondary">—</span>}
+      </button>
+    );
+  };
+
   const renderEditableNumberCell = (item: BoqItemResponse, field: EditableField) => {
+    // Stage 4: a split line's executed qty is DERIVED from its operations — the backend
+    // rejects manual writes (BOQ_SPLIT_QTY_DERIVED), so don't offer the edit.
+    if (field === "qtyExecutedToDate" && item.splitMode) {
+      return (
+        <span title="Derived from the line's operations — record quantity via DPRs">
+          {formatAmount(item[field])}
+        </span>
+      );
+    }
     const isEditing = editingCell?.itemId === item.id && editingCell.field === field;
     if (isEditing) {
       return (
@@ -225,6 +311,57 @@ export default function BoqPage() {
         header: "Item No.",
         size: 90,
         meta: { className: "font-medium" },
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <span>
+              {row.itemNo}
+              {row.splitMode && (
+                <span
+                  className="ml-1 rounded bg-accent/15 px-1 py-0.5 text-[10px] font-semibold text-accent"
+                  title={
+                    row.splitMode === "QUANTITY_PARTITION"
+                      ? "Split: quantity partition"
+                      : "Split: weighted operations"
+                  }
+                >
+                  SPLIT
+                </span>
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        id: "operations",
+        header: "Ops",
+        size: 92,
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSplitDialogItem(row);
+              }}
+              className={cn(
+                "rounded border px-2 py-0.5 text-[11px] font-medium",
+                row.splitMode
+                  ? "border-accent/40 text-accent hover:bg-accent/10"
+                  : "border-border text-text-secondary hover:bg-surface-hover",
+              )}
+              title={
+                row.splitMode
+                  ? "View / edit this line's operations"
+                  : "Split this line into operations (screening, compaction, …)"
+              }
+            >
+              {row.splitMode ? "Operations…" : "Split…"}
+            </button>
+          );
+        },
       },
       {
         accessorKey: "chapter",
@@ -240,6 +377,19 @@ export default function BoqPage() {
         header: "Description",
         size: 280,
         meta: { className: "whitespace-normal" },
+      },
+      {
+        id: "wbs",
+        // accessorFn (not accessorKey) so the table's global search and sorting operate on
+        // the visible "code — name" label rather than the raw UUID.
+        accessorFn: (row) => {
+          const wbs = row.wbsNodeId ? wbsById.get(row.wbsNodeId) : null;
+          return wbs ? `${wbs.code} — ${wbs.name}` : "";
+        },
+        header: "WBS",
+        size: 170,
+        meta: { className: "whitespace-normal" },
+        cell: (info) => renderWbsCell(info.row.original),
       },
       {
         accessorKey: "unit",
@@ -349,10 +499,11 @@ export default function BoqPage() {
         },
       },
     ],
-    // editingCell/editingValue captured via closures inside renderEditableNumberCell — must re-build columns when they change so the input re-renders.
+    // editingCell/editingValue/editingWbsItemId captured via closures inside the cell
+    // renderers — must re-build columns when they change so the inputs re-render.
     // money is included so cells re-format once the currency master resolves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editingCell, editingValue, money]
+    [editingCell, editingValue, editingWbsItemId, wbsById, wbsOptions, money]
   );
 
   // Grand-total quantities — Σ across all items. Units are heterogeneous
@@ -366,7 +517,7 @@ export default function BoqPage() {
 
   const grandTotalFooter = summary ? (
 <tr className="text-text-primary dark:text-[#F5F2E8] font-semibold">
-  <td className="px-4 py-3" colSpan={5}>
+  <td className="px-4 py-3" colSpan={7}>
         Grand Total
       </td>
       <td className="px-4 py-3 text-left">{formatAmount(boqQtyGrandTotal)}</td>
@@ -435,15 +586,33 @@ export default function BoqPage() {
           />
         )}
 
-        <button
-          onClick={() => {
-            setShowForm(!showForm);
-            setFormError(null);
-          }}
-          className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
-        >
-          {showForm ? "Cancel" : "Add BOQ Item"}
-        </button>
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              setShowForm(!showForm);
+              setFormError(null);
+            }}
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
+          >
+            {showForm ? "Cancel" : "Add BOQ Item"}
+          </button>
+          <div className="w-72">
+            <SearchableSelect
+              options={[
+                { value: WBS_FILTER_NONE, label: "Unassigned (no WBS)" },
+                ...wbsOptions,
+              ]}
+              value={wbsFilter}
+              onChange={setWbsFilter}
+              placeholder="Filter by WBS — all items"
+            />
+          </div>
+          {wbsFilter !== "" && (
+            <span className="text-xs text-text-muted">
+              {items.length} of {overrunScoped.length} items
+            </span>
+          )}
+        </div>
 
         {errorMessage && <div className="text-danger mb-4">{errorMessage}</div>}
         {formError && <div className="text-danger mb-4">{formError}</div>}
@@ -486,6 +655,15 @@ export default function BoqPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">WBS Node (optional)</label>
+                <SearchableSelect
+                  options={wbsOptions}
+                  value={formData.wbsNodeId}
+                  onChange={(v) => setFormData({ ...formData, wbsNodeId: v })}
+                  placeholder="— none —"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">BOQ Qty</label>
@@ -570,6 +748,14 @@ export default function BoqPage() {
           maxHeight={640}
           emptyMessage={overrunOnly ? "No overrun items." : "No BOQ items yet. Click “Add BOQ Item” to start."}
           footer={grandTotalFooter}
+        />
+
+        {/* Stage 4: split lifecycle dialog (split form / operations view). */}
+        <SplitBoqDialog
+          open={splitDialogItem !== null}
+          onClose={() => setSplitDialogItem(null)}
+          projectId={projectId}
+          item={splitDialogItem}
         />
       </div>
     </div>

@@ -55,6 +55,10 @@ public class SectionFBoqCalculator {
             // the full qty so PM "Total Income" represents the project's full BOQ revenue
             // (the SC-driven portion is also captured by SectionFSubContractorCalculator,
             // but as an expense — the income side flows through here).
+            // Stage 4 (A7): on a WEIGHTED-split line only measurement-operation rows (and
+            // pre-split legacy rows, boq_operation_id NULL) are income — pricing every
+            // operation's qty at boq_rate would multiply the day's revenue by the number of
+            // operations. QUANTITY_PARTITION children all count (their Σ IS the measured qty).
             String sql = """
                 SELECT b.item_no,
                        b.description,
@@ -71,6 +75,7 @@ public class SectionFBoqCalculator {
                 FROM project.daily_progress_reports d
                 JOIN project.boq_items b ON b.id = d.boq_item_id
                 LEFT JOIN activity.activities a ON a.id = d.activity_id
+                LEFT JOIN project.boq_operations o ON o.id = d.boq_operation_id
                 LEFT JOIN (
                     SELECT dpr_id, COALESCE(SUM(quantity), 0) AS sc_qty
                       FROM project.dpr_sub_contractor
@@ -80,6 +85,9 @@ public class SectionFBoqCalculator {
                   AND d.report_date = :dt
                   AND d.approval_status = 'APPROVED'
                   AND (cast(:sup as uuid) IS NULL OR d.supervisor_user_id = cast(:sup as uuid))
+                  AND (d.boq_operation_id IS NULL
+                       OR o.is_measure = true
+                       OR b.split_mode = 'QUANTITY_PARTITION')
                 """;
             // Casts are required so PostgreSQL can infer the parameter type when :sup is null —
             // without them the driver sends untyped placeholders and the planner aborts with

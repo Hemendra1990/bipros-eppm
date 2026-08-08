@@ -3,9 +3,7 @@ package com.bipros.reporting.presentation.controller;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.reporting.application.dto.*;
 import com.bipros.reporting.application.service.CapacityUtilizationReportService;
-import com.bipros.reporting.application.service.DailyDeploymentReportService;
 import com.bipros.reporting.application.service.DprCostingReportService;
-import com.bipros.reporting.application.service.DprReportService;
 import com.bipros.reporting.application.service.ReportService;
 import com.bipros.reporting.application.service.SupervisorPerformanceReportService;
 import com.bipros.reporting.domain.model.ReportFormat;
@@ -37,8 +35,6 @@ public class ReportController {
 
   private final ReportService reportService;
   private final CapacityUtilizationReportService capacityUtilizationReportService;
-  private final DailyDeploymentReportService dailyDeploymentReportService;
-  private final DprReportService dprReportService;
   private final CapacityUtilizationExcelWriter capacityUtilizationExcelWriter;
   private final DprCostingReportService dprCostingReportService;
   private final DprCostingExcelWriter dprCostingExcelWriter;
@@ -252,31 +248,42 @@ public class ReportController {
   }
 
   /**
-   * Streams the 5-sheet Capacity Utilisation .xlsx workbook (Plant utilization, Manpower
-   * utilization, SUMMARY, Daily Deployment, DPR) for a single project and calendar month.
-   * {@code month} accepts ISO {@code YYYY-MM}; {@code workDays} populates the highlighted Work
-   * days cell (defaults to 26 — typical 6-day-week construction month).
+   * Streams the 3-sheet Capacity Utilisation .xlsx workbook (Plant utilization, Manpower
+   * utilization, SUMMARY) in the client's "Resource Capacity Utilization Report" format —
+   * each resource with its per-activity task rows.
+   *
+   * <p>Window: pass either {@code month} (ISO {@code YYYY-MM} — the Reports-page form) or
+   * {@code fromDate}+{@code toDate} (the Capacity Util. tab's filters); with neither, the
+   * current month is used. The "for the day" columns anchor on the window's To date (today
+   * when the range includes today). {@code workDays} populates the highlighted Work days cell.
    */
   @GetMapping("/capacity-utilization/excel")
   @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
   public ResponseEntity<byte[]> downloadCapacityUtilizationExcel(
       @RequestParam UUID projectId,
-      @RequestParam String month,
+      @RequestParam(required = false) String month,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "26") int workDays,
       @RequestParam(required = false) UUID supervisorUserId) {
-    YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
-    LocalDate from = ym.atDay(1);
-    LocalDate to = ym.atEndOfMonth();
-    var plant = capacityUtilizationReportService.build(
-        projectId, from, to, "RESOURCE_TYPE", "EQUIPMENT", supervisorUserId);
-    var manpower = capacityUtilizationReportService.build(
-        projectId, from, to, "RESOURCE_TYPE", "MANPOWER", supervisorUserId);
-    var daily = dailyDeploymentReportService.build(projectId, ym);
-    var dpr = dprReportService.build(projectId, ym);
+    LocalDate from;
+    LocalDate to;
+    if (fromDate != null && toDate != null) {
+      from = fromDate;
+      to = toDate;
+    } else {
+      YearMonth requested = month != null
+          ? YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"))
+          : YearMonth.now();
+      from = requested.atDay(1);
+      to = requested.atEndOfMonth();
+    }
+    var data = capacityUtilizationReportService.clientWorkbook(
+        projectId, from, to, supervisorUserId, workDays);
+    YearMonth ym = YearMonth.from(data.referenceDate());
     String projectName = lookupProjectName(projectId);
 
-    byte[] bytes = capacityUtilizationExcelWriter.generate(
-        plant, manpower, daily, dpr, ym, workDays, projectName);
+    byte[] bytes = capacityUtilizationExcelWriter.generate(data, ym, projectName);
 
     String fileName = "capacity-utilization-" + ym + ".xlsx";
     return ResponseEntity.ok()

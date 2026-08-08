@@ -99,6 +99,12 @@ public class DailyProgressReport extends BaseEntity {
   @Column(name = "boq_item_no", length = 20)
   private String boqItemNo;
 
+  /** Optional FK to {@code project.boq_operations.id} — stamped at save from the activity's
+   *  operation link when the referenced BOQ line is split (Stage 4). Null for unsplit lines and
+   *  pre-split rows (those resolve to the line's legacy operation at recompute time). */
+  @Column(name = "boq_operation_id")
+  private UUID boqOperationId;
+
   @Column(name = "unit", nullable = false, length = 20)
   private String unit;
 

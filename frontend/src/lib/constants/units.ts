@@ -8,38 +8,25 @@
  * Work Activity master, and the DPR form's strict dropdown silently rejects it (or falls back to
  * the first option), leading to a unit mismatch and broken Capacity Utilization math.
  *
- * Extend cautiously — adding values is safe, removing values orphans existing data.
+ * This is the client-approved 12-unit list (workbook "Web" sheet, DPR row 2, 01 Aug 2026:
+ * "Keep Cum, Sqm, Rm, MT, Nr, LS, Kg, Hrs, Bag, Month, Week, Day. Rest all to be removed").
+ * Removing a value never touches stored rows — units are free text in the DB; consumers render
+ * via unitOptionsWithFallback so legacy values keep displaying with a "(legacy)" tag.
+ * KEEP IN SYNC with backend/bipros-ai .../voice/dpr/DprUnits.java (voice DPR fill).
  */
 export const STANDARD_UNITS = [
-  // Volume
   "Cum",
-  "Brass",
-  "L",
-  // Area
   "Sqm",
-  "Sqft",
-  // Length
   "Rm",
-  "Lm",
-  "lin.m.",
-  "R/mtr",
-  "m",
-  "mm",
-  "ft",
-  "in",
-  // Mass / weight
-  "kg",
   "MT",
-  "Tonne",
-  "Quintal",
-  "Bag",
-  // Count
-  "Each",
   "Nr",
-  "Nos",
-  // Time
+  "LS",
+  "Kg",
+  "Hrs",
+  "Bag",
+  "Month",
+  "Week",
   "Day",
-  "Hour",
 ] as const;
 
 export type StandardUnit = (typeof STANDARD_UNITS)[number];

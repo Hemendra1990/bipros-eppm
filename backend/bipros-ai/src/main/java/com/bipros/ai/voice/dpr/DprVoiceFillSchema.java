@@ -78,7 +78,7 @@ public class DprVoiceFillSchema {
     props.set("activityName", nullableString("Display name of the activity."));
     props.set("contractorName", nullableString("Top-level contractor for the activity."));
     props.set("weatherCondition", nullableEnum(
-        List.of("Clear", "Cloudy", "Rain", "Hot", "Cold", "Windy"),
+        List.of("Clear", "Cloudy", "Rain", "Thunderstorm", "Foggy", "Sandstorm"),
         "Weather condition. Pick the closest match; null if not stated."));
     props.set("startTime", nullableString("Start time as HH:mm (24-hour)."));
     props.set("endTime", nullableString("End time as HH:mm (24-hour)."));
@@ -108,13 +108,21 @@ public class DprVoiceFillSchema {
     props.set("manpower", manpowerSchema());
     props.set("equipment", equipmentSchema());
     props.set("materials", materialsSchema());
+    props.set("removeManpower", nullableStringArray(
+        "Trade labels of manpower rows the user asked to REMOVE (e.g. [\"Carpenter\"]). Each must "
+            + "match the trade of a row in CURRENT FORM STATE. Null when nothing is removed."));
+    props.set("removeEquipment", nullableStringArray(
+        "equipmentType labels of equipment rows the user asked to REMOVE. Null when none."));
+    props.set("removeMaterials", nullableStringArray(
+        "materialName labels of material rows the user asked to REMOVE. Null when none."));
 
     requireAll(patch, List.of(
         "reportDate", "supervisorUserId", "supervisorName", "activityId", "activityName",
         "contractorName", "weatherCondition", "startTime", "endTime", "shift", "approvalStatus",
         "side", "landmark", "chainageFromM", "chainageToM", "boqItemNo", "boqItemId", "unit", "qtyExecuted",
         "remarks", "delayReason", "safetyObservation", "safetyIncidentType",
-        "manpower", "equipment", "materials"));
+        "manpower", "equipment", "materials",
+        "removeManpower", "removeEquipment", "removeMaterials"));
     return patch;
   }
 
@@ -122,9 +130,11 @@ public class DprVoiceFillSchema {
     ObjectNode arr = objectMapper.createObjectNode();
     arr.put("type", "array");
     arr.put("description",
-        "Rows to APPEND to the manpower grid. Do not include rows the user already entered. "
-            + "Each row's resourceAssignmentId MUST come from the provided assignments list when "
-            + "available — otherwise leave it null and emit a follow-up question.");
+        "Manpower rows to ADD or UPDATE. A row whose trade/variant matches a row in CURRENT FORM "
+            + "STATE updates that row in place (emit the changed numbers); otherwise it is added. "
+            + "Emit only rows the user mentioned this turn. Each row's resourceAssignmentId MUST "
+            + "come from the provided assignments list when available — otherwise leave it null "
+            + "and emit a follow-up question.");
 
     ObjectNode item = arr.putObject("items");
     item.put("type", "object");
@@ -158,7 +168,8 @@ public class DprVoiceFillSchema {
   private ObjectNode equipmentSchema() {
     ObjectNode arr = objectMapper.createObjectNode();
     arr.put("type", "array");
-    arr.put("description", "Rows to APPEND to the equipment grid. Same picker semantics as manpower.");
+    arr.put("description",
+        "Equipment rows to ADD or UPDATE (merge semantics identical to manpower).");
 
     ObjectNode item = arr.putObject("items");
     item.put("type", "object");
@@ -198,7 +209,8 @@ public class DprVoiceFillSchema {
   private ObjectNode materialsSchema() {
     ObjectNode arr = objectMapper.createObjectNode();
     arr.put("type", "array");
-    arr.put("description", "Rows to APPEND to the materials grid. Same picker semantics as manpower.");
+    arr.put("description",
+        "Material rows to ADD or UPDATE (merge semantics identical to manpower).");
 
     ObjectNode item = arr.putObject("items");
     item.put("type", "object");
@@ -267,6 +279,17 @@ public class DprVoiceFillSchema {
 
   private ObjectNode nullableNumber(String description) {
     return nullableType("number", description);
+  }
+
+  /** Strict-mode nullable array of strings: {@code type: ["array","null"], items: {type: string}}. */
+  private ObjectNode nullableStringArray(String description) {
+    ObjectNode n = objectMapper.createObjectNode();
+    ArrayNode types = n.putArray("type");
+    types.add("array");
+    types.add("null");
+    n.put("description", description);
+    n.putObject("items").put("type", "string");
+    return n;
   }
 
   private ObjectNode nullableType(String typeName, String description) {

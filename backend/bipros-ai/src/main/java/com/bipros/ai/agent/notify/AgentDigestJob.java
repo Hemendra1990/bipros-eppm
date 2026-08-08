@@ -29,7 +29,9 @@ import java.util.stream.Collectors;
 /**
  * Daily digest for the deferred (MEDIUM / LOW) findings that {@link NotificationRouter} intentionally
  * does not send immediately. Groups every still-notifiable such finding by recipient and delivers one
- * rolled-up in-app notification ("Daily AI digest (N findings)") plus one digest email per recipient.
+ * rolled-up in-app notification ("Daily AI digest (N findings)") plus, only for findings whose routing
+ * rule includes the email channel, one digest email per recipient (the default routing is in-app only
+ * — owner decision 2026-08-07, so no digest email goes out unless a rule re-enables email).
  *
  * <p>Lease-guarded so only one node fires (mirrors {@code AgentSweepJobs}). Per-finding delivery rows
  * on the synthetic {@code digest} channel provide idempotency so a finding is never digested twice to
@@ -74,6 +76,7 @@ public class AgentDigestJob {
         for (AgentFinding f : findings) {
             try {
                 String deepLink = router.deepLinkFor(f);
+                boolean emailAllowed = router.emailEnabled(f.getProjectId(), f.getSeverity());
                 for (StakeholderResolver.Recipient r : stakeholderResolver.resolve(f)) {
                     if (r.userId() == null) {
                         continue;
@@ -83,7 +86,11 @@ public class AgentDigestJob {
                         continue;
                     }
                     Bundle bundle = byRecipient.computeIfAbsent(r.userId(), k -> new Bundle(r));
-                    bundle.items.add(router.toResolved(f, r, deepLink));
+                    ResolvedNotification rn = router.toResolved(f, r, deepLink);
+                    bundle.items.add(rn);
+                    if (emailAllowed) {
+                        bundle.emailItems.add(rn);
+                    }
                     bundle.findingIds.add(f.getId());
                 }
             } catch (Exception ex) {
@@ -118,9 +125,16 @@ public class AgentDigestJob {
             log.warn("AgentDigestJob: in-app digest failed for {}: {}", b.recipient.userId(), ex.getMessage());
         }
 
-        if (b.recipient.email() != null && !b.recipient.email().isBlank()) {
-            emailChannel.sendDigest(b.recipient.email(), b.recipient.name(), b.items);
+        // Honest audit: the digest row reflects the EMAIL outcome (SENT / PREVIEW / FAILED). The
+        // in-app digest above is best-effort either way; a bundle with no email-enabled findings
+        // (or a recipient without an email address) records SENT for the in-app-only bundle,
+        // matching the previous behaviour.
+        NotificationChannel.SendResult emailResult = null;
+        if (!b.emailItems.isEmpty() && b.recipient.email() != null && !b.recipient.email().isBlank()) {
+            emailResult = emailChannel.sendDigest(b.recipient.email(), b.recipient.name(), b.emailItems);
         }
+        DeliveryStatus status = emailResult == null ? DeliveryStatus.SENT : emailResult.status();
+        String detail = emailResult == null ? null : emailResult.detail();
 
         Instant now = Instant.now();
         for (UUID findingId : b.findingIds) {
@@ -129,8 +143,11 @@ public class AgentDigestJob {
                 d.setFindingId(findingId);
                 d.setChannelKey(DIGEST_CHANNEL);
                 d.setRecipientUserId(b.recipient.userId());
-                d.setStatus(DeliveryStatus.SENT);
-                d.setSentAt(now);
+                d.setStatus(status);
+                d.setDetail(detail);
+                if (status == DeliveryStatus.SENT) {
+                    d.setSentAt(now);
+                }
                 deliveryRepository.save(d);
             } catch (Exception ex) {
                 log.debug("AgentDigestJob: delivery record failed for finding {}: {}", findingId, ex.getMessage());
@@ -162,6 +179,7 @@ public class AgentDigestJob {
     private static final class Bundle {
         final StakeholderResolver.Recipient recipient;
         final List<ResolvedNotification> items = new ArrayList<>();
+        final List<ResolvedNotification> emailItems = new ArrayList<>();
         final List<UUID> findingIds = new ArrayList<>();
 
         Bundle(StakeholderResolver.Recipient recipient) {

@@ -18,11 +18,14 @@ export interface DayGroup {
   activityGroups: ActivityGroup[];
 }
 
+// Stage 4 fix: group by the ACTIVITY first — keying on boqItemNo merged two different
+// activities sharing one split BOQ line into a single block titled with whichever
+// activity's DPR came first. boqItemNo stays as the fallback for legacy rows only.
 const activityKey = (row: DprSummaryRow): string =>
-  row.boqItemNo
-    ? `boq:${row.boqItemNo}`
-    : row.activityId
-      ? `aid:${row.activityId}`
+  row.activityId
+    ? `aid:${row.activityId}`
+    : row.boqItemNo
+      ? `boq:${row.boqItemNo}`
       : `name:${(row.activityName ?? "").toLowerCase()}`;
 
 const compareByChainage = (a: DprSummaryRow, b: DprSummaryRow): number => {

@@ -19,4 +19,7 @@ public interface DbsDailyCmRepository extends JpaRepository<DbsDailyCm, UUID> {
 
     List<DbsDailyCm> findByProjectIdAndCmUserIdAndReportDateBetween(
         UUID projectId, UUID cmUserId, LocalDate from, LocalDate to);
+
+    List<DbsDailyCm> findByProjectIdAndReportDateBetween(
+        UUID projectId, LocalDate from, LocalDate to);
 }

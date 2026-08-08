@@ -116,11 +116,13 @@ export interface DbsCmDayResponse {
   fuelAmount: number;
   subcontractAmount: number;
   boqForTheDayAmount: number;
-  boqPlannedAmount: number;
-  boqAchievedAmount: number;
+  /** Cumulative to date. The CM payload names these `…ToDate`, unlike the other tiers. */
+  boqPlannedToDate: number;
+  boqAchievedToDate: number;
   totalExpense: number;
   totalIncome: number;
   contribution: number;
+  /** Fraction — 0.9823 = 98.23%. Multiply by 100 to render, as every other tier does. */
   contributionPct: number;
   directCost?: number | null;
   prelimCost?: number | null;
@@ -328,6 +330,9 @@ export interface DbsProjectPeriodResponse {
 export interface BoqExecutedSummary {
   boqItemsExecuted: number;
   boqQtyExecuted: number;
+  /** Stage 4: the billable subset (measurement-operation / pre-split / partition rows).
+   *  Equals boqQtyExecuted when no split line is involved. */
+  boqBillableQty: number;
 }
 
 /** In-memory recompute job status returned by the async background endpoints. */
@@ -442,13 +447,14 @@ export const dbsApi = {
       .then((r) => r.data),
 
   /**
-   * Phase 8 — list of all CMs with activity on the given date. Used to populate
-   * the CM picker and the "Group by CM" table on the PM tab.
+   * Phase 8 — list of all CMs with activity on the given date (or period — WEEK / MONTH
+   * expand the roster to the period bounds, same as listSupervisorsForDay). Used to
+   * populate the CM picker and the "Group by CM" table on the PM tab.
    */
-  listCms: (projectId: string, date: string) =>
+  listCms: (projectId: string, date: string, periodType?: string) =>
     apiClient
       .get<ApiResponse<DbsCmSummaryDto[]>>(`${base(projectId)}/cms`, {
-        params: { date },
+        params: periodType && periodType !== "DAY" ? { date, periodType } : { date },
       })
       .then((r) => r.data),
 

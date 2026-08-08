@@ -1,0 +1,34 @@
+databaseChangeLog:
+  # Activity -> BOQ link (design doc 2026-08-04, D8/D9/§5.3): each activity points at the ONE
+  # BOQ line it executes (and later, one operation of a split line); DPRs inherit the link.
+  # All columns nullable so dev's ddl-auto:update path matches Liquibase exactly.
+  - changeSet:
+      id: 127-activity-boq-link
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: activity
+            tableName: activities
+            columns:
+              - column:
+                  name: boq_item_id
+                  type: uuid
+              - column:
+                  name: boq_operation_id
+                  type: uuid
+              - column:
+                  name: planned_qty
+                  type: numeric(18,3)
+      rollback:
+        - dropColumn:
+            schemaName: activity
+            tableName: activities
+            columnName: boq_item_id
+        - dropColumn:
+            schemaName: activity
+            tableName: activities
+            columnName: boq_operation_id
+        - dropColumn:
+            schemaName: activity
+            tableName: activities
+            columnName: planned_qty

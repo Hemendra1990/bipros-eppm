@@ -20,14 +20,17 @@ public final class RaBillDraftCalculator {
 
   private RaBillDraftCalculator() {}
 
-  /** Snapshot of one BOQ row at draft time — caller projects from {@code project.BoqItem}. */
+  /** Snapshot of one BOQ row at draft time — caller projects from {@code project.BoqItem}.
+   *  {@code boqQty} (Gate B, A6) caps the claimable cumulative at the contracted quantity;
+   *  null keeps the legacy uncapped behaviour for degenerate no-quantity lines. */
   public record BoqLineSnapshot(
       UUID boqItemId,
       String itemNo,
       String description,
       String unit,
       BigDecimal boqRate,
-      BigDecimal qtyExecutedToDate
+      BigDecimal qtyExecutedToDate,
+      BigDecimal boqQty
   ) {}
 
   /** Deduction percentages applied to gross. All inputs are 0..1 fractions (e.g. 0.05 for 5%). */
@@ -92,6 +95,11 @@ public final class RaBillDraftCalculator {
 
     for (BoqLineSnapshot s : boq) {
       double current = s.qtyExecutedToDate() == null ? 0d : s.qtyExecutedToDate().doubleValue();
+      // Gate B (A6, approved 04 Aug 2026): the employer can never be billed beyond the
+      // contracted quantity — over-execution routes through a VO, not an RA-Bill.
+      if (s.boqQty() != null && s.boqQty().signum() > 0) {
+        current = Math.min(current, s.boqQty().doubleValue());
+      }
       double previous = previousCumulativeByBoqItemId.getOrDefault(s.boqItemId(), 0d);
       double delta = current - previous;
       if (delta <= 0d) continue;

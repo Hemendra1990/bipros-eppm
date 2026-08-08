@@ -108,6 +108,27 @@ public class DprVoiceFillService {
     log.info("[dpr voice-fill] project={} transcript=\"{}\"", projectId,
         transcript.length() > 200 ? transcript.substring(0, 200) + "…" : transcript);
 
+    return fillFromTranscript(projectId, transcript, refs, request);
+  }
+
+  /**
+   * Typed-chat variant (client workbook, Web sheet row 9: "chat option to type the data").
+   * Identical pipeline minus Whisper — the typed text plays the transcript's role, so the
+   * response shape, session history and FE merge logic are unchanged.
+   */
+  public DprVoiceFillResponse fillFromText(UUID projectId, String text, DprVoiceFillRequest request) {
+    String activityIdStr = request.state().path("activityId").asText(null);
+    UUID activityId = tryParseUuid(activityIdStr);
+    ReferenceData refs = loadReferenceData(projectId, activityId);
+
+    log.info("[dpr voice-fill] project={} typed=\"{}\"", projectId,
+        text.length() > 200 ? text.substring(0, 200) + "…" : text);
+
+    return fillFromTranscript(projectId, text, refs, request);
+  }
+
+  private DprVoiceFillResponse fillFromTranscript(
+      UUID projectId, String transcript, ReferenceData refs, DprVoiceFillRequest request) {
     LlmProviderConfig cfg = providerConfigRepository.findByIsDefaultTrueAndIsActiveTrue()
         .orElseGet(() -> providerConfigRepository
             .findFirstByIsActiveTrueOrderByIsDefaultDescCreatedAtAsc()
@@ -184,8 +205,16 @@ public class DprVoiceFillService {
         - When the user names a supervisor / activity / BOQ item ambiguously (no exact match, multiple
           near matches), set the related id to null and put the clarification in followUpQuestion.
         - When a quantity is given without a matching unit, ask for the unit in followUpQuestion.
-        - Manpower / Equipment / Material rows you return are APPENDED to the user's existing rows;
-          never overwrite them. Skip rows the user didn't speak about.
+        - Manpower / Equipment / Material rows are MERGED into the user's grid by trade/variant:
+          a row matching one in CURRENT FORM STATE updates that row's numbers in place; a new
+          trade is added. Emit ONLY rows the user mentioned this turn. When the user changes a
+          value ("make masons 3", "excavator worked 6 hours"), re-emit that row with the new
+          numbers — the form updates it, it will NOT duplicate.
+        - To REMOVE a row the user asks to delete ("remove carpenter"), put its label into
+          removeManpower / removeEquipment / removeMaterials. NEVER write edit commands into
+          remarks — remarks is only for genuine site narrative the user dictates as a remark.
+        - When the user asks to CHANGE an already-filled field (quantity, times, weather, ...),
+          emit the new value for that field. Leave fields they didn't address at null.
         - resourceAssignmentId values must come from the provided assignment hints if any are listed;
           otherwise leave null and request clarification.
         - Set complete=true only when no follow-up is needed and you've captured every spoken fact.
@@ -290,8 +319,9 @@ public class DprVoiceFillService {
   }
 
   private String currentStatePrompt(JsonNode state) {
-    return "CURRENT FORM STATE (do not duplicate fields the user already filled — only patch what "
-        + "they newly mention):\n" + state.toPrettyString();
+    return "CURRENT FORM STATE (emit only what the user addresses this turn: new fields, changed "
+        + "values, rows to merge, or rows to remove — leave everything else null):\n"
+        + state.toPrettyString();
   }
 
   /**

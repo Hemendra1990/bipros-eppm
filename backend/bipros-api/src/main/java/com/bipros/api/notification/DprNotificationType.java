@@ -7,4 +7,5 @@ public final class DprNotificationType {
   public static final String DPR_APPROVAL_OVERDUE_ESCALATION = "DPR_APPROVAL_OVERDUE_ESCALATION";
   public static final String DPR_APPROVED                   = "DPR_APPROVED";
   public static final String DPR_REJECTED                   = "DPR_REJECTED";
+  public static final String DPR_REPORT_READY              = "DPR_REPORT_READY";
 }

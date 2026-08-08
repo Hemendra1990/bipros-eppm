@@ -38,7 +38,7 @@ public class InAppChannel implements NotificationChannel {
     }
 
     @Override
-    public void send(ResolvedNotification n) {
+    public SendResult send(ResolvedNotification n) {
         try {
             UUID notificationId = notificationService.create(
                     n.recipientUserId(),
@@ -49,9 +49,11 @@ public class InAppChannel implements NotificationChannel {
                     n.projectId(),
                     n.findingId());
             sseHub.publish(n.recipientUserId(), payload(n, notificationId));
+            return SendResult.sent();
         } catch (Exception ex) {
             log.warn("InAppChannel send failed for finding {} user {}: {}",
                     n.findingId(), n.recipientUserId(), ex.getMessage());
+            return SendResult.failed(ex.getMessage());
         }
     }
 

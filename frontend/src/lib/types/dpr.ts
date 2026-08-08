@@ -155,6 +155,8 @@ export interface DprIssueRow {
   assignedToName?: string | null;
   openedAt?: string | null;
   resolvedAt?: string | null;
+  /** Stamped server-side when the issue enters CLOSED; cleared on reopen. Response-only. */
+  closedAt?: string | null;
   resolutionNotes?: string | null;
   /** Sub-classification of a SAFETY/ENVIRONMENTAL issue, feeding the HSE statistics. Null for
    *  non-HSE issues and for legacy safety issues logged before classification existed. */

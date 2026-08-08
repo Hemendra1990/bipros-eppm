@@ -20,7 +20,10 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true)
 public class Activity extends BaseEntity {
 
-  @Column(nullable = false, length = 20)
+  // 120: dotted-path codes (D11 — full code = ancestor segments joined by dots) overflow the
+  // old 20. Existing DBs are widened by Liquibase changeset 126 (prod) and DevSchemaFixupRunner
+  // fixup 126 (dev) — ddl-auto:update never alters a column type.
+  @Column(nullable = false, length = 120)
   private String code;
 
   @Column(nullable = false, length = 100)
@@ -34,6 +37,39 @@ public class Activity extends BaseEntity {
 
   @Column(name = "wbs_node_id", nullable = false)
   private UUID wbsNodeId;
+
+  /**
+   * Optional containment parent (spec D10). A parent is a grouping/rollup node only:
+   * it takes no DPRs, no resource plan, no scheduling relationships — guards enforced
+   * in ActivityService and (cross-module) DailyProgressReportService. Nullable so
+   * existing flat activities are untouched.
+   */
+  @Column(name = "parent_activity_id")
+  private UUID parentActivityId;
+
+  /**
+   * Spec D8/D9: the ONE BOQ line this activity executes. Soft FK to {@code project.boq_items}
+   * (cross-schema, same pattern as {@link #wbsNodeId}). DPRs inherit it — the supervisor no
+   * longer free-picks a BOQ item once the activity is linked. Null = unlinked (legacy flow).
+   */
+  @Column(name = "boq_item_id")
+  private UUID boqItemId;
+
+  /**
+   * Set only when the linked line is split into operations (Stage 4 of the BOQ-split design).
+   * Soft FK to {@code project.boq_operations}. Always null until operations exist.
+   */
+  @Column(name = "boq_operation_id")
+  private UUID boqOperationId;
+
+  /**
+   * Spec §5.3: this activity's own workdone target, in the linked line/operation's unit.
+   * Denominator of the activity's BOQ-driven % — several activities sharing one line each
+   * get an honest percentage instead of all dividing by the whole line quantity. Defaults
+   * to the line's boqQty when this is the only linked activity.
+   */
+  @Column(name = "planned_qty", precision = 18, scale = 3)
+  private java.math.BigDecimal plannedQty;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)

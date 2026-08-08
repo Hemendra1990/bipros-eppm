@@ -33,11 +33,18 @@ public class DprBoqSyncListener {
 
   private final BoqService boqService;
 
+  // Order 10: must run BEFORE BoqActualRateRecalcListener (order 20) — the rate listener divides
+  // by the measured qtyExecutedToDate this listener writes (A5).
+  @org.springframework.core.annotation.Order(10)
   @EventListener
   public void onDprSubmitted(DprSubmittedEvent event) {
+    // sorted(): the recompute takes a PESSIMISTIC_WRITE row lock per item — two concurrent
+    // re-points between the same two lines in opposite directions must lock in the same
+    // (canonical UUID) order or they can deadlock AB-BA.
     Stream.of(event.boqItemId(), event.oldBoqItemId())
         .filter(Objects::nonNull)
         .distinct()
+        .sorted()
         .forEach(boqItemId ->
             boqService.recomputeExecutedQtyApproved(event.projectId(), boqItemId));
   }

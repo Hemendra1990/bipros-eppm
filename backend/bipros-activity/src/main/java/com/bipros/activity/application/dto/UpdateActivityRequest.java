@@ -79,5 +79,27 @@ public record UpdateActivityRequest(
      * {@code null} to leave unchanged (consistent with the rest of this request's
      * "only-mutate-on-non-null" semantics).
      */
-    Boolean preliminary
+    Boolean preliminary,
+
+    /**
+     * Hierarchy (design D10/D11): re-parent this activity. {@code null} = leave unchanged;
+     * to detach (make top-level) set {@code clearParent} true.
+     */
+    UUID parentActivityId,
+
+    /** Explicit detach flag — {@code parentActivityId=null} means "unchanged", so clearing needs its own signal. */
+    Boolean clearParent,
+
+    /** BOQ link (design D8/D9): re-point this activity's BOQ line. {@code null} = unchanged. */
+    UUID boqItemId,
+
+    /** §5.3: this activity's own workdone target. {@code null} = unchanged. */
+    java.math.BigDecimal plannedQty,
+
+    /** Explicit unlink flag — {@code boqItemId=null} means "unchanged", so clearing needs its own signal. */
+    Boolean clearBoqLink,
+
+    /** Stage 4: (re-)point this activity at an operation of its linked split line.
+     *  {@code null} = unchanged; {@code clearBoqLink} clears it together with the line. */
+    UUID boqOperationId
 ) {}

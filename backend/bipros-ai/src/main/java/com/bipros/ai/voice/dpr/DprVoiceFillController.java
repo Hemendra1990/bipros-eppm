@@ -5,7 +5,6 @@ import com.bipros.common.exception.BusinessRuleException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -45,7 +44,8 @@ public class DprVoiceFillController {
   @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
   public ResponseEntity<ApiResponse<DprVoiceFillResponse>> fill(
       @PathVariable UUID projectId,
-      @NotNull @RequestPart("audio") MultipartFile audio,
+      @RequestPart(value = "audio", required = false) MultipartFile audio,
+      @RequestPart(value = "text", required = false) String text,
       @RequestPart("state") String stateJson,
       @RequestPart(value = "history", required = false) String historyJson,
       @RequestPart(value = "dprId", required = false) String dprId) throws IOException {
@@ -55,14 +55,26 @@ public class DprVoiceFillController {
         ? List.of()
         : objectMapper.readValue(historyJson, new TypeReference<>() {});
 
-    if (audio.isEmpty()) {
-      throw new BusinessRuleException("VOICE_AUDIO_EMPTY", "Audio payload is empty");
+    // Exactly one input: a recording OR typed chat text (client workbook, Web sheet row 9).
+    boolean hasAudio = audio != null && !audio.isEmpty();
+    boolean hasText = text != null && !text.isBlank();
+    if (hasAudio && hasText) {
+      throw new BusinessRuleException("VOICE_INPUT_AMBIGUOUS",
+          "Send either an audio recording or typed text, not both");
+    }
+    if (!hasAudio && !hasText) {
+      throw new BusinessRuleException("VOICE_AUDIO_EMPTY",
+          "Provide an audio recording or typed text");
     }
 
-    log.info("POST /v1/projects/{}/dpr/voice-fill - audio={} bytes, history={} turn(s), dprId={}",
-        projectId, audio.getSize(), history.size(), dprId);
+    log.info("POST /v1/projects/{}/dpr/voice-fill - {}={}, history={} turn(s), dprId={}",
+        projectId, hasAudio ? "audio" : "text",
+        hasAudio ? audio.getSize() + " bytes" : text.length() + " chars", history.size(), dprId);
 
     DprVoiceFillRequest request = new DprVoiceFillRequest(state, history, dprId);
-    return ResponseEntity.ok(ApiResponse.ok(service.fill(projectId, audio, request)));
+    DprVoiceFillResponse response = hasAudio
+        ? service.fill(projectId, audio, request)
+        : service.fillFromText(projectId, text.trim(), request);
+    return ResponseEntity.ok(ApiResponse.ok(response));
   }
 }

@@ -131,6 +131,7 @@ public class DailyProgressReportService {
     // Reject DPRs against a DRAFT activity — the activity is still being planned, so
     // execution data against it is meaningless. Lock the activity to start accepting DPRs.
     rejectIfActivityDraft(request.activityId());
+    rejectIfActivityIsParent(request.activityId());
 
     // Reject duplicate DPRs from the *same supervisor* for the same (project, day, activity).
     // Multi-supervisor model: an activity can have two or more supervisors and each may file
@@ -155,7 +156,8 @@ public class DailyProgressReportService {
     // / design / office work) don't track productivity. The DPR form surfaces a coverage banner
     // so the user knows when productivity won't be measured.
 
-    BoqLinkage linkage = resolveBoqLinkage(projectId, request.boqItemId(), request.boqItemNo());
+    BoqLinkage linkage = resolveBoqLinkage(
+        projectId, request.activityId(), request.boqItemId(), request.boqItemNo());
 
     DailyProgressReport dpr = DailyProgressReport.builder()
         .projectId(projectId)
@@ -169,6 +171,7 @@ public class DailyProgressReportService {
         .wbsNodeId(request.wbsNodeId())
         .boqItemId(linkage.boqItemId())
         .boqItemNo(linkage.boqItemNo())
+        .boqOperationId(linkage.boqOperationId())
         .unit(request.unit())
         .qtyExecuted(request.qtyExecuted())
         .weatherCondition(request.weatherCondition())
@@ -193,6 +196,8 @@ public class DailyProgressReportService {
     List<String> warnings = new ArrayList<>();
     SnapshottedChildren snap = snapshotChildren(saved, request.manpower(), request.equipment(), request.materials(), warnings);
     addUnitMismatchWarning(saved, warnings);
+    addOperationSequenceWarning(saved, warnings);
+    addOperationTargetReachedWarning(saved, warnings);
 
     List<DprManpower> savedManpower = snap.manpower.isEmpty() ? List.of() : manpowerRepository.saveAll(snap.manpower);
     List<DprEquipment> savedEquipment = snap.equipment.isEmpty() ? List.of() : equipmentRepository.saveAll(snap.equipment);
@@ -252,6 +257,7 @@ public class DailyProgressReportService {
     // the existing DPR's activityId. Either being DRAFT blocks the write.
     UUID targetActivityId = request.activityId() != null ? request.activityId() : dpr.getActivityId();
     rejectIfActivityDraft(targetActivityId);
+    rejectIfActivityIsParent(targetActivityId);
 
     DprApprovalStatus oldStatus = effectiveStatus(dpr);
     String oldBoqItemNo = dpr.getBoqItemNo();
@@ -260,7 +266,8 @@ public class DailyProgressReportService {
     DailyProgressReportResponse before = DailyProgressReportResponse.from(dpr,
         computeCumulative(dpr.getProjectId(), dpr.getActivityName(), dpr.getReportDate()));
 
-    BoqLinkage linkage = resolveBoqLinkage(projectId, request.boqItemId(), request.boqItemNo());
+    BoqLinkage linkage = resolveBoqLinkage(
+        projectId, targetActivityId, request.boqItemId(), request.boqItemNo());
 
     dpr.setReportDate(request.reportDate());
     dpr.setSupervisorUserId(request.supervisorUserId());
@@ -272,6 +279,7 @@ public class DailyProgressReportService {
     dpr.setWbsNodeId(request.wbsNodeId());
     dpr.setBoqItemId(linkage.boqItemId());
     dpr.setBoqItemNo(linkage.boqItemNo());
+    dpr.setBoqOperationId(linkage.boqOperationId());
     dpr.setUnit(request.unit());
     dpr.setQtyExecuted(request.qtyExecuted());
     dpr.setWeatherCondition(request.weatherCondition());
@@ -304,6 +312,8 @@ public class DailyProgressReportService {
 
     List<String> warnings = new ArrayList<>();
     addUnitMismatchWarning(saved, warnings);
+    addOperationSequenceWarning(saved, warnings);
+    addOperationTargetReachedWarning(saved, warnings);
 
     List<DprManpower> savedManpower;
     List<DprEquipment> savedEquipment;
@@ -1011,8 +1021,10 @@ public class DailyProgressReportService {
     return aa.add(bb);
   }
 
-  /** Resolved BOQ linkage on a DPR write: prefers {@code boqItemId}; falls back to itemNo for legacy. */
-  private record BoqLinkage(UUID boqItemId, String boqItemNo) {}
+  /** Resolved BOQ linkage on a DPR write: prefers {@code boqItemId}; falls back to itemNo for
+   *  legacy. {@code boqOperationId} (Stage 4) is inherited from the activity's operation link —
+   *  null for unsplit lines and unlinked activities. */
+  private record BoqLinkage(UUID boqItemId, String boqItemNo, UUID boqOperationId) {}
 
   /**
    * Resolve the BOQ linkage for a DPR write. The new canonical path is {@code boqItemId};
@@ -1022,7 +1034,53 @@ public class DailyProgressReportService {
    * {@code boqItemNo} is supplied, we look the row up and persist both — one-time migration
    * path so subsequent edits flow through the FK.
    */
-  private BoqLinkage resolveBoqLinkage(UUID projectId, UUID boqItemId, String boqItemNo) {
+  private BoqLinkage resolveBoqLinkage(UUID projectId, UUID activityId, UUID boqItemId, String boqItemNo) {
+    // BOQ-link design D8/L5: when the DPR's activity carries a BOQ link, that link is
+    // AUTHORITATIVE — the DPR inherits it, and a contradicting payload is rejected rather
+    // than silently re-pointed (voice-fill, seeders and the raw API bypass the UI chip).
+    ActivityBoqLink link = activityBoqLink(activityId);
+    if (link.boqItemId() != null) {
+      if (boqItemId != null && !boqItemId.equals(link.boqItemId())) {
+        throw new BusinessRuleException(
+            "DPR_BOQ_MISMATCH",
+            "This activity is linked to a different BOQ item — the DPR inherits it automatically.");
+      }
+      BoqItem item = boqItemRepository.findById(link.boqItemId()).orElse(null);
+      if (item == null) {
+        // The linked line was deleted out from under the activity — fall through to the
+        // legacy resolution rather than blocking every DPR on this activity.
+        return legacyResolveBoqLinkage(projectId, boqItemId, boqItemNo);
+      }
+      // Review fix: the inherited line must belong to THIS project — same rule the legacy
+      // path enforces. A cross-project link is data corruption; do not mask it.
+      if (!item.getProjectId().equals(projectId)) {
+        throw new BusinessRuleException(
+            "DPR_BOQ_ITEM_PROJECT_MISMATCH",
+            "The activity's linked BoqItem " + item.getId() + " belongs to project "
+                + item.getProjectId() + ", not " + projectId + ".");
+      }
+      if (boqItemId == null && boqItemNo != null && !boqItemNo.isBlank()
+          && !boqItemNo.equals(item.getItemNo())) {
+        throw new BusinessRuleException(
+            "DPR_BOQ_MISMATCH",
+            "This activity is linked to BOQ item " + item.getItemNo()
+                + " — the DPR inherits it automatically.");
+      }
+      // Stage 4 (L2 / edge 14): a split line demands an operation attribution — without it the
+      // DPR's qty would be unattributable and every aggregate would double-count.
+      if (item.getSplitMode() != null && link.boqOperationId() == null) {
+        throw new BusinessRuleException(
+            "DPR_BOQ_OPERATION_REQUIRED",
+            "BOQ item " + item.getItemNo() + " is split into operations — re-point this "
+                + "activity to one of its operations on the activity page first.");
+      }
+      return new BoqLinkage(item.getId(), item.getItemNo(), link.boqOperationId());
+    }
+    return legacyResolveBoqLinkage(projectId, boqItemId, boqItemNo);
+  }
+
+  /** Pre-link behaviour, byte-identical (L4): used for activities with no BOQ link. */
+  private BoqLinkage legacyResolveBoqLinkage(UUID projectId, UUID boqItemId, String boqItemNo) {
     if (boqItemId != null) {
       BoqItem item = boqItemRepository.findById(boqItemId)
           .orElseThrow(() -> new BusinessRuleException(
@@ -1034,17 +1092,109 @@ public class DailyProgressReportService {
             "BoqItem " + boqItemId + " belongs to project " + item.getProjectId()
                 + ", not " + projectId + ".");
       }
-      return new BoqLinkage(item.getId(), item.getItemNo());
+      rejectSplitLineFreePick(item);
+      return new BoqLinkage(item.getId(), item.getItemNo(), null);
     }
     if (boqItemNo != null && !boqItemNo.isBlank()) {
       // Legacy path — caller only had the itemNo string. Resolve to an id when we can so
       // subsequent edits use the FK; if the lookup fails we still persist the string for
       // the old substring-match fallback in DailyCostReportService.
       return boqItemRepository.findByProjectIdAndItemNo(projectId, boqItemNo)
-          .map(item -> new BoqLinkage(item.getId(), item.getItemNo()))
-          .orElse(new BoqLinkage(null, boqItemNo));
+          .map(item -> {
+            rejectSplitLineFreePick(item);
+            return new BoqLinkage(item.getId(), item.getItemNo(), null);
+          })
+          .orElse(new BoqLinkage(null, boqItemNo, null));
     }
-    return new BoqLinkage(null, null);
+    return new BoqLinkage(null, null, null);
+  }
+
+  /**
+   * Q6 (owner-defaulted warn, not block): the DPR's operation has an earlier sibling
+   * (lower {@code sort_order}, non-legacy) with zero approved progress — physically suspicious
+   * (e.g. compaction reported before screening). Same non-blocking shape as the unit-mismatch
+   * warning; the supervisor's save always goes through.
+   */
+  private void addOperationSequenceWarning(DailyProgressReport saved, List<String> warnings) {
+    if (saved == null || warnings == null || saved.getBoqOperationId() == null || em == null) return;
+    @SuppressWarnings("unchecked")
+    List<Object> rows = em.createNativeQuery(
+            "SELECT o2.name FROM project.boq_operations o "
+                + "JOIN project.boq_operations o2 ON o2.boq_item_id = o.boq_item_id "
+                + "  AND o2.sort_order < o.sort_order AND o2.is_legacy = false "
+                + "WHERE o.id = :opId "
+                + "AND NOT EXISTS (SELECT 1 FROM project.daily_progress_reports d "
+                + "  WHERE d.boq_operation_id = o2.id AND d.approval_status = 'APPROVED' "
+                + "  AND d.qty_executed > 0) "
+                + "ORDER BY o2.sort_order")
+        .setParameter("opId", saved.getBoqOperationId())
+        .getResultList();
+    for (Object name : rows) {
+      warnings.add("operation-sequence: earlier operation '" + name
+          + "' has no recorded progress yet — check the sequence");
+    }
+  }
+
+  /**
+   * Owner-approved (05 Aug 2026, warn-not-block): the DPR's operation had already reached its
+   * target before this save — the quantity may belong to the next stage. Over-execution stays
+   * possible (targets are estimates), so this only nudges; the DPR form shows the same warning
+   * pre-save, this covers voice-fill/API and the saved-response warning list.
+   */
+  private void addOperationTargetReachedWarning(DailyProgressReport saved, List<String> warnings) {
+    if (saved == null || warnings == null || saved.getBoqOperationId() == null || em == null) return;
+    @SuppressWarnings("unchecked")
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT o.name, o.target_qty, "
+                + "COALESCE((SELECT SUM(d.qty_executed) FROM project.daily_progress_reports d "
+                + "  WHERE d.boq_operation_id = o.id AND d.approval_status = 'APPROVED'), 0) "
+                + "FROM project.boq_operations o "
+                + "WHERE o.id = :opId AND o.target_qty IS NOT NULL AND o.target_qty > 0")
+        .setParameter("opId", saved.getBoqOperationId())
+        .getResultList();
+    if (rows.isEmpty()) return;
+    Object[] row = rows.get(0);
+    java.math.BigDecimal target = new java.math.BigDecimal(row[1].toString());
+    java.math.BigDecimal executed = new java.math.BigDecimal(row[2].toString());
+    if (executed.compareTo(target) >= 0) {
+      warnings.add("operation-complete: operation '" + row[0] + "' has already reached its target ("
+          + executed.stripTrailingZeros().toPlainString() + "/"
+          + target.stripTrailingZeros().toPlainString()
+          + " approved) — if the crew has moved to the next stage, re-point the activity to the "
+          + "next operation or create a new activity for it");
+    }
+  }
+
+  /** Edge 14: the free-pick path can never name an operation, so a split line is off-limits to
+   *  it — only an activity linked to one of the line's operations may file DPRs against it. */
+  private static void rejectSplitLineFreePick(BoqItem item) {
+    if (item.getSplitMode() != null) {
+      throw new BusinessRuleException(
+          "DPR_BOQ_OPERATION_REQUIRED",
+          "BOQ item " + item.getItemNo() + " is split into operations — DPRs against it must "
+              + "come through an activity linked to one of its operations.");
+    }
+  }
+
+  /** The activity's BOQ link (line + operation), both null when unlinked / no activity. */
+  private record ActivityBoqLink(UUID boqItemId, UUID boqOperationId) {}
+
+  /** Cross-schema probe: the activity's linked BOQ line + operation. */
+  private ActivityBoqLink activityBoqLink(UUID activityId) {
+    if (activityId == null || em == null) return new ActivityBoqLink(null, null);
+    @SuppressWarnings("unchecked")
+    List<Object[]> rows = em.createNativeQuery(
+            "SELECT boq_item_id, boq_operation_id FROM activity.activities WHERE id = :activityId")
+        .setParameter("activityId", activityId)
+        .getResultList();
+    if (rows.isEmpty()) return new ActivityBoqLink(null, null);
+    Object[] row = rows.get(0);
+    return new ActivityBoqLink(asUuid(row[0]), asUuid(row[1]));
+  }
+
+  private static UUID asUuid(Object v) {
+    if (v == null) return null;
+    return v instanceof UUID u ? u : UUID.fromString(v.toString());
   }
 
   // ─── Issue merge-by-id (deliberate divergence from full-replace) ──────────────────
@@ -1125,6 +1275,14 @@ public class DailyProgressReportService {
     } else if (wasTerminal && !isTerminal) {
       target.setResolvedAt(null);
     }
+    // closedAt mirrors DprIssueService.update(): CLOSED-specific, cleared on reopen.
+    boolean wasClosed = oldStatus == IssueStatus.CLOSED;
+    boolean isClosed = row.status() == IssueStatus.CLOSED;
+    if (!wasClosed && isClosed) {
+      target.setClosedAt(now);
+    } else if (wasClosed && !isClosed) {
+      target.setClosedAt(null);
+    }
   }
 
   /** Stamp a brand-new issue with snapshots from the parent DPR. */
@@ -1160,6 +1318,7 @@ public class DailyProgressReportService {
         .description(row.description())
         .openedAt(now)
         .resolvedAt(status.resolvedAtTerminal() ? now : null)
+        .closedAt(status == IssueStatus.CLOSED ? now : null)
         .resolutionNotes(row.resolutionNotes())
         .hseIncidentType(row.hseIncidentType())
         .build();
@@ -1722,6 +1881,25 @@ public class DailyProgressReportService {
           "ACTIVITY_DRAFT_DPR_REJECTED",
           "Cannot submit DPR against activity '" + code
               + "' — it is still in Draft. Lock the activity to start accepting DPRs.");
+    }
+  }
+
+  /**
+   * Hierarchy design H3/D10: a parent (grouping) activity takes no new DPRs — its progress
+   * rolls up from its children, so execution must be filed against the child that did the
+   * work. Cross-schema native check, same pattern as {@link #rejectIfActivityDraft}.
+   */
+  private void rejectIfActivityIsParent(UUID activityId) {
+    if (activityId == null || em == null) return;
+    Number n = (Number) em.createNativeQuery(
+            "SELECT count(*) FROM activity.activities WHERE parent_activity_id = :activityId")
+        .setParameter("activityId", activityId)
+        .getSingleResult();
+    if (n != null && n.longValue() > 0) {
+      throw new BusinessRuleException(
+          "ACTIVITY_IS_PARENT_DPR_REJECTED",
+          "This activity groups " + n + " child activities — file the DPR against the child "
+              + "activity that did the work.");
     }
   }
 

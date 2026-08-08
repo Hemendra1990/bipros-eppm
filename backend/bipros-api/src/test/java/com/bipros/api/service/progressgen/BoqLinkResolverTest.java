@@ -37,7 +37,7 @@ class BoqLinkResolverTest {
         id, UUID.randomUUID(), no, "desc", "Cum", UUID.randomUUID(),
         qty, BigDecimal.TEN,
         null, null, null, BigDecimal.TEN,
-        null, null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null);
   }
 
   // Helper: creates a BoqItem entity usable in repo mocks (resolved via BoqItemResponse.from).

@@ -2,7 +2,6 @@ package com.bipros.project.application.service;
 
 import com.bipros.project.domain.model.BoqItem;
 import com.bipros.project.domain.repository.BoqItemRepository;
-import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,14 +20,14 @@ import static org.mockito.Mockito.*;
 class BoqRebuildServiceTest {
 
   @Mock BoqItemRepository boqRepo;
-  @Mock DailyProgressReportRepository dprRepo;
+  @Mock BoqService boqService;
   @Mock BoqActualCostQuery boqActualCostQuery;
 
   BoqRebuildService service;
 
   @BeforeEach
   void setUp() {
-    service = new BoqRebuildService(boqRepo, dprRepo, boqActualCostQuery);
+    service = new BoqRebuildService(boqRepo, boqService, boqActualCostQuery);
   }
 
   @Test
@@ -41,7 +40,9 @@ class BoqRebuildServiceTest {
     item.setBudgetedRate(new BigDecimal("80")); item.setManualOverride(null);
 
     when(boqRepo.findByProjectId(projectId)).thenReturn(List.of(item));
-    when(dprRepo.sumQtyExecutedByBoqItemIdApproved(projectId, boqId)).thenReturn(new BigDecimal("200"));
+    // A10: qty is rebuilt by the canonical split-aware roll-up — simulate its write here.
+    doAnswer(inv -> { item.setQtyExecutedToDate(new BigDecimal("200")); return null; })
+        .when(boqService).recomputeExecutedQtyApproved(projectId, boqId);
     // shared cost query covers MP + EQ + MAT + SC + MCL (2000 = 1500 MP + 500 EQ + 0 MAT)
     when(boqActualCostQuery.sumActualCost(projectId, boqId)).thenReturn(new BigDecimal("2000"));
 
@@ -52,23 +53,27 @@ class BoqRebuildServiceTest {
     assertThat(item.getActualRate()).isEqualByComparingTo("10"); // 2000/200
     assertThat(item.getActualAmount()).isEqualByComparingTo("2000"); // recomputed by BoqCalculator
     verify(boqRepo).save(item);
-    // Assert the shared cost query and approved-only qty method are invoked
-    verify(dprRepo).sumQtyExecutedByBoqItemIdApproved(projectId, boqId);
+    verify(boqService).recomputeExecutedQtyApproved(projectId, boqId);
     verify(boqActualCostQuery).sumActualCost(projectId, boqId);
-    // Non-approved qty variant must NOT be called
-    verify(dprRepo, never()).sumQtyExecutedByBoqItemId(any(), any());
   }
 
   @Test
-  void skipsManualOverrideItems() {
+  void manualOverrideProtectsRateOnly() {
+    // A10 reconciliation: quantities are STILL rebuilt for overridden rows; only the
+    // manually-set actualRate is preserved (no rate write, no save from the rate branch).
     UUID projectId = UUID.randomUUID();
+    UUID boqId = UUID.randomUUID();
     BoqItem item = new BoqItem();
-    item.setId(UUID.randomUUID()); item.setProjectId(projectId); item.setManualOverride(Boolean.TRUE);
+    item.setId(boqId); item.setProjectId(projectId); item.setManualOverride(Boolean.TRUE);
+    item.setActualRate(new BigDecimal("123.4567"));
     when(boqRepo.findByProjectId(projectId)).thenReturn(List.of(item));
 
     int n = service.rebuildFromDprs(projectId);
 
-    assertThat(n).isZero();
+    assertThat(n).isEqualTo(1);
+    verify(boqService).recomputeExecutedQtyApproved(projectId, boqId);   // qty rebuilt
+    verify(boqActualCostQuery, never()).sumActualCost(any(), any());     // rate untouched
     verify(boqRepo, never()).save(any());
+    assertThat(item.getActualRate()).isEqualByComparingTo("123.4567");
   }
 }

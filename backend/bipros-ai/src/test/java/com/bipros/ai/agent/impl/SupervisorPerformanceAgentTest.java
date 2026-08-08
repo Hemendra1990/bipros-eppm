@@ -36,12 +36,20 @@ class SupervisorPerformanceAgentTest {
     private DailyProgressReportRepository dprRepository;
     @Mock
     private ActivityRepository activityRepository;
+    @Mock
+    private com.bipros.ai.agent.notify.StakeholderResolver stakeholderResolver;
 
     private SupervisorPerformanceAgent agent() {
+        // Responsible-person routing is exercised in StakeholderResolver's own tests; here it just
+        // needs to return a well-formed map so drafts carry non-null stakeholders.
+        org.mockito.Mockito.lenient()
+                .when(stakeholderResolver.pmPlusManagersOf(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Map.of("PROJECT_MANAGER", java.util.List.of()));
         // Optional.empty() = no reporting module wired in; the progress comparison must still stand
         // on its own, with efficiency simply absent.
         return new SupervisorPerformanceAgent(dprRepository, activityRepository,
-                java.util.Optional.empty(), new ObjectMapper());
+                java.util.Optional.empty(), new ObjectMapper(), stakeholderResolver);
     }
 
     private static Activity activity(double pct, LocalDate plannedFinish) {

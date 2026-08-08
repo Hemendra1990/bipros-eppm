@@ -1,0 +1,1631 @@
+{
+  "version": 1,
+  "source": "Requirements final - 01 Aug 2026.xlsx / Rates sheet",
+  "notes": "Salary/m is MONTHLY; the seeder derives the daily rate as salary / 26 (the sheet's own plant-rate convention). Rates rounded to 4 dp.",
+  "materials": [
+    {
+      "code": "CEMENT",
+      "name": "Cement",
+      "unit": "Bag",
+      "rate": "1.4500"
+    },
+    {
+      "code": "CONC15",
+      "name": "Concrete 15/20",
+      "unit": "Cum",
+      "rate": "20.3810"
+    },
+    {
+      "code": "CONC16",
+      "name": "Concrete 16/20",
+      "unit": "Cum",
+      "rate": null
+    },
+    {
+      "code": "CONC20",
+      "name": "Concrete 20/20",
+      "unit": "Cum",
+      "rate": null
+    },
+    {
+      "code": "CONC25",
+      "name": "Concrete 25/20",
+      "unit": "Cum",
+      "rate": "21.6460"
+    },
+    {
+      "code": "CONC30",
+      "name": "Concrete 30/20",
+      "unit": "Cum",
+      "rate": "25.3510"
+    },
+    {
+      "code": "CONC35",
+      "name": "Concrete 35/20(7% MS)",
+      "unit": "Cum",
+      "rate": "27.0030"
+    },
+    {
+      "code": "CONC40",
+      "name": "Concrete 40/20",
+      "unit": "Cum",
+      "rate": null
+    },
+    {
+      "code": "CONC45",
+      "name": "Concrete 45/20",
+      "unit": "Cum",
+      "rate": null
+    },
+    {
+      "code": "BLOCK",
+      "name": "Blocks",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "AGGR",
+      "name": "Aggregates",
+      "unit": "Cum",
+      "rate": "2.2810"
+    },
+    {
+      "code": "SAND",
+      "name": "Washed Sand",
+      "unit": "Cum",
+      "rate": "3.5000"
+    },
+    {
+      "code": "CSAND",
+      "name": "Crushed Sand",
+      "unit": "Cum",
+      "rate": "2.0000"
+    },
+    {
+      "code": "SHUTRNGCONS",
+      "name": "Shuttering Consumables",
+      "unit": "Cum",
+      "rate": "0.9500"
+    },
+    {
+      "code": "MISCCIVIL",
+      "name": "Miscellaneous Civil Works",
+      "unit": "Cum",
+      "rate": "0.9500"
+    },
+    {
+      "code": "STEELBAR",
+      "name": "High Yield Steel Bars",
+      "unit": "MT",
+      "rate": "290.0000"
+    },
+    {
+      "code": "MESH",
+      "name": "Reinforcement Mesh",
+      "unit": "Sqm",
+      "rate": "1.2000"
+    },
+    {
+      "code": "MSROD20",
+      "name": "MS Rod 20mm",
+      "unit": "Rmt",
+      "rate": "0.6300"
+    },
+    {
+      "code": "JBOLT",
+      "name": "J Bolt",
+      "unit": "Nos",
+      "rate": "1.2560"
+    },
+    {
+      "code": "STEEL",
+      "name": "Structural Steel",
+      "unit": "MT",
+      "rate": "425.0000"
+    },
+    {
+      "code": "6009",
+      "name": "Steel fabrications",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "ACDOOR",
+      "name": "Superstrucrure access door",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "FORM",
+      "name": "Ply Form Work",
+      "unit": "Sqm",
+      "rate": "4.9000"
+    },
+    {
+      "code": "RWWOOD",
+      "name": "Red / White wood runners",
+      "unit": "Lm",
+      "rate": "0.4735"
+    },
+    {
+      "code": "NAIL",
+      "name": "Nail 2.5\"",
+      "unit": "Kg",
+      "rate": "0.7667"
+    },
+    {
+      "code": "OILSHT",
+      "name": "Shuttering Oil",
+      "unit": "Ltr",
+      "rate": "0.4250"
+    },
+    {
+      "code": "6012",
+      "name": "Joinery Materials",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "GLASS",
+      "name": "Glass Items",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6017",
+      "name": "Aluminum, Steel doors & Windows",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "FLOOR",
+      "name": "Flooring sheets",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "RUBSHT",
+      "name": "Rubber sheets(300x400x8mm)",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "PVCBAR",
+      "name": "PVC water barrier",
+      "unit": "Lm",
+      "rate": "1.7500"
+    },
+    {
+      "code": "6018",
+      "name": "Roofing & Water proofing materials",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "WATPRF",
+      "name": "Water proofing materials",
+      "unit": "Kg",
+      "rate": null
+    },
+    {
+      "code": "6020",
+      "name": "Adhesives, Fillers, selants",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "BITUBOARD",
+      "name": "Bituminous Filler Board (20mm)",
+      "unit": "Sqm",
+      "rate": "2.3500"
+    },
+    {
+      "code": "EPOXY",
+      "name": "Epoxy Grout",
+      "unit": "Kg",
+      "rate": null
+    },
+    {
+      "code": "POLY",
+      "name": "Polysulphide Sealant",
+      "unit": "m",
+      "rate": "0.3850"
+    },
+    {
+      "code": "INTERTILE",
+      "name": "Interlock  tiles",
+      "unit": "Sqm",
+      "rate": "3.8000"
+    },
+    {
+      "code": "BITUPAINT",
+      "name": "Bituminous Paint",
+      "unit": "Ltr",
+      "rate": "0.2515"
+    },
+    {
+      "code": "CURBPAINT",
+      "name": "Curb Paint",
+      "unit": "Ltr",
+      "rate": null
+    },
+    {
+      "code": "BRIGPAINT",
+      "name": "Paint for bridge structures",
+      "unit": "Ltr",
+      "rate": null
+    },
+    {
+      "code": "6025",
+      "name": "Paints & Coating materials",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "PRIMER",
+      "name": "Primer for concrete structures",
+      "unit": "Ltr",
+      "rate": null
+    },
+    {
+      "code": "PRIMECOAT",
+      "name": "Prime Coat (MC 70 or Eqv.)",
+      "unit": "Kg",
+      "rate": "0.2520"
+    },
+    {
+      "code": "TACKCOAT",
+      "name": "Tack Coat",
+      "unit": "Kg",
+      "rate": "0.2080"
+    },
+    {
+      "code": "ABC",
+      "name": "ABC Material",
+      "unit": "Cum",
+      "rate": "0.5500"
+    },
+    {
+      "code": "STONE",
+      "name": "Boulders For Rip Rap",
+      "unit": "Cum",
+      "rate": "2.9616"
+    },
+    {
+      "code": "Rock",
+      "name": "Rock Armour(3 to 6 MT)",
+      "unit": "Cum",
+      "rate": "25.0000"
+    },
+    {
+      "code": "GSB",
+      "name": "Granular Subase",
+      "unit": "Cum",
+      "rate": "0.2300"
+    },
+    {
+      "code": "ROYALTY",
+      "name": "Embk/GSB Material",
+      "unit": "Cum",
+      "rate": "0.2200"
+    },
+    {
+      "code": "BBPAD",
+      "name": "Bridge Bearing - Elastomeric",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "EXPJOINT",
+      "name": "Bridge Expansion joints ( 50mm)",
+      "unit": "Lm",
+      "rate": null
+    },
+    {
+      "code": "BITPAD",
+      "name": "Expansion Joint Pad - Bituminous Pad",
+      "unit": "Sqm",
+      "rate": "2.3500"
+    },
+    {
+      "code": "CANTLEC1",
+      "name": "Cantilever C1",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "SIGNR1",
+      "name": "Chevron signs",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "SIGNC750",
+      "name": "Circular Signs 750 mm Dia",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "SIGNC900",
+      "name": "Circular Signs 900 mm Dia",
+      "unit": "Nos",
+      "rate": "29.2600"
+    },
+    {
+      "code": "SIGNC1200",
+      "name": "Circular Signs 1200 mm Dia",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "DUCTMARK",
+      "name": "Concrete marker blocks (250x300x250)",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "ENDANCH",
+      "name": "End Anchorage approach",
+      "unit": "Nos",
+      "rate": "154.0000"
+    },
+    {
+      "code": "FILTER",
+      "name": "Filter Material",
+      "unit": "Cum",
+      "rate": null
+    },
+    {
+      "code": "FLEDEL",
+      "name": "Flexible delineator",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "GANG2",
+      "name": "Gantry Sign G2",
+      "unit": "Nos",
+      "rate": "48.6500"
+    },
+    {
+      "code": "SIGNHR",
+      "name": "Highway sign, Rectangular Supplementary Plate",
+      "unit": "Sqm",
+      "rate": "40.0000"
+    },
+    {
+      "code": "6032",
+      "name": "Misc Road Items",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "MULTIPOST",
+      "name": "Multi Post",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "PLASBAR",
+      "name": "Plastic Barriers",
+      "unit": "Rm",
+      "rate": "9.2000"
+    },
+    {
+      "code": "PRECURBM",
+      "name": "Precast Mountable Curb",
+      "unit": "Lm",
+      "rate": "1.8000"
+    },
+    {
+      "code": "PRECURBNM",
+      "name": "Precast Non Mountable Curb",
+      "unit": "Lm",
+      "rate": "2.9000"
+    },
+    {
+      "code": "PRECURBFL",
+      "name": "Precast Flush Curb",
+      "unit": "Lm",
+      "rate": "1.8000"
+    },
+    {
+      "code": "PRECURBED",
+      "name": "Precast Edge Curb",
+      "unit": "Lm",
+      "rate": "1.7000"
+    },
+    {
+      "code": "PRECURBLP",
+      "name": "Precast Lip Curb",
+      "unit": "Lm",
+      "rate": "1.8000"
+    },
+    {
+      "code": "SIGNR",
+      "name": "Rectangular Signs",
+      "unit": "Sqm",
+      "rate": null
+    },
+    {
+      "code": "RDSTUD2",
+      "name": "Reflecting road studs cat eye",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "RDSTUDCAT1",
+      "name": "Reflecting road studs(1 Face)",
+      "unit": "Nos",
+      "rate": "4.7500"
+    },
+    {
+      "code": "RDSTUDCAT",
+      "name": "Reflecting road studs(2 Face)",
+      "unit": "Nos",
+      "rate": "5.2250"
+    },
+    {
+      "code": "REFLECT",
+      "name": "Reflectors",
+      "unit": "Nos",
+      "rate": "5.0000"
+    },
+    {
+      "code": "RDCONES",
+      "name": "Road cones",
+      "unit": "Nos",
+      "rate": "3.4000"
+    },
+    {
+      "code": "SBPOST",
+      "name": "Safety Barrier Post",
+      "unit": "Nos",
+      "rate": "12.6900"
+    },
+    {
+      "code": "SBEAMW",
+      "name": "Saftey Beam \"W\" Beam",
+      "unit": "Lm",
+      "rate": "6.3000"
+    },
+    {
+      "code": "SIGNFACE3",
+      "name": "Sign Face 18-20 Sqm",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "SIGNFACE1",
+      "name": "Sign Face 2-4 Sqm",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "SIGNFACE2",
+      "name": "Sign Face 6-8Sqm",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "SIGNPSIN",
+      "name": "Single post",
+      "unit": "Nos",
+      "rate": "48.6500"
+    },
+    {
+      "code": "FISHTAIL",
+      "name": "Terminal Section",
+      "unit": "Nos",
+      "rate": "65.0000"
+    },
+    {
+      "code": "FABRIC",
+      "name": "Filter Membrane",
+      "unit": "Sqm",
+      "rate": null
+    },
+    {
+      "code": "SIGNT1200",
+      "name": "Traingular Signs 1200 mm sided",
+      "unit": "Sqm",
+      "rate": null
+    },
+    {
+      "code": "SIGNT750",
+      "name": "Traingular Signs 750 mm sided",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "SIGNT900",
+      "name": "Traingular Signs 900 mm sided",
+      "unit": "Nos",
+      "rate": "25.0000"
+    },
+    {
+      "code": "6035",
+      "name": "Cables & wires",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6036",
+      "name": "Distribution boads, Conduits",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6037",
+      "name": "Lamps & Luminaries",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6038",
+      "name": "Cable Laying, Joining materails",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6039",
+      "name": "Switches, sockets & Control",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6040",
+      "name": "Condut support & accessories",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6042",
+      "name": "Electrical hard ware",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6043",
+      "name": "Electrical machinary & Equipments",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6045",
+      "name": "General Building Material",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "AC100",
+      "name": "100 mm RCC Pipes",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "AC300",
+      "name": "300 mm RCC Pipes",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "AC400",
+      "name": "400 mm RCC Pipes",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "AC500",
+      "name": "500 mm RCC Pipes",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "AC600",
+      "name": "600 mm RCC Pipes",
+      "unit": "m",
+      "rate": "44.5000"
+    },
+    {
+      "code": "AC750",
+      "name": "750 mm RCC Pipes",
+      "unit": "m",
+      "rate": "44.5000"
+    },
+    {
+      "code": "AC1000",
+      "name": "1000 mm RCC Pipes",
+      "unit": "m",
+      "rate": "82.6000"
+    },
+    {
+      "code": "AC1200",
+      "name": "1200 mm RCC Pipes",
+      "unit": "m",
+      "rate": "44.5000"
+    },
+    {
+      "code": "AC1500",
+      "name": "1500 mm RCC Pipes",
+      "unit": "m",
+      "rate": "128.0000"
+    },
+    {
+      "code": "AC900",
+      "name": "900 mm RCC Pipes",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "DPIPE100",
+      "name": "Drainage Pipe(100mmdia)",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "HDPE1.2",
+      "name": "HDPE 1.2mm sheet",
+      "unit": "m",
+      "rate": "0.8500"
+    },
+    {
+      "code": "HDPE30",
+      "name": "HDPE 30 mm dia",
+      "unit": "m",
+      "rate": "0.3500"
+    },
+    {
+      "code": "HDPE300",
+      "name": "HDPE 300 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "HDPE400",
+      "name": "HDPE 400 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "HDPE500",
+      "name": "HDPE 500 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "HDPE600",
+      "name": "HDPE 600 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "HDPE900",
+      "name": "HDPE 900 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "HDPE1000",
+      "name": "HDPE 1000 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "Bundledct",
+      "name": "5way Bundle duct 32mm each",
+      "unit": "m",
+      "rate": "1.9015"
+    },
+    {
+      "code": "6046",
+      "name": "Pipes & Pipe fittings",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "PVC1000",
+      "name": "Polythene Sheet",
+      "unit": "Sqm",
+      "rate": "0.1300"
+    },
+    {
+      "code": "UPVC100",
+      "name": "UPVC 100 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "UPVC150",
+      "name": "UPVC 150 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "UPVC150SP",
+      "name": "UPVC 150 mm split duct",
+      "unit": "m",
+      "rate": "5.6000"
+    },
+    {
+      "code": "UPVC200",
+      "name": "UPVC 200 mm dia",
+      "unit": "m",
+      "rate": "5.9000"
+    },
+    {
+      "code": "UPVC300",
+      "name": "UPVC 300 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "UPVC75",
+      "name": "UPVC 75 mm dia",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "GI75",
+      "name": "GI Pipe 75mm",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "GI150",
+      "name": "GI Pipe 150mm",
+      "unit": "m",
+      "rate": null
+    },
+    {
+      "code": "6047",
+      "name": "Sanrtary wares, Euipments",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6052",
+      "name": "E.E Items ( P.H.E)",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6055",
+      "name": "Iron Mongery",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "ALUMSHT",
+      "name": "Aluminum sheets for temp. sign boards",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "BWIRE",
+      "name": "Binding Wire",
+      "unit": "Kg",
+      "rate": "0.5500"
+    },
+    {
+      "code": "BWIREST",
+      "name": "Binding Wire (Steel)",
+      "unit": "Kg",
+      "rate": null
+    },
+    {
+      "code": "CHLINK",
+      "name": "CHIAINLINK",
+      "unit": null,
+      "rate": null
+    },
+    {
+      "code": "DICOV1000",
+      "name": "DI COVER 1000 x1000 heavy duty",
+      "unit": "Nos",
+      "rate": "22.0000"
+    },
+    {
+      "code": "DICOV600",
+      "name": "DI COVER 600 x600 heavy duty",
+      "unit": "Nos",
+      "rate": "28.0000"
+    },
+    {
+      "code": "GRATING",
+      "name": "Steel Grating 600x600",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "GABION",
+      "name": "Gabions(500mm)",
+      "unit": "Cum",
+      "rate": "8.0750"
+    },
+    {
+      "code": "GABION1",
+      "name": "Gabions(1000mm)",
+      "unit": "Cum",
+      "rate": "6.7000"
+    },
+    {
+      "code": "GABION2",
+      "name": "Gabions(1500mm)",
+      "unit": "Cum",
+      "rate": "6.5000"
+    },
+    {
+      "code": "GEOTEX",
+      "name": "Geo Textile",
+      "unit": "Sqm",
+      "rate": "0.5600"
+    },
+    {
+      "code": "Geocell",
+      "name": "Geo Cell",
+      "unit": "Sqm",
+      "rate": "0.8000"
+    },
+    {
+      "code": "6056",
+      "name": "General Hard ware",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "HANDRAIL",
+      "name": "Hand Rails for Bridges",
+      "unit": "Rm",
+      "rate": null
+    },
+    {
+      "code": "HTSWIRE",
+      "name": "HTS Wire for Pre-Stressing",
+      "unit": "MT",
+      "rate": null
+    },
+    {
+      "code": "6057",
+      "name": "Cating & Moulds",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "MOULD",
+      "name": "Steel Mould",
+      "unit": "Sqm",
+      "rate": null
+    },
+    {
+      "code": "6060",
+      "name": "Welding & Gas Cutting (Consumables)",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6064",
+      "name": "Safety , Fire fighting & Unifrims",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6068",
+      "name": "Hand Tools",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6069",
+      "name": "EDP Accessories",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6070",
+      "name": "Mechnaical Equipments",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6074",
+      "name": "Valves",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6075",
+      "name": "Sapres for Macninary",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "6079",
+      "name": "Misc. Store Items",
+      "unit": "LS",
+      "rate": null
+    },
+    {
+      "code": "SPACER",
+      "name": "Spacer Blocks",
+      "unit": "Nos",
+      "rate": "0.0100"
+    },
+    {
+      "code": "WATER",
+      "name": "Construction Water",
+      "unit": "Trip",
+      "rate": "5.0000"
+    },
+    {
+      "code": "6284",
+      "name": "Utilities - Cons. Water",
+      "unit": "Trip",
+      "rate": null
+    },
+    {
+      "code": "ASPHALTBC",
+      "name": "Asphalt Base Course",
+      "unit": "MT",
+      "rate": "11.5000"
+    },
+    {
+      "code": "ASPHALTWC",
+      "name": "Asphalt Wearing Course",
+      "unit": "MT",
+      "rate": "12.5000"
+    },
+    {
+      "code": "IRWLIN",
+      "name": "Irish Crossing Water Level Indicator",
+      "unit": "Nos",
+      "rate": null
+    },
+    {
+      "code": "MANHOL400",
+      "name": "Manhole Type 4",
+      "unit": "Nos",
+      "rate": "93.0000"
+    },
+    {
+      "code": "MANHOL600",
+      "name": "Manhole Type 6",
+      "unit": "Nos",
+      "rate": "165.0000"
+    },
+    {
+      "code": "HSCLO",
+      "name": "Haissen Cloth",
+      "unit": "Sqm",
+      "rate": "0.1200"
+    },
+    {
+      "code": "BRSHTR",
+      "name": "Barrier Steel Shutter",
+      "unit": "m",
+      "rate": "0.8800"
+    },
+    {
+      "code": "bolard",
+      "name": "Steel Bolard",
+      "unit": "Nos",
+      "rate": "28.0000"
+    },
+    {
+      "code": "bolard1",
+      "name": "Steel Bolard",
+      "unit": "Nos",
+      "rate": "28.0000"
+    },
+    {
+      "code": "Thermoplas",
+      "name": "Thermoplastic paint",
+      "unit": "Kg",
+      "rate": null
+    },
+    {
+      "code": "Glassbeed",
+      "name": "Glass beeds",
+      "unit": "Kg",
+      "rate": null
+    }
+  ],
+  "equipment": [
+    {
+      "code": "APV",
+      "name": "Asphalt/ABC Paver",
+      "ratePerDay": "109.0920",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "AC1",
+      "name": "Air Compressor",
+      "ratePerDay": "3.8462",
+      "operatorCode": null
+    },
+    {
+      "code": "ASC",
+      "name": "Asphalt Cutter",
+      "ratePerDay": "1.2000",
+      "operatorCode": null
+    },
+    {
+      "code": "B25",
+      "name": "Bus - 15/25 Seater",
+      "ratePerDay": "30.0000",
+      "operatorCode": "LVD"
+    },
+    {
+      "code": "Amb",
+      "name": "Ambulance",
+      "ratePerDay": "30.0000",
+      "operatorCode": "LVD"
+    },
+    {
+      "code": "B66",
+      "name": "Bus 66 Seater",
+      "ratePerDay": "40.0000",
+      "operatorCode": "DRN"
+    },
+    {
+      "code": "BBM",
+      "name": "Bar Bending machine",
+      "ratePerDay": "0.7692",
+      "operatorCode": null
+    },
+    {
+      "code": "BCM",
+      "name": "Bar Cutting machine",
+      "ratePerDay": "0.7692",
+      "operatorCode": null
+    },
+    {
+      "code": "BST",
+      "name": "Bitumen Sprayer",
+      "ratePerDay": "31.4600",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "CRV",
+      "name": "Cargo Vechicle",
+      "ratePerDay": null,
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "CMT",
+      "name": "Hiab (Crane Mounted Truck)",
+      "ratePerDay": "35.0000",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "CRN",
+      "name": "Crane 20T",
+      "ratePerDay": "60.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "CRN-160",
+      "name": "Crane 50-150 T",
+      "ratePerDay": "104.0700",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "fork",
+      "name": "Fork lift",
+      "ratePerDay": "40.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "Manlift",
+      "name": "Manlift",
+      "ratePerDay": "20.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "CNT",
+      "name": "Canter",
+      "ratePerDay": "25.0000",
+      "operatorCode": "LVD"
+    },
+    {
+      "code": "DD",
+      "name": "DD 25",
+      "ratePerDay": null,
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "DWP",
+      "name": "Dewatering pump",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "DPR",
+      "name": "Dumper",
+      "ratePerDay": "110.0000",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "DZR",
+      "name": "Bull Dozer",
+      "ratePerDay": "100.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "EXV",
+      "name": "Excavator -480LC+Breaker",
+      "ratePerDay": "105.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "EXVB",
+      "name": "Excavator+Breaker",
+      "ratePerDay": null,
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "GRD",
+      "name": "Grader",
+      "ratePerDay": "80.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "JCB",
+      "name": "JCB",
+      "ratePerDay": "30.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "LAL",
+      "name": "Load all",
+      "ratePerDay": null,
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "MMC",
+      "name": "Mixer M/C",
+      "ratePerDay": "35.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "MMT",
+      "name": "Transit Mixer",
+      "ratePerDay": null,
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "PDL",
+      "name": "Post  Driving M/C",
+      "ratePerDay": "44.7500",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "PDR",
+      "name": "Pedestrian Roller",
+      "ratePerDay": "4.4200",
+      "operatorCode": null
+    },
+    {
+      "code": "PG2",
+      "name": "P/Generator 50 to 200 KVA",
+      "ratePerDay": "11.5385",
+      "operatorCode": null
+    },
+    {
+      "code": "PG1",
+      "name": "P/Generator Upto 10 to 25 KVA",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "PG3",
+      "name": "P/Generator Upto 40 KVA",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "PGT",
+      "name": "P/Generator with tower light",
+      "ratePerDay": "2.3077",
+      "operatorCode": null
+    },
+    {
+      "code": "PLC",
+      "name": "Plate Compactor",
+      "ratePerDay": "0.5769",
+      "operatorCode": null
+    },
+    {
+      "code": "GRM",
+      "name": "Guard Rail Machine",
+      "ratePerDay": "15.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "10seat",
+      "name": "10 Seater Land cruiser",
+      "ratePerDay": "7.6923",
+      "operatorCode": "LVD"
+    },
+    {
+      "code": "PMR",
+      "name": "Prime Mover & low bed",
+      "ratePerDay": "100.0000",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "PU4",
+      "name": "4x 4 Pick Up",
+      "ratePerDay": "10.0000",
+      "operatorCode": "LVD"
+    },
+    {
+      "code": "STW",
+      "name": "Station Wagon",
+      "ratePerDay": "10.0000",
+      "operatorCode": "LVD"
+    },
+    {
+      "code": "SVL",
+      "name": "Shovel",
+      "ratePerDay": "60.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "TKF",
+      "name": "Fuel Tanker-4x4-2200 Gln",
+      "ratePerDay": "40.0000",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "TKS",
+      "name": "Sewage Tanker",
+      "ratePerDay": "57.6923",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "TKW",
+      "name": "Water Tanker",
+      "ratePerDay": "40.0000",
+      "operatorCode": "DRN"
+    },
+    {
+      "code": "TLR",
+      "name": "Trailor-Flat Bed",
+      "ratePerDay": null,
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "TPR",
+      "name": "Tipper-18 Cum",
+      "ratePerDay": "50.0000",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "TRH",
+      "name": "Tandem Roller",
+      "ratePerDay": "31.1590",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "TRM",
+      "name": "Tandom Roller Mini",
+      "ratePerDay": "12.3100",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "TYR",
+      "name": "Tyre Roller",
+      "ratePerDay": "30.1100",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "VBR",
+      "name": "Vibratory Roller",
+      "ratePerDay": "37.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "VBT",
+      "name": "Vibrator",
+      "ratePerDay": "1.3000",
+      "operatorCode": null
+    },
+    {
+      "code": "CRU",
+      "name": "Crusher",
+      "ratePerDay": "190.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "WG",
+      "name": "Welding Generator",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "FV",
+      "name": "Form Vibrater",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "WC",
+      "name": "Wood cutter",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "PL",
+      "name": "Wood Planer",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "WPU",
+      "name": "Water Pump",
+      "ratePerDay": null,
+      "operatorCode": null
+    },
+    {
+      "code": "EXT",
+      "name": "Exteck Crusher (Maintenance)",
+      "ratePerDay": "200.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "BOB",
+      "name": "Bobcat-Skid steer loader",
+      "ratePerDay": "12.0000",
+      "operatorCode": "OPE"
+    },
+    {
+      "code": "ARTTPR",
+      "name": "Articulated tippers",
+      "ratePerDay": "110.0000",
+      "operatorCode": "DRE"
+    },
+    {
+      "code": "PSCreen",
+      "name": "Power screen",
+      "ratePerDay": "150.0000",
+      "operatorCode": "OPE"
+    }
+  ],
+  "manpower": [
+    {
+      "code": "OPN",
+      "title": "Operators",
+      "variants": [
+        {
+          "lCode": "OPN",
+          "category": "National",
+          "salaryPerMonth": "0.0000"
+        },
+        {
+          "lCode": "OPE",
+          "category": "Expat",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "LVD",
+      "title": "Drivers National(LVD)",
+      "variants": [
+        {
+          "lCode": "LVD",
+          "category": "National",
+          "salaryPerMonth": "750.0000"
+        }
+      ]
+    },
+    {
+      "code": "DRN",
+      "title": "Drivers National(HDD)",
+      "variants": [
+        {
+          "lCode": "DRN",
+          "category": "National",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "DRE",
+      "title": "Drivers Expat(HDD)",
+      "variants": [
+        {
+          "lCode": "DRE",
+          "category": "Expat",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "CHE",
+      "title": "Chargehand",
+      "variants": [
+        {
+          "lCode": "CHE",
+          "category": "Expat",
+          "salaryPerMonth": "205.0000"
+        },
+        {
+          "lCode": "CHN",
+          "category": "National",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "MAS",
+      "title": "Mason",
+      "variants": [
+        {
+          "lCode": "MAS",
+          "category": "Expat",
+          "salaryPerMonth": "163.0000"
+        }
+      ]
+    },
+    {
+      "code": "CAR",
+      "title": "Carpenter",
+      "variants": [
+        {
+          "lCode": "CAR",
+          "category": "Expat",
+          "salaryPerMonth": "163.0000"
+        }
+      ]
+    },
+    {
+      "code": "SCM",
+      "title": "Screw Man",
+      "variants": [
+        {
+          "lCode": "SCM",
+          "category": "Expat",
+          "salaryPerMonth": "300.0000"
+        }
+      ]
+    },
+    {
+      "code": "RCM",
+      "title": "Rack Man",
+      "variants": [
+        {
+          "lCode": "RCM",
+          "category": "Expat",
+          "salaryPerMonth": "300.0000"
+        }
+      ]
+    },
+    {
+      "code": "ELECTRICIAN",
+      "title": "Electrician",
+      "variants": [
+        {
+          "lCode": null,
+          "category": "Expat",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "PLM",
+      "title": "Plumber",
+      "variants": [
+        {
+          "lCode": "PLM",
+          "category": "Expat",
+          "salaryPerMonth": "200.0000"
+        }
+      ]
+    },
+    {
+      "code": "FIX",
+      "title": "Steel Fixer",
+      "variants": [
+        {
+          "lCode": "FIX",
+          "category": "Expat",
+          "salaryPerMonth": "163.0000"
+        }
+      ]
+    },
+    {
+      "code": "SWR",
+      "title": "Sign Writer",
+      "variants": [
+        {
+          "lCode": "SWR",
+          "category": "Expat",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "TCE",
+      "title": "Technician",
+      "variants": [
+        {
+          "lCode": "TCE",
+          "category": "Expat",
+          "salaryPerMonth": "0.0000"
+        },
+        {
+          "lCode": "TCN",
+          "category": "National",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "HSE",
+      "title": "Helper Skilled",
+      "variants": [
+        {
+          "lCode": "HSE",
+          "category": "Expat",
+          "salaryPerMonth": "244.0000"
+        },
+        {
+          "lCode": "HSN",
+          "category": "National",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "HLE",
+      "title": "Helper Unskilled",
+      "variants": [
+        {
+          "lCode": "HLE",
+          "category": "Expat",
+          "salaryPerMonth": "138.0000"
+        },
+        {
+          "lCode": "HLN",
+          "category": "National",
+          "salaryPerMonth": "0.0000"
+        }
+      ]
+    },
+    {
+      "code": "WMN",
+      "title": "Watchman",
+      "variants": [
+        {
+          "lCode": "WMN",
+          "category": "National",
+          "salaryPerMonth": "450.0000"
+        }
+      ]
+    },
+    {
+      "code": "HLS",
+      "title": "Sur.Helper",
+      "variants": [
+        {
+          "lCode": "HLS",
+          "category": "Expat",
+          "salaryPerMonth": "161.0000"
+        }
+      ]
+    },
+    {
+      "code": "ele",
+      "title": "Electrician & AC Technician",
+      "variants": [
+        {
+          "lCode": "ele",
+          "category": "Expat",
+          "salaryPerMonth": "259.0000"
+        }
+      ]
+    }
+  ]
+}

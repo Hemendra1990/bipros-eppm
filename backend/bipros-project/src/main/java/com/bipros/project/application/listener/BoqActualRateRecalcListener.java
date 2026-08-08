@@ -7,7 +7,6 @@ import com.bipros.project.application.service.BoqActualCostQuery;
 import com.bipros.project.application.service.BoqCalculator;
 import com.bipros.project.domain.model.BoqItem;
 import com.bipros.project.domain.repository.BoqItemRepository;
-import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
@@ -33,12 +32,12 @@ import java.util.UUID;
  *   actualRate = SUM(DPR child contributions ×  assignment.effective_rate)
  *              + SUM(material_consumption_logs.line_cost where activity_id ∈ DPRs)
  *              ─────────────────────────────────────────────────────────────────
- *              SUM(daily_progress_reports.qty_executed where boq_item_id = X)
+ *              BoqItem.qtyExecutedToDate   (the line's MEASURED quantity — A5)
  * </pre>
  *
  * <p>Rows with {@code manualOverride = TRUE} are skipped — the user has explicitly set the rate
- * and we will not overwrite it. Items where the denominator is zero are skipped to avoid
- * divide-by-zero.
+ * and we will not overwrite it. A zero denominator writes {@code actualRate = 0} (a full revoke
+ * must clear the phantom rate, edge 16).
  *
  * <p>Synchronous (no {@code @TransactionalEventListener}): runs in the same TX as the DPR write
  * so a rate-recalc failure rolls the DPR back. The recompute touches a single row per item and
@@ -53,12 +52,14 @@ public class BoqActualRateRecalcListener {
   private static final int RATE_SCALE = 4;
 
   private final BoqItemRepository boqItemRepository;
-  private final DailyProgressReportRepository dprRepository;
   private final BoqActualCostQuery boqActualCostQuery;
 
   @PersistenceContext
   private EntityManager em;
 
+  // Order 20: runs AFTER DprBoqSyncListener (order 10) — the denominator below is the measured
+  // qtyExecutedToDate that listener just wrote (A5).
+  @org.springframework.core.annotation.Order(20)
   @EventListener
   @Transactional
   public void onDprSubmitted(DprSubmittedEvent event) {
@@ -122,9 +123,16 @@ public class BoqActualRateRecalcListener {
       return;
     }
 
-    BigDecimal qty = dprRepository.sumQtyExecutedByBoqItemIdApproved(projectId, boqItemId);
+    // A5: divide by the line's stored MEASURED quantity — on a split line the flat all-operations
+    // DPR sum would dilute actualRate and actualAmount would lose the non-measured spend.
+    // DprBoqSyncListener (order 10) wrote this value in the same transaction.
+    BigDecimal qty = item.getQtyExecutedToDate();
     if (qty == null || qty.signum() == 0) {
-      log.debug("[BoqActualRateRecalc] skip zero qty boqItemId={}", boqItemId);
+      // Edge 16: after a full revoke, clear the phantom rate instead of leaving the last value.
+      item.setActualRate(BigDecimal.ZERO);
+      BoqCalculator.recompute(item);
+      boqItemRepository.save(item);
+      log.info("[BoqActualRateRecalc] boqItemId={} zero qty — actualRate cleared", boqItemId);
       return;
     }
 

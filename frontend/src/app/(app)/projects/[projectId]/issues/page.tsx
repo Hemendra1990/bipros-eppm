@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +31,17 @@ const inputCls =
 
 const TERMINAL: IssueStatus[] = ["RESOLVED", "CLOSED"];
 
+/** Instants (openedAt/resolvedAt/closedAt) render as date + clock time. */
+function fmtDateTime(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+type IssueSortKey = "openedAt" | "resolvedAt";
+
 export default function ProjectIssuesPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
@@ -39,6 +50,10 @@ export default function ProjectIssuesPage() {
   const [filters, setFilters] = useState<DprIssueFilters>({});
   const [statusMenu, setStatusMenu] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
+  const [sort, setSort] = useState<{ key: IssueSortKey | null; dir: "asc" | "desc" }>({
+    key: null,
+    dir: "desc",
+  });
 
   // Create/edit happen in a right-side drawer launched from this page.
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -86,6 +101,26 @@ export default function ProjectIssuesPage() {
   });
 
   const rows: DprIssueRow[] = data?.data ?? [];
+
+  // Client-side sort on the timestamp columns; null stamps always sort last.
+  const sortedRows = useMemo(() => {
+    if (!sort.key) return rows;
+    const k = sort.key;
+    const mult = sort.dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const av = a[k] ? new Date(a[k] as string).getTime() : null;
+      const bv = b[k] ? new Date(b[k] as string).getTime() : null;
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      return (av - bv) * mult;
+    });
+  }, [rows, sort]);
+
+  const toggleSort = (key: IssueSortKey) =>
+    setSort((s) =>
+      s.key === key ? { key, dir: s.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" },
+    );
 
   const setFilter = <K extends keyof DprIssueFilters>(k: K, v: DprIssueFilters[K]) =>
     setFilters((f) => ({ ...f, [k]: v || undefined }));
@@ -192,20 +227,37 @@ export default function ProjectIssuesPage() {
           <table className="min-w-full divide-y divide-border text-sm">
             <thead className="bg-surface-hover">
               <tr>
-                {["Title", "Category", "Severity", "Status", "Assigned To", "Date", "Activity", ""].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-muted"
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
+                {["Title", "Category", "Severity", "Status", "Assigned To", "Date"].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-muted"
+                  >
+                    {h}
+                  </th>
+                ))}
+                {(["openedAt", "resolvedAt"] as const).map((k) => (
+                  <th
+                    key={k}
+                    onClick={() => toggleSort(k)}
+                    className="cursor-pointer select-none px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-muted hover:text-text-primary"
+                    title="Click to sort"
+                  >
+                    {k === "openedAt" ? "Opened" : "Resolved"}
+                    {sort.key === k ? (sort.dir === "desc" ? " ↓" : " ↑") : ""}
+                  </th>
+                ))}
+                {["Activity", ""].map((h) => (
+                  <th
+                    key={h || "actions"}
+                    className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-muted"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border bg-surface">
-              {rows.map((row) => (
+              {sortedRows.map((row) => (
                 <tr key={row.id} className="hover:bg-surface-hover">
                   <td className="px-4 py-3 font-medium text-text-primary max-w-xs truncate">
                     {row.title}
@@ -271,6 +323,12 @@ export default function ProjectIssuesPage() {
                     {row.reportDate
                       ? new Date(row.reportDate).toLocaleDateString()
                       : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-text-muted whitespace-nowrap">
+                    {fmtDateTime(row.openedAt)}
+                  </td>
+                  <td className="px-4 py-3 text-text-muted whitespace-nowrap">
+                    {fmtDateTime(row.resolvedAt)}
                   </td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap max-w-[160px] truncate">
                     {row.activityName ?? "—"}

@@ -42,6 +42,7 @@ export default function NewActivityPage() {
     supervisorUserId: string;
     supervisorUserName: string;
     preliminary: boolean;
+    parentActivityId: string;
   }>({
     code: "",
     name: "",
@@ -57,6 +58,7 @@ export default function NewActivityPage() {
     supervisorUserId: "",
     supervisorUserName: "",
     preliminary: false,
+    parentActivityId: "",
   });
 
   const [error, setError] = useState("");
@@ -104,6 +106,17 @@ export default function NewActivityPage() {
 
   // Flatten WBS tree for dropdown
   const flattenedWbs = flattenWbsNodes(wbsNodes);
+
+  // Parent activity candidates (hierarchy D10) — any project activity. The backend rejects
+  // cycles and parents holding schedule links; the picked parent's code prefixes this one's.
+  const { data: parentCandidatesData } = useQuery({
+    queryKey: ["activities", projectId, "all-for-parent-picker"],
+    queryFn: () => activityApi.listActivities(projectId, 0, 1000),
+  });
+  const parentOptions = (parentCandidatesData?.data?.content ?? []).map((a) => ({
+    value: a.id,
+    label: `${a.code} — ${a.name}`,
+  }));
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -154,6 +167,7 @@ export default function NewActivityPage() {
         // DBS-Phase-2 BOQ Section 1 (Preliminaries) flag. Only send when explicitly ticked so
         // the backend's null-means-default contract is preserved.
         preliminary: formData.preliminary || undefined,
+        parentActivityId: formData.parentActivityId || undefined,
       };
 
       const result = await activityApi.createActivity(projectId, createRequest);
@@ -329,6 +343,23 @@ export default function NewActivityPage() {
               />
               {fieldErrors.wbsNodeId && <p className="mt-1 text-xs text-danger">{fieldErrors.wbsNodeId}</p>}
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Parent activity</label>
+              <SearchableSelect
+                value={formData.parentActivityId}
+                onChange={(val) => setFormData((prev) => ({ ...prev, parentActivityId: val }))}
+                placeholder="— none (top-level) —"
+                options={parentOptions}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Optional. The new activity nests under the parent and its code becomes
+                parentCode.segment. Parents are grouping nodes — they take no DPRs or resource plan.
+              </p>
+            </div>
+            <div />
           </div>
 
           <div className="grid grid-cols-2 gap-6">

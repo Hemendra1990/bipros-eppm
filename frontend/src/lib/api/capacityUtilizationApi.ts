@@ -378,6 +378,31 @@ export const capacityUtilizationApi = {
       .then((r) => r.data);
   },
 
+  /**
+   * Client-format "Resource Capacity Utilization Report" workbook (Plant utilization /
+   * Manpower utilization / SUMMARY sheets, per-resource → per-activity rows) for the
+   * page's current filter window. Returns the .xlsx as a blob.
+   */
+  downloadClientWorkbook: (params: {
+    projectId: string;
+    fromDate: string;
+    toDate: string;
+    workDays?: number;
+    supervisorUserId?: string;
+  }) =>
+    apiClient.get(`/v1/reports/capacity-utilization/excel`, {
+      responseType: "blob",
+      params: {
+        projectId: params.projectId,
+        fromDate: params.fromDate,
+        toDate: params.toDate,
+        workDays: params.workDays ?? 26,
+        ...(params.supervisorUserId
+          ? { supervisorUserId: params.supervisorUserId }
+          : {}),
+      },
+    }),
+
   getSupervisorsUsed: (params: {
     projectId: string;
     fromDate?: string;

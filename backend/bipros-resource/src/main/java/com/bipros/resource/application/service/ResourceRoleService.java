@@ -7,6 +7,7 @@ import com.bipros.resource.application.dto.ResourceRoleRequest;
 import com.bipros.resource.application.dto.ResourceRoleResponse;
 import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceType;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
 import com.bipros.resource.domain.repository.ResourceTypeRepository;
@@ -28,6 +29,7 @@ public class ResourceRoleService {
   private final ResourceRoleRepository roleRepository;
   private final ResourceTypeRepository typeRepository;
   private final ResourceRepository resourceRepository;
+  private final ResourceAssignmentRepository assignmentRepository;
   private final AuditService auditService;
 
   @Transactional(readOnly = true)
@@ -117,6 +119,24 @@ public class ResourceRoleService {
       throw new BusinessRuleException("RESOURCE_ROLE_IN_USE",
           "Resource Role '" + r.getName() + "' is used by " + usage
               + " resource(s) and cannot be deleted");
+    }
+
+    // A role referenced by activity resource plans or historical DPR lines must never be
+    // hard-deleted — those tables have no DB foreign keys, so the rows would silently orphan.
+    // Deactivating instead keeps history intact and hides the role from the DPR pickers.
+    long planUsage = assignmentRepository.countByRoleId(id);
+    if (planUsage > 0) {
+      throw new BusinessRuleException("RESOURCE_ROLE_IN_USE",
+          "Resource Role '" + r.getName() + "' is used by " + planUsage
+              + " activity resource plan line(s) and cannot be deleted. Untick Active instead to"
+              + " retire it — history stays intact and it disappears from the DPR dropdowns.");
+    }
+    long dprUsage = roleRepository.countDprUsage(id);
+    if (dprUsage > 0) {
+      throw new BusinessRuleException("RESOURCE_ROLE_IN_USE",
+          "Resource Role '" + r.getName() + "' appears on " + dprUsage
+              + " historical DPR line(s) and cannot be deleted. Untick Active instead to retire"
+              + " it — history stays intact and it disappears from the DPR dropdowns.");
     }
 
     roleRepository.delete(r);

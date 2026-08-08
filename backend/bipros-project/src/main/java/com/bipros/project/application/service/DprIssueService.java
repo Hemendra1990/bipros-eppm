@@ -128,6 +128,15 @@ public class DprIssueService {
             } else if (wasTerminal && !isTerminal) {
                 issue.setResolvedAt(null);
             }
+            // closedAt is CLOSED-specific (resolvedAt is stamped by the FIRST terminal
+            // status, so RESOLVED→CLOSED would otherwise leave no trace of the close time).
+            boolean wasClosed = oldStatus == IssueStatus.CLOSED;
+            boolean isClosed = newStatus == IssueStatus.CLOSED;
+            if (!wasClosed && isClosed) {
+                issue.setClosedAt(Instant.now());
+            } else if (wasClosed && !isClosed) {
+                issue.setClosedAt(null);
+            }
             String historyReason =
                     request.statusChangeReason() != null && !request.statusChangeReason().isBlank()
                             ? request.statusChangeReason()
@@ -185,6 +194,7 @@ public class DprIssueService {
                 .description(req.description())
                 .openedAt(Instant.now())
                 .resolvedAt(status.resolvedAtTerminal() ? Instant.now() : null)
+                .closedAt(status == IssueStatus.CLOSED ? Instant.now() : null)
                 .hseIncidentType(req.hseIncidentType())
                 .build();
         DprIssue saved = issueRepository.save(issue);

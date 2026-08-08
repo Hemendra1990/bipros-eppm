@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CalendarDays, CheckCircle2, Clock, History, UserRound } from "lucide-react";
+import { AlertCircle, CalendarDays, CheckCircle2, Clock, History, Lock, UserRound } from "lucide-react";
 import { dprIssueApi, type UpdateDprIssueRequest } from "@/lib/api/dprIssueApi";
 import type { CreateDprIssueRequest, DprIssueRow } from "@/lib/types/dpr";
 import { activityApi } from "@/lib/api/activityApi";
@@ -72,6 +72,15 @@ function initialState(issue: DprIssueRow | null): FormState {
 
 function fmtDate(iso?: string | null): string {
   return iso ? new Date(iso).toLocaleDateString() : "—";
+}
+
+/** Lifecycle instants (opened/resolved/closed) show the clock time, not just the date. */
+function fmtDateTime(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export interface IssueFormProps {
@@ -245,7 +254,7 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
         </div>
 
         {isEdit && (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4 rounded-xl border border-border bg-surface-hover/40 px-4 py-3.5 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 rounded-xl border border-border bg-surface-hover/40 px-4 py-3.5 sm:grid-cols-5">
             <MetaStat
               icon={<UserRound className="h-4 w-4" />}
               label="Logged by"
@@ -259,12 +268,17 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
             <MetaStat
               icon={<Clock className="h-4 w-4" />}
               label="Opened"
-              value={fmtDate(issue?.openedAt)}
+              value={fmtDateTime(issue?.openedAt)}
             />
             <MetaStat
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="Resolved"
-              value={fmtDate(issue?.resolvedAt)}
+              value={fmtDateTime(issue?.resolvedAt)}
+            />
+            <MetaStat
+              icon={<Lock className="h-4 w-4" />}
+              label="Closed"
+              value={fmtDateTime(issue?.closedAt)}
             />
           </div>
         )}

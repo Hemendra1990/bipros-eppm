@@ -76,7 +76,9 @@ class ActivityServiceLockGuardTest {
   void setUp() {
     service = new ActivityService(activityRepository, activitySupervisorRepository,
         relationshipRepository, auditService, projectAccess, projectRepository,
-        percentCompleteCalculator, stepRepository, mock(ApplicationEventPublisher.class),
+        percentCompleteCalculator,
+        new com.bipros.activity.application.percent.ParentRollupCalculator(),
+        stepRepository, mock(ApplicationEventPublisher.class),
         boqProgressGuard);
     lenient().when(activitySupervisorRepository.findByActivityId(any())).thenReturn(List.of());
     lenient().when(activitySupervisorRepository.findByActivityIdIn(any())).thenReturn(List.of());
@@ -111,7 +113,7 @@ class ActivityServiceLockGuardTest {
     return new UpdateActivityRequest(
         "Renamed", null, null, null, null, null, null, null, null,
         null, null, null, null,
-        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
   }
 
   // ─── LOCKED activities reject mutators ────────────────────────────────────────────

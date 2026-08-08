@@ -49,7 +49,7 @@ export function SiteConditionsPanel({ weather }: SiteConditionsPanelProps) {
 
   return (
     <SectionCard
-      title="Site Conditions"
+      title="Weather Conditions"
       subtitle={weather ? `As of ${weather.logDate}` : "Latest reading unavailable"}
       icon={<CloudSun size={16} />}
       accent

@@ -36,9 +36,15 @@ class DprAnomalyAgentTest {
     @Mock private DailyProgressReportRepository dprRepository;
     @Mock private DprManpowerRepository manpowerRepository;
     @Mock private DprEquipmentRepository equipmentRepository;
+    @Mock private com.bipros.ai.agent.notify.StakeholderResolver stakeholderResolver;
 
     private DprAnomalyAgent agent() {
-        return new DprAnomalyAgent(dprRepository, manpowerRepository, equipmentRepository, new ObjectMapper());
+        org.mockito.Mockito.lenient()
+                .when(stakeholderResolver.pmPlusManagersOf(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Map.of("PROJECT_MANAGER", java.util.List.of()));
+        return new DprAnomalyAgent(dprRepository, manpowerRepository, equipmentRepository,
+                new ObjectMapper(), stakeholderResolver);
     }
 
     private static DailyProgressReport dpr(UUID id, UUID activityId, String activityName, LocalDate date,

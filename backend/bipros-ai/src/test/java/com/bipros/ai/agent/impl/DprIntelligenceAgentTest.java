@@ -30,9 +30,18 @@ class DprIntelligenceAgentTest {
 
     @Mock
     private DailyProgressReportRepository dprRepository;
+    @Mock
+    private com.bipros.admin.domain.repository.GlobalSettingRepository globalSettingRepository;
+    @Mock
+    private com.bipros.ai.agent.notify.StakeholderResolver stakeholderResolver;
 
     private DprIntelligenceAgent agent() {
-        return new DprIntelligenceAgent(dprRepository, new ObjectMapper());
+        org.mockito.Mockito.lenient()
+                .when(stakeholderResolver.pmPlusResponsible(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Map.of("PROJECT_MANAGER", java.util.List.of()));
+        return new DprIntelligenceAgent(dprRepository, globalSettingRepository,
+                new ObjectMapper(), stakeholderResolver);
     }
 
     private static AgentRunContext ctx() {

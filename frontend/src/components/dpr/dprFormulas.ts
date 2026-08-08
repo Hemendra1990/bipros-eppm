@@ -40,6 +40,12 @@ export function fmtRate(n: number | null | undefined): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 }
 
+/** Executed / cumulative workdone quantity — always a fixed 3 decimals (client workbook, 01 Aug 2026). */
+export function fmtQty(n: number | null | undefined): string {
+  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+  return n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
 /** Suffix for the rate cell — only HOUR and DAY get a visible badge; EACH stays bare. */
 export function rateBasisSuffix(basis: RateBasis | null | undefined): string {
   if (basis === "HOUR") return "/hr";

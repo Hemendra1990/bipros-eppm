@@ -29,8 +29,8 @@ import java.util.UUID;
  *   <li><b>daily-sweep</b> — run {@code DAILY_PROJECT_SWEEP} for every ACTIVE project.</li>
  *   <li><b>ttl-expiry</b> — flip stale findings past their TTL to EXPIRED.</li>
  *   <li><b>issue-hourly</b> — run the {@code issue_intelligence} agent per ACTIVE project (best-effort).</li>
- *   <li><b>digest</b> / <b>portfolio-weekly</b> — TODO stubs (Track C owns the digest; portfolio
- *       agents are not yet registered).</li>
+ *   <li><b>portfolio-weekly</b> — TODO stub (portfolio agents are not yet registered). The daily
+ *       digest lives in {@code AgentDigestJob}, not here.</li>
  * </ul>
  */
 @Slf4j
@@ -96,15 +96,6 @@ public class AgentSweepJobs {
             }
         }
         log.info("AgentSweepJobs.issueHourly ran {} on {} projects", ISSUE_AGENT_KEY, fired);
-    }
-
-    @Scheduled(cron = "${bipros.agent.schedule.digest-cron}")
-    public void digest() {
-        if (!acquire("agent_digest")) {
-            return;
-        }
-        // TODO(Track C): build and deliver the daily findings digest.
-        log.info("AgentSweepJobs.digest: stub — daily digest is owned by Track C");
     }
 
     @Scheduled(cron = "${bipros.agent.schedule.portfolio-weekly-cron}")

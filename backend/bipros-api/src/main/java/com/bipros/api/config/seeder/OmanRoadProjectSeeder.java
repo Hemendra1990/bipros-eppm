@@ -723,7 +723,7 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       BoqItem b = BoqItem.builder()
           .projectId(projectId)
           .itemNo(itemNo)
-          .description(truncate(nullSafe(r.description(), "BOQ item " + itemNo), 500))
+          .description(truncate(nullSafe(r.description(), "BOQ item " + itemNo), 2000))
           .unit(unit)
           .wbsNodeId(wbsNodeId)
           .boqQty(qty)

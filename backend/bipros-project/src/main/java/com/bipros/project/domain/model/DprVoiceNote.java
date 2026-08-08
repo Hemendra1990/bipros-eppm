@@ -22,7 +22,9 @@ import java.util.UUID;
  * binary when the row is removed.
  *
  * <p>This is distinct from the transcribe-and-discard "Voice fill" assistant — voice notes are
- * persisted and never transcribed; they are an attachment, like a photo.
+ * persisted attachments, like a photo. They are transcribed on demand by the DPR report agent
+ * (see {@code DprVoiceNoteTranscriber}), which persists the result in {@link #transcript} /
+ * {@link #transcribedAt} so a given note is only sent to STT once.
  */
 @Entity
 @Table(
@@ -64,4 +66,10 @@ public class DprVoiceNote extends BaseEntity {
 
     @Column(name = "caption", length = 500)
     private String caption;
+
+    @Column(name = "transcript", columnDefinition = "TEXT")
+    private String transcript;
+
+    @Column(name = "transcribed_at")
+    private java.time.Instant transcribedAt;
 }

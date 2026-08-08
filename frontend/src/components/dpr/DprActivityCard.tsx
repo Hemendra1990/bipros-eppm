@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { chainageLabel } from "@/lib/format/chainage";
+import { fmtQty } from "./dprFormulas";
 import type { DailyProgressReportResponse, DprApprovalStatus } from "@/lib/types/dpr";
 import { SEVERITY_VARIANT, STATUS_VARIANT as ISSUE_STATUS_VARIANT, categoryLabel } from "./IssueBadges";
 
@@ -110,7 +111,7 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 {row.qtyExecuted != null && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-parchment px-2 py-0.5 text-xs font-semibold text-charcoal tabular-nums">
-                    {fmt(row.qtyExecuted)} {row.unit}
+                    {fmtQty(row.qtyExecuted)} {row.unit}
                   </span>
                 )}
                 {manpowerCount > 0 && (
@@ -172,7 +173,7 @@ export function DprActivityCard({ row, onEdit, onDelete }: Props) {
           {row.cumulativeQty != null && (
             <div className="text-xs text-slate">
               <span className="font-semibold text-charcoal">Cumulative:</span>{" "}
-              <span className="tabular-nums">{fmt(row.cumulativeQty)} {row.unit}</span>
+              <span className="tabular-nums">{fmtQty(row.cumulativeQty)} {row.unit}</span>
             </div>
           )}
           {row.landmark && (

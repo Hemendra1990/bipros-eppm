@@ -22,15 +22,29 @@ public class DprEarnedValueLookup {
     /**
      * Approved DPR earned value grouped by report date, with cumulative capping:
      * once a BOQ item's running executed quantity crosses boqQty, later days contribute 0.
+     *
+     * <p>Stage 4 (B2): computed over MEASURED rows only (measurement-operation / pre-split /
+     * partition rows) so a split line's non-measure operations don't distort the date shape.
+     * If that filter would empty the shape entirely while unfiltered rows exist (extreme case:
+     * every attributed DPR is non-measure), fall back to the unfiltered shape — a distorted
+     * shape scales to the right total, an empty one flatlines the Performance tab.
      */
     public Map<LocalDate, BigDecimal> sumByProjectGroupedByDate(UUID projectId) {
+        if (projectId == null) return new HashMap<>();
+        Map<LocalDate, BigDecimal> out = aggregate(dprRepository.sumQtyByBoqItemAndDateMeasured(projectId));
+        if (out.isEmpty()) {
+            out = aggregate(dprRepository.sumQtyByBoqItemAndDate(projectId));
+        }
+        return out;
+    }
+
+    private static Map<LocalDate, BigDecimal> aggregate(List<Object[]> raw) {
         Map<LocalDate, BigDecimal> out = new HashMap<>();
-        if (projectId == null) return out;
 
         // group rows by BOQ item
         Map<UUID, List<Object[]>> byItem = new HashMap<>();
         Map<UUID, BigDecimal[]> meta = new HashMap<>(); // itemId -> [boqQty, budgetedRate]
-        for (Object[] r : dprRepository.sumQtyByBoqItemAndDate(projectId)) {
+        for (Object[] r : raw) {
             UUID itemId = (UUID) r[0];
             byItem.computeIfAbsent(itemId, k -> new ArrayList<>()).add(r);
             meta.putIfAbsent(itemId, new BigDecimal[]{(BigDecimal) r[3], (BigDecimal) r[4]});

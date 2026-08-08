@@ -15,6 +15,7 @@ import { workActivityApi } from "@/lib/api/workActivityApi";
 import type { WorkActivityResponse } from "@/lib/api/workActivityApi";
 import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { boqApi } from "@/lib/api/boqApi";
 import { resourceApi } from "@/lib/api/resourceApi";
 import { RoleDemandOverview } from "@/components/activity/RoleDemandOverview";
 import { RoleDemandSections } from "@/components/activity/RoleDemandSections";
@@ -32,7 +33,7 @@ import type { ActivityEvmResponse } from "@/lib/api/evmApi";
 import { activityStepApi } from "@/lib/api/activityStepApi";
 import { useAuthStore } from "@/lib/state/store";
 import type { ActivityStepResponse, CreateActivityStepRequest } from "@/lib/api/activityStepApi";
-import { SearchableSelect } from "@/components/common/SearchableSelect";
+import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
@@ -115,6 +116,18 @@ export default function ActivityDetailPage() {
     preliminary: false,
   });
 
+  // Hierarchy (D10/D11): parent edited separately from EditForm — "" = top-level. On save,
+  // a change maps to parentActivityId (set) or clearParent (detach).
+  const [parentEdit, setParentEdit] = useState<string>("");
+
+  // BOQ link (D8/§5.3): edited separately from EditForm. "" = unlinked; plannedQty as text.
+  // operationId (Stage 4): mandatory when the picked line is split into operations.
+  const [boqEdit, setBoqEdit] = useState<{ itemId: string; operationId: string; plannedQty: string }>({
+    itemId: "",
+    operationId: "",
+    plannedQty: "",
+  });
+
   const [usePert, setUsePert] = useState(false);
   const [pertData, setPertData] = useState({
     optimisticDuration: 0 as number | "",
@@ -136,6 +149,51 @@ export default function ActivityDetailPage() {
     queryFn: () => workActivityApi.list(true),
   });
   const workActivities: WorkActivityResponse[] = workActivitiesData?.data ?? [];
+
+  // Parent candidates (hierarchy D10) — any other project activity; the backend rejects
+  // cycles, cross-project parents and parents holding schedule links. Also used (always on)
+  // to detect whether THIS activity is a parent, which hides DPR affordances.
+  const { data: parentCandidatesData } = useQuery({
+    queryKey: ["activities", projectId, "all-for-parent-picker"],
+    queryFn: () => activityApi.listActivities(projectId, 0, 1000),
+  });
+  const parentOptions = (parentCandidatesData?.data?.content ?? [])
+    .filter((a) => a.id !== activityId)
+    .map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }));
+  const isParentActivity = (parentCandidatesData?.data?.content ?? []).some(
+    (a) => a.parentActivityId === activityId,
+  );
+
+  // BOQ lines for the link picker (design D8) + the client-side WBS-divergence warning (D13).
+  const { data: boqListData } = useQuery({
+    queryKey: ["boq", projectId],
+    queryFn: () => boqApi.list(projectId),
+    enabled: isEditing,
+  });
+  const boqItems = boqListData?.data?.items ?? [];
+  const boqLinkOptions = boqItems
+    .slice()
+    .sort((a, b) => a.itemNo.localeCompare(b.itemNo, undefined, { numeric: true }))
+    .map((b) => ({ value: b.id, label: `${b.itemNo} — ${b.description}` }));
+  const pickedBoqLine = boqItems.find((b) => b.id === boqEdit.itemId) ?? null;
+  const boqWbsDiverges =
+    !!pickedBoqLine?.wbsNodeId &&
+    !!activity?.wbsNodeId &&
+    pickedBoqLine.wbsNodeId !== activity.wbsNodeId;
+
+  // Stage 4: a split line demands an operation (L2) — fetch its operations for the picker.
+  const pickedLineIsSplit = !!pickedBoqLine?.splitMode;
+  const { data: pickedOpsData } = useQuery({
+    queryKey: ["boq-operations", projectId, boqEdit.itemId],
+    queryFn: () => boqApi.listOperations(projectId, boqEdit.itemId),
+    enabled: isEditing && pickedLineIsSplit && !!boqEdit.itemId,
+  });
+  const operationOptions: SelectOption[] = (pickedOpsData?.data ?? [])
+    .filter((op) => !op.isLegacy && !!op.id)
+    .map((op) => ({
+      value: op.id as string,
+      label: `${op.opCode} — ${op.name}${op.isMeasure ? " (measurement)" : ""}`,
+    }));
 
   const { data: costAccountsData } = useQuery({
     queryKey: ["cost-accounts"],
@@ -287,6 +345,45 @@ export default function ActivityDetailPage() {
         : {}),
     };
 
+    // Hierarchy: only send the parent fields when the selection actually changed —
+    // null parentActivityId means "unchanged" on the backend, detach needs clearParent.
+    const oldParent = activity?.parentActivityId ?? "";
+    if (parentEdit !== oldParent) {
+      if (parentEdit) {
+        sanitizedData.parentActivityId = parentEdit;
+      } else {
+        sanitizedData.clearParent = true;
+      }
+    }
+
+    // BOQ link: same PATCH convention — send only what changed; unlink needs the explicit flag.
+    const oldBoq = activity?.boqItemId ?? "";
+    if (boqEdit.itemId !== oldBoq) {
+      if (boqEdit.itemId) {
+        sanitizedData.boqItemId = boqEdit.itemId;
+      } else {
+        sanitizedData.clearBoqLink = true;
+      }
+    }
+    // Stage 4 (L2): a split line demands an operation; the server rejects DPRs without one.
+    if (boqEdit.itemId && pickedLineIsSplit && !boqEdit.operationId) {
+      setError("This BOQ line is split into operations — pick the one this activity executes");
+      return;
+    }
+    const oldOperation = activity?.boqOperationId ?? "";
+    if (boqEdit.itemId && boqEdit.operationId && boqEdit.operationId !== oldOperation) {
+      sanitizedData.boqOperationId = boqEdit.operationId;
+    }
+    const oldPlanned = activity?.plannedQty != null ? String(activity.plannedQty) : "";
+    if (boqEdit.itemId && boqEdit.plannedQty !== oldPlanned && boqEdit.plannedQty !== "") {
+      const parsed = Number(boqEdit.plannedQty);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setError("Planned quantity must be a number greater than zero");
+        return;
+      }
+      sanitizedData.plannedQty = parsed;
+    }
+
     const supervisorChanged =
       (nextSupervisorUserId ?? null) !== (activity?.responsibleResourceId ?? null);
     if (supervisorChanged) {
@@ -308,6 +405,12 @@ export default function ActivityDetailPage() {
 
   const handleStartEdit = () => {
     if (activity) {
+      setParentEdit(activity.parentActivityId ?? "");
+      setBoqEdit({
+        itemId: activity.boqItemId ?? "",
+        operationId: activity.boqOperationId ?? "",
+        plannedQty: activity.plannedQty != null ? String(activity.plannedQty) : "",
+      });
       setEditData({
         name: activity.name,
         percentComplete: activity.percentComplete,
@@ -368,7 +471,7 @@ export default function ActivityDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             <ActivityEditStatusBadge editStatus={activity.editStatus} />
-            {isLocked && (
+            {isLocked && !isParentActivity && (
               <button
                 type="button"
                 onClick={() =>
@@ -379,6 +482,14 @@ export default function ActivityDetailPage() {
               >
                 Create DPR
               </button>
+            )}
+            {isParentActivity && (
+              <span
+                className="rounded-md border border-border bg-surface-hover px-3 py-1.5 text-xs text-text-secondary"
+                title="Grouping activity — % rolls up from its children; DPRs and the resource plan live on the children"
+              >
+                Grouping · rolled up
+              </span>
             )}
             {isLocked && canUnlockActivity && (
               <button
@@ -462,6 +573,86 @@ export default function ActivityDetailPage() {
       />
 
       {isEditing ? (
+        <>
+        {/* Hierarchy (D10/D11): parent lives outside EditForm — clearing detaches (top-level),
+            picking re-nests and regenerates the dotted code for this activity + descendants. */}
+        <div className="mb-4 rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
+          <label className="block text-sm font-medium text-text-secondary">Parent activity</label>
+          <div className="mt-1 max-w-xl">
+            <SearchableSelect
+              value={parentEdit}
+              onChange={setParentEdit}
+              placeholder="— none (top-level) —"
+              options={parentOptions}
+            />
+          </div>
+          <p className="mt-1 text-xs text-text-muted">
+            Moving this activity re-generates its code as parentCode.segment (descendants follow).
+            Parents are grouping nodes — they take no DPRs, resource plan or schedule links.
+          </p>
+        </div>
+        {/* BOQ link (D8/§5.3): which contract line this activity executes. DPRs inherit it. */}
+        <div className="mb-4 rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
+          <label className="block text-sm font-medium text-text-secondary">BOQ link</label>
+          <div className="mt-1 grid gap-4 md:grid-cols-2">
+            <div>
+              <SearchableSelect
+                value={boqEdit.itemId}
+                // Changing the line resets any operation of the OLD line (Stage 4).
+                onChange={(v) => setBoqEdit((prev) => ({ ...prev, itemId: v, operationId: "" }))}
+                placeholder="— not linked —"
+                options={boqLinkOptions}
+                disabled={isParentActivity}
+              />
+              {isParentActivity && (
+                <p className="mt-1 text-xs text-text-muted">
+                  Parents carry no BOQ link — link the child activities instead.
+                </p>
+              )}
+              {boqWbsDiverges && (
+                <p className="mt-1 text-xs text-warning">
+                  This BOQ line is tagged to a different WBS node than the activity — allowed,
+                  but check it is intentional.
+                </p>
+              )}
+              {pickedLineIsSplit && (
+                <div className="mt-2">
+                  <SearchableSelect
+                    value={boqEdit.operationId}
+                    onChange={(v) => setBoqEdit((prev) => ({ ...prev, operationId: v }))}
+                    placeholder="— pick the operation (required) —"
+                    options={operationOptions}
+                    disabled={isParentActivity}
+                  />
+                  <p className="mt-1 text-xs text-text-muted">
+                    This line is split into operations — pick the one this activity executes.
+                    DPRs cannot be filed until it is set.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={boqEdit.plannedQty}
+                onChange={(e) => setBoqEdit((prev) => ({ ...prev, plannedQty: e.target.value }))}
+                placeholder="Planned qty (defaults to the line's BOQ qty)"
+                className="block w-full rounded-md border border-border px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                disabled={!boqEdit.itemId || isParentActivity}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                This activity&apos;s own workdone target{pickedBoqLine?.unit ? ` (${pickedBoqLine.unit})` : ""}.
+                Set it when several activities share one BOQ line so each shows an honest %.
+              </p>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-text-muted">
+            Once linked, DPRs for this activity inherit the BOQ item automatically — the
+            supervisor stops picking it on the DPR form.
+          </p>
+        </div>
         <EditForm
           data={editData}
           onChange={handleEditChange}
@@ -491,6 +682,7 @@ export default function ActivityDetailPage() {
             setEditData((prev) => ({ ...prev, preliminary: checked }))
           }
         />
+        </>
       ) : (
         <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} projectCalendars={projectCalendars} projectCalendarId={projectCalendarId} costAccounts={costAccounts} />
       )}

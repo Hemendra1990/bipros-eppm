@@ -26,7 +26,11 @@ public record BoqItemResponse(
     BigDecimal costVariancePercent,
     String chapter,
     BoqStatus status,
-    Boolean manualOverride
+    Boolean manualOverride,
+    /** Stage 4: null = unsplit; WEIGHTED_OPERATIONS or QUANTITY_PARTITION when split. */
+    String splitMode,
+    /** Stage 4: the split line's weighted completion fraction 0..1 (null = unsplit). */
+    BigDecimal earnedFraction
 ) {
   public static BoqItemResponse from(BoqItem b) {
     return new BoqItemResponse(
@@ -49,7 +53,9 @@ public record BoqItemResponse(
         b.getCostVariancePercent(),
         b.getChapter(),
         b.getStatus(),
-        b.getManualOverride()
+        b.getManualOverride(),
+        b.getSplitMode(),
+        b.getEarnedFraction()
     );
   }
 }

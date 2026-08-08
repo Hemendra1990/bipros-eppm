@@ -42,6 +42,8 @@ class MonteCarloEngineBaselineRequiredTest {
         ActivitySubContractorAssignmentRepository scAssignmentRepo =
             Mockito.mock(ActivitySubContractorAssignmentRepository.class);
         DprActualCostLookup dprActualCostLookup = Mockito.mock(DprActualCostLookup.class);
+        com.bipros.project.domain.repository.ProjectRepository projectRepo =
+            Mockito.mock(com.bipros.project.domain.repository.ProjectRepository.class);
 
         UUID projectId = UUID.randomUUID();
         Mockito.when(baselineRepo.findByProjectIdAndIsActiveTrue(projectId)).thenReturn(List.of());
@@ -49,7 +51,7 @@ class MonteCarloEngineBaselineRequiredTest {
         MonteCarloEngine engine = new MonteCarloEngine(
             baselineRepo, baselineActivityRepo, activityRepo, relRepo, pertRepo, riskRepo,
             riskAssignRepo, corrRepo, calendar, expenseRepo, assignmentRepo, scAssignmentRepo,
-            dprActualCostLookup);
+            dprActualCostLookup, projectRepo);
 
         MonteCarloInput input = MonteCarloInput.defaultsFor(projectId, 1000);
 

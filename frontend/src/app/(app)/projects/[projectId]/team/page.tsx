@@ -49,6 +49,12 @@ const ROLE_ORDER: ProjectRole[] = [
   "SUPERVISOR",
   "QS",
   "SAFETY",
+  // The four seats added for the client requirements workbook. Listed after the cost-rollup
+  // roles because they do not participate in the DBS supervisor → engineer → CM → PM chain.
+  "PROJECT_CONTROL",
+  "QUALITY_ENGINEER",
+  "STORE_KEEPER",
+  "DESIGN_COORDINATOR",
 ];
 
 const ROLE_CHIP: Record<ProjectRole, string> = {
@@ -59,6 +65,10 @@ const ROLE_CHIP: Record<ProjectRole, string> = {
   SUPERVISOR: "bg-amber-500/10 text-amber-600 border-amber-500/30",
   QS: "bg-purple-500/10 text-purple-600 border-purple-500/30",
   SAFETY: "bg-rose-500/10 text-rose-600 border-rose-500/30",
+  PROJECT_CONTROL: "bg-cyan-500/10 text-cyan-600 border-cyan-500/30",
+  QUALITY_ENGINEER: "bg-teal-500/10 text-teal-600 border-teal-500/30",
+  STORE_KEEPER: "bg-orange-500/10 text-orange-600 border-orange-500/30",
+  DESIGN_COORDINATOR: "bg-violet-500/10 text-violet-600 border-violet-500/30",
 };
 
 function RoleChip({ role }: { role: ProjectRole }) {

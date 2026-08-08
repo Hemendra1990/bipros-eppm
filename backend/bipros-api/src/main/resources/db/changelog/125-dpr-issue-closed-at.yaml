@@ -1,0 +1,46 @@
+databaseChangeLog:
+  # DPRT-22 (client workbook, 01 Aug 2026): capture when an issue is CLOSED, separately
+  # from resolved_at (which stamps on the FIRST terminal status, so RESOLVED->CLOSED kept
+  # only the RESOLVED time). The service now stamps closed_at on entry to CLOSED and
+  # clears it on reopen.
+  - changeSet:
+      id: 125-dpr-issue-closed-at
+      author: subrat
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                schemaName: project
+                tableName: dpr_issues
+                columnName: closed_at
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_issues
+            columns:
+              - column:
+                  name: closed_at
+                  type: timestamp with time zone
+  # Backfill from the status-history audit trail: for issues currently CLOSED, the stamp
+  # is the LATEST transition into CLOSED (matching the new service semantics — reopening
+  # clears the stamp, re-closing re-stamps). Issues closed by a path that bypassed the
+  # service (seeders / repair scripts) have no history row and stay null.
+  - changeSet:
+      id: 125-dpr-issue-closed-at-backfill
+      author: subrat
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >-
+              UPDATE project.dpr_issues i
+                 SET closed_at = h.last_closed
+                FROM (SELECT issue_id, MAX(created_at) AS last_closed
+                        FROM project.dpr_issue_status_history
+                       WHERE to_status = 'CLOSED'
+                       GROUP BY issue_id) h
+               WHERE h.issue_id = i.id
+                 AND i.status = 'CLOSED'
+                 AND i.closed_at IS NULL
+      rollback:
+        - sql:
+            sql: "UPDATE project.dpr_issues SET closed_at = NULL"

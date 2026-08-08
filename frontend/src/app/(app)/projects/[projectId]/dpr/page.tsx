@@ -20,6 +20,7 @@ import { capacityUtilizationApi } from "@/lib/api/capacityUtilizationApi";
 import { Drawer } from "@/components/common/Drawer";
 import { TabTip } from "@/components/common/TabTip";
 import { DprActivityForm } from "@/components/dpr/DprActivityForm";
+import { fmtQty } from "@/components/dpr/dprFormulas";
 import type { SelectOption } from "@/components/common/SearchableSelect";
 import { DprDayList, DprDaySkeleton } from "@/components/dpr/DprDayList";
 import { DprApprovalActions } from "@/components/dpr/DprApprovalActions";
@@ -167,10 +168,6 @@ function ApprovalQueueRow({
   highlight?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const fmt = (n: number | null | undefined) =>
-    typeof n === "number" && Number.isFinite(n)
-      ? n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-      : "—";
   const status = row.approvalStatus ?? "SUBMITTED";
 
   return (
@@ -209,7 +206,7 @@ function ApprovalQueueRow({
             )}
             {row.qtyExecuted != null && (
               <span className="font-display font-semibold tabular-nums text-gold-ink">
-                {fmt(row.qtyExecuted)}
+                {fmtQty(row.qtyExecuted)}
                 <span className="ml-0.5 text-[11px] font-normal text-slate">{row.unit}</span>
               </span>
             )}
@@ -281,6 +278,11 @@ export default function DprPage() {
     // when the user picks an activity, so DPRs default to the right unit and the Capacity
     // Utilization math doesn't divide Cum by nr.
     const defaultUnitByActivityId = new Map<string, string | null>();
+    // activityId → its linked BOQ line (design D8). When set, the DPR form shows a read-only
+    // chip instead of the BOQ picker — the server inherits and enforces the link.
+    const linkedBoqItemByActivityId = new Map<string, string | null>();
+    // activityId → its linked operation of a split line (Stage 4) — names the chip.
+    const linkedBoqOperationByActivityId = new Map<string, string | null>();
     const seen = new Set<string>();
     for (const a of activitiesData?.data?.content ?? []) {
       if (seen.has(a.id)) continue;
@@ -298,8 +300,11 @@ export default function DprPage() {
             : [];
       supervisorsByActivityId.set(a.id, list);
       defaultUnitByActivityId.set(a.id, a.workActivityDefaultUnit ?? null);
+      linkedBoqItemByActivityId.set(a.id, a.boqItemId ?? null);
+      linkedBoqOperationByActivityId.set(a.id, a.boqOperationId ?? null);
     }
-    return { opts, byName, byId, supervisorsByActivityId, defaultUnitByActivityId };
+    return { opts, byName, byId, supervisorsByActivityId, defaultUnitByActivityId,
+      linkedBoqItemByActivityId, linkedBoqOperationByActivityId };
   }, [activitiesData]);
   const activityOptions = activityIndex.opts;
 
@@ -321,6 +326,80 @@ export default function DprPage() {
         })) ?? [],
     [boqData]
   );
+
+  // Stage 4: operation names for split lines that linked activities point at — one batched
+  // fetch across the (rare) split lines so the chip can name the operation.
+  const splitLinkedLineIds = useMemo(() => {
+    const splitLines = new Set(
+      (boqData?.data?.items ?? []).filter((i) => i.splitMode).map((i) => i.id)
+    );
+    const ids = new Set<string>();
+    for (const [, bid] of activityIndex.linkedBoqItemByActivityId) {
+      if (bid && splitLines.has(bid)) ids.add(bid);
+    }
+    return [...ids].sort();
+  }, [activityIndex, boqData]);
+  const { data: splitOpsById } = useQuery({
+    queryKey: ["boq-operations-for-links", projectId, splitLinkedLineIds],
+    queryFn: async () => {
+      const results = await Promise.all(
+        splitLinkedLineIds.map((id) => boqApi.listOperations(projectId, id))
+      );
+      const byOpId = new Map<
+        string,
+        { opCode: string; name: string; targetQty: number | null; executedQty: number }
+      >();
+      for (const r of results) {
+        for (const op of r.data ?? []) {
+          if (op.id) {
+            byOpId.set(op.id, {
+              opCode: op.opCode,
+              name: op.name,
+              targetQty: op.targetQty ?? null,
+              executedQty: op.executedQty ?? 0,
+            });
+          }
+        }
+      }
+      return byOpId;
+    },
+    enabled: splitLinkedLineIds.length > 0,
+  });
+
+  // activityId → its linked BOQ line with a display label (design D8). Feeds the DPR form's
+  // read-only chip; activities without a link fall back to the legacy picker. Split lines'
+  // labels name the linked operation (Stage 4).
+  const linkedBoqByActivityId = useMemo(() => {
+    const byId = new Map<string, { itemNo: string; description: string }>();
+    for (const i of boqData?.data?.items ?? []) {
+      byId.set(i.id, { itemNo: i.itemNo, description: i.description });
+    }
+    const m = new Map<
+      string,
+      {
+        id: string;
+        itemNo: string;
+        label: string;
+        operation?: { name: string; targetQty: number | null; executedQty: number };
+      }
+    >();
+    for (const [aid, bid] of activityIndex.linkedBoqItemByActivityId) {
+      if (!bid) continue;
+      const b = byId.get(bid);
+      const opId = activityIndex.linkedBoqOperationByActivityId.get(aid);
+      const op = opId ? splitOpsById?.get(opId) : null;
+      m.set(aid, {
+        id: bid,
+        itemNo: b?.itemNo ?? "",
+        label: (b ? `${b.itemNo} — ${b.description}` : "Linked BOQ item")
+          + (op ? ` · ${op.name}` : ""),
+        operation: op
+          ? { name: op.name, targetQty: op.targetQty, executedQty: op.executedQty }
+          : undefined,
+      });
+    }
+    return m;
+  }, [activityIndex, boqData, splitOpsById]);
 
   // Phase 4.4 RBAC: supervisor candidates come from the User pool, filtered server-side by
   // the SUPERVISOR / FOREMAN / SITE_ENGINEER / SITE_MANAGER roles. Same source as
@@ -793,6 +872,7 @@ export default function DprPage() {
             activityIdByName={activityIndex.byName}
             supervisorsByActivityId={activityIndex.supervisorsByActivityId}
             defaultUnitByActivityId={activityIndex.defaultUnitByActivityId}
+            linkedBoqByActivityId={linkedBoqByActivityId}
             boqOptions={boqOptions}
             defaultPrefill={prefill}
             onCancel={closeForm}

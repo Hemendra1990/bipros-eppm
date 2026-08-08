@@ -8,6 +8,24 @@ spring:
     init:
       mode: never
 
+  # Outbound mail. Spring Boot only creates a JavaMailSender bean when spring.mail.host is set,
+  # and EmailChannel requires BOTH that bean and bipros.agent.notify.email.host before it will
+  # transmit. With SMTP_HOST unset (the default) the channel runs in PREVIEW mode — it renders
+  # the message and logs it, so the whole notification path is testable without a mail server.
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS:true}
+        transport:
+          protocol: smtp
+
   datasource:
     # Env-overrides make this file the single source of truth for local/dev; prod just sets
     # DATABASE_URL / DB_USERNAME / DB_PASSWORD in the orchestrator secrets.
@@ -120,6 +138,13 @@ bipros:
       bucket: ${DPR_VOICE_NOTES_BUCKET:dpr-voice-notes}
       multipart-part-size-mb: 5
       max-file-size: 26214400   # 25 MB
+    # Daily DPR Report engine (ported 2026-08-05). Operational switches live in Admin →
+    # Settings (dpr_report_enabled / dpr_report_cadence / dpr_report_window /
+    # dpr_report_recipients_override — seeded by DprReportSettingsSeeder, default OFF).
+    # Blank from-address ⇒ falls back to spring.mail.username (same rule as agent alerts).
+    report:
+      from-address: ${DPR_REPORT_FROM:}
+      tick-ms: ${DPR_REPORT_TICK_MS:900000}
 
   # Error responses — include exception class + message + top stack frame in 500 bodies.
   # Default is OFF so production never leaks internals; default profile (dev) turns it ON below.
@@ -145,6 +170,30 @@ bipros:
       issue-hourly-cron: "0 0 * * * *"         # top of every hour — issue_intelligence per active project (LLM)
       digest-cron: "0 0 7 * * *"               # 07:00 daily — deferred MEDIUM/LOW findings digest + email
       portfolio-weekly-cron: "0 0 6 * * MON"   # Mon 06:00 — portfolio weekly sweep (stub)
+
+    # Which channels each severity fans out to, and whether it goes now or waits for the
+    # 07:00 digest. Do not delete the block: with an EMPTY map NotificationRouter returns
+    # before touching any channel and nothing reaches anybody.
+    # Owner decision 2026-08-07: per-finding EMAIL is OFF for every severity — the
+    # requirements workbook (AI Agent sheet) asks for report-summary mails to roles plus a
+    # few specific event alerts, never one email per finding. Findings surface in-app
+    # (bell + Notification log); email is reserved for the report mails (e.g. the scheduled
+    # DPR report). To re-enable email for a severity add it to channels here, or per-project
+    # via an AgentNotificationRule row (which overrides this map); the 07:00 digest honours
+    # the same channel config.
+    notify:
+      routing:
+        critical: { channels: "in_app", immediate: true }
+        high:     { channels: "in_app", immediate: true }
+        medium:   { channels: "in_app", immediate: false }   # false => 07:00 digest
+        low:      { channels: "in_app", immediate: false }
+        info:     { channels: "in_app", immediate: false }
+      email:
+        # Single-key SMTP gate: the channel transmits when spring.mail.host (SMTP_HOST) is set —
+        # no second host key. Blank SMTP_HOST keeps PREVIEW mode (composed + logged, not sent).
+        # From falls back to spring.mail.username when blank (gmail/outlook reject a mismatch).
+        from: ${BIPROS_MAIL_FROM:}
+        app-base-url: ${FRONTEND_URL:http://localhost:3000}
 
   # Seeder gates. The Excel master-data loader replaces the entire resource catalog
   # on every boot (it deletes resources/contracts/etc and re-inserts from

@@ -216,6 +216,34 @@ class PercentCompleteCalculatorTest {
       assertTrue(calculator.calculateBoq(activity, 50.0, 0.0, LocalDate.now()).isKeepPrior());
       assertTrue(calculator.calculateBoq(activity, 50.0, null, LocalDate.now()).isKeepPrior());
     }
+
+    @Test
+    @DisplayName("uses the activity's own plannedQty when set (BOQ-link design §5.3)")
+    void usesPlannedQtyWhenPresent() {
+      Activity activity = new Activity();
+      activity.setActualStartDate(LocalDate.of(2026, 4, 1));
+      activity.setPlannedQty(new java.math.BigDecimal("200"));
+
+      PercentCompleteCalculator.Result result =
+          calculator.calculateBoq(activity, 150.0, 1000.0, LocalDate.of(2026, 4, 20));
+
+      assertEquals(75.0, result.percent()); // 150 / 200, NOT 150 / 1000
+      assertEquals(ActivityStatus.IN_PROGRESS, result.status());
+    }
+
+    @Test
+    @DisplayName("null or non-positive plannedQty falls back to the line quantity (unchanged behaviour)")
+    void fallsBackToLineQtyWhenPlannedQtyAbsent() {
+      Activity activity = new Activity();
+      activity.setActualStartDate(LocalDate.of(2026, 4, 1));
+      activity.setPlannedQty(null);
+      assertEquals(25.0,
+          calculator.calculateBoq(activity, 250.0, 1000.0, LocalDate.of(2026, 4, 20)).percent());
+
+      activity.setPlannedQty(java.math.BigDecimal.ZERO);
+      assertEquals(25.0,
+          calculator.calculateBoq(activity, 250.0, 1000.0, LocalDate.of(2026, 4, 20)).percent());
+    }
   }
 
   @Nested

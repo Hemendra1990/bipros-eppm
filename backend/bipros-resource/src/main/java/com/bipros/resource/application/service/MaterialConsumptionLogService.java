@@ -166,7 +166,7 @@ public class MaterialConsumptionLogService {
 
   @Transactional(readOnly = true)
   public List<MaterialConsumptionLogResponse> list(
-      UUID projectId, LocalDate from, LocalDate to) {
+      UUID projectId, LocalDate from, LocalDate to, String enteredByRole, UUID issuedByUserId) {
     log.info(
         "Listing material consumption logs: projectId={}, from={}, to={}", projectId, from, to);
 
@@ -177,7 +177,31 @@ public class MaterialConsumptionLogService {
     } else {
       entities = repository.findByProjectIdOrderByLogDateAscIdAsc(projectId);
     }
-    return entities.stream().map(MaterialConsumptionLogResponse::from).toList();
+    // Optional filters — the screen has offered both dropdowns since Phase A but the
+    // params were silently dropped here, leaving them inert.
+    return entities.stream()
+        .filter(e -> roleFilterMatches(enteredByRole, e.getEnteredByRole()))
+        .filter(e -> issuedByUserId == null || issuedByUserId.equals(e.getIssuedByUserId()))
+        .map(MaterialConsumptionLogResponse::from)
+        .toList();
+  }
+
+  /**
+   * Three storekeeper spellings are live in data and UI: the form writes {@code STOREKEEPER},
+   * {@code resolveEnteredByRole} stamps {@code STORE_MANAGER} (the security role name), and
+   * the Spring alias is {@code STORE_KEEPER}. Treat them as one family so filtering by any
+   * of them matches rows stored under any other — otherwise storekeeper-entered rows
+   * silently vanish from a "Storekeeper" filter.
+   */
+  private static final java.util.Set<String> STOREKEEPER_FAMILY =
+      java.util.Set.of("STOREKEEPER", "STORE_KEEPER", "STORE_MANAGER");
+
+  private static boolean roleFilterMatches(String filter, String stored) {
+    if (filter == null || filter.isBlank()) return true;
+    if (filter.equalsIgnoreCase(stored)) return true;
+    return stored != null
+        && STOREKEEPER_FAMILY.contains(filter.toUpperCase())
+        && STOREKEEPER_FAMILY.contains(stored.toUpperCase());
   }
 
   @Transactional(readOnly = true)

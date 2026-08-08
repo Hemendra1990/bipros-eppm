@@ -279,27 +279,21 @@ public class DbsFinancialTool extends ProjectScopedTool {
     }
 
     private String summariseCmDay(DbsCmDayResponse r, String level, String periodType, String currency) {
-        // CM DTO doesn't carry totalExpense/totalIncome/contribution (see DBS Finding 9);
-        // derive expense from the section amounts and income from boqForTheDayAmount.
-        // contributionPct is persisted as a percentage on the CM tier (Finding 8) —
-        // unlike supervisor/engineer/project which store a fraction — so do NOT call scalePct.
-        // NOTE: DbsCmDayResponse currently does NOT carry subcontractAmount or
-        // generalExpenseAmount — sections F and G are surfaced at PROJECT scope only.
-        // When those fields are added to the CM DTO, include them in the sum below.
-        BigDecimal expense = nz(r.materialAmount())
-                .add(nz(r.manpowerAmount()))
-                .add(nz(r.adminAmount()))
-                .add(nz(r.machineryAmount()))
-                .add(nz(r.fuelAmount()));
-        BigDecimal income = nz(r.boqForTheDayAmount());
-        BigDecimal contribution = income.subtract(expense);
+        // The CM DTO now carries the stored P&L (totalExpense/totalIncome/contribution), summed
+        // from the CM's supervisor rows, so read it rather than re-deriving from the section
+        // amounts — a derived figure would drift from the DBS tab. contributionPct is now a
+        // FRACTION on every tier, so scalePct applies here as it does everywhere else.
+        // NOTE: section G general expense is still PROJECT scope only and is not on the CM row.
+        BigDecimal expense = nz(r.totalExpense());
+        BigDecimal income = nz(r.totalIncome());
+        BigDecimal contribution = nz(r.contribution());
         return String.format(Locale.ROOT,
                 "DBS %s/%s %s [%s]: expense=%s income=%s contribution=%s (%s%%)"
                         + "\nSections: A.manpower=%s B.admin=%s (project-only, 0 here) C.machinery=%s D.fuel=%s E.material=%s"
-                        + " — F sub-contractor & G general expense are project-only and not surfaced on the CM row",
+                        + " — G general expense is project-only and not surfaced on the CM row",
                 level, periodType, r.reportDate(), currency,
                 fmtCcy(expense, currency), fmtCcy(income, currency),
-                fmtCcy(contribution, currency), fmt(r.contributionPct()),
+                fmtCcy(contribution, currency), fmt(scalePct(r.contributionPct())),
                 fmtCcy(r.manpowerAmount(), currency),
                 fmtCcy(r.adminAmount(), currency),
                 fmtCcy(r.machineryAmount(), currency),
