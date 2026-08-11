@@ -1268,6 +1268,8 @@ public class DailyProgressReportService {
     if (row.assignedToName() != null) target.setAssignedToName(row.assignedToName());
     target.setResolutionNotes(row.resolutionNotes());
     target.setHseIncidentType(row.hseIncidentType());
+    target.setInterventionRequired(Boolean.TRUE.equals(row.interventionRequired()));
+    target.setDueDate(row.dueDate());
     boolean wasTerminal = oldStatus != null && oldStatus.resolvedAtTerminal();
     boolean isTerminal = row.status() != null && row.status().resolvedAtTerminal();
     if (!wasTerminal && isTerminal) {
@@ -1321,6 +1323,8 @@ public class DailyProgressReportService {
         .closedAt(status == IssueStatus.CLOSED ? now : null)
         .resolutionNotes(row.resolutionNotes())
         .hseIncidentType(row.hseIncidentType())
+        .interventionRequired(Boolean.TRUE.equals(row.interventionRequired()))
+        .dueDate(row.dueDate())
         .build();
     return issue;
   }

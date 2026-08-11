@@ -59,7 +59,11 @@ public record DprIssueRow(
     UUID assignedToUserId,
     HseIncidentType hseIncidentType,
     /** Response-only, like openedAt/resolvedAt — stamped when the issue enters CLOSED. */
-    Instant closedAt
+    Instant closedAt,
+    /** Supervisor's "next-level intervention required" checkbox; null on old payloads = false. */
+    Boolean interventionRequired,
+    /** Act-by date ("time frame to act on it"); optional. */
+    LocalDate dueDate
 ) {
     @SuppressWarnings("deprecation")
     public static DprIssueRow from(DprIssue e) {
@@ -84,6 +88,8 @@ public record DprIssueRow(
             e.getSupervisorUserId(),
             e.getAssignedToUserId(),
             e.getHseIncidentType(),
-            e.getClosedAt());
+            e.getClosedAt(),
+            e.isInterventionRequired(),
+            e.getDueDate());
     }
 }

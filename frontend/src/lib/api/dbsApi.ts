@@ -95,8 +95,10 @@ export interface DbsEngineerDayResponse {
  * a DPR's resources by walking up the supervisor's reporting chain at
  * recompute time, so historical CM rollups stay stable on team re-orgs.
  *
- * Section line arrays are NOT carried — the CM tier shows section totals only;
- * drill in to a specific Engineer / Supervisor for line-level detail.
+ * Section line arrays are the CM's downline supervisor rows' lines merged at read time
+ * (grouped by description + unit + rate, qty and amount summed — same rule as the
+ * supervisor period view). `boqLines` is the flat "BOQ Work executed" merge; the
+ * direct/prelim split stays totals-only (stored lines carry no split flag).
  */
 export interface DbsCmDayResponse {
   id?: string;
@@ -130,7 +132,38 @@ export interface DbsCmDayResponse {
   pctAchieved?: number | null;
   /** Optional — the CM's contribution to the project P&L. */
   contributionPctOfProject?: number | null;
+  materialLines?: DbsSectionLine[];
+  manpowerLines?: DbsSectionLine[];
+  adminLines?: DbsSectionLine[];
+  machineryLines?: DbsSectionLine[];
+  fuelLines?: DbsSectionLine[];
+  boqLines?: DbsSectionLine[];
   recomputedAt?: string;
+}
+
+/**
+ * One (BOQ item × supervisor) row of the "BOQ level performance supervisor wise — Cost"
+ * comparison. qty/income count billable rows minus the sub-contractor share (the DBS
+ * income convention); costs are the supervisor's DPR-attributable manpower + machinery +
+ * live fuel + material on the item — Section B (admin) is not item-attributable and is
+ * excluded. `contributionPct` is a FRACTION (0.875 = 87.5%).
+ */
+export interface BoqSupervisorPerformanceRow {
+  itemNo: string;
+  description?: string | null;
+  unit?: string | null;
+  boqRate: number;
+  supervisorUserId?: string | null;
+  supervisorName: string;
+  qty: number;
+  income: number;
+  manpowerCost: number;
+  machineryCost: number;
+  fuelCost: number;
+  materialCost: number;
+  totalCost: number;
+  contribution: number;
+  contributionPct: number;
 }
 
 export interface DbsCmPeriodResponse {
@@ -426,6 +459,16 @@ export const dbsApi = {
     apiClient
       .get<ApiResponse<DbsSupervisorSummaryDto[]>>(
         `${base(projectId)}/supervisors`,
+        { params: periodType && periodType !== "DAY" ? { date, periodType } : { date } },
+      )
+      .then((r) => r.data),
+
+  /** "BOQ level performance supervisor wise — Cost": per (BOQ item × supervisor) rows
+   *  for the period window. See {@link BoqSupervisorPerformanceRow} for conventions. */
+  getBoqSupervisorComparison: (projectId: string, date: string, periodType?: string) =>
+    apiClient
+      .get<ApiResponse<BoqSupervisorPerformanceRow[]>>(
+        `${base(projectId)}/boq-supervisor-comparison`,
         { params: periodType && periodType !== "DAY" ? { date, periodType } : { date } },
       )
       .then((r) => r.data),

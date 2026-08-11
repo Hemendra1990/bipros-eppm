@@ -30,6 +30,9 @@ public class DprReportService {
     private final NotificationService notificationService;
     private final PdfReportGenerator pdfGenerator;
     private final DprAgentReportRepository reportRepository;
+    private final com.bipros.api.notification.SupervisorCapacityMailService supervisorCapacityMail;
+    private final com.bipros.api.notification.AgentMailLogService mailLogService;
+    private final com.bipros.api.notification.DprAlertConfig alertConfig;
     private final com.bipros.ai.agent.domain.AgentFindingRepository findingRepository;
     private final ObjectMapper objectMapper;
 
@@ -42,6 +45,9 @@ public class DprReportService {
         try {
             var snapshot = collector.collect(req);
             var metrics = metricsCalculator.compute(snapshot);
+            // EVM-agent-row 2026-08-11 ("dash board should be available"): the mail's section 9
+            // links straight to the project's EVM tab.
+            metrics.evmDashboardUrl = alertConfig.appBaseUrl() + "/projects/" + req.projectId() + "/evm";
             InsightsResponse llm = generator.generate(snapshot, metrics);
             var verify = verifier.verify(llm, metrics.allowedNumbers);
             InsightsResponse finalResponse = verify.sanitized();
@@ -67,14 +73,30 @@ public class DprReportService {
             // deliver
             List<String> recipients = recipientResolver.resolveEmails(req);
             byte[] pdf = pdfGenerator.generateBranded(metrics.projectName + " — Daily Project Report", html);
-            var sendResult = emailService.send(new EmailMessage(recipients,
-                "Daily Project Report — " + metrics.projectName + " (" + req.windowLabel() + ")", html,
+            String subject = "Daily Project Report — " + metrics.projectName + " (" + req.windowLabel() + ")";
+            var sendResult = emailService.send(new EmailMessage(recipients, subject, html,
                 "daily-project-report.pdf", pdf));
             row.setDeliveredTo(String.join(",", recipients));
             row.setDeliveryStatus(sendResult.name());
 
             DprAgentReport saved = reportRepository.save(row);
+            // Delivery log — one EMAIL row per recipient; body stays on the stored report row.
+            for (String email : recipients) {
+                logDelivery(req.projectId(), com.bipros.api.notification.AgentMailLog.CH_EMAIL,
+                    null, email, subject, saved.getId(), sendResult.name());
+            }
             if (req.deliverInApp()) notifyRecipients(req, saved);
+            // Capacity-agent-row addition 2026-08-10: per-boss supervisor capacity mails ride
+            // the scheduled send only (inherits its once-per-day due logic); a mail failure
+            // must never fail the already-delivered report.
+            if ("SCHEDULED".equals(req.trigger())) {
+                try {
+                    supervisorCapacityMail.send(req, snapshot, metrics);
+                } catch (Exception mailEx) {
+                    log.warn("[DprReportService] supervisor capacity mails failed project={}: {}",
+                        req.projectId(), mailEx.getMessage(), mailEx);
+                }
+            }
             return saved;
         } catch (Exception e) {
             log.warn("[DprReportService] generation failed project={}: {}", req.projectId(), e.getMessage(), e);
@@ -84,6 +106,20 @@ public class DprReportService {
         }
     }
 
+    private void logDelivery(UUID projectId, String channel, UUID userId, String email,
+                             String subject, UUID reportId, String status) {
+        var logRow = new com.bipros.api.notification.AgentMailLog();
+        logRow.setProjectId(projectId);
+        logRow.setCategory(com.bipros.api.notification.AgentMailLog.CAT_DPR_REPORT);
+        logRow.setChannel(channel);
+        logRow.setRecipientUserId(userId);
+        logRow.setRecipientEmail(email);
+        logRow.setSubject(subject);
+        logRow.setReportId(reportId);
+        logRow.setStatus(status);
+        mailLogService.log(logRow);
+    }
+
     private void notifyRecipients(ReportRequest req, DprAgentReport saved) {
         String link = "/projects/" + req.projectId() + "/dpr-reports?report=" + saved.getId();
         Set<UUID> notified = new LinkedHashSet<>();
@@ -91,6 +127,8 @@ public class DprReportService {
             notificationService.create(userId, DprNotificationType.DPR_REPORT_READY,
                 "DPR report ready", "DPR insights report for " + req.windowLabel() + " is ready.",
                 link, req.projectId(), saved.getId());
+            logDelivery(req.projectId(), com.bipros.api.notification.AgentMailLog.CH_IN_APP,
+                userId, null, "DPR report ready", saved.getId(), "SENT");
             notified.add(userId);
         }
         // Scheduled runs have no requestedByUserId; on-demand runs still get notified even if

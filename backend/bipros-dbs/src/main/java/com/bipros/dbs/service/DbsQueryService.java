@@ -1,6 +1,7 @@
 package com.bipros.dbs.service;
 
 import com.bipros.dbs.api.dto.BoqExecutedSummaryDto;
+import com.bipros.dbs.api.dto.BoqSupervisorPerformanceRow;
 import com.bipros.dbs.api.dto.DbsCmDayResponse;
 import com.bipros.dbs.api.dto.DbsCmSummaryDto;
 import com.bipros.dbs.api.dto.DbsEngineerDayResponse;
@@ -108,7 +109,9 @@ public class DbsQueryService {
     public DbsCmDayResponse getCmDay(UUID projectId, UUID cmUserId, LocalDate date) {
         return cmRepo
             .findByProjectIdAndCmUserIdAndReportDate(projectId, cmUserId, date)
-            .map(this::toResponse)
+            .map(row -> toResponse(row,
+                supervisorRepo.findByProjectIdAndReportDateAndConstructionManagerUserId(
+                    projectId, date, cmUserId)))
             .orElseGet(() -> zeroCm(projectId, cmUserId, date));
     }
 
@@ -119,7 +122,9 @@ public class DbsQueryService {
     public DbsCmDayResponse getCmPeriod(UUID projectId, UUID cmUserId, String periodType, LocalDate referenceDate) {
         LocalDate[] bounds = boundsFor(periodType, referenceDate);
         DbsDailyCm totals = aggregationService.computeCmPeriod(projectId, cmUserId, bounds[0], bounds[1]);
-        return toResponse(totals);
+        return toResponse(totals,
+            supervisorRepo.findByProjectIdAndConstructionManagerUserIdAndReportDateBetween(
+                projectId, cmUserId, bounds[0], bounds[1]));
     }
 
     /**
@@ -325,6 +330,129 @@ public class DbsQueryService {
         BigDecimal billableBd = billable == null ? BigDecimal.ZERO
             : (billable instanceof BigDecimal bd2 ? bd2 : new BigDecimal(billable.toString()));
         return new BoqExecutedSummaryDto(itemsLong, qtyBd, billableBd);
+    }
+
+    /**
+     * "BOQ level performance supervisor wise — Cost" (AI Agent sheet, DBS row): one row per
+     * (BOQ item, supervisor) over the period window. Conventions documented on
+     * {@link BoqSupervisorPerformanceRow}; the SQL mirrors the Section A/C/E calculators'
+     * rate resolution and SectionFBoqCalculator's billable-income predicate exactly.
+     */
+    @SuppressWarnings("unchecked")
+    public List<BoqSupervisorPerformanceRow> boqSupervisorComparison(
+        UUID projectId, String periodType, LocalDate referenceDate) {
+        LocalDate[] b = boundsFor(periodType, referenceDate);
+        List<Object[]> raw = em.createNativeQuery("""
+            SELECT bi.item_no,
+                   bi.description,
+                   bi.unit,
+                   COALESCE(bi.boq_rate, 0)                                       AS boq_rate,
+                   MAX(d.supervisor_user_id::text)                                AS sup_id,
+                   MAX(COALESCE(NULLIF(btrim(d.supervisor_name), ''),
+                                d.supervisor_user_id::text, '(unnamed)'))         AS sup_name,
+                   SUM(CASE WHEN (d.boq_operation_id IS NULL OR o.is_measure = true
+                                  OR bi.split_mode = 'QUANTITY_PARTITION')
+                            THEN GREATEST(COALESCE(d.qty_executed, 0) - COALESCE(sc.sc_qty, 0), 0)
+                            ELSE 0 END)                                           AS billable_qty,
+                   SUM(COALESCE(mp.amt, 0))                                       AS manpower_cost,
+                   SUM(COALESCE(eq.amt, 0))                                       AS machinery_cost,
+                   SUM(COALESCE(mat.amt, 0))                                      AS material_cost
+            FROM project.daily_progress_reports d
+            JOIN project.boq_items bi ON bi.id = d.boq_item_id
+            LEFT JOIN project.boq_operations o ON o.id = d.boq_operation_id
+            LEFT JOIN (
+                SELECT sc.dpr_id, SUM(COALESCE(sc.quantity, 0)) AS sc_qty
+                FROM project.dpr_sub_contractor sc GROUP BY sc.dpr_id
+            ) sc ON sc.dpr_id = d.id
+            LEFT JOIN (
+                SELECT m.dpr_id,
+                       SUM(CASE WHEN COALESCE(m.line_cost, 0) <> 0 THEN m.line_cost
+                                ELSE COALESCE(m.nos, 0) * COALESCE(NULLIF(m.unit_rate, 0),
+                                     (SELECT rrr.rate FROM resource.manpower_role_rates rrr
+                                       WHERE rrr.id = m.manpower_role_rate_id),
+                                     (SELECT mrm.rate FROM resource.manpower_rate_masters mrm
+                                       WHERE mrm.role_id = m.role_id AND mrm.active
+                                       ORDER BY mrm.rate DESC LIMIT 1), 0) END) AS amt
+                FROM project.dpr_manpower m
+                JOIN project.daily_progress_reports d2 ON d2.id = m.dpr_id
+                WHERE d2.project_id = cast(:pid as uuid)
+                  AND d2.report_date BETWEEN :from AND :to
+                GROUP BY m.dpr_id
+            ) mp ON mp.dpr_id = d.id
+            LEFT JOIN (
+                SELECT e.dpr_id,
+                       SUM(CASE WHEN COALESCE(e.line_cost, 0) <> 0 THEN e.line_cost
+                                ELSE COALESCE(e.nos, 0) * COALESCE(NULLIF(e.unit_rate, 0),
+                                     erv.rate, erm.rate, 0) END) AS amt
+                FROM project.dpr_equipment e
+                JOIN project.daily_progress_reports d2 ON d2.id = e.dpr_id
+                LEFT JOIN resource.equipment_role_variants erv ON erv.id = e.equipment_role_variant_id
+                LEFT JOIN resource.equipment_rate_masters erm ON erm.id = e.role_id
+                WHERE d2.project_id = cast(:pid as uuid)
+                  AND d2.report_date BETWEEN :from AND :to
+                GROUP BY e.dpr_id
+            ) eq ON eq.dpr_id = d.id
+            LEFT JOIN (
+                SELECT t.dpr_id,
+                       SUM(CASE WHEN COALESCE(t.line_cost, 0) <> 0 THEN t.line_cost
+                                ELSE COALESCE(t.quantity, 0) * COALESCE(NULLIF(t.unit_rate, 0),
+                                     mrv.rate, 0) END) AS amt
+                FROM project.dpr_material t
+                JOIN project.daily_progress_reports d2 ON d2.id = t.dpr_id
+                LEFT JOIN resource.material_role_variants mrv ON mrv.id = t.material_role_variant_id
+                WHERE d2.project_id = cast(:pid as uuid)
+                  AND d2.report_date BETWEEN :from AND :to
+                GROUP BY t.dpr_id
+            ) mat ON mat.dpr_id = d.id
+            WHERE d.project_id = cast(:pid as uuid)
+              AND d.approval_status = 'APPROVED'
+              AND d.report_date BETWEEN :from AND :to
+              AND d.boq_item_id IS NOT NULL
+            GROUP BY bi.item_no, bi.description, bi.unit, COALESCE(bi.boq_rate, 0),
+                     COALESCE(d.supervisor_user_id::text,
+                              'nm:' || lower(btrim(COALESCE(d.supervisor_name, ''))))
+            ORDER BY bi.item_no
+            """)
+            .setParameter("pid", projectId.toString())
+            .setParameter("from", b[0])
+            .setParameter("to", b[1])
+            .getResultList();
+
+        // Resolve display names for linked supervisors in one batch — the per-item MAX of the
+        // DPR snapshot name can differ between items for the same person.
+        Set<UUID> supIds = raw.stream()
+            .map(r -> (String) r[4])
+            .filter(Objects::nonNull)
+            .map(UUID::fromString)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<UUID, String> nameByUser = resolveUserNames(supIds);
+
+        List<BoqSupervisorPerformanceRow> out = new ArrayList<>(raw.size());
+        for (Object[] r : raw) {
+            BigDecimal rate = toBd(r[3]);
+            BigDecimal qty = toBd(r[6]);
+            BigDecimal income = qty.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal mp = toBd(r[7]).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal eq = toBd(r[8]).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal mat = toBd(r[9]).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal fuel = fuelOf(eq);
+            BigDecimal cost = mp.add(eq).add(fuel).add(mat);
+            BigDecimal contribution = income.subtract(cost);
+            UUID supId = r[4] == null ? null : UUID.fromString((String) r[4]);
+            String supName = supId != null && nameByUser.get(supId) != null
+                ? nameByUser.get(supId) : (String) r[5];
+            out.add(new BoqSupervisorPerformanceRow(
+                (String) r[0], (String) r[1], (String) r[2], rate,
+                supId, supName,
+                qty, income, mp, eq, fuel, mat, cost, contribution,
+                pctFraction(contribution, income)));
+        }
+        return out;
+    }
+
+    private static BigDecimal toBd(Object v) {
+        if (v == null) return BigDecimal.ZERO;
+        return v instanceof BigDecimal bd ? bd : new BigDecimal(v.toString());
     }
 
     // ── list ────────────────────────────────────────────────────────────────────
@@ -542,7 +670,7 @@ public class DbsQueryService {
         );
     }
 
-    private DbsCmDayResponse toResponse(DbsDailyCm e) {
+    private DbsCmDayResponse toResponse(DbsDailyCm e, List<DbsDailySupervisor> downline) {
         return new DbsCmDayResponse(
             e.getId(),
             e.getProjectId(),
@@ -568,8 +696,23 @@ public class DbsQueryService {
             nz(e.getContribution()),
             nz(e.getContributionPct()),
             nz(e.getPctAchieved()),
+            mergeEntityLines(downline, DbsDailySupervisor::getMaterialLinesJson),
+            mergeEntityLines(downline, DbsDailySupervisor::getManpowerLinesJson),
+            mergeEntityLines(downline, DbsDailySupervisor::getAdminLinesJson),
+            mergeEntityLines(downline, DbsDailySupervisor::getMachineryLinesJson),
+            mergeEntityLines(downline, DbsDailySupervisor::getFuelLinesJson),
+            mergeEntityLines(downline, DbsDailySupervisor::getBoqLinesJson),
             e.getRecomputedAt()
         );
+    }
+
+    /** Parse + merge the downline supervisor rows' section-line JSON for the CM tab —
+     *  same grouping rule as {@link #aggregateSectionLines}. */
+    private List<DbsSectionLineDto> mergeEntityLines(
+        List<DbsDailySupervisor> rows,
+        java.util.function.Function<DbsDailySupervisor, String> jsonGetter) {
+        if (rows == null || rows.isEmpty()) return Collections.emptyList();
+        return mergeLineLists(rows.stream().map(r -> parseLines(jsonGetter.apply(r))).toList());
     }
 
     private DbsProjectDayResponse toResponse(DbsDailyProject e,
@@ -648,6 +791,8 @@ public class DbsQueryService {
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
             // totalExpense, totalIncome, contribution, contributionPct, pctAchieved
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
             null
         );
     }
@@ -741,10 +886,13 @@ public class DbsQueryService {
     private static List<DbsSectionLineDto> aggregateSectionLines(
         List<DbsSupervisorDayResponse> daily,
         java.util.function.Function<DbsSupervisorDayResponse, List<DbsSectionLineDto>> extractor) {
+        return mergeLineLists(daily.stream().map(extractor).toList());
+    }
 
+    /** Core of the line merge — shared by the supervisor period totals and the CM roll-up. */
+    private static List<DbsSectionLineDto> mergeLineLists(List<List<DbsSectionLineDto>> lists) {
         Map<String, DbsSectionLineDto> byKey = new LinkedHashMap<>();
-        for (DbsSupervisorDayResponse d : daily) {
-            List<DbsSectionLineDto> lines = extractor.apply(d);
+        for (List<DbsSectionLineDto> lines : lists) {
             if (lines == null) continue;
             for (DbsSectionLineDto line : lines) {
                 if (line == null) continue;

@@ -35,9 +35,17 @@ import java.util.UUID;
  *              BoqItem.qtyExecutedToDate   (the line's MEASURED quantity — A5)
  * </pre>
  *
+ * <p>The numerator is also stored on its own as {@code BoqItem.actualCost}, and IS the line's
+ * {@code actualAmount}. It is written on every event regardless of the measured quantity — cost
+ * incurred on a non-measurement operation of a split line is real money and must still be reported
+ * (11 Aug 2026; the old zero-qty short-circuit returned before the cost was even queried). Only
+ * the per-unit {@code actualRate} depends on the measured quantity, and it is null while that
+ * quantity is zero — there is no cost-per-unit to state, and a printed {@code 0.000} reads as
+ * "the work was free".
+ *
  * <p>Rows with {@code manualOverride = TRUE} are skipped — the user has explicitly set the rate
- * and we will not overwrite it. A zero denominator writes {@code actualRate = 0} (a full revoke
- * must clear the phantom rate, edge 16).
+ * and we will not overwrite it. A full revoke leaves {@code actualCost = 0} and a null rate, which
+ * clears the phantom rate exactly as edge 16 always required.
  *
  * <p>Synchronous (no {@code @TransactionalEventListener}): runs in the same TX as the DPR write
  * so a rate-recalc failure rolls the DPR back. The recompute touches a single row per item and
@@ -123,28 +131,26 @@ public class BoqActualRateRecalcListener {
       return;
     }
 
-    // A5: divide by the line's stored MEASURED quantity — on a split line the flat all-operations
-    // DPR sum would dilute actualRate and actualAmount would lose the non-measured spend.
-    // DprBoqSyncListener (order 10) wrote this value in the same transaction.
-    BigDecimal qty = item.getQtyExecutedToDate();
-    if (qty == null || qty.signum() == 0) {
-      // Edge 16: after a full revoke, clear the phantom rate instead of leaving the last value.
-      item.setActualRate(BigDecimal.ZERO);
-      BoqCalculator.recompute(item);
-      boqItemRepository.save(item);
-      log.info("[BoqActualRateRecalc] boqItemId={} zero qty — actualRate cleared", boqItemId);
-      return;
-    }
-
+    // The cost is fetched unconditionally: it is the line's actualAmount and must never be gated
+    // on the measured quantity (11 Aug 2026 — the old zero-qty short-circuit returned before this
+    // call, so a split line whose spend sat on a non-measurement operation reported no cost).
     BigDecimal cost = boqActualCostQuery.sumActualCost(projectId, boqItemId);
     if (cost == null) cost = BigDecimal.ZERO;
 
-    BigDecimal newRate = cost.divide(qty, RATE_SCALE, RoundingMode.HALF_UP);
+    // A5: the rate's denominator is the line's stored MEASURED quantity — DprBoqSyncListener
+    // (order 10) wrote it in the same transaction. With nothing measured there is no cost-per-unit
+    // to state, so the rate is null (rendered "—") rather than a 0.000 that reads as "free work".
+    BigDecimal qty = item.getQtyExecutedToDate();
+    BigDecimal newRate = (qty == null || qty.signum() == 0)
+        ? null
+        : cost.divide(qty, RATE_SCALE, RoundingMode.HALF_UP);
+
+    item.setActualCost(cost);
     item.setActualRate(newRate);
     BoqCalculator.recompute(item);
     boqItemRepository.save(item);
-    log.info("[BoqActualRateRecalc] boqItemId={} actualRate={} (cost={}, qty={})",
-        boqItemId, newRate, cost, qty);
+    log.info("[BoqActualRateRecalc] boqItemId={} actualCost={} actualRate={} (qty={})",
+        boqItemId, cost, newRate, qty);
   }
 
 }

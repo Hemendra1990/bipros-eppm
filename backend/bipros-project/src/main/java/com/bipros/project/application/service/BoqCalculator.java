@@ -14,12 +14,21 @@ import java.math.RoundingMode;
  * <ul>
  *   <li>boqAmount         = boqQty × boqRate</li>
  *   <li>budgetedAmount    = boqQty × budgetedRate</li>
- *   <li>actualAmount      = qtyExecutedToDate × actualRate</li>
+ *   <li>actualAmount      = actualCost when the DPR roll-up has set one, else
+ *       qtyExecutedToDate × actualRate (seeded / manually rated lines)</li>
  *   <li>percentComplete   = qtyExecutedToDate / boqQty (null when boqQty = 0)</li>
- *   <li>costVariance      = actualAmount − (qtyExecutedToDate × budgetedRate)</li>
- *   <li>costVariancePercent = costVariance / (qtyExecutedToDate × budgetedRate)
+ *   <li>costVariance      = actualAmount − {@link #earnedBudget(BoqItem)}</li>
+ *   <li>costVariancePercent = costVariance / earnedBudget
  *       (null when that denominator is 0, keeping "no earned budget yet ⇒ no variance %" explicit)</li>
  * </ul>
+ *
+ * <p><b>Why actualCost wins (11 Aug 2026).</b> {@code actualAmount} used to be reconstructed as
+ * {@code qty × rate} on every write. On a split line {@code qtyExecutedToDate} counts only the
+ * measurement operation, so a line whose spend sat entirely on a non-measurement stage stored
+ * {@code 0 × rate = 0} and reported no cost at all while its earned budget was credited in full —
+ * the same work counted as earned and as costless. Cost incurred is now carried in its own field
+ * and is never a function of the billable quantity. {@code qtyExecutedToDate} keeps its
+ * measurement/invoice meaning untouched.
  */
 public final class BoqCalculator {
 
@@ -38,7 +47,12 @@ public final class BoqCalculator {
 
     BigDecimal boqAmount = round(boqQty.multiply(boqRate));
     BigDecimal budgetedAmount = round(boqQty.multiply(budgetedRate));
-    BigDecimal actualAmount = round(qtyExecuted.multiply(actualRate));
+    // Cost incurred wins whenever the DPR roll-up has established one — it is real money and must
+    // not be gated on the billable quantity. Lines the roll-up never touched (seeded rows, manually
+    // rated rows) keep the legacy rate × qty basis.
+    BigDecimal actualAmount = item.getActualCost() != null
+        ? round(item.getActualCost())
+        : round(qtyExecuted.multiply(actualRate));
     BigDecimal earnedBudget = earnedBudget(item);
 
     BigDecimal percentComplete;

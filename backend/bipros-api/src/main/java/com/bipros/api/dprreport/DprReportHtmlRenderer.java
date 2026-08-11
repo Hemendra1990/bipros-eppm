@@ -105,8 +105,42 @@ public class DprReportHtmlRenderer {
              .append(note("* Raw workdone tally across all operations; billing uses the measurement-operation basis (BOQ tab)."));
         }
 
-        // 2 - Capacity utilization
-        sectionTitle(b, "2" + DOT + "Capacity utilization" + DASH + "efficiency vs productivity norms");
+        // 2 - Supervisor performance (AI Agent sheet DPR row: reported daily/cumulative)
+        sectionTitle(b, "2" + DOT + "Supervisor performance" + DASH + "day &amp; cumulative");
+        if (m.supervisorPerformance.isEmpty()) {
+            zero(b, "No approved DPRs in this window.");
+        } else {
+            String dayLabel = m.referenceDay != null ? " " + m.referenceDay : "";
+            b.append(tableOpen())
+             .append(th("Supervisor", "left"))
+             .append(th("DPRs" + dayLabel, "right")).append(th("Qty" + dayLabel, "right"))
+             .append(th("DPRs (window)", "right")).append(th("Qty (window)", "right"))
+             .append(th("Contribution " + cur, "right")).append("</tr>");
+            int spIdx = 0;
+            for (var p : m.supervisorPerformance) {
+                b.append(trOpen(spIdx++))
+                 .append(td(esc(p.name()), "left"))
+                 .append(td(String.valueOf(p.filedDay()), "right"))
+                 .append(td(QTY.format(p.qtyDay()), "right"))
+                 .append(td(String.valueOf(p.filedWindow()), "right"))
+                 .append(td(QTY.format(p.qtyWindow()), "right"));
+                if (p.contribution() != null) {
+                    b.append("<td style='padding:5px 8px;text-align:right;font-size:12px;font-weight:bold;color:")
+                     .append(p.contribution() >= 0 ? GOOD : BAD).append("'>")
+                     .append(MONEY.format(p.contribution())).append("</td>");
+                } else {
+                    b.append(td("&#8212;", "right"));
+                }
+                b.append("</tr>");
+            }
+            b.append("</table>")
+             .append(note("Day = the latest report date in the window" + DOT
+                     + "contribution from the DBS engine" + DOT
+                     + "per-supervisor efficiency vs norms lives in Capacity Util. (supervisor view)."));
+        }
+
+        // 3 - Capacity utilization
+        sectionTitle(b, "3" + DOT + "Capacity utilization" + DASH + "efficiency vs productivity norms");
         if (m.roleEfficiencies.isEmpty()) {
             zero(b, "No productivity-tracked resources in this window.");
         } else {
@@ -123,9 +157,14 @@ public class DprReportHtmlRenderer {
              .append(note("Efficiency = output vs the productivity norm per resource-day (the Capacity Util. tab's own engine). "
                      + "100% = crews delivered exactly what the norms expect."));
         }
+        // Resource-wise tables (capacity-agent-row addition 2026-08-10) - the Capacity Util.
+        // tab's own day + window buckets per role, so this email IS the resource capacity
+        // utilization report the project-control team receives.
+        capacityTable(b, "Manpower", m.capacityManpower, m.capacityManpowerTotal, cur);
+        capacityTable(b, "Equipment", m.capacityEquipment, m.capacityEquipmentTotal, cur);
 
-        // 3 - DBS
-        sectionTitle(b, "3" + DOT + "Daily balance sheet" + DASH + "income vs expense per day");
+        // 4 - DBS
+        sectionTitle(b, "4" + DOT + "Daily balance sheet" + DASH + "income vs expense per day");
         if (m.dbsDays.isEmpty()) {
             zero(b, "No DBS rows in this window.");
         } else {
@@ -168,8 +207,8 @@ public class DprReportHtmlRenderer {
                     + "contribution = income &#8722; expense."));
         }
 
-        // 4 - Issues
-        sectionTitle(b, "4" + DOT + "Issues reported on site");
+        // 5 - Issues
+        sectionTitle(b, "5" + DOT + "Issues reported on site");
         if (m.issueCategories.isEmpty()) {
             zero(b, "No issues logged with the window's DPRs.");
         } else {
@@ -182,8 +221,8 @@ public class DprReportHtmlRenderer {
              .append(note(m.openIssues + " open" + DOT + m.criticalIssues + " critical" + DOT + m.safetyIncidents + " HSE incident(s)."));
         }
 
-        // 5 - Material consumption
-        sectionTitle(b, "5" + DOT + "Material consumption (from approved DPRs)");
+        // 6 - Material consumption
+        sectionTitle(b, "6" + DOT + "Material consumption (from approved DPRs)");
         if (m.materials.isEmpty()) {
             zero(b, "No material consumption recorded in this window.");
         } else {
@@ -198,12 +237,113 @@ public class DprReportHtmlRenderer {
                  .append(td(MONEY.format(mat.cost()), "right"))
                  .append("</tr>");
             }
-            b.append("</table>")
-             .append(note("Store availability (receipts / closing balance) is excluded until its source data is repaired."));
+            b.append("</table>");
         }
 
-        // 6 - Costing (informative table, not cryptic bars)
-        sectionTitle(b, "6" + DOT + "Costing" + DASH + "largest BOQ cost variances");
+        // 6b - Material availability (store) - Material-agent-row 2026-08-11 (MAT-01/MAT-04)
+        sectionTitle(b, "6b" + DOT + "Material availability (store)");
+        if (!m.materialTracked) {
+            zero(b, "Stock not tracked on this project" + DOT
+                + "storekeeper GRN / issue-slip entries have not started, so receipts and closing balance cannot be computed.");
+        } else if (m.materialAvailability.isEmpty()) {
+            zero(b, "No material movements recorded in this window.");
+        } else {
+            var availTop = m.materialAvailability.stream().limit(15).toList();
+            b.append(tableOpen())
+             .append(th("Material", "left")).append(th("Unit", "left"))
+             .append(th("Received", "right")).append(th("Issued", "right"))
+             .append(th("Consumed", "right")).append(th("Closing balance", "right"))
+             .append(th("Days cover", "right")).append(th("Alert", "left")).append("</tr>");
+            int avIdx = 0;
+            for (var a : availTop) {
+                b.append(trOpen(avIdx++))
+                 .append(td(esc(a.name()), "left"))
+                 .append(td(esc(a.unit() == null ? "" : a.unit()), "left"))
+                 .append(td(a.receivedWindow() != null ? QTY.format(a.receivedWindow()) : "&#8212;", "right"))
+                 .append(td(a.issuedWindow() != null ? QTY.format(a.issuedWindow()) : "&#8212;", "right"))
+                 .append(td(a.consumedWindow() != null ? QTY.format(a.consumedWindow()) : "&#8212;", "right"))
+                 .append(td(a.storeClosing() != null ? QTY.format(a.storeClosing()) : "&#8212;", "right"))
+                 .append(td(a.daysOfCover() != null ? QTY.format(a.daysOfCover()) : "&#8212;", "right"))
+                 .append(td(alertLabel(a.alert()), "left"))
+                 .append("</tr>");
+            }
+            b.append("</table>")
+             .append(note("Received / Issued / Consumed are window figures" + DOT
+                 + "closing balance and days-of-cover are as of the window end" + DOT
+                 + "closing = received &#8722; issued, storekeeper log figure wins where entered."));
+        }
+        if (!m.supervisorMaterialVariances.isEmpty()) {
+            var varTop = m.supervisorMaterialVariances.stream().limit(12).toList();
+            b.append("<div style='height:10px'></div>").append(tableOpen())
+             .append(th("Supervisor", "left")).append(th("Material", "left"))
+             .append(th("Issued to date", "right")).append(th("Reported (DPR)", "right"))
+             .append(th("Variance", "right")).append(th("Value " + cur, "right")).append("</tr>");
+            int svIdx = 0;
+            for (var v : varTop) {
+                b.append(trOpen(svIdx++))
+                 .append(td(esc(v.supervisor()), "left"))
+                 .append(td(esc(v.material()) + (v.unit() == null ? "" : " (" + esc(v.unit()) + ")"), "left"))
+                 .append(td(QTY.format(v.issuedToDate()), "right"))
+                 .append(td(QTY.format(v.reportedToDate()), "right"))
+                 .append(td(QTY.format(v.varianceQty()), "right"))
+                 .append(td(v.varianceValue() != null ? MONEY.format(v.varianceValue()) : "&#8212;", "right"))
+                 .append("</tr>");
+            }
+            b.append("</table>")
+             .append(note("Issued vs supervisor-reported material" + DOT
+                 + "cumulative from the first store movement to the window end" + DOT
+                 + "flag only &#8212; DBS costing awaits the tolerance ruling (open question Q20)."));
+        }
+
+        // 7 - Commodity summary (AI Agent sheet DPR row: executed qty at BOQ + activity level)
+        sectionTitle(b, "7" + DOT + "Commodity summary" + DASH + "executed quantities");
+        if (m.commodityBoq.isEmpty()) {
+            zero(b, "No BOQ-linked execution recorded yet.");
+        } else {
+            var boqTop = m.commodityBoq.stream().limit(15).toList();
+            b.append(tableOpen())
+             .append(th("BOQ item", "left")).append(th("Unit", "left")).append(th("Contract qty", "right"))
+             .append(th("This month", "right")).append(th("Till date", "right")).append(th("% complete", "right"))
+             .append("</tr>");
+            int cIdx = 0;
+            for (var c : boqTop) {
+                b.append(trOpen(cIdx++))
+                 .append(td(esc(c.label()), "left"))
+                 .append(td(esc(c.unit() == null ? "" : c.unit()), "left"))
+                 .append(td(c.contractedQty() != null ? QTY.format(c.contractedQty()) : "&#8212;", "right"))
+                 .append(td(QTY.format(c.qtyMonth()), "right"))
+                 .append(td(QTY.format(c.qtyToDate()), "right"))
+                 .append(td(c.pctComplete() != null ? PCT.format(c.pctComplete()) + "%" : "&#8212;", "right"))
+                 .append("</tr>");
+            }
+            b.append("</table>");
+            if (m.commodityBoq.size() > boqTop.size()) {
+                b.append(note("Showing " + boqTop.size() + " of " + m.commodityBoq.size()
+                        + " BOQ lines with execution" + DOT + "full list on the BOQ tab."));
+            }
+            if (!m.commodityActivities.isEmpty()) {
+                var actTop = m.commodityActivities.stream().limit(10).toList();
+                b.append("<div style='height:10px'></div>").append(tableOpen())
+                 .append(th("Activity", "left")).append(th("Unit", "left"))
+                 .append(th("This month", "right")).append(th("Window total", "right")).append("</tr>");
+                int aIdx = 0;
+                for (var c : actTop) {
+                    b.append(trOpen(aIdx++))
+                     .append(td(esc(c.label()), "left"))
+                     .append(td(esc(c.unit() == null ? "" : c.unit()), "left"))
+                     .append(td(QTY.format(c.qtyMonth()), "right"))
+                     .append(td(QTY.format(c.qtyToDate()), "right"))
+                     .append("</tr>");
+                }
+                b.append("</table>");
+            }
+            b.append(note("Executed quantities from approved DPRs" + DOT
+                    + "\"This month\" = the calendar month of the latest report date" + DOT
+                    + "till-date uses the BOQ tab's stored columns (billing basis)."));
+        }
+
+        // 8 - Costing (informative table, not cryptic bars)
+        sectionTitle(b, "8" + DOT + "Costing" + DASH + "largest BOQ cost variances");
         if (m.boqTopVariances.isEmpty()) {
             zero(b, "No cost variances on executed BOQ lines.");
         } else {
@@ -232,8 +372,53 @@ public class DprReportHtmlRenderer {
                      + "quantity done). Red = paying more than budgeted. Stored BOQ-tab columns; split lines on the billable basis."));
         }
 
-        // 7 - EVM
-        sectionTitle(b, "7" + DOT + "Earned value" + DASH + "project health");
+        // 8b - Activity costing (Costing-agent-row 2026-08-11): actual vs budgeted vs BOQ value
+        sectionTitle(b, "8b" + DOT + "Activity costing" + DASH + "actual vs budgeted vs BOQ value");
+        if (m.activityCosting.isEmpty()) {
+            zero(b, "No costed activity execution in this window.");
+        } else {
+            b.append(tableOpen())
+             .append(th("Activity", "left")).append(th("Qty", "right")).append(th("Unit", "left"))
+             .append(th("Actual " + cur, "right")).append(th("@Budgeted rates", "right"))
+             .append(th("@BOQ rates", "right")).append(th("Over/(under) budget", "right")).append("</tr>");
+            int acIdx = 0;
+            for (var l : m.activityCosting) {
+                b.append(trOpen(acIdx++))
+                 .append(td(esc(truncate(l.activity(), 40)), "left"))
+                 .append(td(l.qty() != null ? QTY.format(l.qty()) : "&#8212;", "right"))
+                 .append(td(esc(l.unit() == null ? "" : l.unit()), "left"))
+                 .append(td(MONEY.format(l.actualCost()), "right"))
+                 .append(td(l.budgetedValue() != null ? MONEY.format(l.budgetedValue()) : "&#8212;", "right"))
+                 .append(td(l.boqValue() != null ? MONEY.format(l.boqValue()) : "&#8212;", "right"))
+                 .append(varianceCell(l.varVsBudgeted()))
+                 .append("</tr>");
+            }
+            var t = m.activityCostingTotal;
+            if (t != null) {
+                b.append("<tr style='font-weight:bold;border-top:2px solid #ccc'>")
+                 .append(td("<b>Total (all " + m.activityCostingCount + " activities)</b>", "left"))
+                 .append(td("&#8212;", "right")).append(td("", "left"))
+                 .append(td("<b>" + MONEY.format(t.actualCost()) + "</b>", "right"))
+                 .append(td(t.budgetedValue() != null ? "<b>" + MONEY.format(t.budgetedValue()) + "</b>" : "&#8212;", "right"))
+                 .append(td(t.boqValue() != null ? "<b>" + MONEY.format(t.boqValue()) + "</b>" : "&#8212;", "right"))
+                 .append(varianceCell(t.varVsBudgeted()))
+                 .append("</tr>");
+            }
+            b.append("</table>");
+            if (m.activityCostingCount > m.activityCosting.size()) {
+                b.append(note("Top " + m.activityCosting.size() + " of " + m.activityCostingCount
+                        + " activities by absolute budget variance" + DOT + "full detail on the P&amp;L pages."));
+            }
+            b.append(note("Actual = approved-DPR line costs (manpower, equipment, material, sub-contractor)" + DOT
+                    + "@Budgeted / @BOQ = executed qty priced at the BOQ line's budgeted / contract rate" + DOT
+                    + "split-line non-measurement rows carry no BOQ value" + DOT
+                    + "positive variance (red) = costing more than the rate allows."));
+        }
+
+        // 9 - EVM (EVM-agent-row 2026-08-11: full health parameter set + key notes + dashboard
+        // link, per the AI Agents sheet "summarize the project health parameters ... with a key
+        // notes / dash board should be available")
+        sectionTitle(b, "9" + DOT + "Earned value" + DASH + "project health");
         if (m.evm == null) {
             zero(b, "No project budget configured" + DASH + "EVM unavailable.");
         } else {
@@ -243,16 +428,35 @@ public class DprReportHtmlRenderer {
             kpi(b, compact(m.evm.ac()), "Actual cost spent", INK);
             kpi(b, compact(m.evm.eac()), "Forecast final cost (EAC)", INK);
             b.append("</tr><tr>");
-            kpi(b, PCT.format(m.evm.cpi()) + (m.evm.cpi() >= 1 ? " &#10004;" : ""),
-                    "CPI (cost efficiency, 1.0 = on budget)", m.evm.cpi() >= 1 ? GOOD : BAD);
-            kpi(b, PCT.format(m.evm.spi()) + (m.evm.spi() >= 1 ? " &#10004;" : ""),
-                    "SPI (schedule pace, 1.0 = on plan)", m.evm.spi() >= 1 ? GOOD : BAD);
+            kpi(b, m.evm.cpi() == null ? "n/a" : PCT.format(m.evm.cpi()) + (m.evm.cpi() >= 1 ? " &#10004;" : ""),
+                    "CPI (cost efficiency, 1.0 = on budget)",
+                    m.evm.cpi() == null ? MUTED : m.evm.cpi() >= 1 ? GOOD : BAD);
+            kpi(b, m.evm.spi() == null ? "n/a" : PCT.format(m.evm.spi()) + (m.evm.spi() >= 1 ? " &#10004;" : ""),
+                    "SPI (schedule pace, 1.0 = on plan)",
+                    m.evm.spi() == null ? MUTED : m.evm.spi() >= 1 ? GOOD : BAD);
             kpi(b, compact(Math.abs(m.evm.vac())) + (m.evm.vac() >= 0 ? " under" : " over"),
                     "Forecast vs budget (VAC)", m.evm.vac() >= 0 ? GOOD : BAD);
             kpi(b, PCT.format(m.evm.pctComplete()) + "%", "Project complete (EV/BAC)", GOLD_DARK);
-            b.append("</tr></table>")
-             .append(note("All figures in " + esc(cur) + " (M = million)" + DOT
-                     + "canonical cost engine, identical to the Costs and EVM tabs."));
+            b.append("</tr><tr>");
+            kpi(b, compact(m.evm.pv()), "Planned value (work scheduled)", INK);
+            kpi(b, compact(Math.abs(m.evm.sv())) + (m.evm.sv() >= 0 ? " ahead" : " behind"),
+                    "Schedule variance (SV = EV &#8722; PV)", m.evm.sv() >= 0 ? GOOD : BAD);
+            kpi(b, compact(Math.abs(m.evm.cv())) + (m.evm.cv() >= 0 ? " under" : " over"),
+                    "Cost variance (CV = EV &#8722; AC)", m.evm.cv() >= 0 ? GOOD : BAD);
+            kpi(b, compact(m.evm.etc()), "Cost still to spend (ETC)", INK);
+            b.append("</tr></table>");
+            evmKeyNotes(b, m.evm, cur);
+            if (m.evmDashboardUrl != null && !m.evmDashboardUrl.isBlank()) {
+                // esc() covers element text only; inside a single-quoted attribute an apostrophe
+                // in the configured base URL would end the attribute and break the strict XML.
+                b.append("<div style='font-size:12px;margin:8px 0 0'><a href='")
+                 .append(esc(m.evmDashboardUrl).replace("'", "&#39;"))
+                 .append("' style='color:").append(GOLD_DARK)
+                 .append(";font-weight:bold'>Open the live EVM dashboard (S-curve, WBS drill-down, forecast methods) &#8594;</a></div>");
+            }
+            b.append(note("All figures in " + esc(cur) + " (M = million)" + DOT
+                     + "canonical cost engine, identical to the Costs and EVM tabs" + DOT
+                     + "forecast (EAC/ETC/VAC) uses the CPI-based method, the EVM tab's default view."));
         }
 
         // AI narrative
@@ -299,7 +503,159 @@ public class DprReportHtmlRenderer {
 
     // -------------------------------------------------------------- helpers --
 
+    /** Resource-wise capacity sub-table (one per side) - the tab's day + window buckets. */
+    private static void capacityTable(StringBuilder b, String title,
+                               List<DprReportMetrics.CapacityLine> lines,
+                               DprReportMetrics.CapacityLine total, String cur) {
+        if (lines == null || lines.isEmpty()) return;
+        b.append("<div style='font-size:11px;font-weight:bold;color:").append(INK)
+         .append(";margin:10px 0 2px'>").append(title).append("</div>")
+         .append(tableOpen())
+         .append(th("Role", "left"))
+         .append(th("For the day", "right"))
+         .append(th("Qty (window)", "right"))
+         .append(th("Budget days", "right"))
+         .append(th("Counted days", "right"))
+         .append(th("Eff %", "right"))
+         .append(th("Cost impact " + esc(cur), "right")).append("</tr>");
+        int i = 0;
+        for (var l : lines) {
+            b.append(trOpen(i++)).append(capacityCells(l));
+        }
+        if (total != null) {
+            b.append("<tr style='background:").append(ZEBRA).append(";font-weight:bold'>")
+             .append(capacityCells(total));
+        }
+        b.append("</table>")
+         .append(note("For the day = budget &#247; counted days (eff %) on the window's anchor day"
+                 + DOT + "window figures = the report window's cumulative bucket, identical to the Capacity Util. tab."));
+    }
+
+    private static String capacityCells(DprReportMetrics.CapacityLine l) {
+        String day = (l.dayBudget() == null && l.dayCounted() == null) ? "&#8212;"
+                : QTY.format(l.dayBudget() == null ? 0 : l.dayBudget())
+                    + " &#247; " + QTY.format(l.dayCounted() == null ? 0 : l.dayCounted())
+                    + (l.dayEff() == null ? "" : " (" + PCT.format(l.dayEff()) + "%)");
+        String eff = l.eff() == null ? "&#8212;" : PCT.format(l.eff()) + "%";
+        String effColor = l.eff() == null ? MUTED : l.eff() >= 100 ? GOOD : l.eff() >= 90 ? WARN : BAD;
+        String cost;
+        if (l.cost() == null || l.cost() == 0) {
+            cost = "&#8212;";
+        } else {
+            boolean over = l.cost() > 0;
+            cost = "<span style='color:" + (over ? BAD : GOOD) + "'>"
+                    + (over ? "overrun " : "saved ") + MONEY.format(Math.abs(l.cost())) + "</span>";
+        }
+        return td(esc(l.role()), "left")
+                + td(day, "right")
+                + td(l.qty() == null ? "&#8212;" : QTY.format(l.qty()), "right")
+                + td(l.budgetDays() == null ? "&#8212;" : QTY.format(l.budgetDays()), "right")
+                + td(l.countedDays() == null ? "&#8212;" : QTY.format(l.countedDays()), "right")
+                + "<td style='padding:5px 8px;text-align:right;font-size:12px;font-weight:bold;color:" + effColor + "'>" + eff + "</td>"
+                + td(cost, "right")
+                + "</tr>";
+    }
+
+    /**
+     * Plain-language "key notes" on the health parameters (EVM-agent-row 2026-08-11). Pure
+     * restatement of the engine's own figures - the thresholds here are presentation wording,
+     * never new arithmetic. Direction words ("under"/"over", "ahead"/"behind") branch on the sign
+     * of the EXACT money gaps (CV/SV), never on the 4-dp-rounded CPI/SPI, so the notes can never
+     * contradict the KPI cells above them at the 1.0000 rounding boundary. A null CPI/SPI is the
+     * engine's "no data" (no actual cost / no planned value yet); a genuine 0.0 is a real score
+     * (money spent or time passed with nothing earned) and reads as over budget / behind schedule.
+     */
+    private static void evmKeyNotes(StringBuilder b, DprReportMetrics.EvmBlock e, String cur) {
+        b.append("<div style='font-size:11px;font-weight:bold;letter-spacing:.5px;text-transform:uppercase;color:")
+         .append(INK).append(";margin:10px 0 4px'>Key notes</div>");
+
+        // Cost health - CPI is "budgeted work earned per 1 spent"; CV is the exact money gap.
+        if (e.cpi() == null) {
+            keyNote(b, MUTED, "Cost", "not yet measurable" + DASH + "no actual cost on record yet.");
+        } else if (e.cv() >= 0) {
+            keyNote(b, GOOD, "Cost", "every 1 " + esc(cur) + " spent has earned "
+                + COMPACT.format(e.cpi()) + " " + esc(cur) + " of budgeted work (CPI)" + DOT
+                + "work done is worth <b>" + compact(Math.abs(e.cv()))
+                + " more</b> than it cost (CV)" + DOT + "under budget so far.");
+        } else {
+            keyNote(b, BAD, "Cost", "every 1 " + esc(cur) + " spent is earning only "
+                + COMPACT.format(e.cpi()) + " " + esc(cur) + " of budgeted work (CPI)" + DOT
+                + "spending has run <b>" + compact(Math.abs(e.cv()))
+                + " ahead</b> of the value of work done (CV)" + DOT + "over budget.");
+        }
+
+        // Schedule health - SPI is pace vs plan; SV is the exact value of work not yet earned.
+        if (e.spi() == null) {
+            keyNote(b, MUTED, "Schedule", "not yet measurable" + DASH
+                + "no planned value on record for this date.");
+        } else if (e.sv() >= 0) {
+            keyNote(b, GOOD, "Schedule", "work is being earned at " + Math.round(e.spi() * 100)
+                + "% of the planned pace (SPI " + COMPACT.format(e.spi()) + ")" + DOT
+                + "<b>" + compact(Math.abs(e.sv())) + "</b> ahead of plan (SV)" + DOT + "on or ahead of schedule.");
+        } else {
+            keyNote(b, BAD, "Schedule", "work is being earned at " + Math.round(e.spi() * 100)
+                + "% of the planned pace (SPI " + COMPACT.format(e.spi()) + ")" + DOT
+                + "<b>" + compact(Math.abs(e.sv())) + "</b> of planned work is not yet done (SV)"
+                + DOT + "behind schedule.");
+        }
+
+        // Forecast - EAC vs BAC (CPI-based, the tab's default). Without a positive CPI the engine
+        // falls back to EAC = BAC, which is a placeholder, not a projection - say so instead of
+        // printing a green "0 under budget" beside a red CV.
+        if (e.cpi() == null || e.cpi() <= 0) {
+            keyNote(b, MUTED, "Forecast", "no cost forecast yet" + DASH
+                + "it needs both earned value and actual cost on record.");
+        } else {
+            keyNote(b, e.vac() >= 0 ? GOOD : BAD, "Forecast",
+                "at the current cost efficiency the project finishes at <b>" + compact(e.eac())
+                + "</b> against a " + compact(e.bac()) + " budget" + DASH + "<b>"
+                + compact(Math.abs(e.vac())) + (e.vac() >= 0 ? " under" : " over")
+                + " budget</b> (VAC), with " + compact(e.etc()) + " still to spend (ETC).");
+        }
+
+        // TCPI - how hard the remaining work has to perform to land exactly on budget. When the
+        // actual cost has already reached the full budget, TCPI goes negative (or the engine nulls
+        // it at BAC = AC) and no efficiency can save the target - never call that "comfortable".
+        if (e.bac() > 0 && e.ac() >= e.bac()) {
+            keyNote(b, BAD, "To finish on budget", "no longer achievable" + DASH
+                + "the actual cost has already reached the full budget.");
+        } else if (e.tcpi() != null) {
+            keyNote(b, e.tcpi() <= 1 ? GOOD : WARN, "To finish on budget",
+                "the remaining work needs a cost efficiency of " + COMPACT.format(e.tcpi())
+                + " (TCPI)" + DOT + (e.tcpi() <= 1
+                    ? "at or below 1.0" + DASH + "the target is comfortable at today's performance."
+                    : "above 1.0" + DASH + "crews must beat their past cost performance to land on budget."));
+        }
+    }
+
+    /** One key-note line - same left-border card style as the findings block. */
+    private static void keyNote(StringBuilder b, String color, String label, String text) {
+        b.append("<div style='border-left:3px solid ").append(color)
+         .append(";padding:5px 12px;margin:0 0 6px;background:").append(ZEBRA)
+         .append(";font-size:12px'><b style='color:").append(color).append("'>")
+         .append(label).append(":</b> ").append(text).append("</div>");
+    }
+
     /** Explicit money wording: red "overrun X CUR" or green "saved X CUR"; empty when zero. */
+    /** Right-aligned money cell for a cost variance: red positive (overspend), green negative. */
+    private static String varianceCell(Double v) {
+        if (v == null) return td("&#8212;", "right");
+        String color = v > 0 ? BAD : GOOD;
+        String sign = v > 0 ? "+" : "";
+        return "<td style='padding:5px 8px;text-align:right;font-size:12px;font-weight:bold;color:"
+                + color + "'>" + sign + MONEY.format(v) + "</td>";
+    }
+
+    private static String alertLabel(String code) {
+        if (code == null) return "&#8212;";
+        return switch (code) {
+            case "BELOW_MIN_STOCK" -> "<span style='color:#b91c1c;font-weight:600'>Below min stock</span>";
+            case "LOW_COVER" -> "<span style='color:#b45309;font-weight:600'>Low cover</span>";
+            case "NEGATIVE_BALANCE" -> "<span style='color:#b91c1c;font-weight:600'>Negative balance</span>";
+            default -> esc(code);
+        };
+    }
+
     private static String moneyImpact(double implication, String cur) {
         if (implication == 0) return "";
         boolean over = implication > 0;

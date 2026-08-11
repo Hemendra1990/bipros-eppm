@@ -27,6 +27,8 @@ const blank = (): DprIssueRow => ({
   assignedToUserId: null,
   assignedToName: null,
   resolutionNotes: null,
+  interventionRequired: false,
+  dueDate: null,
 });
 
 interface Props {
@@ -147,6 +149,37 @@ export function IssuesGrid({ rows, onChange, supervisorOptions, defaultSuperviso
           value={r.description ?? ""}
           onChange={(v) => u({ description: v || null })}
           placeholder="What happened, why…"
+        />
+      ),
+    },
+    {
+      // Client requirement (AI Agent sheet, DPR row): checkbox whether next-level
+      // intervention is required — flags the issue for project control follow-up.
+      key: "interventionRequired",
+      label: "Intervention?",
+      minWidth: 110,
+      render: (r, _i, u) => (
+        <label className="flex h-full cursor-pointer items-center justify-center" title="Next-level intervention required">
+          <input
+            type="checkbox"
+            checked={r.interventionRequired ?? false}
+            onChange={(e) => u({ interventionRequired: e.target.checked })}
+            className="h-4 w-4 accent-gold"
+          />
+        </label>
+      ),
+    },
+    {
+      // Act-by date ("time frame to act on it") — used by the weekly outstanding digest.
+      key: "dueDate",
+      label: "Act by",
+      minWidth: 140,
+      render: (r, _i, u) => (
+        <input
+          type="date"
+          value={r.dueDate ?? ""}
+          onChange={(e) => u({ dueDate: e.target.value || null })}
+          className="w-full rounded border border-hairline bg-paper px-2.5 py-1.5 text-[0.95rem] text-charcoal focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
         />
       ),
     },

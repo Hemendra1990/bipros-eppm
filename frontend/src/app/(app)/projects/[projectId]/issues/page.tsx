@@ -190,6 +190,17 @@ export default function ProjectIssuesPage() {
           className="w-48"
         />
 
+        <SearchableSelect
+          options={[
+            { value: "", label: "Intervention: all" },
+            { value: "true", label: "Intervention required" },
+          ]}
+          value={filters.interventionRequired ? "true" : ""}
+          onChange={(v) => setFilter("interventionRequired", v === "true" ? true : undefined)}
+          placeholder="Intervention"
+          className="w-48"
+        />
+
         <input
           type="date"
           value={filters.dateFrom ?? ""}
@@ -227,7 +238,7 @@ export default function ProjectIssuesPage() {
           <table className="min-w-full divide-y divide-border text-sm">
             <thead className="bg-surface-hover">
               <tr>
-                {["Title", "Category", "Severity", "Status", "Assigned To", "Date"].map((h) => (
+                {["Title", "Category", "Severity", "Status", "Assigned To", "Date", "Act by"].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-muted"
@@ -261,6 +272,11 @@ export default function ProjectIssuesPage() {
                 <tr key={row.id} className="hover:bg-surface-hover">
                   <td className="px-4 py-3 font-medium text-text-primary max-w-xs truncate">
                     {row.title}
+                    {row.interventionRequired && (
+                      <Badge variant="danger" className="ml-2 align-middle">
+                        Intervention
+                      </Badge>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
                     {categoryLabel(row.category)}
@@ -323,6 +339,19 @@ export default function ProjectIssuesPage() {
                     {row.reportDate
                       ? new Date(row.reportDate).toLocaleDateString()
                       : "—"}
+                  </td>
+                  <td
+                    className={`px-4 py-3 whitespace-nowrap ${
+                      row.dueDate &&
+                      new Date(row.dueDate) < new Date(new Date().toDateString()) &&
+                      row.status !== "CLOSED" &&
+                      row.status !== "RESOLVED" &&
+                      row.status !== "CANCELLED"
+                        ? "font-semibold text-danger"
+                        : "text-text-muted"
+                    }`}
+                  >
+                    {row.dueDate ? new Date(row.dueDate).toLocaleDateString() : "—"}
                   </td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">
                     {fmtDateTime(row.openedAt)}

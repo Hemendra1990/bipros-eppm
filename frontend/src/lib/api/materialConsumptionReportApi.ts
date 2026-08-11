@@ -82,6 +82,45 @@ function buildQuery(filters: MaterialConsumptionFilters): string {
   return qs ? `?${qs}` : "";
 }
 
+/** Mirrors MaterialBalanceRow (bipros-resource) — the availability engine's per-material line. */
+export interface MaterialBalanceRow {
+  materialKey: string;
+  materialName: string | null;
+  unit: string | null;
+  receivedWindow: number | null;
+  issuedWindow: number | null;
+  consumedWindow: number | null;
+  receivedToDate: number | null;
+  issuedToDate: number | null;
+  consumedToDate: number | null;
+  storeClosing: number | null;
+  siteBalance: number | null;
+  minStockLevel: number | null;
+  avgDailyConsumption: number | null;
+  daysOfCover: number | null;
+  alerts: string[];
+}
+
+export interface MaterialAvailabilityResult {
+  tracked: boolean;
+  rows: MaterialBalanceRow[];
+}
+
+/** Mirrors SupervisorMaterialRow — issued vs DPR-reported per (supervisor × material). */
+export interface SupervisorMaterialRow {
+  supervisorKey: string;
+  supervisorName: string | null;
+  materialName: string | null;
+  unit: string | null;
+  issuedToDate: number;
+  reportedToDate: number;
+  varianceQty: number;
+  varianceValue: number | null;
+  wastageQty: number | null;
+  issuedWindow: number | null;
+  reportedWindow: number | null;
+}
+
 export const materialConsumptionReportApi = {
   generate: (projectId: string, filters: MaterialConsumptionFilters = {}) =>
     apiClient
@@ -89,6 +128,30 @@ export const materialConsumptionReportApi = {
         `/v1/projects/${projectId}/reports/material-consumption${buildQuery(filters)}`,
       )
       .then((r) => r.data),
+
+  availability: (projectId: string, from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    const qs = params.toString();
+    return apiClient
+      .get<ApiResponse<MaterialAvailabilityResult>>(
+        `/v1/projects/${projectId}/reports/material-consumption/availability${qs ? `?${qs}` : ""}`,
+      )
+      .then((r) => r.data);
+  },
+
+  supervisorComparison: (projectId: string, asOf?: string, windowFrom?: string) => {
+    const params = new URLSearchParams();
+    if (asOf) params.set("asOf", asOf);
+    if (windowFrom) params.set("windowFrom", windowFrom);
+    const qs = params.toString();
+    return apiClient
+      .get<ApiResponse<SupervisorMaterialRow[]>>(
+        `/v1/projects/${projectId}/reports/material-consumption/supervisor-comparison${qs ? `?${qs}` : ""}`,
+      )
+      .then((r) => r.data);
+  },
 
   downloadExcel: async (projectId: string, filters: MaterialConsumptionFilters = {}) => {
     const response = await apiClient.get<Blob>(

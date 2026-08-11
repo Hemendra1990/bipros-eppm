@@ -1,7 +1,10 @@
 package com.bipros.api.listener;
 
+import com.bipros.api.email.EmailService;
+import com.bipros.api.notification.DprAlertConfig;
 import com.bipros.api.notification.DprNotificationType;
 import com.bipros.api.service.DprNotificationRecipientResolver;
+import com.bipros.security.domain.repository.UserRepository;
 import com.bipros.common.event.DprMutationType;
 import com.bipros.common.event.DprSubmittedEvent;
 import com.bipros.common.notification.NotificationService;
@@ -38,12 +41,17 @@ class DprApprovalNotificationListenerTest {
     @Mock private DailyProgressReportRepository dprRepository;
     @Mock private NotificationService notificationService;
     @Mock private DprNotificationRecipientResolver recipientResolver;
+    @Mock private UserRepository userRepository;
+    @Mock private EmailService emailService;
+    @Mock private DprAlertConfig alertConfig;
+    @Mock private com.bipros.api.notification.AgentMailLogService mailLogService;
 
     private DprApprovalNotificationListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new DprApprovalNotificationListener(dprRepository, notificationService, recipientResolver);
+        listener = new DprApprovalNotificationListener(dprRepository, notificationService, recipientResolver,
+            userRepository, emailService, alertConfig, mailLogService);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────────
@@ -196,6 +204,74 @@ class DprApprovalNotificationListenerTest {
 
         assertThat(typeCaptor.getValue()).isEqualTo(DprNotificationType.DPR_REJECTED);
         assertThat(bodyCaptor.getValue()).contains("Quantities don't match survey");
+    }
+
+    // ── test 5b: REJECTED with a linked, emailable submitter → rejection email ───
+
+    @Test
+    @DisplayName("5b. REJECTED: rejection email sent to the submitter with the reason")
+    void rejected_sendsEmailToSubmitter() {
+        UUID dprId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID submitterId = UUID.randomUUID();
+
+        DailyProgressReport dpr = dpr(dprId, projectId, DprApprovalStatus.REJECTED);
+        dpr.setSubmittedByUserId(submitterId);
+        dpr.setRejectionReason("Quantities don't match survey");
+
+        when(dprRepository.findById(dprId)).thenReturn(Optional.of(dpr));
+        com.bipros.security.domain.model.User user = org.mockito.Mockito.mock(com.bipros.security.domain.model.User.class);
+        when(user.getEmail()).thenReturn("supervisor@example.com");
+        when(userRepository.findById(submitterId)).thenReturn(Optional.of(user));
+        when(alertConfig.channel()).thenReturn("EMAIL");
+        when(alertConfig.appBaseUrl()).thenReturn("http://localhost:3000");
+        when(emailService.send(any())).thenReturn(EmailService.SendResult.SENT);
+
+        listener.onDpr(event(dprId, DprMutationType.UPDATED));
+
+        ArgumentCaptor<com.bipros.api.email.EmailMessage> emailCaptor =
+            ArgumentCaptor.forClass(com.bipros.api.email.EmailMessage.class);
+        verify(emailService, times(1)).send(emailCaptor.capture());
+        assertThat(emailCaptor.getValue().to()).containsExactly("supervisor@example.com");
+        assertThat(emailCaptor.getValue().html()).contains("Quantities don&#39;t match survey");
+        assertThat(emailCaptor.getValue().subject()).contains("DPR rejected");
+    }
+
+    // ── test 5c: REJECTED email + in-app both land in the agent mail log ─────────
+
+    @Test
+    @DisplayName("5c. REJECTED: delivery rows logged for the email and the in-app mirror")
+    void rejected_logsDeliveries() {
+        UUID dprId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID submitterId = UUID.randomUUID();
+
+        DailyProgressReport dpr = dpr(dprId, projectId, DprApprovalStatus.REJECTED);
+        dpr.setSubmittedByUserId(submitterId);
+        dpr.setRejectionReason("Quantities don't match survey");
+
+        when(dprRepository.findById(dprId)).thenReturn(Optional.of(dpr));
+        com.bipros.security.domain.model.User user = org.mockito.Mockito.mock(com.bipros.security.domain.model.User.class);
+        when(user.getEmail()).thenReturn("supervisor@example.com");
+        when(userRepository.findById(submitterId)).thenReturn(Optional.of(user));
+        when(alertConfig.channel()).thenReturn("EMAIL");
+        when(alertConfig.appBaseUrl()).thenReturn("http://localhost:3000");
+        when(emailService.send(any())).thenReturn(EmailService.SendResult.SENT);
+
+        listener.onDpr(event(dprId, DprMutationType.UPDATED));
+
+        ArgumentCaptor<com.bipros.api.notification.AgentMailLog> cap =
+            ArgumentCaptor.forClass(com.bipros.api.notification.AgentMailLog.class);
+        verify(mailLogService, times(2)).log(cap.capture());
+        assertThat(cap.getAllValues()).anySatisfy(r -> {
+            assertThat(r.getCategory()).isEqualTo(com.bipros.api.notification.AgentMailLog.CAT_DPR_REJECTION);
+            assertThat(r.getChannel()).isEqualTo(com.bipros.api.notification.AgentMailLog.CH_EMAIL);
+            assertThat(r.getRecipientEmail()).isEqualTo("supervisor@example.com");
+            assertThat(r.getStatus()).isEqualTo("SENT");
+            assertThat(r.getBodyHtml()).contains("Quantities don&#39;t match survey");
+        });
+        assertThat(cap.getAllValues()).anySatisfy(r ->
+            assertThat(r.getChannel()).isEqualTo(com.bipros.api.notification.AgentMailLog.CH_IN_APP));
     }
 
     // ── test 6: DELETED event → findById NOT called, no create ───────────────────

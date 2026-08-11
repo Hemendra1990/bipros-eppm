@@ -36,11 +36,14 @@ public class BoqRebuildService {
       // freezing stale quantities forever).
       if (!Boolean.TRUE.equals(item.getManualOverride())) {
         BigDecimal qty = nz(item.getQtyExecutedToDate());   // measured basis (A5)
-        BigDecimal cost = boqActualCostQuery.sumActualCost(projectId, boqId);
+        BigDecimal cost = nz(boqActualCostQuery.sumActualCost(projectId, boqId));
+        // actualCost IS the amount and is never gated on the measured quantity; only the per-unit
+        // rate needs a denominator, and it is null when nothing has been measured (11 Aug 2026).
         BigDecimal actualRate = qty.signum() == 0
-            ? BigDecimal.ZERO
+            ? null
             : cost.divide(qty, 4, RoundingMode.HALF_UP);
 
+        item.setActualCost(cost);
         item.setActualRate(actualRate);
         BoqCalculator.recompute(item);          // reuse canonical derived-field math
         // Review fix: the old local qty-only status mirror contradicted the fraction-aware

@@ -217,11 +217,19 @@ public class EvmService {
 
         BigDecimal bac = EvmRollupService.getActivityBac(activity, expensesByActivity,
                 assignmentsByActivity, scAssignmentsByActivity);
-        BigDecimal pv = EvmRollupService.getActivityPv(activity, bac, dataDate);
+        BigDecimal pvRaw = EvmRollupService.getActivityPv(activity, bac, dataDate);
+
+        // Same rule as getCostAccountRollup: getActivityPv returns ZERO both for genuinely zero PV
+        // and for activities whose dates make PV non-computable (no planned start/finish, or data
+        // date before planned start). Those cases must surface as null so the card shows "—"
+        // instead of a contradictory SV = +EV (green) next to SPI = 0.00 (red).
+        boolean pvUnknown = activity.getPlannedFinishDate() == null
+                || activity.getPlannedStartDate() == null
+                || dataDate.isBefore(activity.getPlannedStartDate());
 
         EvmTechnique technique = resolveEvmTechnique(activity.getPercentCompleteType());
         EvmTechniqueStrategy strategy = EvmTechniqueFactory.getStrategy(technique);
-        BigDecimal ev = strategy.calculateEarnedValue(activity, bac, pv);
+        BigDecimal ev = strategy.calculateEarnedValue(activity, bac, pvRaw);
 
         // Per-activity DPR AC fetch — one query for this activity only, since getActivityEvm is a
         // single-activity endpoint (not part of the project-wide rollup that uses sumByActivity()).
@@ -232,20 +240,26 @@ public class EvmService {
         Map<String, BigDecimal> ctx = Map.of(
                 "EV", nvl(ev),
                 "AC", nvl(ac),
-                "PV", nvl(pv)
+                "PV", nvl(pvRaw)
         );
 
         BigDecimal cv = safeEvalBigDecimal("EVM_CV", projectId, ctx, ev.subtract(ac));
-        BigDecimal sv = safeEvalBigDecimal("EVM_SV", projectId, ctx, ev.subtract(pv));
 
         Double cpi = safeEvalDouble("EVM_CPI", projectId, ctx,
                 ac.compareTo(BigDecimal.ZERO) != 0
                         ? ev.divide(ac, 4, RoundingMode.HALF_UP).doubleValue()
                         : null);
-        Double spi = safeEvalDouble("EVM_SPI", projectId, ctx,
-                pv.compareTo(BigDecimal.ZERO) != 0
-                        ? ev.divide(pv, 4, RoundingMode.HALF_UP).doubleValue()
-                        : null);
+
+        // PV-dependent metrics are null when PV is unknown — skip the formula engine too, so a
+        // configured EVM_SV/EVM_SPI formula can't turn "unknown" into a misleading 0.
+        BigDecimal pv = pvUnknown ? null : pvRaw;
+        BigDecimal sv = pvUnknown ? null
+                : safeEvalBigDecimal("EVM_SV", projectId, ctx, ev.subtract(pvRaw));
+        Double spi = pvUnknown ? null
+                : safeEvalDouble("EVM_SPI", projectId, ctx,
+                        pvRaw.compareTo(BigDecimal.ZERO) != 0
+                                ? ev.divide(pvRaw, 4, RoundingMode.HALF_UP).doubleValue()
+                                : null);
 
         Double pct = activity.getPercentComplete();
 

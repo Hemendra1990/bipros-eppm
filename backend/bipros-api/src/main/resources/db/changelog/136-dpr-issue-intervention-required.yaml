@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 136-dpr-issue-intervention-required
+      author: claude
+      comment: Supervisor "next-level intervention required" checkbox on DPR issues (AI Agent sheet, DPR row bullet 7)
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_issues
+            columns:
+              - column:
+                  name: intervention_required
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints: {nullable: false}
+      rollback:
+        - dropColumn: {schemaName: project, tableName: dpr_issues, columnName: intervention_required}

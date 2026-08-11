@@ -23,6 +23,7 @@ import { DprActivityForm } from "@/components/dpr/DprActivityForm";
 import { fmtQty } from "@/components/dpr/dprFormulas";
 import type { SelectOption } from "@/components/common/SearchableSelect";
 import { DprDayList, DprDaySkeleton } from "@/components/dpr/DprDayList";
+import { DprAnalyticsPanel } from "@/components/dpr/DprAnalyticsPanel";
 import { DprApprovalActions } from "@/components/dpr/DprApprovalActions";
 import { DprDetailModal } from "@/components/dpr/DprDetailModal";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
@@ -464,6 +465,7 @@ export default function DprPage() {
   const [prefill, setPrefill] = useState<DprPrefill | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingCommodity, setIsGeneratingCommodity] = useState(false);
   // AI Insights → DPR Intelligence deep-links here two ways: ?view=approvals opens the queue, and
   // ?focus=<dprId> targets one pending DPR. A focused pending DPR lives in the approvals queue, so
   // ?focus also opens that view and the id is used to scroll/highlight the matching row.
@@ -618,6 +620,20 @@ export default function DprPage() {
       setPageError(getErrorMessage(err, "Failed to generate report"));
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Executed Commodity Summary workbook for the To-date's calendar month (BOQ / Activity /
+  // Per-supervisor sheets — AI Agent sheet, DPR row).
+  const handleCommoditySummary = async () => {
+    setPageError(null);
+    setIsGeneratingCommodity(true);
+    try {
+      await dprApi.downloadCommoditySummary(projectId, (toInput || to).slice(0, 7));
+    } catch (err) {
+      setPageError(getErrorMessage(err, "Failed to generate commodity summary"));
+    } finally {
+      setIsGeneratingCommodity(false);
     }
   };
 
@@ -845,6 +861,16 @@ export default function DprPage() {
                 <Download className="h-4 w-4" />
                 {isGenerating ? "Generating…" : "Generate Report"}
               </button>
+              <button
+                type="button"
+                onClick={handleCommoditySummary}
+                disabled={isGeneratingCommodity}
+                title="Download the Executed Commodity Summary (BOQ level, activity level, per supervisor) for the To-date's month"
+                className="inline-flex items-center gap-2 rounded-md border border-hairline bg-paper px-4 py-2 text-sm font-semibold text-charcoal hover:bg-ivory disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                {isGeneratingCommodity ? "Generating…" : "Commodity Summary"}
+              </button>
             </div>
           )}
         </div>
@@ -884,6 +910,7 @@ export default function DprPage() {
           <DprApprovalsView projectId={projectId} focusDprId={focusDprId} />
         ) : (
           <>
+            <DprAnalyticsPanel projectId={projectId} from={from} to={to} />
             {rows.length === 0 && (statusFilter !== "ALL" || supervisorFilter !== "ALL") && (
               <div className="mb-4 rounded-lg border border-dashed border-hairline bg-ivory/30 px-6 py-8 text-center text-sm text-slate">
                 No DPRs match the selected filters in this date range.

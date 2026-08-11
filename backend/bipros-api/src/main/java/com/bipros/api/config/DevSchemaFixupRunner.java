@@ -54,6 +54,7 @@ public class DevSchemaFixupRunner {
       ensureDprBoqItemFk();
       ensureDprBoqOperationFk();
       repairGateAStoredVariance();
+      backfillBoqActualCost();
       log.info("[DevSchemaFixupRunner] complete");
     };
   }
@@ -412,6 +413,88 @@ public class DevSchemaFixupRunner {
       }
     } catch (Exception e) {
       log.warn("[DevSchemaFixupRunner] fixup 132 (Gate A stored variance) failed — continuing", e);
+    }
+  }
+
+  /**
+   * Fixup 141 — mirror of Liquibase changeset 141: seed {@code boq_items.actual_cost} for lines
+   * that already have approved DPRs, and re-derive the columns that depend on it.
+   *
+   * <p>{@code actual_amount} used to be reconstructed as {@code qty_executed_to_date × actual_rate},
+   * so a split line whose spend sat entirely on a non-measurement operation stored zero cost while
+   * its earned budget was credited in full. The cost is now carried in its own column; this brings
+   * existing rows onto that basis without waiting for their next DPR event.
+   *
+   * <p>Scope guards: only rows with at least one APPROVED DPR (a seeded line with no DPR history
+   * keeps its workbook {@code qty × rate} amount), never {@code manual_override} rows (same rule
+   * {@code BoqActualRateRecalcListener} applies), and only where {@code actual_cost IS NULL} — so
+   * re-running is a no-op and it never overwrites a live roll-up.
+   *
+   * <p>The five cost legs and the Gate A earned-budget basis are copied verbatim from
+   * {@code BoqActualCostQuery.sumActualCost} and {@code BoqCalculator.earnedBudget}; they must stay
+   * identical or the BOQ tab disagrees with itself.
+   */
+  private void backfillBoqActualCost() {
+    try {
+      int updated = jdbcTemplate.update(
+          """
+          WITH c AS (
+            SELECT b.id,
+              ROUND(COALESCE((SELECT SUM(u.contrib) FROM (
+                  SELECT m.line_cost AS contrib FROM project.dpr_manpower m
+                    JOIN project.daily_progress_reports d ON m.dpr_id = d.id
+                    WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                  UNION ALL
+                  SELECT e.line_cost FROM project.dpr_equipment e
+                    JOIN project.daily_progress_reports d ON e.dpr_id = d.id
+                    WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                  UNION ALL
+                  SELECT mt.line_cost FROM project.dpr_material mt
+                    JOIN project.daily_progress_reports d ON mt.dpr_id = d.id
+                    WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                  UNION ALL
+                  SELECT COALESCE(mcl.line_cost,0) FROM resource.material_consumption_logs mcl
+                    WHERE mcl.line_cost IS NOT NULL AND mcl.activity_id IN (
+                      SELECT DISTINCT d2.activity_id FROM project.daily_progress_reports d2
+                      WHERE d2.boq_item_id = b.id AND d2.activity_id IS NOT NULL
+                        AND d2.approval_status = 'APPROVED')
+                  UNION ALL
+                  SELECT (sc.quantity * COALESCE(a.rate_per_unit,0)) FROM project.dpr_sub_contractor sc
+                    JOIN project.daily_progress_reports d ON sc.dpr_id = d.id
+                    LEFT JOIN resource.activity_sub_contractor_assignments a
+                      ON a.id = sc.activity_sub_contractor_assignment_id
+                    WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                ) u), 0), 2) AS cost,
+              CASE
+                WHEN b.earned_fraction IS NOT NULL
+                  THEN b.earned_fraction * COALESCE(b.boq_qty,0) * COALESCE(b.budgeted_rate,0)
+                WHEN COALESCE(b.boq_qty,0) = 0
+                  THEN COALESCE(b.qty_executed_to_date,0) * COALESCE(b.budgeted_rate,0)
+                ELSE LEAST(COALESCE(b.qty_executed_to_date,0), b.boq_qty) * COALESCE(b.budgeted_rate,0)
+              END AS earned
+            FROM project.boq_items b
+            WHERE b.actual_cost IS NULL
+              AND COALESCE(b.manual_override, FALSE) = FALSE
+              AND EXISTS (SELECT 1 FROM project.daily_progress_reports d3
+                          WHERE d3.boq_item_id = b.id AND d3.approval_status = 'APPROVED')
+          )
+          UPDATE project.boq_items t SET
+            actual_cost = c.cost,
+            actual_amount = c.cost,
+            actual_rate = CASE WHEN COALESCE(t.qty_executed_to_date,0) = 0 THEN NULL
+                               ELSE ROUND(c.cost / t.qty_executed_to_date, 4) END,
+            cost_variance = ROUND(c.cost - c.earned, 2),
+            cost_variance_percent = CASE WHEN c.earned = 0 THEN NULL
+                                         ELSE ROUND((c.cost - c.earned) / c.earned, 6) END
+          FROM c WHERE t.id = c.id
+          """);
+      if (updated > 0) {
+        log.info("[DevSchemaFixupRunner] fixup 141 applied: actual_cost seeded on {} BOQ line(s)", updated);
+      } else {
+        log.debug("[DevSchemaFixupRunner] fixup 141: every BOQ line already carries actual_cost — no-op");
+      }
+    } catch (Exception e) {
+      log.warn("[DevSchemaFixupRunner] fixup 141 (BOQ actual_cost backfill) failed — continuing", e);
     }
   }
 

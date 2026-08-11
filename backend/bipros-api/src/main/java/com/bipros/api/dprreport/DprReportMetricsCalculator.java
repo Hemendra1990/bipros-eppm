@@ -99,6 +99,116 @@ public class DprReportMetricsCalculator {
             }
         }
 
+        // Supervisor performance + commodity summary (DPR-agent-row additions 2026-08-10) —
+        // pass-through of the snapshot's derived rows; no arithmetic beyond double conversion.
+        m.referenceDay = s.referenceDay() != null ? s.referenceDay().toString() : null;
+        if (s.supervisorPerformance() != null) {
+            for (var p : s.supervisorPerformance()) {
+                m.supervisorPerformance.add(new DprReportMetrics.SupPerf(p.name(),
+                    p.filedDay(), dbl(p.qtyDay()), p.filedWindow(), dbl(p.qtyWindow()),
+                    p.contribution() != null ? dbl(p.contribution()) : null));
+                allow(m, p.filedDay());
+                allow(m, dbl(p.qtyDay()));
+                allow(m, p.filedWindow());
+                allow(m, dbl(p.qtyWindow()));
+                if (p.contribution() != null) allow(m, dbl(p.contribution()));
+            }
+        }
+        if (s.commodityBoq() != null) {
+            for (var c : s.commodityBoq()) {
+                m.commodityBoq.add(new DprReportMetrics.CommodityLine(c.label(), c.unit(),
+                    c.contractedQty() != null ? dbl(c.contractedQty()) : null,
+                    dbl(c.qtyMonth()), dbl(c.qtyToDate()),
+                    c.pctComplete() != null ? dbl(c.pctComplete()) : null));
+                allow(m, dbl(c.qtyMonth()));
+                allow(m, dbl(c.qtyToDate()));
+            }
+        }
+        if (s.commodityActivities() != null) {
+            for (var c : s.commodityActivities()) {
+                m.commodityActivities.add(new DprReportMetrics.CommodityLine(c.label(), c.unit(),
+                    null, dbl(c.qtyMonth()), dbl(c.qtyToDate()), null));
+            }
+        }
+
+        // Activity costing (Costing-agent-row 2026-08-11): aggregate the Daily Cost Report's
+        // per-DPR rows by activity name. Actual + budgeted come from the engine's own row figures
+        // ("clients should not recompute"); BOQ value = qty × BoqCostRow.boqRate for
+        // revenue-counting rows only (split-line non-measurement ops excluded, same as the P&L).
+        if (s.cost() != null && s.cost().rows() != null && !s.cost().rows().isEmpty()) {
+            Map<String, Double> boqRateByItemNo = new HashMap<>();
+            if (s.boqRows() != null) {
+                for (var b : s.boqRows()) {
+                    if (b.itemNo() != null && b.boqRate() != null) {
+                        boqRateByItemNo.putIfAbsent(b.itemNo(), b.boqRate().doubleValue());
+                    }
+                }
+            }
+            final class Agg {
+                double qty; String unit; double actual;
+                double budgeted; boolean anyBudgeted;
+                double boqValue; boolean anyBoq;
+            }
+            Map<String, Agg> byActivity = new LinkedHashMap<>();
+            for (var row : s.cost().rows()) {
+                String name = row.activity() != null && !row.activity().isBlank()
+                    ? row.activity() : "(unnamed)";
+                Agg a = byActivity.computeIfAbsent(name, k -> new Agg());
+                a.qty += dbl(row.qtyExecuted());
+                if (a.unit == null && row.unit() != null) a.unit = row.unit();
+                a.actual += dbl(row.actualCost());
+                if (row.budgetedCost() != null) { a.budgeted += dbl(row.budgetedCost()); a.anyBudgeted = true; }
+                Double boqRate = row.boqItemNo() != null ? boqRateByItemNo.get(row.boqItemNo()) : null;
+                if (boqRate != null && row.countsAsRevenue()) {
+                    a.boqValue += dbl(row.qtyExecuted()) * boqRate;
+                    a.anyBoq = true;
+                }
+            }
+            List<DprReportMetrics.ActivityCost> lines = new ArrayList<>(byActivity.size());
+            double tQty = 0, tActual = 0, tBudgeted = 0, tBoq = 0;
+            boolean tAnyBudgeted = false, tAnyBoq = false;
+            for (var e : byActivity.entrySet()) {
+                Agg a = e.getValue();
+                Double budgeted = a.anyBudgeted ? a.budgeted : null;
+                Double boqVal = a.anyBoq ? a.boqValue : null;
+                lines.add(new DprReportMetrics.ActivityCost(e.getKey(), a.qty, a.unit, a.actual,
+                    budgeted, boqVal,
+                    budgeted != null ? a.actual - budgeted : null,
+                    boqVal != null ? a.actual - boqVal : null));
+                tQty += a.qty; tActual += a.actual;
+                if (a.anyBudgeted) { tBudgeted += a.budgeted; tAnyBudgeted = true; }
+                if (a.anyBoq) { tBoq += a.boqValue; tAnyBoq = true; }
+            }
+            lines.sort((x, y) -> Double.compare(
+                Math.abs(y.varVsBudgeted() != null ? y.varVsBudgeted() : y.actualCost()),
+                Math.abs(x.varVsBudgeted() != null ? x.varVsBudgeted() : x.actualCost())));
+            m.activityCostingCount = lines.size();
+            m.activityCosting.addAll(lines.subList(0, Math.min(10, lines.size())));
+            m.activityCostingTotal = new DprReportMetrics.ActivityCost("Total", tQty, null, tActual,
+                tAnyBudgeted ? tBudgeted : null, tAnyBoq ? tBoq : null,
+                tAnyBudgeted ? tActual - tBudgeted : null, tAnyBoq ? tActual - tBoq : null);
+            for (var l : m.activityCosting) {
+                allow(m, l.actualCost());
+                if (l.qty() != null) allow(m, l.qty());
+                if (l.budgetedValue() != null) allow(m, l.budgetedValue());
+                if (l.boqValue() != null) allow(m, l.boqValue());
+                if (l.varVsBudgeted() != null) allow(m, l.varVsBudgeted());
+                if (l.varVsBoq() != null) allow(m, l.varVsBoq());
+            }
+            allow(m, m.activityCostingTotal.actualCost());
+            if (m.activityCostingTotal.budgetedValue() != null) allow(m, m.activityCostingTotal.budgetedValue());
+            if (m.activityCostingTotal.boqValue() != null) allow(m, m.activityCostingTotal.boqValue());
+            long overBudget = lines.stream()
+                .filter(l -> l.varVsBudgeted() != null && l.varVsBudgeted() > 0).count();
+            if (overBudget > 0) {
+                m.anomalies.add(new DprReportMetrics.Anomaly("ACTIVITY_COST_OVERRUN",
+                    "Activities above budgeted-rate value", "warning",
+                    overBudget + " activit" + (overBudget == 1 ? "y" : "ies")
+                        + " cost more than their value at budgeted rates in this window",
+                    overBudget));
+            }
+        }
+
         // Costing — stored split-corrected BOQ columns; top variances by absolute value.
         if (s.boqRows() != null) {
             m.boqTotalVariance = s.boqRows().stream().mapToDouble(b -> dbl(b.costVariance())).sum();
@@ -117,8 +227,7 @@ public class DprReportMetricsCalculator {
         }
 
         // Material consumption — aggregated from the window's APPROVED DPR material lines
-        // (same rows the cost report prices). Availability/receipts are excluded until the
-        // material availability defects (finding F5) are fixed at source.
+        // (same rows the cost report prices).
         if (s.dprs() != null) {
             Map<String, double[]> byMaterial = new LinkedHashMap<>();
             Map<String, String> unitByMaterial = new LinkedHashMap<>();
@@ -141,6 +250,50 @@ public class DprReportMetricsCalculator {
                     allow(m, e.getValue()[0]);
                     allow(m, e.getValue()[1]);
                 });
+        }
+
+        // Material availability (store) + supervisor issued-vs-reported — Material-agent-row 2026-08-11.
+        if (s.materialAvailability() != null) {
+            m.materialTracked = s.materialAvailability().tracked();
+            for (var row : s.materialAvailability().rows()) {
+                String alert = row.alerts() == null || row.alerts().isEmpty() ? null : row.alerts().get(0);
+                m.materialAvailability.add(new DprReportMetrics.MaterialAvail(
+                    row.materialName(), row.unit(),
+                    dblOrNull(row.receivedWindow()), dblOrNull(row.issuedWindow()), dblOrNull(row.consumedWindow()),
+                    dblOrNull(row.storeClosing()), dblOrNull(row.daysOfCover()), alert));
+                for (var v : new java.math.BigDecimal[]{row.receivedWindow(), row.issuedWindow(),
+                        row.consumedWindow(), row.storeClosing(), row.daysOfCover()}) {
+                    if (v != null) allow(m, v.doubleValue());
+                }
+            }
+            long shortSupply = m.materialAvailability.stream()
+                .filter(a -> "BELOW_MIN_STOCK".equals(a.alert()) || "LOW_COVER".equals(a.alert()))
+                .count();
+            if (shortSupply > 0) {
+                m.anomalies.add(new DprReportMetrics.Anomaly("MATERIAL_SHORT_SUPPLY",
+                    "Materials in short supply", "warning",
+                    shortSupply + " material(s) below minimum stock or low days-of-cover", shortSupply));
+            }
+        }
+        if (s.supervisorMaterialVariances() != null) {
+            for (var v : s.supervisorMaterialVariances()) {
+                m.supervisorMaterialVariances.add(new DprReportMetrics.SupMaterialVar(
+                    v.supervisorName(), v.materialName(), v.unit(),
+                    dbl(v.issuedToDate()), dbl(v.reportedToDate()), dbl(v.varianceQty()),
+                    dblOrNull(v.varianceValue())));
+                allow(m, dbl(v.issuedToDate()));
+                allow(m, dbl(v.reportedToDate()));
+                allow(m, dbl(v.varianceQty()));
+                if (v.varianceValue() != null) allow(m, v.varianceValue().doubleValue());
+            }
+            long overIssued = s.supervisorMaterialVariances().stream()
+                .filter(v -> v.varianceQty().signum() > 0).count();
+            if (overIssued > 0) {
+                m.anomalies.add(new DprReportMetrics.Anomaly("MATERIAL_ISSUE_VARIANCE",
+                    "Issued material exceeds supervisor-reported consumption", "warning",
+                    overIssued + " supervisor/material line(s) with issued > reported (see §Material)",
+                    overIssued));
+            }
         }
 
         // Per-supervisor workdone (raw workdone qty — the labelled tally, not the billable basis)
@@ -176,22 +329,32 @@ public class DprReportMetricsCalculator {
             var e = s.evm();
             m.evm = new DprReportMetrics.EvmBlock(
                 dbl(e.bac()), dbl(e.plannedValue()), dbl(e.earnedValue()), dbl(e.totalActual()),
-                dbl(e.costPerformanceIndex()), dbl(e.schedulePerformanceIndex()),
+                // Nullable pass-through: the engine's null (no AC / no PV) must stay distinct from
+                // a genuine 0.0 score, or the key notes mislabel a real overrun as "no data".
+                dblOrNull(e.costPerformanceIndex()), dblOrNull(e.schedulePerformanceIndex()),
                 dbl(e.estimateAtCompletion()), dbl(e.bac()) - dbl(e.estimateAtCompletion()),
                 // costPercentComplete is a FRACTION (0.238) — the tabs multiply by 100; so do we.
-                dbl(e.costPercentComplete()) * 100.0);
+                dbl(e.costPercentComplete()) * 100.0,
+                // EVM-agent-row 2026-08-11: the engine's own SV/CV/ETC/TCPI, no local arithmetic.
+                dbl(e.scheduleVariance()), dbl(e.costVariance()),
+                dbl(e.estimateToComplete()), dblOrNull(e.toCompletePerformanceIndex()));
             allow(m, m.evm.bac());
             allow(m, m.evm.pv());
             allow(m, m.evm.ev());
             allow(m, m.evm.ac());
             allow(m, m.evm.eac());
             allow(m, m.evm.vac());
+            allow(m, m.evm.sv());
+            allow(m, m.evm.cv());
+            allow(m, m.evm.etc());
         }
         return m;
     }
 
     private void addSection(DprReportMetrics m, CapacityUtilizationReport.Section section, String kind) {
         if (section == null || section.rows() == null) return;
+        List<DprReportMetrics.CapacityLine> lines =
+            "manpower".equals(kind) ? m.capacityManpower : m.capacityEquipment;
         for (var row : section.rows()) {
             var cum = row.cumulative(); // RolePeriod
             if (cum == null) continue;
@@ -199,6 +362,7 @@ public class DprReportMetricsCalculator {
             double impl = dbl(cum.costImplication());
             String sev = efficiencySeverity(util);
             m.roleEfficiencies.add(new DprReportMetrics.RoleEfficiency(row.roleName(), util, impl, sev));
+            lines.add(capacityLine(m, row.roleName(), row.forTheDay(), cum));
             if (util != null) allow(m, util);
             allow(m, impl);
             if ("critical".equals(sev) || "warning".equals(sev)) {
@@ -212,6 +376,29 @@ public class DprReportMetricsCalculator {
                     "Overrun " + fmtNumber(impl) + " " + m.currencyCode, impl));
             }
         }
+        if (section.totalCumulative() != null) {
+            var total = capacityLine(m, "Total", section.totalForTheDay(), section.totalCumulative());
+            if ("manpower".equals(kind)) m.capacityManpowerTotal = total;
+            else m.capacityEquipmentTotal = total;
+        }
+    }
+
+    /** Pass-through of one Capacity-tab role row (day + cumulative buckets) — no arithmetic. */
+    private DprReportMetrics.CapacityLine capacityLine(
+            DprReportMetrics m, String role,
+            CapacityUtilizationReport.RolePeriod day, CapacityUtilizationReport.RolePeriod cum) {
+        Double dayBudget = day == null ? null : dblOrNull(day.budgetDays());
+        Double dayCounted = day == null ? null : dblOrNull(day.actualDays());
+        Double dayEff = day == null ? null : dblOrNull(day.utilizationPct());
+        Double qty = dblOrNull(cum.qty());
+        Double budgetDays = dblOrNull(cum.budgetDays());
+        Double countedDays = dblOrNull(cum.actualDays());
+        for (Double v : new Double[]{dayBudget, dayCounted, qty, budgetDays, countedDays}) {
+            if (v != null) allow(m, v);
+        }
+        return new DprReportMetrics.CapacityLine(role, dayBudget, dayCounted, dayEff,
+            qty, budgetDays, countedDays, dblOrNull(cum.utilizationPct()),
+            dblOrNull(cum.costImplication()));
     }
 
     private static boolean isOpen(String status) {

@@ -155,6 +155,20 @@ public class DbsController {
         return ResponseEntity.ok(ApiResponse.ok(body));
     }
 
+    /**
+     * "BOQ level performance supervisor wise — Cost" (AI Agent sheet, DBS row): per
+     * (BOQ item × supervisor) qty / income / cost / contribution over the period window.
+     */
+    @GetMapping("/boq-supervisor-comparison")
+    public ResponseEntity<ApiResponse<List<com.bipros.dbs.api.dto.BoqSupervisorPerformanceRow>>> boqSupervisorComparison(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
+
+        return ResponseEntity.ok(
+            ApiResponse.ok(queryService.boqSupervisorComparison(projectId, periodType, date)));
+    }
+
     @GetMapping("/supervisors")
     public ResponseEntity<ApiResponse<List<DbsSupervisorSummaryDto>>> listSupervisors(
         @PathVariable UUID projectId,

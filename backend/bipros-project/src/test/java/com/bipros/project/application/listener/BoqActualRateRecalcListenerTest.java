@@ -66,7 +66,7 @@ class BoqActualRateRecalcListenerTest {
   }
 
   @Test
-  @DisplayName("actualRate = cost / stored measured qty, actualAmount = qty × actualRate")
+  @DisplayName("actualRate = cost / stored measured qty, actualAmount = the cost itself")
   void recomputeDividesByStoredMeasuredQty() {
     BoqItem item = boqItem();
     when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
@@ -80,25 +80,50 @@ class BoqActualRateRecalcListenerTest {
     BoqItem out = saved.getValue();
     // 127500 / 100 (stored qtyExecutedToDate) = 1275.0000 (scale 4 from RATE_SCALE)
     assertThat(out.getActualRate()).isEqualByComparingTo("1275.0000");
-    // BoqCalculator.recompute: actualAmount = qtyExecutedToDate × actualRate = 100 × 1275 = 127500.00
+    // actualAmount is the cost itself — no rate × qty round-trip, so no 4-dp reconstruction loss.
+    assertThat(out.getActualCost()).isEqualByComparingTo("127500");
     assertThat(out.getActualAmount()).isEqualByComparingTo("127500.00");
   }
 
   @Test
-  @DisplayName("zero measured qty clears the phantom rate (edge 16 — full revoke)")
-  void zeroQtyClearsActualRate() {
+  @DisplayName("zero measured qty still reports the incurred cost, with a null rate")
+  void zeroMeasuredQtyStillReportsCost() {
+    // A split line whose spend sits entirely on a NON-measurement operation: nothing is billable
+    // yet, but the money was genuinely spent. The old zero-qty short-circuit reported 0 here.
     BoqItem item = boqItem();
     item.setQtyExecutedToDate(BigDecimal.ZERO);
-    item.setActualRate(new BigDecimal("999.0000"));   // stale rate from before the revoke
+    item.setActualRate(new BigDecimal("999.0000"));   // stale rate from a previous state
     when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
+    when(boqActualCostQuery.sumActualCost(projectId, boqItemId))
+        .thenReturn(new BigDecimal("6300"));
 
     listener.onDprSubmitted(event());
 
     ArgumentCaptor<BoqItem> saved = ArgumentCaptor.forClass(BoqItem.class);
     verify(boqItemRepository).save(saved.capture());
-    assertThat(saved.getValue().getActualRate()).isEqualByComparingTo("0");
+    BoqItem out = saved.getValue();
+    assertThat(out.getActualCost()).isEqualByComparingTo("6300");
+    assertThat(out.getActualAmount()).isEqualByComparingTo("6300.00");
+    // No billable quantity ⇒ no cost-per-unit to state (a printed 0.000 would read as "free work").
+    assertThat(out.getActualRate()).isNull();
+  }
+
+  @Test
+  @DisplayName("full revoke clears the phantom rate and the cost (edge 16)")
+  void fullRevokeClearsRateAndCost() {
+    BoqItem item = boqItem();
+    item.setQtyExecutedToDate(BigDecimal.ZERO);
+    item.setActualRate(new BigDecimal("999.0000"));   // stale rate from before the revoke
+    when(boqItemRepository.findById(boqItemId)).thenReturn(Optional.of(item));
+    when(boqActualCostQuery.sumActualCost(projectId, boqItemId)).thenReturn(BigDecimal.ZERO);
+
+    listener.onDprSubmitted(event());
+
+    ArgumentCaptor<BoqItem> saved = ArgumentCaptor.forClass(BoqItem.class);
+    verify(boqItemRepository).save(saved.capture());
+    assertThat(saved.getValue().getActualCost()).isEqualByComparingTo("0");
     assertThat(saved.getValue().getActualAmount()).isEqualByComparingTo("0.00");
-    verify(boqActualCostQuery, never()).sumActualCost(any(), any());
+    assertThat(saved.getValue().getActualRate()).isNull();
   }
 
   @Test

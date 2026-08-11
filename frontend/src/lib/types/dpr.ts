@@ -161,6 +161,10 @@ export interface DprIssueRow {
   /** Sub-classification of a SAFETY/ENVIRONMENTAL issue, feeding the HSE statistics. Null for
    *  non-HSE issues and for legacy safety issues logged before classification existed. */
   hseIncidentType?: HseIncidentType | null;
+  /** Supervisor's "next-level intervention required" checkbox (AI Agent sheet, DPR row). */
+  interventionRequired?: boolean | null;
+  /** Act-by date ("time frame to act on it"); ISO date, optional. */
+  dueDate?: string | null;
 }
 
 /** Request body for creating a standalone DprIssue not tied to a parent DPR. */
@@ -179,6 +183,8 @@ export interface CreateDprIssueRequest {
   activityName?: string | null;
   reportDate?: string | null;
   hseIncidentType?: HseIncidentType | null;
+  interventionRequired?: boolean | null;
+  dueDate?: string | null;
 }
 
 /** One status transition in an issue's append-only history timeline. */

@@ -1,0 +1,89 @@
+databaseChangeLog:
+  - changeSet:
+      id: 141-add-boq-item-actual-cost
+      author: claude
+      comment: >
+        BOQ actual_amount used to be reconstructed as qty_executed_to_date x actual_rate. On a split
+        line qty_executed_to_date counts only the measurement operation, so a line whose spend sat
+        entirely on a non-measurement stage stored zero cost while its earned budget was credited in
+        full. Cost incurred now has its own column and is never gated on the billable quantity.
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: boq_items
+            columns:
+              - column:
+                  name: actual_cost
+                  type: NUMERIC(19,2)
+                  remarks: >
+                    Real incurred cost rolled up from approved DPRs (BoqActualCostQuery.sumActualCost).
+                    NULL on lines a roll-up has never touched, which keep the legacy qty x rate basis.
+      rollback:
+        - dropColumn: {schemaName: project, tableName: boq_items, columnName: actual_cost}
+
+  - changeSet:
+      id: 141-backfill-boq-actual-cost
+      author: claude
+      comment: >
+        Seed actual_cost for lines that already have approved DPRs and re-derive actual_amount,
+        actual_rate, cost_variance and cost_variance_percent from it. Mirrored by
+        DevSchemaFixupRunner.backfillBoqActualCost for the dev profile (Liquibase disabled there).
+        Guards - only lines with APPROVED DPR history (a seeded line with no DPRs keeps its workbook
+        qty x rate amount), never manual_override rows, only where actual_cost IS NULL so re-running
+        is a no-op. The five cost legs and the earned-budget basis are copied verbatim from
+        BoqActualCostQuery.sumActualCost and BoqCalculator.earnedBudget.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              WITH c AS (
+                SELECT b.id,
+                  ROUND(COALESCE((SELECT SUM(u.contrib) FROM (
+                      SELECT m.line_cost AS contrib FROM project.dpr_manpower m
+                        JOIN project.daily_progress_reports d ON m.dpr_id = d.id
+                        WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                      UNION ALL
+                      SELECT e.line_cost FROM project.dpr_equipment e
+                        JOIN project.daily_progress_reports d ON e.dpr_id = d.id
+                        WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                      UNION ALL
+                      SELECT mt.line_cost FROM project.dpr_material mt
+                        JOIN project.daily_progress_reports d ON mt.dpr_id = d.id
+                        WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                      UNION ALL
+                      SELECT COALESCE(mcl.line_cost,0) FROM resource.material_consumption_logs mcl
+                        WHERE mcl.line_cost IS NOT NULL AND mcl.activity_id IN (
+                          SELECT DISTINCT d2.activity_id FROM project.daily_progress_reports d2
+                          WHERE d2.boq_item_id = b.id AND d2.activity_id IS NOT NULL
+                            AND d2.approval_status = 'APPROVED')
+                      UNION ALL
+                      SELECT (sc.quantity * COALESCE(a.rate_per_unit,0)) FROM project.dpr_sub_contractor sc
+                        JOIN project.daily_progress_reports d ON sc.dpr_id = d.id
+                        LEFT JOIN resource.activity_sub_contractor_assignments a
+                          ON a.id = sc.activity_sub_contractor_assignment_id
+                        WHERE d.boq_item_id = b.id AND d.approval_status = 'APPROVED'
+                    ) u), 0), 2) AS cost,
+                  CASE
+                    WHEN b.earned_fraction IS NOT NULL
+                      THEN b.earned_fraction * COALESCE(b.boq_qty,0) * COALESCE(b.budgeted_rate,0)
+                    WHEN COALESCE(b.boq_qty,0) = 0
+                      THEN COALESCE(b.qty_executed_to_date,0) * COALESCE(b.budgeted_rate,0)
+                    ELSE LEAST(COALESCE(b.qty_executed_to_date,0), b.boq_qty) * COALESCE(b.budgeted_rate,0)
+                  END AS earned
+                FROM project.boq_items b
+                WHERE b.actual_cost IS NULL
+                  AND COALESCE(b.manual_override, FALSE) = FALSE
+                  AND EXISTS (SELECT 1 FROM project.daily_progress_reports d3
+                              WHERE d3.boq_item_id = b.id AND d3.approval_status = 'APPROVED')
+              )
+              UPDATE project.boq_items t SET
+                actual_cost = c.cost,
+                actual_amount = c.cost,
+                actual_rate = CASE WHEN COALESCE(t.qty_executed_to_date,0) = 0 THEN NULL
+                                   ELSE ROUND(c.cost / t.qty_executed_to_date, 4) END,
+                cost_variance = ROUND(c.cost - c.earned, 2),
+                cost_variance_percent = CASE WHEN c.earned = 0 THEN NULL
+                                             ELSE ROUND((c.cost - c.earned) / c.earned, 6) END
+              FROM c WHERE t.id = c.id;
+      rollback:
+        - empty

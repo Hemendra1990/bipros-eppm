@@ -20,6 +20,7 @@ import { MultiSelect } from "@/components/common/MultiSelect";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { SupervisorPerformanceSections } from "@/components/capacity-utilization/SupervisorPerformanceSections";
 import { SupervisorComparisonSections } from "@/components/capacity-utilization/SupervisorComparisonSections";
+import { CapacityTrendStrip } from "@/components/capacity-utilization/CapacityTrendStrip";
 import { PeriodCell as RolePeriodCellShared, utilBand } from "@/components/capacity/PeriodCell";
 import {
   hiddenSideSentence,
@@ -343,6 +344,9 @@ function CapacityUtilizationPageInner() {
   const [workDays, setWorkDays] = useState<number>(26);
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  // "" = project-wide; an activity id narrows the comparison to that one activity
+  // ("comparison between the supervisors for the same activity").
+  const [compareActivityId, setCompareActivityId] = useState<string>("");
   const [generating, setGenerating] = useState<boolean>(false);
 
   // Client-format Excel workbook (Plant / Manpower utilization + SUMMARY) for the current
@@ -452,17 +456,27 @@ function CapacityUtilizationPageInner() {
       fromDate,
       toDate,
       compareIds.join(","),
+      compareActivityId,
       workDays,
     ],
     queryFn: () =>
       capacityUtilizationApi.compareSupervisorPerformance({
         projectId,
         supervisorUserIds: compareIds,
+        activityId: compareActivityId || undefined,
         fromDate,
         toDate,
         workDays,
       }),
     enabled: compareMode && compareIds.length >= 2,
+    placeholderData: keepPreviousData,
+  });
+
+  // Activity options for the compare scope — loaded only once compare is switched on.
+  const { data: activitiesData } = useQuery({
+    queryKey: ["activities-for-compare", projectId],
+    queryFn: () => activityApi.listActivities(projectId, 0, 500),
+    enabled: compareMode,
     placeholderData: keepPreviousData,
   });
 
@@ -488,6 +502,14 @@ function CapacityUtilizationPageInner() {
 
   const totalRows = rows?.length ?? 0;
   const supervisors = supervisorOptions?.data ?? [];
+
+  const activityOptions: SelectOption[] = [
+    { value: "", label: "All activities (project-wide)" },
+    ...(activitiesData?.data?.content ?? []).map((a) => ({
+      value: a.id,
+      label: `${a.code} — ${a.name}`,
+    })),
+  ];
 
   const supervisorSelectOptions: SelectOption[] = [
     { value: "", label: "All supervisors (project-wide)" },
@@ -633,7 +655,10 @@ function CapacityUtilizationPageInner() {
                   onClick={() => {
                     setCompareMode((m) => !m);
                     if (!compareMode) setSupervisorUserId("");
-                    else setCompareIds([]);
+                    else {
+                      setCompareIds([]);
+                      setCompareActivityId("");
+                    }
                   }}
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold ${
                     compareMode
@@ -647,6 +672,20 @@ function CapacityUtilizationPageInner() {
               </div>
             </div>
           </div>
+          {compareMode && (
+            <div className="mt-3 max-w-md">
+              <label className="block text-xs font-medium mb-1 text-text-secondary">
+                Compare on activity (optional)
+              </label>
+              <SearchableSelect
+                options={activityOptions}
+                value={compareActivityId}
+                onChange={setCompareActivityId}
+                placeholder="All activities (project-wide)"
+                className="w-full"
+              />
+            </div>
+          )}
           <div className="mt-2 text-xs text-text-muted">
             <span className="font-semibold text-text-secondary">Efficiency %</span>
             {" "}color bands: ≥100 % green · 90–99 % yellow · &lt;90 % red · no norm grey.
@@ -659,6 +698,10 @@ function CapacityUtilizationPageInner() {
             )}
           </div>
         </div>
+
+        {!compareMode && (
+          <CapacityTrendStrip projectId={projectId} toDate={toDate} />
+        )}
 
         {missingWa.length > 0 && (
           <div className="mt-3 flex items-start gap-3 rounded-lg border border-text-muted/20 bg-surface-hover/40 px-4 py-3 text-sm">

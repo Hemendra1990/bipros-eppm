@@ -62,7 +62,7 @@ public class DprReportConfig {
         }).orElse(DEFAULT_ZONE);
     }
 
-    static LocalTime parseTime(String raw) {
+    public static LocalTime parseTime(String raw) {
         String v = raw.trim();
         for (DateTimeFormatter f : TIME_FORMATS) {
             try { return LocalTime.parse(v, f); } catch (Exception ignored) { }

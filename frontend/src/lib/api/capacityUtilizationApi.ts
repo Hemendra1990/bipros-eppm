@@ -285,6 +285,9 @@ export interface CompareSupervisorPerformanceParams {
   projectId: string;
   /** Phase 4.4 rename — array of User UUIDs. */
   supervisorUserIds: string[];
+  /** Restrict the comparison to one activity ("same activity" comparison, AI Agent sheet
+   *  Capacity Utilization row). Omit for the project-wide comparison. */
+  activityId?: string;
   fromDate?: string;
   toDate?: string;
   workDays?: number;
@@ -353,6 +356,7 @@ export const capacityUtilizationApi = {
       `projectId=${params.projectId}`,
       `supervisorUserIds=${params.supervisorUserIds.join(",")}`,
     ];
+    if (params.activityId) qs.push(`activityId=${params.activityId}`);
     if (params.fromDate) qs.push(`fromDate=${params.fromDate}`);
     if (params.toDate) qs.push(`toDate=${params.toDate}`);
     if (params.workDays) qs.push(`workDays=${params.workDays}`);

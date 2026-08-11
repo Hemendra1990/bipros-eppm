@@ -20,6 +20,8 @@ import { getErrorMessage } from "@/lib/utils/error";
 const ALERT_STYLES: Record<string, string> = {
   NEGATIVE_BALANCE: "bg-rose-500/10 text-rose-600 border-rose-500/30",
   MISSING_UNIT_RATE: "bg-blue-500/10 text-blue-600 border-blue-500/30",
+  BELOW_MIN_STOCK: "bg-rose-500/10 text-rose-600 border-rose-500/30",
+  LOW_COVER: "bg-amber-500/10 text-amber-700 border-amber-500/30",
 };
 
 const GROUP_BY_OPTIONS: Array<{ value: "" | MaterialConsumptionGroupBy; label: string }> = [
@@ -78,9 +80,11 @@ export default function MaterialConsumptionReportPage() {
     }
   }, [project, draft.from]);
 
+  // The seeded security role is STORE_MANAGER ("Storekeeper" is its display concept —
+  // no role literally named STOREKEEPER exists, which used to leave this dropdown empty).
   const { data: storekeepers } = useQuery<UserSummary[]>({
-    queryKey: ["users-by-role", "STOREKEEPER"],
-    queryFn: () => userApi.listByRoles(["STOREKEEPER"]),
+    queryKey: ["users-by-role", "STORE_MANAGER"],
+    queryFn: () => userApi.listByRoles(["STORE_MANAGER"]),
   });
 
   const { data: materialRates } = useQuery({
@@ -97,6 +101,21 @@ export default function MaterialConsumptionReportPage() {
   const report: MaterialConsumptionReportResponse | undefined = data?.data ?? undefined;
   const rows = useMemo(() => report?.rows ?? [], [report]);
   const supervisors = useMemo(() => report?.supervisors ?? [], [report]);
+
+  // Material availability (MAT-01) + supervisor issued-vs-reported (MAT-04) — same window.
+  const { data: availabilityData } = useQuery({
+    queryKey: ["material-availability", projectId, applied.from, applied.to],
+    queryFn: () => materialConsumptionReportApi.availability(projectId, applied.from, applied.to),
+    enabled: !!projectId && !!applied.from && !!applied.to,
+  });
+  const availability = availabilityData?.data;
+  const { data: comparisonData } = useQuery({
+    queryKey: ["material-supervisor-comparison", projectId, applied.to, applied.from],
+    queryFn: () =>
+      materialConsumptionReportApi.supervisorComparison(projectId, applied.to, applied.from),
+    enabled: !!projectId && !!applied.to,
+  });
+  const comparison = comparisonData?.data ?? [];
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -318,6 +337,107 @@ export default function MaterialConsumptionReportPage() {
                 : `${Number(report.totals.wastagePercent_avg).toFixed(2)}%`
             }
           />
+        </div>
+      )}
+
+      {/* Material availability (store) — MAT-01: receipts / issue / closing balance */}
+      {availability && !availability.tracked && (
+        <div className="rounded-lg border border-amber-300 bg-amber-500/10 px-3 py-2 text-sm text-amber-800">
+          <b>Stock not tracked on this project</b> — storekeeper GRN / issue-slip entries have not
+          started, so receipts and closing balance cannot be computed. Consumption below comes from
+          approved DPRs.
+        </div>
+      )}
+      {availability?.tracked && availability.rows.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="px-3 pt-3 text-sm font-medium">Material availability (store)</div>
+          <div className="px-3 pb-2 text-xs text-text-muted">
+            Received / Issued / Consumed are figures for the filter window; Closing balance and Days
+            cover are as of the To date (closing = received − issued; the storekeeper log figure wins
+            where entered). Consumed = approved-DPR consumption — the storekeeper log&apos;s figure
+            stands in only for materials never captured through DPRs.
+          </div>
+          <table className="min-w-full text-sm">
+            <thead className="bg-surface-active text-xs uppercase tracking-wide text-text-muted">
+              <tr>
+                <Th>Material</Th>
+                <Th>Unit</Th>
+                <Th align="right">Received</Th>
+                <Th align="right">Issued</Th>
+                <Th align="right">Consumed</Th>
+                <Th align="right">Closing balance</Th>
+                <Th align="right">Days cover</Th>
+                <Th>Alerts</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {availability.rows.map((r) => (
+                <tr key={r.materialKey} className="border-t border-border/60">
+                  <Td>{r.materialName ?? "—"}</Td>
+                  <Td>{r.unit ?? "—"}</Td>
+                  <Td align="right">{fmtNum(r.receivedWindow)}</Td>
+                  <Td align="right">{fmtNum(r.issuedWindow)}</Td>
+                  <Td align="right">{fmtNum(r.consumedWindow)}</Td>
+                  <Td align="right">{fmtNum(r.storeClosing)}</Td>
+                  <Td align="right">{r.daysOfCover === null ? "—" : fmtNum(r.daysOfCover, 1)}</Td>
+                  <Td>
+                    <div className="flex flex-wrap gap-1">
+                      {r.alerts.map((a) => (
+                        <AlertChip key={a} code={a} />
+                      ))}
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Supervisor-wise issued vs reported — MAT-04 (flag only; DBS costing awaits Q20) */}
+      {comparison.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="px-3 pt-3 text-sm font-medium">
+            Supervisor-wise issued material vs DPR-reported
+          </div>
+          <div className="px-3 pb-2 text-xs text-text-muted">
+            Cumulative from the first store movement (GRN / issue slip) to {applied.to} — a
+            positive variance means material was issued to the person but not accounted for in
+            their approved DPRs; DPR consumption from before store tracking began is not
+            compared. Flag only; no DBS cost is adjusted.
+          </div>
+          <table className="min-w-full text-sm">
+            <thead className="bg-surface-active text-xs uppercase tracking-wide text-text-muted">
+              <tr>
+                <Th>Supervisor</Th>
+                <Th>Material</Th>
+                <Th>Unit</Th>
+                <Th align="right">Issued to date</Th>
+                <Th align="right">Reported (DPR)</Th>
+                <Th align="right">Variance</Th>
+                <Th align="right">Value</Th>
+                <Th align="right">Wastage</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparison.map((v) => (
+                <tr key={`${v.supervisorKey}|${v.materialName}`} className="border-t border-border/60">
+                  <Td>{v.supervisorName ?? "—"}</Td>
+                  <Td>{v.materialName ?? "—"}</Td>
+                  <Td>{v.unit ?? "—"}</Td>
+                  <Td align="right">{fmtNum(v.issuedToDate)}</Td>
+                  <Td align="right">{fmtNum(v.reportedToDate)}</Td>
+                  <Td align="right">
+                    <span className={v.varianceQty > 0 ? "font-semibold text-rose-600" : undefined}>
+                      {fmtNum(v.varianceQty)}
+                    </span>
+                  </Td>
+                  <Td align="right">{v.varianceValue === null ? "—" : money(v.varianceValue)}</Td>
+                  <Td align="right">{fmtNum(v.wastageQty)}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

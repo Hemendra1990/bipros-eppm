@@ -87,7 +87,19 @@ public class BoqItem extends BaseEntity {
   @Column(name = "actual_rate", precision = 18, scale = 4)
   private BigDecimal actualRate;
 
-  /** Derived: qtyExecutedToDate × actualRate. */
+  /**
+   * Real incurred cost for this line, rolled up from approved DPRs by
+   * {@code BoqActualCostQuery.sumActualCost} — manpower + equipment + material + material
+   * consumption + sub-contractor. Independent of the measured quantity, so spend booked against a
+   * non-measurement operation of a split line is still reported.
+   *
+   * <p>Null on rows a DPR roll-up has never touched (seeded/manually rated lines), which keep the
+   * legacy {@code qtyExecutedToDate × actualRate} basis.
+   */
+  @Column(name = "actual_cost", precision = 19, scale = 2)
+  private BigDecimal actualCost;
+
+  /** Derived: actualCost when known, else qtyExecutedToDate × actualRate. */
   @Column(name = "actual_amount", precision = 19, scale = 2)
   private BigDecimal actualAmount;
 

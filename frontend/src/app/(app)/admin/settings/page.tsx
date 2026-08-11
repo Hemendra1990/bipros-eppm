@@ -115,9 +115,10 @@ function GlobalSettingsSection() {
     return <div className="text-center text-text-muted py-12">Loading settings...</div>;
   }
 
-  // Group settings by category (exclude THEME keys — they have their own tab)
+  // Group settings by category (exclude THEME keys — they have their own tab — and SEEDER
+  // markers, which are internal bookkeeping the seeders manage themselves)
   const grouped = settings
-    .filter((s) => s.category !== "THEME")
+    .filter((s) => s.category !== "THEME" && s.category !== "SEEDER")
     .reduce((acc: Record<string, SettingResponse[]>, s: SettingResponse) => {
       const cat = s.category || "general";
       if (!acc[cat]) acc[cat] = [];

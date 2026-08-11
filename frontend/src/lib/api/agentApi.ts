@@ -106,6 +106,55 @@ export interface NotificationLogEntry {
   sentAt: string | null;
 }
 
+/** One per-recipient delivery from the agent mail log (ai.agent_mail_log). */
+export interface AgentMailRow {
+  id: string;
+  category:
+    | "DPR_REPORT"
+    | "SUPERVISOR_SUMMARY"
+    | "MISSING_DPR"
+    | "DPR_REJECTION"
+    | "ISSUE_ASSIGNMENT"
+    | "OUTSTANDING_ISSUES"
+    | "MATERIAL_SHORT_SUPPLY";
+  channel: "EMAIL" | "IN_APP" | "WHATSAPP";
+  recipientUserId?: string | null;
+  recipientName?: string | null;
+  recipientEmail?: string | null;
+  subject?: string | null;
+  /** Full mail HTML for the small mails; null for DPR_REPORT rows (use reportId). */
+  bodyHtml?: string | null;
+  reportId?: string | null;
+  status: "SENT" | "FAILED" | "PREVIEW" | "SKIPPED";
+  detail?: string | null;
+  sentAt: string;
+}
+
+export interface AgentDeliverablesResponse {
+  reportSchedule: {
+    enabled: boolean;
+    sendTime: string;
+    timezone: string;
+    cadence: string;
+    lastGeneratedAt?: string | null;
+    lastStatus?: string | null;
+    lastDeliveryStatus?: string | null;
+    lastDeliveredTo?: string | null;
+    lastReportId?: string | null;
+  };
+  missingAlert: {
+    enabled: boolean;
+    alertTime: string;
+    lastCheckedDate?: string | null;
+    lastMissingCount?: number | null;
+    lastEmailsSent?: number | null;
+    lastSkippedNonWorking?: boolean | null;
+    lastGeneratedAt?: string | null;
+  };
+  alertChannel: string;
+  mails: AgentMailRow[];
+}
+
 export const agentApi = {
   listAgents: (projectId: string) =>
     apiClient
@@ -146,6 +195,14 @@ export const agentApi = {
       .get<ApiResponse<NotificationLogEntry[]>>(`/v1/admin/notifications/log`, {
         params: { limit, ...(projectId ? { projectId } : {}) },
       })
+      .then((r) => r.data),
+
+  /** Agent deliverables — schedule status + per-recipient delivery log for the AI tab panel. */
+  getDeliverables: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<AgentDeliverablesResponse>>(
+        `/v1/projects/${projectId}/agent-deliverables`,
+      )
       .then((r) => r.data),
 
   /** Recent agent runs across every project the caller can see — the portfolio activity feed. */

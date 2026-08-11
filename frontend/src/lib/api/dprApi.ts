@@ -84,6 +84,31 @@ export interface ProductivityPreviewResponse {
   warnings: string[];
 }
 
+export interface DprAnalyticsDayCount {
+  date: string;
+  count: number;
+}
+
+export interface DprAnalyticsSupervisorCount {
+  name: string;
+  filed: number;
+  approved: number;
+}
+
+/** DPR tab analytics strip — see backend DprAnalyticsResponse for the exact semantics. */
+export interface DprAnalyticsResponse {
+  total: number;
+  draft: number;
+  submitted: number;
+  approved: number;
+  rejected: number;
+  avgApprovalHours: number | null;
+  rejectionRatePct: number | null;
+  perDay: DprAnalyticsDayCount[];
+  supervisors: DprAnalyticsSupervisorCount[];
+  expectedSupervisors: number;
+}
+
 export const dprApi = {
   list: (projectId: string, filters: DprListFilters = {}) => {
     const params = new URLSearchParams();
@@ -123,6 +148,28 @@ export const dprApi = {
     const cd = res.headers.get("Content-Disposition") ?? "";
     const match = /filename="?([^";]+)"?/.exec(cd);
     const fileName = match ? match[1] : `dpr-costing-${from}_${to}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  /** Executed Commodity Summary workbook (BOQ / Activity / Per-supervisor sheets). month = YYYY-MM. */
+  downloadCommoditySummary: async (projectId: string, month: string): Promise<void> => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+    const params = new URLSearchParams({ projectId, month });
+    const res = await fetch(`${API_BASE_URL}/v1/reports/commodity-summary/excel?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`report fetch ${res.status}`);
+    const blob = await res.blob();
+    const cd = res.headers.get("Content-Disposition") ?? "";
+    const match = /filename="?([^";]+)"?/.exec(cd);
+    const fileName = match ? match[1] : `commodity-summary-${month}.xlsx`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -180,6 +227,14 @@ export const dprApi = {
   unassignedApprovals: (projectId: string) =>
     apiClient
       .get<ApiResponse<DprSummaryRow[]>>(`/v1/projects/${projectId}/dpr/approvals/unassigned`)
+      .then((r) => r.data),
+
+  /** DPR-performance analytics strip (read-only aggregates for the current window). */
+  analytics: (projectId: string, from: string, to: string) =>
+    apiClient
+      .get<ApiResponse<DprAnalyticsResponse>>(`/v1/projects/${projectId}/dpr/analytics`, {
+        params: { from, to },
+      })
       .then((r) => r.data),
 
   // ─── Photo attachments ───────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import { getErrorMessage } from "@/lib/utils/error";
 import { formatCurrency, formatPercent } from "@/lib/utils/format";
 
 import { DailyBreakdownTable } from "./DailyBreakdownTable";
+import { BoqSupervisorComparison } from "./BoqSupervisorComparison";
 import { SectionCard } from "./SectionCard";
 import { TotalsPanel } from "./TotalsPanel";
 
@@ -478,6 +479,15 @@ export function SupervisorDbsTab({
               </table>
             </div>
           </section>
+
+          {/* BOQ performance by supervisor — Cost (AI Agent sheet, DBS row). */}
+          <BoqSupervisorComparison
+            projectId={projectId}
+            date={date}
+            periodType={periodType}
+            currency={currency}
+            onSupervisorClick={onSupervisorChange}
+          />
         </>
       )}
     </div>

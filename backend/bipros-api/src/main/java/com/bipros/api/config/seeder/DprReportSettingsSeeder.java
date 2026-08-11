@@ -44,6 +44,29 @@ public class DprReportSettingsSeeder implements CommandLineRunner {
     inserted += upsert("dpr_report_timezone", "Asia/Muscat",
         "IANA timezone the send time is interpreted in (e.g. Asia/Muscat)");
 
+    inserted += upsertAlert("dpr_alert_channel", "EMAIL",
+        "Delivery channel for DPR alerts (EMAIL or WHATSAPP; WHATSAPP falls back to email until a provider is configured)");
+    inserted += upsertAlert("dpr_missing_alert_enabled", "false",
+        "Enable the daily missing-DPR alert to each supervisor's reporting manager + project control");
+    inserted += upsertAlert("dpr_missing_alert_time", "09:00",
+        "Local time the missing-DPR check runs, verifying the PREVIOUS day's submissions (dpr_report_timezone applies)");
+
+    inserted += upsertIssue("issue_digest_enabled", "false",
+        "Enable the weekly outstanding-issues digest to project control + assignees, critical issues highlighted");
+    inserted += upsertIssue("issue_digest_day", "MONDAY",
+        "Day of week the outstanding-issues digest is sent (MONDAY..SUNDAY)");
+    inserted += upsertIssue("issue_digest_time", "09:00",
+        "Local time the outstanding-issues digest is sent (dpr_report_timezone applies)");
+
+    inserted += upsertMaterial("material_shortage_enabled", "false",
+        "Enable the weekly material short-supply digest to project control (store-tracked projects only)");
+    inserted += upsertMaterial("material_shortage_day", "MONDAY",
+        "Day of week the material short-supply digest is sent (MONDAY..SUNDAY)");
+    inserted += upsertMaterial("material_shortage_time", "09:00",
+        "Local time the material short-supply digest is sent (dpr_report_timezone applies)");
+    inserted += upsertMaterial("material_shortage_days_cover", "3",
+        "Days-of-cover threshold: materials whose closing stock covers fewer days of recent consumption count as short supply (min-stock level from the Material Catalogue wins when set)");
+
     if (inserted == 0) {
       log.info("[DprReportSettingsSeeder] all AI DPR Reports settings already present, skipping");
     } else {
@@ -52,6 +75,22 @@ public class DprReportSettingsSeeder implements CommandLineRunner {
   }
 
   private int upsert(String key, String value, String description) {
+    return upsert(key, value, description, CATEGORY);
+  }
+
+  private int upsertAlert(String key, String value, String description) {
+    return upsert(key, value, description, "DPR Alerts");
+  }
+
+  private int upsertIssue(String key, String value, String description) {
+    return upsert(key, value, description, "Issue Alerts");
+  }
+
+  private int upsertMaterial(String key, String value, String description) {
+    return upsert(key, value, description, "Material Alerts");
+  }
+
+  private int upsert(String key, String value, String description, String category) {
     if (globalSettingRepository.findBySettingKey(key).isPresent()) {
       return 0;
     }
@@ -59,7 +98,7 @@ public class DprReportSettingsSeeder implements CommandLineRunner {
     s.setSettingKey(key);
     s.setSettingValue(value);
     s.setDescription(description);
-    s.setCategory(CATEGORY);
+    s.setCategory(category);
     globalSettingRepository.save(s);
     return 1;
   }

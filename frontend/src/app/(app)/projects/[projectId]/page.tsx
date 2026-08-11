@@ -41,6 +41,7 @@ import { ProjectDocumentsPanel } from "@/components/document/ProjectDocumentsPan
 import { ProjectSetupProgress } from "@/components/project/ProjectSetupProgress";
 import { ProjectTeamCard } from "@/components/project/ProjectTeamCard";
 import { LocationCard } from "@/components/project/LocationCard";
+import { MaterialAvailabilityCard } from "@/components/materials/MaterialAvailabilityCard";
 import { ProjectDashboardTab } from "@/components/dashboards/project/ProjectDashboardTab";
 import { BaselinesPanel } from "@/components/baseline/BaselinesPanel";
 import type { ContractType } from "@/lib/types";
@@ -536,6 +537,8 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
       <LocationCard project={project} projectId={projectId} />
 
       <ProjectDetailsSection project={project} projectId={projectId} />
+
+      <MaterialAvailabilityCard projectId={projectId} />
 
       {/* KPI Mini-Dashboard */}
       <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">

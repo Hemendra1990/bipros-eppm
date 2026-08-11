@@ -50,6 +50,8 @@ interface FormState {
   resolutionNotes: string;
   reportDate: string;
   statusChangeReason: string;
+  interventionRequired: boolean;
+  dueDate: string;
 }
 
 function initialState(issue: DprIssueRow | null): FormState {
@@ -67,6 +69,8 @@ function initialState(issue: DprIssueRow | null): FormState {
     resolutionNotes: issue?.resolutionNotes ?? "",
     reportDate: issue?.reportDate ?? today(),
     statusChangeReason: "",
+    interventionRequired: issue?.interventionRequired ?? false,
+    dueDate: issue?.dueDate ?? "",
   };
 }
 
@@ -179,6 +183,8 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
             issue && form.status !== issue.status && !TERMINAL.includes(form.status)
               ? form.statusChangeReason || null
               : null,
+          interventionRequired: form.interventionRequired,
+          dueDate: form.dueDate || null,
         };
         return dprIssueApi.patch(projectId, issue!.id!, body);
       }
@@ -197,6 +203,8 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
             ? form.hseIncidentType || null
             : null,
         reportDate: form.reportDate || today(),
+        interventionRequired: form.interventionRequired,
+        dueDate: form.dueDate || null,
       };
       return dprIssueApi.create(projectId, body);
     },
@@ -368,6 +376,23 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
             />
           </div>
 
+          <label className="flex cursor-pointer select-none items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={form.interventionRequired}
+              onChange={(e) => set("interventionRequired", e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-accent"
+            />
+            <span>
+              <span className="text-sm font-medium text-text-primary">
+                Next-level intervention required
+              </span>
+              <span className="block text-xs text-text-muted">
+                Flags this issue for project control to assign a responsible person.
+              </span>
+            </span>
+          </label>
+
           {showStatusReason && (
             <AccentPanel tone="gold">
               <FieldLabel>Reason for status change</FieldLabel>
@@ -438,6 +463,15 @@ export function IssueForm({ projectId, issue, onSaved, onCancel }: IssueFormProp
                 />
               </div>
             )}
+            <div>
+              <FieldLabel>Act by (due date)</FieldLabel>
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => set("dueDate", e.target.value)}
+                className={fieldInput}
+              />
+            </div>
           </div>
 
           {!isEdit && (

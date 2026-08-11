@@ -43,6 +43,10 @@ public record UpdateDprIssueRequest(
      * caller (e.g. a quick status-change) MUST include this field with the row's existing value so
      * it is not inadvertently wiped.
      */
-    HseIncidentType hseIncidentType
+    HseIncidentType hseIncidentType,
+    /** Next-level intervention required checkbox; null = leave unchanged (patch) / false (create). */
+    Boolean interventionRequired,
+    /** Act-by date; null = leave unchanged. */
+    java.time.LocalDate dueDate
 ) {
 }

@@ -44,8 +44,12 @@ public class AnalyzeCostTool extends ProjectScopedTool {
                 + "cost alongside manpower/equipment/material — do not add SC cost on top. To isolate "
                 + "sub-contractor cost vs company cost, call get_subcontractor_kpis. For BOQ-item cost "
                 + "variance specifically, prefer query_boq — its cost_variance comes directly from "
-                + "BoqItem.costVariance = actualAmount − (qtyExecutedToDate × BUDGETED rate). Do NOT "
-                + "use the BOQ/client rate and do NOT recompute client-side.";
+                + "BoqItem.costVariance = actualAmount − earnedBudget, where earnedBudget is "
+                + "earnedFraction × boqQty × BUDGETED rate on a split line, else "
+                + "min(qtyExecutedToDate, boqQty) × BUDGETED rate. actualAmount is the real incurred "
+                + "cost from approved DPRs, NOT qtyExecutedToDate × actualRate — a split line can "
+                + "carry cost with zero measured quantity. Do NOT use the BOQ/client rate and do NOT "
+                + "recompute client-side.";
     }
 
     @Override

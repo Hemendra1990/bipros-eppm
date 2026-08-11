@@ -3,6 +3,7 @@ package com.bipros.reporting.presentation.controller;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.reporting.application.dto.*;
 import com.bipros.reporting.application.service.CapacityUtilizationReportService;
+import com.bipros.reporting.application.service.CommoditySummaryReportService;
 import com.bipros.reporting.application.service.DprCostingReportService;
 import com.bipros.reporting.application.service.ReportService;
 import com.bipros.reporting.application.service.SupervisorPerformanceReportService;
@@ -36,6 +37,8 @@ public class ReportController {
   private final ReportService reportService;
   private final CapacityUtilizationReportService capacityUtilizationReportService;
   private final CapacityUtilizationExcelWriter capacityUtilizationExcelWriter;
+  private final CommoditySummaryReportService commoditySummaryReportService;
+  private final com.bipros.reporting.infrastructure.export.CommoditySummaryExcelWriter commoditySummaryExcelWriter;
   private final DprCostingReportService dprCostingReportService;
   private final DprCostingExcelWriter dprCostingExcelWriter;
   private final SupervisorPerformanceReportService supervisorPerformanceReportService;
@@ -224,11 +227,12 @@ public class ReportController {
   public ApiResponse<SupervisorPerformanceReport> getSupervisorPerformance(
       @RequestParam UUID projectId,
       @RequestParam(required = false) UUID supervisorUserId,
+      @RequestParam(required = false) UUID activityId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "26") int workDays) {
     return ApiResponse.ok(supervisorPerformanceReportService.build(
-        projectId, supervisorUserId, fromDate, toDate, workDays));
+        projectId, supervisorUserId, activityId, fromDate, toDate, workDays));
   }
 
   /**
@@ -240,11 +244,12 @@ public class ReportController {
   public ApiResponse<SupervisorPerformanceComparison> compareSupervisorPerformance(
       @RequestParam UUID projectId,
       @RequestParam List<UUID> supervisorUserIds,
+      @RequestParam(required = false) UUID activityId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "26") int workDays) {
     return ApiResponse.ok(supervisorPerformanceReportService.compare(
-        projectId, supervisorUserIds, fromDate, toDate, workDays));
+        projectId, supervisorUserIds, activityId, fromDate, toDate, workDays));
   }
 
   /**
@@ -286,6 +291,31 @@ public class ReportController {
     byte[] bytes = capacityUtilizationExcelWriter.generate(data, ym, projectName);
 
     String fileName = "capacity-utilization-" + ym + ".xlsx";
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"" + fileName + "\"")
+        .body(bytes);
+  }
+
+  /**
+   * Executed Commodity Summary workbook — BOQ level / Activity level / Per-supervisor sheets
+   * (AI Agent sheet, DPR row). Quantities only. {@code month} = ISO {@code YYYY-MM}; defaults
+   * to the current month.
+   */
+  @GetMapping("/commodity-summary/excel")
+  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
+  public ResponseEntity<byte[]> downloadCommoditySummaryExcel(
+      @RequestParam UUID projectId,
+      @RequestParam(required = false) String month) {
+    YearMonth ym = month != null
+        ? YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"))
+        : YearMonth.now();
+    var data = commoditySummaryReportService.build(projectId, ym);
+    byte[] bytes = commoditySummaryExcelWriter.generate(data, lookupProjectName(projectId));
+
+    String fileName = "commodity-summary-" + ym + ".xlsx";
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

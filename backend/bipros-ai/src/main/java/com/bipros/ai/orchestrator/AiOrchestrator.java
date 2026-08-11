@@ -838,11 +838,17 @@ public class AiOrchestrator {
 
             **COST VARIANCE (BOQ).**
 
-            BOQ cost_variance = actualAmount − (qtyExecutedToDate × BUDGETED_RATE).
+            BOQ cost_variance = actualAmount − earnedBudget, where earnedBudget is
+            the split-aware capped basis: earnedFraction × boqQty × BUDGETED_RATE on
+            a split line, else min(qtyExecutedToDate, boqQty) × BUDGETED_RATE.
             Use the BUDGETED rate from the BoqItem, NOT the BOQ/client rate (they
             can differ). Read costVariance directly from the BoqItem response — do
-            not recompute it client-side. The actualAmount on a BOQ item already
-            includes sub-contractor cost; do not double-count.
+            not recompute it client-side. The actualAmount on a BOQ item is the real
+            incurred cost rolled up from approved DPRs (manpower + equipment +
+            material + sub-contractor); it already includes sub-contractor cost, so
+            do not double-count. It is NOT qtyExecutedToDate × actualRate: a split
+            line can carry cost with zero measured quantity when the work so far sat
+            on a non-measurement operation.
 
             RESOURCE LOOKUP — CATALOGUE vs ASSIGNMENTS (always disambiguate):
             Two distinct surfaces; pick the right one or you will report "no

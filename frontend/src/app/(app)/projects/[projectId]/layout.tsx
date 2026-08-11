@@ -138,7 +138,11 @@ function ProjectDetailLayoutInner({
     // { label: "RFIs", href: `/projects/${projectId}/rfis` },
     // { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
     // { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
-    // { label: "GRNs", href: `/projects/${projectId}/grns` },
+    // Store chain (Material agent row, Mode A): catalogue → receipts in → issue slips out → stock.
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials` },
+    { label: "GRNs (Goods Received)", href: `/projects/${projectId}/grns` },
+    { label: "Material Issues (Store)", href: `/projects/${projectId}/material-issues` },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register` },
     { label: "Issues", href: `/projects/${projectId}/issues` },
     { label: "Baselines", href: `/projects/${projectId}?tab=baselines` },
     { label: "Contracts", href: `/projects/${projectId}/contracts` },

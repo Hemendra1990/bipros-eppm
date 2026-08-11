@@ -30,4 +30,8 @@ public interface DbsDailySupervisorRepository extends JpaRepository<DbsDailySupe
      */
     List<DbsDailySupervisor> findByProjectIdAndReportDateAndConstructionManagerUserId(
         UUID projectId, LocalDate reportDate, UUID constructionManagerUserId);
+
+    /** Period variant of the CM downline finder — powers the CM tab's read-time line roll-up. */
+    List<DbsDailySupervisor> findByProjectIdAndConstructionManagerUserIdAndReportDateBetween(
+        UUID projectId, UUID constructionManagerUserId, LocalDate from, LocalDate to);
 }

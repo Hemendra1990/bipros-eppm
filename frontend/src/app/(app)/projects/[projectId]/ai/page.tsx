@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils/cn";
 import type { AgentFindingDto, AgentSeverity } from "@/lib/types";
 import { FindingCard } from "@/components/ai/agents/FindingCard";
 import { AgentActivityFeed } from "@/components/ai/agents/AgentActivityFeed";
+import { AgentDeliverablesPanel } from "@/components/ai/AgentDeliverablesPanel";
 import { InvestigatePanel } from "@/components/ai/agents/InvestigatePanel";
 import { SiteWeatherPanel } from "@/components/ai/agents/SiteWeatherPanel";
 import { FindingsTicker } from "@/components/ai/agents/FindingsTicker";
@@ -328,6 +329,9 @@ export default function ProjectAiPage() {
           <AgentActivityFeed projectId={projectId} />
         </div>
       </div>
+
+      {/* Agent deliverables — what the scheduled senders mailed, to whom, with preview. */}
+      <AgentDeliverablesPanel projectId={projectId} />
 
       {/* Delivery audit — PM/admin only (panel hides itself on 403). */}
       <NotificationLogPanel projectId={projectId} />

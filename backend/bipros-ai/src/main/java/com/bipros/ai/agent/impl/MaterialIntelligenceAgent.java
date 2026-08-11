@@ -6,6 +6,8 @@ import com.bipros.ai.agent.core.AgentRunContext;
 import com.bipros.ai.agent.core.EvidenceRef;
 import com.bipros.ai.agent.core.GatherResult;
 import com.bipros.ai.agent.core.Severity;
+import com.bipros.resource.application.dto.MaterialBalanceRow;
+import com.bipros.resource.application.service.MaterialBalanceService;
 import com.bipros.resource.application.service.MaterialKpiService;
 import com.bipros.resource.application.service.MaterialKpiService.CostPerUnitRow;
 import com.bipros.resource.application.service.MaterialKpiService.MaterialKpiResponse;
@@ -47,8 +49,12 @@ public class MaterialIntelligenceAgent extends AbstractAgent {
     private static final double WASTAGE_HIGH = 0.10;
     private static final double WASTAGE_MEDIUM = 0.05;
     private static final int MAX_EXAMPLES = 6;
+    /** Days-of-cover threshold for the low-stock finding (the mail digest reads its own
+     *  configurable copy in bipros-api — keep the default in step with the seeder value 3). */
+    private static final int LOW_COVER_DAYS = 3;
 
     private final MaterialKpiService materialKpi;
+    private final MaterialBalanceService balanceService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -79,7 +85,8 @@ public class MaterialIntelligenceAgent extends AbstractAgent {
         Instant validUntil = now.plus(TTL);
 
         MaterialKpiResponse k = materialKpi.compute(projectId, null, null);
-        if (k.issuedQty() <= 0 && k.consumedQty() <= 0) {
+        List<MaterialBalanceRow> shortages = safeShortages(projectId);
+        if (k.issuedQty() <= 0 && k.consumedQty() <= 0 && shortages.isEmpty()) {
             // No material ledger — nothing to judge.
             return new GatherResult(snapshot, candidates);
         }
@@ -89,6 +96,11 @@ public class MaterialIntelligenceAgent extends AbstractAgent {
         snapshot.put("wastagePct", k.wastagePct());
         snapshot.put("reconciliationBalance", k.reconciliationBalance());
         snapshot.put("costPerUnitActivities", k.costPerUnitByActivity().size());
+        snapshot.put("lowStockMaterials", shortages.size());
+
+        if (!shortages.isEmpty()) {
+            candidates.add(lowStock(projectId, shortages, validUntil));
+        }
 
         if (k.issuedQty() > 0 && k.wastagePct() >= WASTAGE_MEDIUM) {
             candidates.add(highWastage(projectId, k, validUntil));
@@ -195,6 +207,56 @@ public class MaterialIntelligenceAgent extends AbstractAgent {
                 "Review the highest-variance activities' material consumption against the BOQ norm with the site "
                         + "team; curb over-use and verify the recorded unit rates.",
                 ev, Map.of("SITE_MANAGER", List.of(), "PROJECT_MANAGER", List.of()), validUntil);
+    }
+
+    /** Short-supply detection must never sink the whole gather. */
+    private List<MaterialBalanceRow> safeShortages(UUID projectId) {
+        try {
+            return balanceService.shortages(projectId, LOW_COVER_DAYS);
+        } catch (Exception e) {
+            log.warn("Material shortage check failed for project {}: {}", projectId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private AgentFindingDraft lowStock(UUID projectId, List<MaterialBalanceRow> shortages, Instant validUntil) {
+        int n = shortages.size();
+        boolean acute = shortages.stream().anyMatch(r ->
+                (r.daysOfCover() != null && r.daysOfCover().doubleValue() < 2)
+                || (r.minStockLevel() != null && r.storeClosing() != null
+                    && r.storeClosing().doubleValue() < r.minStockLevel().doubleValue() * 0.5));
+        Severity severity = acute ? Severity.HIGH : Severity.MEDIUM;
+
+        List<EvidenceRef> ev = new ArrayList<>();
+        ev.add(EvidenceRef.metric("Materials in short supply", String.valueOf(n)));
+        for (MaterialBalanceRow r : shortages.subList(0, Math.min(MAX_EXAMPLES, n))) {
+            String detail = "closing " + r.storeClosing() + (r.unit() == null ? "" : " " + r.unit())
+                    + (r.daysOfCover() != null ? " · " + r.daysOfCover() + " day(s) cover" : "")
+                    + (r.minStockLevel() != null ? " · min " + r.minStockLevel() : "");
+            ev.add(EvidenceRef.entity(trim(r.materialName()), detail, "project", projectId,
+                    "/projects/" + projectId + "/reports/material-consumption"));
+        }
+
+        MaterialBalanceRow worst = shortages.get(0);
+        return new AgentFindingDraft(
+                "MATERIAL_LOW_STOCK", "PROJECT", severity, 0.85,
+                "Store closing balance vs minimum stock level (Material Catalogue), else days-of-cover "
+                        + "(closing ÷ average daily consumption over the last 14 days, threshold "
+                        + LOW_COVER_DAYS + ")",
+                n + " material" + (n == 1 ? " is" : "s are") + " in short supply",
+                "The tightest, " + trim(worst.materialName()) + ", has a closing balance of "
+                        + worst.storeClosing() + (worst.unit() == null ? "" : " " + worst.unit())
+                        + (worst.daysOfCover() != null
+                            ? " — about " + worst.daysOfCover() + " day(s) of cover at the recent burn rate."
+                            : " — below its minimum stock level."),
+                "Stock is running down faster than receipts are replenishing it — deliveries lagging, "
+                        + "consumption ahead of plan, or GRN entries not being recorded.",
+                "A stock-out stops the affected work fronts outright; idle crews and plant keep costing while "
+                        + "no progress is earned.",
+                "Raise the purchase/indent for the short materials now (respect the lead time on the catalogue), "
+                        + "and verify recent receipts were actually entered as GRNs.",
+                ev, Map.of("SITE_MANAGER", List.of(), "STORE_KEEPER", List.of(),
+                        "PROJECT_MANAGER", List.of()), validUntil);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

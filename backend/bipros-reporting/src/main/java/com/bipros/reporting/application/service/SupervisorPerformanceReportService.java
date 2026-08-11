@@ -63,6 +63,16 @@ public class SupervisorPerformanceReportService {
   public SupervisorPerformanceReport build(
       UUID projectId, UUID supervisorUserId,
       LocalDate fromDate, LocalDate toDate, int workDays) {
+    return build(projectId, supervisorUserId, null, fromDate, toDate, workDays);
+  }
+
+  /** Activity-scoped overload — when {@code activityId} is non-null, every cell/meta query is
+   *  restricted to DPRs filed against that activity ("comparison between the supervisors for
+   *  the same activity", AI Agent sheet Capacity Utilization row). */
+  @Transactional(readOnly = true)
+  public SupervisorPerformanceReport build(
+      UUID projectId, UUID supervisorUserId, UUID activityId,
+      LocalDate fromDate, LocalDate toDate, int workDays) {
 
     LocalDate today = LocalDate.now();
     LocalDate effectiveTo = toDate == null ? today : toDate;
@@ -78,11 +88,11 @@ public class SupervisorPerformanceReportService {
         : resolveSupervisorName(projectId, supervisorUserId);
 
     List<ManpowerCellRow> manpowerCells =
-        fetchManpowerCells(projectId, supervisorUserId, effectiveFrom, effectiveTo);
+        fetchManpowerCells(projectId, supervisorUserId, activityId, effectiveFrom, effectiveTo);
     List<EquipmentCellRow> equipmentCells =
-        fetchEquipmentCells(projectId, supervisorUserId, effectiveFrom, effectiveTo);
+        fetchEquipmentCells(projectId, supervisorUserId, activityId, effectiveFrom, effectiveTo);
     Map<UUID, ActivityMeta> activityMeta =
-        fetchActivityMeta(projectId, supervisorUserId, effectiveFrom, effectiveTo,
+        fetchActivityMeta(projectId, supervisorUserId, activityId, effectiveFrom, effectiveTo,
             referenceDate, referenceMonth);
 
     // Resolve norms once per (workActivityId, resourceTypeId) to avoid hammering the DB inside
@@ -125,7 +135,7 @@ public class SupervisorPerformanceReportService {
     // Sub-contractor qty per DPR — subtracted from qty_executed so the allocator only sees
     // the company-resource portion. See CapacityUtilizationReportService for the same semantics.
     Map<UUID, BigDecimal> subContractorQtyByDpr = loadSubContractorQtyByDpr(
-        projectId, effectiveFrom, effectiveTo, supervisorUserId);
+        projectId, effectiveFrom, effectiveTo, supervisorUserId, activityId);
 
     List<com.bipros.reporting.application.dto.CapacityUtilizationReport.HiddenSideNote> manpowerHidden = new ArrayList<>();
     List<com.bipros.reporting.application.dto.CapacityUtilizationReport.HiddenSideNote> equipmentHidden = new ArrayList<>();
@@ -365,7 +375,7 @@ public class SupervisorPerformanceReportService {
    *  Subtracted from each DPR's qty_executed before the allocator distributes work to roles. */
   @SuppressWarnings("unchecked")
   private Map<UUID, BigDecimal> loadSubContractorQtyByDpr(
-      UUID projectId, LocalDate fromDate, LocalDate toDate, UUID supervisorUserId) {
+      UUID projectId, LocalDate fromDate, LocalDate toDate, UUID supervisorUserId, UUID activityId) {
     List<Object[]> rows = em.createNativeQuery(
             "SELECT d.id, COALESCE(SUM(sc.quantity), 0) "
                 + "FROM project.daily_progress_reports d "
@@ -375,12 +385,15 @@ public class SupervisorPerformanceReportService {
                 + "  AND d.approval_status = 'APPROVED' "
                 + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
                 + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
+                + "  AND (CAST(:activityId AS uuid) IS NULL "
+                + "       OR d.activity_id = CAST(:activityId AS uuid)) "
                 + "GROUP BY d.id")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
         .setParameter("toDate", toDate)
         .setParameter("supervisorUserId",
             supervisorUserId != null ? supervisorUserId.toString() : null)
+        .setParameter("activityId", activityId != null ? activityId.toString() : null)
         .getResultList();
     Map<UUID, BigDecimal> out = new HashMap<>();
     for (Object[] r : rows) {
@@ -416,13 +429,21 @@ public class SupervisorPerformanceReportService {
   public SupervisorPerformanceComparison compare(
       UUID projectId, List<UUID> supervisorUserIds,
       LocalDate fromDate, LocalDate toDate, int workDays) {
+    return compare(projectId, supervisorUserIds, null, fromDate, toDate, workDays);
+  }
+
+  /** Activity-scoped overload — see the activity-scoped {@code build}. */
+  @Transactional(readOnly = true)
+  public SupervisorPerformanceComparison compare(
+      UUID projectId, List<UUID> supervisorUserIds, UUID activityId,
+      LocalDate fromDate, LocalDate toDate, int workDays) {
     if (supervisorUserIds == null || supervisorUserIds.size() < 2) {
       throw new IllegalArgumentException("compare requires at least 2 supervisor ids");
     }
 
     List<SupervisorPerformanceReport> reports = new ArrayList<>(supervisorUserIds.size());
     for (UUID supId : supervisorUserIds) {
-      reports.add(build(projectId, supId, fromDate, toDate, workDays));
+      reports.add(build(projectId, supId, activityId, fromDate, toDate, workDays));
     }
 
     LocalDate windowFrom = reports.get(0).fromDate();
@@ -477,7 +498,7 @@ public class SupervisorPerformanceReportService {
 
   @SuppressWarnings("unchecked")
   private List<ManpowerCellRow> fetchManpowerCells(
-      UUID projectId, UUID supervisorUserId, LocalDate fromDate, LocalDate toDate) {
+      UUID projectId, UUID supervisorUserId, UUID activityId, LocalDate fromDate, LocalDate toDate) {
 
     // Role-only model: groups by m.role_id (the trade) and joins resource_roles directly.
     // Legacy resource-keyed rows (m.resource_id set, m.role_id NULL) are skipped — they don't
@@ -523,6 +544,8 @@ public class SupervisorPerformanceReportService {
                 // count semantics and the user's mental model. NULL = project-wide.
                 + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
                 + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
+                + "  AND (CAST(:activityId AS uuid) IS NULL "
+                + "       OR d.activity_id = CAST(:activityId AS uuid)) "
                 + "GROUP BY rr.code, rr.name, rr.resource_type_id, d.activity_id, "
                 + "         a.work_activity_id, a.code, a.name, d.unit, m.role_id, d.id, d.report_date")
         .setParameter("projectId", projectId)
@@ -530,6 +553,7 @@ public class SupervisorPerformanceReportService {
         .setParameter("toDate", toDate)
         .setParameter("supervisorUserId",
             supervisorUserId != null ? supervisorUserId.toString() : null)
+        .setParameter("activityId", activityId != null ? activityId.toString() : null)
         .getResultList();
 
     List<ManpowerCellRow> out = new ArrayList<>(raw.size());
@@ -547,7 +571,7 @@ public class SupervisorPerformanceReportService {
 
   @SuppressWarnings("unchecked")
   private List<EquipmentCellRow> fetchEquipmentCells(
-      UUID projectId, UUID supervisorUserId, LocalDate fromDate, LocalDate toDate) {
+      UUID projectId, UUID supervisorUserId, UUID activityId, LocalDate fromDate, LocalDate toDate) {
 
     // Same role-only rewrite as the manpower query: group by e.role_id, fall back hours to 8,
     // and join equipment_role_variants for the line-cost rate so MM/Eq Rate appears even when
@@ -584,6 +608,8 @@ public class SupervisorPerformanceReportService {
                 // Same filer-based filter as the manpower query above.
                 + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
                 + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
+                + "  AND (CAST(:activityId AS uuid) IS NULL "
+                + "       OR d.activity_id = CAST(:activityId AS uuid)) "
                 + "GROUP BY rr.code, rr.name, rr.resource_type_id, d.activity_id, "
                 + "         a.work_activity_id, a.code, a.name, d.unit, e.role_id, d.id, d.report_date")
         .setParameter("projectId", projectId)
@@ -591,6 +617,7 @@ public class SupervisorPerformanceReportService {
         .setParameter("toDate", toDate)
         .setParameter("supervisorUserId",
             supervisorUserId != null ? supervisorUserId.toString() : null)
+        .setParameter("activityId", activityId != null ? activityId.toString() : null)
         .getResultList();
 
     List<EquipmentCellRow> out = new ArrayList<>(raw.size());
@@ -608,7 +635,7 @@ public class SupervisorPerformanceReportService {
 
   @SuppressWarnings("unchecked")
   private Map<UUID, ActivityMeta> fetchActivityMeta(
-      UUID projectId, UUID supervisorUserId, LocalDate fromDate, LocalDate toDate,
+      UUID projectId, UUID supervisorUserId, UUID activityId, LocalDate fromDate, LocalDate toDate,
       LocalDate referenceDate, YearMonth referenceMonth) {
 
     // LEFT JOIN to dpr_sub_contractor + SUM gives Σ sub-contractor qty per activity in the
@@ -643,6 +670,8 @@ public class SupervisorPerformanceReportService {
                 // selected supervisor actually filed a DPR for, matching the cells above.
                 + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
                 + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
+                + "  AND (CAST(:activityId AS uuid) IS NULL "
+                + "       OR d.activity_id = CAST(:activityId AS uuid)) "
                 + "GROUP BY d.activity_id")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
@@ -652,6 +681,7 @@ public class SupervisorPerformanceReportService {
         .setParameter("monthEnd", monthEnd)
         .setParameter("supervisorUserId",
             supervisorUserId != null ? supervisorUserId.toString() : null)
+        .setParameter("activityId", activityId != null ? activityId.toString() : null)
         .getResultList();
 
     Map<UUID, ActivityMeta> out = new LinkedHashMap<>(raw.size());

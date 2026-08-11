@@ -2,6 +2,7 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.event.DprIssueChangedEvent;
 import com.bipros.common.event.DprMutationType;
+import com.bipros.common.event.IssueAssignedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.ProjectAccessGuard;
@@ -60,7 +61,8 @@ public class DprIssueService {
             UUID activityId,
             LocalDate dateFrom,
             LocalDate dateTo,
-            String q) {
+            String q,
+            Boolean interventionRequired) {
         return issueRepository.findByProjectIdOrderByOpenedAtDesc(projectId).stream()
                 .filter(i -> status == null || i.getStatus() == status)
                 .filter(i -> severity == null || i.getSeverity() == severity)
@@ -71,6 +73,8 @@ public class DprIssueService {
                 .filter(i -> dateFrom == null || !i.getReportDate().isBefore(dateFrom))
                 .filter(i -> dateTo == null || !i.getReportDate().isAfter(dateTo))
                 .filter(i -> q == null || q.isBlank() || matchesQ(i, q))
+                .filter(i -> interventionRequired == null
+                        || i.isInterventionRequired() == interventionRequired)
                 .map(DprIssueRow::from)
                 .toList();
     }
@@ -91,6 +95,7 @@ public class DprIssueService {
         DprIssue issue = findIssue(projectId, id);
         DprIssueRow before = DprIssueRow.from(issue);
         IssueStatus oldStatus = issue.getStatus();
+        UUID oldAssignee = issue.getAssignedToUserId();
 
         if (request.title() != null) {
             if (request.title().isBlank()) {
@@ -112,6 +117,10 @@ public class DprIssueService {
         if (request.resolutionNotes() != null) issue.setResolutionNotes(request.resolutionNotes());
         if (request.activityId() != null) issue.setActivityId(request.activityId());
         if (request.activityName() != null) issue.setActivityName(request.activityName());
+        if (request.interventionRequired() != null) {
+            issue.setInterventionRequired(request.interventionRequired());
+        }
+        if (request.dueDate() != null) issue.setDueDate(request.dueDate());
         // Unconditional (NOT null-guarded): the IssueForm always sends the full body, so clearing the
         // HSE-type dropdown to blank OR re-categorizing away from SAFETY/ENVIRONMENTAL (both send
         // hseIncidentType=null) correctly UN-classifies the incident and lowers the headline count.
@@ -153,6 +162,13 @@ public class DprIssueService {
                 oldStatus != null ? oldStatus.name() : null,
                 saved.getStatus().name(),
                 DprMutationType.UPDATED));
+        // Assignment auto-notification — only on a real change (the IssueForm round-trips the
+        // full body on every save, so an equality check is what prevents re-mailing per edit).
+        if (saved.getAssignedToUserId() != null
+                && !saved.getAssignedToUserId().equals(oldAssignee)) {
+            eventPublisher.publishEvent(new IssueAssignedEvent(
+                    saved.getProjectId(), saved.getId(), saved.getAssignedToUserId()));
+        }
         return after;
     }
 
@@ -196,6 +212,8 @@ public class DprIssueService {
                 .resolvedAt(status.resolvedAtTerminal() ? Instant.now() : null)
                 .closedAt(status == IssueStatus.CLOSED ? Instant.now() : null)
                 .hseIncidentType(req.hseIncidentType())
+                .interventionRequired(Boolean.TRUE.equals(req.interventionRequired()))
+                .dueDate(req.dueDate())
                 .build();
         DprIssue saved = issueRepository.save(issue);
         appendStatusHistory(saved.getId(), null, saved.getStatus(),
@@ -203,6 +221,10 @@ public class DprIssueService {
         auditService.logCreate("DprIssue", saved.getId(), DprIssueRow.from(saved));
         eventPublisher.publishEvent(new DprIssueChangedEvent(
                 projectId, null, saved.getId(), null, status.name(), DprMutationType.CREATED));
+        if (saved.getAssignedToUserId() != null) {
+            eventPublisher.publishEvent(new IssueAssignedEvent(
+                    projectId, saved.getId(), saved.getAssignedToUserId()));
+        }
         return DprIssueRow.from(saved);
     }
 

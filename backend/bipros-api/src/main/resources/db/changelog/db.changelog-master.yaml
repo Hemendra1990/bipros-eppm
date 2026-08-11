@@ -259,3 +259,17 @@ databaseChangeLog:
       file: db/changelog/133-dpr-voice-note-transcript.yaml
   - include:
       file: db/changelog/134-dpr-agent-report.yaml
+  - include:
+      file: db/changelog/135-dpr-missing-alert-run.yaml
+  - include:
+      file: db/changelog/136-dpr-issue-intervention-required.yaml
+  - include:
+      file: db/changelog/137-agent-mail-log.yaml
+  - include:
+      file: db/changelog/138-dpr-issue-due-date.yaml
+  - include:
+      file: db/changelog/139-issue-digest-run.yaml
+  - include:
+      file: db/changelog/140-material-shortage-run.yaml
+  - include:
+      file: db/changelog/141-boq-actual-cost.yaml

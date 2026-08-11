@@ -31,10 +31,10 @@ import { TotalsPanel } from "./TotalsPanel";
  *   1. CM picker + "N CMs with activity" hint
  *   2. Prelim-aware KPI tiles (Direct, Prelim, Total incl Prelims, % Achieved)
  *   3. Standard {@link TotalsPanel} (P&L summary)
- *   4. Section accordions for Material, Manpower, Admin, Machinery, Fuel —
- *      the CM-tier response carries SECTION TOTALS only (no line-level detail);
- *      we render each section card with an empty `lines` array so the user
- *      sees the totals but no spurious lines.
+ *   4. Section accordions for Manpower, Admin, Machinery, Fuel, Material and one
+ *      merged "BOQ Work executed" — the backend rolls the downline supervisors'
+ *      lines up at read time (grouped by description + unit + rate). The BOQ
+ *      direct/prelim split stays on the KPI tiles (stored lines carry no split).
  *   5. Chip list of Site Managers / Engineers under this CM.
  */
 export interface CmDbsTabProps {
@@ -220,50 +220,44 @@ export function CmDbsTab({
             currency={currency}
           />
 
-          {/* Section totals — CM-tier response carries totals only, not lines.
-              Each card shows the total in the header; the empty body just notes
-              that drill-down lives one tier lower. */}
+          {/* Section accordions — downline supervisor lines merged by the backend at
+              read time. One flat "BOQ Work executed" list mirrors the supervisor tab;
+              the direct/prelim split lives on the KPI tiles above. */}
           <div className="space-y-3">
             <SectionCard
               title="A. Manpower"
-              lines={[]}
+              lines={day.manpowerLines ?? []}
               total={day.manpowerAmount}
               currency={currency}
             />
             <SectionCard
               title="B. Admin / Catering"
-              lines={[]}
+              lines={day.adminLines ?? []}
               total={day.adminAmount}
               currency={currency}
             />
             <SectionCard
               title="C. Machinery"
-              lines={[]}
+              lines={day.machineryLines ?? []}
               total={day.machineryAmount}
               currency={currency}
             />
             <SectionCard
               title="D. Fuel"
-              lines={[]}
+              lines={day.fuelLines ?? []}
               total={day.fuelAmount}
               currency={currency}
             />
             <SectionCard
               title="E. Material"
-              lines={[]}
+              lines={day.materialLines ?? []}
               total={day.materialAmount}
               currency={currency}
             />
             <SectionCard
-              title="BOQ — Direct"
-              lines={[]}
-              total={day.directCost ?? 0}
-              currency={currency}
-            />
-            <SectionCard
-              title="BOQ — Preliminaries"
-              lines={[]}
-              total={day.prelimCost ?? 0}
+              title="BOQ Work executed"
+              lines={day.boqLines ?? []}
+              total={day.boqForTheDayAmount}
               currency={currency}
             />
           </div>

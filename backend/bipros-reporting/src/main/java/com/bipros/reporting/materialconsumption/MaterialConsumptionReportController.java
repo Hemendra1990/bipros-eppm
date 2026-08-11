@@ -1,6 +1,10 @@
 package com.bipros.reporting.materialconsumption;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.resource.application.dto.MaterialAvailabilityResult;
+import com.bipros.resource.application.dto.SupervisorMaterialRow;
+import com.bipros.resource.application.service.MaterialBalanceService;
+import com.bipros.resource.application.service.SupervisorMaterialComparisonService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -13,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -27,6 +32,34 @@ public class MaterialConsumptionReportController {
 
   private final MaterialConsumptionReportService service;
   private final MaterialConsumptionExcelWriter excelWriter;
+  private final MaterialBalanceService balanceService;
+  private final SupervisorMaterialComparisonService comparisonService;
+
+  /**
+   * Material availability (MAT-01): per-material received / issued / consumed / closing balance,
+   * computed from GRNs + issue slips + storekeeper log + approved DPRs. {@code tracked=false}
+   * means the project has no store data — the UI shows "stock not tracked", never zeros.
+   */
+  @GetMapping("/availability")
+  public ApiResponse<MaterialAvailabilityResult> availability(
+      @PathVariable UUID projectId,
+      @RequestParam(required = false) LocalDate from,
+      @RequestParam(required = false) LocalDate to,
+      @RequestParam(required = false, defaultValue = "3") int lowCoverDays) {
+    return ApiResponse.ok(balanceService.availability(projectId, from, to, lowCoverDays));
+  }
+
+  /**
+   * Supervisor-wise issued vs DPR-reported material (MAT-04) — cumulative to {@code asOf} with
+   * movement columns from {@code windowFrom}. Flag only; no DBS costing (open question Q20).
+   */
+  @GetMapping("/supervisor-comparison")
+  public ApiResponse<List<SupervisorMaterialRow>> supervisorComparison(
+      @PathVariable UUID projectId,
+      @RequestParam(required = false) LocalDate asOf,
+      @RequestParam(required = false) LocalDate windowFrom) {
+    return ApiResponse.ok(comparisonService.compare(projectId, asOf, windowFrom));
+  }
 
   @GetMapping
   public ApiResponse<MaterialConsumptionReportResponse> generate(

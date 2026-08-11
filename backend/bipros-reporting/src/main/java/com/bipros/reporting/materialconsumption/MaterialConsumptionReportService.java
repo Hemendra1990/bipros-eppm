@@ -5,6 +5,7 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
 import com.bipros.project.application.dto.DprMaterialLine;
 import com.bipros.project.application.service.DprMaterialConsumptionLookup;
+import com.bipros.resource.application.service.MaterialBalanceService;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
 import com.bipros.resource.domain.model.MaterialIssue;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
@@ -53,6 +54,7 @@ public class MaterialConsumptionReportService {
   private final ActivityRepository activityRepo;
   private final ActivitySupervisorRepository activitySupervisorRepo;
   private final DprMaterialConsumptionLookup dprMaterialLookup;
+  private final MaterialBalanceService balanceService;
 
   @PersistenceContext private EntityManager em;
 
@@ -71,8 +73,21 @@ public class MaterialConsumptionReportService {
     List<MaterialConsumptionLog> logs = safeFetchLogs(filter.projectId(), from, to);
     logs = applyLogFilters(logs, filter);
 
-    // Issued totals per (activity, material) for the same window.
-    Map<IssueKey, BigDecimal> issuedByKey = sumIssuedQuantities(filter.projectId(), from, to);
+    // Issued totals per (day, material). Each day's total is attached to exactly ONE matching
+    // ledger row (the first for that day+material) so grouped sums are correct — the previous
+    // whole-window total stamped on every row overstated Issued N× under grouping.
+    Map<IssueKey, BigDecimal> issuedByDay = sumIssuedQuantitiesPerDay(filter.projectId(), from, to);
+    java.util.Set<IssueKey> claimedIssueKeys = new java.util.HashSet<>();
+    // Window issued totals per normalized material NAME — authoritative Issued for
+    // MATERIAL-grouped buckets even when issue days don't coincide with ledger-entry days.
+    // Only when no row filter is active: issue slips can't be narrowed by supervisor /
+    // storekeeper / WBS the way rows can, so under a filter the override would overstate.
+    boolean noRowFilters = filter.wbsNodeId() == null && filter.activityId() == null
+        && filter.supervisorUserId() == null && filter.storekeeperUserId() == null
+        && filter.materialRateMasterId() == null;
+    Map<String, BigDecimal> issuedByNameKey = noRowFilters
+        ? sumIssuedQuantitiesByName(filter.projectId(), from, to)
+        : Map.of();
 
     // Caches to avoid N+1 lookups.
     Map<UUID, String> userNameCache = new HashMap<>();
@@ -102,8 +117,11 @@ public class MaterialConsumptionReportService {
           ? closingStock
           : openingStock.add(received).subtract(consumed);
 
-      BigDecimal issuedQty = issuedByKey.getOrDefault(
-          new IssueKey(log.getActivityId(), log.getResourceId()), null);
+      BigDecimal issuedQty = null;
+      IssueKey issueKey = new IssueKey(log.getLogDate(), log.getResourceId());
+      if (issuedByDay.containsKey(issueKey) && claimedIssueKeys.add(issueKey)) {
+        issuedQty = issuedByDay.get(issueKey);
+      }
 
       BigDecimal unitRate = log.getUnitRate();
       BigDecimal actualCost = log.getLineCost();
@@ -208,7 +226,8 @@ public class MaterialConsumptionReportService {
           alerts));
     }
 
-    List<MaterialConsumptionRow> finalRows = groupRows(rawRows, filter.groupBy(), from, to);
+    List<MaterialConsumptionRow> finalRows =
+        groupRows(rawRows, filter.groupBy(), from, to, issuedByNameKey);
     Map<String, BigDecimal> totals = computeTotals(finalRows);
     Map<String, Integer> alertCounts = computeAlertCounts(finalRows);
 
@@ -258,17 +277,40 @@ public class MaterialConsumptionReportService {
     return out;
   }
 
-  private Map<IssueKey, BigDecimal> sumIssuedQuantities(
+  private Map<IssueKey, BigDecimal> sumIssuedQuantitiesPerDay(
       UUID projectId, LocalDate from, LocalDate to) {
     Map<IssueKey, BigDecimal> out = new HashMap<>();
     try {
       List<MaterialIssue> issues = issueRepo.findByProjectIdAndIssueDateBetween(projectId, from, to);
       for (MaterialIssue i : issues) {
-        IssueKey k = new IssueKey(i.getActivityId(), i.getMaterialId());
+        IssueKey k = new IssueKey(i.getIssueDate(), i.getMaterialId());
         out.merge(k, nz(i.getQuantity()), BigDecimal::add);
       }
     } catch (Exception e) {
       log.debug("Material issue aggregation failed for project {}: {}", projectId, e.getMessage());
+    }
+    return out;
+  }
+
+  /** Window issued totals keyed by normalized material name (catalogue → resources fallback). */
+  private Map<String, BigDecimal> sumIssuedQuantitiesByName(
+      UUID projectId, LocalDate from, LocalDate to) {
+    Map<String, BigDecimal> out = new HashMap<>();
+    try {
+      List<MaterialIssue> issues = issueRepo.findByProjectIdAndIssueDateBetween(projectId, from, to);
+      if (issues.isEmpty()) return out;
+      java.util.Set<UUID> ids = new java.util.HashSet<>();
+      for (MaterialIssue i : issues) ids.add(i.getMaterialId());
+      ids.remove(null);
+      Map<UUID, MaterialBalanceService.MaterialRef> refs =
+          balanceService.resolveMaterialRefs(projectId, ids);
+      for (MaterialIssue i : issues) {
+        MaterialBalanceService.MaterialRef ref = refs.get(i.getMaterialId());
+        if (ref == null || ref.name() == null) continue;
+        out.merge(MaterialBalanceService.norm(ref.name()), nz(i.getQuantity()), BigDecimal::add);
+      }
+    } catch (Exception e) {
+      log.debug("Material issue name aggregation failed for project {}: {}", projectId, e.getMessage());
     }
     return out;
   }
@@ -357,7 +399,8 @@ public class MaterialConsumptionReportService {
   // ── Grouping ─────────────────────────────────────────────────────────────────────────────
 
   private List<MaterialConsumptionRow> groupRows(
-      List<MaterialConsumptionRow> rows, String groupBy, LocalDate from, LocalDate to) {
+      List<MaterialConsumptionRow> rows, String groupBy, LocalDate from, LocalDate to,
+      Map<String, BigDecimal> issuedByNameKey) {
     if (groupBy == null || groupBy.isBlank()) return rows;
     String key = groupBy.trim().toUpperCase();
     Map<Object, List<MaterialConsumptionRow>> buckets = new LinkedHashMap<>();
@@ -375,21 +418,26 @@ public class MaterialConsumptionReportService {
     }
     List<MaterialConsumptionRow> out = new ArrayList<>(buckets.size());
     for (List<MaterialConsumptionRow> bucket : buckets.values()) {
-      out.add(aggregateBucket(bucket, key, from, to));
+      out.add(aggregateBucket(bucket, key, from, to, issuedByNameKey));
     }
     return out;
   }
 
   private MaterialConsumptionRow aggregateBucket(
-      List<MaterialConsumptionRow> bucket, String key, LocalDate globalFrom, LocalDate globalTo) {
+      List<MaterialConsumptionRow> bucket, String key, LocalDate globalFrom, LocalDate globalTo,
+      Map<String, BigDecimal> issuedByNameKey) {
     MaterialConsumptionRow first = bucket.get(0);
 
     BigDecimal issuedQty = null;
     BigDecimal consumedQty = BigDecimal.ZERO;
-    BigDecimal balanceQty = BigDecimal.ZERO;
     BigDecimal actualCost = null;
     BigDecimal wastageWeightedNum = BigDecimal.ZERO;
     BigDecimal wastageWeightedDen = BigDecimal.ZERO;
+    // A closing balance is a point-in-time figure — summing it across a material's daily rows
+    // double-counts stock. Keep the LATEST non-null balance per material in the bucket and sum
+    // those (one material per MATERIAL bucket → its latest closing; mixed buckets → Σ of each
+    // material's latest closing). Buckets with no ledger balance stay null, not zero.
+    Map<String, MaterialConsumptionRow> latestBalanceByMaterial = new LinkedHashMap<>();
 
     List<String> aggAlerts = new ArrayList<>();
     for (MaterialConsumptionRow r : bucket) {
@@ -397,7 +445,14 @@ public class MaterialConsumptionReportService {
         issuedQty = (issuedQty == null ? BigDecimal.ZERO : issuedQty).add(r.issuedQty());
       }
       consumedQty = consumedQty.add(nz(r.consumedQty()));
-      balanceQty = balanceQty.add(nz(r.balanceQty()));
+      if (r.balanceQty() != null) {
+        String mk = r.materialName() != null ? r.materialName().trim().toLowerCase() : "";
+        MaterialConsumptionRow prev = latestBalanceByMaterial.get(mk);
+        if (prev == null || prev.fromDate() == null
+            || (r.fromDate() != null && !r.fromDate().isBefore(prev.fromDate()))) {
+          latestBalanceByMaterial.put(mk, r);
+        }
+      }
       if (r.actualCost() != null) {
         actualCost = (actualCost == null ? BigDecimal.ZERO : actualCost).add(r.actualCost());
       }
@@ -407,6 +462,11 @@ public class MaterialConsumptionReportService {
         wastageWeightedDen = wastageWeightedDen.add(w);
       }
       for (String a : r.alerts()) if (!aggAlerts.contains(a)) aggAlerts.add(a);
+    }
+
+    BigDecimal balanceQty = null;
+    for (MaterialConsumptionRow r : latestBalanceByMaterial.values()) {
+      balanceQty = (balanceQty == null ? BigDecimal.ZERO : balanceQty).add(r.balanceQty());
     }
 
     BigDecimal wastagePercent = wastageWeightedDen.signum() > 0
@@ -425,6 +485,15 @@ public class MaterialConsumptionReportService {
     UUID materialRateMasterId = GROUP_MATERIAL.equals(key) ? first.materialRateMasterId() : null;
     String materialName = GROUP_MATERIAL.equals(key) ? first.materialName() : null;
     String unit = GROUP_MATERIAL.equals(key) ? first.unit() : null;
+
+    // MATERIAL buckets: Issued comes straight from the window's issue slips for this material —
+    // row-level Issued only carries same-day slips, which understates the material total when
+    // issue days don't coincide with ledger-entry days.
+    if (GROUP_MATERIAL.equals(key) && materialName != null) {
+      BigDecimal windowIssued =
+          issuedByNameKey.get(MaterialBalanceService.norm(materialName));
+      if (windowIssued != null) issuedQty = windowIssued;
+    }
 
     return new MaterialConsumptionRow(
         first.projectId(), fromDate, toDate, null, null, activityId, activityName,
@@ -472,6 +541,6 @@ public class MaterialConsumptionReportService {
     return v == null ? BigDecimal.ZERO : v;
   }
 
-  /** (activity_id, resource_id == material_id in the issue table) key for the issued-qty cache. */
-  private record IssueKey(UUID activityId, UUID materialId) {}
+  /** (day, resource_id == material_id in the issue table) key for the per-day issued-qty cache. */
+  private record IssueKey(LocalDate day, UUID materialId) {}
 }

@@ -34,6 +34,8 @@ export interface DprIssueFilters {
   dateFrom?: string;
   dateTo?: string;
   q?: string;
+  /** true = only intervention-flagged issues. */
+  interventionRequired?: boolean;
 }
 
 /**
@@ -59,6 +61,9 @@ export interface UpdateDprIssueRequest {
   hseIncidentType?: HseIncidentType | null;
   /** Free-text reason recorded on the status-change history row (non-terminal moves). */
   statusChangeReason?: string | null;
+  interventionRequired?: boolean | null;
+  /** Act-by date; ISO date, null = leave unchanged. */
+  dueDate?: string | null;
 }
 
 function toQuery(filters: DprIssueFilters): string {
@@ -71,6 +76,9 @@ function toQuery(filters: DprIssueFilters): string {
   if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) params.set("dateTo", filters.dateTo);
   if (filters.q) params.set("q", filters.q);
+  if (filters.interventionRequired != null) {
+    params.set("interventionRequired", String(filters.interventionRequired));
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }

@@ -11,6 +11,9 @@ public interface DprAgentReportRepository extends JpaRepository<DprAgentReport, 
             UUID projectId, String trigger, String status);
     Optional<DprAgentReport> findTopByProjectIdOrderByGeneratedAtDesc(UUID projectId);
 
+    /** Latest run of the given trigger regardless of status — powers the deliverables panel. */
+    Optional<DprAgentReport> findTopByProjectIdAndTriggerOrderByGeneratedAtDesc(UUID projectId, String trigger);
+
     /** Backs the DPR Analyst's {@code list_dpr_reports} tool — "which report do you mean?" disambiguation. */
     List<DprAgentReport> findTop20ByProjectIdOrderByGeneratedAtDesc(UUID projectId);
 }

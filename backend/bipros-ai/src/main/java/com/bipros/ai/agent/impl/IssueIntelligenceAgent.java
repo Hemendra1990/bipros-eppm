@@ -525,7 +525,7 @@ public class IssueIntelligenceAgent extends AbstractAgent {
 
     private List<DprIssueRow> safeDprIssues(UUID projectId) {
         try {
-            return dprIssueService.list(projectId, null, null, null, null, null, null, null, null);
+            return dprIssueService.list(projectId, null, null, null, null, null, null, null, null, null);
         } catch (Exception e) {
             log.debug("DPR issues unavailable for project {}: {}", projectId, e.getMessage());
             return List.of();

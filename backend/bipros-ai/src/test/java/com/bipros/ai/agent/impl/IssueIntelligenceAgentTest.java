@@ -79,7 +79,7 @@ class IssueIntelligenceAgentTest {
                 "Issue " + id.toString().substring(0, 4), "desc",
                 cat, IssueSeverity.HIGH, status,
                 null, null, null, null,
-                openedAt, null, null, null, null, hse, null);
+                openedAt, null, null, null, null, hse, null, null, null);
     }
 
     private NcrResponse ncr(UUID id, NcrCategory cat, NcrStatus status, Instant raisedAt) {

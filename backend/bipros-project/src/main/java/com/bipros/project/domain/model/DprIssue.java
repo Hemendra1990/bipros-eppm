@@ -152,4 +152,19 @@ public class DprIssue extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "hse_incident_type", length = 20)
     private HseIncidentType hseIncidentType;
+
+    /**
+     * Client requirement (AI Agent sheet, DPR row): the supervisor ticks whether next-level
+     * intervention is required. Groundwork for the Issues-agent assignment flow (project control
+     * assigns a responsible person to flagged issues).
+     */
+    @Column(name = "intervention_required", nullable = false, columnDefinition = "boolean default false")
+    private boolean interventionRequired;
+
+    /**
+     * Act-by date (client: "assign the responsible person along with time frame to act on it").
+     * Optional; the Issues page and the weekly outstanding digest highlight overdue rows.
+     */
+    @Column(name = "due_date")
+    private LocalDate dueDate;
 }

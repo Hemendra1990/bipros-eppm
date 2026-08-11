@@ -75,7 +75,7 @@ class DprIssueServiceTest {
 
         service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null, null, null));
+                null, null, null, null, null, null, null, null, null, null, null, null, null));
 
         ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
         verify(historyRepository).save(cap.capture());
@@ -93,7 +93,7 @@ class DprIssueServiceTest {
         service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
                 null, null, null, null, null, null, null, null, null,
-                "Awaiting customs clearance", null));
+                "Awaiting customs clearance", null, null, null));
 
         ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
         verify(historyRepository).save(cap.capture());
@@ -109,7 +109,7 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.RESOLVED,
-                null, null, null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
             .hasMessageContaining("Resolution notes");
     }
@@ -122,7 +122,7 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.patch(projectId, issueId, new UpdateDprIssueRequest(
                 null, null, null, null, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
             .hasMessageContaining("Assigned");
     }
@@ -131,7 +131,7 @@ class DprIssueServiceTest {
     void create_openWithoutAssignee_ok() {
         var row = service.create(projectId, new CreateDprIssueRequest(
             "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.OPEN,
-            null, null, null, null, null, null, null, null, null, null));
+            null, null, null, null, null, null, null, null, null, null, null, null));
         assertThat(row.title()).isEqualTo("title");
     }
 
@@ -140,7 +140,7 @@ class DprIssueServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
             service.create(projectId, new CreateDprIssueRequest(
                 "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.IN_PROGRESS,
-                null, null, null, null, null, null, null, null, null, null)))
+                null, null, null, null, null, null, null, null, null, null, null, null)))
             .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class);
     }
 
@@ -149,7 +149,7 @@ class DprIssueServiceTest {
         var row = service.create(projectId, new CreateDprIssueRequest(
             "gas leak near manifold", null, IssueCategory.SAFETY, IssueSeverity.MEDIUM, IssueStatus.OPEN,
             null, null, null, null, null, null, null, null, null,
-            HseIncidentType.NEAR_MISS));
+            HseIncidentType.NEAR_MISS, null, null));
 
         assertThat(row.hseIncidentType()).isEqualTo(HseIncidentType.NEAR_MISS);
     }
@@ -163,15 +163,15 @@ class DprIssueServiceTest {
         when(issueRepository.findByProjectIdOrderByOpenedAtDesc(projectId))
                 .thenReturn(java.util.List.of(a, b));
 
-        var byTitle = service.list(projectId, null, null, null, null, null, null, null, "REBAR");
+        var byTitle = service.list(projectId, null, null, null, null, null, null, null, "REBAR", null);
         assertThat(byTitle).hasSize(1);
         assertThat(byTitle.get(0).title()).isEqualTo("Steel rebar delay");
 
-        var byDesc = service.list(projectId, null, null, null, null, null, null, null, "hydraulic");
+        var byDesc = service.list(projectId, null, null, null, null, null, null, null, "hydraulic", null);
         assertThat(byDesc).hasSize(1);
         assertThat(byDesc.get(0).title()).isEqualTo("Crane breakdown");
 
-        var noQ = service.list(projectId, null, null, null, null, null, null, null, null);
+        var noQ = service.list(projectId, null, null, null, null, null, null, null, null, null);
         assertThat(noQ).hasSize(2);
     }
 }

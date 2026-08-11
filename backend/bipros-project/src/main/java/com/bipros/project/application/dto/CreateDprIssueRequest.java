@@ -31,5 +31,9 @@ public record CreateDprIssueRequest(
     LocalDate reportDate,
     UUID supervisorUserId,
     UUID assignedToUserId,
-    HseIncidentType hseIncidentType
+    HseIncidentType hseIncidentType,
+    /** Next-level intervention required checkbox; null = leave unchanged (patch) / false (create). */
+    Boolean interventionRequired,
+    /** Act-by date ("time frame to act on it"); optional. */
+    LocalDate dueDate
 ) {}

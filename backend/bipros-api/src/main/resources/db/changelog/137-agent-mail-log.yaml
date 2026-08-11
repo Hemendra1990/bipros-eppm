@@ -1,0 +1,37 @@
+databaseChangeLog:
+  - changeSet:
+      id: 137-create-agent-mail-log
+      author: claude
+      comment: Per-recipient delivery log for agent-sent mails / in-app notifications — powers the AI tab "Agent deliverables" panel
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_mail_log
+            columns:
+              - column: {name: id, type: UUID, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: project_id, type: UUID, constraints: {nullable: false}}
+              - column: {name: category, type: VARCHAR(40), constraints: {nullable: false}}
+              - column: {name: channel, type: VARCHAR(16), constraints: {nullable: false}}
+              - column: {name: recipient_user_id, type: UUID}
+              - column: {name: recipient_name, type: VARCHAR(255)}
+              - column: {name: recipient_email, type: VARCHAR(255)}
+              - column: {name: subject, type: VARCHAR(500)}
+              - column: {name: body_html, type: TEXT}
+              - column: {name: report_id, type: UUID}
+              - column: {name: status, type: VARCHAR(16), constraints: {nullable: false}}
+              - column: {name: detail, type: VARCHAR(500)}
+              - column: {name: sent_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: VARCHAR(255)}
+              - column: {name: updated_by, type: VARCHAR(255)}
+              - column: {name: version, type: BIGINT}
+        - createIndex:
+            schemaName: ai
+            tableName: agent_mail_log
+            indexName: ix_agent_mail_log_project_sent
+            columns:
+              - column: {name: project_id}
+              - column: {name: sent_at}
+      rollback:
+        - dropTable: {schemaName: ai, tableName: agent_mail_log}
