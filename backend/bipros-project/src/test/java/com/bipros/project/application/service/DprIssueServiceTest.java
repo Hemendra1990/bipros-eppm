@@ -50,7 +50,8 @@ class DprIssueServiceTest {
     @BeforeEach
     void setUp() {
         service = new DprIssueService(issueRepository, historyRepository, auditService,
-                eventPublisher, projectAccessGuard);
+                eventPublisher, projectAccessGuard,
+                com.bipros.common.security.ScopeKeys::all);
         lenient().when(projectAccessGuard.currentUserId()).thenReturn(actorId);
         lenient().when(issueRepository.save(any(DprIssue.class)))
                 .thenAnswer(inv -> inv.getArgument(0));

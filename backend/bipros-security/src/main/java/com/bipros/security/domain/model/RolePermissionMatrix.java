@@ -354,6 +354,38 @@ public final class RolePermissionMatrix {
         executive.add("HDS_LIBRARY.UPDATE");
         m.put("EXECUTIVE", Collections.unmodifiableSet(executive));
 
+        // Access-control round (2026-08-11) compat grants: the new fine-grained codes
+        // (DPR.EXPORT, DBS.READ/EXPORT, ISSUE.*) default onto every role that already had the
+        // surface de facto — otherwise the new endpoint guards would lock out existing
+        // role-based users the day they ship. Sarooj profiles control these codes precisely.
+        for (Map.Entry<String, Set<String>> entry : m.entrySet()) {
+            // ADMIN already carries ALL_CODES; VIEWER is read-only by contract and its
+            // .READ-filter construction picks up DBS.READ / ISSUE.READ on its own.
+            if ("ADMIN".equals(entry.getKey()) || "VIEWER".equals(entry.getKey())) continue;
+            Set<String> updated = new HashSet<>(entry.getValue());
+            // Review round 2: DBS reads and the team roster were reachable by EVERY logged-in
+            // user before this round, and the roster powers pickers all over the UI — key those
+            // on PROJECT.READ (the broad view baseline), not DPR.READ, or FINANCE/EXECUTIVE/PMO
+            // and friends get locked out of screens they had yesterday.
+            if (updated.contains("DPR.READ")) updated.add("DPR.EXPORT");
+            if (updated.contains("PROJECT.READ")) {
+                updated.add("DBS.READ");
+                updated.add("ISSUE.READ");
+                updated.add("PROJECT_MEMBER.READ");
+            }
+            // The old issue-create guard explicitly allowed PROJECT_MANAGER (DPR.APPROVE holder).
+            if (updated.contains("DPR.CREATE") || updated.contains("DPR.APPROVE")) {
+                updated.add("ISSUE.CREATE");
+            }
+            if (updated.contains("DPR.UPDATE")) updated.add("ISSUE.UPDATE");
+            // Exporting the DBS requires being able to SEE the DBS — never grant the export to
+            // a role without the read (CLIENT holds REPORT.EXPORT but must not pull the P&L).
+            if (updated.contains("DBS.READ") && updated.contains("REPORT.EXPORT")) {
+                updated.add("DBS.EXPORT");
+            }
+            entry.setValue(Collections.unmodifiableSet(updated));
+        }
+
         DEFAULTS = Collections.unmodifiableMap(m);
     }
 

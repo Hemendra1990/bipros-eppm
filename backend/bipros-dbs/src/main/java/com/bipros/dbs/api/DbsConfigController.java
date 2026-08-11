@@ -5,6 +5,7 @@ import com.bipros.dbs.api.dto.DbsConfigResponse;
 import com.bipros.dbs.config.DbsProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,6 +25,7 @@ public class DbsConfigController {
     private final DbsProperties properties;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<DbsConfigResponse>> getConfig() {
         return ResponseEntity.ok(
             ApiResponse.ok(new DbsConfigResponse(properties.getFuelMachineryCostRatio())));

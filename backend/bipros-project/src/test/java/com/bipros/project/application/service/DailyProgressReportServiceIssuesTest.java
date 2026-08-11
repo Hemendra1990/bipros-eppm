@@ -85,7 +85,8 @@ class DailyProgressReportServiceIssuesTest {
                 dprRepository, manpowerRepository, equipmentRepository, materialRepository,
                 subContractorRepository, attachmentRepository, voiceNoteRepository, issueRepository,
                 attachmentStorage, voiceNoteStorage, projectRepository, ledgerService, auditService,
-                eventPublisher, null, boqItemRepository, null, null, null, null);
+                eventPublisher, null, boqItemRepository, null, null, null, null,
+        com.bipros.common.security.ScopeKeys::all);
         lenient().when(subContractorRepository.findByDprIdOrderBySubContractorNameAsc(any()))
                 .thenReturn(java.util.List.of());
         lenient().when(subContractorRepository.findByDprIdIn(any())).thenReturn(java.util.List.of());

@@ -48,7 +48,27 @@ export interface MarginSummary {
 
 export type MarginScope = "budgeted" | "boq";
 
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export const marginApi = {
+  /** Excel download for the P&L screens (Access-Output row 5). Server gate: COST.READ + REPORT.EXPORT. */
+  downloadExcel: async (projectId: string, scope: MarginScope, cadence: string) => {
+    const res = await apiClient.get<Blob>(
+      `/v1/projects/${projectId}/pnl/${scope}/export.xlsx`,
+      { params: { periodType: cadence }, responseType: "blob" },
+    );
+    triggerBlobDownload(res.data, `pnl-${scope}.xlsx`);
+  },
+
   items: (projectId: string, scope: MarginScope) =>
     apiClient
       .get<ApiResponse<MarginItem[]>>(`/v1/projects/${projectId}/pnl/${scope}/items`)

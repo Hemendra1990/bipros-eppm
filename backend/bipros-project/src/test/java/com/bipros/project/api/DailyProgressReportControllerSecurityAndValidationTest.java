@@ -58,7 +58,7 @@ class DailyProgressReportControllerSecurityAndValidationTest {
     @Test
     @DisplayName("GET /dpr (list) requires DPR.READ on the path projectId")
     void listRequiresProjectReadPermission() throws Exception {
-        assertProjectReadGuarded(method("list", UUID.class, LocalDate.class, LocalDate.class, String.class, LocalDate.class, int.class));
+        assertProjectReadGuarded(method("list", UUID.class, LocalDate.class, LocalDate.class, String.class, LocalDate.class, int.class, UUID.class, String.class, com.bipros.project.domain.model.DprApprovalStatus.class));
     }
 
     @Test
@@ -70,7 +70,7 @@ class DailyProgressReportControllerSecurityAndValidationTest {
     @Test
     @DisplayName("GET /dpr/supervisors-used requires DPR.READ on the path projectId")
     void supervisorsUsedRequiresProjectReadPermission() throws Exception {
-        assertProjectReadGuarded(method("supervisorsUsed", UUID.class, LocalDate.class, LocalDate.class));
+        assertProjectReadGuarded(method("supervisorsUsed", UUID.class, LocalDate.class, LocalDate.class, boolean.class));
     }
 
     @Test

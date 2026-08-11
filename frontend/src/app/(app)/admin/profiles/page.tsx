@@ -116,6 +116,23 @@ export default function ProfilesPage() {
         ),
       },
       {
+        accessorKey: "dataScope",
+        header: "Data scope",
+        cell: ({ row }) => {
+          const scope = row.original.dataScope ?? "PROJECT";
+          const styles: Record<string, string> = {
+            OWN: "bg-warning/10 text-warning",
+            PROJECT: "bg-accent/10 text-accent",
+            ALL: "bg-emerald/10 text-emerald",
+          };
+          return (
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${styles[scope] ?? styles.PROJECT}`}>
+              {scope}
+            </span>
+          );
+        },
+      },
+      {
         accessorKey: "systemDefault",
         header: "System default?",
         cell: (info) => {

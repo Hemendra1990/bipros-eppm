@@ -2,6 +2,8 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.event.ProjectCreatedEvent;
+import com.bipros.project.domain.model.ProjectTeamMember;
+import com.bipros.project.domain.model.ProjectRole;
 import com.bipros.common.event.ProjectUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
@@ -53,6 +55,7 @@ public class ProjectService {
     private final ContractRepository contractRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectAccessGuard projectAccess;
+    private final com.bipros.project.domain.repository.ProjectTeamRepository projectTeamRepository;
 
     public ProjectResponse createProject(CreateProjectRequest request) {
         log.info("Creating project with code: {}", request.code());
@@ -116,6 +119,17 @@ public class ProjectService {
 
         // Auto-create root WBS node
         createRootWbsNode(saved);
+
+        // Access-control round (2026-08-11): membership auto-provisioning — the creator gets a
+        // PM seat on the Team tab, so a freshly created project is immediately visible to its
+        // creator (gate 2). Mirrors ProjectTeamBackfillSeeder's ownerId rule for old projects.
+        if (creatorId != null) {
+            projectTeamRepository.save(ProjectTeamMember.builder()
+                .projectId(saved.getId())
+                .userId(creatorId)
+                .role(ProjectRole.PM)
+                .build());
+        }
 
         eventPublisher.publishEvent(
             new ProjectCreatedEvent(saved.getId(), saved.getCode(), saved.getName())

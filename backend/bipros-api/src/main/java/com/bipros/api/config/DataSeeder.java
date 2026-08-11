@@ -48,6 +48,7 @@ public class DataSeeder implements CommandLineRunner {
   private final GlobalSettingRepository globalSettingRepository;
   private final PasswordEncoder passwordEncoder;
   private final ProfileSeeder profileSeeder;
+  private final SaroojProfileSeeder saroojProfileSeeder;
   private final com.bipros.security.domain.repository.ProfileRepository profileRepository;
 
   @Value("${bipros.admin.username:admin}")
@@ -68,6 +69,8 @@ public class DataSeeder implements CommandLineRunner {
 
     // Profiles seeded idempotently every boot so newly-introduced defaults appear without a wipe.
     profileSeeder.seed();
+    // Sarooj client profiles (Access sheets, 2026-08-11) — insert-only, admin-editable after.
+    saroojProfileSeeder.seed();
 
     if (roleRepository.count() > 0 && userRepository.findByUsername(adminUsername).isPresent()) {
       log.info("Bulk data already seeded, skipping calendar/currency/settings");

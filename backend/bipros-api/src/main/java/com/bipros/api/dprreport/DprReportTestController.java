@@ -37,6 +37,7 @@ public class DprReportTestController {
 
     private final DprReportService reportService;
     private final DprReportConfig config;
+    private final com.bipros.common.security.ScopeResolverPort scopeResolver;
 
     @PostMapping("/test-send")
     @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
@@ -44,6 +45,13 @@ public class DprReportTestController {
             @PathVariable UUID projectId,
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String window) {
+
+        // Review round 2: the report is project-wide; generating it in an OWN-scoped caller's
+        // context would collect (and email/persist) only that caller's rows. Management scopes only.
+        if (scopeResolver.resolveForProject(projectId).personScoped()) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Test-send requires project-wide data scope");
+        }
 
         DprReportWindow w = DprReportWindow.ofPreset(parsePreset(window), LocalDate.now(config.zone()), null);
         List<String> recipients = (email != null && !email.isBlank())

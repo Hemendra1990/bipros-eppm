@@ -18,6 +18,7 @@ import { activityApi } from "@/lib/api/activityApi";
 import { TabTip } from "@/components/common/TabTip";
 import { MultiSelect } from "@/components/common/MultiSelect";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
+import { useAuthStore } from "@/lib/state/store";
 import { SupervisorPerformanceSections } from "@/components/capacity-utilization/SupervisorPerformanceSections";
 import { SupervisorComparisonSections } from "@/components/capacity-utilization/SupervisorComparisonSections";
 import { CapacityTrendStrip } from "@/components/capacity-utilization/CapacityTrendStrip";
@@ -338,6 +339,7 @@ function CapacityUtilizationPageInner() {
   const [normType, setNormType] = useState<CapacityNormType | "">("");
   // Seeded from ?supervisorUserId= so the AI Insights supervisor rows can deep-link straight into
   // that supervisor's breakdown; the dropdown owns it from then on.
+  const dataScope = useAuthStore((st) => st.dataScope());
   const [supervisorUserId, setSupervisorUserId] = useState<string>(
     () => searchParams.get("supervisorUserId") ?? "",
   );
@@ -614,6 +616,8 @@ function CapacityUtilizationPageInner() {
                 <option value="MANPOWER">Manpower</option>
               </select>
             </div>
+            {/* OWN scope: the server forces the caller's own identity — hide the picker. */}
+            {dataScope !== "OWN" && (
             <div>
               <label className="block text-xs font-medium mb-1 text-text-secondary">
                 Supervisor
@@ -636,6 +640,7 @@ function CapacityUtilizationPageInner() {
                 />
               )}
             </div>
+            )}
             <div>
               <label className="block text-xs font-medium mb-1 text-text-secondary">
                 Work days / Compare

@@ -85,7 +85,8 @@ class DailyProgressReportServiceDraftRejectionTest {
         dprRepository, manpowerRepository, equipmentRepository, materialRepository,
         subContractorRepository, attachmentRepository, voiceNoteRepository, issueRepository,
         attachmentStorage, voiceNoteStorage, projectRepository, ledgerService, auditService,
-        eventPublisher, null, boqItemRepository, null, null, null, null);
+        eventPublisher, null, boqItemRepository, null, null, null, null,
+        com.bipros.common.security.ScopeKeys::all);
 
     // Inject the mocked EntityManager — @PersistenceContext field, can't use @InjectMocks here
     // because the service also has @RequiredArgsConstructor for the other deps.

@@ -59,7 +59,7 @@ class ActivityServicePredecessorValidationTest {
 
   @BeforeEach
   void setUp() {
-    service = new ActivityService(activityRepository, activitySupervisorRepository, relationshipRepository, auditService, projectAccess, projectRepository, percentCompleteCalculator, new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository, org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class), boqProgressGuard);
+    service = new ActivityService(activityRepository, activitySupervisorRepository, relationshipRepository, auditService, projectAccess, projectRepository, percentCompleteCalculator, new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository, org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class), boqProgressGuard, com.bipros.common.security.ScopeKeys::all);
 
     successorId = UUID.randomUUID();
     predecessorId = UUID.randomUUID();

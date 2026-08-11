@@ -81,20 +81,22 @@ function ProjectDetailLayoutInner({
   // Order follows the runbook flow: plan → commercial+org → execution → daily P&L →
   // financial analysis → schedule views → cross-cutting. Team is promoted out of
   // the More dropdown because it's load-bearing for the DBS Engineer/CM/PM rollup.
+  // Access-control round (2026-08-11): EVERY tab is gated by its module's READ code, so the
+  // screens a user sees are exactly what their profile grants (nothing hardcoded).
   const allTabs: ProjectTab[] = [
-    { id: "overview",           label: "Overview",            href: null },
-    { id: "wbs",                label: "WBS",                 href: null },
-    { id: "activities",         label: "Activities",          href: `/projects/${projectId}/activities` },
-    { id: "boq",                label: "BOQ",                 href: `/projects/${projectId}/boq` },
-    { id: "team",               label: "Team",                href: `/projects/${projectId}/team` },
-    { id: "general-expenses",   label: "General Expenses",    href: `/projects/${projectId}/general-expenses` },
-    { id: "dpr",                label: "DPR",                 href: `/projects/${projectId}/dpr` },
-    { id: "capacity",           label: "Capacity Util.",      href: `/projects/${projectId}/capacity-utilization` },
-    { id: "dbs",                label: "DBS",                 href: `/projects/${projectId}/dbs` },
+    { id: "overview",           label: "Overview",            href: null,                                            permission: "PROJECT.READ" },
+    { id: "wbs",                label: "WBS",                 href: null,                                            permission: "PROJECT.READ" },
+    { id: "activities",         label: "Activities",          href: `/projects/${projectId}/activities`,             permission: "ACTIVITY.READ" },
+    { id: "boq",                label: "BOQ",                 href: `/projects/${projectId}/boq`,                    permission: "PROJECT.READ" },
+    { id: "team",               label: "Team",                href: `/projects/${projectId}/team`,                   permission: "PROJECT_MEMBER.READ" },
+    { id: "general-expenses",   label: "General Expenses",    href: `/projects/${projectId}/general-expenses`,       permission: "COST.READ" },
+    { id: "dpr",                label: "DPR",                 href: `/projects/${projectId}/dpr`,                    permission: "DPR.READ" },
+    { id: "capacity",           label: "Capacity Util.",      href: `/projects/${projectId}/capacity-utilization`,   permission: "REPORT.READ" },
+    { id: "dbs",                label: "DBS",                 href: `/projects/${projectId}/dbs`,                    permission: "DBS.READ" },
     { id: "costs",              label: "Costs",               href: null, permission: "COST.READ" },
-    { id: "evm",                label: "EVM",                 href: `/projects/${projectId}/evm` },
+    { id: "evm",                label: "EVM",                 href: `/projects/${projectId}/evm`,                    permission: "EVM.READ" },
     { id: "risks",              label: "Risks",               href: `/projects/${projectId}/risks`, permission: "RISK.READ" },
-    { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption` },
+    { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption`, permission: "RESOURCE.READ" },
     { id: "ai",                 label: "AI",                  href: `/projects/${projectId}/ai`, permission: "AI.READ" },
   ];
 
@@ -102,35 +104,35 @@ function ProjectDetailLayoutInner({
 
   // PMS Master Data — the 5 project-scoped reference entities from TESTING_GUIDE.md §2
   const masterDataLinks = [
-    { label: "BOQ & Budget", href: `/projects/${projectId}/boq` },
-    { label: "Stretches", href: `/projects/${projectId}/stretches` },
-    { label: "Material Sources", href: `/projects/${projectId}/material-sources` },
-    { label: "Material Catalogue", href: `/projects/${projectId}/materials` },
-    { label: "Stock Register", href: `/projects/${projectId}/stock-register` },
-  ];
+    { label: "BOQ & Budget", href: `/projects/${projectId}/boq`, permission: "PROJECT.READ" },
+    { label: "Stretches", href: `/projects/${projectId}/stretches`, permission: "PROJECT.READ" },
+    { label: "Material Sources", href: `/projects/${projectId}/material-sources`, permission: "RESOURCE.READ" },
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "RESOURCE.READ" },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "RESOURCE.READ" },
+  ].filter((l) => hasPermission(l.permission));
 
   const moreLinks: { label: string; href: string; permission?: string }[] = [
-    { label: "GIS", href: `/projects/${projectId}/gis-viewer` },
+    { label: "GIS", href: `/projects/${projectId}/gis-viewer`, permission: "PROJECT.READ" },
     { label: "Quality", href: `/projects/${projectId}/quality`, permission: "NCR.READ" },
     { label: "Procurement", href: `/projects/${projectId}/procurement`, permission: "RESOURCE.READ" },
-    { label: "Insights", href: `/projects/${projectId}/insights` },
+    { label: "Insights", href: `/projects/${projectId}/insights`, permission: "REPORT.READ" },
     // Team is now a top-level tab (see allTabs above).
-    { label: "Budget Changes", href: `/projects/${projectId}/budget-changes` },
-    { label: "Relationships", href: `/projects/${projectId}/relationships` },
+    { label: "Budget Changes", href: `/projects/${projectId}/budget-changes`, permission: "COST.READ" },
+    { label: "Relationships", href: `/projects/${projectId}/relationships`, permission: "ACTIVITY.READ" },
     // { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },  // hidden per request
-    { label: "Performance (D/W/M)", href: `/projects/${projectId}/performance` },
+    { label: "Performance (D/W/M)", href: `/projects/${projectId}/performance`, permission: "COST.READ" },
     // /pnl/** routes are gated by project-scoped COST.READ on the backend — hide the
     // links from roles that would only get a 403 on click.
     { label: "P&L vs Budgeted Rates", href: `/projects/${projectId}/pnl/budgeted`, permission: "COST.READ" },
     { label: "P&L vs BOQ Rates", href: `/projects/${projectId}/pnl/boq`, permission: "COST.READ" },
-    { label: "Material Consumption Report", href: `/projects/${projectId}/reports/material-consumption` },
+    { label: "Material Consumption Report", href: `/projects/${projectId}/reports/material-consumption`, permission: "REPORT.READ" },
     /* { label: "Material Reconciliation", href: `/projects/${projectId}/material-reconciliation` },
     { label: "Resource Deployment", href: `/projects/${projectId}/resource-deployment` }, */
-    { label: "Weather Log", href: `/projects/${projectId}/weather-log` },
-    { label: "Next Day Plan", href: `/projects/${projectId}/next-day-plan` },
-    { label: "Schedule Health", href: `/projects/${projectId}/schedule-health` },
-    { label: "Schedule Compression", href: `/projects/${projectId}/schedule-compression` },
-    { label: "Risk Analysis", href: `/projects/${projectId}/risk-analysis` },
+    { label: "Weather Log", href: `/projects/${projectId}/weather-log`, permission: "DPR.READ" },
+    { label: "Next Day Plan", href: `/projects/${projectId}/next-day-plan`, permission: "DPR.READ" },
+    { label: "Schedule Health", href: `/projects/${projectId}/schedule-health`, permission: "SCHEDULE.READ" },
+    { label: "Schedule Compression", href: `/projects/${projectId}/schedule-compression`, permission: "SCHEDULE.READ" },
+    { label: "Risk Analysis", href: `/projects/${projectId}/risk-analysis`, permission: "RISK.READ" },
     // { label: "Activity Correlations", href: `/projects/${projectId}/activity-correlations` },
     // { label: "Predictions", href: `/projects/${projectId}/predictions` },
     // { label: "RA Bills", href: `/projects/${projectId}/ra-bills` },
@@ -139,13 +141,13 @@ function ProjectDetailLayoutInner({
     // { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
     // { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
     // Store chain (Material agent row, Mode A): catalogue → receipts in → issue slips out → stock.
-    { label: "Material Catalogue", href: `/projects/${projectId}/materials` },
-    { label: "GRNs (Goods Received)", href: `/projects/${projectId}/grns` },
-    { label: "Material Issues (Store)", href: `/projects/${projectId}/material-issues` },
-    { label: "Stock Register", href: `/projects/${projectId}/stock-register` },
-    { label: "Issues", href: `/projects/${projectId}/issues` },
-    { label: "Baselines", href: `/projects/${projectId}?tab=baselines` },
-    { label: "Contracts", href: `/projects/${projectId}/contracts` },
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "RESOURCE.READ" },
+    { label: "GRNs (Goods Received)", href: `/projects/${projectId}/grns`, permission: "RESOURCE.READ" },
+    { label: "Material Issues (Store)", href: `/projects/${projectId}/material-issues`, permission: "RESOURCE.READ" },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "RESOURCE.READ" },
+    { label: "Issues", href: `/projects/${projectId}/issues`, permission: "ISSUE.READ" },
+    { label: "Baselines", href: `/projects/${projectId}?tab=baselines`, permission: "BASELINE.READ" },
+    { label: "Contracts", href: `/projects/${projectId}/contracts`, permission: "CONTRACT.READ" },
   ];
 
   // Check if any dropdown link is active (check first so we can exclude them below)
@@ -201,7 +203,7 @@ function ProjectDetailLayoutInner({
             />
           </button>
           {insightsHeaderOpen && (
-            <div className="absolute right-0 top-full mt-1 w-56 rounded-md border border-border bg-surface shadow-lg z-50">
+            <div className="absolute right-0 top-full mt-1 w-56 rounded-md border border-border bg-surface shadow-lg z-50 max-h-[70vh] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => {
@@ -292,7 +294,7 @@ function ProjectDetailLayoutInner({
             </button>
 
             {masterDataOpen && (
-              <div className="absolute right-0 mt-0 w-56 bg-surface border border-border rounded-md shadow-lg z-50">
+              <div className="absolute right-0 mt-0 w-56 bg-surface border border-border rounded-md shadow-lg z-50 max-h-[70vh] overflow-y-auto">
                 {masterDataLinks.map((link) => (
                   <button
                     key={link.href}
@@ -340,7 +342,7 @@ function ProjectDetailLayoutInner({
             </button>
 
             {moreDropdownOpen && (
-              <div className="absolute right-0 mt-0 w-48 bg-surface border border-border rounded-md shadow-lg z-50">
+              <div className="absolute right-0 mt-0 w-48 bg-surface border border-border rounded-md shadow-lg z-50 max-h-[70vh] overflow-y-auto">
                 {moreLinks
                   .filter((link) => !link.permission || hasPermission(link.permission))
                   .map((link) => (

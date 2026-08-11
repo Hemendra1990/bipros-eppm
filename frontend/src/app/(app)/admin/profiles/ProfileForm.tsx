@@ -7,7 +7,14 @@ import toast from "react-hot-toast";
 
 import { profileApi } from "@/lib/api/profileApi";
 import { getErrorMessage } from "@/lib/utils/error";
-import type { PermissionDescriptor, ProfileResponse } from "@/lib/types";
+import type { DataScope, PermissionDescriptor, ProfileResponse } from "@/lib/types";
+
+const DATA_SCOPES: { value: DataScope; label: string; hint: string }[] = [
+  { value: "OWN", label: "Own — only rows the user is involved in", hint: "Their DPRs, assigned activities, own DBS page. For field roles." },
+  { value: "TEAM", label: "Team — their rows plus their Team-tab downline", hint: "Everyone reporting to them (transitively) on each project's Team tab. For engineers/managers over field crews." },
+  { value: "PROJECT", label: "Project — everything in their projects", hint: "All rows of every project they are a member of. For management roles." },
+  { value: "ALL", label: "All — every project, no filter", hint: "Executive oversight. Admins always get this regardless." },
+];
 
 const LEGACY_ROLES = [
   "ADMIN",
@@ -38,6 +45,7 @@ export function ProfileForm({ initial }: ProfileFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [legacyRoleName, setLegacyRoleName] = useState(initial?.legacyRoleName ?? "VIEWER");
+  const [dataScope, setDataScope] = useState<DataScope>(initial?.dataScope ?? "PROJECT");
   const [permissions, setPermissions] = useState<Set<string>>(
     new Set(initial?.permissions ?? []),
   );
@@ -89,6 +97,7 @@ export function ProfileForm({ initial }: ProfileFormProps) {
         description,
         legacyRoleName,
         permissions: Array.from(permissions),
+        dataScope,
       };
       if (isEdit) {
         return profileApi.updateProfile(initial!.id, body);
@@ -176,6 +185,22 @@ export function ProfileForm({ initial }: ProfileFormProps) {
           <p className="mt-1 text-xs text-text-muted">
             When a user is assigned this profile, this role is added to their JWT so existing
             role-based authorization keeps working.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary">Data scope *</label>
+          <select
+            value={dataScope}
+            onChange={(e) => setDataScope(e.target.value as DataScope)}
+            className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none"
+          >
+            {DATA_SCOPES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-text-muted">
+            {DATA_SCOPES.find((s) => s.value === dataScope)?.hint} The permissions above say what
+            the user can do; the scope says which rows they apply to.
           </p>
         </div>
       </div>

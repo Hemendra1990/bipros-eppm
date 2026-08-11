@@ -91,7 +91,7 @@ class CapacityUtilizationServiceAllocationTest {
   @BeforeEach
   void setUp() throws Exception {
     em = mock(EntityManager.class);
-    service = new CapacityUtilizationReportService();
+    service = new CapacityUtilizationReportService(com.bipros.common.security.ScopeKeys::all);
     // The service uses field injection via @PersistenceContext; set it directly.
     Field f = CapacityUtilizationReportService.class.getDeclaredField("em");
     f.setAccessible(true);

@@ -329,7 +329,7 @@ public class ReportController {
    * calendar month, APPROVED DPRs only. Mirrors the site teams' DPR-monthwise template.
    */
   @GetMapping("/dpr/excel")
-  @PreAuthorize("hasPermission(null, 'DPR.READ')")
+  @PreAuthorize("hasPermission(null, 'DPR.EXPORT')")
   public ResponseEntity<byte[]> downloadDprCostingExcel(
       @RequestParam UUID projectId,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

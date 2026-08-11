@@ -49,6 +49,10 @@ import java.util.UUID;
  * omit it (or pass DAY) for the single-day response shape, pass WEEK/MONTH for the
  * period envelope with totals + zero-filled daily rows. ISO Mon–Sun week, calendar
  * month bounds.
+ *
+ * <p>Access-control round (2026-08-11): every GET requires DBS.READ on the project, the
+ * two exports DBS.EXPORT, and the three person pages additionally pass the OWN-scope
+ * downline guard ({@link DbsPersonAccessGuard}) — previously all 16 GETs were unguarded.
  */
 @Slf4j
 @RestController
@@ -65,10 +69,12 @@ public class DbsController {
     private final DbsPdfWriter pdfWriter;
     private final RegisterAggregationService registerAggregationService;
     private final DbsRecomputeJobService jobService;
+    private final DbsPersonAccessGuard dbsPersonAccess;
 
     // ── supervisor ──────────────────────────────────────────────────────────────
 
     @GetMapping("/supervisor/{supervisorUserId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') and @dbsPersonAccess.canViewPerson(#projectId, #supervisorUserId)")
     public ResponseEntity<ApiResponse<?>> getSupervisor(
         @PathVariable UUID projectId,
         @PathVariable UUID supervisorUserId,
@@ -87,6 +93,7 @@ public class DbsController {
     // ── engineer ────────────────────────────────────────────────────────────────
 
     @GetMapping("/engineer/{engineerUserId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') and @dbsPersonAccess.canViewPerson(#projectId, #engineerUserId)")
     public ResponseEntity<ApiResponse<?>> getEngineer(
         @PathVariable UUID projectId,
         @PathVariable UUID engineerUserId,
@@ -112,6 +119,7 @@ public class DbsController {
      * calendar month containing {@code date}.
      */
     @GetMapping("/cm/{cmUserId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') and @dbsPersonAccess.canViewPerson(#projectId, #cmUserId)")
     public ResponseEntity<ApiResponse<DbsCmDayResponse>> getCmDay(
         @PathVariable UUID projectId,
         @PathVariable UUID cmUserId,
@@ -128,6 +136,7 @@ public class DbsController {
      * Compact per-CM summary list for the date. Powers the PM tab's CM drill-down menu.
      */
     @GetMapping("/cms")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
     public ResponseEntity<ApiResponse<List<DbsCmSummaryDto>>> listCms(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -136,12 +145,17 @@ public class DbsController {
         // periodType optional — omit / DAY keeps the single-day roster; WEEK / MONTH expand to
         // the period bounds so the CM picker matches the period scope (same rationale as
         // listSupervisors above).
-        return ResponseEntity.ok(ApiResponse.ok(queryService.listCmsForScope(projectId, date, periodType)));
+        // Gate 3: same roster narrowing as /supervisors.
+        return ResponseEntity.ok(ApiResponse.ok(
+            queryService.listCmsForScope(projectId, date, periodType).stream()
+                .filter(cm -> dbsPersonAccess.canViewRosterRow(projectId, cm.cmUserId(), cm.cmName()))
+                .toList()));
     }
 
     // ── project (PM tab) ────────────────────────────────────────────────────────
 
     @GetMapping("/project")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
     public ResponseEntity<ApiResponse<?>> getProject(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -160,16 +174,22 @@ public class DbsController {
      * (BOQ item × supervisor) qty / income / cost / contribution over the period window.
      */
     @GetMapping("/boq-supervisor-comparison")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
     public ResponseEntity<ApiResponse<List<com.bipros.dbs.api.dto.BoqSupervisorPerformanceRow>>> boqSupervisorComparison(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
         @RequestParam(required = false) String periodType) {
 
+        // Review round 2: per-person P&L rows — OWN callers see self + downline only.
         return ResponseEntity.ok(
-            ApiResponse.ok(queryService.boqSupervisorComparison(projectId, periodType, date)));
+            ApiResponse.ok(queryService.boqSupervisorComparison(projectId, periodType, date).stream()
+                .filter(row -> dbsPersonAccess.canViewRosterRow(projectId,
+                    row.supervisorUserId(), row.supervisorName()))
+                .toList()));
     }
 
     @GetMapping("/supervisors")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
     public ResponseEntity<ApiResponse<List<DbsSupervisorSummaryDto>>> listSupervisors(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -179,8 +199,12 @@ public class DbsController {
         // WEEK / MONTH expands to the period bounds so the Supervisor tab roster matches
         // the period scope. Previously the roster was empty whenever the focal date had
         // no DPRs but the surrounding week/month did, hiding all data on the Supervisor tab.
+        // Gate 3: an OWN-scoped caller's roster shows only themself + their downline.
         return ResponseEntity.ok(
-            ApiResponse.ok(queryService.listSupervisorsForScope(projectId, date, periodType)));
+            ApiResponse.ok(queryService.listSupervisorsForScope(projectId, date, periodType).stream()
+                .filter(sup -> dbsPersonAccess.canViewRosterRow(projectId,
+                    sup.supervisorUserId(), sup.supervisorName()))
+                .toList()));
     }
 
     /**
@@ -190,6 +214,7 @@ public class DbsController {
      * cheaply and independently of the full DBS payload.
      */
     @GetMapping("/alerts")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
     public ResponseEntity<ApiResponse<List<String>>> getAlerts(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -205,6 +230,8 @@ public class DbsController {
      * supervisorUserId) and the PM tab (without) to render the BOQ KPI tiles.
      */
     @GetMapping("/boq-executed-summary")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #supervisorUserId)")
     public ResponseEntity<ApiResponse<BoqExecutedSummaryDto>> boqExecutedSummary(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -222,6 +249,8 @@ public class DbsController {
      * each broken down by CM × shift. Optionally filtered to a single CM.
      */
     @GetMapping("/register/equipment")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #cmUserId)")
     public ResponseEntity<ApiResponse<EquipmentRegisterResponse>> getEquipmentRegister(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -237,6 +266,8 @@ public class DbsController {
      * down by CM × shift. Optionally filtered to a single CM.
      */
     @GetMapping("/register/manpower")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #cmUserId)")
     public ResponseEntity<ApiResponse<ManpowerRegisterResponse>> getManpowerRegister(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -252,6 +283,8 @@ public class DbsController {
      * {@code <= asOf}. Optionally restricted to a single CM's downline.
      */
     @GetMapping("/register/cumulative")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #cmUserId)")
     public ResponseEntity<ApiResponse<CumulativeDaysResponse>> getCumulative(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf,
@@ -298,6 +331,7 @@ public class DbsController {
     }
 
     @GetMapping("/recompute-jobs/{jobId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
     public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> getRecomputeJob(
         @PathVariable UUID projectId,
         @PathVariable UUID jobId) {
@@ -309,6 +343,7 @@ public class DbsController {
     }
 
     @GetMapping("/recompute-jobs/latest")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
     public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> getLatestRecomputeJob(
         @PathVariable UUID projectId) {
 
@@ -329,6 +364,8 @@ public class DbsController {
      * as a binary attachment (not wrapped in {@code ApiResponse}).
      */
     @GetMapping("/export.xlsx")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.EXPORT') "
+        + "and @dbsPersonAccess.canExport(#projectId, #level, #supervisorUserId)")
     public ResponseEntity<byte[]> exportExcel(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -357,6 +394,8 @@ public class DbsController {
      * PDF export — same shape as {@link #exportExcel} but renders via openhtmltopdf.
      */
     @GetMapping("/export.pdf")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.EXPORT') "
+        + "and @dbsPersonAccess.canExport(#projectId, #level, #supervisorUserId)")
     public ResponseEntity<byte[]> exportPdf(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,

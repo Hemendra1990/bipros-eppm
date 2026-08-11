@@ -114,6 +114,7 @@ public class DailyProgressReportService {
   private final UserPermissionPort userPermissionPort;
   private final DprApprovalHistoryRepository approvalHistoryRepository;
   private final ProjectTeamService projectTeamService;
+  private final com.bipros.common.security.ScopeResolverPort scopeResolver;
 
   /**
    * The DPR write path snapshots rates and validates assignment ↔ activity ↔ kind via tiny
@@ -398,7 +399,14 @@ public class DailyProgressReportService {
   public List<DailyProgressReportResponse> list(UUID projectId, LocalDate from, LocalDate to, String activityName) {
     ensureProjectExists(projectId);
     List<DailyProgressReport> rows;
-    if (activityName != null && !activityName.isBlank()) {
+    // Gate 3 (access-control round, 2026-08-11): OWN-scoped callers get the involvement
+    // predicate pushed into the query; PROJECT/ALL keep the legacy project-wide branches.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    if (scope.personScoped()) {
+      rows = dprRepository.findScopedList(projectId, from, to,
+          (activityName != null && !activityName.isBlank()) ? activityName : null,
+          scope.memberIds(), lowerAliases(scope), teamActivityIds(scope.memberIds()));
+    } else if (activityName != null && !activityName.isBlank()) {
       rows = dprRepository.findByProjectIdAndActivityNameIgnoreCaseOrderByReportDateAsc(projectId, activityName);
     } else if (from != null && to != null) {
       rows = dprRepository.findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(projectId, from, to);
@@ -433,8 +441,18 @@ public class DailyProgressReportService {
     String supervisorName =
         (supervisorNameFilter != null && !supervisorNameFilter.isBlank()) ? supervisorNameFilter : null;
 
+    // Gate 3: for OWN scope the involvement predicate rides both queries; for PROJECT/ALL the
+    // scope triple is the null/sentinel no-op. (Client-supplied supervisor filters still apply
+    // on top — they can only narrow further.)
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    boolean scoped = scope.personScoped();
+    java.util.Collection<UUID> scopeUserIds = scoped ? scope.memberIds() : List.of(new UUID(0L, 0L));
+    List<String> scopeAliases = scoped ? lowerAliases(scope) : List.of("");
+    List<UUID> scopeActivityIds = scoped ? teamActivityIds(scope.memberIds()) : List.of(new UUID(0L, 0L));
+
     List<LocalDate> dates = dprRepository.findDistinctReportDatesDesc(
         projectId, from, to, before, activity, supervisorUserId, supervisorName, status,
+        scoped, scopeUserIds, scopeAliases, scopeActivityIds,
         PageRequest.of(0, batch + 1));
     boolean hasMore = dates.size() > batch;
     if (hasMore) {
@@ -447,7 +465,8 @@ public class DailyProgressReportService {
 
     List<DailyProgressReport> rows =
         dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(
-            projectId, dates, activity, supervisorUserId, supervisorName, status);
+            projectId, dates, activity, supervisorUserId, supervisorName, status,
+            scoped, scopeUserIds, scopeAliases, scopeActivityIds);
     List<DprSummaryResponse> items = toSummaryRows(rows);
     return new DprPage(items, hasMore ? nextCursor : null, hasMore);
   }
@@ -690,6 +709,12 @@ public class DailyProgressReportService {
   public List<DprSummaryResponse> listUnassignedPending(UUID projectId) {
     var rows = dprRepository.findByProjectIdAndApprovalStatusAndAssignedApproverUserIdIsNullOrderByReportDateAsc(
         projectId, DprApprovalStatus.SUBMITTED);
+    // Review round 2: an OWN-scoped approver's pool shows only rows they're involved in —
+    // everything else would 404 at find() anyway, so listing it was a tease, not access.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    if (scope.personScoped()) {
+      rows = rows.stream().filter(r -> rowInScope(r, scope)).toList();
+    }
     return toSummaryRows(rows);
   }
 
@@ -936,10 +961,23 @@ public class DailyProgressReportService {
         .setParameter("toDate", toDate)
         .getResultList();
 
+    // Gate 3 (TEAM-aware, round 3): person-scoped callers see only their member set's options
+    // (id-when-present, else name alias) — powers the DPR/capacity supervisor dropdowns.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+
     List<com.bipros.project.application.dto.SupervisorOption> out = new ArrayList<>(raw.size());
     for (Object[] r : raw) {
+      UUID optionUserId = (UUID) r[0];
+      String optionName = (String) r[2];
+      if (scope.personScoped()) {
+        boolean visible = optionUserId != null
+            ? scope.memberIds().contains(optionUserId)
+            : optionName != null && scope.memberAliases().stream()
+                .anyMatch(a -> a.equalsIgnoreCase(optionName.trim()));
+        if (!visible) continue;
+      }
       out.add(new com.bipros.project.application.dto.SupervisorOption(
-          (UUID) r[0], (String) r[1], (String) r[2], ((Number) r[3]).longValue()));
+          optionUserId, (String) r[1], optionName, ((Number) r[3]).longValue()));
     }
     return out;
   }
@@ -950,7 +988,66 @@ public class DailyProgressReportService {
     if (!dpr.getProjectId().equals(projectId)) {
       throw new ResourceNotFoundException("DailyProgressReport", id);
     }
+    // Gate 3 (access-control round, 2026-08-11): an OWN-scoped caller can only load rows they
+    // are involved in — a foreign record is invisible (404), not merely forbidden. Every
+    // get/update/delete/approve path funnels through here; system + PROJECT/ALL are unaffected.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    if (scope.personScoped() && !rowInScope(dpr, scope)) {
+      throw new ResourceNotFoundException("DailyProgressReport", id);
+    }
     return dpr;
+  }
+
+  // ── Gate-3 helpers (access-control round, 2026-08-11) ───────────────────────
+
+  /** True when the OWN-scoped caller is involved in this row — same predicate as the scoped
+   *  repository queries: filed it, supervises it (id or legacy free-text name alias), is its
+   *  assigned approver, or supervises its activity. Keep in lockstep with the JPQL clause. */
+  private boolean rowInScope(DailyProgressReport dpr, com.bipros.common.security.ScopeKeys scope) {
+    java.util.Set<UUID> members = scope.memberIds();
+    if (members.isEmpty()) return false;
+    if ((dpr.getSupervisorUserId() != null && members.contains(dpr.getSupervisorUserId()))
+        || (dpr.getSubmittedByUserId() != null && members.contains(dpr.getSubmittedByUserId()))
+        || (dpr.getAssignedApproverUserId() != null && members.contains(dpr.getAssignedApproverUserId()))) {
+      return true;
+    }
+    // Name branch is id-ELSE-name: it fires only for legacy rows with no user link, so two
+    // users sharing a display name can never see each other's id-linked rows (review round 2).
+    if (dpr.getSupervisorUserId() == null && dpr.getSupervisorName() != null
+        && scope.memberAliases().stream()
+            .anyMatch(a -> a.equalsIgnoreCase(dpr.getSupervisorName().trim()))) {
+      return true;
+    }
+    return dpr.getActivityId() != null
+        && teamActivityIds(members).contains(dpr.getActivityId());
+  }
+
+  /** Lower-cased alias list for the JPQL {@code lower(supervisorName) in :scopeAliases} clause.
+   *  Never empty — JPQL IN needs at least one binding (the empty string matches nothing real). */
+  private List<String> lowerAliases(com.bipros.common.security.ScopeKeys scope) {
+    List<String> out = scope.memberAliases().stream()
+        .map(a -> a.toLowerCase(java.util.Locale.ROOT)).toList();
+    return out.isEmpty() ? List.of("") : out;
+  }
+
+  /** Activity ids the user supervises — the {@code activity_supervisors} join table plus the
+   *  legacy single-supervisor column. Cross-schema native SQL, same pattern as
+   *  {@code rejectIfActivityDraft}. Never empty (nil-UUID sentinel matches nothing). */
+  private List<UUID> teamActivityIds(java.util.Collection<UUID> userIds) {
+    @SuppressWarnings("unchecked")
+    List<Object> rows = em.createNativeQuery(
+            "SELECT activity_id FROM activity.activity_supervisors WHERE user_id IN (:uids) "
+                + "UNION SELECT id FROM activity.activities WHERE supervisor_user_id IN (:uids)")
+        .setParameter("uids", userIds.isEmpty() ? List.of(new UUID(0L, 0L)) : userIds)
+        .getResultList();
+    List<UUID> ids = new java.util.ArrayList<>();
+    for (Object o : rows) {
+      ids.add(o instanceof UUID u ? u : UUID.fromString(o.toString()));
+    }
+    if (ids.isEmpty()) {
+      ids.add(new UUID(0L, 0L));
+    }
+    return ids;
   }
 
   private void ensureProjectExists(UUID projectId) {

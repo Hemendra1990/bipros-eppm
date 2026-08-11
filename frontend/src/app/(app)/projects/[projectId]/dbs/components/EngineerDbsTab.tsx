@@ -12,6 +12,7 @@ import {
   type DbsPeriodType,
 } from "@/lib/api/dbsApi";
 import { projectTeamApi } from "@/lib/api/projectTeamApi";
+import { useAuthStore } from "@/lib/state/store";
 import { userApi, type UserSummary } from "@/lib/api/userApi";
 import { formatCurrency, formatPercent } from "@/lib/utils/format";
 
@@ -57,7 +58,45 @@ export function EngineerDbsTab({
     queryFn: () => projectTeamApi.list(projectId, "ENGINEER"),
     enabled: !!projectId,
   });
-  const engineers = useMemo(() => teamData?.data ?? [], [teamData]);
+
+  // Person-scoped callers (OWN/TEAM profiles) may only pick themselves or their
+  // Team-tab downline — mirrors the server guard (canViewPerson would 403 on
+  // anyone else anyway; this keeps the dropdown honest). BFS over reportsTo
+  // edges of the FULL team list, since the ENGINEER-filtered list has no chain.
+  const dataScope = useAuthStore((s) => s.dataScope());
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const personScoped = dataScope === "OWN" || dataScope === "TEAM";
+  const { data: fullTeamData } = useQuery({
+    queryKey: ["project-team", projectId, "all"],
+    queryFn: () => projectTeamApi.list(projectId),
+    enabled: !!projectId && personScoped,
+  });
+  const engineers = useMemo(() => {
+    const roster = teamData?.data ?? [];
+    if (!personScoped || !currentUserId) return roster;
+    const visible = new Set<string>([currentUserId]);
+    if (dataScope === "TEAM") {
+      const children = new Map<string, string[]>();
+      for (const m of fullTeamData?.data ?? []) {
+        if (m.userId && m.reportsToUserId) {
+          const list = children.get(m.reportsToUserId) ?? [];
+          list.push(m.userId);
+          children.set(m.reportsToUserId, list);
+        }
+      }
+      const queue = [currentUserId];
+      while (queue.length > 0) {
+        const cursor = queue.shift()!;
+        for (const child of children.get(cursor) ?? []) {
+          if (!visible.has(child)) {
+            visible.add(child);
+            queue.push(child);
+          }
+        }
+      }
+    }
+    return roster.filter((e) => visible.has(e.userId));
+  }, [teamData, fullTeamData, personScoped, dataScope, currentUserId]);
 
   // User directory to resolve display names for engineer rows that didn't
   // come back with projected `firstName/lastName` from the backend, and for

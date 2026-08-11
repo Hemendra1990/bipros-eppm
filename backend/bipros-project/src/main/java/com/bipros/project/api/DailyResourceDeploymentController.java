@@ -53,6 +53,7 @@ public class DailyResourceDeploymentController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<List<DailyResourceDeploymentResponse>>> list(
       @PathVariable UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -62,6 +63,7 @@ public class DailyResourceDeploymentController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<DailyResourceDeploymentResponse>> get(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
@@ -82,6 +84,7 @@ public class DailyResourceDeploymentController {
    * persisting. Backs the "Recalculate from plan" button on the frontend.
    */
   @GetMapping("/suggest-nos-planned")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<Integer>> suggestNosPlanned(
       @PathVariable UUID projectId,
       @RequestParam(required = false) UUID resourceRoleId,

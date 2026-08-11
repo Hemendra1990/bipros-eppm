@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +47,7 @@ public class GeneralExpenseController {
     // ── plan items ──────────────────────────────────────────────────────────
 
     @GetMapping("/plan-items")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")
     public ResponseEntity<ApiResponse<List<GeneralExpensePlanItemDto>>> listPlanItems(
         @PathVariable UUID projectId) {
         List<GeneralExpensePlanItemDto> body = service.listPlanItems(projectId).stream()
@@ -55,6 +57,7 @@ public class GeneralExpenseController {
     }
 
     @PostMapping("/plan-items")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.UPDATE')")
     public ResponseEntity<ApiResponse<GeneralExpensePlanItemDto>> createPlanItem(
         @PathVariable UUID projectId,
         @RequestBody PlanItemUpsertRequest req) {
@@ -63,6 +66,7 @@ public class GeneralExpenseController {
     }
 
     @PutMapping("/plan-items/{itemId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.UPDATE')")
     public ResponseEntity<ApiResponse<GeneralExpensePlanItemDto>> updatePlanItem(
         @PathVariable UUID projectId,
         @PathVariable UUID itemId,
@@ -72,6 +76,7 @@ public class GeneralExpenseController {
     }
 
     @DeleteMapping("/plan-items/{itemId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.UPDATE')")
     public ResponseEntity<ApiResponse<Void>> deletePlanItem(
         @PathVariable UUID projectId,
         @PathVariable UUID itemId) {
@@ -82,6 +87,7 @@ public class GeneralExpenseController {
     // ── monthly actuals ────────────────────────────────────────────────────
 
     @GetMapping("/actuals")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")
     public ResponseEntity<ApiResponse<MonthlyActualsResponse>> getActuals(
         @PathVariable UUID projectId,
         @RequestParam Integer yearMonth) {
@@ -103,6 +109,7 @@ public class GeneralExpenseController {
     }
 
     @PutMapping("/actuals/{planItemId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.UPDATE')")
     public ResponseEntity<ApiResponse<GeneralExpenseMonthlyEntryDto>> upsertActual(
         @PathVariable UUID projectId,
         @PathVariable UUID planItemId,
@@ -124,6 +131,7 @@ public class GeneralExpenseController {
     }
 
     @DeleteMapping("/actuals/{planItemId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.UPDATE')")
     public ResponseEntity<ApiResponse<Void>> deleteActual(
         @PathVariable UUID projectId,
         @PathVariable UUID planItemId,

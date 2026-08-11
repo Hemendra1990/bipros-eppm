@@ -57,7 +57,27 @@ export interface PeriodPerformanceRollup {
   spi: number | null;
 }
 
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export const periodPerformanceApi = {
+  /** Excel download for the Performance screen (Access-Output row 5). Server gate: COST.READ + REPORT.EXPORT. */
+  downloadPerformanceExcel: async (projectId: string, cadence: string) => {
+    const res = await apiClient.get<Blob>(
+      `/v1/projects/${projectId}/performance/export.xlsx`,
+      { params: { periodType: cadence }, responseType: "blob" },
+    );
+    triggerBlobDownload(res.data, `performance-${cadence}.xlsx`);
+  },
+
   getAllFinancialPeriods: () =>
     apiClient
       .get<ApiResponse<FinancialPeriod[]>>("/v1/financial-periods")

@@ -273,3 +273,5 @@ databaseChangeLog:
       file: db/changelog/140-material-shortage-run.yaml
   - include:
       file: db/changelog/141-boq-actual-cost.yaml
+  - include:
+      file: db/changelog/142-profile-data-scope.yaml

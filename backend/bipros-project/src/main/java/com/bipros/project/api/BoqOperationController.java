@@ -32,6 +32,7 @@ public class BoqOperationController {
   private final BoqOperationService boqOperationService;
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.READ')")
   public ResponseEntity<ApiResponse<List<BoqOperationDto>>> list(
       @PathVariable UUID projectId,
       @PathVariable UUID itemId) {

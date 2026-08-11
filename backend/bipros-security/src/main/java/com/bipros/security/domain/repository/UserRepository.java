@@ -16,6 +16,9 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    /** Review round 2: guards profile deletion — a profile still assigned may not be deleted. */
+    long countByProfileId(java.util.UUID profileId);
+
     Optional<User> findByUsername(String username);
 
     Optional<User> findByEmail(String email);

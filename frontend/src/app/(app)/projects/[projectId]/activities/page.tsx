@@ -164,7 +164,9 @@ export default function ActivitiesPage() {
   const { data: costSummaryData } = useQuery({
     queryKey: ["activity-cost-summary", projectId],
     queryFn: () => costApi.getActivityCostSummary(projectId),
-    enabled: !!projectId,
+    // Access-Output row 4: the endpoint now needs COST.READ; field roles just get
+    // empty cost columns instead of a guaranteed 403.
+    enabled: !!projectId && hasPermission("COST.READ"),
   });
 
   const activities = (activitiesData?.data?.content || []) as ActivityResponse[];

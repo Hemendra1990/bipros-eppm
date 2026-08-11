@@ -71,6 +71,8 @@ export interface UserResponse {
    * with no profile mapping; ADMIN role short-circuits all gates regardless.
    */
   permissions?: string[];
+  /** Row-visibility level (gate 3): OWN | PROJECT | ALL. ALL for admins. */
+  dataScope?: DataScope;
   profileId?: string | null;
   profileName?: string | null;
   // IC-PMS fields (nullable for legacy users)
@@ -97,6 +99,8 @@ export interface PermissionDescriptor {
   label: string;
 }
 
+export type DataScope = "OWN" | "TEAM" | "PROJECT" | "ALL";
+
 export interface ProfileResponse {
   id: string;
   code: string;
@@ -105,6 +109,8 @@ export interface ProfileResponse {
   systemDefault: boolean;
   legacyRoleName: string;
   permissions: string[];
+  /** Row-visibility level (gate 3): which rows the permissions apply to. */
+  dataScope: DataScope;
 }
 
 export interface CreateProfileRequest {
@@ -113,6 +119,7 @@ export interface CreateProfileRequest {
   description?: string;
   legacyRoleName: string;
   permissions: string[];
+  dataScope?: DataScope;
 }
 
 export interface UpdateProfileRequest {
@@ -120,6 +127,7 @@ export interface UpdateProfileRequest {
   description?: string;
   legacyRoleName?: string;
   permissions?: string[];
+  dataScope?: DataScope;
 }
 
 // === Project Structure ===

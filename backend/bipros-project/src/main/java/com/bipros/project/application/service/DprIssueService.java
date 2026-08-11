@@ -50,6 +50,10 @@ public class DprIssueService {
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectAccessGuard projectAccessGuard;
+    private final com.bipros.common.security.ScopeResolverPort scopeResolver;
+
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager em;
 
     @Transactional(readOnly = true)
     public List<DprIssueRow> list(
@@ -63,7 +67,14 @@ public class DprIssueService {
             LocalDate dateTo,
             String q,
             Boolean interventionRequired) {
+        // Gate 3 (access-control round, 2026-08-11): OWN callers see issues they raised, are
+        // assigned to, or that sit on their activities. This list is unpaginated in-memory
+        // filtering by design, so a stream filter is scope-safe here (no page/total to skew).
+        com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+        java.util.List<UUID> ownActs = scope.personScoped()
+                ? teamActivityIds(scope.memberIds()) : java.util.List.of();
         return issueRepository.findByProjectIdOrderByOpenedAtDesc(projectId).stream()
+                .filter(i -> !scope.personScoped() || issueInScope(i, scope, ownActs))
                 .filter(i -> status == null || i.getStatus() == status)
                 .filter(i -> severity == null || i.getSeverity() == severity)
                 .filter(i -> category == null || i.getCategory() == category)
@@ -263,7 +274,45 @@ public class DprIssueService {
     }
 
     private DprIssue findIssue(UUID projectId, UUID id) {
-        return issueRepository.findByIdAndProjectId(id, projectId)
+        DprIssue issue = issueRepository.findByIdAndProjectId(id, projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("DprIssue", id));
+        // Gate 3: OWN-scoped callers cannot open a foreign issue by URL — invisible, not 403.
+        com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+        if (scope.personScoped() && !issueInScope(issue, scope, teamActivityIds(scope.memberIds()))) {
+            throw new ResourceNotFoundException("DprIssue", id);
+        }
+        return issue;
+    }
+
+    /** OWN involvement predicate for issues — keep in step with the DPR service's rowInScope. */
+    private boolean issueInScope(DprIssue issue, com.bipros.common.security.ScopeKeys scope,
+                                 java.util.List<UUID> ownActs) {
+        java.util.Set<UUID> members = scope.memberIds();
+        if (members.isEmpty()) return false;
+        if ((issue.getSupervisorUserId() != null && members.contains(issue.getSupervisorUserId()))
+                || (issue.getAssignedToUserId() != null && members.contains(issue.getAssignedToUserId()))) {
+            return true;
+        }
+        if (issue.getSupervisorUserId() == null && issue.getSupervisorName() != null
+                && scope.memberAliases().stream()
+                    .anyMatch(a -> a.equalsIgnoreCase(issue.getSupervisorName().trim()))) {
+            return true;
+        }
+        return issue.getActivityId() != null && ownActs.contains(issue.getActivityId());
+    }
+
+    /** Activities the user supervises (join table + legacy column) — cross-schema native SQL. */
+    private java.util.List<UUID> teamActivityIds(java.util.Collection<UUID> userIds) {
+        @SuppressWarnings("unchecked")
+        java.util.List<Object> rows = em.createNativeQuery(
+                        "SELECT activity_id FROM activity.activity_supervisors WHERE user_id IN (:uids) "
+                                + "UNION SELECT id FROM activity.activities WHERE supervisor_user_id IN (:uids)")
+                .setParameter("uids", userIds.isEmpty() ? java.util.List.of(new UUID(0L, 0L)) : userIds)
+                .getResultList();
+        java.util.List<UUID> ids = new java.util.ArrayList<>();
+        for (Object o : rows) {
+            ids.add(o instanceof UUID u ? u : UUID.fromString(o.toString()));
+        }
+        return ids;
     }
 }

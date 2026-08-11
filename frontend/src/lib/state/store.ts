@@ -7,6 +7,8 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   setAuth: (user: UserResponse, accessToken: string, refreshToken: string) => void;
+  /** Refresh the cached user (permissions/profile/scope) without touching tokens. */
+  setUser: (user: UserResponse) => void;
   clearAuth: () => void;
   isAuthenticated: () => boolean;
   /**
@@ -20,6 +22,11 @@ interface AuthState {
   hasAnyPermission: (codes: readonly string[]) => boolean;
   /** Shorthand for "is the current user an admin?" — accepts {@code ADMIN} or {@code ROLE_ADMIN}. */
   isAdmin: () => boolean;
+  /**
+   * Gate-3 row-visibility level from {@code /v1/auth/me}: OWN | PROJECT | ALL. UX gate only
+   * (the server filters regardless) — used to hide supervisor pickers etc. for OWN users.
+   */
+  dataScope: () => "OWN" | "TEAM" | "PROJECT" | "ALL";
 }
 
 const ROLE_PREFIX = "ROLE_";
@@ -40,6 +47,7 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem("refresh_token", refreshToken);
         set({ user, accessToken, refreshToken });
       },
+      setUser: (user) => set({ user }),
       clearAuth: () => {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
@@ -66,6 +74,12 @@ export const useAuthStore = create<AuthState>()(
         return codes.some((c) => perms.includes(c));
       },
       isAdmin: () => userIsAdmin(get().user),
+      dataScope: () => {
+        const u = get().user;
+        if (!u) return "PROJECT";
+        if (userIsAdmin(u)) return "ALL";
+        return u.dataScope ?? "PROJECT";
+      },
     }),
     { name: "bipros-auth" }
   )

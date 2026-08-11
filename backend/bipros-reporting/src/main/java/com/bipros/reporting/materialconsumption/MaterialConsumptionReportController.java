@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class MaterialConsumptionReportController {
 
   private final MaterialConsumptionReportService service;
+  private final com.bipros.common.security.ScopeResolverPort scopeResolver;
   private final MaterialConsumptionExcelWriter excelWriter;
   private final MaterialBalanceService balanceService;
   private final SupervisorMaterialComparisonService comparisonService;
@@ -41,6 +43,7 @@ public class MaterialConsumptionReportController {
    * means the project has no store data — the UI shows "stock not tracked", never zeros.
    */
   @GetMapping("/availability")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<MaterialAvailabilityResult> availability(
       @PathVariable UUID projectId,
       @RequestParam(required = false) LocalDate from,
@@ -54,14 +57,28 @@ public class MaterialConsumptionReportController {
    * movement columns from {@code windowFrom}. Flag only; no DBS costing (open question Q20).
    */
   @GetMapping("/supervisor-comparison")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<List<SupervisorMaterialRow>> supervisorComparison(
       @PathVariable UUID projectId,
       @RequestParam(required = false) LocalDate asOf,
       @RequestParam(required = false) LocalDate windowFrom) {
-    return ApiResponse.ok(comparisonService.compare(projectId, asOf, windowFrom));
+    // Gate 3 (TEAM-aware): person-scoped callers see their member set's rows (id-else-name).
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    List<SupervisorMaterialRow> rows = comparisonService.compare(projectId, asOf, windowFrom);
+    if (scope.personScoped()) {
+      java.util.Set<String> memberKeys = scope.memberIds().stream()
+          .map(java.util.UUID::toString).collect(java.util.stream.Collectors.toSet());
+      rows = rows.stream()
+          .filter(r -> memberKeys.contains(r.supervisorKey())
+              || (r.supervisorName() != null && scope.memberAliases().stream()
+                  .anyMatch(a -> a.equalsIgnoreCase(r.supervisorName().trim()))))
+          .toList();
+    }
+    return ApiResponse.ok(rows);
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<MaterialConsumptionReportResponse> generate(
       @PathVariable UUID projectId,
       @RequestParam(required = false) LocalDate from,
@@ -79,6 +96,7 @@ public class MaterialConsumptionReportController {
   }
 
   @GetMapping("/export.xlsx")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ResponseEntity<byte[]> exportExcel(
       @PathVariable UUID projectId,
       @RequestParam(required = false) LocalDate from,

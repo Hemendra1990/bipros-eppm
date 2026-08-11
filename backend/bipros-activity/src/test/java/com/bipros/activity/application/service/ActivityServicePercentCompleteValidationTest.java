@@ -61,7 +61,8 @@ class ActivityServicePercentCompleteValidationTest {
         percentCompleteCalculator,
         new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository,
         org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
-        boqProgressGuard);
+        boqProgressGuard,
+        com.bipros.common.security.ScopeKeys::all);
 
     activityId = UUID.randomUUID();
     activity = new Activity();

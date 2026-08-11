@@ -191,6 +191,7 @@ public class ChatController {
     }
 
     @GetMapping("/conversations")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<ConversationDto>>> listConversations(
             @RequestParam(required = false) UUID projectId,
             @RequestParam(defaultValue = "20") int limit) {
@@ -198,11 +199,13 @@ public class ChatController {
     }
 
     @GetMapping("/conversations/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<ConversationDetailDto>> getConversation(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(conversationService.getDetail(id)));
     }
 
     @DeleteMapping("/conversations/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> deleteConversation(@PathVariable UUID id) {
         conversationService.softDelete(id);
         return ResponseEntity.ok(ApiResponse.ok(null));

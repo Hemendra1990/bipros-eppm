@@ -16,7 +16,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { getErrorMessage } from "@/lib/utils/error";
-import { useAuth } from "@/lib/auth/useAuth";
+import { useAuthStore } from "@/lib/state/store";
 import { formatBudget, budgetUnit } from "@/lib/utils/format";
 
 const changeTypeConfig: Record<BudgetChangeType, { label: string; icon: typeof Plus; color: string }> = {
@@ -40,8 +40,9 @@ export default function BudgetChangesPage() {
   const params = useParams();
   const projectId = params.projectId as string;
   const queryClient = useQueryClient();
-  const { hasAnyRole } = useAuth();
-  const isAdmin = hasAnyRole(["ADMIN"]);
+  // Access-control round (2026-08-11): permission-driven, not role-name-driven — profiles
+  // decide. Approving a budget change is a project write.
+  const isAdmin = useAuthStore((s) => s.isAdmin() || s.hasPermission("PROJECT.UPDATE"));
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreateBudgetChangeRequest>({

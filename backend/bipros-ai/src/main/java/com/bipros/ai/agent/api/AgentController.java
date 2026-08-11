@@ -101,6 +101,7 @@ public class AgentController {
 
     /** Portfolio activity feed — recent agent runs across the projects the caller can see. */
     @GetMapping("/portfolio/agent-activity")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<AgentRunDto>>> portfolioActivity(
             @RequestParam(defaultValue = "30") int limit) {
         Pageable pageable = PageRequest.of(0, Math.min(limit, 100));
@@ -140,6 +141,7 @@ public class AgentController {
     }
 
     @GetMapping("/agent-runs/{runId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<AgentRunDetailDto>> getRun(@PathVariable UUID runId) {
         AgentRun run = runRepository.findById(runId)
                 .orElseThrow(() -> new ResourceNotFoundException("AgentRun", runId));
@@ -173,6 +175,7 @@ public class AgentController {
     }
 
     @PostMapping("/agent-findings/{id}/acknowledge")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<AgentFindingDto>> acknowledge(@PathVariable UUID id) {
         AgentFinding f = loadFindingWithAccess(id);
         AgentFinding saved = memoryService.acknowledge(id, projectAccess.currentUserId(), Instant.now());
@@ -180,6 +183,7 @@ public class AgentController {
     }
 
     @PostMapping("/agent-findings/{id}/resolve")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<AgentFindingDto>> resolve(@PathVariable UUID id) {
         AgentFinding f = loadFindingWithAccess(id);
         AgentFinding saved = memoryService.resolve(id, projectAccess.currentUserId(), Instant.now());

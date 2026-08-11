@@ -8,6 +8,8 @@ import { KpiTile } from "@/components/common/KpiTile";
 import { CadenceToggle, type Cadence } from "@/components/financials/CadenceToggle";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useAuthStore } from "@/lib/state/store";
+import { Download } from "lucide-react";
 import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import {
   Bar,
@@ -39,6 +41,7 @@ export default function PerformanceDashboardPage() {
   const projectId = params.projectId as string;
   const { money, moneyCompact } = useProjectCurrency();
   const [cadence, setCadence] = useState<Cadence>("M");
+  const canExport = useAuthStore((s) => s.hasPermission)("REPORT.EXPORT");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["performance-rollup", projectId, cadence],
@@ -79,7 +82,19 @@ export default function PerformanceDashboardPage() {
 
       <div className="mb-6 flex items-center justify-between">
         <h1 className="font-display text-3xl font-semibold text-charcoal">Performance</h1>
-        <CadenceToggle value={cadence} onChange={setCadence} />
+        <div className="flex items-center gap-3">
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => periodPerformanceApi.downloadPerformanceExcel(projectId, cadence)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-ivory px-2.5 py-1.5 text-xs font-semibold text-charcoal transition-all duration-200 hover:-translate-y-px hover:border-gold/50 hover:bg-paper hover:text-gold-deep"
+            >
+              <Download size={12} />
+              Generate Report
+            </button>
+          )}
+          <CadenceToggle value={cadence} onChange={setCadence} />
+        </div>
       </div>
 
       {error && (

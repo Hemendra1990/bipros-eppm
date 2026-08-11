@@ -250,6 +250,7 @@ export default function DprPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasPermission = useAuthStore((s) => s.hasPermission);
+  const dataScope = useAuthStore((s) => s.dataScope());
   const canApprove = hasPermission("DPR.APPROVE");
 
   const { data: projectData } = useQuery({
@@ -763,12 +764,14 @@ export default function DprPage() {
                   </button>
                 </div>
               )}
+              {hasPermission("DPR.CREATE") && (
               <button
                 onClick={openNew}
                 className="inline-flex items-center gap-1.5 rounded-md bg-gold px-4 py-2 text-sm font-semibold text-gold-ink hover:bg-gold-deep transition"
               >
                 <Plus className="h-4 w-4" /> Add DPR
               </button>
+              )}
             </div>
           </div>
 
@@ -798,6 +801,9 @@ export default function DprPage() {
                     className="rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
                   />
                 </div>
+                {/* OWN-scoped users see only their own rows (server-enforced) — the
+                    supervisor picker would be an empty promise, so it is hidden. */}
+                {dataScope !== "OWN" && (
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate">
                     Supervisor
@@ -815,6 +821,7 @@ export default function DprPage() {
                     ))}
                   </select>
                 </div>
+                )}
                 <button
                   type="submit"
                   className="rounded-md border border-hairline bg-paper px-4 py-2 text-sm font-semibold text-charcoal hover:bg-ivory"

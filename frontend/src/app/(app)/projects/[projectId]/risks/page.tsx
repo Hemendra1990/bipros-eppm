@@ -25,9 +25,9 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { ApiResponse, ProjectResponse } from "@/lib/types";
 // import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
-import { useAuth } from "@/lib/auth/useAuth";
+import { useAuthStore } from "@/lib/state/store";
 
-const RISK_INTERNAL_ROLES = ["ROLE_PMO", "ROLE_PROJECT_MANAGER", "ROLE_ADMIN", "ROLE_FINANCE"] as const;
+// Access-control round (2026-08-11): internals gate is permission-driven (profiles decide).
 
 // Light mode = solid pastel bg + dark text. Dark mode = deep bg + pastel text.
 const ragColors: Record<RiskRag, string> = {
@@ -60,8 +60,11 @@ export default function ProjectRisksPage() {
   const router = useRouter();
   const projectId = params.projectId as string;
   const queryClient = useQueryClient();
-  const { hasAnyRole } = useAuth();
-  const canSeeRiskInternals = hasAnyRole(RISK_INTERNAL_ROLES);
+  // Internals = internal staff, not external CLIENT/CONTRACTOR viewers. EVM.READ is the
+  // permission proxy for the old PMO/FINANCE allowlist (both hold it; externals don't).
+  const canSeeRiskInternals = useAuthStore(
+    (s) => s.isAdmin() || s.hasAnyPermission(["RISK.UPDATE", "RISK.APPROVE", "EVM.READ"]),
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState("");

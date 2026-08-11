@@ -56,6 +56,7 @@ public class SupervisorPerformanceReportService {
   @PersistenceContext private EntityManager em;
 
   private final ProductivityNormResolver normResolver;
+  private final com.bipros.common.security.ScopeResolverPort scopeResolver;
 
   // ─── Public API ─────────────────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,14 @@ public class SupervisorPerformanceReportService {
   public SupervisorPerformanceReport build(
       UUID projectId, UUID supervisorUserId, UUID activityId,
       LocalDate fromDate, LocalDate toDate, int workDays) {
+
+    // Gate 3 (TEAM-aware): OWN forces self; TEAM honours any requested team member and
+    // defaults to self; PROJECT/ALL honour the request as-is.
+    com.bipros.common.security.ScopeKeys ownScope = scopeResolver.resolveForProject(projectId);
+    if (ownScope.personScoped()
+        && (supervisorUserId == null || !ownScope.memberIds().contains(supervisorUserId))) {
+      supervisorUserId = ownScope.userId();
+    }
 
     LocalDate today = LocalDate.now();
     LocalDate effectiveTo = toDate == null ? today : toDate;
@@ -439,6 +448,14 @@ public class SupervisorPerformanceReportService {
       LocalDate fromDate, LocalDate toDate, int workDays) {
     if (supervisorUserIds == null || supervisorUserIds.size() < 2) {
       throw new IllegalArgumentException("compare requires at least 2 supervisor ids");
+    }
+    // Gate 3: comparison is allowed within the caller's team (TEAM) or project-wide
+    // (PROJECT/ALL); OWN-scoped callers have nobody to compare.
+    com.bipros.common.security.ScopeKeys cmpScope = scopeResolver.resolveForProject(projectId);
+    if (cmpScope.personScoped()
+        && !cmpScope.memberIds().containsAll(supervisorUserIds)) {
+      throw new org.springframework.security.access.AccessDeniedException(
+          "Supervisor comparison is limited to your own team");
     }
 
     List<SupervisorPerformanceReport> reports = new ArrayList<>(supervisorUserIds.size());

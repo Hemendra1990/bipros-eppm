@@ -19,6 +19,7 @@ import {
 import type { ActivityResponse } from "@/lib/api/activityApi";
 import type { ResourceKind } from "./QuickAssignResourceDialog";
 import { useActivityMasterStatus } from "@/lib/hooks/useActivityMasterStatus";
+import { useAuthStore } from "@/lib/state/store";
 import type { DialogMode } from "./LinkOrCreateWorkActivityDialog";
 
 export interface ContextMenuPosition {
@@ -68,6 +69,7 @@ export function ActivityRowContextMenu({
   onCreateDpr,
   onOpenMasterDialog,
 }: Props) {
+  const canCreateDpr = useAuthStore((st) => st.hasPermission("DPR.CREATE"));
   const masterStatus = useActivityMasterStatus(activity.workActivityId);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -144,12 +146,14 @@ export function ActivityRowContextMenu({
       icon: <UserCheck size={14} />,
       onClick: () => onSetSupervisor(activity),
     },
-    {
-      key: "create-dpr",
-      label: "Create DPR",
-      icon: <FilePlus2 size={14} />,
-      onClick: () => onCreateDpr(activity),
-    },
+    ...(canCreateDpr
+      ? [{
+          key: "create-dpr",
+          label: "Create DPR",
+          icon: <FilePlus2 size={14} />,
+          onClick: () => onCreateDpr(activity),
+        }]
+      : []),
     ...(onOpenMasterDialog && masterStatus.state === "UNLINKED"
       ? ([
           {

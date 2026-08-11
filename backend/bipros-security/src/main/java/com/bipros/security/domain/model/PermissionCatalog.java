@@ -210,9 +210,19 @@ public final class PermissionCatalog {
             new Permission("HDS_LIBRARY.DELETE", "HDS_LIBRARY", DELETE, "Delete HDS documents"),
 
             // DBS (Daily Balance Sheet) — admin-grade recompute of the daily aggregates.
-            // Reads are membership-gated at the controller; only the three recompute POSTs
-            // need this stronger code (a project-wide recompute is an admin action).
-            new Permission("DBS.RECOMPUTE", "DBS", RECOMPUTE, "Trigger DBS aggregate recompute (day / range / cumulative)")
+            new Permission("DBS.RECOMPUTE", "DBS", RECOMPUTE, "Trigger DBS aggregate recompute (day / range / cumulative)"),
+
+            // Access-control round (2026-08-11), from the client's Access-Input/Output sheets:
+            // "Report Download" is a separate action from "View", and PM/QS may edit site
+            // concerns WITHOUT being able to edit DPR data — hence the dedicated ISSUE family
+            // (DprIssueController is keyed on these instead of DPR.*). DBS reads/exports get
+            // their own codes so the DBS GET endpoints can be guarded at all.
+            new Permission("DPR.EXPORT",   "DPR",   EXPORT, "Download DPR reports (PDF / Excel)"),
+            new Permission("DBS.READ",     "DBS",   READ,   "View daily balance sheets"),
+            new Permission("DBS.EXPORT",   "DBS",   EXPORT, "Download DBS exports (Excel / PDF)"),
+            new Permission("ISSUE.CREATE", "ISSUE", CREATE, "Raise site concerns / issues"),
+            new Permission("ISSUE.READ",   "ISSUE", READ,   "View site concerns / issues"),
+            new Permission("ISSUE.UPDATE", "ISSUE", UPDATE, "Edit / resolve site concerns")
     );
 
     public static final Set<String> ALL_CODES = ALL.stream()

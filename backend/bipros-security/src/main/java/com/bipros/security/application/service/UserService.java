@@ -280,8 +280,19 @@ public class UserService {
                 profile != null ? profile.getId() : null,
                 profile != null ? profile.getName() : null,
                 List.of(),
-                effectivePermissions(user)
+                effectivePermissions(user),
+                resolveDataScope(user, profile)
         );
+    }
+
+    /** Gate-3 scope for the client: ADMIN is always ALL; else the profile's scope (default PROJECT). */
+    private String resolveDataScope(User user, Profile profile) {
+        boolean admin = user.getRoles().stream()
+                .map(ur -> ur.getRole() != null ? ur.getRole().getName() : null)
+                .anyMatch("ADMIN"::equals);
+        if (admin) return com.bipros.common.security.DataScope.ALL.name();
+        return profile != null ? profile.dataScopeOrDefault().name()
+                : com.bipros.common.security.DataScope.PROJECT.name();
     }
 
     /** Effective permission union for {@code user}, sorted ascending for stable client diffs. */

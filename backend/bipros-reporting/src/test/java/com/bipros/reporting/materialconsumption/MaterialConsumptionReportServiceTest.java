@@ -44,7 +44,14 @@ class MaterialConsumptionReportServiceTest {
     @Mock DprMaterialConsumptionLookup dprMaterialLookup;
     @Mock EntityManager em;
     @Mock Query query;
+    @Mock com.bipros.common.security.ScopeResolverPort scopeResolver;
     @InjectMocks MaterialConsumptionReportService service;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubScope() {
+        org.mockito.Mockito.when(scopeResolver.resolveForProject(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(com.bipros.common.security.ScopeKeys.all());
+    }
 
     @BeforeEach
     void setUp() {

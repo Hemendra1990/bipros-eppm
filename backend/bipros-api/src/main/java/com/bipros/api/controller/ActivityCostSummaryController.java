@@ -56,7 +56,8 @@ public class ActivityCostSummaryController {
   ) {}
 
   @GetMapping("/cost-summary")
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
+  // Access-Output row 4: per-activity costing is cost data — COST.READ, not REPORT.READ.
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")
   public ResponseEntity<ApiResponse<List<ActivityCostSummaryRow>>> getCostSummary(
       @PathVariable UUID projectId) {
 

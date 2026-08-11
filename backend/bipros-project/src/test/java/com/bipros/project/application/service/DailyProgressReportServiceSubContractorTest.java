@@ -98,7 +98,8 @@ class DailyProgressReportServiceSubContractorTest {
         dprRepository, manpowerRepository, equipmentRepository, materialRepository,
         subContractorRepository, attachmentRepository, voiceNoteRepository, issueRepository,
         attachmentStorage, voiceNoteStorage, projectRepository, ledgerService, auditService,
-        eventPublisher, null, boqItemRepository, null, null, null, null);
+        eventPublisher, null, boqItemRepository, null, null, null, null,
+        com.bipros.common.security.ScopeKeys::all);
     ReflectionTestUtils.setField(service, "em", entityManager);
 
     // Route every native query to a Query mock that consults resultListBySql.

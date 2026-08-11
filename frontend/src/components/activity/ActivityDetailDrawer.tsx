@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useAuthStore } from "@/lib/state/store";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, ExternalLink, FilePlus2, RefreshCw, Lock, AlertTriangle } from "lucide-react";
@@ -118,6 +119,7 @@ function DrawerInner({
   const [supervisorOpen, setSupervisorOpen] = useState(false);
   const queryClient = useQueryClient();
   const router = useRouter();
+  const canCreateDpr = useAuthStore((st) => st.hasPermission("DPR.CREATE"));
 
   const recomputeMutation = useMutation({
     mutationFn: () => resourceApi.recomputeProjectAssignmentCosts(projectId),
@@ -332,6 +334,7 @@ function DrawerInner({
           <ExternalLink size={14} />
         </Link>
         {activity && isLocked && !isParentActivity && (
+          canCreateDpr && (
           <button
             type="button"
             onClick={() => {
@@ -346,6 +349,7 @@ function DrawerInner({
             <FilePlus2 size={14} />
             Create DPR
           </button>
+          )
         )}
       </footer>
 

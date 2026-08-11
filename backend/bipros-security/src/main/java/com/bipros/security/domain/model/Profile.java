@@ -48,6 +48,18 @@ public class Profile extends BaseEntity {
     @Column(name = "legacy_role_name", nullable = false, length = 60)
     private String legacyRoleName;
 
+    /**
+     * Row-visibility level (gate 3): OWN | PROJECT | ALL. Nullable for pre-existing rows
+     * (ddl-auto:update never backfills) — null reads as PROJECT via {@link #dataScopeOrDefault()}.
+     * Prod schema: Liquibase changeset 142.
+     */
+    @Column(name = "data_scope", length = 10)
+    private String dataScope;
+
+    public com.bipros.common.security.DataScope dataScopeOrDefault() {
+        return com.bipros.common.security.DataScope.fromDb(dataScope);
+    }
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "profile_permissions",

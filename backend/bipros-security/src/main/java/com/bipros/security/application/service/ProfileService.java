@@ -29,6 +29,7 @@ public class ProfileService {
 
     private final ProfileRepository profileRepository;
     private final RoleRepository roleRepository;
+    private final com.bipros.security.domain.repository.UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<ProfileResponse> listProfiles() {
@@ -57,6 +58,7 @@ public class ProfileService {
 
         Profile p = new Profile(req.code(), req.name(), req.description(), req.legacyRoleName(),
                 false, perms);
+        p.setDataScope(parseScope(req.dataScope()).name());
         Profile saved = profileRepository.save(p);
         log.info("Created profile {} ({}) with {} permissions", saved.getCode(), saved.getName(), perms.size());
         return ProfileResponse.from(saved);
@@ -75,9 +77,25 @@ public class ProfileService {
         if (req.permissions() != null) {
             p.setPermissions(sanitizePermissions(req.permissions()));
         }
+        // Data scope is config, not identity — editable on system defaults too (the owner's
+        // "everything configurable" requirement).
+        if (req.dataScope() != null && !req.dataScope().isBlank()) {
+            p.setDataScope(parseScope(req.dataScope()).name());
+        }
 
         Profile saved = profileRepository.save(p);
         return ProfileResponse.from(saved);
+    }
+
+    /** Strict parse for API input: unknown values are a client error, not a silent PROJECT. */
+    private static com.bipros.common.security.DataScope parseScope(String raw) {
+        if (raw == null || raw.isBlank()) return com.bipros.common.security.DataScope.PROJECT;
+        try {
+            return com.bipros.common.security.DataScope.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessRuleException("UNKNOWN_DATA_SCOPE",
+                    "dataScope must be one of OWN, PROJECT, ALL (got '" + raw + "')");
+        }
     }
 
     public void deleteProfile(UUID id) {
@@ -86,6 +104,14 @@ public class ProfileService {
         if (p.isSystemDefault()) {
             throw new BusinessRuleException("PROFILE_SYSTEM_DEFAULT",
                     "System-default profiles cannot be deleted");
+        }
+        // Review round 2 (fail-open): users.profile_id is a soft FK — deleting an assigned
+        // profile would silently drop those users back to the wider role-union permissions
+        // and PROJECT scope. Reassign the users first, then delete.
+        long assigned = userRepository.countByProfileId(id);
+        if (assigned > 0) {
+            throw new BusinessRuleException("PROFILE_IN_USE",
+                    assigned + " user(s) still use this profile. Reassign them first.");
         }
         profileRepository.delete(p);
     }

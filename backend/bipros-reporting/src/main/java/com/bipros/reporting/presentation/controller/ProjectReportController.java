@@ -242,7 +242,8 @@ public class ProjectReportController {
    * P6-style Cost Variance Report. Same baseline-resolution rules as schedule-variance.
    */
   @GetMapping("/cost-variance")
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
+  // Access-Output row 4: cost data — COST.READ (Supervisor holds REPORT.READ but must not see this).
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")
   public ApiResponse<CostVarianceReport> getCostVarianceReport(
       @PathVariable UUID projectId,
       @RequestParam(required = false) UUID baselineId) {

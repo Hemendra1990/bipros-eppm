@@ -8,6 +8,7 @@ import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { downloadCsv, toCsv } from "@/lib/utils/csvExport";
+import { useAuthStore } from "@/lib/state/store";
 import {
   varianceReportApi,
   type ActivityStatusName,
@@ -70,6 +71,8 @@ function costToneClass(value: number | null | undefined): string {
 }
 
 export function CostVarianceSection({ projectId, baselineId }: Props) {
+  // Access-Output row 4: Engineer may view but not download — the CSV follows COST.EXPORT.
+  const canExportCsv = useAuthStore((st) => st.hasPermission)("COST.EXPORT");
   const { data, isLoading, error } = useQuery({
     queryKey: ["cost-variance", projectId, baselineId ?? null],
     queryFn: () => varianceReportApi.getCostVariance(projectId, baselineId),
@@ -380,6 +383,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
             <span className="text-xs text-slate tabular-nums">
               {filtered.length} of {activityRows.length}
             </span>
+            {canExportCsv && (
             <button
               type="button"
               onClick={onExport}
@@ -388,6 +392,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
               <Download size={12} />
               Export CSV
             </button>
+            )}
           </div>
         </div>
         <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">

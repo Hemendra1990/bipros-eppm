@@ -210,6 +210,7 @@ public class AnalyticsReadController {
      * than failing the whole endpoint — the caller can render that as "—".
      */
     @GetMapping("/health")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<TableHealth>>> health() {
         List<TableHealth> out = new ArrayList<>(MONITORED_TABLES.size());
         for (String table : MONITORED_TABLES) {

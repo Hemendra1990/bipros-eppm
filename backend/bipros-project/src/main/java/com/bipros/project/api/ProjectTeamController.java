@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +33,7 @@ public class ProjectTeamController {
     private final ProjectTeamService service;
 
     @GetMapping
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.READ')")
     public ResponseEntity<ApiResponse<List<ProjectTeamMemberResponse>>> list(
             @PathVariable UUID projectId,
             @RequestParam(required = false) String role) {
@@ -42,6 +44,7 @@ public class ProjectTeamController {
     }
 
     @PostMapping
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.MANAGE')")
     public ResponseEntity<ApiResponse<ProjectTeamMemberResponse>> create(
             @PathVariable UUID projectId,
             @RequestBody ProjectTeamMemberRequest request) {
@@ -51,6 +54,7 @@ public class ProjectTeamController {
     }
 
     @PutMapping("/{memberId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.MANAGE')")
     public ResponseEntity<ApiResponse<ProjectTeamMemberResponse>> update(
             @PathVariable UUID projectId,
             @PathVariable UUID memberId,
@@ -59,6 +63,7 @@ public class ProjectTeamController {
     }
 
     @DeleteMapping("/{memberId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.MANAGE')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID projectId,
             @PathVariable UUID memberId) {
@@ -67,6 +72,7 @@ public class ProjectTeamController {
     }
 
     @GetMapping("/resolve/engineer")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.READ')")
     public ResponseEntity<ApiResponse<UUID>> resolveEngineer(
             @PathVariable UUID projectId,
             @RequestParam UUID supervisorUserId) {
@@ -77,6 +83,7 @@ public class ProjectTeamController {
     }
 
     @GetMapping("/resolve/pm")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT_MEMBER.READ')")
     public ResponseEntity<ApiResponse<UUID>> resolvePm(@PathVariable UUID projectId) {
         UUID pmId = service.resolvePmFor(projectId)
             .orElseThrow(() -> new ResourceNotFoundException("ProjectTeamMember(pm)", projectId));

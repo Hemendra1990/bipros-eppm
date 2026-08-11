@@ -12,6 +12,7 @@ import { permissionApi } from "@/lib/api/permissionApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { getErrorMessage } from "@/lib/utils/error";
 import type {
+  DataScope,
   PermissionDescriptor,
   ProfileResponse,
   UpdateProfileRequest,
@@ -53,6 +54,7 @@ export default function ProfileDetailPage() {
   // Form state — initialised from the fetched profile.
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [dataScope, setDataScope] = useState<DataScope>("PROJECT");
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
 
@@ -60,6 +62,7 @@ export default function ProfileDetailPage() {
     if (!profile) return;
     setName(profile.name);
     setDescription(profile.description ?? "");
+    setDataScope(profile.dataScope ?? "PROJECT");
     setPermissions(new Set(profile.permissions));
   }, [profile]);
 
@@ -100,11 +103,12 @@ export default function ProfileDetailPage() {
     mutationFn: () => {
       if (!profile) throw new Error("No profile loaded");
       const body: UpdateProfileRequest = profile.systemDefault
-        ? { description }
+        ? { description, dataScope }
         : {
             name,
             description,
             permissions: Array.from(permissions),
+            dataScope,
           };
       return profileApi.updateProfile(profile.id, body);
     },
@@ -245,6 +249,21 @@ export default function ProfileDetailPage() {
               className="block w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none"
             />
           </Field>
+          <Field
+            label="Data scope"
+            hint="Which rows the permissions apply to. Editable on system defaults too."
+          >
+            <select
+              value={dataScope}
+              onChange={(e) => setDataScope(e.target.value as DataScope)}
+              className="block w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none"
+            >
+              <option value="OWN">Own — only rows the user is involved in</option>
+              <option value="TEAM">Team — their rows plus their Team-tab downline</option>
+              <option value="PROJECT">Project — everything in their projects</option>
+              <option value="ALL">All — every project, no filter</option>
+            </select>
+          </Field>
         </div>
       </section>
 
@@ -352,7 +371,7 @@ export default function ProfileDetailPage() {
           {saveMutation.isPending
             ? "Saving…"
             : isSystem
-            ? "Save description"
+            ? "Save description & scope"
             : "Save changes"}
         </button>
       </div>

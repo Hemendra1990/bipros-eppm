@@ -65,7 +65,8 @@ class ActivityServiceApplyActualsTest {
         percentCompleteCalculator,
         new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository,
         org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
-        boqProgressGuard);
+        boqProgressGuard,
+        com.bipros.common.security.ScopeKeys::all);
     projectId = UUID.randomUUID();
     dataDate = LocalDate.of(2026, 5, 5);
 

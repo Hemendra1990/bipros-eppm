@@ -46,6 +46,8 @@ public class CapacityUtilizationReportService {
 
   @PersistenceContext private EntityManager em;
 
+  private final com.bipros.common.security.ScopeResolverPort scopeResolver;
+
   @Transactional(readOnly = true)
   public CapacityUtilizationReport build(
       UUID projectId, LocalDate fromDate, LocalDate toDate, String groupBy, String normType) {
@@ -74,6 +76,10 @@ public class CapacityUtilizationReportService {
       String groupBy, String normType,
       UUID supervisorUserId, int workDays) {
 
+    // Gate 3 (TEAM-aware, round 3): PROJECT/ALL honour the request; OWN forces self; TEAM
+    // allows any requested team member and defaults to the WHOLE downline union.
+    java.util.List<UUID> supervisorFilter = resolveSupervisorFilter(projectId, supervisorUserId);
+
     LocalDate today = LocalDate.now();
     LocalDate effectiveTo = toDate == null ? today : toDate;
     LocalDate effectiveFrom = fromDate == null ? effectiveTo.withDayOfYear(1) : fromDate;
@@ -89,11 +95,11 @@ public class CapacityUtilizationReportService {
 
     Section manpowerSection = wantManpower
         ? buildSection(projectId, "MANPOWER", effectiveFrom, effectiveTo,
-            referenceDate, referenceMonth, supervisorUserId, effectiveWorkDays)
+            referenceDate, referenceMonth, supervisorFilter, effectiveWorkDays)
         : null;
     Section equipmentSection = wantEquipment
         ? buildSection(projectId, "EQUIPMENT", effectiveFrom, effectiveTo,
-            referenceDate, referenceMonth, supervisorUserId, effectiveWorkDays)
+            referenceDate, referenceMonth, supervisorFilter, effectiveWorkDays)
         : null;
 
     // Synthesise the legacy flat-row + groupBy/normType fields so existing consumers
@@ -128,6 +134,9 @@ public class CapacityUtilizationReportService {
   public CapacityUtilizationAggregateReport aggregate(
       UUID projectId, String periodType, LocalDate fromDate, LocalDate toDate,
       String groupBy, UUID supervisorUserId) {
+    // Gate 3 (TEAM-aware, round 3): PROJECT/ALL honour the request; OWN forces self; TEAM
+    // allows any requested team member and defaults to the WHOLE downline union.
+    java.util.List<UUID> supervisorFilter = resolveSupervisorFilter(projectId, supervisorUserId);
     LocalDate today = LocalDate.now();
     LocalDate effectiveTo = toDate == null ? today : toDate;
     LocalDate effectiveFrom = fromDate == null ? effectiveTo.withDayOfYear(1) : fromDate;
@@ -159,11 +168,11 @@ public class CapacityUtilizationReportService {
       Section manpowerSection = buildSection(projectId, "MANPOWER",
           bucketStart, bucketEnd,
           bucketEnd, YearMonth.from(bucketEnd),
-          supervisorUserId, defaultWorkDays());
+          supervisorFilter, defaultWorkDays());
       Section equipmentSection = buildSection(projectId, "EQUIPMENT",
           bucketStart, bucketEnd,
           bucketEnd, YearMonth.from(bucketEnd),
-          supervisorUserId, defaultWorkDays());
+          supervisorFilter, defaultWorkDays());
 
       // Per bucket we only want the cumulative-over-bucket view — strip the Day/Month
       // fields so the wire payload is tight and the frontend doesn't accidentally render
@@ -203,6 +212,9 @@ public class CapacityUtilizationReportService {
   public CapacityUtilizationClientWorkbook clientWorkbook(
       UUID projectId, LocalDate fromDate, LocalDate toDate,
       UUID supervisorUserId, int workDays) {
+    // Gate 3 (TEAM-aware, round 3): PROJECT/ALL honour the request; OWN forces self; TEAM
+    // allows any requested team member and defaults to the WHOLE downline union.
+    java.util.List<UUID> supervisorFilter = resolveSupervisorFilter(projectId, supervisorUserId);
     LocalDate today = LocalDate.now();
     LocalDate effectiveTo = toDate == null ? today : toDate;
     LocalDate effectiveFrom = fromDate == null ? effectiveTo.withDayOfMonth(1) : fromDate;
@@ -212,16 +224,16 @@ public class CapacityUtilizationReportService {
     return new CapacityUtilizationClientWorkbook(
         projectId, effectiveFrom, effectiveTo, referenceDate, effectiveWorkDays,
         clientSection(projectId, "EQUIPMENT", effectiveFrom, effectiveTo,
-            referenceDate, referenceMonth, supervisorUserId),
+            referenceDate, referenceMonth, supervisorFilter),
         clientSection(projectId, "MANPOWER", effectiveFrom, effectiveTo,
-            referenceDate, referenceMonth, supervisorUserId));
+            referenceDate, referenceMonth, supervisorFilter));
   }
 
   private CapacityUtilizationClientWorkbook.Section clientSection(
       UUID projectId, String normType,
       LocalDate fromDate, LocalDate toDate,
       LocalDate referenceDate, YearMonth referenceMonth,
-      UUID supervisorUserId) {
+      java.util.List<UUID> supervisorUserId) {
     RoleAccum accum = accumulateByRole(projectId, normType, fromDate, toDate,
         referenceDate, referenceMonth, supervisorUserId);
     Map<WorkActivityRoleKey, NormLookup> normCache = accum.normCache();
@@ -489,7 +501,7 @@ public class CapacityUtilizationReportService {
       UUID projectId, String normType,
       LocalDate fromDate, LocalDate toDate,
       LocalDate referenceDate, YearMonth referenceMonth,
-      UUID supervisorUserId) {
+      java.util.List<UUID> supervisorUserId) {
     List<Contribution> contributions = "MANPOWER".equals(normType)
         ? loadManpowerContributions(projectId, fromDate, toDate, supervisorUserId)
         : loadEquipmentContributions(projectId, fromDate, toDate, supervisorUserId);
@@ -615,7 +627,7 @@ public class CapacityUtilizationReportService {
       UUID projectId, String normType,
       LocalDate fromDate, LocalDate toDate,
       LocalDate referenceDate, YearMonth referenceMonth,
-      UUID supervisorUserId,
+      java.util.List<UUID> supervisorUserId,
       int workDays) {
     RoleAccum accum = accumulateByRole(projectId, normType, fromDate, toDate,
         referenceDate, referenceMonth, supervisorUserId);
@@ -919,11 +931,11 @@ public class CapacityUtilizationReportService {
   @SuppressWarnings("unchecked")
   private List<Contribution> loadManpowerContributions(
       UUID projectId, LocalDate fromDate, LocalDate toDate,
-      UUID supervisorUserId) {
+      java.util.List<UUID> supervisorUserId) {
     // One row per (role, dpr) — role-days summed across the multiple manpower rows that may
     // exist on the same DPR for the same role. Joins activity + work_activity so the caller can
     // resolve per-activity norms downstream.
-    List<Object[]> raw = em.createNativeQuery(
+    var qMan = em.createNativeQuery(
             "SELECT m.role_id, "
                 + "       MAX(rr.code) AS role_code, "
                 + "       COALESCE(MAX(rr.name), m.trade) AS role_name, "
@@ -952,23 +964,22 @@ public class CapacityUtilizationReportService {
                 // Filter by the supervisor who actually filed the DPR. Co-supervisors on a
                 // shared activity each see only their own DPRs — matches the supervisor-dropdown
                 // count semantics. NULL = project-wide.
-                + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
-                + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
+                + supervisorPredicate(supervisorUserId)
                 + "GROUP BY m.role_id, m.trade, d.id, d.report_date, a.work_activity_id, a.id")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
-        .setParameter("toDate", toDate)
-        .setParameter("supervisorUserId",
-            supervisorUserId != null ? supervisorUserId.toString() : null)
-        .getResultList();
+        .setParameter("toDate", toDate);
+    bindSupervisors(qMan, supervisorUserId);
+    @SuppressWarnings("unchecked")
+    List<Object[]> raw = (List<Object[]>) qMan.getResultList();
     return mapContributions(raw);
   }
 
   @SuppressWarnings("unchecked")
   private List<Contribution> loadEquipmentContributions(
       UUID projectId, LocalDate fromDate, LocalDate toDate,
-      UUID supervisorUserId) {
-    List<Object[]> raw = em.createNativeQuery(
+      java.util.List<UUID> supervisorUserId) {
+    var qEq = em.createNativeQuery(
             "SELECT e.role_id, "
                 + "       MAX(rr.code) AS role_code, "
                 + "       COALESCE(MAX(rr.name), e.equipment_type) AS role_name, "
@@ -992,15 +1003,14 @@ public class CapacityUtilizationReportService {
                 + "  AND a.work_activity_id IS NOT NULL "
                 + "  AND d.approval_status = 'APPROVED' "
                 // Same filer-based filter as the manpower query above.
-                + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
-                + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
+                + supervisorPredicate(supervisorUserId)
                 + "GROUP BY e.role_id, e.equipment_type, d.id, d.report_date, a.work_activity_id, a.id")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
-        .setParameter("toDate", toDate)
-        .setParameter("supervisorUserId",
-            supervisorUserId != null ? supervisorUserId.toString() : null)
-        .getResultList();
+        .setParameter("toDate", toDate);
+    bindSupervisors(qEq, supervisorUserId);
+    @SuppressWarnings("unchecked")
+    List<Object[]> raw = (List<Object[]>) qEq.getResultList();
     return mapContributions(raw);
   }
 
@@ -1053,7 +1063,7 @@ public class CapacityUtilizationReportService {
   @SuppressWarnings("unchecked")
   Map<DprActivityKey, BigDecimal> loadOtherSideExpectedPerDpr(
       UUID projectId, LocalDate fromDate, LocalDate toDate, String thisSideNormType,
-      UUID supervisorUserId) {
+      java.util.List<UUID> supervisorUserId) {
     String otherSide = "MANPOWER".equals(thisSideNormType) ? "EQUIPMENT" : "MANPOWER";
     String table = "EQUIPMENT".equals(otherSide) ? "dpr_equipment" : "dpr_manpower";
     String normColumn = "EQUIPMENT".equals(otherSide)
@@ -1076,7 +1086,7 @@ public class CapacityUtilizationReportService {
         "  AND rn.make IS NULL AND rn.model IS NULL " +
         "WHERE d.project_id = :pid AND d.report_date BETWEEN :from AND :to " +
         "AND d.approval_status = 'APPROVED' " +
-        (supervisorUserId == null ? "" : "  AND d.supervisor_user_id = :sup ") +
+        supervisorPredicate(supervisorUserId) +
         "GROUP BY d.id, d.activity_id";
 
     var q = em.createNativeQuery(sql)
@@ -1084,7 +1094,7 @@ public class CapacityUtilizationReportService {
         .setParameter("from", fromDate)
         .setParameter("to", toDate)
         .setParameter("nt", otherSide);
-    if (supervisorUserId != null) q.setParameter("sup", supervisorUserId);
+    bindSupervisors(q, supervisorUserId);
 
     Map<DprActivityKey, BigDecimal> out = new HashMap<>();
     for (Object[] row : (List<Object[]>) q.getResultList()) {
@@ -1094,6 +1104,30 @@ public class CapacityUtilizationReportService {
       out.put(new DprActivityKey(dpr, act), exp == null ? BigDecimal.ZERO : exp);
     }
     return out;
+  }
+
+  /** Gate 3 (TEAM-aware): PROJECT/ALL honour the request as-is; OWN forces self; TEAM allows
+   *  any requested team member and defaults to the whole downline union. Null = no filter. */
+  private java.util.List<UUID> resolveSupervisorFilter(UUID projectId, UUID requested) {
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    if (!scope.personScoped()) {
+      return requested == null ? null : java.util.List.of(requested);
+    }
+    if (requested != null && scope.memberIds().contains(requested)) {
+      return java.util.List.of(requested);
+    }
+    return java.util.List.copyOf(scope.memberIds());
+  }
+
+  /** Filer-filter SQL fragment: empty when unrestricted (null/empty id set). */
+  private static String supervisorPredicate(java.util.List<UUID> ids) {
+    return (ids == null || ids.isEmpty()) ? "" : "  AND d.supervisor_user_id IN (:supIds) ";
+  }
+
+  private static void bindSupervisors(jakarta.persistence.Query q, java.util.List<UUID> ids) {
+    if (ids != null && !ids.isEmpty()) {
+      q.setParameter("supIds", ids);
+    }
   }
 
   record DprActivityKey(UUID dprId, UUID activityId) {}
@@ -1106,23 +1140,22 @@ public class CapacityUtilizationReportService {
    */
   @SuppressWarnings("unchecked")
   Map<UUID, BigDecimal> loadSubContractorQtyByDpr(
-      UUID projectId, LocalDate fromDate, LocalDate toDate, UUID supervisorUserId) {
-    List<Object[]> rows = em.createNativeQuery(
+      UUID projectId, LocalDate fromDate, LocalDate toDate, java.util.List<UUID> supervisorUserId) {
+    var qSc = em.createNativeQuery(
             "SELECT d.id, COALESCE(SUM(sc.quantity), 0) "
                 + "FROM project.daily_progress_reports d "
                 + "JOIN project.dpr_sub_contractor sc ON sc.dpr_id = d.id "
                 + "WHERE d.project_id = :projectId "
                 + "  AND d.report_date BETWEEN :fromDate AND :toDate "
                 + "  AND d.approval_status = 'APPROVED' "
-                + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
-                + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
+                + supervisorPredicate(supervisorUserId)
                 + "GROUP BY d.id")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
-        .setParameter("toDate", toDate)
-        .setParameter("supervisorUserId",
-            supervisorUserId != null ? supervisorUserId.toString() : null)
-        .getResultList();
+        .setParameter("toDate", toDate);
+    bindSupervisors(qSc, supervisorUserId);
+    @SuppressWarnings("unchecked")
+    List<Object[]> rows = (List<Object[]>) qSc.getResultList();
     Map<UUID, BigDecimal> out = new HashMap<>();
     for (Object[] r : rows) {
       UUID id = (UUID) r[0];

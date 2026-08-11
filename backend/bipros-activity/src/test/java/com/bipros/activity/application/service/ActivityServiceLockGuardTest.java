@@ -79,7 +79,8 @@ class ActivityServiceLockGuardTest {
         percentCompleteCalculator,
         new com.bipros.activity.application.percent.ParentRollupCalculator(),
         stepRepository, mock(ApplicationEventPublisher.class),
-        boqProgressGuard);
+        boqProgressGuard,
+        com.bipros.common.security.ScopeKeys::all);
     lenient().when(activitySupervisorRepository.findByActivityId(any())).thenReturn(List.of());
     lenient().when(activitySupervisorRepository.findByActivityIdIn(any())).thenReturn(List.of());
 

@@ -55,12 +55,27 @@ public class MaterialConsumptionReportService {
   private final ActivitySupervisorRepository activitySupervisorRepo;
   private final DprMaterialConsumptionLookup dprMaterialLookup;
   private final MaterialBalanceService balanceService;
+  private final com.bipros.common.security.ScopeResolverPort scopeResolver;
 
   @PersistenceContext private EntityManager em;
 
   public MaterialConsumptionReportResponse generate(MaterialConsumptionFilter filter) {
     Objects.requireNonNull(filter, "filter");
     Objects.requireNonNull(filter.projectId(), "projectId");
+
+    // Gate 3 (TEAM-aware): OWN = self; TEAM = requested member within the team, else the
+    // whole team; PROJECT/ALL honour the request. Null set = no supervisor restriction.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(filter.projectId());
+    java.util.Set<UUID> supervisorFilterIds;
+    if (scope.personScoped()) {
+      supervisorFilterIds = (filter.supervisorUserId() != null
+          && scope.memberIds().contains(filter.supervisorUserId()))
+          ? java.util.Set.of(filter.supervisorUserId())
+          : scope.memberIds();
+    } else {
+      supervisorFilterIds = filter.supervisorUserId() == null
+          ? null : java.util.Set.of(filter.supervisorUserId());
+    }
 
     LocalDate from = filter.from() != null ? filter.from() : LocalDate.now().minusMonths(1);
     LocalDate to = filter.to() != null ? filter.to() : LocalDate.now();
@@ -83,7 +98,7 @@ public class MaterialConsumptionReportService {
     // Only when no row filter is active: issue slips can't be narrowed by supervisor /
     // storekeeper / WBS the way rows can, so under a filter the override would overstate.
     boolean noRowFilters = filter.wbsNodeId() == null && filter.activityId() == null
-        && filter.supervisorUserId() == null && filter.storekeeperUserId() == null
+        && supervisorFilterIds == null && filter.storekeeperUserId() == null
         && filter.materialRateMasterId() == null;
     Map<String, BigDecimal> issuedByNameKey = noRowFilters
         ? sumIssuedQuantitiesByName(filter.projectId(), from, to)
@@ -103,7 +118,7 @@ public class MaterialConsumptionReportService {
           ? resolveUserName(supervisorUserId, userNameCache) : null;
       if (supervisorUserId != null) supervisorsSeen.putIfAbsent(supervisorUserId, supervisorName);
 
-      if (filter.supervisorUserId() != null && !filter.supervisorUserId().equals(supervisorUserId)) {
+      if (supervisorFilterIds != null && (supervisorUserId == null || !supervisorFilterIds.contains(supervisorUserId))) {
         continue;
       }
 
@@ -180,7 +195,7 @@ public class MaterialConsumptionReportService {
       if (filter.activityId() != null && !filter.activityId().equals(activityId)) continue;
       if (filter.storekeeperUserId() != null) continue;
       if (filter.materialRateMasterId() != null) continue;
-      if (filter.supervisorUserId() != null && !filter.supervisorUserId().equals(supervisorUserId)) {
+      if (supervisorFilterIds != null && (supervisorUserId == null || !supervisorFilterIds.contains(supervisorUserId))) {
         continue;
       }
 

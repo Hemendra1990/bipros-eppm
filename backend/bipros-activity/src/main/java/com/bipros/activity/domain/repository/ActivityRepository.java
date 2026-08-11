@@ -19,6 +19,22 @@ import java.util.UUID;
 
 @Repository
 public interface ActivityRepository extends JpaRepository<Activity, UUID>, JpaSpecificationExecutor<Activity> {
+
+  /**
+   * Gate-3 OWN-scope list (access-control round, 2026-08-11): activities the user supervises —
+   * the {@code activity_supervisors} join rows plus the legacy single-supervisor column.
+   */
+  @Query("""
+      select a from Activity a
+      where a.projectId = :projectId
+        and (a.supervisorUserId in :userIds
+             or exists (select 1 from ActivitySupervisor s
+                        where s.activityId = a.id and s.userId in :userIds))
+      order by a.sortOrder
+      """)
+  Page<Activity> findScopedByProjectId(@Param("projectId") java.util.UUID projectId,
+                                       @Param("userIds") java.util.Collection<java.util.UUID> userIds,
+                                       Pageable pageable);
   List<Activity> findByProjectId(UUID projectId);
 
   List<Activity> findByProjectIdIn(List<UUID> projectIds);

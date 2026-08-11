@@ -53,6 +53,7 @@ public class NextDayPlanController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<List<NextDayPlanResponse>>> list(
       @PathVariable UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -61,6 +62,7 @@ public class NextDayPlanController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<NextDayPlanResponse>> get(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {

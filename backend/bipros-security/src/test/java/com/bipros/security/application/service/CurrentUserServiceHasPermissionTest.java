@@ -86,7 +86,7 @@ class CurrentUserServiceHasPermissionTest {
     }
 
     @Test
-    void userWithRoleAndProfile_returnsUnion() {
+    void userWithRoleAndProfile_profileWins() {
         UUID profileId = UUID.randomUUID();
         User user = fixture(USERNAME, profileId, "SUPERVISOR");
         Profile profile = profileWithPermissions("REPORT.EXPORT");
@@ -95,8 +95,9 @@ class CurrentUserServiceHasPermissionTest {
 
         Set<String> perms = service.getEffectivePermissions();
 
-        // Matrix contributes (SUPERVISOR -> DPR.CREATE among others) and profile contributes REPORT.EXPORT.
-        assertThat(perms).contains("DPR.CREATE", "REPORT.EXPORT");
+        // Profile-wins rule (2026-08-11): the assigned profile IS the permission set — the
+        // SUPERVISOR matrix defaults (e.g. DPR.CREATE) no longer leak in.
+        assertThat(perms).containsExactly("REPORT.EXPORT");
     }
 
     @Test

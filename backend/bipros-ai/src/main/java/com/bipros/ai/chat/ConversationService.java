@@ -110,6 +110,7 @@ public class ConversationService {
     public ChatController.ConversationDetailDto getDetail(UUID id) {
         AiConversation conv = conversationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", id.toString()));
+        requireOwner(conv);
         List<AiMessage> msgs = messageRepository.findByConversationIdOrderBySeqAsc(id);
         List<ChatController.MessageDto> messageDtos = msgs.stream()
                 .map(m -> new ChatController.MessageDto(m.getRole(), m.getContent(), m.getCreatedAt()))
@@ -117,10 +118,28 @@ public class ConversationService {
         return new ChatController.ConversationDetailDto(conv.getId(), conv.getTitle(), conv.getProjectId(), conv.getModule(), messageDtos);
     }
 
+
+    /**
+     * Review round 2 (IDOR): conversations are private to their owner — list() always filtered
+     * by user, but detail/delete loaded by bare id. A foreign conversation is invisible (404).
+     */
+    private void requireOwner(AiConversation conv) {
+        UUID me;
+        try {
+            me = securityContextHelper.getCurrentUserId();
+        } catch (Exception noUser) {
+            me = null;
+        }
+        if (conv.getUserId() != null && !conv.getUserId().equals(me)) {
+            throw new ResourceNotFoundException("Conversation", conv.getId().toString());
+        }
+    }
+
     @Transactional
     public void softDelete(UUID id) {
         AiConversation conv = conversationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", id.toString()));
+        requireOwner(conv);
         conv.setDeletedAt(Instant.now());
         conversationRepository.save(conv);
     }

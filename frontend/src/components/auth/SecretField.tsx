@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useAuthStore } from "@/lib/state/store";
 import { useAuth } from "@/lib/auth/useAuth";
 
 /**
@@ -18,14 +19,19 @@ import { useAuth } from "@/lib/auth/useAuth";
  *   </SecretField>
  */
 export function SecretField({
+  permission,
   visibleTo,
   masked = "—",
   children,
 }: {
+  /** Preferred gate: a permission code (profile-driven). When set, roles are ignored. */
+  permission?: string;
   visibleTo: readonly string[];
   masked?: ReactNode;
   children: ReactNode;
 }) {
   const { hasAnyRole } = useAuth();
-  return <>{hasAnyRole(visibleTo) ? children : masked}</>;
+  const hasPermission = useAuthStore((st) => st.hasPermission);
+  const allowed = permission ? hasPermission(permission) : hasAnyRole(visibleTo);
+  return <>{allowed ? children : masked}</>;
 }

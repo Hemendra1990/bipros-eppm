@@ -34,6 +34,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
@@ -71,7 +72,8 @@ class DailyProgressReportServicePaginationTest {
         dprRepository, manpowerRepository, equipmentRepository, materialRepository,
         subContractorRepository, attachmentRepository, voiceNoteRepository, issueRepository,
         attachmentStorage, voiceNoteStorage, projectRepository, ledgerService, auditService,
-        eventPublisher, null, boqItemRepository, null, null, null, null);
+        eventPublisher, null, boqItemRepository, null, null, null, null,
+        com.bipros.common.security.ScopeKeys::all);
     lenient().when(projectRepository.existsById(projectId)).thenReturn(true);
     lenient().when(manpowerRepository.sumNosByDprIdIn(any())).thenReturn(List.of());
     lenient().when(equipmentRepository.sumNosByDprIdIn(any())).thenReturn(List.of());
@@ -98,9 +100,9 @@ class DailyProgressReportServicePaginationTest {
   void firstPage_hasMore() {
     LocalDate d1 = LocalDate.of(2026, 3, 10);
     LocalDate d2 = LocalDate.of(2026, 3, 9);
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), anyBoolean(), any(), any(), any(), any(Pageable.class)))
         .thenReturn(List.of(d1, d2, LocalDate.of(2026, 3, 8)));
-    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1, d2)), isNull(), isNull(), isNull(), isNull()))
+    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1, d2)), isNull(), isNull(), isNull(), isNull(), anyBoolean(), any(), any(), any()))
         .thenReturn(List.of(dpr(dprA, d1, "Earthworks", new BigDecimal("100")),
                             dpr(dprB, d2, "Earthworks", new BigDecimal("50"))));
 
@@ -117,9 +119,9 @@ class DailyProgressReportServicePaginationTest {
   @DisplayName("last page: fewer days than requested ⇒ hasMore false, nextCursor null")
   void lastPage_noMore() {
     LocalDate d1 = LocalDate.of(2026, 3, 1);
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), anyBoolean(), any(), any(), any(), any(Pageable.class)))
         .thenReturn(List.of(d1));
-    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull(), isNull(), isNull(), isNull()))
+    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull(), isNull(), isNull(), isNull(), anyBoolean(), any(), any(), any()))
         .thenReturn(List.of(dpr(dprA, d1, "Earthworks", new BigDecimal("10"))));
 
     DprPage page = service.listPaged(projectId, null, null, null, null, 14, null, null, null);
@@ -132,7 +134,7 @@ class DailyProgressReportServicePaginationTest {
   @Test
   @DisplayName("empty: no dates ⇒ empty page")
   void empty() {
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), anyBoolean(), any(), any(), any(), any(Pageable.class)))
         .thenReturn(List.of());
 
     DprPage page = service.listPaged(projectId, null, null, null, null, 14, null, null, null);
@@ -146,9 +148,9 @@ class DailyProgressReportServicePaginationTest {
   @DisplayName("aggregates: nos sums, counts, and issue live/open/critical flags map onto the right dpr")
   void aggregates() {
     LocalDate d1 = LocalDate.of(2026, 3, 10);
-    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+    when(dprRepository.findDistinctReportDatesDesc(eq(projectId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), anyBoolean(), any(), any(), any(), any(Pageable.class)))
         .thenReturn(List.of(d1));
-    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull(), isNull(), isNull(), isNull()))
+    when(dprRepository.findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(eq(projectId), eq(List.of(d1)), isNull(), isNull(), isNull(), isNull(), anyBoolean(), any(), any(), any()))
         .thenReturn(List.of(dpr(dprA, d1, "Earthworks", new BigDecimal("100"))));
     when(manpowerRepository.sumNosByDprIdIn(any())).thenReturn(List.<Object[]>of(new Object[]{dprA, 12L}));
     when(equipmentRepository.sumNosByDprIdIn(any())).thenReturn(List.<Object[]>of(new Object[]{dprA, 3L}));

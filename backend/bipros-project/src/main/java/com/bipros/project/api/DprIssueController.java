@@ -47,7 +47,9 @@ public class DprIssueController {
     private final DprIssueService service;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+    // Access-control round (2026-08-11): replaced the stale role-name check (SITE_SUPERVISOR is
+    // a legacy alias) with the ISSUE family so concerns rights are separable from DPR rights.
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ISSUE.CREATE')")
     public ResponseEntity<ApiResponse<DprIssueRow>> create(
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateDprIssueRequest request) {
@@ -57,6 +59,7 @@ public class DprIssueController {
     }
 
     @GetMapping
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ISSUE.READ')")
     public ResponseEntity<ApiResponse<List<DprIssueRow>>> list(
             @PathVariable UUID projectId,
             @RequestParam(required = false) IssueStatus status,
@@ -74,6 +77,7 @@ public class DprIssueController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ISSUE.READ')")
     public ResponseEntity<ApiResponse<DprIssueRow>> get(
             @PathVariable UUID projectId,
             @PathVariable UUID id) {
@@ -81,6 +85,7 @@ public class DprIssueController {
     }
 
     @GetMapping("/{id}/history")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ISSUE.READ')")
     public ResponseEntity<ApiResponse<List<DprIssueStatusHistoryRow>>> history(
             @PathVariable UUID projectId,
             @PathVariable UUID id) {
@@ -88,7 +93,7 @@ public class DprIssueController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ISSUE.UPDATE')")
     public ResponseEntity<ApiResponse<DprIssueRow>> patch(
             @PathVariable UUID projectId,
             @PathVariable UUID id,
@@ -98,7 +103,7 @@ public class DprIssueController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'ISSUE.UPDATE')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID projectId,
             @PathVariable UUID id) {

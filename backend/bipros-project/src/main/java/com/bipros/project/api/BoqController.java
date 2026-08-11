@@ -54,6 +54,7 @@ public class BoqController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.READ')")
   public ResponseEntity<ApiResponse<BoqSummaryResponse>> list(@PathVariable UUID projectId) {
     log.info("GET /v1/projects/{}/boq", projectId);
     return ResponseEntity.ok(ApiResponse.ok(boqService.getProjectBoqSummary(projectId)));
@@ -64,6 +65,7 @@ public class BoqController {
    * the supervisor picks an activity. The match is heuristic (activity name vs item description).
    */
   @GetMapping("/by-activity")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.READ')")
   public ResponseEntity<ApiResponse<List<BoqItemResponse>>> listForActivity(
       @PathVariable UUID projectId,
       @RequestParam UUID activityId) {
@@ -72,6 +74,7 @@ public class BoqController {
   }
 
   @GetMapping("/{itemId}")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.READ')")
   public ResponseEntity<ApiResponse<BoqItemResponse>> get(
       @PathVariable UUID projectId,
       @PathVariable UUID itemId) {

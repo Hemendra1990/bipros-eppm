@@ -98,7 +98,29 @@ class DailyProgressReportApprovalServiceTest {
         subContractorRepository, attachmentRepository, voiceNoteRepository, issueRepository,
         attachmentStorage, voiceNoteStorage, projectRepository, ledgerService, auditService,
         eventPublisher, null, boqItemRepository,
-        projectAccessGuard, userPermissionPort, approvalHistoryRepository, null);
+        projectAccessGuard, userPermissionPort, approvalHistoryRepository, null,
+        com.bipros.common.security.ScopeKeys::all);
+
+    // get() resolves submitter/approver display names via a native query on the
+    // field-injected EntityManager — stub it to "no matching user" (empty list).
+    jakarta.persistence.EntityManager em =
+        org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+    jakarta.persistence.Query nameQuery =
+        org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+    lenient().when(em.createNativeQuery(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(nameQuery);
+    lenient().when(nameQuery.setParameter(org.mockito.ArgumentMatchers.anyString(), any()))
+        .thenReturn(nameQuery);
+    lenient().when(nameQuery.setMaxResults(org.mockito.ArgumentMatchers.anyInt()))
+        .thenReturn(nameQuery);
+    lenient().when(nameQuery.getResultList()).thenReturn(List.of());
+    try {
+      var emField = DailyProgressReportService.class.getDeclaredField("em");
+      emField.setAccessible(true);
+      emField.set(service, em);
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException(e);
+    }
 
     // Default: child repos return empty lists so get() doesn't NPE.
     lenient().when(manpowerRepository.findByDprIdOrderByTradeAsc(any())).thenReturn(List.of());

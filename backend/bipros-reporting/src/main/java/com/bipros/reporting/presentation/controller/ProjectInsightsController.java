@@ -272,6 +272,8 @@ public class ProjectInsightsController {
   // ─────────────── J4 — Cost variance per WBS ───────────────
 
   @GetMapping("/cost-variance")
+  // Access-Output row 4: overrides the class-level REPORT.READ — cost variance is cost data.
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")
   public ApiResponse<List<CostVarianceRow>> getCostVariance(@PathVariable UUID projectId) {
     // Build code → WbsNode map for wbsNodeId + level enrichment.
     List<WbsNode> nodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId);

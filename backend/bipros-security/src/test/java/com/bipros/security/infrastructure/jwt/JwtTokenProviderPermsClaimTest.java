@@ -98,7 +98,7 @@ class JwtTokenProviderPermsClaimTest {
     }
 
     @Test
-    void userWithProfileAndRole_permsUnionsBoth() {
+    void userWithProfileAndRole_profileWinsInPermsClaim() {
         UUID profileId = UUID.randomUUID();
         User user = fixture("sam", profileId, "SUPERVISOR");
         Profile profile = profileWithPermissions("REPORT.EXPORT");
@@ -108,12 +108,9 @@ class JwtTokenProviderPermsClaimTest {
         Claims claims = parse(token);
 
         Set<String> perms = split(claims.get("perms", String.class));
-        // SUPERVISOR contributes DPR.CREATE from the matrix; profile contributes REPORT.EXPORT.
-        assertThat(perms).contains("DPR.CREATE", "REPORT.EXPORT");
-        // Sanity: the union must contain at least everything SUPERVISOR ships with plus the extra.
-        Set<String> expectedMin = new HashSet<>(RolePermissionMatrix.permissionsFor("SUPERVISOR"));
-        expectedMin.add("REPORT.EXPORT");
-        assertThat(perms).containsAll(expectedMin);
+        // Profile-wins rule (2026-08-11): the claim carries the profile set only — the
+        // SUPERVISOR matrix defaults (DPR.CREATE etc.) no longer leak into the token.
+        assertThat(perms).containsExactly("REPORT.EXPORT");
     }
 
     @Test

@@ -283,6 +283,12 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
              or d.supervisorName = cast(:supervisorName as string))
         and (:status is null
              or coalesce(d.approvalStatus, com.bipros.project.domain.model.DprApprovalStatus.DRAFT) = :status)
+        and (:scoped = false
+             or d.supervisorUserId in :scopeUserIds
+             or d.submittedByUserId in :scopeUserIds
+             or d.assignedApproverUserId in :scopeUserIds
+             or (d.supervisorUserId is null and lower(trim(d.supervisorName)) in :scopeAliases)
+             or d.activityId in :scopeActivityIds)
       order by d.reportDate desc
       """)
   List<LocalDate> findDistinctReportDatesDesc(
@@ -294,6 +300,10 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       @Param("supervisorUserId") UUID supervisorUserId,
       @Param("supervisorName") String supervisorName,
       @Param("status") DprApprovalStatus status,
+      @Param("scoped") boolean scoped,
+      @Param("scopeUserIds") java.util.Collection<UUID> scopeUserIds,
+      @Param("scopeAliases") List<String> scopeAliases,
+      @Param("scopeActivityIds") List<UUID> scopeActivityIds,
       Pageable pageable);
 
   /**
@@ -311,6 +321,12 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
              or d.supervisorName = cast(:supervisorName as string))
         and (:status is null
              or coalesce(d.approvalStatus, com.bipros.project.domain.model.DprApprovalStatus.DRAFT) = :status)
+        and (:scoped = false
+             or d.supervisorUserId in :scopeUserIds
+             or d.submittedByUserId in :scopeUserIds
+             or d.assignedApproverUserId in :scopeUserIds
+             or (d.supervisorUserId is null and lower(trim(d.supervisorName)) in :scopeAliases)
+             or d.activityId in :scopeActivityIds)
       order by d.reportDate desc, d.id asc
       """)
   List<DailyProgressReport> findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(
@@ -319,7 +335,39 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       @Param("activity") String activity,
       @Param("supervisorUserId") UUID supervisorUserId,
       @Param("supervisorName") String supervisorName,
-      @Param("status") DprApprovalStatus status);
+      @Param("status") DprApprovalStatus status,
+      @Param("scoped") boolean scoped,
+      @Param("scopeUserIds") java.util.Collection<UUID> scopeUserIds,
+      @Param("scopeAliases") List<String> scopeAliases,
+      @Param("scopeActivityIds") List<UUID> scopeActivityIds);
+
+  /**
+   * Gate-3 OWN/TEAM-scope variant of the plain list (access-control round, 2026-08-11): rows the
+   * caller is involved in — filed by them, supervised by them (id or legacy free-text name
+   * alias), awaiting their approval, or on an activity they supervise. The predicate matches
+   * the scope clause of the two paged queries above — keep all three in lockstep.
+   */
+  @Query("""
+      select d from DailyProgressReport d
+      where d.projectId = :projectId
+        and (cast(:from as date) is null or d.reportDate >= :from)
+        and (cast(:to as date) is null or d.reportDate <= :to)
+        and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
+        and (d.supervisorUserId in :scopeUserIds
+             or d.submittedByUserId in :scopeUserIds
+             or d.assignedApproverUserId in :scopeUserIds
+             or (d.supervisorUserId is null and lower(trim(d.supervisorName)) in :scopeAliases)
+             or d.activityId in :scopeActivityIds)
+      order by d.reportDate asc, d.id asc
+      """)
+  List<DailyProgressReport> findScopedList(
+      @Param("projectId") UUID projectId,
+      @Param("from") LocalDate from,
+      @Param("to") LocalDate to,
+      @Param("activity") String activity,
+      @Param("scopeUserIds") java.util.Collection<UUID> scopeUserIds,
+      @Param("scopeAliases") List<String> scopeAliases,
+      @Param("scopeActivityIds") List<UUID> scopeActivityIds);
 
   /**
    * Refresh the denormalized {@code activityName} snapshot on every DPR for {@code activityId}.

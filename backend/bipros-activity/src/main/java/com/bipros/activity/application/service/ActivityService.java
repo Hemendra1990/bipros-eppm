@@ -66,6 +66,7 @@ public class ActivityService {
   private final ActivityStepRepository stepRepository;
   private final ApplicationEventPublisher eventPublisher;
   private final com.bipros.activity.application.percent.BoqProgressGuard boqProgressGuard;
+  private final com.bipros.common.security.ScopeResolverPort scopeResolver;
 
   /** Cross-schema lookup of {@code resource.work_activities.default_unit} — keeps this module
    *  free of a Maven dep on {@code bipros-resource}, mirroring the precedent in
@@ -422,6 +423,15 @@ public class ActivityService {
     Activity activity = activityRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Activity", id));
     projectAccess.requireRead(activity.getProjectId());
+    // Gate 3: an OWN-scoped caller cannot open a foreign activity by URL — invisible, not 403.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(activity.getProjectId());
+    if (scope.personScoped()
+        && (activity.getSupervisorUserId() == null
+            || !scope.memberIds().contains(activity.getSupervisorUserId()))
+        && scope.memberIds().stream()
+            .noneMatch(m -> activitySupervisorRepository.existsByActivityIdAndUserId(id, m))) {
+      throw new ResourceNotFoundException("Activity", id);
+    }
     // Read the STORED percentComplete/status — identical to the list path, so the detail page
     // and the list can never disagree. Writers (BOQ listener, duration/units listeners, nightly
     // job, Complete button) keep the stored value current.
@@ -436,7 +446,12 @@ public class ActivityService {
 
     projectAccess.requireRead(projectId);
 
-    Page<Activity> page = activityRepository.findByProjectIdOrderBySortOrder(projectId, pageable);
+    // Gate 3 (access-control round, 2026-08-11): OWN-scoped callers see only activities they
+    // supervise; PROJECT/ALL keep the project-wide list.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    Page<Activity> page = scope.personScoped()
+        ? activityRepository.findScopedByProjectId(projectId, scope.memberIds(), pageable)
+        : activityRepository.findByProjectIdOrderBySortOrder(projectId, pageable);
     Map<UUID, String> defaultUnitsByWorkActivity =
         bulkResolveWorkActivityDefaultUnits(page.getContent());
     Map<UUID, List<SupervisorEntry>> supervisorsByActivityId =

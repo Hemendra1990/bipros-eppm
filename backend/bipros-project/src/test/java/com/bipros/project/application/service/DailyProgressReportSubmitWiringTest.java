@@ -89,7 +89,8 @@ class DailyProgressReportSubmitWiringTest {
         subContractorRepository, attachmentRepository, voiceNoteRepository, issueRepository,
         attachmentStorage, voiceNoteStorage, projectRepository, ledgerService, auditService,
         eventPublisher, null, boqItemRepository,
-        projectAccessGuard, userPermissionPort, approvalHistoryRepository, projectTeamService);
+        projectAccessGuard, userPermissionPort, approvalHistoryRepository, projectTeamService,
+        com.bipros.common.security.ScopeKeys::all);
 
     // Default stubs — lenient so unused stubs don't trip UnnecessaryStubbingException.
     lenient().when(projectRepository.existsById(any())).thenReturn(true);
