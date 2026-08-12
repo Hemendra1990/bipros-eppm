@@ -32,6 +32,7 @@ public class AgentMailLog extends BaseEntity {
     public static final String CAT_ISSUE_ASSIGNMENT = "ISSUE_ASSIGNMENT";
     public static final String CAT_OUTSTANDING_ISSUES = "OUTSTANDING_ISSUES";
     public static final String CAT_MATERIAL_SHORT_SUPPLY = "MATERIAL_SHORT_SUPPLY";
+    public static final String CAT_MATERIAL_IDLE_STOCK = "MATERIAL_IDLE_STOCK";
     public static final String CH_EMAIL = "EMAIL";
     public static final String CH_IN_APP = "IN_APP";
     /** Recipient could not be reached on the channel (e.g. user has no email address). */

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { materialKpiApi } from "@/lib/api/materialKpiApi";
 import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
+import { useAuthStore } from "@/lib/state/store";
 
 interface Props {
   projectId: string;
@@ -27,6 +28,9 @@ function formatNumber(value: number | null | undefined, fractionDigits = 2): str
 
 export function MaterialKpiSection({ projectId, from, to, density = "compact" }: Props) {
   const { money, symbol } = useProjectCurrency();
+  // Quantities are operational and stay visible; the money tile follows the same COST.READ
+  // line as every other commercial figure on the Overview page.
+  const canReadCost = useAuthStore((s) => s.hasPermission)("COST.READ");
   const range = useMemo(() => (from && to ? { from, to } : null), [from, to]);
 
   const { data, isLoading, error } = useQuery({
@@ -71,7 +75,7 @@ export function MaterialKpiSection({ projectId, from, to, density = "compact" }:
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${canReadCost ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
         <div className="rounded-lg border border-border bg-surface/50 p-4">
           <div className="text-xs uppercase tracking-wide text-text-muted">Material Utilisation</div>
           <div
@@ -120,6 +124,7 @@ export function MaterialKpiSection({ projectId, from, to, density = "compact" }:
             target = 0
           </div>
         </div>
+        {canReadCost && (
         <div className="rounded-lg border border-border bg-surface/50 p-4">
           <div className="text-xs uppercase tracking-wide text-text-muted">Cost / Unit Finished</div>
           <div className="mt-1 text-2xl font-semibold text-text-primary">
@@ -134,6 +139,7 @@ export function MaterialKpiSection({ projectId, from, to, density = "compact" }:
             weighted across activities
           </div>
         </div>
+        )}
       </div>
 
       {density === "full" && kpis.byMaterial.length > 0 && (

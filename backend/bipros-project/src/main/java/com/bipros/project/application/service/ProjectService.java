@@ -48,6 +48,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProjectService {
 
+    /** Optional so plain unit tests and internal callers keep working unchanged; see canReadCost(). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.bipros.common.security.PermissionChecker permissionChecker;
+
     private final ProjectRepository projectRepository;
     private final EpsNodeRepository epsNodeRepository;
     private final WbsNodeRepository wbsNodeRepository;
@@ -472,6 +476,14 @@ public class ProjectService {
         log.info("Root WBS node created for project: {}", project.getId());
     }
 
+    /**
+     * True when the caller may see project money. Absent checker (plain unit tests, internal
+     * callers with no security context) means no redaction — the guard exists for HTTP callers.
+     */
+    private boolean canReadCost() {
+        return permissionChecker == null || permissionChecker.has("COST.READ");
+    }
+
     private ProjectResponse buildProjectResponse(Project project) {
         return new ProjectResponse(
             project.getId(),
@@ -509,8 +521,13 @@ public class ProjectService {
             project.getTertiaryBaselineId(),
             project.isRequiresRebaseline(),
             primaryContractSummary(project.getId()),
-            project.getOriginalBudget(),
-            project.getCurrentBudget(),
+            // Commercial figures are omitted for callers without COST.READ. The project record
+            // itself is readable by every site user (PROJECT.READ), so without this the budget
+            // travels to supervisors, storekeepers and quality staff on every project fetch —
+            // hiding the card in the UI alone would leave the number in the API response.
+            // The currency code stays: it is only a label, and money elsewhere needs it.
+            canReadCost() ? project.getOriginalBudget() : null,
+            canReadCost() ? project.getCurrentBudget() : null,
             project.getBudgetCurrency(),
             toLocalDateTime(project.getCreatedAt()),
             toLocalDateTime(project.getUpdatedAt()),

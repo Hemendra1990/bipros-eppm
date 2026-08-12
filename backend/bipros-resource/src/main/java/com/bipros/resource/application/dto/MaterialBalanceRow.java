@@ -13,6 +13,7 @@ import java.util.List;
  *
  * <p>Alert codes: {@code BELOW_MIN_STOCK}, {@code LOW_COVER}, {@code NEGATIVE_BALANCE}.
  */
+@SuppressWarnings("checkstyle:ParameterNumber")
 public record MaterialBalanceRow(
     String materialKey,
     String materialName,
@@ -28,5 +29,13 @@ public record MaterialBalanceRow(
     BigDecimal minStockLevel,
     BigDecimal avgDailyConsumption,
     BigDecimal daysOfCover,
+    /**
+     * How long material has been sitting with custodians, as of the report end date — the
+     * ageing view over {@link #siteBalance}. Measured from the earliest issue of this material,
+     * which is the honest approximation available: issues are not tracked lot by lot, so we
+     * cannot say which specific delivery is the one still unaccounted for. Null when nothing is
+     * outstanding.
+     */
+    Integer daysHeld,
     List<String> alerts
 ) {}

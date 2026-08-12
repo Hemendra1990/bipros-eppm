@@ -27,8 +27,34 @@ import java.util.Set;
  * so PM/QS can edit concerns without gaining DPR edit rights. Engineer deliberately has
  * COST.READ but NOT COST.EXPORT (Access-Output: Engineer may view but not download the
  * Activity Costing report). Material/store surfaces run on RESOURCE.* (verified against
- * the bipros-resource controllers' guards). Full ACTIVITY control (create/update/delete/
- * lock/unlock) for PM and Construction Manager: owner request 2026-08-12.
+ * the bipros-resource controllers' guards).
+ *
+ * <p>PROJECT.UPDATE for PM and Construction Manager (owner request 2026-08-12): the Overview
+ * page's project-level actions — complete / deactivate the project, set the data date, change
+ * the currency, edit the contract and corridor — are gated on it. Without it a PM cannot close
+ * their own project. Project Control and QS already held it.
+ *
+ * <p>Activity configuration for PM and Construction Manager (owner request 2026-08-12):
+ * full ACTIVITY control (create/update/delete/lock/unlock), ADMIN_MASTER.READ (the Work
+ * Activity master card, master library and calendar pickers read through it) and
+ * RESOURCE.UPDATE (the activity's manpower / equipment / material demand rows, sub-contractor
+ * lines and Recompute all run through RoleAssignmentController on RESOURCE.UPDATE).
+ *
+ * <p><b>Global masters stay with the system administrator</b> (owner decision 2026-08-12).
+ * Work activities, productivity norms, resource roles, skills, grades and sub-contractors carry
+ * no project id — they are shared by every project, so letting each project's staff create them
+ * fills the catalogue with near-duplicates ("Steel Fixer" twice) and, because each duplicate
+ * carries its own norms, with conflicting productivity numbers. ADMIN_MASTER.UPDATE was
+ * therefore withdrawn from PM / Construction Manager / Project Control; they keep
+ * ADMIN_MASTER.READ. Configuring an activity's productivity norm still works: those three
+ * endpoints on ProductivityNormController accept ACTIVITY.UPDATE, so a planner links the
+ * activity to an existing master and sets its norms, while creating the master itself stays
+ * with an admin. Note the project Material Catalogue is project-scoped and is unaffected.
+ *
+ * <p>Senior tier visibility (owner decision 2026-08-12): PM, Construction Manager and Project
+ * Control see every project tab — RISK.* (register write included), NCR.READ and CONTRACT.*.
+ * NCR write stays with the Quality Engineer: a non-conformance is only evidence while the
+ * people delivering the work cannot close it.
  */
 @Component
 @Slf4j
@@ -89,7 +115,9 @@ public class SaroojProfileSeeder {
                     "SCHEDULE.READ", "SCHEDULE.UPDATE", "BASELINE.READ",
                     "DPR.READ", "DPR.UPDATE", "DPR.EXPORT", "DPR.APPROVE",
                     "ISSUE.CREATE", "ISSUE.READ", "ISSUE.UPDATE",
-                    "ADMIN_MASTER.READ", "ADMIN_MASTER.UPDATE",
+                    "ADMIN_MASTER.READ",
+                    "RISK.READ", "RISK.CREATE", "RISK.UPDATE",
+                    "NCR.READ", "CONTRACT.READ", "CONTRACT.UPDATE",
                     "RESOURCE.CREATE", "RESOURCE.READ", "RESOURCE.UPDATE",
                     "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE", "DOCUMENT.DELETE",
                     "COST.READ", "COST.EXPORT", "EVM.READ", "EVM.EXPORT",
@@ -124,35 +152,43 @@ public class SaroojProfileSeeder {
                     "AI.READ")),
 
             new ClientProfile("SAROOJ_PM", "Sarooj — Project Manager",
-                    "Reader: views and downloads everywhere, posts almost nothing (per the client matrix).",
+                    "Views and downloads everywhere; also configures activities — plan, supervisors, "
+                            + "master link and productivity norms.",
                     "PROJECT_MANAGER", DataScope.PROJECT, Set.of(
-                    "PROJECT.READ", "PROJECT_MEMBER.READ",
+                    "PROJECT.READ", "PROJECT.UPDATE", "PROJECT_MEMBER.READ",
                     "ACTIVITY.CREATE", "ACTIVITY.READ", "ACTIVITY.UPDATE", "ACTIVITY.DELETE",
                     "ACTIVITY.LOCK", "ACTIVITY.UNLOCK",
                     "SCHEDULE.READ", "BASELINE.READ",
                     "DPR.READ", "DPR.EXPORT", "DPR.APPROVE",
                     "ISSUE.READ", "ISSUE.UPDATE",
-                    "RESOURCE.READ",
+                    "ADMIN_MASTER.READ",
+                    "RESOURCE.READ", "RESOURCE.UPDATE",
                     "DOCUMENT.READ",
                     "COST.READ", "COST.EXPORT", "EVM.READ", "EVM.EXPORT",
-                    "RISK.READ",
+                    "RISK.READ", "RISK.CREATE", "RISK.UPDATE",
+                    "NCR.READ", "CONTRACT.READ", "CONTRACT.UPDATE",
                     "REPORT.READ", "REPORT.EXPORT",
                     "DBS.READ", "DBS.EXPORT", "DBS.RECOMPUTE",
                     "AI.READ")),
 
             new ClientProfile("SAROOJ_CONSTRUCTION_MANAGER", "Sarooj — Construction Manager",
-                    "PM-level visibility plus field corrections: edits DPRs/activities, approves; "
-                            + "no recompute/EVM export/risk/AI (PM-only surfaces).",
+                    "PM-level visibility plus field corrections: edits DPRs/activities, configures "
+                            + "activity plans and norms, approves; no DBS recompute/EVM export/risk/AI "
+                            + "(PM-only surfaces).",
                     "CONSTRUCTION_MANAGER", DataScope.PROJECT, Set.of(
-                    "PROJECT.READ", "PROJECT_MEMBER.READ",
+                    "PROJECT.READ", "PROJECT.UPDATE", "PROJECT_MEMBER.READ",
                     "ACTIVITY.CREATE", "ACTIVITY.READ", "ACTIVITY.UPDATE", "ACTIVITY.DELETE",
                     "ACTIVITY.LOCK", "ACTIVITY.UNLOCK",
                     "SCHEDULE.READ", "BASELINE.READ",
                     "DPR.READ", "DPR.UPDATE", "DPR.EXPORT", "DPR.APPROVE",
                     "ISSUE.CREATE", "ISSUE.READ", "ISSUE.UPDATE",
-                    "RESOURCE.READ",
+                    "ADMIN_MASTER.READ",
+                    "RESOURCE.READ", "RESOURCE.UPDATE",
                     "DOCUMENT.CREATE", "DOCUMENT.READ",
                     "COST.READ", "COST.EXPORT", "EVM.READ",
+                    "RISK.READ", "RISK.CREATE", "RISK.UPDATE",
+                    "NCR.READ", "CONTRACT.READ", "CONTRACT.UPDATE",
+                    "AI.READ",
                     "REPORT.READ", "REPORT.EXPORT",
                     "DBS.READ", "DBS.EXPORT")),
 

@@ -8,6 +8,7 @@ import com.bipros.common.util.AuditService;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,8 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+// Must run before MaterialIdleAlertListener(50), which reads the percentage this listener writes.
+@Order(10)
 public class ActivityProgressFromBoqListener {
 
   private final ActivityRepository activityRepository;

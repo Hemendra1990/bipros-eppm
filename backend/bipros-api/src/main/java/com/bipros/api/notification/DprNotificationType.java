@@ -13,4 +13,5 @@ public final class DprNotificationType {
   public static final String ISSUE_ASSIGNED                = "ISSUE_ASSIGNED";
   public static final String OUTSTANDING_ISSUES_DIGEST     = "OUTSTANDING_ISSUES_DIGEST";
   public static final String MATERIAL_SHORT_SUPPLY         = "MATERIAL_SHORT_SUPPLY";
+  public static final String MATERIAL_IDLE_STOCK           = "MATERIAL_IDLE_STOCK";
 }

@@ -16,6 +16,13 @@ export const RESOURCE_RATE_UNITS = [
   "Shift",
   "Trip",
   "Bag",
+  // Material units from the client rate book (Requirements final - 01 Aug 2026, Rates
+  // sheet) not already covered by STANDARD_UNITS — kept verbatim (no synonym collapsing).
+  "Ltr",
+  "Nos",
+  "Lm",
+  "Rmt",
+  "m",
   ...STANDARD_UNITS,
 ] as const;
 

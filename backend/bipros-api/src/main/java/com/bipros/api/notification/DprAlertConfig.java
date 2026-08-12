@@ -3,6 +3,7 @@ package com.bipros.api.notification;
 import com.bipros.admin.domain.model.GlobalSetting;
 import com.bipros.admin.domain.repository.GlobalSettingRepository;
 import com.bipros.api.dprreport.DprReportConfig;
+import com.bipros.resource.application.service.MaterialIdleStockService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -131,5 +132,42 @@ public class DprAlertConfig {
                 return 3;
             }
         }).orElse(3);
+    }
+
+    // ---- idle-material alert (owner request 2026-08-12) ----
+
+    static final String KEY_IDLE_ENABLED = "material_idle_enabled";
+    static final String KEY_IDLE_PERCENT_TRIGGER = "material_idle_percent_trigger";
+    static final String KEY_IDLE_EXCESS_PCT = "material_idle_excess_pct";
+    static final String KEY_IDLE_VALUE_FLOOR = "material_idle_value_floor";
+    static final String KEY_IDLE_GRACE_DAYS = "material_idle_grace_days";
+    static final String KEY_IDLE_MAX_REMINDERS = "material_idle_max_reminders";
+
+    public boolean materialIdleEnabled() {
+        return value(KEY_IDLE_ENABLED).map(v -> v.trim().equalsIgnoreCase("true")).orElse(true);
+    }
+
+    /** Maximum reminder mails per outstanding item before it lives only in the weekly digest. */
+    public int materialIdleMaxReminders() {
+        return intValue(KEY_IDLE_MAX_REMINDERS, 3);
+    }
+
+    /** The four numbers the engine needs, read fresh so admin edits apply on the next event. */
+    public MaterialIdleStockService.IdleThresholds idleThresholds() {
+        return new MaterialIdleStockService.IdleThresholds(
+            intValue(KEY_IDLE_PERCENT_TRIGGER, 90),
+            intValue(KEY_IDLE_EXCESS_PCT, 20),
+            java.math.BigDecimal.valueOf(intValue(KEY_IDLE_VALUE_FLOOR, 100)),
+            intValue(KEY_IDLE_GRACE_DAYS, 7));
+    }
+
+    private int intValue(String key, int fallback) {
+        return value(key).map(v -> {
+            try {
+                return Math.max(0, Integer.parseInt(v.trim()));
+            } catch (NumberFormatException ex) {
+                return fallback;
+            }
+        }).orElse(fallback);
     }
 }

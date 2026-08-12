@@ -352,10 +352,13 @@ export default function MaterialConsumptionReportPage() {
         <div className="overflow-x-auto rounded-lg border border-border bg-surface">
           <div className="px-3 pt-3 text-sm font-medium">Material availability (store)</div>
           <div className="px-3 pb-2 text-xs text-text-muted">
-            Received / Issued / Consumed are figures for the filter window; Closing balance and Days
-            cover are as of the To date (closing = received − issued; the storekeeper log figure wins
-            where entered). Consumed = approved-DPR consumption — the storekeeper log&apos;s figure
-            stands in only for materials never captured through DPRs.
+            Received / Issued / Consumed are figures for the filter window; Closing balance, With
+            custodian and Days cover are as of the To date (closing = received − issued + usable
+            returns; the storekeeper log figure wins where entered). Consumed = approved-DPR
+            consumption — the storekeeper log&apos;s figure stands in only for materials never
+            captured through DPRs. With custodian = issued − returned − consumed: material out of
+            the store and not yet accounted for by anyone; Days held ages it from the earliest
+            issue of that material (30 days and over is highlighted).
           </div>
           <table className="min-w-full text-sm">
             <thead className="bg-surface-active text-xs uppercase tracking-wide text-text-muted">
@@ -366,6 +369,8 @@ export default function MaterialConsumptionReportPage() {
                 <Th align="right">Issued</Th>
                 <Th align="right">Consumed</Th>
                 <Th align="right">Closing balance</Th>
+                <Th align="right">With custodian</Th>
+                <Th align="right">Days held</Th>
                 <Th align="right">Days cover</Th>
                 <Th>Alerts</Th>
               </tr>
@@ -379,6 +384,16 @@ export default function MaterialConsumptionReportPage() {
                   <Td align="right">{fmtNum(r.issuedWindow)}</Td>
                   <Td align="right">{fmtNum(r.consumedWindow)}</Td>
                   <Td align="right">{fmtNum(r.storeClosing)}</Td>
+                  <Td align="right">{r.siteBalance === null ? "—" : fmtNum(r.siteBalance)}</Td>
+                  <Td align="right">
+                    {r.daysHeld === null ? (
+                      "—"
+                    ) : (
+                      <span className={r.daysHeld >= 30 ? "font-semibold text-amber-700" : undefined}>
+                        {r.daysHeld} d
+                      </span>
+                    )}
+                  </Td>
                   <Td align="right">{r.daysOfCover === null ? "—" : fmtNum(r.daysOfCover, 1)}</Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">

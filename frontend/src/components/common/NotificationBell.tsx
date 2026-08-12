@@ -215,7 +215,7 @@ export function NotificationBell() {
             ref={menuRef}
             role="menu"
             style={{ top: `${top}px`, right: `${right}px` }}
-            className="fixed z-50 w-[360px] overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
+            className="fixed z-[110] w-[360px] overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
           >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">

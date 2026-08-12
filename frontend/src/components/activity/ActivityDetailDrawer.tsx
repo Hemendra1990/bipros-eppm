@@ -286,6 +286,12 @@ function DrawerInner({
               projectId={projectId}
             />
 
+            <UnreconciledMaterial
+              projectId={projectId}
+              activityId={activityId}
+              percentComplete={activity.percentComplete}
+            />
+
             <section>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
@@ -493,5 +499,56 @@ function DrawerMasterPanel({
       {section}
       {dialog}
     </>
+  );
+}
+
+/**
+ * Closeout flag: a finished activity that still has store material outstanding against someone.
+ * Deliberately informational — it never blocks completing or locking the activity, matching how
+ * the DPR and BOQ anomaly flags already behave.
+ */
+function UnreconciledMaterial({
+  projectId,
+  activityId,
+  percentComplete,
+}: {
+  projectId: string;
+  activityId: string;
+  percentComplete: number | null | undefined;
+}) {
+  const finished = (percentComplete ?? 0) >= 100;
+  const { data } = useQuery({
+    queryKey: ["activity-material-idle", projectId, activityId],
+    queryFn: () => activityApi.materialIdle(projectId, activityId),
+    enabled: finished,
+  });
+  const rows = data?.data ?? [];
+  if (!finished || rows.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-warning/40 bg-warning/5 p-4">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
+        <AlertTriangle size={16} className="text-warning" />
+        Unreconciled material
+      </h3>
+      <p className="text-sm text-text-secondary">
+        This activity is complete, but material issued for it is still outstanding. Return the
+        usable balance to store so it can be re-issued, or record it as scrap.
+      </p>
+      <ul className="mt-2 space-y-1 text-sm text-text-primary">
+        {rows.map((r, i) => (
+          <li key={`${r.materialName}-${i}`}>
+            <span className="font-medium">{r.materialName}</span> — {r.excess.toLocaleString()}{" "}
+            {r.unit ?? ""} with {r.custodianName}
+          </li>
+        ))}
+      </ul>
+      <Link
+        href={`/projects/${projectId}/material-issues`}
+        className="mt-3 inline-block text-xs font-medium text-accent hover:underline"
+      >
+        Open Material Issues
+      </Link>
+    </section>
   );
 }

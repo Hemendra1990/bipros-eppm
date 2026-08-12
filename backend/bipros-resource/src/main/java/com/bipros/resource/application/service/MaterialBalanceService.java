@@ -11,11 +11,13 @@ import com.bipros.resource.domain.model.GoodsReceiptNote;
 import com.bipros.resource.domain.model.Material;
 import com.bipros.resource.domain.model.MaterialConsumptionLog;
 import com.bipros.resource.domain.model.MaterialIssue;
+import com.bipros.resource.domain.model.MaterialReturn;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.repository.GoodsReceiptNoteRepository;
 import com.bipros.resource.domain.repository.MaterialConsumptionLogRepository;
 import com.bipros.resource.domain.repository.MaterialIssueRepository;
 import com.bipros.resource.domain.repository.MaterialRepository;
+import com.bipros.resource.domain.repository.MaterialReturnRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +60,7 @@ public class MaterialBalanceService {
 
   private final GoodsReceiptNoteRepository grnRepository;
   private final MaterialIssueRepository issueRepository;
+  private final MaterialReturnRepository returnRepository;
   private final MaterialConsumptionLogRepository consumptionLogRepository;
   private final MaterialRepository materialRepository;
   private final ResourceRepository resourceRepository;
@@ -105,6 +108,7 @@ public class MaterialBalanceService {
 
     List<GoodsReceiptNote> grns = grnRepository.findByProjectIdOrderByReceivedDateDesc(projectId);
     List<MaterialIssue> issues = issueRepository.findByProjectId(projectId);
+    List<MaterialReturn> returns = returnRepository.findByProjectId(projectId);
     List<MaterialConsumptionLog> logs =
         consumptionLogRepository.findByProjectIdOrderByLogDateAscIdAsc(projectId);
     boolean tracked = !grns.isEmpty() || !issues.isEmpty() || !logs.isEmpty();
@@ -112,6 +116,7 @@ public class MaterialBalanceService {
     Set<UUID> refIds = new java.util.HashSet<>();
     for (GoodsReceiptNote g : grns) refIds.add(g.getMaterialId());
     for (MaterialIssue i : issues) refIds.add(i.getMaterialId());
+    for (MaterialReturn r : returns) refIds.add(r.getMaterialId());
     refIds.remove(null);
     Map<UUID, MaterialRef> refs = resolveMaterialRefs(projectId, refIds);
 
@@ -136,6 +141,21 @@ public class MaterialBalanceService {
       BigDecimal qty = nz(i.getQuantity());
       acc.issuedToDate = acc.issuedToDate.add(qty);
       if (inWindow(i.getIssueDate(), from, end)) acc.issuedWindow = acc.issuedWindow.add(qty);
+      if (acc.earliestIssueDate == null || i.getIssueDate().isBefore(acc.earliestIssueDate)) {
+        acc.earliestIssueDate = i.getIssueDate();
+      }
+    }
+
+    // Returns drain what the custodian is holding. They are NOT added back into received here:
+    // a USABLE return already writes a `received` row into the daily consumption log
+    // (MaterialReturnService), so it reaches receivedToDate — and the store closing balance —
+    // through the log loop below. Adding it again here would double-count the same movement.
+    for (MaterialReturn r : returns) {
+      if (afterEnd(r.getReturnDate(), end)) continue;
+      MaterialRef m = refs.get(r.getMaterialId());
+      Acc acc = acc(byKey, m != null ? m.name() : "(unknown material)",
+          m != null ? m.unit() : null);
+      acc.returnedToDate = acc.returnedToDate.add(nz(r.getQuantity()));
     }
 
     for (MaterialConsumptionLog l : logs) {
@@ -195,7 +215,9 @@ public class MaterialBalanceService {
             ? a.latestLogClosing
             : a.receivedToDate.subtract(a.issuedToDate);
         if (a.issuedToDate.signum() > 0) {
-          siteBalance = a.issuedToDate.subtract(consumedToDate);
+          // What is still physically with the custodians: issued out, less what came back
+          // (usable or scrap — both leave their hands), less what was consumed into the works.
+          siteBalance = a.issuedToDate.subtract(a.returnedToDate).subtract(consumedToDate);
         }
       }
 
@@ -216,13 +238,19 @@ public class MaterialBalanceService {
         alerts.add("LOW_COVER");
       }
 
+      // Ageing over the outstanding balance only — nothing with custodians, nothing to age.
+      Integer daysHeld = (siteBalance != null && siteBalance.signum() > 0
+          && a.earliestIssueDate != null)
+          ? (int) java.time.temporal.ChronoUnit.DAYS.between(a.earliestIssueDate, end)
+          : null;
+
       rows.add(new MaterialBalanceRow(
           e.getKey(), a.displayName, a.unit,
           scale3(a.receivedWindow), scale3(a.issuedWindow), scale3(consumedWindow),
           scale3(a.receivedToDate), scale3(a.issuedToDate), scale3(consumedToDate),
           storeClosing != null ? scale3(storeClosing) : null,
           siteBalance != null ? scale3(siteBalance) : null,
-          minStock, avgDaily, daysOfCover, alerts));
+          minStock, avgDaily, daysOfCover, daysHeld, alerts));
     }
     rows.sort(Comparator
         .comparing((MaterialBalanceRow r) -> r.alerts().isEmpty())
@@ -242,7 +270,8 @@ public class MaterialBalanceService {
   // ---------- helpers ----------
 
   record DprLine(LocalDate reportDate, String materialName, String unit, BigDecimal quantity,
-                 UUID supervisorUserId, String supervisorName, BigDecimal unitRate) {}
+                 UUID supervisorUserId, String supervisorName, BigDecimal unitRate,
+                 UUID activityId) {}
 
   /** All APPROVED DPR material lines up to {@code end}, with parent report date + supervisor. */
   List<DprLine> fetchApprovedDprLines(UUID projectId, LocalDate end) {
@@ -261,7 +290,7 @@ public class MaterialBalanceService {
       DailyProgressReport d = byId.get(m.getDprId());
       if (d == null) continue;
       lines.add(new DprLine(d.getReportDate(), m.getMaterialName(), m.getUnit(), m.getQuantity(),
-          d.getSupervisorUserId(), d.getSupervisorName(), m.getUnitRate()));
+          d.getSupervisorUserId(), d.getSupervisorName(), m.getUnitRate(), d.getActivityId()));
     }
     return lines;
   }
@@ -299,6 +328,7 @@ public class MaterialBalanceService {
     BigDecimal issuedWindow = BigDecimal.ZERO;
     BigDecimal receivedToDate = BigDecimal.ZERO;
     BigDecimal issuedToDate = BigDecimal.ZERO;
+    BigDecimal returnedToDate = BigDecimal.ZERO;
     BigDecimal logConsumedToDate = BigDecimal.ZERO;
     BigDecimal logConsumedWindow = BigDecimal.ZERO;
     BigDecimal logConsumedBurn = BigDecimal.ZERO;
@@ -307,5 +337,6 @@ public class MaterialBalanceService {
     BigDecimal dprConsumedBurn = BigDecimal.ZERO;
     LocalDate latestLogDate;
     BigDecimal latestLogClosing;
+    LocalDate earliestIssueDate;
   }
 }

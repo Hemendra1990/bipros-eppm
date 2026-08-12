@@ -36,10 +36,13 @@ public class MaterialShortageScheduler {
     private final MaterialShortageRunRepository runRepository;
     private final ScheduledJobLeaseRepository leaseRepository;
     private final MaterialShortageService shortageService;
+    private final MaterialIdleAlertService idleAlertService;
 
     @Scheduled(fixedDelayString = "${bipros.dpr.report.tick-ms:900000}")
     public void tick() {
-        if (!alertConfig.materialShortageEnabled()) return;
+        // The idle-material sweep rides the same weekly slot but has its own switch: it must keep
+        // reminding even on projects that never enabled the short-supply digest.
+        if (!alertConfig.materialShortageEnabled() && !alertConfig.materialIdleEnabled()) return;
         Instant now = Instant.now();
         ZonedDateTime nowZ = now.atZone(reportConfig.zone());
         if (!IssueDigestScheduler.isDue(nowZ, alertConfig.materialShortageDay(), alertConfig.materialShortageTime())) return;
@@ -48,6 +51,18 @@ public class MaterialShortageScheduler {
         LocalDate weekStart = nowZ.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         for (Project p : projectRepository.findAllByArchivedAtIsNull()) {
             if (p.getStatus() != ProjectStatus.ACTIVE) continue;
+            // Reminder pass for outstanding idle material. Deliberately outside the
+            // MaterialShortageRun guard below — that row is the short-supply digest's
+            // once-per-week idempotence, while this re-evaluates open alerts and closes any
+            // that have since been consumed, returned or scrapped.
+            if (alertConfig.materialIdleEnabled()) {
+                try {
+                    idleAlertService.runForProject(p.getId(), nowZ.toLocalDate());
+                } catch (Exception ex) {
+                    log.warn("[MaterialIdleSweep] project={} failed: {}", p.getId(), ex.getMessage(), ex);
+                }
+            }
+            if (!alertConfig.materialShortageEnabled()) continue;
             try {
                 if (runRepository.existsByProjectIdAndWeekStart(p.getId(), weekStart)) continue;
                 shortageService.runForProject(p, weekStart);

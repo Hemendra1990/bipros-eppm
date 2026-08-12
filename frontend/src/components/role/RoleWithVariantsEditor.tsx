@@ -16,10 +16,6 @@ import {
 import { getErrorMessage } from "@/lib/utils/error";
 import { rateUnitOptionsWithFallback } from "@/lib/constants/resourceUnits";
 
-const UNITS_MP = ["Day", "Hour"];
-const UNITS_EQ = ["Day", "Hour"];
-const UNITS_MAT = ["MT", "Bag", "Cum", "Litre", "Nos", "Kg"];
-
 /** Canonical 4 manpower categories used by the rate book. Anything else in the
  *  manpower_category_master table (e.g. role-like entries) is filtered out. */
 const ALLOWED_MANPOWER_CATEGORIES = new Set([
@@ -554,7 +550,10 @@ export function RoleWithVariantsEditor({ editingRoleId, onSaved, onCancel }: Pro
                         onChange={(e) => updateMT(r._rowKey, { unit: e.target.value })}
                         className="w-full rounded-md border border-hairline bg-ivory/40 px-2 py-1"
                       >
-                        {UNITS_MAT.map((u) => (
+                        {/* Same fallback helper as the manpower/equipment sections —
+                            covers the client rate book's material units (Ltr, Lm, Rmt,
+                            Sqm, LS, Trip, m…) and keeps legacy stored values visible. */}
+                        {rateUnitOptionsWithFallback(r.unit).map((u) => (
                           <option key={u} value={u}>
                             {u}
                           </option>

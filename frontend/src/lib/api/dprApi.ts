@@ -109,7 +109,45 @@ export interface DprAnalyticsResponse {
   expectedSupervisors: number;
 }
 
+/** One custodian × material line from the idle-stock engine (see MaterialIdleStockService). */
+export interface IdleStockRow {
+  custodianUserId: string;
+  custodianName: string;
+  materialKey: string;
+  materialName: string;
+  unit: string | null;
+  bucket: "ACTIVITY" | "PERSON";
+  activityId: string | null;
+  activityName: string | null;
+  percentComplete: number;
+  issuedToDate: number;
+  returnedToDate: number;
+  consumedToDate: number;
+  holding: number;
+  need: number;
+  graceExcluded: number;
+  excess: number;
+  rate: number | null;
+  excessValue: number | null;
+  alerting: boolean;
+  earliestIssueDate: string | null;
+  challanNumbers: string[];
+}
+
+export interface MaterialIdleCheckResponse {
+  /** True while the DPR is not yet approved — its own quantities are not counted yet. */
+  approvedOnly: boolean;
+  rows: IdleStockRow[];
+}
+
 export const dprApi = {
+  materialIdleCheck: (projectId: string, dprId: string) =>
+    apiClient
+      .get<ApiResponse<MaterialIdleCheckResponse>>(
+        `/v1/projects/${projectId}/dpr/${dprId}/material-idle-check`,
+      )
+      .then((r) => r.data),
+
   list: (projectId: string, filters: DprListFilters = {}) => {
     const params = new URLSearchParams();
     if (filters.from) params.set("from", filters.from);

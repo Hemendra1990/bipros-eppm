@@ -67,6 +67,19 @@ public class DprReportSettingsSeeder implements CommandLineRunner {
     inserted += upsertMaterial("material_shortage_days_cover", "3",
         "Days-of-cover threshold: materials whose closing stock covers fewer days of recent consumption count as short supply (min-stock level from the Material Catalogue wins when set)");
 
+    inserted += upsertMaterial("material_idle_enabled", "true",
+        "Email a supervisor and their reporting manager when an activity nears completion with store-issued material still outstanding against them");
+    inserted += upsertMaterial("material_idle_percent_trigger", "90",
+        "Activity % complete at which outstanding material is checked");
+    inserted += upsertMaterial("material_idle_excess_pct", "20",
+        "Excess must be at least this percentage of what was issued before an email is sent");
+    inserted += upsertMaterial("material_idle_value_floor", "100",
+        "Excess must also be worth at least this much (project currency) before an email is sent");
+    inserted += upsertMaterial("material_idle_grace_days", "7",
+        "Material issued within this many days is presumed in use and excluded from the excess");
+    inserted += upsertMaterial("material_idle_max_reminders", "3",
+        "Maximum reminder emails per outstanding item before it stays only in the weekly digest");
+
     if (inserted == 0) {
       log.info("[DprReportSettingsSeeder] all AI DPR Reports settings already present, skipping");
     } else {

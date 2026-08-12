@@ -116,7 +116,8 @@ export interface AgentMailRow {
     | "DPR_REJECTION"
     | "ISSUE_ASSIGNMENT"
     | "OUTSTANDING_ISSUES"
-    | "MATERIAL_SHORT_SUPPLY";
+    | "MATERIAL_SHORT_SUPPLY"
+    | "MATERIAL_IDLE_STOCK";
   channel: "EMAIL" | "IN_APP" | "WHATSAPP";
   recipientUserId?: string | null;
   recipientName?: string | null;

@@ -159,6 +159,7 @@ function DprDetailBody({ projectId, row }: { projectId: string; row: DprSummaryR
           setTab={setTab}
           money={money}
         />
+        <IdleMaterialPanel projectId={projectId} dprId={row.id} money={money} />
         {detail && (
           <div className="space-y-3 border-t border-hairline px-4 py-4">
             <MediaRow projectId={projectId} detail={detail} />
@@ -1143,6 +1144,64 @@ function VoiceNotePlayer({
           <span className="line-clamp-2">{note.caption}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Outstanding-material warning. Shown when the DPR's supervisor is still holding store-issued
+ * material that the remaining work no longer needs, so the approver sees it before approving.
+ * Deliberately non-blocking — approval is already an SLA-tracked bottleneck.
+ */
+function IdleMaterialPanel({
+  projectId,
+  dprId,
+  money,
+}: {
+  projectId: string;
+  dprId: string;
+  money: (n: number | null | undefined) => string;
+}) {
+  const { data } = useQuery({
+    queryKey: ["dpr-material-idle-check", projectId, dprId],
+    queryFn: () => dprApi.materialIdleCheck(projectId, dprId),
+    staleTime: 1000 * 60 * 5,
+  });
+  const rows = data?.data?.rows ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="border-t border-hairline px-4 py-4">
+      <div className="rounded-lg border border-amber-300 bg-amber-500/10 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-amber-900">Material still outstanding</span>
+          {data?.data?.approvedOnly && (
+            <span className="rounded bg-amber-200/70 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">
+              Excludes this DPR — not yet approved
+            </span>
+          )}
+        </div>
+        <div className="mt-2 space-y-2">
+          {rows.map((r) => (
+            <div key={`${r.materialKey}-${r.activityId ?? "pool"}`} className="text-xs text-amber-900">
+              <div className="font-medium">
+                {r.materialName}
+                {r.activityName ? ` · ${r.activityName}` : " · across open activities"} —{" "}
+                {r.percentComplete}% complete
+              </div>
+              <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                <span>Issued {r.issuedToDate.toLocaleString()} {r.unit ?? ""}</span>
+                <span>Consumed {r.consumedToDate.toLocaleString()} {r.unit ?? ""}</span>
+                <span>Still needs {r.need.toLocaleString()} {r.unit ?? ""}</span>
+                <span className="font-semibold">
+                  Outstanding {r.excess.toLocaleString()} {r.unit ?? ""}
+                  {r.excessValue != null ? ` (${money(r.excessValue)})` : ""}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

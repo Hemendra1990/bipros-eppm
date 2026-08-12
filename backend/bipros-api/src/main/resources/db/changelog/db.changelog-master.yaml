@@ -275,3 +275,9 @@ databaseChangeLog:
       file: db/changelog/141-boq-actual-cost.yaml
   - include:
       file: db/changelog/142-profile-data-scope.yaml
+  - include:
+      file: db/changelog/143-material-return.yaml
+  - include:
+      file: db/changelog/144-material-idle-alert.yaml
+  - include:
+      file: db/changelog/145-sarooj-senior-profile-permissions.yaml

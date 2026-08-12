@@ -98,6 +98,8 @@ export interface MaterialBalanceRow {
   minStockLevel: number | null;
   avgDailyConsumption: number | null;
   daysOfCover: number | null;
+  /** Ageing over siteBalance: days since the earliest issue, as of the To date. */
+  daysHeld: number | null;
   alerts: string[];
 }
 

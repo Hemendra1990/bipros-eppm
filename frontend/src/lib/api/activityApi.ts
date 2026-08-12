@@ -218,7 +218,23 @@ export interface SetSupervisorsRequest {
   supervisors: SupervisorEntry[];
 }
 
+/** Outstanding store material tagged to an activity — the closeout flag on the activity drawer. */
+export interface ActivityIdleMaterialRow {
+  materialName: string;
+  unit: string | null;
+  excess: number;
+  excessValue: number | null;
+  custodianName: string;
+}
+
 export const activityApi = {
+  materialIdle: (projectId: string, activityId: string) =>
+    apiClient
+      .get<ApiResponse<ActivityIdleMaterialRow[]>>(
+        `/v1/projects/${projectId}/activities/${activityId}/material-idle`,
+      )
+      .then((r) => r.data),
+
   listActivities: (projectId: string, page = 0, size = 20) =>
     apiClient
       .get<ApiResponse<PagedResponse<ActivityResponse>>>(`/v1/projects/${projectId}/activities`, {

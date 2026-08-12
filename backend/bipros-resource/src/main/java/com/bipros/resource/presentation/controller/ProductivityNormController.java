@@ -28,6 +28,10 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+// Norms are configured from the activity screen by whoever runs the work (ACTIVITY.UPDATE),
+// while the global work-activity catalogue they hang off stays with master-data admins
+// (ADMIN_MASTER.UPDATE) so it cannot fill with near-duplicates from different projects.
+// Deleting a norm remains master-data admin only. Owner decision 2026-08-12.
 @RequestMapping("/v1/productivity-norms")
 @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.READ')")
 @RequiredArgsConstructor
@@ -38,7 +42,8 @@ public class ProductivityNormController {
   private final ProductivityNormLookupService lookupService;
 
   @PostMapping
-  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE') "
+      + "or hasPermission(null, 'ACTIVITY.UPDATE')")
   public ResponseEntity<ApiResponse<ProductivityNormResponse>> create(
       @Valid @RequestBody CreateProductivityNormRequest request) {
     log.info("POST /v1/productivity-norms - type={}, workActivityId={}",
@@ -47,7 +52,8 @@ public class ProductivityNormController {
   }
 
   @PostMapping("/bulk")
-  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE') "
+      + "or hasPermission(null, 'ACTIVITY.UPDATE')")
   public ResponseEntity<ApiResponse<List<ProductivityNormResponse>>> createBulk(
       @Valid @RequestBody List<CreateProductivityNormRequest> requests) {
     log.info("POST /v1/productivity-norms/bulk - count={}", requests.size());
@@ -95,7 +101,8 @@ public class ProductivityNormController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE')")
+  @PreAuthorize("hasPermission(null, 'ADMIN_MASTER.UPDATE') "
+      + "or hasPermission(null, 'ACTIVITY.UPDATE')")
   public ResponseEntity<ApiResponse<ProductivityNormResponse>> update(
       @PathVariable UUID id,
       @Valid @RequestBody CreateProductivityNormRequest request) {

@@ -1,0 +1,66 @@
+databaseChangeLog:
+  - changeSet:
+      id: 145-sarooj-senior-profile-permissions
+      author: claude
+      comment: >
+        Brings SAROOJ_PM / SAROOJ_CONSTRUCTION_MANAGER / SAROOJ_PROJECT_CONTROL up to the
+        permission sets in SaroojProfileSeeder (owner decisions 2026-08-12). Needed because
+        that seeder is insert-only — it skips a profile whose code already exists, so a
+        server that was deployed before these decisions would never pick the changes up.
+        On a fresh database every statement matches zero rows and the seeder creates the
+        profiles correctly instead, so this is safe to run either way.
+      changes:
+        # --- grants -------------------------------------------------------------------
+        # Project-level actions on the Overview page (complete / deactivate, data date,
+        # currency, contract, corridor) plus full activity configuration and the demand rows.
+        - sql:
+            splitStatements: false
+            sql: |
+              INSERT INTO public.profile_permissions (profile_id, permission_code)
+              SELECT p.id, v.code
+                FROM public.profiles p
+                CROSS JOIN (VALUES
+                    ('PROJECT.UPDATE'),
+                    ('ACTIVITY.CREATE'), ('ACTIVITY.READ'), ('ACTIVITY.UPDATE'),
+                    ('ACTIVITY.DELETE'), ('ACTIVITY.LOCK'), ('ACTIVITY.UNLOCK'),
+                    ('ADMIN_MASTER.READ'),
+                    ('RESOURCE.READ'), ('RESOURCE.UPDATE'),
+                    ('RISK.READ'), ('RISK.CREATE'), ('RISK.UPDATE'),
+                    ('NCR.READ'),
+                    ('CONTRACT.READ'), ('CONTRACT.UPDATE'),
+                    ('AI.READ')
+                  ) AS v(code)
+               WHERE p.code IN ('SAROOJ_PM',
+                                'SAROOJ_CONSTRUCTION_MANAGER',
+                                'SAROOJ_PROJECT_CONTROL')
+              ON CONFLICT DO NOTHING;
+        # --- withdrawal ---------------------------------------------------------------
+        # Work activities, productivity norms, resource roles, skills, grades and
+        # sub-contractors carry no project id: they are global masters shared by every
+        # project. Letting each project's staff create them fills the catalogue with
+        # near-duplicates, and each duplicate carries its own norms and therefore its own
+        # productivity numbers. Creating them stays with the system administrator; these
+        # profiles keep ADMIN_MASTER.READ so every picker and master card still works, and
+        # ProductivityNormController accepts ACTIVITY.UPDATE so an activity's norms remain
+        # configurable by the people running the work.
+        - sql:
+            splitStatements: false
+            sql: |
+              DELETE FROM public.profile_permissions pp
+                USING public.profiles p
+               WHERE pp.profile_id = p.id
+                 AND pp.permission_code = 'ADMIN_MASTER.UPDATE'
+                 AND p.code IN ('SAROOJ_PM',
+                                'SAROOJ_CONSTRUCTION_MANAGER',
+                                'SAROOJ_PROJECT_CONTROL');
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              INSERT INTO public.profile_permissions (profile_id, permission_code)
+              SELECT p.id, 'ADMIN_MASTER.UPDATE'
+                FROM public.profiles p
+               WHERE p.code IN ('SAROOJ_PM',
+                                'SAROOJ_CONSTRUCTION_MANAGER',
+                                'SAROOJ_PROJECT_CONTROL')
+              ON CONFLICT DO NOTHING;

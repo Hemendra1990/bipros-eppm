@@ -4,6 +4,7 @@ import { TrendingUp, Wallet, CheckCircle2, AlertOctagon } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { KpiTile } from "@/components/common/KpiTile";
 import { formatDelta } from "./dashboardDerivations";
+import { useAuthStore } from "@/lib/state/store";
 import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
 import { formatMoney } from "@/lib/currency/format";
 import type {
@@ -43,6 +44,12 @@ export function KpiRow({
   const physicalPct = snapshot?.physicalPct ?? 0;
   const acCrores = snapshot?.acCrores ?? 0;
 
+  // Money is for cost-cleared staff only. Site roles (supervisor, storekeeper, quality,
+  // design) see progress but never spend. The tile is dropped rather than blanked so the
+  // row reads as a complete operational summary instead of a locked cell.
+  const canReadCost = useAuthStore((s) => s.hasPermission)("COST.READ");
+  const columns = canReadCost ? "xl:grid-cols-4" : "xl:grid-cols-3";
+
   // parseISO keeps a date-only string (e.g. "2026-05-31") in local time; `new Date(...)` would
   // treat it as UTC midnight and render the prior day in negative-UTC-offset timezones.
   const asOfHint = snapshot?.dataDate
@@ -50,7 +57,7 @@ export function KpiRow({
     : undefined;
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${columns}`}>
       <KpiTile
         label="Overall Progress"
         value={`${Math.min(physicalPct, 100).toFixed(0)}%`}
@@ -63,16 +70,18 @@ export function KpiRow({
         })}
         hint={asOfHint}
       />
-      <KpiTile
-        label="Budget Utilised"
-        value={moneyCompact(acCrores * 1e7)}
-        tone="accent"
-        icon={<Wallet size={14} />}
-        delta={formatDelta(acCrores * (isIndian ? 1 : 10), deltas?.acCroresDelta ?? null, {
-          unit: isIndian ? " Cr" : " M",
-          digits: 1,
-        })}
-      />
+      {canReadCost && (
+        <KpiTile
+          label="Budget Utilised"
+          value={moneyCompact(acCrores * 1e7)}
+          tone="accent"
+          icon={<Wallet size={14} />}
+          delta={formatDelta(acCrores * (isIndian ? 1 : 10), deltas?.acCroresDelta ?? null, {
+            unit: isIndian ? " Cr" : " M",
+            digits: 1,
+          })}
+        />
+      )}
       <KpiTile
         label="Tasks Completed"
         value={`${tasks.done}`}

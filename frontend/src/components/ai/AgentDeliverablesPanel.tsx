@@ -26,6 +26,7 @@ const CATEGORY_ORDER: Array<{ key: AgentMailRow["category"]; label: string }> = 
   { key: "ISSUE_ASSIGNMENT", label: "Issue assignments" },
   { key: "OUTSTANDING_ISSUES", label: "Outstanding-issues digest" },
   { key: "MATERIAL_SHORT_SUPPLY", label: "Material short-supply digest" },
+  { key: "MATERIAL_IDLE_STOCK", label: "Idle-material alerts" },
 ];
 
 export function AgentDeliverablesPanel({ projectId }: { projectId: string }) {

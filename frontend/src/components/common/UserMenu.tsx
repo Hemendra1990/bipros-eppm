@@ -88,7 +88,9 @@ export function UserMenu() {
 
       {/* Portalled to <body> (same pattern as NotificationBell): the sticky header wrapper is a
           z-30 stacking context, so a dropdown rendered inside it sits BELOW any page element with
-          a higher z-index (sticky tab bars, the AI launcher) and shows up clipped/half-hidden. */}
+          a higher z-index (sticky tab bars, the AI launcher) and shows up clipped/half-hidden.
+          z-[110] clears the AppSwitcherOverlay ("Where to next?") backdrop/panel at z-[100]/[101],
+          which starts at top-16 and would otherwise paint straight over this menu. */}
       {open &&
         hydrated &&
         createPortal(
@@ -101,7 +103,7 @@ export function UserMenu() {
           ref={menuRef}
           role="menu"
           style={{ top: `${top}px`, right: `${right}px` }}
-          className="fixed z-50 w-64 overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
+          className="fixed z-[110] w-64 overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
         >
           <div className="flex items-center gap-3 border-b border-hairline px-4 py-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-hairline bg-ivory text-[11px] font-semibold uppercase tracking-[0.06em] text-charcoal">

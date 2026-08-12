@@ -52,7 +52,7 @@ public class DprReportHtmlRenderer {
 
         // Header band
         b.append("<tr><td style='background:").append(INK).append(";padding:20px 26px;border-bottom:4px solid ").append(GOLD).append("'>")
-         .append("<div style='font-size:11px;letter-spacing:2px;color:").append(GOLD).append(";text-transform:uppercase'>Bipros").append(DOT).append("Daily Project Report</div>")
+         .append("<div style='font-size:11px;letter-spacing:2px;color:").append(GOLD).append(";text-transform:uppercase'>Sarooj").append(DOT).append("Daily Project Report</div>")
          .append("<div style='font-size:20px;font-weight:bold;color:#ffffff;margin-top:5px'>").append(esc(m.projectName)).append("</div>")
          .append("<div style='font-size:12px;color:#B9C0C6;margin-top:3px'>Window: ").append(esc(windowLabel))
          .append(DOT).append("all money in ").append(esc(cur)).append("</div>")
@@ -495,7 +495,7 @@ public class DprReportHtmlRenderer {
         b.append("<div style='margin-top:18px;padding-top:10px;border-top:1px solid ").append(LINE)
          .append(";font-size:11px;color:").append(MUTED)
          .append("'>&#10004; Every figure sourced from the canonical engines (DPR / Capacity / DBS / BOQ / Cost) and cross-checked before sending")
-         .append(DOT).append("Bipros EPPM</div>");
+         .append(DOT).append("Sarooj EPPM</div>");
 
         b.append("</td></tr></table>");
         return b.toString();

@@ -159,7 +159,7 @@ public class EmailChannel implements NotificationChannel {
             sb.append("<p style=\"color:#888;font-size:12px;margin:18px 0 0\">Basis: ")
                     .append(safe(n.confidenceBasis())).append("</p>");
         }
-        sb.append(button(url, "Open in Bipros"));
+        sb.append(button(url, "Open in Sarooj"));
         sb.append("</div></div>");
         return sb.toString();
     }
@@ -194,7 +194,7 @@ public class EmailChannel implements NotificationChannel {
         return "<div style=\"background:linear-gradient(135deg," + GOLD + "," + GOLD_DARK + ");"
                 + "padding:18px 24px;color:#fff\">"
                 + "<div style=\"font-size:11px;letter-spacing:1.5px;text-transform:uppercase;opacity:.85\">"
-                + "Bipros AI" + (isBlank(tag) ? "" : " &middot; " + safe(tag)) + "</div>"
+                + "Sarooj AI" + (isBlank(tag) ? "" : " &middot; " + safe(tag)) + "</div>"
                 + "<div style=\"font-size:18px;font-weight:bold;margin-top:4px\">" + title + "</div></div>";
     }
 

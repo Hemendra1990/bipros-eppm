@@ -426,6 +426,8 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
     : (rawKpiDefs as unknown as { content?: KpiDefinition[] })?.content ?? [];
   const kpiDefMap = new Map(kpiDefs.map((d: KpiDefinition) => [d.id, d]));
 
+  const permits = useAuthStore((s) => s.hasPermission);
+
   const statusTransitions: Record<string, { label: string; value: string }[]> = {
     PLANNED: [{ label: "Activate Project", value: "ACTIVE" }],
     ACTIVE: [
@@ -436,7 +438,12 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
     COMPLETED: [],
   };
 
-  const availableTransitions = statusTransitions[project.status] ?? [];
+  // Project-level actions (status change, data date, budget, currency, contract, corridor) are
+  // for staff who may edit the project. Site roles read the page but change nothing on it —
+  // previously every one of these buttons was offered to a supervisor and failed with a 403.
+  const canEditProject = permits("PROJECT.UPDATE");
+  const canReadCost = permits("COST.READ");
+  const availableTransitions = canEditProject ? statusTransitions[project.status] ?? [] : [];
 
   const handleStatusTransition = async (newStatus: string) => {
     setIsTransitioning(true);
@@ -525,18 +532,18 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
             {getPriorityInfo(project.priority).label}
           </p>
         </div>
-        <DataDateCard project={project} />
+        <DataDateCard project={project} canEdit={canEditProject} />
       </div>
 
       <ProjectTeamCard projectId={projectId} />
 
-      <BudgetCard projectId={projectId} />
+      {canReadCost && <BudgetCard projectId={projectId} />}
 
-      <CurrencyCard project={project} projectId={projectId} />
+      <CurrencyCard project={project} projectId={projectId} canEdit={canEditProject} />
 
       <LocationCard project={project} projectId={projectId} />
 
-      <ProjectDetailsSection project={project} projectId={projectId} />
+      <ProjectDetailsSection project={project} projectId={projectId} canEdit={canEditProject} />
 
       <MaterialAvailabilityCard projectId={projectId} />
 
@@ -606,7 +613,7 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
   );
 }
 
-function DataDateCard({ project }: { project: ProjectResponse }) {
+function DataDateCard({ project, canEdit }: { project: ProjectResponse; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [dateValue, setDateValue] = useState(project.dataDate ?? "");
@@ -654,19 +661,21 @@ function DataDateCard({ project }: { project: ProjectResponse }) {
       ) : (
         <div className="mt-2 flex items-center gap-3">
           <p className="text-lg text-text-primary">{project.dataDate ? formatDate(project.dataDate) : "Not set"}</p>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
-          >
-            Set
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Set
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function CurrencyCard({ project, projectId }: { project: ProjectResponse; projectId: string }) {
+function CurrencyCard({ project, projectId, canEdit }: { project: ProjectResponse; projectId: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -734,7 +743,7 @@ function CurrencyCard({ project, projectId }: { project: ProjectResponse; projec
               Used for every money value in this project. Changing it relabels amounts — stored values are not converted.
             </p>
           </div>
-          {!editing && (
+          {!editing && canEdit && (
             <button
               type="button"
               onClick={() => { setSelected(currentCode); setEditing(true); }}
@@ -915,7 +924,7 @@ function BudgetCard({ projectId }: { projectId: string }) {
   );
 }
 
-function ProjectDetailsSection({ project }: { project: ProjectResponse; projectId: string }) {
+function ProjectDetailsSection({ project, canEdit }: { project: ProjectResponse; projectId: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const { symbol: currencySymbol, money } = useProjectCurrency();
   const [isEditing, setIsEditing] = useState(false);
@@ -1142,12 +1151,14 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
           <h3 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
             Project Category & Corridor
           </h3>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
-          >
-            Edit
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Edit
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -1191,12 +1202,14 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
           <h3 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
             Primary Contract
           </h3>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
-          >
-            Edit
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Edit
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

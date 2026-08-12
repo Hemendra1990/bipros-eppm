@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: 143-create-material-return
+      author: claude
+      comment: Material returned to store against an issue slip (USABLE re-enters stock, SCRAP is written off) — the reversal document the ledger lacked
+      changes:
+        - createTable:
+            schemaName: resource
+            tableName: material_return
+            columns:
+              - column: {name: id, type: UUID, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: project_id, type: UUID, constraints: {nullable: false}}
+              - column: {name: material_issue_id, type: UUID, constraints: {nullable: false}}
+              - column: {name: material_id, type: UUID, constraints: {nullable: false}}
+              - column: {name: return_date, type: DATE, constraints: {nullable: false}}
+              - column: {name: quantity, type: "DECIMAL(18,3)", constraints: {nullable: false}}
+              - column: {name: return_condition, type: VARCHAR(12), constraints: {nullable: false}}
+              - column: {name: returned_by_user_id, type: UUID}
+              - column: {name: received_by_user_id, type: UUID}
+              - column: {name: remarks, type: VARCHAR(500)}
+              - column: {name: created_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: VARCHAR(255)}
+              - column: {name: updated_by, type: VARCHAR(255)}
+              - column: {name: version, type: BIGINT}
+        - createIndex:
+            schemaName: resource
+            tableName: material_return
+            indexName: idx_material_return_project
+            columns:
+              - column: {name: project_id}
+        - createIndex:
+            schemaName: resource
+            tableName: material_return
+            indexName: idx_material_return_issue
+            columns:
+              - column: {name: material_issue_id}
+        - createIndex:
+            schemaName: resource
+            tableName: material_return
+            indexName: idx_material_return_date
+            columns:
+              - column: {name: return_date}
+      rollback:
+        - dropTable: {schemaName: resource, tableName: material_return}
