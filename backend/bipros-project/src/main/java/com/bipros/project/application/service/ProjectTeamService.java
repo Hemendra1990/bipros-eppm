@@ -9,14 +9,19 @@ import com.bipros.project.domain.model.ProjectRole;
 import com.bipros.project.domain.model.ProjectTeamMember;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.ProjectTeamRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +42,9 @@ public class ProjectTeamService {
     private final ProjectTeamRepository teamRepository;
     private final ProjectRepository projectRepository;
     private final UserPermissionPort userPermissionPort;
+
+    @PersistenceContext
+    private EntityManager em;
 
     public static final String DPR_APPROVE = "DPR.APPROVE";
 
@@ -67,7 +75,7 @@ public class ProjectTeamService {
 
         ProjectTeamMember saved = teamRepository.save(member);
         log.info("Created project_team member project={} user={} role={}", projectId, req.userId(), role);
-        return toResponse(saved);
+        return toResponse(saved, lookupUsers(memberUserIds(List.of(saved))));
     }
 
     public ProjectTeamMemberResponse update(UUID projectId, UUID memberId, ProjectTeamMemberRequest req) {
@@ -86,7 +94,7 @@ public class ProjectTeamService {
         member.setActiveTo(req.activeTo());
 
         ProjectTeamMember saved = teamRepository.save(member);
-        return toResponse(saved);
+        return toResponse(saved, lookupUsers(memberUserIds(List.of(saved))));
     }
 
     public void delete(UUID projectId, UUID memberId) {
@@ -99,17 +107,21 @@ public class ProjectTeamService {
     @Transactional(readOnly = true)
     public List<ProjectTeamMemberResponse> listForProject(UUID projectId) {
         ensureProjectExists(projectId);
-        return teamRepository.findByProjectId(projectId).stream()
+        List<ProjectTeamMember> rows = teamRepository.findByProjectId(projectId);
+        Map<UUID, UserRow> users = lookupUsers(memberUserIds(rows));
+        return rows.stream()
             .sorted(Comparator.comparing(ProjectTeamMember::getRole))
-            .map(this::toResponse)
+            .map(m -> toResponse(m, users))
             .toList();
     }
 
     @Transactional(readOnly = true)
     public List<ProjectTeamMemberResponse> listByRole(UUID projectId, ProjectRole role) {
         ensureProjectExists(projectId);
-        return teamRepository.findByProjectIdAndRole(projectId, role).stream()
-            .map(this::toResponse)
+        List<ProjectTeamMember> rows = teamRepository.findByProjectIdAndRole(projectId, role);
+        Map<UUID, UserRow> users = lookupUsers(memberUserIds(rows));
+        return rows.stream()
+            .map(m -> toResponse(m, users))
             .toList();
     }
 
@@ -241,7 +253,44 @@ public class ProjectTeamService {
         }
     }
 
-    private ProjectTeamMemberResponse toResponse(ProjectTeamMember m) {
+    /** Name/email columns projected from {@code public.users} for the Team tab. */
+    private record UserRow(String username, String firstName, String lastName, String email) {
+        String displayName() {
+            String full = ((firstName == null ? "" : firstName) + " "
+                + (lastName == null ? "" : lastName)).trim();
+            return full.isEmpty() ? username : full;
+        }
+    }
+
+    /** All user ids referenced by the rows — members plus their reports-to targets. */
+    private static Set<UUID> memberUserIds(Collection<ProjectTeamMember> rows) {
+        Set<UUID> ids = new HashSet<>();
+        for (ProjectTeamMember m : rows) {
+            if (m.getUserId() != null) ids.add(m.getUserId());
+            if (m.getReportsToUserId() != null) ids.add(m.getReportsToUserId());
+        }
+        return ids;
+    }
+
+    /** Batch display-name lookup. Null-safe on {@code em} (plain unit tests) — enrichment
+     *  is best-effort, the ids in the response stay authoritative. */
+    private Map<UUID, UserRow> lookupUsers(Set<UUID> ids) {
+        if (em == null || ids.isEmpty()) return Map.of();
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery(
+                "SELECT id, username, first_name, last_name, email FROM public.users WHERE id IN (:ids)")
+            .setParameter("ids", ids)
+            .getResultList();
+        Map<UUID, UserRow> map = new HashMap<>();
+        for (Object[] r : rows) {
+            map.put((UUID) r[0], new UserRow((String) r[1], (String) r[2], (String) r[3], (String) r[4]));
+        }
+        return map;
+    }
+
+    private ProjectTeamMemberResponse toResponse(ProjectTeamMember m, Map<UUID, UserRow> users) {
+        UserRow user = users.get(m.getUserId());
+        UserRow boss = m.getReportsToUserId() != null ? users.get(m.getReportsToUserId()) : null;
         return new ProjectTeamMemberResponse(
             m.getId(),
             m.getProjectId(),
@@ -251,7 +300,13 @@ public class ProjectTeamService {
             m.getActiveFrom(),
             m.getActiveTo(),
             m.getCreatedAt(),
-            m.getUpdatedAt()
+            m.getUpdatedAt(),
+            user != null ? user.username() : null,
+            user != null ? user.firstName() : null,
+            user != null ? user.lastName() : null,
+            user != null ? user.email() : null,
+            boss != null ? boss.username() : null,
+            boss != null ? boss.displayName() : null
         );
     }
 }

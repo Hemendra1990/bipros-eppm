@@ -27,7 +27,8 @@ import java.util.Set;
  * so PM/QS can edit concerns without gaining DPR edit rights. Engineer deliberately has
  * COST.READ but NOT COST.EXPORT (Access-Output: Engineer may view but not download the
  * Activity Costing report). Material/store surfaces run on RESOURCE.* (verified against
- * the bipros-resource controllers' guards).
+ * the bipros-resource controllers' guards). Full ACTIVITY control (create/update/delete/
+ * lock/unlock) for PM and Construction Manager: owner request 2026-08-12.
  */
 @Component
 @Slf4j
@@ -125,7 +126,10 @@ public class SaroojProfileSeeder {
             new ClientProfile("SAROOJ_PM", "Sarooj — Project Manager",
                     "Reader: views and downloads everywhere, posts almost nothing (per the client matrix).",
                     "PROJECT_MANAGER", DataScope.PROJECT, Set.of(
-                    "PROJECT.READ", "PROJECT_MEMBER.READ", "ACTIVITY.READ", "SCHEDULE.READ", "BASELINE.READ",
+                    "PROJECT.READ", "PROJECT_MEMBER.READ",
+                    "ACTIVITY.CREATE", "ACTIVITY.READ", "ACTIVITY.UPDATE", "ACTIVITY.DELETE",
+                    "ACTIVITY.LOCK", "ACTIVITY.UNLOCK",
+                    "SCHEDULE.READ", "BASELINE.READ",
                     "DPR.READ", "DPR.EXPORT", "DPR.APPROVE",
                     "ISSUE.READ", "ISSUE.UPDATE",
                     "RESOURCE.READ",
@@ -140,7 +144,10 @@ public class SaroojProfileSeeder {
                     "PM-level visibility plus field corrections: edits DPRs/activities, approves; "
                             + "no recompute/EVM export/risk/AI (PM-only surfaces).",
                     "CONSTRUCTION_MANAGER", DataScope.PROJECT, Set.of(
-                    "PROJECT.READ", "PROJECT_MEMBER.READ", "ACTIVITY.READ", "ACTIVITY.UPDATE", "SCHEDULE.READ", "BASELINE.READ",
+                    "PROJECT.READ", "PROJECT_MEMBER.READ",
+                    "ACTIVITY.CREATE", "ACTIVITY.READ", "ACTIVITY.UPDATE", "ACTIVITY.DELETE",
+                    "ACTIVITY.LOCK", "ACTIVITY.UNLOCK",
+                    "SCHEDULE.READ", "BASELINE.READ",
                     "DPR.READ", "DPR.UPDATE", "DPR.EXPORT", "DPR.APPROVE",
                     "ISSUE.CREATE", "ISSUE.READ", "ISSUE.UPDATE",
                     "RESOURCE.READ",

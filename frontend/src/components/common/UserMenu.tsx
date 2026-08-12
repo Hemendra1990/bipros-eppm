@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { LogOut, UserCircle2 } from "lucide-react";
 import { useAuthStore } from "@/lib/state/store";
@@ -16,6 +17,7 @@ export function UserMenu() {
   const [open, setOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => setHydrated(true), []);
 
@@ -23,7 +25,9 @@ export function UserMenu() {
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const insideWrap = wrapRef.current?.contains(e.target as Node);
+      const insideMenu = menuRef.current?.contains(e.target as Node);
+      if (!insideWrap && !insideMenu) {
         setOpen(false);
       }
     };
@@ -82,10 +86,22 @@ export function UserMenu() {
         <span suppressHydrationWarning>{initials}</span>
       </button>
 
-      {open && (
+      {/* Portalled to <body> (same pattern as NotificationBell): the sticky header wrapper is a
+          z-30 stacking context, so a dropdown rendered inside it sits BELOW any page element with
+          a higher z-index (sticky tab bars, the AI launcher) and shows up clipped/half-hidden. */}
+      {open &&
+        hydrated &&
+        createPortal(
+          (() => {
+            const btnRect = wrapRef.current?.getBoundingClientRect();
+            const top = btnRect ? btnRect.bottom + 8 : 0;
+            const right = btnRect ? window.innerWidth - btnRect.right : 0;
+            return (
         <div
+          ref={menuRef}
           role="menu"
-          className="absolute right-0 top-12 z-40 w-64 overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
+          style={{ top: `${top}px`, right: `${right}px` }}
+          className="fixed z-50 w-64 overflow-hidden rounded-xl border border-hairline bg-paper shadow-[0_18px_40px_-18px_rgba(28,28,28,0.25)]"
         >
           <div className="flex items-center gap-3 border-b border-hairline px-4 py-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-hairline bg-ivory text-[11px] font-semibold uppercase tracking-[0.06em] text-charcoal">
@@ -130,7 +146,10 @@ export function UserMenu() {
             Sign out
           </button>
         </div>
-      )}
+            );
+          })(),
+          document.body,
+        )}
     </div>
   );
 }

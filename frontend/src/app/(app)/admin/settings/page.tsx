@@ -81,6 +81,49 @@ export default function SettingsPage() {
   );
 }
 
+// Human-readable labels for the raw setting keys shown in Admin → Settings. Display only —
+// the key itself is untouched and still sent verbatim in the update payload.
+const SETTING_LABELS: Record<string, string> = {
+  "default.scheduling.option": "Scheduling option",
+  "default.evm.technique": "EVM technique",
+  dpr_sla_hours: "DPR approval SLA (hours)",
+  dpr_report_enabled: "Enable scheduled DPR report",
+  dpr_report_cadence: "Report frequency",
+  dpr_report_window: "Analysis window",
+  dpr_report_recipients_override: "Report recipients (override)",
+  dpr_report_send_time: "Report send time",
+  dpr_report_timezone: "Report timezone",
+  dpr_alert_channel: "Alert delivery channel",
+  dpr_missing_alert_enabled: "Enable missing-DPR alert",
+  dpr_missing_alert_time: "Missing-DPR check time",
+  issue_digest_enabled: "Enable weekly issues digest",
+  issue_digest_day: "Digest day of week",
+  issue_digest_time: "Digest send time",
+  material_shortage_enabled: "Enable weekly short-supply digest",
+  material_shortage_day: "Digest day of week",
+  material_shortage_time: "Digest send time",
+  material_shortage_days_cover: "Days-of-cover threshold",
+};
+
+function settingLabel(key: string): string {
+  const mapped = SETTING_LABELS[key];
+  if (mapped) return mapped;
+  // Fallback for keys added later: strip the "default." prefix, break on dots/underscores,
+  // sentence-case, and uppercase the domain acronyms.
+  const text = key.replace(/^default\./, "").replace(/[._]/g, " ");
+  return (text.charAt(0).toUpperCase() + text.slice(1)).replace(
+    /\b(dpr|evm|sla|ai|boq|dbs)\b/gi,
+    (m) => m.toUpperCase(),
+  );
+}
+
+// Category headings come from the DB in mixed casing ("scheduling", "evm", "OPERATIONS").
+const CATEGORY_LABELS: Record<string, string> = {
+  scheduling: "Scheduling",
+  evm: "EVM",
+  OPERATIONS: "Operations",
+};
+
 function GlobalSettingsSection() {
   const queryClient = useQueryClient();
   const { data: settingsData, isLoading } = useQuery({
@@ -138,13 +181,15 @@ function GlobalSettingsSection() {
     <div className="space-y-6">
       {Object.entries(grouped).map(([category, categorySettings]) => (
         <div key={category} className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
-          <h2 className="mb-4 text-lg font-semibold text-text-primary capitalize">{category}</h2>
+          <h2 className="mb-4 text-lg font-semibold text-text-primary capitalize">
+            {CATEGORY_LABELS[category] ?? category}
+          </h2>
           <div className="space-y-4">
             {categorySettings.map((setting) => (
               <div key={setting.id} className="flex items-end gap-4">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-text-secondary">
-                    {setting.settingKey.replace(/\./g, " ").replace(/default /i, "")}
+                    {settingLabel(setting.settingKey)}
                   </label>
                   {setting.description && (
                     <p className="mt-0.5 text-xs text-text-muted">{setting.description}</p>

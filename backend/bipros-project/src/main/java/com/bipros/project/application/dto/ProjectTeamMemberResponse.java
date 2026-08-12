@@ -13,6 +13,14 @@ public record ProjectTeamMemberResponse(
         LocalDate activeFrom,
         LocalDate activeTo,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // Display projection from public.users — the Team tab renders these directly
+        // instead of depending on a separate (role-filtered) user-directory lookup.
+        String username,
+        String firstName,
+        String lastName,
+        String email,
+        String reportsToUsername,
+        String reportsToName
 ) {
 }
