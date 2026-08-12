@@ -134,7 +134,11 @@ public class ProfileSeeder {
                     "CONSTRUCTION_MANAGER",
                     "Construction Manager",
                     "Daily site execution: crew & machine deployment, materials, DPR ownership.",
-                    "CONSTRUCTION_MANAGER",
+                    // SITE_MANAGER stands in for the CM role: the roles table has no
+                    // CONSTRUCTION_MANAGER row, so assigning this profile with the old value
+                    // failed with UNKNOWN_ROLE (UserService.applyProfile syncs user_roles to
+                    // this name). Permission set still comes from the CM matrix entry.
+                    "SITE_MANAGER",
                     RolePermissionMatrix.permissionsFor("CONSTRUCTION_MANAGER")
             ),
             new DefaultProfile(

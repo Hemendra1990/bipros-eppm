@@ -281,3 +281,5 @@ databaseChangeLog:
       file: db/changelog/144-material-idle-alert.yaml
   - include:
       file: db/changelog/145-sarooj-senior-profile-permissions.yaml
+  - include:
+      file: db/changelog/146-cm-profile-legacy-role.yaml

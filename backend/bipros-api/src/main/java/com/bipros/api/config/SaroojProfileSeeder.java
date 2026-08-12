@@ -175,7 +175,14 @@ public class SaroojProfileSeeder {
                     "PM-level visibility plus field corrections: edits DPRs/activities, configures "
                             + "activity plans and norms, approves; no DBS recompute/EVM export/risk/AI "
                             + "(PM-only surfaces).",
-                    "CONSTRUCTION_MANAGER", DataScope.PROJECT, Set.of(
+                    // Legacy role is SITE_MANAGER, not CONSTRUCTION_MANAGER: the roles table has
+                    // no CONSTRUCTION_MANAGER row (DataSeeder deliberately seeds SITE_MANAGER as
+                    // its stand-in; the permission matrix defines them identically), and
+                    // UserService.applyProfile syncs user_roles to this name — an unknown name
+                    // makes every profile assignment fail with UNKNOWN_ROLE (found in prod
+                    // 2026-08-12). Frontend CM surfaces (DBS CM tab etc.) also gate on
+                    // SITE_MANAGER. Changeset 146 repairs profiles on existing databases.
+                    "SITE_MANAGER", DataScope.PROJECT, Set.of(
                     "PROJECT.READ", "PROJECT.UPDATE", "PROJECT_MEMBER.READ",
                     "ACTIVITY.CREATE", "ACTIVITY.READ", "ACTIVITY.UPDATE", "ACTIVITY.DELETE",
                     "ACTIVITY.LOCK", "ACTIVITY.UNLOCK",
