@@ -185,6 +185,21 @@ export function SubContractorGrid({ projectId, activityId, rows, onChange, workd
           Pick an activity above to choose sub-contractor.
         </div>
       )}
+      {/* Client workbook Web sheet row 7 ("Sub-contractor — to be activated??"): the empty
+          dropdown looked broken to the client. Spell out the plan-first chain instead. */}
+      {activityId && !isLoading && assignments.length === 0 && (
+        <div className="mb-3 rounded-md border border-hairline bg-ivory/60 px-3 py-2 text-xs text-slate">
+          <p className="font-semibold">No sub-contractors are planned for this activity yet.</p>
+          <p className="mt-1">
+            Sub-contractors can only be reported against a plan. To make them selectable here:
+            1)&nbsp;an admin registers the company under <span className="font-medium">Admin › Sub-Contractors</span>
+            (with its work types and rates); 2)&nbsp;add it to this activity&apos;s{" "}
+            <span className="font-medium">Sub-Contractor Requirements</span> in the activity&apos;s
+            resource plan (Activities tab › open the activity); 3)&nbsp;it then appears in this
+            dropdown for daily reporting.
+          </p>
+        </div>
+      )}
       {exceeds && (
         <div className="mb-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
           Sub-contractor total ({scSum}) exceeds activity workdone ({workdoneQty}). Save will be rejected.
@@ -200,7 +215,7 @@ export function SubContractorGrid({ projectId, activityId, rows, onChange, workd
         emptyHint={
           activityId
             ? assignments.length === 0
-              ? "No sub-contractors planned for this activity — add them in the activity plan first."
+              ? "No sub-contractors planned for this activity — see the note above."
               : "Click Add sub-contractor to record work done."
             : "Pick an activity first."
         }

@@ -283,3 +283,5 @@ databaseChangeLog:
       file: db/changelog/145-sarooj-senior-profile-permissions.yaml
   - include:
       file: db/changelog/146-cm-profile-legacy-role.yaml
+  - include:
+      file: db/changelog/147-manpower-trade-list-cleanup.yaml

@@ -79,16 +79,14 @@ function ProjectDetailLayoutInner({
   // so SUPERVISOR-tier users don't see finance/contract surfaces.
   type ProjectTab = { id: string; label: string; href: string | null; permission?: string };
   // Order follows the runbook flow: plan → commercial+org → execution → daily P&L →
-  // financial analysis → schedule views → cross-cutting. Team is promoted out of
-  // the More dropdown because it's load-bearing for the DBS Engineer/CM/PM rollup.
+  // financial analysis → schedule views → cross-cutting. WBS, Activities and Team live in
+  // the More dropdown (client workbook Web sheet, 2026-08-17: "Tabs should go under More —
+  // WBS, Team, Activity").
   // Access-control round (2026-08-11): EVERY tab is gated by its module's READ code, so the
   // screens a user sees are exactly what their profile grants (nothing hardcoded).
   const allTabs: ProjectTab[] = [
     { id: "overview",           label: "Overview",            href: null,                                            permission: "PROJECT.READ" },
-    { id: "wbs",                label: "WBS",                 href: null,                                            permission: "PROJECT.READ" },
-    { id: "activities",         label: "Activities",          href: `/projects/${projectId}/activities`,             permission: "ACTIVITY.READ" },
     { id: "boq",                label: "BOQ",                 href: `/projects/${projectId}/boq`,                    permission: "PROJECT.READ" },
-    { id: "team",               label: "Team",                href: `/projects/${projectId}/team`,                   permission: "PROJECT_MEMBER.READ" },
     { id: "general-expenses",   label: "General Expenses",    href: `/projects/${projectId}/general-expenses`,       permission: "COST.READ" },
     { id: "dpr",                label: "DPR",                 href: `/projects/${projectId}/dpr`,                    permission: "DPR.READ" },
     { id: "capacity",           label: "Capacity Util.",      href: `/projects/${projectId}/capacity-utilization`,   permission: "REPORT.READ" },
@@ -112,11 +110,14 @@ function ProjectDetailLayoutInner({
   ].filter((l) => hasPermission(l.permission));
 
   const moreLinks: { label: string; href: string; permission?: string }[] = [
+    // Client workbook (Web sheet): WBS, Team and Activities moved here from the top tab row.
+    { label: "WBS", href: `/projects/${projectId}?tab=wbs`, permission: "PROJECT.READ" },
+    { label: "Activities", href: `/projects/${projectId}/activities`, permission: "ACTIVITY.READ" },
+    { label: "Team", href: `/projects/${projectId}/team`, permission: "PROJECT_MEMBER.READ" },
     { label: "GIS", href: `/projects/${projectId}/gis-viewer`, permission: "PROJECT.READ" },
     { label: "Quality", href: `/projects/${projectId}/quality`, permission: "NCR.READ" },
     { label: "Procurement", href: `/projects/${projectId}/procurement`, permission: "RESOURCE.READ" },
     { label: "Insights", href: `/projects/${projectId}/insights`, permission: "REPORT.READ" },
-    // Team is now a top-level tab (see allTabs above).
     { label: "Budget Changes", href: `/projects/${projectId}/budget-changes`, permission: "COST.READ" },
     { label: "Relationships", href: `/projects/${projectId}/relationships`, permission: "ACTIVITY.READ" },
     // { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },  // hidden per request
@@ -154,9 +155,6 @@ function ProjectDetailLayoutInner({
   const isMasterDataActive = masterDataLinks.some((link) => pathname.includes(link.href));
   const isMoreActive = moreLinks.some((link) => pathname.includes(link.href));
 
-  // Check if any href-based tab matches
-  const isAnyHrefTabActive = tabs.some((t) => t.href && pathname.includes(t.href));
-
   // Determine if a tab is active
   const isTabActive = (tab: typeof tabs[0]): boolean => {
     if (tab.href) {
@@ -165,12 +163,6 @@ function ProjectDetailLayoutInner({
     // For query-based tabs on the base project page
     if (activeTab !== null) {
       return activeTab === tab.id;
-    }
-    // On a sub-route: check if the pathname contains /activities/, /activity-codes/ etc.
-    // that should map back to the query-based tab
-    if (isOnSubRoute && !isMasterDataActive && !isMoreActive && !isAnyHrefTabActive) {
-      const subRouteSegment = pathname.replace(`/projects/${projectId}`, "").split("/")[1];
-      if (tab.id === "activities" && (subRouteSegment === "activities" || subRouteSegment === "activity-codes")) return true;
     }
     return false;
   };

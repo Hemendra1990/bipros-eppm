@@ -87,8 +87,10 @@ public class DprVoiceFillSchema {
         List.of("DRAFT", "SUBMITTED", "APPROVED", "REJECTED"),
         "Approval status. Voice-fill should normally leave this DRAFT."));
     props.set("side", nullableEnum(
-        List.of("LHS", "RHS", "CENTER"),
-        "Side of corridor. LHS=left, RHS=right, CENTER=median."));
+        List.of("LHS", "RHS", "CENTER", "MEDIAN_LHS", "MEDIAN_RHS", "MCW_LHS", "MCW_RHS",
+            "CDROAD_LHS", "CDROAD_RHS"),
+        "Side / corridor element. LHS=left, RHS=right, CENTER=centre; MEDIAN_*=median side, "
+            + "MCW_*=main carriageway, CDROAD_*=CD road."));
     props.set("landmark", nullableString("Free-text landmark when chainage isn't given numerically."));
     props.set("chainageFromM", nullableInteger(
         "Chainage from, in metres. Convert km+metres (e.g. '145+200') to metres (145200)."));

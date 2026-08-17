@@ -25,6 +25,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { chainageLabel } from "@/lib/format/chainage";
 import { fmtQty } from "./dprFormulas";
 import type { DailyProgressReportResponse, DprApprovalStatus } from "@/lib/types/dpr";
+import { SIDE_LABELS } from "@/lib/types/dpr";
 import { SEVERITY_VARIANT, STATUS_VARIANT as ISSUE_STATUS_VARIANT, categoryLabel } from "./IssueBadges";
 
 interface Props {
@@ -40,11 +41,7 @@ const STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
   REJECTED: "danger",
 };
 
-const SIDE_LABEL: Record<string, string> = {
-  LHS: "LHS",
-  RHS: "RHS",
-  CENTER: "Center",
-};
+const SIDE_LABEL: Record<string, string> = SIDE_LABELS;
 
 const fmt = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && isFinite(n)

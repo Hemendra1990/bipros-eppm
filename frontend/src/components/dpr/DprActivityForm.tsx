@@ -26,6 +26,7 @@ import type {
   Shift,
   Side,
 } from "@/lib/types/dpr";
+import { SIDE_LABELS } from "@/lib/types/dpr";
 import { ManpowerGrid } from "./ManpowerGrid";
 import { EquipmentGrid } from "./EquipmentGrid";
 import { MaterialGrid } from "./MaterialGrid";
@@ -118,11 +119,9 @@ const todayIso = () => new Date().toISOString().split("T")[0];
 
 const SUPERVISOR_OTHER = "__other__";
 
-const SIDE_OPTS: Array<{ value: Side; label: string }> = [
-  { value: "LHS", label: "LHS" },
-  { value: "RHS", label: "RHS" },
-  { value: "CENTER", label: "Center" },
-];
+const SIDE_OPTS: Array<{ value: Side; label: string }> = (
+  Object.entries(SIDE_LABELS) as Array<[Side, string]>
+).map(([value, label]) => ({ value, label }));
 const SHIFT_OPTS: Array<{ value: Shift; label: string }> = [
   { value: "DAY", label: "Day" },
   { value: "NIGHT", label: "Night" },

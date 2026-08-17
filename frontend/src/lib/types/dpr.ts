@@ -2,7 +2,33 @@
 // backend/bipros-project/.../dto. Kept in /lib/types so non-API callers (forms,
 // charts, AI insights) can import without dragging the axios client along.
 
-export type Side = "LHS" | "RHS" | "CENTER";
+export type Side =
+  | "LHS"
+  | "RHS"
+  | "CENTER"
+  | "MEDIAN_LHS"
+  | "MEDIAN_RHS"
+  | "MCW_LHS"
+  | "MCW_RHS"
+  | "CDROAD_LHS"
+  | "CDROAD_RHS";
+
+/**
+ * Display labels for {@link Side}, in dropdown order. Client workbook (01 Aug 2026): the six
+ * corridor-element sides (Median / MCW / CD Road × LHS/RHS) join the original three. Enum
+ * names are ≤10 chars because the backend `side` column is VARCHAR(10) — see backend Side.java.
+ */
+export const SIDE_LABELS: Record<Side, string> = {
+  LHS: "LHS",
+  RHS: "RHS",
+  CENTER: "Center",
+  MEDIAN_LHS: "Median LHS",
+  MEDIAN_RHS: "Median RHS",
+  MCW_LHS: "MCW-LHS",
+  MCW_RHS: "MCW-RHS",
+  CDROAD_LHS: "CD Road-LHS",
+  CDROAD_RHS: "CD Road-RHS",
+};
 export type Shift = "DAY" | "NIGHT";
 export type DprApprovalStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED";
 export type SafetyIncidentType = "NONE" | "NEAR_MISS" | "INCIDENT";

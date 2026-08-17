@@ -45,6 +45,7 @@ public class DevSchemaFixupRunner {
       log.info("[DevSchemaFixupRunner] running idempotent schema fixups (dev profile only)");
       ensureBoqStatusCheckIncludesOverrun();
       ensureProjectTeamRoleCheckIncludesNewSeats();
+      ensureDprSideCheckIncludesNewSides();
       ensureRaBillItemDescriptionIsAtLeast500();
       ensureBoqItemDescriptionIsAtLeast2000();
       ensureActivityCodeIsAtLeast120();
@@ -124,6 +125,46 @@ public class DevSchemaFixupRunner {
       log.info("[DevSchemaFixupRunner] fixup 122 applied: project_team_role_check now allows the four new seats");
     } catch (Exception e) {
       log.warn("[DevSchemaFixupRunner] fixup 122 (project_team_role_check) failed — continuing", e);
+    }
+  }
+
+  /**
+   * Fixup — drop and recreate {@code daily_progress_reports_side_check} so it admits the six
+   * corridor-element sides added from the client workbook (MEDIAN_LHS/RHS, MCW_LHS/RHS,
+   * CDROAD_LHS/RHS). Long-lived dev databases carry a stale Hibernate-era constraint listing
+   * only {@code LHS/RHS/BOTH} — it predates even CENTER, so saving a "Center" DPR already
+   * failed in dev. Prod is unaffected (Liquibase 072 created the column with no constraint).
+   * Only acts if the current definition does not already mention CDROAD_RHS.
+   */
+  private void ensureDprSideCheckIncludesNewSides() {
+    try {
+      String def = jdbcTemplate.queryForObject(
+          """
+          select pg_get_constraintdef(oid)
+          from pg_constraint
+          where conname = 'daily_progress_reports_side_check'
+            and conrelid = 'project.daily_progress_reports'::regclass
+          """,
+          String.class);
+      if (def == null) {
+        log.debug("[DevSchemaFixupRunner] daily_progress_reports_side_check not found — no-op");
+        return;
+      }
+      if (def.contains("CDROAD_RHS")) {
+        log.debug("[DevSchemaFixupRunner] daily_progress_reports_side_check already current — no-op");
+        return;
+      }
+      jdbcTemplate.execute(
+          "ALTER TABLE project.daily_progress_reports DROP CONSTRAINT daily_progress_reports_side_check");
+      jdbcTemplate.execute(
+          "ALTER TABLE project.daily_progress_reports ADD CONSTRAINT daily_progress_reports_side_check "
+              + "CHECK (side IN ('LHS','RHS','CENTER','MEDIAN_LHS','MEDIAN_RHS',"
+              + "'MCW_LHS','MCW_RHS','CDROAD_LHS','CDROAD_RHS'))");
+      log.info("[DevSchemaFixupRunner] fixup applied: daily_progress_reports_side_check now allows all Side values");
+    } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+      log.debug("[DevSchemaFixupRunner] daily_progress_reports_side_check absent — no-op (prod-parity schema)");
+    } catch (Exception e) {
+      log.warn("[DevSchemaFixupRunner] fixup (daily_progress_reports_side_check) failed — continuing", e);
     }
   }
 

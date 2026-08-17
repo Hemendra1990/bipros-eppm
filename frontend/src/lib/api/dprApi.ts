@@ -471,7 +471,17 @@ export interface DprVoicePatch {
   endTime?: string | null;
   shift?: "DAY" | "NIGHT" | null;
   approvalStatus?: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | null;
-  side?: "LHS" | "RHS" | "CENTER" | null;
+  side?:
+    | "LHS"
+    | "RHS"
+    | "CENTER"
+    | "MEDIAN_LHS"
+    | "MEDIAN_RHS"
+    | "MCW_LHS"
+    | "MCW_RHS"
+    | "CDROAD_LHS"
+    | "CDROAD_RHS"
+    | null;
   landmark?: string | null;
   chainageFromM?: number | null;
   chainageToM?: number | null;

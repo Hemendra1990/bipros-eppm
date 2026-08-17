@@ -121,7 +121,7 @@ public class DailyProgressReport extends BaseEntity {
   @Column(name = "remarks", length = 1000)
   private String remarks;
 
-  /** Carriageway side for road / highway DPRs (LHS / RHS / CENTER). Optional. */
+  /** Carriageway side / corridor element for road / highway DPRs (see {@link Side}). Optional. */
   @Enumerated(EnumType.STRING)
   @Column(name = "side", length = 10)
   private Side side;

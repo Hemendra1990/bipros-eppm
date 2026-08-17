@@ -1,7 +1,7 @@
 {
-  "version": 1,
-  "source": "Requirements final - 01 Aug 2026.xlsx / Rates sheet",
-  "notes": "Salary/m is MONTHLY; the seeder derives the daily rate as salary / 26 (the sheet's own plant-rate convention). Rates rounded to 4 dp.",
+  "version": 2,
+  "source": "Requirements final - 01 Aug 2026.xlsx / Rates sheet (+ Web sheet row 4, manpower trade list)",
+  "notes": "Salary/m is MONTHLY; the seeder derives the daily rate as salary / 26 (the sheet's own plant-rate convention). Rates rounded to 4 dp. v2: four Web-sheet trades added with ESTIMATED salaries (owner-approved 2026-08-17, anchored to comparable client-book trades - see each entry's note; adjust in-app when real salaries are known); LVD retitled Light Duty Drivers (LDD).",
   "materials": [
     {
       "code": "CEMENT",
@@ -1411,7 +1411,7 @@
     },
     {
       "code": "LVD",
-      "title": "Drivers National(LVD)",
+      "title": "Light Duty Drivers (LDD)",
       "variants": [
         {
           "lCode": "LVD",
@@ -1624,6 +1624,54 @@
           "lCode": "ele",
           "category": "Expat",
           "salaryPerMonth": "259.0000"
+        }
+      ]
+    },
+    {
+      "code": "AC-TECHNICIAN",
+      "title": "AC Technician",
+      "note": "Estimated rate (Web sheet trade, not in the client rate sheet) - anchored to Electrician & AC Technician (259/month); adjust when the real salary is known.",
+      "variants": [
+        {
+          "lCode": null,
+          "category": "Expat",
+          "salaryPerMonth": "259.0000"
+        }
+      ]
+    },
+    {
+      "code": "LAB-HELPER",
+      "title": "Lab Helper",
+      "note": "Estimated rate (Web sheet trade, not in the client rate sheet) - anchored to Sur.Helper (161/month); adjust when the real salary is known.",
+      "variants": [
+        {
+          "lCode": null,
+          "category": "Expat",
+          "salaryPerMonth": "161.0000"
+        }
+      ]
+    },
+    {
+      "code": "CHAINMAN",
+      "title": "Chainman",
+      "note": "Estimated rate (Web sheet trade, not in the client rate sheet) - anchored to Sur.Helper (161/month); adjust when the real salary is known.",
+      "variants": [
+        {
+          "lCode": null,
+          "category": "Expat",
+          "salaryPerMonth": "161.0000"
+        }
+      ]
+    },
+    {
+      "code": "SITE-SUPERINTENDENT",
+      "title": "Site Superintendent",
+      "note": "Estimated rate (Web sheet trade, not in the client rate sheet) - senior expat site staff, above Chargehand (205/month); adjust when the real salary is known.",
+      "variants": [
+        {
+          "lCode": null,
+          "category": "Expat",
+          "salaryPerMonth": "650.0000"
         }
       ]
     }

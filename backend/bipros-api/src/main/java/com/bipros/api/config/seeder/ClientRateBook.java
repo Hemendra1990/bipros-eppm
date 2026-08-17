@@ -36,8 +36,15 @@ public record ClientRateBook(
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record EquipmentRow(String code, String name, String ratePerDay, String operatorCode) {}
 
+  /**
+   * {@code note} (v2, Web sheet row 4): set on entries whose salary is an ESTIMATE rather
+   * than a client rate-sheet figure. It replaces the "Client rate book." prefix in the seeded
+   * role description so admins can see the rate needs confirming — the description must never
+   * attribute an invented number to the client.
+   */
   @JsonIgnoreProperties(ignoreUnknown = true)
-  public record ManpowerRole(String code, String title, List<ManpowerVariant> variants) {}
+  public record ManpowerRole(String code, String title, List<ManpowerVariant> variants,
+                             String note) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record ManpowerVariant(String lCode, String category, String salaryPerMonth) {}

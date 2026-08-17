@@ -27,6 +27,7 @@ import type {
   DprSummaryRow,
   DprVoiceNote,
 } from "@/lib/types/dpr";
+import { SIDE_LABELS } from "@/lib/types/dpr";
 import {
   SEVERITY_VARIANT,
   STATUS_VARIANT as ISSUE_STATUS_VARIANT,
@@ -52,7 +53,7 @@ const STATUS_PILL: Record<DprApprovalStatus, { dot: string; text: string }> = {
   REJECTED: { dot: "bg-rose-300", text: "text-rose-100" },
 };
 
-const SIDE_LABEL: Record<string, string> = { LHS: "LHS", RHS: "RHS", CENTER: "Center" };
+const SIDE_LABEL: Record<string, string> = SIDE_LABELS;
 
 const num = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n)

@@ -19,6 +19,7 @@ import { useAuthStore } from "@/lib/state/store";
 import { ResourceAvatar } from "@/components/resource/supervisor-assign/ResourceAvatar";
 import { chainageLabel } from "@/lib/format/chainage";
 import type { DprApprovalStatus, DprSummaryRow } from "@/lib/types/dpr";
+import { SIDE_LABELS } from "@/lib/types/dpr";
 import { fmtQty } from "./dprFormulas";
 import { DprApprovalActions } from "./DprApprovalActions";
 import { DprDetailModal } from "./DprDetailModal";
@@ -39,11 +40,7 @@ const STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
   REJECTED: "danger",
 };
 
-const SIDE_LABEL: Record<string, string> = {
-  LHS: "LHS",
-  RHS: "RHS",
-  CENTER: "Center",
-};
+const SIDE_LABEL: Record<string, string> = SIDE_LABELS;
 
 const lengthLabel = (from: number | null | undefined, to: number | null | undefined): string | null => {
   if (typeof from !== "number" || typeof to !== "number") return null;

@@ -192,7 +192,10 @@ public class ClientRateBookSeeder implements CommandLineRunner {
                             Map<String, ManpowerCategoryMaster> categories) {
     int sort = 3000;
     for (ClientRateBook.ManpowerRole mp : book.manpower()) {
-      StringBuilder desc = new StringBuilder("Client rate book. ");
+      // Estimated-salary entries carry a note that replaces the "Client rate book." prefix —
+      // the description must not attribute an estimate to the client's rate sheet.
+      StringBuilder desc = new StringBuilder(
+          mp.note() != null && !mp.note().isBlank() ? mp.note() + " " : "Client rate book. ");
       for (ClientRateBook.ManpowerVariant v : mp.variants()) {
         desc.append(v.category()).append(v.lCode() == null ? "" : " (L.Code " + v.lCode() + ")")
             .append(": ").append(v.salaryPerMonth()).append("/month; ");
