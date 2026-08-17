@@ -30,6 +30,11 @@ public class ClickHouseDataSourceConfig {
         config.setConnectionTimeout(properties.getPool().getConnectionTimeout());
         config.setPoolName("ClickHousePool");
         config.setDriverClassName("com.clickhouse.jdbc.ClickHouseDriver");
+        // -1: skip the initial connection check so boot survives when ClickHouse is down or
+        // absent (e.g. local dev without Docker — ClickHouse has no native Windows build).
+        // First actual use still fails per connection-timeout; the ETL listeners already
+        // catch + dead-letter those failures, so nothing else needs to change.
+        config.setInitializationFailTimeout(-1);
         log.info("ClickHouse datasource configured: url={}", properties.getUrl());
         return new HikariDataSource(config);
     }

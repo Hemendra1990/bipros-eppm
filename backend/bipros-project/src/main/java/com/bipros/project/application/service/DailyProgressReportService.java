@@ -134,6 +134,28 @@ public class DailyProgressReportService {
     rejectIfActivityDraft(request.activityId());
     rejectIfActivityIsParent(request.activityId());
 
+    // Gate 3 write path (access-control round): the scoped activity picker is UX only — a
+    // person-scoped caller may only file against activities their member set supervises, and
+    // only under a supervisor within that set (OWN = themselves; TEAM = their downline). An
+    // out-of-scope activity answers exactly like a missing one (same error as
+    // rejectIfActivityDraft) so existence never leaks; PROJECT/ALL and system pass through.
+    com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+    if (scope.personScoped()) {
+      if (request.activityId() != null
+          && !teamActivityIds(scope.memberIds()).contains(request.activityId())) {
+        throw new BusinessRuleException(
+            "ACTIVITY_NOT_FOUND",
+            "Activity " + request.activityId() + " not found.");
+      }
+      if (request.supervisorUserId() != null
+          && !scope.memberIds().contains(request.supervisorUserId())) {
+        throw new BusinessRuleException(
+            "DPR_SUPERVISOR_OUT_OF_SCOPE",
+            "The selected supervisor is outside your data scope — you can only file DPRs "
+                + "for yourself or your team members.");
+      }
+    }
+
     // Reject duplicate DPRs from the *same supervisor* for the same (project, day, activity).
     // Multi-supervisor model: an activity can have two or more supervisors and each may file
     // their own DPR for the same date — uniqueness is per supervisor, not per activity. Resource
@@ -259,6 +281,20 @@ public class DailyProgressReportService {
     UUID targetActivityId = request.activityId() != null ? request.activityId() : dpr.getActivityId();
     rejectIfActivityDraft(targetActivityId);
     rejectIfActivityIsParent(targetActivityId);
+
+    // Gate 3 write path (access-control round): find() above already proved involvement in the
+    // CURRENT row — re-check only when the update re-points the DPR at a DIFFERENT activity,
+    // which must itself be one the member set supervises. Same missing-activity answer as
+    // create() so existence never leaks.
+    if (request.activityId() != null && !request.activityId().equals(dpr.getActivityId())) {
+      com.bipros.common.security.ScopeKeys scope = scopeResolver.resolveForProject(projectId);
+      if (scope.personScoped()
+          && !teamActivityIds(scope.memberIds()).contains(request.activityId())) {
+        throw new BusinessRuleException(
+            "ACTIVITY_NOT_FOUND",
+            "Activity " + request.activityId() + " not found.");
+      }
+    }
 
     DprApprovalStatus oldStatus = effectiveStatus(dpr);
     String oldBoqItemNo = dpr.getBoqItemNo();
