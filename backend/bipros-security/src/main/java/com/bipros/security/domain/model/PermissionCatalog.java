@@ -222,7 +222,30 @@ public final class PermissionCatalog {
             new Permission("DBS.EXPORT",   "DBS",   EXPORT, "Download DBS exports (Excel / PDF)"),
             new Permission("ISSUE.CREATE", "ISSUE", CREATE, "Raise site concerns / issues"),
             new Permission("ISSUE.READ",   "ISSUE", READ,   "View site concerns / issues"),
-            new Permission("ISSUE.UPDATE", "ISSUE", UPDATE, "Edit / resolve site concerns")
+            new Permission("ISSUE.UPDATE", "ISSUE", UPDATE, "Edit / resolve site concerns"),
+
+            // Material store round (2026-08-19, client ask "entry limited to storekeeper"):
+            // the store surfaces (catalogue, GRN, issue slips/returns, stock register,
+            // consumption log) get their OWN family so store access can be granted or
+            // withdrawn per profile without touching RESOURCE.* — which also gates
+            // equipment/labour deployment logs, sub-contractor entries and rate masters
+            // that supervisors/engineers must keep.
+            new Permission("STORE.READ",   "STORE", READ,   "View material store (catalogue, GRNs, issues, stock, ledger)"),
+            new Permission("STORE.UPDATE", "STORE", UPDATE, "Record store movements (GRN, issue slips, returns, ledger entries)"),
+            new Permission("STORE.DELETE", "STORE", DELETE, "Delete material catalogue entries"),
+
+            // QC client-feedback round (2026-08-19): supervisors/engineers must re-raise an
+            // RFI after a failed test without holding DOCUMENT.CREATE (which also opens
+            // document uploads and transmittals). The RFI create endpoint accepts
+            // RFI.CREATE OR DOCUMENT.CREATE, so existing document-tier profiles keep working.
+            new Permission("RFI.CREATE", "RFI", CREATE, "Raise RFIs in the RFI register"),
+
+            // My-progress card (client ask, 2026-08-20): per-user overview of the
+            // activities the caller supervises — qty done today/week/month/cumulative.
+            // Own family so any profile can be granted the card without touching
+            // REPORT.* (which opens the full reports surface).
+            new Permission("MY_PROGRESS.READ", "MY_PROGRESS", READ,
+                "View own supervised-activity progress (day/week/month/cumulative)")
     );
 
     public static final Set<String> ALL_CODES = ALL.stream()

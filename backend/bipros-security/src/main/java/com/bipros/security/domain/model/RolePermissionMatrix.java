@@ -137,9 +137,12 @@ public final class RolePermissionMatrix {
         ));
 
         // 9. STORE_MANAGER — store / inventory focus + procurement-request approval.
+        // STORE.* added 2026-08-19: the store surfaces moved off RESOURCE.* onto their
+        // own family (see PermissionCatalog) so store entry can be storekeeper-only.
         m.put("STORE_MANAGER", Set.of(
                 "PROJECT.READ",
                 "RESOURCE.READ", "RESOURCE.UPDATE",
+                "STORE.READ", "STORE.UPDATE",
                 "DOCUMENT.CREATE", "DOCUMENT.READ", "DOCUMENT.UPDATE",
                 "PROCUREMENT_REQUEST.READ", "PROCUREMENT_REQUEST.APPROVE",
                 "REPORT.READ",

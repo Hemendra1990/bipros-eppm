@@ -49,6 +49,10 @@ public class DataSeeder implements CommandLineRunner {
   private final PasswordEncoder passwordEncoder;
   private final ProfileSeeder profileSeeder;
   private final SaroojProfileSeeder saroojProfileSeeder;
+  private final StorePermissionSeeder storePermissionSeeder;
+  private final QcPermissionSeeder qcPermissionSeeder;
+  private final IssuePermissionSeeder issuePermissionSeeder;
+  private final MyProgressPermissionSeeder myProgressPermissionSeeder;
   private final com.bipros.security.domain.repository.ProfileRepository profileRepository;
 
   @Value("${bipros.admin.username:admin}")
@@ -71,6 +75,15 @@ public class DataSeeder implements CommandLineRunner {
     profileSeeder.seed();
     // Sarooj client profiles (Access sheets, 2026-08-11) — insert-only, admin-editable after.
     saroojProfileSeeder.seed();
+    // STORE.* grants (2026-08-19) — self-healing so existing databases pick up the new
+    // family; additive-only so admin profile edits survive.
+    storePermissionSeeder.seed();
+    // NCR.* grants for the QC module (2026-08-19) — same self-healing contract.
+    qcPermissionSeeder.seed();
+    // ISSUE.* grant holes (2026-08-20) — same self-healing contract.
+    issuePermissionSeeder.seed();
+    // MY_PROGRESS.READ for the per-user progress card (2026-08-20) — same contract.
+    myProgressPermissionSeeder.seed();
 
     if (roleRepository.count() > 0 && userRepository.findByUsername(adminUsername).isPresent()) {
       log.info("Bulk data already seeded, skipping calendar/currency/settings");
