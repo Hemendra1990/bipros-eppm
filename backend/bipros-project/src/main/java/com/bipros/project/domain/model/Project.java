@@ -131,13 +131,17 @@ public class Project extends BaseEntity {
 
     /**
      * When true, the scheduled weather ingest + weather-risk agent run for this project.
-     * {@code columnDefinition} carries a DB default so {@code ddl-auto:update} can add this
-     * NOT NULL column to a table that already has rows (a plain {@code add column ... not null}
-     * would be rejected by Postgres).
+     * Defaults to ON (client decision 2026-08-18): any project whose site coordinates are set
+     * gets automatic weather updates without a second switch — no coordinates still means the
+     * pipeline skips it. {@code columnDefinition} carries a DB default so {@code ddl-auto:update}
+     * can add this NOT NULL column to a table that already has rows (a plain
+     * {@code add column ... not null} would be rejected by Postgres). Existing rows created
+     * before this change keep their stored value — enable them with a one-time
+     * {@code UPDATE project.projects SET weather_monitoring_enabled = true}.
      */
     @Column(name = "weather_monitoring_enabled", nullable = false,
-            columnDefinition = "boolean not null default false")
-    private boolean weatherMonitoringEnabled = false;
+            columnDefinition = "boolean not null default true")
+    private boolean weatherMonitoringEnabled = true;
 
     /**
      * Soft pointer to the project's currently-active baseline (P6's "Project Baseline").

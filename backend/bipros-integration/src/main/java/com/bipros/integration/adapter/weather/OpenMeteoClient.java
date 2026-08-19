@@ -19,6 +19,7 @@ import java.util.List;
  * <ul>
  *   <li>{@link #geocode(String, int)} — place search via {@code geocoding-api.open-meteo.com}.</li>
  *   <li>{@link #forecast(double, double, int)} — daily forecast via {@code api.open-meteo.com}.</li>
+ *   <li>{@link #currentUsAqi(double, double)} — current US AQI via {@code air-quality-api.open-meteo.com}.</li>
  * </ul>
  *
  * <p>Both calls are best-effort: any transport/parse error is logged and degraded to an empty list /
@@ -32,14 +33,17 @@ public class OpenMeteoClient {
 
     private final RestClient geocodingHttp;
     private final RestClient forecastHttp;
+    private final RestClient airQualityHttp;
 
     public OpenMeteoClient(
             @Value("${bipros.weather.geocoding-base-url:https://geocoding-api.open-meteo.com}") String geocodingBaseUrl,
             @Value("${bipros.weather.forecast-base-url:https://api.open-meteo.com}") String forecastBaseUrl,
+            @Value("${bipros.weather.air-quality-base-url:https://air-quality-api.open-meteo.com}") String airQualityBaseUrl,
             @Value("${bipros.weather.request-timeout-seconds:8}") int timeoutSeconds) {
         ClientHttpRequestFactory factory = timeoutFactory(Duration.ofSeconds(timeoutSeconds));
         this.geocodingHttp = RestClient.builder().baseUrl(geocodingBaseUrl).requestFactory(factory).build();
         this.forecastHttp = RestClient.builder().baseUrl(forecastBaseUrl).requestFactory(factory).build();
+        this.airQualityHttp = RestClient.builder().baseUrl(airQualityBaseUrl).requestFactory(factory).build();
     }
 
     /**
@@ -122,6 +126,28 @@ public class OpenMeteoClient {
         } catch (Exception e) {
             log.warn("[OpenMeteo] forecast ({},{}) failed: {}", latitude, longitude, e.toString());
             return WeatherForecast.empty(latitude, longitude);
+        }
+    }
+
+    /**
+     * Current US AQI (0–500) at a site via {@code air-quality-api.open-meteo.com}. Same free,
+     * key-less, best-effort contract as the other calls: any failure or missing value → null.
+     */
+    public Integer currentUsAqi(double latitude, double longitude) {
+        try {
+            String uri = UriComponentsBuilder.fromPath("/v1/air-quality")
+                    .queryParam("latitude", latitude)
+                    .queryParam("longitude", longitude)
+                    .queryParam("current", "us_aqi")
+                    .queryParam("timezone", "auto")
+                    .build()
+                    .toUriString();
+            JsonNode root = airQualityHttp.get().uri(uri).retrieve().body(JsonNode.class);
+            JsonNode value = root == null ? null : root.path("current").path("us_aqi");
+            return value == null || value.isNull() || value.isMissingNode() ? null : value.asInt();
+        } catch (Exception e) {
+            log.warn("[OpenMeteo] air-quality ({},{}) failed: {}", latitude, longitude, e.toString());
+            return null;
         }
     }
 

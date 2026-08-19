@@ -13,7 +13,7 @@ spring:
   # transmit. With SMTP_HOST unset (the default) the channel runs in PREVIEW mode — it renders
   # the message and logs it, so the whole notification path is testable without a mail server.
   mail:
-    host: ${SMTP_HOST:smtp.gmail.com}
+    host: ${SMTP_HOST:smtp.office365.com}
     port: ${SMTP_PORT:587}
     username: ${SMTP_USERNAME:}
     password: ${SMTP_PASSWORD:}
@@ -164,7 +164,7 @@ bipros:
   # unless an AI provider is configured. Set any entry to "-" to disable that job.
   agent:
     schedule:
-      weather-ingest-cron: "0 15 5 * * *"      # 05:15 daily — auto-fill today's site weather from Open-Meteo
+      weather-ingest-cron: "0 10 * * * *"      # hourly at :10 — intraday refresh of today's site weather + AQI from Open-Meteo (manual entries always win)
       daily-sweep-cron: "0 0 2 * * *"          # 02:00 daily — DAILY_PROJECT_SWEEP per active project (LLM)
       ttl-expiry-cron: "0 30 1 * * *"          # 01:30 daily — expire stale findings past their TTL
       issue-hourly-cron: "0 0 * * * *"         # top of every hour — issue_intelligence per active project (LLM)

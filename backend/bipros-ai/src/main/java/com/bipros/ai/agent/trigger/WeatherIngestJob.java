@@ -23,13 +23,15 @@ import java.util.UUID;
 
 /**
  * Scheduled job that pulls today's weather from Open-Meteo for every weather-enabled project and
- * upserts it into the DPR "Section C — Weather" log ({@link DailyWeather}). This auto-populates the
- * daily weather readings that a supervisor would otherwise type in by hand.
+ * upserts it into the DPR "Section C — Weather" log ({@link DailyWeather}). Runs intraday (hourly
+ * by default) so the dashboard "Weather Conditions" card tracks current site conditions: the row
+ * still means "today at the site" — max/min temp, rain accumulated so far, peak wind — refreshed
+ * each run, plus the current US AQI from the air-quality API.
  *
- * <p>Lease-guarded (mirrors {@link AgentSweepJobs}). <b>Insert-if-absent</b>: if a row already exists
- * for the project+date (a supervisor's manual entry, or a previous run today), it is left untouched —
- * manual data always wins. Any provider failure is logged per-project and skipped; one bad site never
- * aborts the sweep.
+ * <p>Lease-guarded (mirrors {@link AgentSweepJobs}). <b>Refresh-if-auto</b>: a row this job wrote
+ * earlier today (identified by the remarks marker) is refreshed in place; a supervisor's manual
+ * entry is never touched — manual data always wins. Any provider failure is logged per-project and
+ * skipped; one bad site never aborts the sweep.
  */
 @Slf4j
 @Component
@@ -65,7 +67,7 @@ public class WeatherIngestJob {
         log.info("WeatherIngestJob wrote {} daily-weather rows", written);
     }
 
-    /** Fetch day-0 weather and insert it if no row exists yet for that (project, date). */
+    /** Fetch day-0 weather (+ current AQI) and insert — or, for auto rows only, refresh — today's row. */
     private boolean upsertToday(Project p) {
         WeatherForecast forecast = openMeteoClient.forecast(p.getSiteLatitude(), p.getSiteLongitude(), 1);
         if (forecast.isEmpty()) {
@@ -74,20 +76,22 @@ public class WeatherIngestJob {
         DailyWx today = forecast.days().get(0);
         LocalDate date = today.date() != null ? today.date() : LocalDate.now();
 
-        if (weatherRepository.findByProjectIdAndLogDate(p.getId(), date).isPresent()) {
-            return false; // manual entry or earlier auto-run wins — never clobber.
+        DailyWeather existing = weatherRepository.findByProjectIdAndLogDate(p.getId(), date).orElse(null);
+        if (existing != null && !AUTO_REMARK.equals(existing.getRemarks())) {
+            return false; // supervisor's manual entry wins — never clobber.
         }
 
-        DailyWeather row = DailyWeather.builder()
+        DailyWeather row = existing != null ? existing : DailyWeather.builder()
                 .projectId(p.getId())
                 .logDate(date)
-                .tempMaxC(today.tempMaxC())
-                .tempMinC(today.tempMinC())
-                .rainfallMm(today.rainfallMm())
-                .windKmh(today.windMaxKmh())
-                .weatherCondition(today.condition())
                 .remarks(AUTO_REMARK)
                 .build();
+        row.setTempMaxC(today.tempMaxC());
+        row.setTempMinC(today.tempMinC());
+        row.setRainfallMm(today.rainfallMm());
+        row.setWindKmh(today.windMaxKmh());
+        row.setWeatherCondition(today.condition());
+        row.setAqi(openMeteoClient.currentUsAqi(p.getSiteLatitude(), p.getSiteLongitude()));
         weatherRepository.save(row);
         return true;
     }

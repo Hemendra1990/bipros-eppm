@@ -15,7 +15,9 @@ public record DailyWeatherResponse(
     Double windKmh,
     String weatherCondition,
     Double workingHours,
-    String remarks
+    String remarks,
+    /** US AQI (0–500); auto-ingested rows only, null on manual entries. */
+    Integer aqi
 ) {
   public static DailyWeatherResponse from(DailyWeather w) {
     return new DailyWeatherResponse(
@@ -28,7 +30,8 @@ public record DailyWeatherResponse(
         w.getWindKmh(),
         w.getWeatherCondition(),
         w.getWorkingHours(),
-        w.getRemarks()
+        w.getRemarks(),
+        w.getAqi()
     );
   }
 }
