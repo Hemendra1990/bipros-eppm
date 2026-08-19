@@ -533,7 +533,7 @@ public class CapacityUtilizationReportService {
     }
 
     // Other-side expected per (DPR, activity) so the allocator can decide hiding.
-    Map<DprActivityKey, BigDecimal> otherSideExpected = loadOtherSideExpectedPerDpr(
+    Map<DprActivityKey, BigDecimal> otherSideExpected = computeOtherSideExpected(
         projectId, fromDate, toDate, normType, supervisorUserId);
 
     // Sub-contractor qty per DPR — manpower + equipment did NOT do this portion, it was the
@@ -810,6 +810,14 @@ public class CapacityUtilizationReportService {
       RoleAccumulator acc, Contribution c,
       BigDecimal allocated, BigDecimal dprQty,
       LocalDate referenceDate, YearMonth referenceMonth) {
+    // A row with no allocation AND no crew (nos = 0) has nothing measurable and nothing
+    // informational to show. Crediting the full DPR qty to it (the old behavior) leaked
+    // that qty into the budget whenever the same (work-activity, role) pair was tracked
+    // by other DPRs — allocated and informational qty share one accumulator — inflating
+    // Qty, Budget and Eff% in violation of the "NEVER attribute the full DPR qty to
+    // every role" rule. Verified live (Mason, Apr 2026): 363.64/62.065 shown vs the
+    // correct 271.64/55.89. Skip entirely — don't even create the accumulator entry.
+    if (allocated == null && (c.roleDays == null || c.roleDays.signum() == 0)) return;
     WorkActivityRoleKey waRoleKey = new WorkActivityRoleKey(c.workActivityId, c.roleId);
     ActivityRoleAccumulator ara = acc.activityRoles.computeIfAbsent(waRoleKey,
         k -> new ActivityRoleAccumulator(c.workActivityId, c.workActivityName,
@@ -1058,52 +1066,46 @@ public class CapacityUtilizationReportService {
    * EQUIPMENT expected (= Σ outputPerDay × NOS across equipment rows). The allocator uses this
    * as {@code otherSideExpected} to decide hiding in SERIES / SUBSTITUTE.
    *
+   * <p>Computed in memory through {@link #resolveNorm} (first-match-wins) — the old SQL
+   * version's norm join fanned out and double-counted whenever a role-keyed AND an unscoped
+   * norm both existed for the same work activity. Same canonical chain the visible side uses,
+   * so both sides of the allocator now see norms from one resolver (CAP-21 unification).
+   *
    * <p>HRS is intentionally not used — per-day basis only.
    */
-  @SuppressWarnings("unchecked")
-  Map<DprActivityKey, BigDecimal> loadOtherSideExpectedPerDpr(
+  Map<DprActivityKey, BigDecimal> computeOtherSideExpected(
       UUID projectId, LocalDate fromDate, LocalDate toDate, String thisSideNormType,
       java.util.List<UUID> supervisorUserId) {
     String otherSide = "MANPOWER".equals(thisSideNormType) ? "EQUIPMENT" : "MANPOWER";
-    String table = "EQUIPMENT".equals(otherSide) ? "dpr_equipment" : "dpr_manpower";
-    String normColumn = "EQUIPMENT".equals(otherSide)
-        ? "COALESCE(rn.output_per_day, 0)"
-        : "COALESCE(rn.output_per_man_per_day, rn.output_per_day, 0)";
-
-    String sql =
-        "SELECT d.id, d.activity_id, " +
-        "       SUM(r.nos * " + normColumn + ") AS expected " +
-        "FROM project." + table + " r " +
-        "JOIN project.daily_progress_reports d ON d.id = r.dpr_id " +
-        "JOIN activity.activities a ON a.id = d.activity_id " +
-        "LEFT JOIN resource.productivity_norms rn ON rn.work_activity_id = a.work_activity_id " +
-        "  AND rn.norm_type = :nt " +
-        "  AND (rn.role_id = r.role_id OR " +
-        "       (rn.role_id IS NULL AND rn.category_id IS NULL AND rn.grade_id IS NULL " +
-        "        AND rn.make IS NULL AND rn.model IS NULL " +
-        "        AND rn.resource_id IS NULL AND rn.resource_type_id IS NULL)) " +
-        "  AND rn.category_id IS NULL AND rn.grade_id IS NULL " +
-        "  AND rn.make IS NULL AND rn.model IS NULL " +
-        "WHERE d.project_id = :pid AND d.report_date BETWEEN :from AND :to " +
-        "AND d.approval_status = 'APPROVED' " +
-        supervisorPredicate(supervisorUserId) +
-        "GROUP BY d.id, d.activity_id";
-
-    var q = em.createNativeQuery(sql)
-        .setParameter("pid", projectId)
-        .setParameter("from", fromDate)
-        .setParameter("to", toDate)
-        .setParameter("nt", otherSide);
-    bindSupervisors(q, supervisorUserId);
-
+    List<Contribution> contribs = "MANPOWER".equals(otherSide)
+        ? loadManpowerContributions(projectId, fromDate, toDate, supervisorUserId)
+        : loadEquipmentContributions(projectId, fromDate, toDate, supervisorUserId);
+    Map<WorkActivityRoleKey, NormLookup> cache = new HashMap<>();
     Map<DprActivityKey, BigDecimal> out = new HashMap<>();
-    for (Object[] row : (List<Object[]>) q.getResultList()) {
-      UUID dpr = (UUID) row[0];
-      UUID act = (UUID) row[1];
-      BigDecimal exp = toBigDecimal(row[2]);
-      out.put(new DprActivityKey(dpr, act), exp == null ? BigDecimal.ZERO : exp);
+    for (Contribution c : contribs) {
+      if (c.dprId == null || c.activityId == null) continue;
+      NormLookup nl = cache.computeIfAbsent(
+          new WorkActivityRoleKey(c.workActivityId, c.roleId),
+          k -> resolveNorm(k.workActivityId(), k.roleId(), otherSide));
+      if (nl.outputPerDay() == null || nl.outputPerDay().signum() <= 0) continue;
+      BigDecimal nos = c.roleDays == null ? BigDecimal.ZERO : c.roleDays;
+      if (nos.signum() <= 0) continue;
+      out.merge(new DprActivityKey(c.dprId, c.activityId),
+          nl.outputPerDay().multiply(nos), BigDecimal::add);
     }
     return out;
+  }
+
+  /**
+   * Canonical reporting-side norm resolution (ROLE → UNSCOPED), exposed for
+   * {@link SupervisorPerformanceReportService} so both report engines resolve identical norms
+   * (CAP-21 unification). The deprecated resolver's RESOURCE_TYPE middle tier is intentionally
+   * absent — docs/CALCULATIONS-REFERENCE.md §7 froze this chain as the reference.
+   */
+  CapacityUtilizationReport.Budgeted resolveNormShared(
+      UUID workActivityId, UUID roleId, String normType) {
+    NormLookup nl = resolveNorm(workActivityId, roleId, normType);
+    return new CapacityUtilizationReport.Budgeted(nl.outputPerDay(), nl.source());
   }
 
   /** Gate 3 (TEAM-aware): PROJECT/ALL honour the request as-is; OWN forces self; TEAM allows
@@ -1220,7 +1222,7 @@ public class CapacityUtilizationReportService {
    * rate is used.
    */
   @SuppressWarnings("unchecked")
-  private Map<UUID, BigDecimal> loadRoleRates(
+  Map<UUID, BigDecimal> loadRoleRates(
       java.util.Set<UUID> roleIds, String normType,
       UUID projectId, LocalDate fromDate, LocalDate toDate) {
     if (roleIds == null || roleIds.isEmpty()) return Map.of();

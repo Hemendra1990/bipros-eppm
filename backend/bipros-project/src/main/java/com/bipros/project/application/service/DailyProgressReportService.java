@@ -269,6 +269,7 @@ public class DailyProgressReportService {
 
   public DailyProgressReportResponse update(UUID projectId, UUID id, UpdateDailyProgressReportRequest request) {
     DailyProgressReport dpr = find(projectId, id);
+    requireCanMutate(dpr, "DPR.UPDATE");
 
     if (effectiveStatus(dpr) == DprApprovalStatus.APPROVED) {
       throw new BusinessRuleException("DPR_LOCKED",
@@ -607,6 +608,7 @@ public class DailyProgressReportService {
 
   public void delete(UUID projectId, UUID id) {
     DailyProgressReport dpr = find(projectId, id);
+    requireCanMutate(dpr, "DPR.DELETE");
 
     if (effectiveStatus(dpr) == DprApprovalStatus.APPROVED) {
       throw new BusinessRuleException("DPR_LOCKED",
@@ -752,6 +754,25 @@ public class DailyProgressReportService {
       rows = rows.stream().filter(r -> rowInScope(r, scope)).toList();
     }
     return toSummaryRows(rows);
+  }
+
+  /**
+   * Authorization guard for edit/delete. Admin and holders of the full permission act on any
+   * in-scope DPR (unchanged behavior); a caller admitted by the controller's CREATE-or-full
+   * guard who lacks the full permission — i.e. the submitting supervisor — may mutate ONLY
+   * rows they submitted. This is the server side of the "fix and resubmit" loop the rejection
+   * notification instructs; ownership is by submittedByUserId, so it can never widen to
+   * someone else's rows.
+   */
+  private void requireCanMutate(DailyProgressReport dpr, String permission) {
+    boolean admin = projectAccessGuard.getAccessibleProjectIdsForCurrentUser() == null;
+    if (admin) return;
+
+    UUID me = projectAccessGuard.currentUserId();
+    if (me != null && userPermissionPort.hasPermission(me, permission)) return;
+    if (me != null && me.equals(dpr.getSubmittedByUserId())) return;
+    throw new AccessDeniedException(
+        "Editing this DPR requires " + permission + " or being its submitter");
   }
 
   /**

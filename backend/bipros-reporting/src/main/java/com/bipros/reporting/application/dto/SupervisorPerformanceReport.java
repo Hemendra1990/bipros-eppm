@@ -117,7 +117,7 @@ public record SupervisorPerformanceReport(
       /** Portion of {@link #actualManDays} where the trade's norm didn't resolve for the activity.
        *  Null when zero. Cumulative-window total. */
       BigDecimal actualDaysUntracked,
-      BigDecimal utilizationPct,  // (budgetedManDays / trackedManDays) × 100, capped 999 — cumulative window
+      BigDecimal utilizationPct,  // (budgetedManDays / trackedManDays) × 100, uncapped (CAP-21: matches the Capacity tab) — cumulative window
       BigDecimal costImplication, // (trackedManDays - budgetedManDays) × mmRate — cumulative window
       String normSource,          // SPECIFIC_RESOURCE | RESOURCE_TYPE | RESOURCE_LEGACY | NONE
       /** Optional Day / CalendarMonth / Cumulative breakdown. Null on legacy responses

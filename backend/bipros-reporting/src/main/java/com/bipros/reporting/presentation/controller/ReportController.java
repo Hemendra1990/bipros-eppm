@@ -185,7 +185,7 @@ public class ReportController {
   }
 
   @GetMapping("/capacity-utilization")
-  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<CapacityUtilizationReport> getCapacityUtilization(
       @RequestParam UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
@@ -204,7 +204,7 @@ public class ReportController {
    * roles down the left).
    */
   @GetMapping("/capacity-utilization/aggregate")
-  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<com.bipros.reporting.application.dto.CapacityUtilizationAggregateReport>
       getCapacityUtilizationAggregate(
           @RequestParam UUID projectId,
@@ -223,7 +223,7 @@ public class ReportController {
    * norms. Reads {@code project.dpr_manpower}/{@code project.dpr_equipment} directly.
    */
   @GetMapping("/supervisor-performance")
-  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<SupervisorPerformanceReport> getSupervisorPerformance(
       @RequestParam UUID projectId,
       @RequestParam(required = false) UUID supervisorUserId,
@@ -240,7 +240,7 @@ public class ReportController {
    * full report plus pivoted trade/equipment deltas.
    */
   @GetMapping("/supervisor-performance/compare")
-  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<SupervisorPerformanceComparison> compareSupervisorPerformance(
       @RequestParam UUID projectId,
       @RequestParam List<UUID> supervisorUserIds,
@@ -263,7 +263,7 @@ public class ReportController {
    * when the range includes today). {@code workDays} populates the highlighted Work days cell.
    */
   @GetMapping("/capacity-utilization/excel")
-  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.EXPORT')")
   public ResponseEntity<byte[]> downloadCapacityUtilizationExcel(
       @RequestParam UUID projectId,
       @RequestParam(required = false) String month,

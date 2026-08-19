@@ -260,6 +260,21 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
   long countByProjectIdAndReportDate(UUID projectId, LocalDate reportDate);
 
   /**
+   * Real DPR-document counts per supervisor over a window — any approval status, the same
+   * basis as {@code GET /dpr/supervisors-used}. Drives the DBS roster's {@code dprCount}
+   * so both supervisor dropdowns show the same number, computed live from the ledger
+   * rather than from the DBS recompute snapshots.
+   */
+  @Query("SELECT d.supervisorUserId, COUNT(d) FROM DailyProgressReport d "
+      + "WHERE d.projectId = :projectId AND d.reportDate BETWEEN :from AND :to "
+      + "AND d.supervisorUserId IS NOT NULL "
+      + "GROUP BY d.supervisorUserId")
+  List<Object[]> countDprsBySupervisorBetween(
+      @Param("projectId") UUID projectId,
+      @Param("from") LocalDate from,
+      @Param("to") LocalDate to);
+
+  /**
    * Most-recent distinct report dates for the project within an optional [from,to] window and
    * strictly older than an optional {@code before} cursor, optionally narrowed to one activity,
    * one supervisor and one approval status.

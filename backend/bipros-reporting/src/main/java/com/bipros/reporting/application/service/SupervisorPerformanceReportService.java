@@ -51,11 +51,12 @@ public class SupervisorPerformanceReportService {
 
   private static final double DEFAULT_HOURS_PER_DAY = 8.0;
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-  private static final BigDecimal UTILIZATION_CAP = BigDecimal.valueOf(999);
 
   @PersistenceContext private EntityManager em;
 
-  private final ProductivityNormResolver normResolver;
+  /** Canonical engine (CAP-21 unification): norms, rates and side-expected semantics are
+   *  shared with it so this report can never drift from the Capacity Utilization tab. */
+  private final CapacityUtilizationReportService capacityService;
   private final com.bipros.common.security.ScopeResolverPort scopeResolver;
 
   // ─── Public API ─────────────────────────────────────────────────────────────────────────────
@@ -88,9 +89,9 @@ public class SupervisorPerformanceReportService {
     LocalDate effectiveFrom = fromDate == null ? effectiveTo.withDayOfMonth(1) : fromDate;
     int effectiveWorkDays = workDays > 0 ? workDays : 26;
     // Day / CalendarMonth anchor: today when today falls inside the window, otherwise
-    // effectiveTo (the last day of the window). Same rule as CapacityUtilizationReportService.
+    // effectiveTo (the last day of the window). Same rule as CapacityUtilizationReportService
+    // — including no clamp to effectiveFrom (CAP-21: buckets must match the capacity tab).
     LocalDate referenceDate = effectiveTo.isBefore(today) ? effectiveTo : today;
-    if (referenceDate.isBefore(effectiveFrom)) referenceDate = effectiveFrom;
     YearMonth referenceMonth = YearMonth.from(referenceDate);
 
     String supervisorName = supervisorUserId == null ? null
@@ -104,23 +105,36 @@ public class SupervisorPerformanceReportService {
         fetchActivityMeta(projectId, supervisorUserId, activityId, effectiveFrom, effectiveTo,
             referenceDate, referenceMonth);
 
-    // Resolve norms once per (workActivityId, resourceTypeId) to avoid hammering the DB inside
-    // the inner loops. Both the trade rollup and the activity drill-down consume the same map.
-    // Cache norms with kind-aware keys so a MANPOWER lookup and an EQUIPMENT lookup for the
-    // same (work_activity, resource_type) don't collide and don't accidentally cross-apply.
+    // Resolve norms once per key to avoid hammering the DB inside the inner loops. Both the
+    // trade rollup and the activity drill-down consume the same map. CAP-21 unification: norms
+    // come from the CANONICAL chain (capacity's ROLE → UNSCOPED) — resourceTypeId stays in the
+    // cache key for compatibility but no longer influences resolution.
     Map<NormCacheKey, Budgeted> normCache = new HashMap<>();
     for (ManpowerCellRow c : manpowerCells) {
       normCache.computeIfAbsent(
           new NormCacheKey(c.workActivityId(), c.roleId(), c.resourceTypeId(), "MANPOWER"),
-          k -> normResolver.resolveByRoleOrType(
-              k.workActivityId(), k.roleId(), k.resourceTypeId(), k.normType()));
+          k -> capacityService.resolveNormShared(k.workActivityId(), k.roleId(), k.normType()));
     }
     for (EquipmentCellRow c : equipmentCells) {
       normCache.computeIfAbsent(
           new NormCacheKey(c.workActivityId(), c.roleId(), c.resourceTypeId(), "EQUIPMENT"),
-          k -> normResolver.resolveByRoleOrType(
-              k.workActivityId(), k.roleId(), k.resourceTypeId(), k.normType()));
+          k -> capacityService.resolveNormShared(k.workActivityId(), k.roleId(), k.normType()));
     }
+
+    // CAP-21 unification: MM/Eq rates come from the canonical hours-weighted DPR-deployment
+    // rate the Capacity tab's Rate/Day column uses, not the unweighted line-cost quotient.
+    java.util.Set<UUID> mpRoleIds = new java.util.HashSet<>();
+    for (ManpowerCellRow c : manpowerCells) {
+      if (c.roleId() != null) mpRoleIds.add(c.roleId());
+    }
+    java.util.Set<UUID> eqRoleIds = new java.util.HashSet<>();
+    for (EquipmentCellRow c : equipmentCells) {
+      if (c.roleId() != null) eqRoleIds.add(c.roleId());
+    }
+    Map<UUID, BigDecimal> mpRoleRates = capacityService.loadRoleRates(
+        mpRoleIds, "MANPOWER", projectId, effectiveFrom, effectiveTo);
+    Map<UUID, BigDecimal> eqRoleRates = capacityService.loadRoleRates(
+        eqRoleIds, "EQUIPMENT", projectId, effectiveFrom, effectiveTo);
 
     // Real per-(activity, role) planned headcount from RoleAssignment, used by the drill-down's
     // PLAN column. The Summary section above already uses this on the top-level rollups; the
@@ -152,10 +166,10 @@ public class SupervisorPerformanceReportService {
     // === Cumulative pass — produces the canonical report. Hidden notes only come from this pass. ===
     List<TradeRollup> tradeRollupsCum = rollUpManpower(
         manpowerCells, equipmentExpected, normCache, normCombosByActivity, subContractorQtyByDpr,
-        manpowerHidden, effectiveWorkDays);
+        manpowerHidden, mpRoleRates);
     List<EquipmentRollup> equipmentRollupsCum = rollUpEquipment(
         equipmentCells, manpowerExpected, normCache, normCombosByActivity, subContractorQtyByDpr,
-        equipmentHidden, effectiveWorkDays);
+        equipmentHidden, eqRoleRates);
     List<ActivityDrillDown> drillDownCum = buildDrillDown(
         manpowerCells, equipmentCells, normCache, activityMeta,
         plannedByActivityRole, manpowerExpected, equipmentExpected, normCombosByActivity,
@@ -173,10 +187,10 @@ public class SupervisorPerformanceReportService {
     List<com.bipros.reporting.application.dto.CapacityUtilizationReport.HiddenSideNote> sinkB = new ArrayList<>();
     List<TradeRollup> tradeRollupsDay = rollUpManpower(
         mpCellsDay, equipmentExpected, normCache, normCombosByActivity, subContractorQtyByDpr,
-        sinkA, effectiveWorkDays);
+        sinkA, mpRoleRates);
     List<EquipmentRollup> equipmentRollupsDay = rollUpEquipment(
         eqCellsDay, manpowerExpected, normCache, normCombosByActivity, subContractorQtyByDpr,
-        sinkB, effectiveWorkDays);
+        sinkB, eqRoleRates);
     List<ActivityDrillDown> drillDownDay = buildDrillDown(
         mpCellsDay, eqCellsDay, normCache, activityMeta,
         plannedByActivityRole, manpowerExpected, equipmentExpected, normCombosByActivity,
@@ -199,10 +213,10 @@ public class SupervisorPerformanceReportService {
     List<com.bipros.reporting.application.dto.CapacityUtilizationReport.HiddenSideNote> sinkD = new ArrayList<>();
     List<TradeRollup> tradeRollupsMonth = rollUpManpower(
         mpCellsMonth, equipmentExpected, normCache, normCombosByActivity, subContractorQtyByDpr,
-        sinkC, effectiveWorkDays);
+        sinkC, mpRoleRates);
     List<EquipmentRollup> equipmentRollupsMonth = rollUpEquipment(
         eqCellsMonth, manpowerExpected, normCache, normCombosByActivity, subContractorQtyByDpr,
-        sinkD, effectiveWorkDays);
+        sinkD, eqRoleRates);
     List<ActivityDrillDown> drillDownMonth = buildDrillDown(
         mpCellsMonth, eqCellsMonth, normCache, activityMeta,
         plannedByActivityRole, manpowerExpected, equipmentExpected, normCombosByActivity,
@@ -529,8 +543,13 @@ public class SupervisorPerformanceReportService {
     // combination (SERIES / PARALLEL / SUBSTITUTE).
     List<Object[]> raw = em.createNativeQuery(
             "SELECT "
-                + "  rr.code                                                       AS trade_key, "
-                + "  rr.name                                                       AS trade_label, "
+                // CAP-21 population parity with CapacityUtilizationReportService: NULL-role
+                // (free-text trade) rows are KEPT — keyed by the trade text — and rows whose
+                // activity has no work-activity link are DROPPED, exactly like the capacity
+                // contribution loaders. tradeKey falls back to UPPER(TRIM(trade)) per the DTO
+                // contract; capacity's synthetic accKey lowercases the same string.
+                + "  COALESCE(rr.code, UPPER(TRIM(m.trade)))                       AS trade_key, "
+                + "  COALESCE(rr.name, m.trade)                                    AS trade_label, "
                 + "  rr.resource_type_id                                           AS resource_type_id, "
                 + "  d.activity_id                                                 AS activity_id, "
                 + "  a.work_activity_id                                            AS work_activity_id, "
@@ -549,12 +568,12 @@ public class SupervisorPerformanceReportService {
                 + "  d.report_date                                                 AS report_date "
                 + "FROM project.daily_progress_reports d "
                 + "JOIN project.dpr_manpower m       ON m.dpr_id = d.id "
-                + "JOIN resource.resource_roles rr  ON rr.id = m.role_id "
+                + "LEFT JOIN resource.resource_roles rr ON rr.id = m.role_id "
                 + "LEFT JOIN resource.manpower_role_rates mrr ON mrr.id = m.manpower_role_rate_id "
-                + "LEFT JOIN activity.activities a   ON a.id = d.activity_id "
+                + "JOIN activity.activities a        ON a.id = d.activity_id "
                 + "WHERE d.project_id = :projectId "
                 + "  AND d.report_date BETWEEN :fromDate AND :toDate "
-                + "  AND m.role_id IS NOT NULL "
+                + "  AND a.work_activity_id IS NOT NULL "
                 + "  AND d.approval_status = 'APPROVED' "
                 // Filter by the supervisor who actually filed the DPR. Co-supervisors on a
                 // shared activity each see only their own DPRs — matches the supervisor-dropdown
@@ -563,7 +582,7 @@ public class SupervisorPerformanceReportService {
                 + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
                 + "  AND (CAST(:activityId AS uuid) IS NULL "
                 + "       OR d.activity_id = CAST(:activityId AS uuid)) "
-                + "GROUP BY rr.code, rr.name, rr.resource_type_id, d.activity_id, "
+                + "GROUP BY rr.code, rr.name, m.trade, rr.resource_type_id, d.activity_id, "
                 + "         a.work_activity_id, a.code, a.name, d.unit, m.role_id, d.id, d.report_date")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
@@ -598,8 +617,10 @@ public class SupervisorPerformanceReportService {
     // per-DPR granularity.
     List<Object[]> raw = em.createNativeQuery(
             "SELECT "
-                + "  rr.code                                                      AS equipment_key, "
-                + "  rr.name                                                      AS equipment_label, "
+                // Same CAP-21 population parity as the manpower query: NULL-role equipment
+                // rows kept (keyed by equipment_type), rows without a work-activity link dropped.
+                + "  COALESCE(rr.code, UPPER(TRIM(e.equipment_type)))             AS equipment_key, "
+                + "  COALESCE(rr.name, e.equipment_type)                          AS equipment_label, "
                 + "  rr.resource_type_id                                          AS resource_type_id, "
                 + "  d.activity_id                                                AS activity_id, "
                 + "  a.work_activity_id                                           AS work_activity_id, "
@@ -615,19 +636,19 @@ public class SupervisorPerformanceReportService {
                 + "  d.report_date                                                AS report_date "
                 + "FROM project.daily_progress_reports d "
                 + "JOIN project.dpr_equipment e         ON e.dpr_id = d.id "
-                + "JOIN resource.resource_roles rr     ON rr.id = e.role_id "
+                + "LEFT JOIN resource.resource_roles rr ON rr.id = e.role_id "
                 + "LEFT JOIN resource.equipment_role_variants erv ON erv.id = e.equipment_role_variant_id "
-                + "LEFT JOIN activity.activities a     ON a.id = d.activity_id "
+                + "JOIN activity.activities a          ON a.id = d.activity_id "
                 + "WHERE d.project_id = :projectId "
                 + "  AND d.report_date BETWEEN :fromDate AND :toDate "
-                + "  AND e.role_id IS NOT NULL "
+                + "  AND a.work_activity_id IS NOT NULL "
                 + "  AND d.approval_status = 'APPROVED' "
                 // Same filer-based filter as the manpower query above.
                 + "  AND (CAST(:supervisorUserId AS uuid) IS NULL "
                 + "       OR d.supervisor_user_id = CAST(:supervisorUserId AS uuid)) "
                 + "  AND (CAST(:activityId AS uuid) IS NULL "
                 + "       OR d.activity_id = CAST(:activityId AS uuid)) "
-                + "GROUP BY rr.code, rr.name, rr.resource_type_id, d.activity_id, "
+                + "GROUP BY rr.code, rr.name, e.equipment_type, rr.resource_type_id, d.activity_id, "
                 + "         a.work_activity_id, a.code, a.name, d.unit, e.role_id, d.id, d.report_date")
         .setParameter("projectId", projectId)
         .setParameter("fromDate", fromDate)
@@ -756,7 +777,7 @@ public class SupervisorPerformanceReportService {
       Map<UUID, String> normCombos,
       Map<UUID, BigDecimal> subContractorQtyByDpr,
       List<com.bipros.reporting.application.dto.CapacityUtilizationReport.HiddenSideNote> hiddenOut,
-      int workDays) {
+      Map<UUID, BigDecimal> roleRates) {
 
     // Group cells by (DPR, activity) — one allocator call per group.
     Map<DprActivityKey, List<ManpowerCellRow>> groups = new LinkedHashMap<>();
@@ -773,20 +794,29 @@ public class SupervisorPerformanceReportService {
       DprActivityKey key = entry.getKey();
       List<ManpowerCellRow> groupCells = entry.getValue();
 
-      // Build allocator inputs + this-side expected.
-      List<CapacityAllocator.RoleInput> inputs = new ArrayList<>(groupCells.size());
-      BigDecimal sideExpected = BigDecimal.ZERO;
+      // Build allocator inputs + this-side expected. CAP-21: merge cells per roleId first
+      // (capacity's roleMap semantics) so NULL-role trades all fold onto the null key and
+      // the allocator sees ONE input per role, exactly like the capacity engine.
+      Map<UUID, Integer> nosByRole = new LinkedHashMap<>();
+      Map<UUID, BigDecimal> normByRole = new LinkedHashMap<>();
       BigDecimal dprQty = BigDecimal.ZERO;
       for (ManpowerCellRow c : groupCells) {
         Budgeted norm = normCache.get(new NormCacheKey(
             c.workActivityId(), c.roleId(), c.resourceTypeId(), "MANPOWER"));
         BigDecimal n = norm == null ? null : norm.outputPerDay();
         int nos = c.actualNos() == null ? 0 : c.actualNos().intValue();
-        inputs.add(new CapacityAllocator.RoleInput(c.roleId(), nos, n));
-        if (n != null && n.signum() > 0 && nos > 0) {
-          sideExpected = sideExpected.add(n.multiply(BigDecimal.valueOf(nos)));
-        }
+        nosByRole.merge(c.roleId(), nos, Integer::sum);
+        normByRole.put(c.roleId(), n);
         if (c.qty() != null && c.qty().compareTo(dprQty) > 0) dprQty = c.qty();
+      }
+      List<CapacityAllocator.RoleInput> inputs = new ArrayList<>(nosByRole.size());
+      BigDecimal sideExpected = BigDecimal.ZERO;
+      for (var rm : nosByRole.entrySet()) {
+        BigDecimal n = normByRole.get(rm.getKey());
+        inputs.add(new CapacityAllocator.RoleInput(rm.getKey(), rm.getValue(), n));
+        if (n != null && n.signum() > 0 && rm.getValue() > 0) {
+          sideExpected = sideExpected.add(n.multiply(BigDecimal.valueOf(rm.getValue())));
+        }
       }
       // Effective qty for the allocator = DPR qty − sub-contractor qty, clamped to 0.
       BigDecimal subQty = subContractorQtyByDpr.getOrDefault(key.dprId(), BigDecimal.ZERO);
@@ -817,7 +847,7 @@ public class SupervisorPerformanceReportService {
             c.workActivityId(), c.roleId(), c.resourceTypeId(), "MANPOWER"));
         BigDecimal cellActualDays = c.actualNos() == null ? BigDecimal.ZERO : c.actualNos();
         acc.actualDays = acc.actualDays.add(cellActualDays);
-        if (c.lineCostTotal() != null) acc.lineCostTotal = acc.lineCostTotal.add(c.lineCostTotal());
+        if (acc.roleId == null && c.roleId() != null) acc.roleId = c.roleId();
 
         CapacityAllocator.RoleAlloc ra = allocByRole.get(c.roleId());
         if (result.hidden()) {
@@ -851,7 +881,7 @@ public class SupervisorPerformanceReportService {
 
     List<TradeRollup> out = new ArrayList<>(byTrade.size());
     for (TradeAccumulator a : byTrade.values()) {
-      out.add(buildTradeRollup(a, workDays));
+      out.add(buildTradeRollup(a, roleRates));
     }
     out.sort(Comparator.comparing(TradeRollup::tradeLabel, Comparator.nullsLast(String::compareToIgnoreCase)));
     return out;
@@ -864,7 +894,7 @@ public class SupervisorPerformanceReportService {
       Map<UUID, String> normCombos,
       Map<UUID, BigDecimal> subContractorQtyByDpr,
       List<com.bipros.reporting.application.dto.CapacityUtilizationReport.HiddenSideNote> hiddenOut,
-      int workDays) {
+      Map<UUID, BigDecimal> roleRates) {
 
     Map<DprActivityKey, List<EquipmentCellRow>> groups = new LinkedHashMap<>();
     for (EquipmentCellRow c : cells) {
@@ -880,19 +910,27 @@ public class SupervisorPerformanceReportService {
       DprActivityKey key = entry.getKey();
       List<EquipmentCellRow> groupCells = entry.getValue();
 
-      List<CapacityAllocator.RoleInput> inputs = new ArrayList<>(groupCells.size());
-      BigDecimal sideExpected = BigDecimal.ZERO;
+      // Same CAP-21 per-role merge as rollUpManpower — one allocator input per role.
+      Map<UUID, Integer> nosByRole = new LinkedHashMap<>();
+      Map<UUID, BigDecimal> normByRole = new LinkedHashMap<>();
       BigDecimal dprQty = BigDecimal.ZERO;
       for (EquipmentCellRow c : groupCells) {
         Budgeted norm = normCache.get(new NormCacheKey(
             c.workActivityId(), c.roleId(), c.resourceTypeId(), "EQUIPMENT"));
         BigDecimal n = norm == null ? null : norm.outputPerDay();
         int nos = c.actualNos() == null ? 0 : c.actualNos().intValue();
-        inputs.add(new CapacityAllocator.RoleInput(c.roleId(), nos, n));
-        if (n != null && n.signum() > 0 && nos > 0) {
-          sideExpected = sideExpected.add(n.multiply(BigDecimal.valueOf(nos)));
-        }
+        nosByRole.merge(c.roleId(), nos, Integer::sum);
+        normByRole.put(c.roleId(), n);
         if (c.qty() != null && c.qty().compareTo(dprQty) > 0) dprQty = c.qty();
+      }
+      List<CapacityAllocator.RoleInput> inputs = new ArrayList<>(nosByRole.size());
+      BigDecimal sideExpected = BigDecimal.ZERO;
+      for (var rm : nosByRole.entrySet()) {
+        BigDecimal n = normByRole.get(rm.getKey());
+        inputs.add(new CapacityAllocator.RoleInput(rm.getKey(), rm.getValue(), n));
+        if (n != null && n.signum() > 0 && rm.getValue() > 0) {
+          sideExpected = sideExpected.add(n.multiply(BigDecimal.valueOf(rm.getValue())));
+        }
       }
       BigDecimal subQty = subContractorQtyByDpr.getOrDefault(key.dprId(), BigDecimal.ZERO);
       BigDecimal qtyDone = dprQty.subtract(subQty);
@@ -921,7 +959,7 @@ public class SupervisorPerformanceReportService {
             c.workActivityId(), c.roleId(), c.resourceTypeId(), "EQUIPMENT"));
         BigDecimal cellActualDays = c.actualNos() == null ? BigDecimal.ZERO : c.actualNos();
         acc.actualDays = acc.actualDays.add(cellActualDays);
-        if (c.lineCostTotal() != null) acc.lineCostTotal = acc.lineCostTotal.add(c.lineCostTotal());
+        if (acc.roleId == null && c.roleId() != null) acc.roleId = c.roleId();
 
         CapacityAllocator.RoleAlloc ra = allocByRole.get(c.roleId());
         if (result.hidden()) {
@@ -953,16 +991,17 @@ public class SupervisorPerformanceReportService {
 
     List<EquipmentRollup> out = new ArrayList<>(byEquipment.size());
     for (TradeAccumulator a : byEquipment.values()) {
-      out.add(buildEquipmentRollup(a, workDays));
+      out.add(buildEquipmentRollup(a, roleRates));
     }
     out.sort(Comparator.comparing(EquipmentRollup::equipmentLabel, Comparator.nullsLast(String::compareToIgnoreCase)));
     return out;
   }
 
-  private TradeRollup buildTradeRollup(TradeAccumulator a, int workDays) {
-    BigDecimal mmRate = (a.actualDays.signum() > 0)
-        ? a.lineCostTotal.divide(a.actualDays, 4, RoundingMode.HALF_UP)
-        : null;
+  private TradeRollup buildTradeRollup(TradeAccumulator a, Map<UUID, BigDecimal> roleRates) {
+    // CAP-21: canonical rate — the same hours-weighted, DPR-deployment-weighted rate the
+    // Capacity tab's Rate/Day column shows. NULL-role trades have no rate row → "—",
+    // exactly like the capacity engine.
+    BigDecimal mmRate = a.roleId == null ? null : roleRates.get(a.roleId);
     // Util uses the TRACKED denominator only — suppressed + untracked days are excluded so
     // a role on a mix of governed and ungoverned activities isn't penalised.
     BigDecimal trackedActual = a.actualDays
@@ -988,10 +1027,9 @@ public class SupervisorPerformanceReportService {
         a.normSource != null ? a.normSource : "NONE");
   }
 
-  private EquipmentRollup buildEquipmentRollup(TradeAccumulator a, int workDays) {
-    BigDecimal hourRate = (a.actualDays.signum() > 0)
-        ? a.lineCostTotal.divide(a.actualDays, 4, RoundingMode.HALF_UP)
-        : null;
+  private EquipmentRollup buildEquipmentRollup(TradeAccumulator a, Map<UUID, BigDecimal> roleRates) {
+    // Same canonical-rate rule as buildTradeRollup.
+    BigDecimal hourRate = a.roleId == null ? null : roleRates.get(a.roleId);
     BigDecimal trackedActual = a.actualDays
         .subtract(a.actualDaysOnHiddenSides)
         .subtract(a.actualDaysUntracked);
@@ -1252,8 +1290,9 @@ public class SupervisorPerformanceReportService {
     if (budgetedDays == null || actualDays == null || actualDays.signum() <= 0) {
       return null;
     }
-    BigDecimal pct = budgetedDays.divide(actualDays, 8, RoundingMode.HALF_UP).multiply(HUNDRED);
-    return pct.min(UTILIZATION_CAP).setScale(2, RoundingMode.HALF_UP);
+    // CAP-21: identical to CapacityUtilizationReportService.buildPeriod — scale-4 division,
+    // uncapped, so the same trade can never show different Eff% on the two report surfaces.
+    return budgetedDays.divide(actualDays, 4, RoundingMode.HALF_UP).multiply(HUNDRED);
   }
 
   static BigDecimal computeCostImplication(
@@ -1350,8 +1389,10 @@ public class SupervisorPerformanceReportService {
     Map<DprActivityKey, Map<UUID, CapacityAllocator.RoleAlloc>> out = new HashMap<>();
     for (var entry : groups.entrySet()) {
       DprActivityKey key = entry.getKey();
-      List<CapacityAllocator.RoleInput> inputs = new ArrayList<>();
-      BigDecimal sideExpected = BigDecimal.ZERO;
+      // Same CAP-21 per-role merge as the rollups — the drill-down must see the exact
+      // allocation the trade rollups (and the capacity engine) computed.
+      Map<UUID, Integer> nosByRole = new LinkedHashMap<>();
+      Map<UUID, BigDecimal> normByRole = new LinkedHashMap<>();
       BigDecimal dprQty = BigDecimal.ZERO;
       for (Object o : entry.getValue()) {
         UUID workActivityId, roleId, resourceTypeId;
@@ -1367,11 +1408,18 @@ public class SupervisorPerformanceReportService {
         Budgeted norm = normCache.get(new NormCacheKey(workActivityId, roleId, resourceTypeId, thisSideNormType));
         BigDecimal n = norm == null ? null : norm.outputPerDay();
         int nos = actualNos == null ? 0 : actualNos.intValue();
-        inputs.add(new CapacityAllocator.RoleInput(roleId, nos, n));
-        if (n != null && n.signum() > 0 && nos > 0) {
-          sideExpected = sideExpected.add(n.multiply(BigDecimal.valueOf(nos)));
-        }
+        nosByRole.merge(roleId, nos, Integer::sum);
+        normByRole.put(roleId, n);
         if (q != null && q.compareTo(dprQty) > 0) dprQty = q;
+      }
+      List<CapacityAllocator.RoleInput> inputs = new ArrayList<>(nosByRole.size());
+      BigDecimal sideExpected = BigDecimal.ZERO;
+      for (var rm : nosByRole.entrySet()) {
+        BigDecimal n = normByRole.get(rm.getKey());
+        inputs.add(new CapacityAllocator.RoleInput(rm.getKey(), rm.getValue(), n));
+        if (n != null && n.signum() > 0 && rm.getValue() > 0) {
+          sideExpected = sideExpected.add(n.multiply(BigDecimal.valueOf(rm.getValue())));
+        }
       }
       BigDecimal subQty = subContractorQtyByDpr.getOrDefault(key.dprId(), BigDecimal.ZERO);
       BigDecimal qtyDone = dprQty.subtract(subQty);
@@ -1427,7 +1475,8 @@ public class SupervisorPerformanceReportService {
     /** ALLOCATED qty for this trade — sum of CapacityAllocator.RoleAlloc.allocatedQty across
      *  tracked (DPR, activity) groups. Null when no tracked cells. */
     BigDecimal qtyDone = null;
-    BigDecimal lineCostTotal = BigDecimal.ZERO;
+    /** First non-null role FK — the canonical-rate lookup key (CAP-21). */
+    UUID roleId;
     String normSource = null;
 
     TradeAccumulator(String key, String label) {

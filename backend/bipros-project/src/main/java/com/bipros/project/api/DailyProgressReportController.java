@@ -134,7 +134,11 @@ public class DailyProgressReportController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE')")
+  // CREATE is admitted so the submitting supervisor can fix-and-resubmit their
+  // own DPR; the service narrows CREATE-only callers to rows they submitted
+  // (requireCanMutate). Full DPR.UPDATE keeps its wider reach unchanged.
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.UPDATE') "
+      + "or @projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<DailyProgressReportResponse>> update(
       @PathVariable UUID projectId,
       @PathVariable UUID id,
@@ -144,7 +148,9 @@ public class DailyProgressReportController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.DELETE')")
+  // Same submitter carve-out as PUT — see requireCanMutate in the service.
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.DELETE') "
+      + "or @projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<Void>> delete(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {

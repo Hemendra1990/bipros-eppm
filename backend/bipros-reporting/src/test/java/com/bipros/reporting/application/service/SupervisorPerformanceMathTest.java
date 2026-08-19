@@ -11,7 +11,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Math contract for the supervisor performance rollup. Pins the SC180 semantics:
  * <ul>
- *   <li>Utilization % = budgetedDays / actualDays × 100, capped at 999, 2dp.</li>
+ *   <li>Utilization % = budgetedDays / actualDays × 100 — UNCAPPED and scale-4 division,
+ *       byte-identical to CapacityUtilizationReportService.buildPeriod (CAP-21 unification:
+ *       the same trade must never show different Eff% on the two report surfaces).</li>
  *   <li>Cost implication = (actualDays - budgetedDays) × rate, 2dp.</li>
  *   <li>Missing inputs propagate as null — never zero, so the UI can render "—".</li>
  * </ul>
@@ -48,11 +50,21 @@ class SupervisorPerformanceMathTest {
     }
 
     @Test
-    @DisplayName("crew far above plan capped at 999%")
-    void cappedAt999() {
+    @DisplayName("crew far above plan is NOT capped — matches the Capacity tab (CAP-21)")
+    void uncappedAbovePlan() {
       BigDecimal pct = SupervisorPerformanceReportService.computeUtilizationPct(
           new BigDecimal("1000"), new BigDecimal("1"));
-      assertThat(pct).isEqualByComparingTo(new BigDecimal("999.00"));
+      assertThat(pct).isEqualByComparingTo(new BigDecimal("100000"));
+    }
+
+    @Test
+    @DisplayName("CAP-21 regression: the live Carpenter row (budget 130.905 / counted 53) → 246.99%")
+    void carpenterRegression() {
+      // The same inputs the Capacity tab showed as 247% must produce the same figure here —
+      // before unification this surface said 79.1% for the identical crew and window.
+      BigDecimal pct = SupervisorPerformanceReportService.computeUtilizationPct(
+          new BigDecimal("130.905"), new BigDecimal("53"));
+      assertThat(pct).isEqualByComparingTo(new BigDecimal("246.99"));
     }
 
     @Test
