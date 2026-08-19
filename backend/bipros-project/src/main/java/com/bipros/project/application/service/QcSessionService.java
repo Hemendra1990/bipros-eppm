@@ -14,7 +14,6 @@ import com.bipros.project.domain.model.QcSession;
 import com.bipros.project.domain.model.QcTestItem;
 import com.bipros.project.domain.model.QcTestType;
 import com.bipros.project.domain.repository.QcSessionRepository;
-import com.bipros.project.domain.repository.QcTestItemRepository;
 import com.bipros.project.domain.repository.QcTestTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +38,6 @@ import java.util.UUID;
 public class QcSessionService {
 
     private final QcSessionRepository sessionRepository;
-    private final QcTestItemRepository itemRepository;
     private final QcTestTypeRepository typeRepository;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -69,6 +67,8 @@ public class QcSessionService {
             .testDate(request.testDate())
             .chainageFrom(request.chainageFrom())
             .chainageTo(request.chainageTo())
+            .supervisorUserId(request.supervisorUserId())
+            .supervisorName(request.supervisorName())
             .build();
 
         session = sessionRepository.save(session);
@@ -87,9 +87,12 @@ public class QcSessionService {
         session.setTestDate(request.testDate());
         session.setChainageFrom(request.chainageFrom());
         session.setChainageTo(request.chainageTo());
+        session.setSupervisorUserId(request.supervisorUserId());
+        session.setSupervisorName(request.supervisorName());
 
-        // Full-replacement semantics: delete all items and re-insert
-        itemRepository.deleteBySessionId(session.getId());
+        // Full-replacement semantics: orphanRemoval deletes the old rows at flush.
+        // (A bulk deleteBySessionId here double-deleted rows already managed by the
+        // join-fetched collection and surfaced as a 409 optimistic-lock conflict.)
         session.getItems().clear();
         session.getItems().addAll(buildItems(session, request.items(), projectId));
         session = sessionRepository.save(session);

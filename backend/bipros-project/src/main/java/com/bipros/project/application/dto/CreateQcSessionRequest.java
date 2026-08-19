@@ -15,5 +15,7 @@ public record CreateQcSessionRequest(
     @NotNull LocalDate testDate,
     @Size(max = 30) String chainageFrom,
     @Size(max = 30) String chainageTo,
+    UUID supervisorUserId,
+    @Size(max = 150) String supervisorName,
     @NotNull @Valid List<QcTestItemRow> items
 ) {}

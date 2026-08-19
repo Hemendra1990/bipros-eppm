@@ -29,7 +29,10 @@ public class RfiRegisterController {
     private final RfiRegisterService rfiService;
 
     @PostMapping
-    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DOCUMENT.CREATE')")
+    // RFI.CREATE lets field profiles (supervisor/engineer) raise RFIs after a failed QC
+    // test without holding DOCUMENT.CREATE; document-tier profiles keep working unchanged.
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RFI.CREATE')"
+        + " or @projectAccess.hasProjectPermission(#projectId, 'DOCUMENT.CREATE')")
     public ResponseEntity<ApiResponse<RfiRegisterResponse>> createRfi(
         @PathVariable UUID projectId,
         @Valid @RequestBody RfiRegisterRequest request) {

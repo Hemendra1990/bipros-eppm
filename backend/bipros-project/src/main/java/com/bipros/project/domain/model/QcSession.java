@@ -58,6 +58,17 @@ public class QcSession extends BaseEntity {
     @Column(name = "chainage_to", length = 30)
     private String chainageTo;
 
+    /**
+     * Responsible supervisor/engineer for the tested work section (client ask,
+     * 2026-08-19): shown on FAIL results so they can re-raise the RFI. Soft FK to
+     * users + name snapshot, same pattern as activityName. Optional.
+     */
+    @Column(name = "supervisor_user_id")
+    private UUID supervisorUserId;
+
+    @Column(name = "supervisor_name", length = 150)
+    private String supervisorName;
+
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("createdAt ASC")
     @Builder.Default

@@ -11,7 +11,10 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import type { SelectOption } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 import { RaiseNcrDialog, type RaiseNcrPrefill } from "@/components/quality/RaiseNcrDialog";
+import { RaiseRfiDialog, type RaiseRfiPrefill } from "@/components/quality/RaiseRfiDialog";
 
 interface Props {
   projectId: string;
@@ -29,6 +32,19 @@ export function QcTestRecordList({ projectId, activityOptions, testTypeOptions }
   const [editing, setEditing] = useState<QcSession | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [ncrPrefill, setNcrPrefill] = useState<RaiseNcrPrefill | null>(null);
+  // QC round (2026-08-19): session writes are NCR.CREATE / NCR.UPDATE — hide
+  // (never disable) controls the backend would 403. mounted-gated so the first
+  // client render matches SSR (permissions live in localStorage — hydration).
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const user = useAuthStore((s) => s.user);
+  const canCreate = mounted && hasPermission("NCR.CREATE");
+  const canUpdate = mounted && hasPermission("NCR.UPDATE");
+  // Raise RFI mirrors the backend OR-gate: field profiles hold RFI.CREATE,
+  // the document tier qualifies via DOCUMENT.CREATE.
+  const canRaiseRfi =
+    mounted && (hasPermission("RFI.CREATE") || hasPermission("DOCUMENT.CREATE"));
+  const [rfiPrefill, setRfiPrefill] = useState<RaiseRfiPrefill | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["qc-sessions", projectId, activityFilter, outcomeFilter, from, to],
@@ -92,7 +108,7 @@ export function QcTestRecordList({ projectId, activityOptions, testTypeOptions }
               <option value="">All</option>
               <option value="PASS">PASS</option>
               <option value="FAIL">FAIL</option>
-              <option value="REPEAT">REPEAT</option>
+              <option value="REPEAT">RETEST</option>
             </select>
           </div>
           <div>
@@ -104,12 +120,14 @@ export function QcTestRecordList({ projectId, activityOptions, testTypeOptions }
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={filterCls} />
           </div>
         </div>
-        <button
-          onClick={openNew}
-          className="inline-flex items-center gap-1.5 rounded-md bg-gold px-4 py-2 text-sm font-semibold text-gold-ink hover:bg-gold-deep transition"
-        >
-          <Plus className="h-4 w-4" /> New Session
-        </button>
+        {canCreate && (
+          <button
+            onClick={openNew}
+            className="inline-flex items-center gap-1.5 rounded-md bg-gold px-4 py-2 text-sm font-semibold text-gold-ink hover:bg-gold-deep transition"
+          >
+            <Plus className="h-4 w-4" /> New Session
+          </button>
+        )}
       </div>
 
       {pageError && <div className="text-sm text-burgundy">{pageError}</div>}
@@ -124,16 +142,25 @@ export function QcTestRecordList({ projectId, activityOptions, testTypeOptions }
       ) : (
         <QcSessionGrid
           sessions={sessions}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-          onRaiseNcr={(session, item) =>
+          onEdit={canUpdate ? openEdit : undefined}
+          onDelete={canUpdate ? handleDelete : undefined}
+          onRaiseNcr={canCreate ? (session, item) =>
             setNcrPrefill({
               title: `QC FAIL: ${item.testTypeName} @ ${session.chainageFrom ?? ""}`,
-              description: `Sample ${item.sampleRefNo ?? "—"} result ${item.testResult ?? "—"} vs spec ${item.requiredIrc ?? "—"} (${session.activityName}, ${session.testDate}).`,
+              description: `Sample ${item.sampleRefNo ?? "—"} result ${item.testResult ?? "—"} vs spec ${item.requiredIrc ?? "—"} (${session.activityName}, ${session.testDate}).${session.supervisorName ? ` Responsible: ${session.supervisorName} — to re-raise the RFI.` : ""}`,
               activityId: session.activityId,
               sourceRefId: item.id,
             })
-          }
+          : undefined}
+          onRaiseRfi={canRaiseRfi ? (session, item) =>
+            setRfiPrefill({
+              subject: `QC FAIL: ${item.testTypeName} @ ${session.chainageFrom ?? session.testDate}`,
+              description: `Sample ${item.sampleRefNo ?? "—"} result ${item.testResult ?? "—"} vs spec ${item.requiredIrc ?? "—"} (${session.activityName}, ${session.testDate}).${session.supervisorName ? ` Responsible: ${session.supervisorName}.` : ""}`,
+              raisedBy:
+                [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+                user?.username || "",
+            })
+          : undefined}
         />
       )}
 
@@ -149,6 +176,10 @@ export function QcTestRecordList({ projectId, activityOptions, testTypeOptions }
 
       {ncrPrefill && (
         <RaiseNcrDialog projectId={projectId} prefill={ncrPrefill} onClose={() => setNcrPrefill(null)} />
+      )}
+
+      {rfiPrefill && (
+        <RaiseRfiDialog projectId={projectId} prefill={rfiPrefill} onClose={() => setRfiPrefill(null)} />
       )}
     </div>
   );

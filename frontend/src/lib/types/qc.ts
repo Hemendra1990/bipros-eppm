@@ -48,6 +48,9 @@ export interface QcSession {
   testDate: string;
   chainageFrom: string | null;
   chainageTo: string | null;
+  /** Responsible supervisor/engineer for the tested work section (shown on FAIL rows). */
+  supervisorUserId: string | null;
+  supervisorName: string | null;
   items: QcTestItemResponse[];
   createdAt: string;
   updatedAt: string;
@@ -59,6 +62,8 @@ export interface QcSessionRequest {
   testDate: string;
   chainageFrom?: string | null;
   chainageTo?: string | null;
+  supervisorUserId?: string | null;
+  supervisorName?: string | null;
   items: QcTestItemRow[];
 }
 

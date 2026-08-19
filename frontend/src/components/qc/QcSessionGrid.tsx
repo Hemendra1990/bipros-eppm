@@ -1,14 +1,16 @@
 "use client";
 
-import { CalendarDays, Pencil, Trash2 } from "lucide-react";
+import { CalendarDays, Pencil, Trash2, UserCircle2 } from "lucide-react";
 import type { QcSession, QcTestItemResponse } from "@/lib/types/qc";
 import { cn } from "@/lib/utils/cn";
 
 interface Props {
   sessions: QcSession[];
-  onEdit: (session: QcSession) => void;
-  onDelete: (session: QcSession) => void;
+  // Optional: omitted when the viewer lacks NCR.UPDATE — the buttons are hidden.
+  onEdit?: (session: QcSession) => void;
+  onDelete?: (session: QcSession) => void;
   onRaiseNcr?: (session: QcSession, item: QcTestItemResponse) => void;
+  onRaiseRfi?: (session: QcSession, item: QcTestItemResponse) => void;
 }
 
 const OUTCOME_CLS: Record<string, string> = {
@@ -16,6 +18,9 @@ const OUTCOME_CLS: Record<string, string> = {
   FAIL: "bg-burgundy/10 text-burgundy ring-1 ring-burgundy/40",
   REPEAT: "bg-bronze-warn/10 text-bronze-warn ring-1 ring-bronze-warn/40",
 };
+
+// Display-only rename (client feedback 2026-08-19): stored value stays REPEAT.
+const OUTCOME_LABEL: Record<string, string> = { REPEAT: "RETEST" };
 
 function fmtDate(iso: string) {
   return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", {
@@ -71,7 +76,7 @@ function flatten(sessions: QcSession[]): FlatRow[] {
   return rows;
 }
 
-export function QcSessionGrid({ sessions, onEdit, onDelete, onRaiseNcr }: Props) {
+export function QcSessionGrid({ sessions, onEdit, onDelete, onRaiseNcr, onRaiseRfi }: Props) {
   if (sessions.length === 0) return null;
 
   const rows = flatten(sessions);
@@ -120,10 +125,26 @@ export function QcSessionGrid({ sessions, onEdit, onDelete, onRaiseNcr }: Props)
                   <span className="font-mono text-xs text-ash">{sNo}</span>
                 </td>
 
-                {/* Activity — only on first item */}
+                {/* Activity — only on first item; responsible supervisor/engineer below,
+                    highlighted when the session has a FAIL (they re-raise the RFI) */}
                 <td className="px-3 py-2.5">
                   {isFirstInSession ? (
-                    <span className="font-semibold text-charcoal">{session.activityName}</span>
+                    <div>
+                      <span className="font-semibold text-charcoal">{session.activityName}</span>
+                      {session.supervisorName && (
+                        <span
+                          className={cn(
+                            "mt-0.5 flex items-center gap-1 text-xs",
+                            session.items.some((i) => i.outcome === "FAIL")
+                              ? "font-semibold text-burgundy"
+                              : "text-slate"
+                          )}
+                        >
+                          <UserCircle2 className="h-3 w-3 shrink-0" />
+                          {session.supervisorName}
+                        </span>
+                      )}
+                    </div>
                   ) : null}
                 </td>
 
@@ -190,7 +211,7 @@ export function QcSessionGrid({ sessions, onEdit, onDelete, onRaiseNcr }: Props)
                     "inline-block rounded px-2 py-0.5 text-xs font-bold tracking-wide",
                     OUTCOME_CLS[item.outcome] ?? "bg-hairline text-slate"
                   )}>
-                    {item.outcome}
+                    {OUTCOME_LABEL[item.outcome] ?? item.outcome}
                   </span>
                   {item.outcome === "FAIL" && onRaiseNcr && (
                     <button
@@ -199,6 +220,15 @@ export function QcSessionGrid({ sessions, onEdit, onDelete, onRaiseNcr }: Props)
                       className="ml-2 rounded px-1.5 py-0.5 text-[11px] font-semibold text-burgundy ring-1 ring-burgundy/40 hover:bg-burgundy/10"
                     >
                       Raise NCR
+                    </button>
+                  )}
+                  {item.outcome === "FAIL" && onRaiseRfi && (
+                    <button
+                      type="button"
+                      onClick={() => onRaiseRfi(session, item)}
+                      className="ml-2 rounded px-1.5 py-0.5 text-[11px] font-semibold text-gold-deep ring-1 ring-gold/50 hover:bg-gold/10"
+                    >
+                      Raise RFI
                     </button>
                   )}
                 </td>
@@ -213,24 +243,28 @@ export function QcSessionGrid({ sessions, onEdit, onDelete, onRaiseNcr }: Props)
                   "sticky right-0 px-2 py-2.5 shadow-[-4px_0_8px_rgba(0,0,0,0.06)]",
                   isEven ? "bg-paper" : "bg-ivory/50"
                 )}>
-                  {isFirstInSession && (
+                  {isFirstInSession && (onEdit || onDelete) && (
                     <div className="flex items-center justify-end gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => onEdit(session)}
-                        className="rounded p-1.5 text-ash hover:bg-ivory hover:text-charcoal transition"
-                        aria-label="Edit session"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(session)}
-                        className="rounded p-1.5 text-ash hover:bg-burgundy/10 hover:text-burgundy transition"
-                        aria-label="Delete session"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {onEdit && (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(session)}
+                          className="rounded p-1.5 text-ash hover:bg-ivory hover:text-charcoal transition"
+                          aria-label="Edit session"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(session)}
+                          className="rounded p-1.5 text-ash hover:bg-burgundy/10 hover:text-burgundy transition"
+                          aria-label="Delete session"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </td>

@@ -15,6 +15,8 @@ public record QcSessionResponse(
     LocalDate testDate,
     String chainageFrom,
     String chainageTo,
+    UUID supervisorUserId,
+    String supervisorName,
     List<QcTestItemResponse> items,
     Instant createdAt,
     Instant updatedAt
@@ -28,6 +30,8 @@ public record QcSessionResponse(
             s.getTestDate(),
             s.getChainageFrom(),
             s.getChainageTo(),
+            s.getSupervisorUserId(),
+            s.getSupervisorName(),
             s.getItems().stream().map(QcTestItemResponse::from).toList(),
             s.getCreatedAt(),
             s.getUpdatedAt()

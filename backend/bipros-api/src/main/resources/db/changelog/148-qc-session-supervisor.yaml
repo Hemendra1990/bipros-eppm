@@ -1,0 +1,23 @@
+databaseChangeLog:
+  # Responsible supervisor/engineer on QC sessions (client feedback, 2026-08-19): shown on
+  # FAIL results so the owner of the work section can re-raise the RFI. Both columns are
+  # additive and nullable so dev's ddl-auto:update path matches Liquibase exactly; this
+  # changeset is the prod mirror. supervisor_user_id is a soft FK to users; supervisor_name
+  # is a snapshot, same pattern as activity_name.
+  - changeSet:
+      id: 148-qc-session-supervisor
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: activity
+            tableName: qc_sessions
+            columns:
+              - column: { name: supervisor_user_id, type: UUID }
+              - column: { name: supervisor_name, type: VARCHAR(150) }
+      rollback:
+        - dropColumn:
+            schemaName: activity
+            tableName: qc_sessions
+            columns:
+              - column: { name: supervisor_user_id }
+              - column: { name: supervisor_name }

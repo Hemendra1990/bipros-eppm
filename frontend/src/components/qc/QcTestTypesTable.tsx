@@ -8,6 +8,8 @@ import type { QcTestType } from "@/lib/types/qc";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TableSkeleton } from "@/components/common/Skeleton";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 
 interface Props {
   projectId: string;
@@ -22,6 +24,12 @@ export function QcTestTypesTable({ projectId }: Props) {
   const [ircThreshold, setIrcThreshold] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+  // QC round (2026-08-19): master-type create is NCR.CREATE, edit/delete NCR.UPDATE.
+  // mounted-gated to avoid SSR/client hydration mismatch (see useMounted).
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canCreate = mounted && hasPermission("NCR.CREATE");
+  const canUpdate = mounted && hasPermission("NCR.UPDATE");
 
   const { data, isLoading } = useQuery({
     queryKey: ["qc-test-types", projectId],
@@ -91,12 +99,14 @@ export function QcTestTypesTable({ projectId }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate">Test Types</h3>
-        <button
-          onClick={openNew}
-          className="inline-flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-sm font-semibold text-gold-ink hover:bg-gold-deep transition"
-        >
-          <Plus className="h-4 w-4" /> Add Type
-        </button>
+        {canCreate && (
+          <button
+            onClick={openNew}
+            className="inline-flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-sm font-semibold text-gold-ink hover:bg-gold-deep transition"
+          >
+            <Plus className="h-4 w-4" /> Add Type
+          </button>
+        )}
       </div>
       {showForm && (
         <div className="rounded-lg border border-hairline bg-paper p-4">
@@ -177,6 +187,7 @@ export function QcTestTypesTable({ projectId }: Props) {
                   <td className="px-4 py-2 text-charcoal">{t.unit ?? "—"}</td>
                   <td className="px-4 py-2 text-charcoal tabular-nums">{t.ircThreshold ?? "—"}</td>
                   <td className="px-4 py-2 text-right">
+                    {canUpdate && (
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => openEdit(t)}
@@ -193,6 +204,7 @@ export function QcTestTypesTable({ projectId }: Props) {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, FlaskConical, Plus, Trash2 } from "lucide-react";
 import { Drawer } from "@/components/common/Drawer";
+import { projectTeamApi, PROJECT_TEAM_ROLE_LABELS, type ProjectTeamMember } from "@/lib/api/projectTeamApi";
 import type { QcSession, QcSessionRequest, QcTestItemRow, QcTestType } from "@/lib/types/qc";
 import type { SelectOption } from "@/components/common/SearchableSelect";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
@@ -19,6 +21,13 @@ interface Props {
 }
 
 const OUTCOMES = ["PASS", "FAIL", "REPEAT"] as const;
+
+// Display-only rename (client feedback 2026-08-19): stored value stays REPEAT.
+const OUTCOME_LABEL: Record<(typeof OUTCOMES)[number], string> = {
+  PASS: "PASS",
+  FAIL: "FAIL",
+  REPEAT: "RETEST",
+};
 
 const OUTCOME_STYLE = {
   PASS: {
@@ -54,9 +63,20 @@ function passStatus(result: number | null | undefined, required: number | null |
   return result >= required ? "over" : "under";
 }
 
+// Client feedback (2026-08-19): the responsible supervisor/engineer is named on the
+// session so FAIL results identify who re-raises the RFI. Field-execution roles first.
+const SUPERVISOR_ROLE_ORDER = ["SUPERVISOR", "ENGINEER", "SITE_MANAGER"];
+
+function memberLabel(m: ProjectTeamMember): string {
+  const name =
+    [m.firstName, m.lastName].filter(Boolean).join(" ") || m.username || m.userId.slice(0, 8);
+  return `${name} — ${PROJECT_TEAM_ROLE_LABELS[m.role] ?? m.role}`;
+}
+
 export function QcSessionForm({
   open,
   onClose,
+  projectId,
   editing,
   activityOptions,
   testTypeOptions,
@@ -67,9 +87,26 @@ export function QcSessionForm({
   const [testDate, setTestDate] = useState(new Date().toISOString().split("T")[0]);
   const [chainageFrom, setChainageFrom] = useState("");
   const [chainageTo, setChainageTo] = useState("");
+  const [supervisorUserId, setSupervisorUserId] = useState("");
   const [items, setItems] = useState<QcTestItemRow[]>([blankItem()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { data: teamData } = useQuery({
+    queryKey: ["project-team", projectId, "qc-supervisor-picker"],
+    queryFn: () => projectTeamApi.list(projectId),
+    enabled: open && !!projectId,
+  });
+  const teamOptions = useMemo<SelectOption[]>(() => {
+    const members = teamData?.data ?? [];
+    const rank = (m: ProjectTeamMember) => {
+      const i = SUPERVISOR_ROLE_ORDER.indexOf(m.role);
+      return i === -1 ? SUPERVISOR_ROLE_ORDER.length : i;
+    };
+    return [...members]
+      .sort((a, b) => rank(a) - rank(b) || memberLabel(a).localeCompare(memberLabel(b)))
+      .map((m) => ({ value: m.userId, label: memberLabel(m) }));
+  }, [teamData]);
 
   useEffect(() => {
     if (editing) {
@@ -78,6 +115,7 @@ export function QcSessionForm({
       setTestDate(editing.testDate);
       setChainageFrom(editing.chainageFrom ?? "");
       setChainageTo(editing.chainageTo ?? "");
+      setSupervisorUserId(editing.supervisorUserId ?? "");
       setItems(
         editing.items.length > 0
           ? editing.items.map((i) => ({
@@ -96,6 +134,7 @@ export function QcSessionForm({
       setTestDate(new Date().toISOString().split("T")[0]);
       setChainageFrom("");
       setChainageTo("");
+      setSupervisorUserId("");
       setItems([blankItem()]);
     }
     setError(null);
@@ -143,6 +182,15 @@ export function QcSessionForm({
     }
     setSaving(true);
     setError(null);
+    // Snapshot the picked member's plain name; if the member has since left the
+    // team roster (edit of an old session), keep the stored snapshot.
+    const picked = (teamData?.data ?? []).find((m) => m.userId === supervisorUserId);
+    const supervisorName = picked
+      ? [picked.firstName, picked.lastName].filter(Boolean).join(" ") ||
+        picked.username || null
+      : editing?.supervisorUserId === supervisorUserId
+        ? editing?.supervisorName ?? null
+        : null;
     try {
       await onSave({
         activityId,
@@ -150,6 +198,8 @@ export function QcSessionForm({
         testDate,
         chainageFrom: chainageFrom || null,
         chainageTo: chainageTo || null,
+        supervisorUserId: supervisorUserId || null,
+        supervisorName: supervisorUserId ? supervisorName : null,
         items,
       });
       onClose();
@@ -225,6 +275,19 @@ export function QcSessionForm({
                 />
               </div>
             </div>
+
+            {/* Responsible supervisor/engineer — named so FAIL results say who re-raises the RFI */}
+            <div className="sm:col-span-5">
+              <label className="mb-1 block text-xs font-medium text-slate">
+                Responsible Supervisor / Engineer
+              </label>
+              <SearchableSelect
+                options={teamOptions}
+                value={supervisorUserId}
+                onChange={setSupervisorUserId}
+                placeholder="Select team member…"
+              />
+            </div>
           </div>
         </div>
 
@@ -246,7 +309,7 @@ export function QcSessionForm({
                   )}
                   {repeatCount > 0 && (
                     <span className="rounded-full bg-bronze-warn/10 px-2 py-0.5 font-medium text-bronze-warn">
-                      {repeatCount} Repeat
+                      {repeatCount} Retest
                     </span>
                   )}
                 </div>
@@ -369,7 +432,7 @@ export function QcSessionForm({
                                     : OUTCOME_STYLE[o].inactive
                                 )}
                               >
-                                {o}
+                                {OUTCOME_LABEL[o]}
                               </button>
                             ))}
                           </div>

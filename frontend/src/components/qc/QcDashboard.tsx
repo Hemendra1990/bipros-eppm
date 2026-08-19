@@ -19,6 +19,13 @@ interface Props {
 
 const OUTCOMES: QcOutcome[] = ["PASS", "FAIL", "REPEAT"];
 
+// Display-only rename (client feedback 2026-08-19): stored value stays REPEAT.
+const OUTCOME_LABEL: Record<QcOutcome, string> = {
+  PASS: "PASS",
+  FAIL: "FAIL",
+  REPEAT: "RETEST",
+};
+
 const OUTCOME_STYLE: Record<QcOutcome, { active: string; inactive: string }> = {
   PASS: {
     active: "bg-emerald text-white border-emerald",
@@ -134,7 +141,7 @@ export function QcDashboard({ projectId, activityOptions }: Props) {
                     outcome === o ? OUTCOME_STYLE[o].active : OUTCOME_STYLE[o].inactive
                   )}
                 >
-                  {o}
+                  {OUTCOME_LABEL[o]}
                 </button>
               ))}
             </div>
@@ -187,7 +194,7 @@ export function QcDashboard({ projectId, activityOptions }: Props) {
             <KpiTile label="Total Tests" value={dash.totalTests} icon={<TrendingUp className="h-4 w-4" />} />
             <KpiTile label="Pass" value={dash.passCount} icon={<CheckCircle className="h-4 w-4 text-success" />} tone="success" />
             <KpiTile label="Fail" value={dash.failCount} icon={<AlertTriangle className="h-4 w-4 text-burgundy" />} tone="danger" />
-            <KpiTile label="Repeat" value={dash.repeatCount} icon={<RotateCcw className="h-4 w-4 text-bronze-warn" />} tone="warning" />
+            <KpiTile label="Retest" value={dash.repeatCount} icon={<RotateCcw className="h-4 w-4 text-bronze-warn" />} tone="warning" />
             <KpiTile
               label="Pass Rate %"
               value={`${dash.passRate.toFixed(1)}%`}
@@ -234,7 +241,7 @@ export function QcDashboard({ projectId, activityOptions }: Props) {
                       <th className="px-4 py-2.5 text-left font-semibold text-slate">Activity</th>
                       <th className="px-4 py-2.5 text-right font-semibold text-emerald">Pass</th>
                       <th className="px-4 py-2.5 text-right font-semibold text-burgundy">Fail</th>
-                      <th className="px-4 py-2.5 text-right font-semibold text-bronze-warn">Repeat</th>
+                      <th className="px-4 py-2.5 text-right font-semibold text-bronze-warn">Retest</th>
                       <th className="px-4 py-2.5 text-right font-semibold text-slate">Total</th>
                       <th className="px-4 py-2.5 text-right font-semibold text-slate">Pass Rate</th>
                     </tr>
