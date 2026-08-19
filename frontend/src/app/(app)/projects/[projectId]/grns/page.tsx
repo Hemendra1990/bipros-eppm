@@ -11,11 +11,17 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { GoodsReceiptResponse } from "@/lib/types";
 import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 
 export default function GrnsPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
   const { money } = useProjectCurrency();
+  // Storekeeper round (2026-08-19): receipts are STORE.UPDATE writes.
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canWrite = mounted && hasPermission("STORE.UPDATE");
 
   const { data, isLoading } = useQuery({
     queryKey: ["grns", projectId],
@@ -68,12 +74,14 @@ export default function GrnsPage() {
         title="Goods Receipt Notes (GRN)"
         description="Inward receipt entries for material stock."
         actions={
-          <Link
-            href={`/projects/${projectId}/grns/new`}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
-          >
-            New GRN
-          </Link>
+          canWrite ? (
+            <Link
+              href={`/projects/${projectId}/grns/new`}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+            >
+              New GRN
+            </Link>
+          ) : undefined
         }
       />
 

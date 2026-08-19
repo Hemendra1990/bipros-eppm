@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { materialCatalogueApi } from "@/lib/api/materialCatalogueApi";
 import { organisationApi } from "@/lib/api/organisationApi";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 import { PageHeader } from "@/components/common/PageHeader";
 import type {
   CreateMaterialRequest,
@@ -34,6 +36,11 @@ export default function EditMaterialPage() {
   const materialId = params.materialId;
   const router = useRouter();
   const queryClient = useQueryClient();
+  // Catalogue edits are STORE.UPDATE writes (storekeeper round, 2026-08-19) —
+  // read-only holders see this form as a detail view.
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canWrite = mounted && hasPermission("STORE.UPDATE");
 
   const { data: materialData, isLoading } = useQuery({
     queryKey: ["material", materialId],
@@ -312,13 +319,15 @@ export default function EditMaterialPage() {
           >
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-          >
-            {mutation.isPending ? "Saving…" : "Save Material"}
-          </button>
+          {canWrite && (
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+            >
+              {mutation.isPending ? "Saving…" : "Save Material"}
+            </button>
+          )}
         </div>
       </form>
     </div>

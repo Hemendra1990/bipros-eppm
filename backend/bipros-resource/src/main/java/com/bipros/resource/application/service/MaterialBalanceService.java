@@ -202,11 +202,18 @@ public class MaterialBalanceService {
       Acc a = e.getValue();
       // Workface consumption: approved DPRs are canonical. The storekeeper log's "consumed"
       // records store OUTFLOW (recording an issue slip auto-writes a log row), so it stands in
-      // for consumption only on projects that never capture the material through DPRs (mode B).
+      // for consumption only for materials never issued through slips (true legacy mode B).
+      // For a slip-tracked material with no DPR lines yet, the fallback would count the
+      // issue itself as consumption and zero the custodian balance — an issue is custody,
+      // not consumption, so until a DPR reports usage the consumed figure is simply zero.
       boolean dprPath = a.dprConsumedToDate.signum() > 0;
-      BigDecimal consumedToDate = dprPath ? a.dprConsumedToDate : a.logConsumedToDate;
-      BigDecimal consumedWindow = dprPath ? a.dprConsumedWindow : a.logConsumedWindow;
-      BigDecimal consumedBurn = dprPath ? a.dprConsumedBurn : a.logConsumedBurn;
+      boolean slipTracked = a.issuedToDate.signum() > 0;
+      BigDecimal consumedToDate = dprPath ? a.dprConsumedToDate
+          : (slipTracked ? BigDecimal.ZERO : a.logConsumedToDate);
+      BigDecimal consumedWindow = dprPath ? a.dprConsumedWindow
+          : (slipTracked ? BigDecimal.ZERO : a.logConsumedWindow);
+      BigDecimal consumedBurn = dprPath ? a.dprConsumedBurn
+          : (slipTracked ? BigDecimal.ZERO : a.logConsumedBurn);
 
       BigDecimal storeClosing = null;
       BigDecimal siteBalance = null;

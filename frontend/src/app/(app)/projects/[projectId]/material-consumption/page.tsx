@@ -14,6 +14,8 @@ import { userApi, type UserSummary } from "@/lib/api/userApi";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { useAuth } from "@/lib/auth/useAuth";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 import { getErrorMessage } from "@/lib/utils/error";
 import { VirtualDataTable } from "@/components/common/VirtualDataTable";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -190,6 +192,10 @@ export default function MaterialConsumptionPage() {
   }, [project, appliedFrom, appliedTo]);
 
   const [showForm, setShowForm] = useState(false);
+  // Storekeeper round (2026-08-19): ledger entry is a STORE.UPDATE write.
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canWrite = mounted && hasPermission("STORE.UPDATE");
   const [formData, setFormData] = useState<MaterialConsumptionForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
 
@@ -366,23 +372,32 @@ export default function MaterialConsumptionPage() {
       header: "Remarks",
       cell: ({ row }) => row.original.remarks ?? "—",
     },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: ({ row }) => (
-        <button
-          onClick={() => handleDelete(row.original.id)}
-          className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
-        >
-          Delete
-        </button>
-      ),
-    },
+    // Delete is a STORE.UPDATE write — column exists only for holders
+    // (storekeeper round, 2026-08-19).
+    ...(canWrite
+      ? [{
+          id: "actions",
+          header: "Actions",
+          // Rows with a resourceId were auto-written by issue slips / returns —
+          // immutable (the backend rejects deleting them); record a return instead.
+          cell: ({ row }) =>
+            row.original.resourceId ? (
+              <span className="text-text-muted" title="Maintained by issue slips / returns">—</span>
+            ) : (
+              <button
+                onClick={() => handleDelete(row.original.id)}
+                className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
+              >
+                Delete
+              </button>
+            ),
+        } satisfies ColumnDef<MaterialConsumptionLogResponse>]
+      : []),
     // handleDelete closes over stable values (projectId, queryClient, applied
     // filter dates); the only render-derived input is `usersById` which the
     // issuer/receiver columns read from. Re-memo when that map changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [usersById]);
+  ], [usersById, canWrite]);
 
   if (isLoading && logs.length === 0) {
     return <div className="p-6 text-text-muted">Loading material consumption...</div>;
@@ -453,12 +468,15 @@ export default function MaterialConsumptionPage() {
           </button>
         </div>
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
-        >
-          {showForm ? "Cancel" : "Add Entry"}
-        </button>
+        {/* Ledger entries are STORE.UPDATE writes (storekeeper round, 2026-08-19). */}
+        {canWrite && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
+          >
+            {showForm ? "Cancel" : "Add Entry"}
+          </button>
+        )}
 
         {error && <div className="text-danger mb-4">{error}</div>}
         {isError && (
@@ -467,7 +485,7 @@ export default function MaterialConsumptionPage() {
           </div>
         )}
 
-        {showForm && (
+        {canWrite && showForm && (
           <form
             onSubmit={handleSubmit}
             className="bg-surface/50 p-4 rounded-lg border border-border mb-6 shadow-xl"

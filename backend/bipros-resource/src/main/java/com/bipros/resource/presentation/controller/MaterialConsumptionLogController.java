@@ -33,7 +33,7 @@ public class MaterialConsumptionLogController {
   private final MaterialConsumptionLogService service;
 
   @PostMapping
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.UPDATE')")
   public ResponseEntity<ApiResponse<MaterialConsumptionLogResponse>> create(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateMaterialConsumptionLogRequest request) {
@@ -43,7 +43,7 @@ public class MaterialConsumptionLogController {
   }
 
   @PostMapping("/bulk")
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.UPDATE')")
   public ResponseEntity<ApiResponse<List<MaterialConsumptionLogResponse>>> createBulk(
       @PathVariable UUID projectId,
       @Valid @RequestBody List<CreateMaterialConsumptionLogRequest> requests) {
@@ -53,7 +53,7 @@ public class MaterialConsumptionLogController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.READ')")
   @GetMapping
   public ResponseEntity<ApiResponse<List<MaterialConsumptionLogResponse>>> list(
       @PathVariable UUID projectId,
@@ -67,7 +67,7 @@ public class MaterialConsumptionLogController {
         ApiResponse.ok(service.list(projectId, from, to, enteredByRole, issuedByUserId)));
   }
 
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.READ')")
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<MaterialConsumptionLogResponse>> get(
       @PathVariable UUID projectId, @PathVariable UUID id) {
@@ -76,7 +76,7 @@ public class MaterialConsumptionLogController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.UPDATE')")
   public ResponseEntity<ApiResponse<Void>> delete(
       @PathVariable UUID projectId, @PathVariable UUID id) {
     log.info("DELETE /v1/projects/{}/material-consumption/{}", projectId, id);

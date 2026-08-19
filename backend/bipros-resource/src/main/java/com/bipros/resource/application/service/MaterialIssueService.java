@@ -63,16 +63,28 @@ public class MaterialIssueService {
             throw new BusinessRuleException("MATERIAL_PROJECT_MISMATCH",
                 "Material " + material.getCode() + " belongs to a different project");
         }
+        // "Issued to" is compulsory on new slips (features guide ch. 11) — the idle-material
+        // and issued-vs-reported checks depend on knowing who took the material.
+        if (request.issuedToUserId() == null) {
+            throw new BusinessRuleException("ISSUED_TO_REQUIRED",
+                "Select the person the material is issued to");
+        }
+        if (request.quantity().signum() <= 0) {
+            throw new BusinessRuleException("INVALID_QUANTITY",
+                "Issue quantity must be greater than zero");
+        }
 
-        // Prevent issuing more than what's on hand.
+        // Prevent issuing more than what's on hand. A missing stock row means nothing was
+        // ever received — treat as zero on hand rather than skipping the check.
         MaterialStock stock = stockRepository
             .findByProjectIdAndMaterialId(projectId, request.materialId())
             .orElse(null);
-        if (stock != null && stock.getCurrentStock() != null
-            && stock.getCurrentStock().compareTo(request.quantity()) < 0) {
+        java.math.BigDecimal onHand = stock != null && stock.getCurrentStock() != null
+            ? stock.getCurrentStock() : java.math.BigDecimal.ZERO;
+        if (onHand.compareTo(request.quantity()) < 0) {
             throw new BusinessRuleException("INSUFFICIENT_STOCK",
                 "Cannot issue " + request.quantity() + " " + material.getUnit()
-                    + " — only " + stock.getCurrentStock() + " on hand");
+                    + " — only " + onHand + " on hand");
         }
 
         MaterialIssue issue = MaterialIssue.builder()

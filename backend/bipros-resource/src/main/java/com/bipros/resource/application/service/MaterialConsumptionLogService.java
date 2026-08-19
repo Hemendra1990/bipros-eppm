@@ -226,6 +226,14 @@ public class MaterialConsumptionLogService {
     if (!entity.getProjectId().equals(projectId)) {
       throw new ResourceNotFoundException("MaterialConsumptionLog", id);
     }
+    // Rows carrying a catalogue material id were auto-written by issue slips /
+    // usable returns (see MaterialIssueService.writeConsumptionLog) — deleting
+    // one would desync the ledger from its slips. Manual rows have no resourceId.
+    if (entity.getResourceId() != null) {
+      throw new BusinessRuleException("BRIDGED_ROW",
+          "This ledger row is maintained by issue slips and returns — "
+              + "record a return instead of deleting it");
+    }
     repository.delete(entity);
     auditService.logDelete("MaterialConsumptionLog", id);
 

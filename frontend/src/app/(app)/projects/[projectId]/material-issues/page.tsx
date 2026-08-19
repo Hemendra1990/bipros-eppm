@@ -12,6 +12,8 @@ import {
 } from "@/lib/api/materialCatalogueApi";
 import { activityApi } from "@/lib/api/activityApi";
 import { userApi, type UserSummary } from "@/lib/api/userApi";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 import type { CreateMaterialIssueRequest, MaterialIssueResponse } from "@/lib/types";
 import { formatDate } from "@/lib/utils/format";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -135,6 +137,11 @@ export default function MaterialIssuesPage() {
   const [returnFor, setReturnFor] = useState<MaterialIssueResponse | null>(null);
   const [returnForm, setReturnForm] = useState<ReturnFormState>(emptyReturnForm());
   const [returnError, setReturnError] = useState<string | null>(null);
+  // Storekeeper round (2026-08-19): issue slips and returns are STORE.UPDATE
+  // writes — hide the controls the backend would 403 (e.g. read-only PM/CM).
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canWrite = mounted && hasPermission("STORE.UPDATE");
 
   const returnMutation = useMutation({
     mutationFn: ({ issueId, body }: { issueId: string; body: CreateMaterialReturnRequest }) =>
@@ -229,13 +236,15 @@ export default function MaterialIssuesPage() {
             &ldquo;Issues&rdquo; tab.)
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setFormOpen((v) => !v)}
-          className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
-          {formOpen ? "Close" : "+ New issue slip"}
-        </button>
+        {canWrite && (
+          <button
+            type="button"
+            onClick={() => setFormOpen((v) => !v)}
+            className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            {formOpen ? "Close" : "+ New issue slip"}
+          </button>
+        )}
       </div>
 
       {materials.length === 0 && (
@@ -245,7 +254,7 @@ export default function MaterialIssuesPage() {
         </div>
       )}
 
-      {formOpen && (
+      {canWrite && formOpen && (
         <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <label className="text-sm">
@@ -376,7 +385,7 @@ export default function MaterialIssuesPage() {
               <th className="px-2 py-2 text-right">Outstanding</th>
               <th className="px-2 py-2 text-right">Wastage</th>
               <th className="px-2 py-2 text-left">Remarks</th>
-              <th className="px-2 py-2 text-right">Return</th>
+              {canWrite && <th className="px-2 py-2 text-right">Return</th>}
             </tr>
           </thead>
           <tbody>
@@ -422,6 +431,7 @@ export default function MaterialIssuesPage() {
                     {i.wastageQuantity ?? "—"}
                   </td>
                   <td className="px-2 py-1.5">{i.remarks ?? "—"}</td>
+                  {canWrite && (
                   <td className="whitespace-nowrap px-2 py-1.5 text-right">
                     <button
                       type="button"
@@ -437,6 +447,7 @@ export default function MaterialIssuesPage() {
                       Return
                     </button>
                   </td>
+                  )}
                 </tr>
               );
             })}

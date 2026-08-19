@@ -132,6 +132,10 @@ const PICKER_ROLES = [
   "SAFETY_OFFICER",
   "ENGINEER",
   "PLANNER",
+  // Storekeeper round (2026-08-19): the Store Keeper profiles stamp the
+  // STORE_MANAGER legacy role — without it here the Add-member typeahead
+  // can never offer a storekeeper for the Store Keeper seat.
+  "STORE_MANAGER",
 ];
 
 export default function ProjectTeamPage() {

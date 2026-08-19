@@ -94,7 +94,7 @@ function ProjectDetailLayoutInner({
     { id: "costs",              label: "Costs",               href: null, permission: "COST.READ" },
     { id: "evm",                label: "EVM",                 href: `/projects/${projectId}/evm`,                    permission: "EVM.READ" },
     { id: "risks",              label: "Risks",               href: `/projects/${projectId}/risks`, permission: "RISK.READ" },
-    { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption`, permission: "RESOURCE.READ" },
+    { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption`, permission: "STORE.READ" },
     { id: "ai",                 label: "AI",                  href: `/projects/${projectId}/ai`, permission: "AI.READ" },
   ];
 
@@ -105,8 +105,10 @@ function ProjectDetailLayoutInner({
     { label: "BOQ & Budget", href: `/projects/${projectId}/boq`, permission: "PROJECT.READ" },
     { label: "Stretches", href: `/projects/${projectId}/stretches`, permission: "PROJECT.READ" },
     { label: "Material Sources", href: `/projects/${projectId}/material-sources`, permission: "RESOURCE.READ" },
-    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "RESOURCE.READ" },
-    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "RESOURCE.READ" },
+    // Store surfaces run on STORE.* (2026-08-19): storekeeper-only entry without
+    // disturbing the RESOURCE.* deployment-log grants.
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "STORE.READ" },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "STORE.READ" },
   ].filter((l) => hasPermission(l.permission));
 
   const moreLinks: { label: string; href: string; permission?: string }[] = [
@@ -142,10 +144,11 @@ function ProjectDetailLayoutInner({
     // { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
     // { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
     // Store chain (Material agent row, Mode A): catalogue → receipts in → issue slips out → stock.
-    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "RESOURCE.READ" },
-    { label: "GRNs (Goods Received)", href: `/projects/${projectId}/grns`, permission: "RESOURCE.READ" },
-    { label: "Material Issues (Store)", href: `/projects/${projectId}/material-issues`, permission: "RESOURCE.READ" },
-    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "RESOURCE.READ" },
+    // STORE.* (2026-08-19): storekeeper-only entry; PM/CM hold STORE.READ for visibility.
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "STORE.READ" },
+    { label: "GRNs (Goods Received)", href: `/projects/${projectId}/grns`, permission: "STORE.READ" },
+    { label: "Material Issues (Store)", href: `/projects/${projectId}/material-issues`, permission: "STORE.READ" },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "STORE.READ" },
     { label: "Issues", href: `/projects/${projectId}/issues`, permission: "ISSUE.READ" },
     { label: "Baselines", href: `/projects/${projectId}?tab=baselines`, permission: "BASELINE.READ" },
     { label: "Contracts", href: `/projects/${projectId}/contracts`, permission: "CONTRACT.READ" },
