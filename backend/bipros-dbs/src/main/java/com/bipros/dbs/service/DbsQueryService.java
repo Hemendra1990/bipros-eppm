@@ -497,6 +497,7 @@ public class DbsQueryService {
                 Collectors.toList()));
         if (byUser.isEmpty()) return List.of();
         Map<UUID, String> nameByUser = resolveUserNames(new LinkedHashSet<>(byUser.keySet()));
+        Map<UUID, Long> dprCounts = dprDocumentCounts(projectId, bounds[0], bounds[1]);
 
         return byUser.entrySet().stream()
             .map(entry -> {
@@ -521,10 +522,24 @@ public class DbsQueryService {
                     nameByUser.get(supId),
                     expense, income, contribution, contributionPct,
                     direct, prelim, totalIncl, pctAchieved,
-                    daily.size()
+                    dprCounts.getOrDefault(supId, 0L).intValue()
                 );
             })
             .toList();
+    }
+
+    /**
+     * Live DPR-document counts per supervisor from the ledger — any approval status, the
+     * same basis as {@code GET /dpr/supervisors-used}, so the DBS roster and the Capacity
+     * Utilization dropdown show the same number. Computed on every call (page load / date
+     * change), deliberately independent of the DBS recompute snapshots.
+     */
+    private Map<UUID, Long> dprDocumentCounts(UUID projectId, LocalDate from, LocalDate to) {
+        Map<UUID, Long> counts = new LinkedHashMap<>();
+        for (Object[] row : dprRepository.countDprsBySupervisorBetween(projectId, from, to)) {
+            counts.put((UUID) row[0], (Long) row[1]);
+        }
+        return counts;
     }
 
     private static BigDecimal sumRows(List<DbsDailySupervisor> rows,
@@ -541,6 +556,7 @@ public class DbsQueryService {
             .map(DbsDailySupervisor::getSupervisorUserId)
             .filter(Objects::nonNull)
             .collect(Collectors.toCollection(LinkedHashSet::new)));
+        Map<UUID, Long> dprCounts = dprDocumentCounts(projectId, date, date);
         return rows.stream()
             .map(r -> {
                 BigDecimal expense = liveExpense(r.getTotalExpense(), r.getFuelAmount(), r.getMachineryAmount());
@@ -558,13 +574,9 @@ public class DbsQueryService {
                     nz(r.getPrelimCost()),
                     nz(r.getTotalCostInclPrelims()),
                     nz(r.getPctAchieved()),
-                    // The supervisor row is per-(project, supervisor, date); each row corresponds to
-                    // the aggregated work for that supervisor that day. We surface 1 as the count
-                    // because we don't currently persist the source-DPR count on the supervisor row.
-                    // TODO bug-5/8 follow-up: when DailyProgressReportRepository gains a
-                    // countByProjectIdAndReportDateAndSupervisorUserId finder, surface the real
-                    // source-DPR count here.
-                    1
+                    r.getSupervisorUserId() == null
+                        ? 0
+                        : dprCounts.getOrDefault(r.getSupervisorUserId(), 0L).intValue()
                 );
             })
             .toList();

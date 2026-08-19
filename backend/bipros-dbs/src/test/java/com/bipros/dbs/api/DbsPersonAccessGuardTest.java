@@ -87,6 +87,24 @@ class DbsPersonAccessGuardTest {
     }
 
     @Test
+    @DisplayName("person-scoped caller may never request the project-wide register (null cmUserId denies)")
+    void registerRules() {
+        own();
+        assertThat(guard.canViewRegister(projectId, null)).isFalse();
+        assertThat(guard.canViewRegister(projectId, other)).isFalse();
+        assertThat(guard.canViewRegister(projectId, me)).isTrue();
+    }
+
+    @Test
+    @DisplayName("PROJECT scope gets the project-wide register, with or without a CM filter")
+    void registerProjectScope() {
+        when(scopeResolver.resolveForProject(projectId))
+                .thenReturn(new ScopeKeys(DataScope.PROJECT, me, Set.of("me")));
+        assertThat(guard.canViewRegister(projectId, null)).isTrue();
+        assertThat(guard.canViewRegister(projectId, other)).isTrue();
+    }
+
+    @Test
     @DisplayName("person-scoped caller may export only a member's supervisor sheet, never the PM workbook")
     void exportRules() {
         team();

@@ -250,7 +250,7 @@ public class DbsController {
      */
     @GetMapping("/register/equipment")
     @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
-        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #cmUserId)")
+        + "and @dbsPersonAccess.canViewRegister(#projectId, #cmUserId)")
     public ResponseEntity<ApiResponse<EquipmentRegisterResponse>> getEquipmentRegister(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -267,7 +267,7 @@ public class DbsController {
      */
     @GetMapping("/register/manpower")
     @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
-        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #cmUserId)")
+        + "and @dbsPersonAccess.canViewRegister(#projectId, #cmUserId)")
     public ResponseEntity<ApiResponse<ManpowerRegisterResponse>> getManpowerRegister(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -284,7 +284,7 @@ public class DbsController {
      */
     @GetMapping("/register/cumulative")
     @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
-        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #cmUserId)")
+        + "and @dbsPersonAccess.canViewRegister(#projectId, #cmUserId)")
     public ResponseEntity<ApiResponse<CumulativeDaysResponse>> getCumulative(
         @PathVariable UUID projectId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf,

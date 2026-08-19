@@ -45,9 +45,9 @@ export interface SupervisorDbsTabProps {
   currency?: string | null;
 }
 
-/** Sortable columns of the supervisor comparison table. (No DPR-count column: the
- *  backend hardcodes dprCount=1 per supervisor in DAY mode and returns days-with-data
- *  in period mode — neither is a real DPR count, so it isn't shown as a metric.) */
+/** Sortable columns of the supervisor comparison table. (dprCount is now a real
+ *  document count — computed live from the DPR ledger, same basis as
+ *  /dpr/supervisors-used — but it stays out of the comparison metrics by design.) */
 type ComparisonSortKey =
   | "name"
   | "totalIncome"

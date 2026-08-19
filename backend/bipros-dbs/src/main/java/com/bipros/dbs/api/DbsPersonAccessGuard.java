@@ -47,6 +47,21 @@ public class DbsPersonAccessGuard {
     }
 
     /**
+     * Deployment registers: the project-wide register (no cmUserId) names every CM with their
+     * per-shift counts, so person-scoped callers may never request it — unlike
+     * {@link #canViewPersonOrNull} the null case DENIES. A specific CM follows the member-set
+     * rule (which for OWN/TEAM callers contains no CM, so it denies too). Same shape as the
+     * PM-workbook rule in {@link #canExport}.
+     */
+    public boolean canViewRegister(UUID projectId, UUID cmUserId) {
+        ScopeKeys keys = scopeResolver.resolveForProject(projectId);
+        if (!keys.personScoped()) {
+            return true;
+        }
+        return cmUserId != null && keys.memberIds().contains(cmUserId);
+    }
+
+    /**
      * Exports: the PM-level workbook contains every person's sheets, so person-scoped callers
      * may never build it; the SUPERVISOR-level sheet follows the member-set rule.
      */
