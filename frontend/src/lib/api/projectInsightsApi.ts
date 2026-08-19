@@ -156,7 +156,26 @@ export interface MilestoneRow {
   ldExposureCrores: number;
 }
 
+/** One supervised activity on the "My Progress" card (client ask, 2026-08-20). */
+export interface MyProgressRow {
+  activityId: string;
+  activityName: string;
+  boqItemNo: string;
+  unit: string;
+  todayQty: number;
+  weekQty: number;
+  monthQty: number;
+  cumulativeQty: number;
+  percentComplete: number | null;
+}
+
 export const projectInsightsApi = {
+  /** Caller's supervised-activity progress — gated by MY_PROGRESS.READ. */
+  getMyProgress: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<MyProgressRow[]>>(`/v1/projects/${projectId}/reports/my-progress`)
+      .then((r) => r.data.data),
+
   getStatusSnapshot: (projectId: string) =>
     apiClient
       .get<ApiResponse<ProjectStatusSnapshot>>(`/v1/projects/${projectId}/status-snapshot`)

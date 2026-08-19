@@ -25,6 +25,8 @@ import { IssueForm } from "@/components/dpr/IssueForm";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { ResourceAvatar } from "@/components/resource/supervisor-assign/ResourceAvatar";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 
 const inputCls =
   "rounded-md border border-border bg-surface-hover px-3 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none";
@@ -102,6 +104,14 @@ export default function ProjectIssuesPage() {
 
   const rows: DprIssueRow[] = data?.data ?? [];
 
+  // Issues parity round (2026-08-20): create is ISSUE.CREATE, edit/delete/status
+  // ISSUE.UPDATE — hide (never disable) controls the backend would 403.
+  // mounted-gated so the first client render matches SSR (hydration).
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canCreate = mounted && hasPermission("ISSUE.CREATE");
+  const canUpdate = mounted && hasPermission("ISSUE.UPDATE");
+
   // Client-side sort on the timestamp columns; null stamps always sort last.
   const sortedRows = useMemo(() => {
     if (!sort.key) return rows;
@@ -145,14 +155,16 @@ export default function ProjectIssuesPage() {
               <LayoutDashboard className="h-4 w-4" />
               Dashboard
             </Link>
-            <button
-              type="button"
-              onClick={openNew}
-              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
-            >
-              <Plus className="h-4 w-4" />
-              New Issue
-            </button>
+            {canCreate && (
+              <button
+                type="button"
+                onClick={openNew}
+                className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+              >
+                <Plus className="h-4 w-4" />
+                New Issue
+              </button>
+            )}
           </div>
         }
       />
@@ -287,18 +299,24 @@ export default function ProjectIssuesPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap relative">
-                    <button
-                      onClick={() =>
-                        setStatusMenu((prev) => (prev === row.id ? null : row.id!))
-                      }
-                      className="focus:outline-none"
-                      title="Click to change status"
-                    >
+                    {canUpdate ? (
+                      <button
+                        onClick={() =>
+                          setStatusMenu((prev) => (prev === row.id ? null : row.id!))
+                        }
+                        className="focus:outline-none"
+                        title="Click to change status"
+                      >
+                        <Badge variant={STATUS_VARIANT[row.status]} withDot>
+                          {statusLabel(row.status)}
+                        </Badge>
+                      </button>
+                    ) : (
                       <Badge variant={STATUS_VARIANT[row.status]} withDot>
                         {statusLabel(row.status)}
                       </Badge>
-                    </button>
-                    {statusMenu === row.id && (
+                    )}
+                    {canUpdate && statusMenu === row.id && (
                       <div className="absolute z-20 mt-1 w-40 rounded-md border border-border bg-surface shadow-lg">
                         {STATUS_OPTIONS.map((opt) => (
                           <button
@@ -363,26 +381,28 @@ export default function ProjectIssuesPage() {
                     {row.activityName ?? "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openEdit(row)}
-                        className="text-text-muted hover:text-accent"
-                        title="Edit issue"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm("Delete this issue?")) {
-                            deleteMutation.mutate(row.id!);
-                          }
-                        }}
-                        className="text-text-muted hover:text-danger"
-                        title="Delete issue"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+                    {canUpdate && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEdit(row)}
+                          className="text-text-muted hover:text-accent"
+                          title="Edit issue"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm("Delete this issue?")) {
+                              deleteMutation.mutate(row.id!);
+                            }
+                          }}
+                          className="text-text-muted hover:text-danger"
+                          title="Delete issue"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -54,6 +54,7 @@ public class ProjectReportController {
   private final BaselineService baselineService;
   private final ScheduleVarianceReportService scheduleVarianceReportService;
   private final CostVarianceReportService costVarianceReportService;
+  private final com.bipros.reporting.application.service.MyProgressReportService myProgressReportService;
 
   @PersistenceContext private EntityManager em;
 
@@ -224,6 +225,18 @@ public class ProjectReportController {
   @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<List<ReportDefinitionResponse>> listCustom(@PathVariable UUID projectId) {
     return ApiResponse.ok(reportService.listReportDefinitions(null));
+  }
+
+  /**
+   * "My Progress" card (client ask, 2026-08-20): the caller's supervised activities with
+   * quantity executed today / this week / this month / cumulative (approved DPRs) plus
+   * percent complete. Own permission family so any profile can be granted the card.
+   */
+  @GetMapping("/my-progress")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'MY_PROGRESS.READ')")
+  public ApiResponse<List<com.bipros.reporting.application.dto.MyProgressRow>> getMyProgress(
+      @PathVariable UUID projectId) {
+    return ApiResponse.ok(myProgressReportService.myProgress(projectId));
   }
 
   /**

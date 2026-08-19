@@ -83,7 +83,7 @@ export function ProjectTimelinePreview({
   return (
     <SectionCard
       title="Project Timeline Preview"
-      subtitle={`Upcoming Activities · ${windowMonths}-month window`}
+      subtitle="Planned activity windows around today"
       icon={<Calendar size={16} />}
       accent
     >
@@ -209,6 +209,28 @@ export function ProjectTimelinePreview({
                 })}
               </div>
             </div>
+          </div>
+
+          {/* Legend — the encoding was invisible to normal users (client
+              feedback, 2026-08-20): say what bar, colour, fill and line mean. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline px-3 py-2 text-[10.5px] text-slate">
+            <span className="font-semibold uppercase tracking-wide">Bar = planned dates</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald" /> Done
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-gold-deep" /> In progress
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-burgundy" /> Delayed
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-slate-400" /> Not started
+            </span>
+            <span>darker fill = work done</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-[2px] bg-burgundy/70" /> today
+            </span>
           </div>
         </div>
       )}

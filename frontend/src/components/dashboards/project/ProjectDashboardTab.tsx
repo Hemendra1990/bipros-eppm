@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { KpiRow } from "./KpiRow";
 import { BudgetBand } from "./BudgetBand";
 import { ProjectTimelinePreview } from "./ProjectTimelinePreview";
+import { MyProgressPanel } from "./MyProgressPanel";
 import { ProjectHealthDonut } from "./ProjectHealthDonut";
 import { WorkPackageTable } from "./WorkPackageTable";
 import { ActiveAlertsPanel } from "./ActiveAlertsPanel";
@@ -115,6 +116,9 @@ export function ProjectDashboardTab({
     queryKey: ["project-dashboard-weather", projectId],
     queryFn: () => dailyWeatherApi.list(projectId).then((r) => r.data ?? []),
     staleTime: STALE,
+    // The backend ingest refreshes today's reading hourly — poll so a dashboard
+    // left open tracks current site conditions without a manual reload.
+    refetchInterval: 10 * 60_000,
   });
 
   const snapshot = snapshotQ.data?.current ?? null;
@@ -210,6 +214,9 @@ export function ProjectDashboardTab({
       />
 
       <BudgetBand projectId={projectId} />
+
+      {/* Renders only for MY_PROGRESS.READ holders (panel gates itself). */}
+      <MyProgressPanel projectId={projectId} />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr]">
         <ProjectTimelinePreview activities={activityRows} />
