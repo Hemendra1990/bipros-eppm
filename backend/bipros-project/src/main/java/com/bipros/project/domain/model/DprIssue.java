@@ -167,4 +167,23 @@ public class DprIssue extends BaseEntity {
      */
     @Column(name = "due_date")
     private LocalDate dueDate;
+
+    // ── Act-by SLA (owner decision 2026-08-31): daily reminder to the assignee while overdue,
+    //    one-shot escalation to their reporting manager after the configured overdue days.
+    //    All four fields are service-managed by IssueReminderService — never client-set.
+
+    /** When the assignee was last emailed an overdue reminder; drives the reminder cadence. */
+    @Column(name = "last_reminder_at")
+    private Instant lastReminderAt;
+
+    /** One-shot stamp: when the overdue issue was escalated to the assignee's manager. */
+    @Column(name = "escalated_at")
+    private Instant escalatedAt;
+
+    @Column(name = "escalated_to_user_id")
+    private UUID escalatedToUserId;
+
+    /** Display snapshot of who the escalation went to (shown on the DPR preview / Issues page). */
+    @Column(name = "escalated_to_name", length = 150)
+    private String escalatedToName;
 }

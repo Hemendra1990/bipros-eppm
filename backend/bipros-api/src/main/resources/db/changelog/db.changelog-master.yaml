@@ -287,3 +287,5 @@ databaseChangeLog:
       file: db/changelog/147-manpower-trade-list-cleanup.yaml
   - include:
       file: db/changelog/148-qc-session-supervisor.yaml
+  - include:
+      file: db/changelog/149-dpr-issue-reminder.yaml

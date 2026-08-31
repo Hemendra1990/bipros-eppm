@@ -191,6 +191,12 @@ export interface DprIssueRow {
   interventionRequired?: boolean | null;
   /** Act-by date ("time frame to act on it"); ISO date, optional. */
   dueDate?: string | null;
+  /** Response-only, service-managed by the Act-by SLA job: last overdue reminder to the assignee. */
+  lastReminderAt?: string | null;
+  /** Response-only: when the overdue issue was escalated to the assignee's manager (one-shot). */
+  escalatedAt?: string | null;
+  /** Response-only: display name of who the escalation went to. */
+  escalatedToName?: string | null;
 }
 
 /** Request body for creating a standalone DprIssue not tied to a parent DPR. */
@@ -332,6 +338,8 @@ export interface DailyProgressReportResponse extends DprBaseFields {
   // ─── Approval workflow fields ──────────────────────────────────────────────
   assignedApproverUserId?: string | null;
   submittedAt?: string | null;
+  /** When the pending approval blew its SLA and was escalated (one-shot); null otherwise. */
+  escalatedAt?: string | null;
   submittedByUserId?: string | null;
   approvedByUserId?: string | null;
   approvedAt?: string | null;
@@ -342,11 +350,24 @@ export interface DailyProgressReportResponse extends DprBaseFields {
   submittedByName?: string | null;
   approvedByName?: string | null;
   assignedApproverName?: string | null;
+  rejectedByName?: string | null;
 }
 
 /** Request body for approve / reject / revoke actions. {@code reason} is optional for approve and revoke; required for reject. */
 export interface DprApprovalActionRequest {
   reason?: string;
+}
+
+/**
+ * Pre-submit answer to "who will this DPR go to for approval?" — resolved by the same ladder
+ * the backend assigns with (reporting chain → CM → PM → Project Control → admin). `source` is
+ * CHAIN / CONSTRUCTION_MANAGER / PM / PROJECT_CONTROL / ADMIN, or NONE when nobody resolves.
+ */
+export interface ApproverPreview {
+  userId: string | null;
+  name: string | null;
+  projectRole: string | null;
+  source: string;
 }
 
 export type CreateDailyProgressReportRequest = DprBaseFields;

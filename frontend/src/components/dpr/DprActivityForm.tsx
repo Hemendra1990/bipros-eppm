@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Briefcase, HardHat, Info, Package, Save, Users, X } from "lucide-react";
+import { AlertTriangle, Briefcase, HardHat, Info, Package, Save, UserCheck, Users, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
+import { useAuthStore } from "@/lib/state/store";
+import { PROJECT_TEAM_ROLE_LABELS } from "@/lib/api/projectTeamApi";
 import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { dprApi, type DprVoicePatch } from "@/lib/api/dprApi";
 import { boqApi, type BoqItemResponse } from "@/lib/api/boqApi";
@@ -118,6 +120,12 @@ interface Props {
 const todayIso = () => new Date().toISOString().split("T")[0];
 
 const SUPERVISOR_OTHER = "__other__";
+
+/** Picker labels are "EMPCODE — Name" (or just "Name"); extract the name for persisting. */
+const nameFromOptionLabel = (label: string) => {
+  const sep = label.indexOf(" — ");
+  return sep >= 0 ? label.slice(sep + 3) : label;
+};
 
 const SIDE_OPTS: Array<{ value: Side; label: string }> = (
   Object.entries(SIDE_LABELS) as Array<[Side, string]>
@@ -241,6 +249,29 @@ export function DprActivityForm({
   onSave,
 }: Props) {
   const { money } = useProjectCurrency();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  // Who this DPR will route to for approval — resolved by the same ladder the backend assigns
+  // with at submit time, so the footer line is the truth, not a guess. New DPRs only (editing
+  // an already-SUBMITTED report never re-routes it). The endpoint is DPR.CREATE-gated and this
+  // form stays mounted inside the closed drawer, so gate the fetch on the same permission.
+  const { data: approverPreviewResp } = useQuery({
+    queryKey: ["dpr-approver-preview", projectId],
+    queryFn: () => dprApi.approverPreview(projectId),
+    enabled: !editing && hasPermission("DPR.CREATE"),
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  });
+  const approverPreview = approverPreviewResp?.data ?? null;
+  const approverRoleLabel = useMemo(() => {
+    if (!approverPreview || !approverPreview.userId) return null;
+    if (approverPreview.source === "ADMIN") return "Administrator";
+    const role =
+      approverPreview.projectRole ??
+      (approverPreview.source !== "CHAIN" ? approverPreview.source : null);
+    if (!role) return null;
+    return (PROJECT_TEAM_ROLE_LABELS as Record<string, string>)[role] ?? role;
+  }, [approverPreview]);
   // Global DBS config (fuel/machinery cost ratio) — drives the totals-bar Fuel cell. Cached
   // app-wide; falls back to 0.35 in DprTotalsBar if this hasn't resolved.
   const { data: dbsConfigResp } = useQuery({
@@ -290,6 +321,33 @@ export function DprActivityForm({
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // Late seed: initialState validates defaultPrefill's supervisor against supervisorOptions,
+  // but on a cold page load the pool query may resolve AFTER the form mounted — the seed would
+  // be silently dropped and the default-to-self behavior would look flaky. Apply it once when
+  // the options arrive, only while the supervisor is still untouched (one-shot ref guard).
+  const lateSeedDoneRef = useRef(false);
+  useEffect(() => {
+    if (lateSeedDoneRef.current || editing) return;
+    if (state.supervisorUserId) {
+      lateSeedDoneRef.current = true; // seeded at mount or picked by the user — nothing to do
+      return;
+    }
+    const seedId = defaultPrefill?.supervisorUserId;
+    if (!seedId) return;
+    const match = supervisorOptions.find((o) => o.value === seedId);
+    if (!match) return; // pool loaded without the seed user → they're not eligible, stay empty
+    lateSeedDoneRef.current = true;
+    setState((s) =>
+      s.supervisorUserId
+        ? s
+        : {
+            ...s,
+            supervisorUserId: seedId,
+            supervisorName: defaultPrefill?.supervisorName || nameFromOptionLabel(match.label),
+          }
+    );
+  }, [supervisorOptions, defaultPrefill, editing, state.supervisorUserId]);
 
   // Debounced productivity preview. Fires when manpower / equipment / activityId change and an
   // activity is set. Cancels in-flight requests on rapid edits so the panel reflects the latest
@@ -672,17 +730,23 @@ export function DprActivityForm({
       delta.boqItemId = linkedBoq.id;
       delta.boqItemNo = linkedBoq.itemNo;
     }
-    // Multi-supervisor: pick the first supervisor in the activity's list that is still
-    // eligible (i.e. still has a supervisor role). If none are eligible, leave the supervisor
-    // untouched rather than silently filling an invalid id.
+    // Multi-supervisor: prefer the logged-in user when they co-supervise this activity — the
+    // person filing is almost always reporting their own work. Otherwise pick the first
+    // supervisor in the activity's list that is still eligible (i.e. still has a supervisor
+    // role). If none are eligible, leave the supervisor untouched rather than silently filling
+    // an invalid id.
     const sups = newActivityId ? (supervisorsByActivityId.get(newActivityId) ?? []) : [];
     const supervisorEmpty = !state.supervisorUserId || supervisorIsOther;
     if (sups.length > 0 && supervisorEmpty) {
-      for (const sup of sups) {
+      const ordered =
+        currentUserId && sups.some((s) => s.id === currentUserId)
+          ? [...sups.filter((s) => s.id === currentUserId), ...sups.filter((s) => s.id !== currentUserId)]
+          : sups;
+      for (const sup of ordered) {
         const match = supervisorOptions.find((s) => s.value === sup.id);
         if (match) {
           delta.supervisorUserId = sup.id;
-          delta.supervisorName = match.label.split(" (")[0];
+          delta.supervisorName = sup.name || nameFromOptionLabel(match.label);
           break;
         }
       }
@@ -696,7 +760,10 @@ export function DprActivityForm({
       return;
     }
     const match = supervisorOptions.find((s) => s.value === value);
-    patch({ supervisorUserId: value || null, supervisorName: match?.label.split(" (")[0] ?? "" });
+    patch({
+      supervisorUserId: value || null,
+      supervisorName: match ? nameFromOptionLabel(match.label) : "",
+    });
   };
 
   const handleChainageBlur = (which: "from" | "to") => {
@@ -905,8 +972,50 @@ export function DprActivityForm({
         </div>
       </div>
 
-      {/* Anchoring row: Supervisor + Activity drive everything below, so they lead. */}
+      {/* Approval routing — up top so the supervisor knows where the report goes BEFORE
+          filling anything (owner request 2026-08-31: the footer placement went unnoticed). */}
+      {!editing && approverPreview && (
+        <div className="mx-5 flex items-center gap-2.5 rounded-lg border-l-4 border-gold bg-gold-tint px-4 py-2.5">
+          <UserCheck className="h-4 w-4 shrink-0 text-gold-deep" />
+          {approverPreview.userId ? (
+            <span className="text-sm text-slate">
+              Goes to{" "}
+              <span className="font-semibold text-charcoal">{approverPreview.name ?? "—"}</span>
+              {approverRoleLabel ? ` (${approverRoleLabel})` : ""} for approval.
+            </span>
+          ) : (
+            <span className="text-sm text-slate">
+              No approver is set up for you on the project team yet — this DPR will wait in the
+              shared approval queue.
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Anchoring row: Activity + Supervisor drive everything below, so they lead. Activity
+          first — pick the work, the supervisor auto-fills from it. */}
       <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
+        <Field label="Activity name">
+          <SearchableSelect
+            options={filteredActivityOptions}
+            value={state.activityId ?? ""}
+            onChange={handleActivityChange}
+            placeholder="Search activity…"
+            selectedLabel={state.activityName || undefined}
+          />
+          {supervisorHasNoActivities && (
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
+              <Info className="h-3 w-3" />
+              No activities assigned to this supervisor — showing all.
+            </p>
+          )}
+          {activityFieldError && (
+            <p className="mt-1 inline-flex items-start gap-1 text-xs text-burgundy">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>{activityFieldError}</span>
+            </p>
+          )}
+        </Field>
         <Field label="Supervisor">
           <SearchableSelect
             options={[...supervisorOptions, { value: SUPERVISOR_OTHER, label: "Other (free-text)" }]}
@@ -924,21 +1033,6 @@ export function DprActivityForm({
               required
             />
           )}
-          {supervisorHasNoActivities && (
-            <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
-              <Info className="h-3 w-3" />
-              No activities assigned to this supervisor — showing all.
-            </p>
-          )}
-        </Field>
-        <Field label="Activity name">
-          <SearchableSelect
-            options={filteredActivityOptions}
-            value={state.activityId ?? ""}
-            onChange={handleActivityChange}
-            placeholder="Search activity…"
-            selectedLabel={state.activityName || undefined}
-          />
           {supervisorAutoFilled && (
             <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
               <Info className="h-3 w-3" />
@@ -949,12 +1043,6 @@ export function DprActivityForm({
             <p className="mt-1 inline-flex items-center gap-1 text-xs text-burgundy">
               <Info className="h-3 w-3" />
               Activity is supervised by {activitySupervisorMismatch} — not the selected supervisor.
-            </p>
-          )}
-          {activityFieldError && (
-            <p className="mt-1 inline-flex items-start gap-1 text-xs text-burgundy">
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-              <span>{activityFieldError}</span>
             </p>
           )}
         </Field>
@@ -1347,10 +1435,9 @@ export function DprActivityForm({
           )}
           {tab === "issues" && (
             <IssuesGrid
+              projectId={projectId}
               rows={state.issues ?? []}
               onChange={(rows: DprIssueRow[]) => patch({ issues: rows })}
-              supervisorOptions={supervisorOptions}
-              defaultSupervisorName={state.supervisorName || undefined}
             />
           )}
         </div>

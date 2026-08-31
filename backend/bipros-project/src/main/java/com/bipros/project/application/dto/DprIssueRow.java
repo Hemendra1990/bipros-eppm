@@ -63,7 +63,13 @@ public record DprIssueRow(
     /** Supervisor's "next-level intervention required" checkbox; null on old payloads = false. */
     Boolean interventionRequired,
     /** Act-by date ("time frame to act on it"); optional. */
-    LocalDate dueDate
+    LocalDate dueDate,
+    /** Response-only, service-managed by the Act-by SLA job: last overdue reminder to the assignee. */
+    Instant lastReminderAt,
+    /** Response-only: when the overdue issue was escalated to the assignee's manager (one-shot). */
+    Instant escalatedAt,
+    /** Response-only: display name of who the escalation went to. */
+    String escalatedToName
 ) {
     @SuppressWarnings("deprecation")
     public static DprIssueRow from(DprIssue e) {
@@ -90,6 +96,9 @@ public record DprIssueRow(
             e.getHseIncidentType(),
             e.getClosedAt(),
             e.isInterventionRequired(),
-            e.getDueDate());
+            e.getDueDate(),
+            e.getLastReminderAt(),
+            e.getEscalatedAt(),
+            e.getEscalatedToName());
     }
 }

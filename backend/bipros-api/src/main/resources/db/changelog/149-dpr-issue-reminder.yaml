@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 149-dpr-issue-reminder
+      author: claude
+      comment: Act-by SLA stamps on DPR issues — daily assignee reminder cadence + one-shot manager escalation (owner decision 2026-08-31)
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_issues
+            columns:
+              - column: {name: last_reminder_at, type: TIMESTAMP}
+              - column: {name: escalated_at, type: TIMESTAMP}
+              - column: {name: escalated_to_user_id, type: UUID}
+              - column: {name: escalated_to_name, type: VARCHAR(150)}
+      rollback:
+        - dropColumn: {schemaName: project, tableName: dpr_issues, columnName: last_reminder_at}
+        - dropColumn: {schemaName: project, tableName: dpr_issues, columnName: escalated_at}
+        - dropColumn: {schemaName: project, tableName: dpr_issues, columnName: escalated_to_user_id}
+        - dropColumn: {schemaName: project, tableName: dpr_issues, columnName: escalated_to_name}

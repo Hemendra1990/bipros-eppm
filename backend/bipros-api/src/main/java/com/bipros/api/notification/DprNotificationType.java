@@ -11,6 +11,8 @@ public final class DprNotificationType {
   public static final String DPR_MISSING_ALERT             = "DPR_MISSING_ALERT";
   public static final String SUPERVISOR_CAPACITY_SUMMARY   = "SUPERVISOR_CAPACITY_SUMMARY";
   public static final String ISSUE_ASSIGNED                = "ISSUE_ASSIGNED";
+  public static final String ISSUE_REMINDER                = "ISSUE_REMINDER";
+  public static final String ISSUE_ESCALATED               = "ISSUE_ESCALATED";
   public static final String OUTSTANDING_ISSUES_DIGEST     = "OUTSTANDING_ISSUES_DIGEST";
   public static final String MATERIAL_SHORT_SUPPLY         = "MATERIAL_SHORT_SUPPLY";
   public static final String MATERIAL_IDLE_STOCK           = "MATERIAL_IDLE_STOCK";

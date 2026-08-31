@@ -47,6 +47,8 @@ public record DailyProgressReportResponse(
     // Approval-workflow fields
     UUID assignedApproverUserId,
     Instant submittedAt,
+    /** When the pending approval blew its SLA and was escalated (one-shot); null otherwise. */
+    Instant escalatedAt,
     UUID submittedByUserId,
     UUID approvedByUserId,
     Instant approvedAt,
@@ -57,6 +59,7 @@ public record DailyProgressReportResponse(
     String submittedByName,
     String approvedByName,
     String assignedApproverName,
+    String rejectedByName,
 
     List<DprManpowerRow> manpower,
     List<DprEquipmentRow> equipment,
@@ -106,7 +109,7 @@ public record DailyProgressReportResponse(
       List<DprIssueRow> issues,
       List<String> warnings) {
     return from(r, cumulativeQty, manpower, equipment, materials, subContractors,
-        attachments, voiceNotes, issues, warnings, null, null, null, null);
+        attachments, voiceNotes, issues, warnings, null, null, null, null, null);
   }
 
   /** Full read-path overload — additionally carries the linked BOQ item's description and the
@@ -126,7 +129,8 @@ public record DailyProgressReportResponse(
       String boqItemDescription,
       String submittedByName,
       String approvedByName,
-      String assignedApproverName) {
+      String assignedApproverName,
+      String rejectedByName) {
     return new DailyProgressReportResponse(
         r.getId(),
         r.getProjectId(),
@@ -158,6 +162,7 @@ public record DailyProgressReportResponse(
         r.getSafetyIncidentType(),
         r.getAssignedApproverUserId(),
         r.getSubmittedAt(),
+        r.getEscalatedAt(),
         r.getSubmittedByUserId(),
         r.getApprovedByUserId(),
         r.getApprovedAt(),
@@ -167,6 +172,7 @@ public record DailyProgressReportResponse(
         submittedByName,
         approvedByName,
         assignedApproverName,
+        rejectedByName,
         manpower,
         equipment,
         materials,

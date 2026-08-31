@@ -58,6 +58,15 @@ public class DprReportSettingsSeeder implements CommandLineRunner {
     inserted += upsertIssue("issue_digest_time", "09:00",
         "Local time the outstanding-issues digest is sent (dpr_report_timezone applies)");
 
+    inserted += upsertIssue("issue_reminder_enabled", "true",
+        "Email the assignee daily while an issue is past its Act-by date, and escalate to their reporting manager once");
+    inserted += upsertIssue("issue_reminder_time", "09:00",
+        "Local time the daily overdue-issue check runs (dpr_report_timezone applies)");
+    inserted += upsertIssue("issue_reminder_every_days", "1",
+        "Days between overdue reminders to the assignee (1 = daily)");
+    inserted += upsertIssue("issue_escalation_after_days", "2",
+        "Days past the Act-by date after which the assignee's reporting manager is emailed (one-shot)");
+
     inserted += upsertMaterial("material_shortage_enabled", "false",
         "Enable the weekly material short-supply digest to project control (store-tracked projects only)");
     inserted += upsertMaterial("material_shortage_day", "MONDAY",

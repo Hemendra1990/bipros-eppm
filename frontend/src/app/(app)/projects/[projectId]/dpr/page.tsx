@@ -251,6 +251,7 @@ export default function DprPage() {
   const searchParams = useSearchParams();
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const dataScope = useAuthStore((s) => s.dataScope());
+  const currentUser = useAuthStore((s) => s.user);
   const canApprove = hasPermission("DPR.APPROVE");
 
   const { data: projectData } = useQuery({
@@ -491,10 +492,11 @@ export default function DprPage() {
     if (!activitiesData || !supervisorUsers) return null;
     const activityName = activityIndex.byId.get(activityIdParam);
     if (!activityName) return null;
-    // Multi-supervisor era: an activity may have several. The deep-link prefill seeds
-    // the FIRST supervisor for the picker; the form's mismatch check is set-based.
+    // Multi-supervisor era: an activity may have several. Prefer the logged-in user when
+    // they co-supervise it (they're filing their own work), else seed the first supervisor;
+    // the form's mismatch check is set-based either way.
     const sups = activityIndex.supervisorsByActivityId.get(activityIdParam) ?? [];
-    const sup = sups[0] ?? null;
+    const sup = sups.find((s) => s.id === currentUser?.id) ?? sups[0] ?? null;
     const unit = activityIndex.defaultUnitByActivityId.get(activityIdParam) ?? null;
     return {
       activityId: activityIdParam,
@@ -503,7 +505,7 @@ export default function DprPage() {
       supervisorName: sup?.name ?? null,
       unit,
     };
-  }, [newParam, activityIdParam, activitiesData, supervisorUsers, activityIndex]);
+  }, [newParam, activityIdParam, activitiesData, supervisorUsers, activityIndex, currentUser]);
   useEffect(() => {
     if (!pendingPrefill || showForm) return;
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -640,7 +642,26 @@ export default function DprPage() {
 
   const openNew = () => {
     setEditing(null);
-    setPrefill(null);
+    // Default the Supervisor picker to the logged-in user — the form's existing
+    // supervisor→activity cross-filter then narrows the activity list to their own activities,
+    // and the on-pick auto-fill prefers them over co-supervisors. Eligibility isn't checked
+    // here (the supervisor-pool query may still be loading at click time): the form validates
+    // the seed against the pool and drops it for non-supervisor users (admins, PMs).
+    const selfName =
+      [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ").trim() ||
+      currentUser?.username ||
+      "";
+    setPrefill(
+      currentUser
+        ? {
+            activityId: null,
+            activityName: null,
+            supervisorUserId: currentUser.id,
+            supervisorName: selfName,
+            unit: null,
+          }
+        : null
+    );
     setShowForm(true);
     setPageError(null);
   };
@@ -892,10 +913,16 @@ export default function DprPage() {
         >
           <DprActivityForm
             // Re-mount when switching between edit targets (or new vs. edit) so the form's
-            // lazy useState initializer reseeds. The prefill activity id is part of the key so
-            // a second "Create DPR" deep-link for a different activity also reseeds, even
-            // though both share the "new" path.
-            key={editing?.id ?? (prefill?.activityId ? `new:${prefill.activityId}` : "new")}
+            // lazy useState initializer reseeds. The prefill activity + supervisor ids are part
+            // of the key so a second "Create DPR" deep-link for a different activity — or the
+            // logged-in-supervisor self-seed from openNew — also reseeds, even though all of
+            // them share the "new" path.
+            key={
+              editing?.id ??
+              (prefill
+                ? `new:${prefill.activityId ?? ""}:${prefill.supervisorUserId ?? ""}`
+                : "new")
+            }
             projectId={projectId}
             editing={editing}
             defaultDate={editing?.reportDate ?? todayIso()}

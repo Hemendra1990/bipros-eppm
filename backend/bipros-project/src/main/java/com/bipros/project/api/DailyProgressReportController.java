@@ -203,6 +203,14 @@ public class DailyProgressReportController {
     return ResponseEntity.ok(ApiResponse.ok(service.listUnassignedPending(projectId)));
   }
 
+  /** Who would approve the current user's DPR — shown on the Add DPR form before submit. */
+  @GetMapping("/approver-preview")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
+  public ResponseEntity<ApiResponse<com.bipros.project.application.dto.ApproverPreviewResponse>>
+      approverPreview(@PathVariable UUID projectId) {
+    return ResponseEntity.ok(ApiResponse.ok(service.approverPreview(projectId)));
+  }
+
   // ─── Photo attachments ──────────────────────────────────────────────────────────
 
   /**

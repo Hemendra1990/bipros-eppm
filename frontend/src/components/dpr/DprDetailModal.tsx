@@ -13,7 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { useAuthStore } from "@/lib/state/store";
 import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
 import { chainageLabel } from "@/lib/format/chainage";
@@ -38,13 +38,12 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 // ─── Small helpers ──────────────────────────────────────────────────────────────
 
-// STATUS_VARIANT retained for the (currently hidden) Approval Trail — see below.
-// const STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
-//   DRAFT: "neutral",
-//   SUBMITTED: "info",
-//   APPROVED: "success",
-//   REJECTED: "danger",
-// };
+const STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
+  DRAFT: "neutral",
+  SUBMITTED: "info",
+  APPROVED: "success",
+  REJECTED: "danger",
+};
 
 const STATUS_PILL: Record<DprApprovalStatus, { dot: string; text: string }> = {
   DRAFT: { dot: "bg-ash", text: "text-parchment" },
@@ -69,6 +68,20 @@ function fmtDateTime(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime())
     ? iso
     : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
+/** Whole hours elapsed since an ISO timestamp; null when absent/unparseable. */
+function hoursSince(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((Date.now() - t) / 3_600_000));
 }
 
 type TabKey = "details" | "manpower" | "equipment" | "material" | "sub" | "issues";
@@ -164,8 +177,9 @@ function DprDetailBody({ projectId, row }: { projectId: string; row: DprSummaryR
         {detail && (
           <div className="space-y-3 border-t border-hairline px-4 py-4">
             <MediaRow projectId={projectId} detail={detail} />
-            {/* Approval trail hidden per request — keep for future use.
-            <ApprovalTrail detail={detail} status={status} /> */}
+            {/* Approval trail re-enabled 2026-08-31 (owner request: the supervisor and every
+                approver should see who the DPR is with, how long, and whether it escalated). */}
+            <ApprovalTrail detail={detail} status={status} />
           </div>
         )}
       </div>
@@ -280,10 +294,11 @@ function KpiStrip({
   const submittedBy = detail?.submittedByName ?? row.supervisorName ?? "—";
   const submittedWhen = detail?.submittedAt ? fmtDateTime(detail.submittedAt) : "—";
   const approverName = detail?.approvedByName ?? detail?.assignedApproverName ?? "—";
+  const pendingHours = status === "SUBMITTED" ? hoursSince(detail?.submittedAt) : null;
   const approverWhen = detail?.approvedAt
     ? fmtDateTime(detail.approvedAt)
     : status === "SUBMITTED"
-      ? "Pending"
+      ? `Pending${pendingHours != null ? ` · ${pendingHours}h` : ""}${detail?.escalatedAt ? " · Escalated" : ""}`
       : "—";
 
   return (
@@ -800,6 +815,13 @@ function IssuesTab({ issues, hasDetail }: { issues: DailyProgressReportResponse[
   const list = issues ?? [];
   if (list.length === 0)
     return <EmptyTab icon={<Check className="h-5 w-5 text-emerald-600" />} title="No issues raised" sub="This report was filed with no open issues or blockers." />;
+  const todayIso = new Date().toISOString().split("T")[0];
+  const isOverdue = (i: NonNullable<DailyProgressReportResponse["issues"]>[number]) =>
+    !!i.dueDate &&
+    i.dueDate < todayIso &&
+    i.status !== "RESOLVED" &&
+    i.status !== "CLOSED" &&
+    i.status !== "CANCELLED";
   return (
     <div className="overflow-hidden rounded-xl border border-hairline">
       <div className="overflow-x-auto">
@@ -811,6 +833,8 @@ function IssuesTab({ issues, hasDetail }: { issues: DailyProgressReportResponse[
               <th className="px-3 py-2.5 font-bold">Severity</th>
               <th className="px-3 py-2.5 font-bold">Status</th>
               <th className="px-3 py-2.5 font-bold">Assigned</th>
+              <th className="px-3 py-2.5 font-bold">Act by</th>
+              <th className="px-3 py-2.5 font-bold">Follow-up</th>
             </tr>
           </thead>
           <tbody className="font-semibold text-charcoal">
@@ -821,6 +845,27 @@ function IssuesTab({ issues, hasDetail }: { issues: DailyProgressReportResponse[
                 <td className="px-3 py-3"><Badge variant={SEVERITY_VARIANT[i.severity]}>{i.severity}</Badge></td>
                 <td className="px-3 py-3"><Badge variant={ISSUE_STATUS_VARIANT[i.status]} withDot>{i.status}</Badge></td>
                 <td className="px-3 py-3">{i.assignedToName ?? "—"}</td>
+                <td className="px-3 py-3">
+                  {i.dueDate ? (
+                    <span className={isOverdue(i) ? "font-bold text-burgundy" : ""}>
+                      {i.dueDate}
+                      {isOverdue(i) ? " · overdue" : ""}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-3 py-3">
+                  {i.escalatedAt ? (
+                    <span className="text-burgundy">
+                      Escalated{i.escalatedToName ? ` to ${i.escalatedToName}` : ""}
+                    </span>
+                  ) : i.lastReminderAt ? (
+                    <span className="text-slate">Reminded {fmtDate(i.lastReminderAt)}</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1005,9 +1050,8 @@ function PhotosPanel({
   );
 }
 
-// ─── Approval trail (hidden per request — retained for future use) ───────────────
+// ─── Approval trail ──────────────────────────────────────────────────────────────
 
-/*
 function ApprovalTrail({
   detail,
   status,
@@ -1017,10 +1061,11 @@ function ApprovalTrail({
 }) {
   const terminal =
     status === "APPROVED"
-      ? { label: "Approved", at: detail.approvedAt, tone: "text-emerald-700", chip: "border-emerald-200 bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" }
+      ? { label: "Approved", at: detail.approvedAt, by: detail.approvedByName, tone: "text-emerald-700", dot: "bg-emerald-500" }
       : status === "REJECTED"
-        ? { label: "Rejected", at: detail.rejectedAt, tone: "text-burgundy", chip: "border-burgundy/25 bg-burgundy/10 text-burgundy", dot: "bg-burgundy" }
+        ? { label: "Rejected", at: detail.rejectedAt, by: detail.rejectedByName ?? null, tone: "text-burgundy", dot: "bg-burgundy" }
         : null;
+  const pendingHours = status === "SUBMITTED" ? hoursSince(detail.submittedAt) : null;
 
   return (
     <div className="rounded-2xl border border-hairline bg-paper p-5">
@@ -1032,13 +1077,34 @@ function ApprovalTrail({
         <TrailStep
           dot="bg-gold-tint text-gold-deep"
           icon="↑"
-          label="Submitted"
-          at={detail.submittedAt}
+          label={detail.submittedByName ? `Submitted by ${detail.submittedByName}` : "Submitted"}
+          sub={fmtDateTime(detail.submittedAt)}
         />
+        {status === "SUBMITTED" && (
+          <>
+            <ChevronRight className="h-4 w-4 text-ash" />
+            <TrailStep
+              dot="bg-sky-100 text-sky-700"
+              icon="…"
+              label={
+                detail.assignedApproverName
+                  ? `With ${detail.assignedApproverName} for approval`
+                  : "In the shared approval queue"
+              }
+              sub={pendingHours != null ? `pending ${pendingHours}h` : "pending"}
+            />
+          </>
+        )}
         {terminal && (
           <>
             <ChevronRight className="h-4 w-4 text-ash" />
-            <TrailStep dot={`${terminal.dot} text-paper`} icon="✓" label={terminal.label} at={terminal.at} tone={terminal.tone} />
+            <TrailStep
+              dot={`${terminal.dot} text-paper`}
+              icon="✓"
+              label={terminal.by ? `${terminal.label} by ${terminal.by}` : terminal.label}
+              sub={fmtDateTime(terminal.at)}
+              tone={terminal.tone}
+            />
           </>
         )}
         <div className="ml-auto text-right">
@@ -1048,6 +1114,13 @@ function ApprovalTrail({
           </div>
         </div>
       </div>
+      {status === "SUBMITTED" && detail.escalatedAt && (
+        <div className="mt-4 rounded-md border border-burgundy/25 bg-burgundy/5 px-3 py-2 text-xs text-charcoal">
+          <span className="font-semibold text-burgundy">Escalated: </span>
+          this DPR passed the approval SLA — the approver and their manager were notified on{" "}
+          {fmtDateTime(detail.escalatedAt)}.
+        </div>
+      )}
       {status === "REJECTED" && detail.rejectionReason && (
         <div className="mt-4 rounded-md border border-burgundy/25 bg-burgundy/5 px-3 py-2 text-xs text-charcoal">
           <span className="font-semibold text-burgundy">Reason: </span>
@@ -1062,13 +1135,13 @@ function TrailStep({
   dot,
   icon,
   label,
-  at,
+  sub,
   tone,
 }: {
   dot: string;
   icon: string;
   label: string;
-  at: string | null | undefined;
+  sub: string;
   tone?: string;
 }) {
   return (
@@ -1076,12 +1149,11 @@ function TrailStep({
       <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${dot}`}>{icon}</span>
       <div>
         <div className={`text-sm font-bold ${tone ?? "text-charcoal"}`}>{label}</div>
-        <div className="mt-0.5 font-mono text-[11px] text-ash">{fmtDateTime(at)}</div>
+        <div className="mt-0.5 font-mono text-[11px] text-ash">{sub}</div>
       </div>
     </div>
   );
 }
-*/
 
 // ─── Voice-note player (auth blob → object URL) ─────────────────────────────────
 

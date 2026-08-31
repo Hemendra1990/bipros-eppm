@@ -2,12 +2,14 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.event.DprMutationType;
 import com.bipros.common.event.DprSubmittedEvent;
+import com.bipros.common.event.IssueAssignedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.security.SecurityContextHelper;
 import com.bipros.common.security.UserPermissionPort;
 import com.bipros.common.util.AuditService;
+import com.bipros.project.application.dto.ApproverPreviewResponse;
 import com.bipros.project.application.dto.CreateDailyProgressReportRequest;
 import com.bipros.project.application.dto.DailyProgressReportResponse;
 import com.bipros.project.application.dto.DprApprovalActionRequest;
@@ -242,7 +244,7 @@ public class DailyProgressReportService {
     rollupRoleAssignmentActuals(saved.getActivityId());
 
     // Issues on create are all inserts — stamp parent context. Empty / null list means none.
-    List<DprIssue> savedIssues = upsertIssues(saved, request.issues(), List.of());
+    List<DprIssue> savedIssues = upsertIssues(saved, request.issues(), List.of(), false);
 
     BigDecimal cumulative = computeCumulative(saved.getProjectId(), saved.getActivityName(), saved.getReportDate());
     DailyProgressReportResponse response = DailyProgressReportResponse.from(
@@ -408,7 +410,12 @@ public class DailyProgressReportService {
     // Issues use merge-by-id (diverges from full-replace) so lifecycle (status, resolvedAt,
     // opened_at, version) survives a DPR re-save. See DprIssue javadoc.
     List<DprIssue> existingIssues = issueRepository.findByDprIdOrderByOpenedAtAsc(saved.getId());
-    List<DprIssue> savedIssues = upsertIssues(saved, request.issues(), existingIssues);
+    // A DRAFT that is being submitted for the first time announces its already-assigned issues
+    // now — they were deliberately kept silent while the parent was unsubmitted. Rejected
+    // resubmits (REJECTED→SUBMITTED) do NOT re-announce; those assignees were told already.
+    boolean firstSubmitFromDraft = oldStatus == DprApprovalStatus.DRAFT
+        && saved.getApprovalStatus() == DprApprovalStatus.SUBMITTED;
+    List<DprIssue> savedIssues = upsertIssues(saved, request.issues(), existingIssues, firstSubmitFromDraft);
 
     BigDecimal cumulative = computeCumulative(saved.getProjectId(), saved.getActivityName(), saved.getReportDate());
     List<DprAttachmentResponse> attachments = attachmentRepository.findByDprIdOrderByCreatedAtAsc(saved.getId())
@@ -587,7 +594,8 @@ public class DailyProgressReportService {
         boqItemDescription,
         resolveUserName(dpr.getSubmittedByUserId()),
         resolveUserName(dpr.getApprovedByUserId()),
-        resolveUserName(dpr.getAssignedApproverUserId())
+        resolveUserName(dpr.getAssignedApproverUserId()),
+        resolveUserName(dpr.getRejectedByUserId())
     );
   }
 
@@ -604,6 +612,22 @@ public class DailyProgressReportService {
         .getResultList();
     if (rows.isEmpty() || rows.get(0) == null) return null;
     return rows.get(0).toString();
+  }
+
+  /**
+   * "Who will approve my DPR?" for the current user, BEFORE they submit — same resolution the
+   * submit transition uses, so the Add DPR form can show the routing truthfully.
+   */
+  @Transactional(readOnly = true)
+  public ApproverPreviewResponse approverPreview(UUID projectId) {
+    UUID me = projectAccessGuard.currentUserId();
+    return projectTeamService.resolveApproverDetailed(projectId, me)
+        .map(r -> new ApproverPreviewResponse(
+            r.userId(),
+            resolveUserName(r.userId()),
+            r.role() != null ? r.role().name() : null,
+            r.source()))
+        .orElse(ApproverPreviewResponse.none());
   }
 
   public void delete(UUID projectId, UUID id) {
@@ -1368,7 +1392,8 @@ public class DailyProgressReportService {
   private List<DprIssue> upsertIssues(
       DailyProgressReport parent,
       List<DprIssueRow> incoming,
-      List<DprIssue> existing) {
+      List<DprIssue> existing,
+      boolean announceExisting) {
     if (incoming == null) incoming = List.of();
     Map<UUID, DprIssue> existingById = existing.stream()
         .collect(Collectors.toMap(DprIssue::getId, e -> e));
@@ -1386,8 +1411,10 @@ public class DailyProgressReportService {
       issueRepository.flush();
     }
 
-    // 2) Walk payload — update existing, insert new.
+    // 2) Walk payload — update existing, insert new. Track which rows gained an assignee this
+    //    save (new row with one, or an assignee change) for the assignment notification below.
     List<DprIssue> toSave = new ArrayList<>(incoming.size());
+    List<DprIssue> assigneeGained = new ArrayList<>();
     Instant now = Instant.now();
     for (DprIssueRow row : incoming) {
       if (row.id() != null) {
@@ -1398,13 +1425,44 @@ public class DailyProgressReportService {
               "Issue " + row.id() + " does not belong to DPR " + parent.getId()
                   + " — refresh and try again.");
         }
+        UUID oldAssignee = current.getAssignedToUserId();
         applyEditableFields(current, row, now);
+        boolean assigneeChanged = current.getAssignedToUserId() != null
+            && !current.getAssignedToUserId().equals(oldAssignee);
+        // announceExisting = first submit of a DRAFT: rows assigned while drafting were kept
+        // silent, so tell their assignees now (once — rejected resubmits don't come this way).
+        if (assigneeChanged || (announceExisting && current.getAssignedToUserId() != null)) {
+          assigneeGained.add(current);
+        }
         toSave.add(current);
       } else {
-        toSave.add(stampNewIssue(parent, row, now));
+        // Only a CLIENT-sent assignee counts as an assignment; a server default (stampNewIssue
+        // falls back to the parent's supervisor) is bookkeeping, not an assignment, and stays
+        // silent even when someone files the DPR on that supervisor's behalf.
+        DprIssue fresh = stampNewIssue(parent, row, now);
+        if (row.assignedToUserId() != null) assigneeGained.add(fresh);
+        toSave.add(fresh);
       }
     }
-    return toSave.isEmpty() ? List.of() : issueRepository.saveAll(toSave);
+    List<DprIssue> saved = toSave.isEmpty() ? List.of() : issueRepository.saveAll(toSave);
+
+    // Assignment notification (owner decision 2026-08-31: email at DPR submission, not
+    // approval). Only for SUBMITTED parents, and never for a self-assignment — the person
+    // filing the DPR doesn't need a mail about the issue they just logged themselves. The
+    // AFTER_COMMIT listener re-reads the issue, so publishing inside the write transaction
+    // is safe.
+    if (parent.getApprovalStatus() == DprApprovalStatus.SUBMITTED && !assigneeGained.isEmpty()) {
+      UUID actor = projectAccessGuard.currentUserId();
+      // actor == null means a system context (boot seeders, backfills) — never mail from those.
+      if (actor != null) {
+        for (DprIssue issue : assigneeGained) {
+          if (issue.getAssignedToUserId() == null || issue.getAssignedToUserId().equals(actor)) continue;
+          eventPublisher.publishEvent(new IssueAssignedEvent(
+              parent.getProjectId(), issue.getId(), issue.getAssignedToUserId()));
+        }
+      }
+    }
+    return saved;
   }
 
   /** Apply editable fields from {@code row} onto {@code target}, auto-managing resolvedAt. */

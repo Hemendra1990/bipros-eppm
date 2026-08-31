@@ -37,6 +37,10 @@ public interface DprIssueRepository extends JpaRepository<DprIssue, UUID> {
 
     List<DprIssue> findByProjectIdAndReportDateBetweenOrderByOpenedAtDesc(UUID projectId, LocalDate from, LocalDate to);
 
+    /** Overdue rows for the Act-by SLA job: still-open statuses whose due date is already past. */
+    List<DprIssue> findByProjectIdAndStatusInAndDueDateBefore(
+        UUID projectId, Collection<IssueStatus> statuses, LocalDate date);
+
     /** Lightweight issue rows (status + severity only) for aggregating live/open/critical counts.
      *  Returns [dprId (UUID), status (IssueStatus), severity (IssueSeverity)]. */
     @Query("select i.dprId, i.status, i.severity from DprIssue i where i.dprId in :ids")

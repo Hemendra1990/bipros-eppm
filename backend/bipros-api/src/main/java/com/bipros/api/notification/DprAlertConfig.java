@@ -94,6 +94,37 @@ public class DprAlertConfig {
         ).orElse(DEFAULT_MISSING_TIME);
     }
 
+    // ── Act-by SLA: overdue-issue reminder + escalation ("Issue Alerts" card) ─────
+    //    Owner decision 2026-08-31: daily reminder to the assignee while overdue, then a
+    //    one-shot escalation to the assignee's reporting manager. Default ON — the feature
+    //    was explicitly requested, unlike the opt-in digests above.
+
+    static final String KEY_ISSUE_REMINDER_ENABLED = "issue_reminder_enabled";
+    static final String KEY_ISSUE_REMINDER_TIME = "issue_reminder_time";
+    static final String KEY_ISSUE_REMINDER_EVERY_DAYS = "issue_reminder_every_days";
+    static final String KEY_ISSUE_ESCALATION_AFTER_DAYS = "issue_escalation_after_days";
+
+    public boolean issueReminderEnabled() {
+        return value(KEY_ISSUE_REMINDER_ENABLED).map(v -> v.trim().equalsIgnoreCase("true")).orElse(true);
+    }
+
+    /** Local time of the daily overdue-issue check, in {@link DprReportConfig#zone()}; default 09:00. */
+    public LocalTime issueReminderTime() {
+        return value(KEY_ISSUE_REMINDER_TIME).map(v ->
+            v.trim().isEmpty() ? DEFAULT_MISSING_TIME : DprReportConfig.parseTime(v)
+        ).orElse(DEFAULT_MISSING_TIME);
+    }
+
+    /** Days between reminders to the assignee while an issue stays overdue; default 1 (daily), min 1. */
+    public int issueReminderEveryDays() {
+        return Math.max(1, intValue(KEY_ISSUE_REMINDER_EVERY_DAYS, 1));
+    }
+
+    /** Days overdue after which the one-shot manager escalation fires; default 2. */
+    public int issueEscalationAfterDays() {
+        return intValue(KEY_ISSUE_ESCALATION_AFTER_DAYS, 2);
+    }
+
     // ── weekly material short-supply digest ("Material Alerts" card) ─────────────
 
     static final String KEY_MATERIAL_SHORTAGE_ENABLED = "material_shortage_enabled";

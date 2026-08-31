@@ -193,11 +193,87 @@ public class ProjectTeamService {
      */
     @Transactional(readOnly = true)
     public Optional<UUID> resolveApprover(UUID projectId, UUID submitterUserId) {
+        return resolveApproverDetailed(projectId, submitterUserId).map(ApproverResolution::userId);
+    }
+
+    /** How an approver was resolved: the reporting chain, a role-seat fallback, or an admin. */
+    public record ApproverResolution(UUID userId, ProjectRole role, String source) {
+        public static final String SOURCE_CHAIN = "CHAIN";
+        public static final String SOURCE_ADMIN = "ADMIN";
+    }
+
+    /**
+     * Approver resolution with the fallback ladder (owner decision 2026-08-31): reporting chain
+     * first, then the project's CONSTRUCTION_MANAGER → PM → PROJECT_CONTROL seat, then any
+     * enabled admin. Seat fallbacks still require DPR.APPROVE (assigning someone who cannot
+     * approve would deadlock the DPR); admins bypass permission checks everywhere, so the admin
+     * rung is unfiltered. The submitter is excluded at every rung. {@code source} tells the
+     * pre-submit preview why this person was picked (CHAIN / role name / ADMIN).
+     */
+    @Transactional(readOnly = true)
+    public Optional<ApproverResolution> resolveApproverDetailed(UUID projectId, UUID submitterUserId) {
         if (submitterUserId == null) return Optional.empty();
-        return walkUpChain(projectId, submitterUserId)
-            .map(ProjectTeamMember::getUserId)
-            .filter(uid -> !uid.equals(submitterUserId))      // exclude self (separation of duties)
-            .filter(uid -> userPermissionPort.hasPermission(uid, DPR_APPROVE))
+        Optional<ProjectTeamMember> chain = walkUpChain(projectId, submitterUserId)
+            .filter(m -> !m.getUserId().equals(submitterUserId))  // exclude self (separation of duties)
+            .filter(m -> userPermissionPort.hasPermission(m.getUserId(), DPR_APPROVE))
+            .findFirst();
+        if (chain.isPresent()) {
+            ProjectTeamMember m = chain.get();
+            return Optional.of(new ApproverResolution(m.getUserId(), m.getRole(), ApproverResolution.SOURCE_CHAIN));
+        }
+        for (ProjectRole seat : List.of(ProjectRole.CONSTRUCTION_MANAGER, ProjectRole.PM, ProjectRole.PROJECT_CONTROL)) {
+            Optional<UUID> holder = teamRepository.findByProjectIdAndRole(projectId, seat).stream()
+                .map(ProjectTeamMember::getUserId)
+                .filter(uid -> !uid.equals(submitterUserId))
+                .filter(uid -> userPermissionPort.hasPermission(uid, DPR_APPROVE))
+                .findFirst();
+            if (holder.isPresent()) {
+                return Optional.of(new ApproverResolution(holder.get(), seat, seat.name()));
+            }
+        }
+        return firstEnabledAdmin(submitterUserId)
+            .map(uid -> new ApproverResolution(uid, null, ApproverResolution.SOURCE_ADMIN));
+    }
+
+    /**
+     * Who to raise an overdue item to on behalf of {@code forUserId}: their immediate reporter,
+     * else the same CM → PM → PROJECT_CONTROL → admin seat ladder as the approver fallback (no
+     * permission filter — this is an information escalation, not an assignment). Never
+     * {@code forUserId} themself.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveEscalationContact(UUID projectId, UUID forUserId) {
+        Optional<UUID> reporter = getImmediateReporter(projectId, forUserId)
+            .filter(uid -> !uid.equals(forUserId));
+        if (reporter.isPresent()) return reporter;
+        for (ProjectRole seat : List.of(ProjectRole.CONSTRUCTION_MANAGER, ProjectRole.PM, ProjectRole.PROJECT_CONTROL)) {
+            Optional<UUID> holder = teamRepository.findByProjectIdAndRole(projectId, seat).stream()
+                .map(ProjectTeamMember::getUserId)
+                .filter(uid -> !uid.equals(forUserId))
+                .findFirst();
+            if (holder.isPresent()) return holder;
+        }
+        return firstEnabledAdmin(forUserId);
+    }
+
+    /** First enabled ADMIN-role user other than {@code exclude} (ordered by username for
+     *  determinism — two rows are fetched so the exclusion can never empty the rung while
+     *  another admin exists). Native query — the security module's repositories aren't a
+     *  dependency of this module, same as {@link #lookupUsers}. */
+    private Optional<UUID> firstEnabledAdmin(UUID exclude) {
+        if (em == null) return Optional.empty();
+        @SuppressWarnings("unchecked")
+        List<Object> rows = em.createNativeQuery(
+                "SELECT u.id FROM public.users u "
+                    + "JOIN public.user_roles ur ON ur.user_id = u.id "
+                    + "JOIN public.roles r ON r.id = ur.role_id "
+                    + "WHERE r.name = 'ADMIN' AND u.enabled = true "
+                    + "ORDER BY u.username")
+            .setMaxResults(2)
+            .getResultList();
+        return rows.stream()
+            .map(r -> (UUID) r)
+            .filter(uid -> !uid.equals(exclude))
             .findFirst();
     }
 

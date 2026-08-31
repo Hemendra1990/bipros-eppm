@@ -30,6 +30,9 @@ public class AgentMailLog extends BaseEntity {
     public static final String CAT_MISSING_DPR = "MISSING_DPR";
     public static final String CAT_DPR_REJECTION = "DPR_REJECTION";
     public static final String CAT_ISSUE_ASSIGNMENT = "ISSUE_ASSIGNMENT";
+    public static final String CAT_ISSUE_REMINDER = "ISSUE_REMINDER";
+    public static final String CAT_ISSUE_ESCALATION = "ISSUE_ESCALATION";
+    public static final String CAT_DPR_APPROVAL_OVERDUE = "DPR_APPROVAL_OVERDUE";
     public static final String CAT_OUTSTANDING_ISSUES = "OUTSTANDING_ISSUES";
     public static final String CAT_MATERIAL_SHORT_SUPPLY = "MATERIAL_SHORT_SUPPLY";
     public static final String CAT_MATERIAL_IDLE_STOCK = "MATERIAL_IDLE_STOCK";

@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 import type {
+  ApproverPreview,
   CreateDailyProgressReportRequest,
   DailyProgressReportResponse,
   DprApprovalActionRequest,
@@ -265,6 +266,12 @@ export const dprApi = {
   unassignedApprovals: (projectId: string) =>
     apiClient
       .get<ApiResponse<DprSummaryRow[]>>(`/v1/projects/${projectId}/dpr/approvals/unassigned`)
+      .then((r) => r.data),
+
+  /** Who would approve the current user's DPR — shown on the Add DPR form before submit. */
+  approverPreview: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<ApproverPreview>>(`/v1/projects/${projectId}/dpr/approver-preview`)
       .then((r) => r.data),
 
   /** DPR-performance analytics strip (read-only aggregates for the current window). */
